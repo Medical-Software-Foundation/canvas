@@ -1,5 +1,0 @@
-Conditions: Diabetes
-Diagnostics: Labs
-Treatments: Behavioral Intervention
-Payment Models: CMS
-Payment Models: CQMs
