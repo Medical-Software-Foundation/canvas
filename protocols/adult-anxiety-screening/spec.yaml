@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+  - title: "Diabetes: Hemoglobin A1c (HbA1c) Poor Control (> 9%)"
+    description: "Percentage of patients 18-75 years of age with diabetes who had hemoglobin A1c > 9.0% during the measurement period"
+    url: "https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS122v10.html"
+
+tags:
+  - category: "Conditions"
+    labels: "Anxiety"
+
+  - category: "Diagnostics"
+    label: "screening"
+

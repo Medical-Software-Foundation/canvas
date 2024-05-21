@@ -1,0 +1,17 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+    
+    "All Adults ≥19 years old" -> "Is age 64 years or younger?"
+    "Is age 64 years or younger?" -> "Screen for Anxiety Disorders" [label="Yes"]
+    "Is age 64 years or younger?" -> "Evidence insufficient for screening" [label="No"]
+    
+    "Screen for Anxiety Disorders" -> "*Screening tool: GAD, EPDS, GAS, GAI*"
+    "*Screening tool: GAD, EPDS, GAS, GAI*" -> "*Frequency: Use clinical judgment*"
+
+    node [shape=rectangle, color=black, fontcolor=black];
+    "Screen for Anxiety Disorders" [shape=rectangle]
+    "Evidence insufficient for screening" [shape=rectangle]
+    "*Screening tool: GAD, EPDS, GAS, GAI*" [shape=rectangle]
+    "*Frequency: Use clinical judgment*" [shape=rectangle]
+}
