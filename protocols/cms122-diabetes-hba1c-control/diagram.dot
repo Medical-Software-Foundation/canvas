@@ -1,0 +1,32 @@
+digraph HbA1cManagementRecommendations {
+    node [fontname="Arial", fontsize=12, shape=plaintext];
+    edge [fontname="Arial", fontsize=12];
+
+    // Define Nodes
+    Start [label="Start"];
+    DiagnosedWithDiabetes [label="Diagnosed with Diabetes"];
+    RegularHbA1cTests [label="Regular HbA1c Tests (Every 3-6 months)"];
+    EvaluateHbA1cResults [label="Evaluate HbA1c Results"];
+    LifestyleModifications [label="Lifestyle Modifications"];
+    MedicalTherapy [label="Medical Therapy"];
+    PatientEducation [label="Patient Education on Diabetes Management"];
+    Monitoring [label="Continuous Monitoring and Adjustments"];
+    GoalsAchieved [label="HbA1c Goals Achieved"];
+    FurtherAdjustmentsNeeded [label="Further Adjustments Needed"];
+    End [label="End"];
+
+    // Define Edges
+    Start -> DiagnosedWithDiabetes [label="Start"];
+    DiagnosedWithDiabetes -> RegularHbA1cTests [label="Confirm Diagnosis"];
+    RegularHbA1cTests -> EvaluateHbA1cResults [label="Conduct Tests"];
+    EvaluateHbA1cResults -> GoalsAchieved [label="HbA1c < 7%"];
+    EvaluateHbA1cResults -> FurtherAdjustmentsNeeded [label="HbA1c ≥ 7%"];
+    GoalsAchieved -> End [label="Maintain Current Management"];
+    FurtherAdjustmentsNeeded -> LifestyleModifications [label="Implement Changes"];
+    LifestyleModifications -> MedicalTherapy [label="Diet, Exercise, Weight Management"];
+    MedicalTherapy -> PatientEducation [label="Medication Adjustment if Necessary"];
+    PatientEducation -> Monitoring [label="Educate on Self-Management"];
+    Monitoring -> EvaluateHbA1cResults [label="Regular Follow-up"];
+}
+
+
