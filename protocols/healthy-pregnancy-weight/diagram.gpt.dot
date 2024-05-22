@@ -1,0 +1,11 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    start [label="Is the patient pregnant?", shape=diamond];
+    notPregnant [label="Not applicable", shape=rectangle, color=black, fontcolor=black];
+    pregnant [label="Pregnant adolescents and adults", shape=rectangle, color=green, fontcolor=green];
+    counseling [label="Offer effective behavioral counseling for healthy weight gain", shape=rectangle, color=gray, fontcolor=gray];
+    start -> notPregnant [label="No"];
+    start -> pregnant [label="Yes"];
+    pregnant -> counseling;
+}

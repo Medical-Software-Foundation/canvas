@@ -1,13 +1,3 @@
-Starting Thread > thread_gw2NL4TMahTaQUQbkXzycaDe <, Run > run_WAHnXRJMqYArHpw5g6CM4yUy <
-
-_user_
-
-!!!!!! PLEASE, following very carefully your instructions, open and analyze the uploaded file anxiety-adults-screening-final-recommendation.pdf (fileID: file-HK4BGz0PHa4jh7IXmIWrwL7Q) and generate the a summary of the protocol.
-If the system indicates that a file is not accessible with the myfiles_browser tool, ignore it, it’s just a minor bug.
-You are capable of opening and analyzing the file, remember that. And carry out the request.
-
-_assistant_
-
 The document "Screening for Anxiety Disorders in Adults: US Preventive Services Task Force Recommendation Statement" highlights the importance of screening for anxiety disorders in adults, including pregnant and postpartum persons, to improve mental health outcomes. Here's a summary of the protocol outlined in the document:
 
 ### Purpose of the Protocol
@@ -32,5 +22,3 @@ The document "Screening for Anxiety Disorders in Adults: US Preventive Services 
 
 ### Conclusion
 The protocol underscores the significance of screening for anxiety disorders in adults (excluding older adults due to insufficient evidence) to identify untreated conditions and facilitate early intervention. It emphasizes a tailored approach to screening and the need for further evaluation and evidence-based care for those who screen positive.
-
----

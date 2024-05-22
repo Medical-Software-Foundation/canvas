@@ -5,9 +5,9 @@ contributors:
     name: "William Burke"
 
 reference_papers:
-  - title: "Diabetes: Hemoglobin A1c (HbA1c) Poor Control (> 9%)"
+  - title: "Screening for Anxiety Disorders in Adults US Preventive Services Task Force Recommendation Statement"
     description: "Percentage of patients 18-75 years of age with diabetes who had hemoglobin A1c > 9.0% during the measurement period"
-    url: "https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS122v10.html"
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/anxiety-adults-screening"
 
 tags:
   - category: "Conditions"
@@ -15,4 +15,7 @@ tags:
 
   - category: "Diagnostics"
     label: "screening"
+
+  - category: "Conditions"
+    label: "Mental Health"
 

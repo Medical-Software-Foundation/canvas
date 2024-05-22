@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+  - title: "Behavioral Counseling Interventions for Healthy Weight and Weight Gain in Pregnancy"
+    description: "This paper presents the US Preventive Services Task Force (USPSTF) recommendation that clinicians offer effective behavioral counseling interventions to promote healthy weight gain and prevent excess gestational weight gain in pregnancy. The recommendation is based on a systematic review evaluating the benefits and harms of these interventions, emphasizing their moderate net benefit for pregnant individuals."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/healthy-weight-and-weight-gain-during-pregnancy-behavioral-counseling-interventions"
+
+tags:
+  - category: "Conditions"
+    labels: "Pregnancy"
+
+  - category: "Treatment"
+    label: "Counseling"
+
