@@ -1,0 +1,11 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    Age8to18 [label="Aged 8 to 18 years?"];
+    Screen8to18 [shape=rect,color=black,fontcolor=black,label="Screen for anxiety\n(B recommendation)"];
+    ScreenBelow7 [shape=rect,color=black,fontcolor=black,label="Insufficient evidence to assess the balance of benefits and harms\n(I statement)"];
+  
+    Age8to18 -> Screen8to18 [label="Yes"]
+    Age8to18 -> ScreenBelow7 [label="No"]
+}

@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+- username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+- title: "Screening for Anxiety in Children and Adolescents: US Preventive Services Task Force Recommendation Statement"
+    description: "This paper presents the US Preventive Services Task Force's recommendation for screening children and adolescents aged 8 to 18 years for anxiety disorders to identify those at risk and potentially prevent future mental health conditions, while noting insufficient evidence for screening children 7 years or younger."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/screening-anxiety-children-adolescents"
+
+tags:
+  - category: "Conditions"
+    labels: "Anxiety"
+
+  - category: "Diagnostics"
+    label: "screening"
+
+  - category: "Conditions"
+    label: "Mental Health"
+
