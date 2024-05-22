@@ -1,0 +1,17 @@
+digraph G {
+    node [shape=box]
+    start [label="Start"]
+    age [label="Age 50-80?"]
+    smoking_history [label="20 pack-year smoking history?"]
+    current_or_quit [label="Currently smokes or quit < 15 years ago?"]
+    screen [label="Recommend screening", shape=diamond]
+    no_screen [label="Do not recommend screening", shape=diamond]
+
+    start -> age
+    age -> smoking_history [label="Yes"]
+    age -> no_screen [label="No"]
+    smoking_history -> current_or_quit [label="Yes"]
+    smoking_history -> no_screen [label="No"]
+    current_or_quit -> screen [label="Yes"]
+    current_or_quit -> no_screen [label="No"]
+}
