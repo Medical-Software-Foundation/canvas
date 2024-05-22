@@ -1,0 +1,32 @@
+digraph CentorCriteria {
+    node [shape=box];
+
+    Start [label="Patient with sore throat", shape=oval];
+    Criteria [label="Modified Centor Criteria:\n1. Absence of Cough\n2. Swollen and Tender Anterior Cervical Nodes\n3. Temperature >38°C (100.4°F)\n4. Tonsillar Exudates or Swelling\n5. Age:\n   3-14 years (+1)\n   15-44 years (0)\n   ≥45 years (-1)"];
+    
+    Score0_1 [label="Score 0-1: Low Risk"];
+    NoTesting [label="No Testing\nNo Antibiotics"];
+    
+    Score2_3 [label="Score 2-3: Moderate Risk"];
+    Testing [label="Perform RADT or Throat Culture"];
+    NegativeTest [label="Negative Test"];
+    PositiveTest [label="Positive Test"];
+    NoAntibiotics [label="No Antibiotics"];
+    Antibiotics [label="Antibiotics"];
+    
+    Score4_5 [label="Score 4-5: High Risk"];
+    EmpiricTreatment [label="Consider Empiric Antibiotic Treatment"];
+
+    Start -> Criteria;
+    Criteria -> Score0_1 [label="Score 0-1"];
+    Criteria -> Score2_3 [label="Score 2-3"];
+    Criteria -> Score4_5 [label="Score 4-5"];
+
+    Score0_1 -> NoTesting;
+    Score2_3 -> Testing;
+    Testing -> NegativeTest [label="Negative"];
+    Testing -> PositiveTest [label="Positive"];
+    NegativeTest -> NoAntibiotics;
+    PositiveTest -> Antibiotics;
+    Score4_5 -> EmpiricTreatment;
+}
