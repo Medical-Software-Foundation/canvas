@@ -1,0 +1,23 @@
+status: "draft"
+
+contributors:
+  - username: "dmhardin102"
+    name: "David Hardin"
+
+reference_papers:
+  - title: "Diagnosis and Treatment of Streptococcal Pharyngitis"
+    description: "Clinical decision rules for evaluation of sore throat and diagnosis of GABHS"
+    url: "https://www.aafp.org/pubs/afp/issues/2009/0301/p383.html"
+
+tags:
+  - category: "Conditions"
+    labels: "pharyngitis"
+  
+  - category: "Conditions"
+    labels: "group A Strep"
+
+  - category: "Diagnostics"
+    label: "culture"
+  
+  - category: "Diagnostics"
+    label: "point-of-care"
