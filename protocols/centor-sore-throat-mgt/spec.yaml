@@ -17,7 +17,7 @@ tags:
     labels: "group A Strep"
 
   - category: "Diagnostics"
-    label: "culture"
+    label: "throat culture"
   
   - category: "Diagnostics"
     label: "point-of-care"
