@@ -1,0 +1,23 @@
+status: "draft"
+
+contributors:
+  - username: "dmhardin102"
+    name: "David Hardin"
+
+reference_papers:
+  - title: "Screening for Breast Cancer US Preventive Services Task Force Recommendation Statement"
+    description: "The USPSTF recommends biennial screening mammography for women aged 40 to 74 years."
+    url: "https://jamanetwork.com/journals/jama/fullarticle/2818283"
+
+tags:
+  - category: "Organization"
+    labels: "uspstf"
+  
+  - category: "Conditions"
+    labels: "breast cancer"
+
+  - category: "Diagnostics"
+    label: "screening"
+  
+  - category: "Diagnostics"
+    label: "mammography"
