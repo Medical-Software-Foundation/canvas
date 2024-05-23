@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "NICE epilepsy guidelines: treatment of epilepsy with generalised tonic clonic seizures"
+    description: "Corresponds to section 5.1 of the NICE epilepsy guidelines, which specifies a treatment algorithm for patients with epilepsy characterised by generalised tonic clonic seizures"
+    url: "https://www.nice.org.uk/guidance/ng217/resources/epilepsies-in-children-young-people-and-adults-pdf-66143780239813"
+
+tags:
+  - category: "Conditions"
+    labels: "Epilepsy"
+
+  - category: "Treatment"
+    label: "Drugs"

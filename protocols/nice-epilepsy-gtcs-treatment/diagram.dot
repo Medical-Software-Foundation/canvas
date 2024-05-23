@@ -1,0 +1,40 @@
+digraph GTCS_Treatment {
+    rankdir=TB;
+    node [shape=rect fontsize=7];
+
+    Patient_Characteristics [label="Epilepsy  with generalised \n tonic-clonic seizures"];
+    Women_Girls [label="Women and Girls\n(able to have children)"];
+    Girls_Young [label="Girls (Under 10 years)\nUnlikely to need \n treatment when older"];
+    Women_Unable [label="Women unable to have children"];
+    Boys_Men [label="Boys and Men"];
+    Treatment_Unsuccessful [label="Monotherapy Unsuccessful", color=lightcoral];
+
+    Valproate_women[label="Consider Sodium Valproate \n if other options unsuccessful \n Following MHRA safety advice"]
+    First_Line [label="Offer Sodium Valproate \n as monotherapy"];
+    First_Line_women [label="First-Line Monotherapy Options:\n - Lamotrigine\n- Levetiracetam"];
+    Second_Line [label="Second-Line Monotherapy Options:\n- Lamotrigine\n- Levetiracetam"];
+    Add_On_First_Line [label="First-Line Add-On Options:\n- Clobazam\n- Lamotrigine\n- Levetiracetam\n- Perampanel\n- Sodium valproate\n- Topiramate"];
+    Add_On_Second_Line [label="Second-Line Add-On Options:\n- Brivaracetam\n- Lacosamide\n- Phenobarbital\n- Primidone\n- Zonisamide"];
+
+    Patient_Characteristics -> Women_Girls;
+    Patient_Characteristics -> Girls_Young;
+    Patient_Characteristics -> Women_Unable;
+    Patient_Characteristics -> Boys_Men;
+
+    Women_Girls -> First_Line_women;
+    First_Line_women -> Valproate_women;
+    First_Line_women -> First_Line_women [label="If one drugs fails,\n try the other" fontsize=7];
+    Valproate_women -> Treatment_Unsuccessful
+    Girls_Young -> First_Line;
+    Women_Unable -> First_Line;
+    Boys_Men -> First_Line;
+
+    First_Line -> Second_Line;
+    Second_Line -> Treatment_Unsuccessful;
+    Second_Line -> Second_Line [label="If one drugs fails,\n try the other" fontsize=7];
+    Treatment_Unsuccessful -> Add_On_First_Line;
+    Add_On_First_Line -> Add_On_Second_Line;
+
+    {rank=same; Women_Girls; Girls_Young; Women_Unable; Boys_Men;}
+}
+
