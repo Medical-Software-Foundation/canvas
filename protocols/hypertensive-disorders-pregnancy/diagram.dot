@@ -1,0 +1,11 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    Start [shape=box,label="All Pregnant Persons"]
+    KnownHypertensiveDisorders [label="Known diagnosis of hypertensive disorder or chronic hypertension?"]
+    ScreeningRecommended [shape=box,label="Screen for hypertensive disorders with blood pressure measurements throughout pregnancy\n(B recommendation)"]
+    
+    Start -> KnownHypertensiveDisorders
+    KnownHypertensiveDisorders -> ScreeningRecommended [label="No"]
+}

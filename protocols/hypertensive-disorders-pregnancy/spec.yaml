@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Hypertensive Disorders of Pregnancy"
+    description: "Recommendations on screening for hypertensive disorders of pregnancy to improve maternal and fetal health outcomes"
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/hypertensive-disorders-pregnancy-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Pregnancy"
+
+  - category: "Diagnostics"
+    label: "Screening"
