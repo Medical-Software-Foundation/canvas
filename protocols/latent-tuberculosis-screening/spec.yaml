@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Latent Tuberculosis Infection in Adults"
+    description: "A systematic review on LTBI screening and treatment in asymptomatic adults seen in primary care, as well as the accuracy of LTBI screening tests."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/latent-tuberculosis-infection-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Latent Tuberculosis"
+
+  - category: "Diagnostics"
+    label: "Screening"
+

@@ -1,0 +1,18 @@
+digraph G {
+    rankdir=TB
+    
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    "Adult Population" -> "At Risk for TB?" [label="Denominator"]
+    "At Risk for TB?" -> "History of TB exposure" [label="Yes"]
+    "At Risk for TB?" -> "Not Recommended for Screening" [label="No",shape=rectangle,color=black,fontcolor=black]
+    
+    "History of TB exposure" -> "Underlying Health Conditions?" [label="Yes"]
+    "History of TB exposure" -> "Annual TB Screening" [label="No",shape=rectangle,color=black,fontcolor=black]
+    
+    "Underlying Health Conditions?" -> "Immunosuppressed Patients" [label="Yes"]
+    "Underlying Health Conditions?" -> "General At-Risk Population" [label="No"]
+    
+    "Immunosuppressed Patients" -> "TB Blood Test, Every 6 Months" [label="Numerator",shape=rectangle,color=black,fontcolor=black]
+    "General At-Risk Population" -> "TB Blood Test or Skin Test, Annually" [label="Numerator",shape=rectangle,color=black,fontcolor=black]
+}
