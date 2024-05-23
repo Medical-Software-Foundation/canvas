@@ -1,0 +1,23 @@
+digraph BreastCancerScreening {
+    node [shape=box];
+    rankdir=TB; // Top to Bottom layout
+    nodesep=0.5; // Increase space between nodes
+    ranksep=1; // Increase space between ranks
+
+    Start [label="Start"];
+    Exclusion [label="Patient has exclusion criteria\n(e.g., previous breast cancer, genetic predisposition)?"];
+    ReferSpecialist [label="Refer to specialist"];
+    PatientAge [label="Patient Age"];
+    Age50to74 [label="Biennial Screening Mammography"];
+    Age40to49 [label="Individual Decision\n- Consider patient context\n- Discuss benefits and harms\n- If decision to screen: Biennial Screening Mammography"];
+    Age75plus [label="Insufficient Evidence\n- Discuss patient’s overall health and preferences\n- Consider screening based on individual health status"];
+    NoScreening [label="No Screening Indicated"];
+
+    Start -> Exclusion;
+    Exclusion -> ReferSpecialist [label="Yes"];
+    Exclusion -> PatientAge [label="No"];
+    PatientAge -> Age50to74 [label="50 to 74 years"];
+    PatientAge -> Age40to49 [label="40 to 49 years"];
+    PatientAge -> Age75plus [label="75 years or older"];
+    PatientAge -> NoScreening [label="Younger than 40 years"];
+}
