@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Obesity in Children and Adolescent"
+    description: "Recommendations for clinicians to screen for obesity in children and adolescents 6 years and older and offer or refer them to comprehensive, intensive behavioral interventions to promote improvements in weight status"
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/obesity-in-children-and-adolescents-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Children and Adolescents"
+
+  - category: "Conditions"
+    label: "Obese"
+
+  - category: "Diagnostics"
+    label: "screening"
+

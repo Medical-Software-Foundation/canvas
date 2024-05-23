@@ -1,0 +1,12 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, style=filled, color=blue, fontcolor=white];
+    
+    start [label="All children and adolescents", shape=ellipse, style=filled, color=gray, fontcolor=white];
+    ageCheck [label="Age 6 years and older?"];
+    screenIntervene [label="Screen for obesity and offer or refer to comprehensive, intensive behavioral interventions", shape=rectangle, style=filled, color=green, fontcolor=white];
+    
+    start -> ageCheck;
+    ageCheck -> screenIntervene [label="Yes"];
+    ageCheck -> ageCheck [label="No", dir=back];
+}
