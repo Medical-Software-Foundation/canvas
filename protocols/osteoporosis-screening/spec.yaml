@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Osteoporosis to Prevent Fractures"
+    description: "Recommendation on screening for osteoporosis in postmenopausal women and older men to prevent osteoporotic fractures."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/osteoporosis-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Osteoporosis"
+
+  - category: "Diagnostics"
+    label: "Screening"

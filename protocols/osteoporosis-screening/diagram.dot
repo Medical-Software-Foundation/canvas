@@ -1,0 +1,29 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+
+    start [shape=plaintext, label="Start"];
+    postmenopausal_women_and_men [shape=diamond, label="Postmenopausal women and older men?"];
+    women_65_and_older [shape=diamond, label="Women 65 years and older?"];
+    postmenopausal_women_under_65 [shape=diamond, label="Postmenopausal women under 65 at increased risk?"];
+    men_screening [shape=diamond, label="Men for screening?"];
+    
+    screening_women_65_plus [shape=rectangle, color=green, fontcolor=black, label="Screen with bone measurement testing"];
+    screening_postmenopausal_women_risk [shape=rectangle, color=green, fontcolor=black, label="Screen with bone measurement testing using risk assessment tool"];
+    no_screening_men [shape=rectangle, color=red, fontcolor=black, label="Insufficient evidence for screening"];
+    no_action [shape=rectangle, color=red, fontcolor=black, label="No screening action"];
+
+    start -> postmenopausal_women_and_men
+    postmenopausal_women_and_men -> women_65_and_older [label="Yes"]
+    postmenopausal_women_and_men -> no_action [label="No"]
+    
+    women_65_and_older -> screening_women_65_plus [label="Yes"]
+    women_65_and_older -> postmenopausal_women_under_65 [label="No"]
+    
+    postmenopausal_women_under_65 -> screening_postmenopausal_women_risk [label="Yes"]
+    postmenopausal_women_under_65 -> no_action [label="No"]
+    
+    postmenopausal_women_and_men -> men_screening [label="Yes"]
+    men_screening -> no_screening_men [label="Yes"]
+    men_screening -> no_action [label="No"]
+}
