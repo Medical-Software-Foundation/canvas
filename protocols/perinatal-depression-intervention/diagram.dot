@@ -1,0 +1,19 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+
+    start [label="All pregnant persons and persons\nless than 1 year postpartum", shape=rectangle]
+    riskFactors [label="History of depression, current\ndepressive symptoms, low income,\nadolescent or single parenthood,\nrecent intimate partner violence,\nelevated anxiety symptoms\nor history of negative life events?"]
+    counselingNeeded [label="Provide or refer to\ncounseling interventions?", shape=rectangle]
+    noCounseling [label="No counseling needed", shape=rectangle]
+    cbt [label="Cognitive Behavioral Therapy (CBT)\nor Interpersonal Therapy (IPT)?", shape=diamond]
+    cbtSessions [label="6 to 12 weekly 1- to 2-hour\ngroup sessions during pregnancy\n+ 2 to 5 postpartum booster sessions", shape=rectangle]
+    iptSessions [label="4 or 5 prenatal group sessions\n(60 to 90 minutes each) + 1 individual\n50-minute postpartum session", shape=rectangle]
+
+    start -> riskFactors
+    riskFactors -> counselingNeeded [label="yes"]
+    riskFactors -> noCounseling [label="no"]
+    counselingNeeded -> cbt
+    cbt -> cbtSessions [label="CBT"]
+    cbt -> iptSessions [label="IPT"]
+}

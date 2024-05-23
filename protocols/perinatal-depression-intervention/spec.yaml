@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Interventions to Prevent Perinatal Depression"
+    description: "Recommendation on interventions to prevent perinatal depression in pregnant and postpartum persons at increased risk."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/perinatal-depression-preventive-interventions"
+
+tags:
+  - category: "Conditions"
+    label: "Pregnant and postpartum"
+
+  - category: "Diagnostics"
+    label: "Intervention"
