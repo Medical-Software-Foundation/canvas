@@ -1,0 +1,10 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    a [label="Is the person planning or could become pregnant?", shape=diamond]
+    b [label="Recommend daily supplement containing 0.4 to 0.8 mg of folic acid", shape=rect, color=black, fontcolor=black]
+    c [label="Start at least 1 month prior to conception and continue through the first 2-3 months of pregnancy", shape=rect, color=black, fontcolor=black]
+
+    a -> b [label="Yes"]
+    b -> c [label="Follow-up"]
+}

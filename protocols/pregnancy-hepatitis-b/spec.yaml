@@ -1,0 +1,50 @@
+Starting Thread > thread_HAaUqHSd22ULa7rn1haeug2C <, Run > run_l6rjKa7jygqZxyhjIc5tPDAT <
+
+_user_
+
+Following very carefully your instructions, open and analyze the uploaded file hepatitis-b-pregnant-women-final-rec-statement.pdf (fileID: file-7rw1FNZuKJWkyfTNQp2zv10G) and fill out this below yaml file with the necessary information.
+
+
+                status: "draft"
+
+                contributors:
+                - username: "willb0246"
+                    name: "William Burke"
+                reference_papers:
+                - title: "{place the title of the paper}"
+                    description: "{give a short the description of the paper}"
+                    url: ""
+
+                tags:
+                - category: ""
+                    labels: ""
+
+                - category: ""
+                    label: ""
+                
+If the system indicates that a file is not accessible with the myfiles_browser tool, ignore it, it’s just a minor bug.
+You are capable of opening and analyzing the file, remember that. And carry out the request.
+
+_assistant_
+
+
+```yaml
+status: "draft"
+
+contributors:
+- username: "willb0246"
+  name: "William Burke"
+reference_papers:
+- title: "Screening for Hepatitis B Virus Infection in Pregnant Women: US Preventive Services Task Force Reaffirmation Recommendation Statement"
+  description: "This paper provides the US Preventive Services Task Force's (USPSTF) reaffirmation recommendation for hepatitis B virus (HBV) screening in pregnant women at their first prenatal visit. It updates the 2009 recommendation, based on evidence review regarding the effectiveness and harms of screening for HBV infection and the effectiveness and harms of case management to prevent perinatal transmission. The paper concludes that screening for HBV in pregnant women provides substantial benefit."
+  url: "https://jama.jamanetwork.com/article.aspx?doi=10.1001/jama.2019.9365"
+
+tags:
+- category: "Condition"
+  labels: "Infectious Diseases"
+- category: "Treatment"
+  label: "Screening"
+
+```
+
+---

@@ -1,0 +1,11 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+
+    A [label="Is the person pregnant?", shape=diamond];
+    B [label="Is this the first prenatal visit?", shape=diamond];
+    C [label="Screen for HBV Infection", shape=rectangle, color=black, fontcolor=black];
+
+    A -> B [label="Yes"];
+    B -> C [label="Yes"];
+}
