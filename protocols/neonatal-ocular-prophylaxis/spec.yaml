@@ -1,0 +1,15 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Ocular Prophylaxis for Gonococcal Ophthalmia Neonatorum"
+    description: "Recommendation for prophylactic ocular topical medication for all newborns to prevent gonococcal ophthalmia neonatorum."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/ocular-prophylaxis-for-gonococcal-ophthalmia-neonatorum-preventive-medication"
+
+tags:
+  - category: "Conditions"
+    label: "Newborn"
+

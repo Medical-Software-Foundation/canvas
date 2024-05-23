@@ -1,0 +1,11 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    Population [label="Population" shape=rectangle]
+    Newborns [label="Is a newborn?"]
+    ApplyProphylaxis [label="Apply 0.5% erythromycin ophthalmic ointment" shape=rectangle]
+
+    Population -> Newborns
+    Newborns -> ApplyProphylaxis [label="Yes"]
+}
