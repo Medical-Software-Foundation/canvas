@@ -1,0 +1,23 @@
+digraph OttawaKneeRules {
+    node [shape=box, style="filled", color="lightblue"];
+    
+    start [label="Acute Knee Injury", shape=ellipse, color="lightgrey"];
+    age [label="Patient aged 55 years or over?"];
+    fibulaTenderness [label="Tenderness at the head of the fibula?"];
+    patellaTenderness [label="Isolated tenderness of the patella?"];
+    kneeFlex [label="Ability to flex knee to 90 degrees?"];
+    weightBearing [label="Can bear weight immediately and at presentation?"];
+    xray [label="Knee X-ray indicated", shape=ellipse, color="green"];
+    noxray [label="No X-ray indicated", shape=ellipse, color="red"];
+    
+    start -> age;
+    age -> xray [label="Yes"];
+    age -> fibulaTenderness [label="No"];
+    fibulaTenderness -> xray [label="Yes"];
+    fibulaTenderness -> patellaTenderness [label="No"];
+    patellaTenderness -> xray [label="Yes"];
+    patellaTenderness -> kneeFlex [label="No"];
+    kneeFlex -> weightBearing [label="Yes"];
+    weightBearing -> noxray [label="Yes"];
+    weightBearing -> xray [label="No"];
+}
