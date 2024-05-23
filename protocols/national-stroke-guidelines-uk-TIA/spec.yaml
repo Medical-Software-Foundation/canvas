@@ -1,0 +1,24 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "National Stroke Guidelines (UK): Transient Ischemic Attack (TIA) and minor stroke treatment and management
+    description: "Corresponds to section 3.3 of the National Stroke Guideline, which details the treatment of minor stroke and Transient Ischemic Attack"
+    url: "https://www.strokeguideline.org/"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Minor Stroke"
+      - "TIA"
+
+  - category: "Treatment"
+    label: 
+      - "Antiplatelets"
+      - "Statins"
+      - "Anticoagulation"
+      - "Endarctectomy"
+      - "Carotid stenting"

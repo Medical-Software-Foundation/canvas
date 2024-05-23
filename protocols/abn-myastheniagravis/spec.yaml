@@ -1,0 +1,22 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "Association of British Neurologist (ABN) Management Guideline for Myasthenia Gravis: Treatment of Generalised Myasthenia"
+    description: "Corresponds to the Generalised Myasthenia subsection of the ABN management guideline for Myasthenia Gravis"
+    url: "https://www.myaware.org/abn-guidelines/"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Generalised myasthenia gravis"
+
+  - category: "Treatment"
+    label: 
+      - "Prednisolone"
+      - "Immunosuppression"
+      - "Thymectomy"
+

@@ -1,0 +1,38 @@
+digraph MyastheniaGravisTreatment {
+    rankdir=TB;
+    node [shape=box, style=filled, color=lightblue];
+
+    StartTreatment [label="Start Treatment for Generalised Myasthenia Gravis"];
+    StartPyridostigmine [label="Start Pyridostigmine"];
+    PyridostigmineProtocol [label="Pyridostigmine Dose Escalation Protocol"];
+    PyridostigmineEffective [label="Pyridostigmine Effective?"];
+    StartPrednisolone [label="Start Prednisolone"];
+    PrednisoloneProtocol [label="Prednisolone Dose Escalation Protocol"];
+    PrednisoloneEffective [label="Prednisolone Effective After 3 months?"];
+    IntroduceImmunosuppression [label="Introduce Immunosuppression"];
+    Remission [label="Remission achieved"];
+    SpecialistOpinion [label="Seek Specialist Opinion"];
+    WithdrawalProtocol [label="Prednisolone Withdrawal Protocol"];
+    AchRAB [label="ACh-R Ab seropositive & under 45 years?"]
+    RelapseonWithdrawing [label="Relapse on reducing Prednisolone \n to >15-20mg on alternate days?"]
+    Thymectomy [label="Consider Thymectomy"];
+    MaintenancePrednisolone [label="Maintain patient on\nlowest dose of Prednisolone\nachieving symptom control"]
+
+    StartTreatment -> AchRAB;
+    AchRAB -> Thymectomy [label="Yes"];
+    AchRAB -> StartPyridostigmine [label="No"]
+    StartPyridostigmine -> PyridostigmineProtocol;
+    Thymectomy -> StartPyridostigmine
+    PyridostigmineProtocol -> PyridostigmineEffective;
+    PyridostigmineEffective -> StartPrednisolone [label="No"];
+    PyridostigmineEffective -> Remission [label="Yes"];
+    StartPrednisolone -> PrednisoloneProtocol;
+    PrednisoloneProtocol -> PrednisoloneEffective;
+    PrednisoloneEffective -> SpecialistOpinion [label="No"];
+    PrednisoloneEffective -> Remission [label="Yes"];
+    Remission -> WithdrawalProtocol;
+    WithdrawalProtocol -> RelapseonWithdrawing 
+    RelapseonWithdrawing -> IntroduceImmunosuppression [label="Yes"]
+    RelapseonWithdrawing -> MaintenancePrednisolone [label="No"]
+  
+}

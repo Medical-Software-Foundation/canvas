@@ -1,0 +1,41 @@
+digraph StrokeGuidelines {
+    rankdir=TB;
+    node [shape=box, style=rounded, fontname="Arial"];
+
+    subgraph cluster_0 {
+        
+        style=filled;
+        node [style=filled, color=white];
+
+        MinorStrokeOrTIA [label="Minor Ischaemic Stroke or TIA"];
+        LifestyleModification [label="Support to modify lifestyle factors\n(smoking, alcohol consumption, diet, exercise)"];
+        AtrialFibrillationCheck [label=" Atrial Fibrillation" shape="diamond"];
+        HighIntensityStatin [label="High Intensity Statin Therapy\n(atorvastatin 20-80 mg daily)"];
+        BloodPressureTherapy [label="Blood Pressure-Lowering Therapy\n(thiazide-like diuretic, long-acting calcium\nchannel blocker or ACE inhibitor)"];
+        DualAntiplateletTherapy [label="Dual Antiplatelet Therapy\n(clopidogrel + aspirin or\n ticagrelor + aspirin)"];
+        Monotherapy [label="Monotherapy\n(clopidogrel or ticagrelor)"];
+        AnticoagulationTherapy [label="Anticoagulation"];
+        CarotidImaging [label="Carotid Imaging\n(duplex ultrasound, CT angiography, MR angiography)"];
+        NoIntervention [label="No Carotid Intervention\nOptimal Medical Treatment"];
+        MildModerateCarotidStenosis [label="Mild or Moderate Carotid Stenosis\n(<50%)"];
+        SevereCarotidStenosis [label="Severe Carotid Stenosis\n(50-99%)"];
+        CarotidAngioplasty [label="Consider Carotid Angioplasty and Stenting"];
+        SuitableForSurgery [label="Suitable for\n open surgery?" shape="diamond"];
+        ReferForEndarterectomy [label="Refer for Carotid Endarterectomy"];
+
+        MinorStrokeOrTIA -> LifestyleModification;
+        MinorStrokeOrTIA -> AtrialFibrillationCheck;
+        MinorStrokeOrTIA -> HighIntensityStatin;
+        MinorStrokeOrTIA -> BloodPressureTherapy;
+        DualAntiplateletTherapy -> Monotherapy [label="After 21-30 days"];
+        AtrialFibrillationCheck -> DualAntiplateletTherapy [label="No"];
+        AtrialFibrillationCheck -> AnticoagulationTherapy [label="Yes"];
+        MinorStrokeOrTIA -> CarotidImaging ;
+        CarotidImaging -> MildModerateCarotidStenosis;
+        CarotidImaging -> SevereCarotidStenosis;
+        MildModerateCarotidStenosis -> NoIntervention;
+        SevereCarotidStenosis -> SuitableForSurgery;
+        SuitableForSurgery -> CarotidAngioplasty [label="No"];
+        SuitableForSurgery -> ReferForEndarterectomy [label="Yes"];
+    }
+}
