@@ -1,0 +1,26 @@
+status: "draft"
+
+contributors:
+  - username: "dmhardin102"
+    name: "David Hardin"
+
+reference_papers:
+  - title: "Ottawa Ankle Rules"
+    description: "Criteria for Ankle and Foot XR Imaging in Acute Injury"
+    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2146318/pdf/canfamphys00073-0108.pdf"
+
+tags:
+  - category: "Conditions"
+    labels: "ankle injury"
+
+  - category: "Conditions"
+    labels: "foot injury"
+
+  - category: "Diagnostics"
+    label: "injury"
+  
+  - category: "Diagnostics"
+    label: "radiography"
+
+  - category: "specialty"
+    label: "orthopedics"
