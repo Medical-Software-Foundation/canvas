@@ -1,0 +1,23 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    start [label="Adult 18 years or older without known hypertension", shape=box, color=black, fontcolor=black];
+    IncreasedRisk [label="At increased risk for hypertension?"];
+    AgeOver40 [label="Age 40 years or older?"];
+    ScreenYearly [label="Screen for hypertension every year", shape=box, color=black, fontcolor=black];
+    Age18to39 [label="Age 18 to 39 years?"];
+    NormalBPReading [label="Prior normal BP reading?"];
+    Screen3to5Years [label="Screen for hypertension every 3-5 years", shape=box, color=black, fontcolor=black];
+    ConfirmScreening [label="Confirm diagnosis outside clinical setting", shape=box, color=black, fontcolor=black];
+
+    start -> IncreasedRisk;
+    IncreasedRisk -> AgeOver40 [label="Yes"];
+    IncreasedRisk -> Age18to39 [label="No"];
+    AgeOver40 -> ScreenYearly;
+    Age18to39 -> NormalBPReading;
+    NormalBPReading -> ScreenYearly [label="No"];
+    NormalBPReading -> Screen3to5Years [label="Yes"];
+    ScreenYearly -> ConfirmScreening;
+    Screen3to5Years -> ConfirmScreening;
+}

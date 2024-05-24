@@ -12,7 +12,9 @@ reference_papers:
 tags:
 - category: "Condition"
   labels: "Infectious Diseases"
-  
+
 - category: "Treatment"
   label: "Screening"
 
+- category: "Guideline"
+  label: "USPSTF"

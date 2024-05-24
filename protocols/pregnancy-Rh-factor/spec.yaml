@@ -1,0 +1,19 @@
+status: "draft"
+
+contributors:
+- username: "willb0246"
+  name: "William Burke"
+reference_papers:
+- title: "Screening for Rh (D) Incompatibility: USPSTF Recommendations"
+  description: "This paper provides the U.S. Preventive Services Task Force (USPSTF) recommendations on screening for Rh (D) incompatibility in pregnant women, including Rh (D) blood typing and antibody testing at the first prenatal visit and repeated antibody testing at 24–28 weeks’ gestation for unsensitized Rh (D)-negative women. It discusses the benefits of Rh (D) immunoglobulin intervention and updates the 1996 recommendations based on current evidence."
+  url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/rh-d-incompatibility-screening"
+
+tags:
+- category: "Medical Guidelines"
+  labels: "Pregnancy, Rh Incompatibility, Screening, USPSTF Recommendations"
+- category: "Healthcare Policy"
+  label: "Preventive Services"
+
+```
+
+---

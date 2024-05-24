@@ -13,9 +13,11 @@ tags:
   - category: "Conditions"
     labels: "Anxiety"
 
-  - category: "Diagnostics"
+  - category: "Treatment"
     label: "screening"
 
   - category: "Conditions"
     label: "Mental Health"
 
+- category: "Guideline"
+  label: "USPSTF"

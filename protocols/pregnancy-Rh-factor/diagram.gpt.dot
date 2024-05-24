@@ -1,0 +1,24 @@
+digraph G {
+    rankdir=TB
+
+    node [shape=diamond, color=blue, fontcolor=blue];
+    AllPregnantWomen [label="All Pregnant Women"];
+    RhDNegativeUnsensitized [label="Rh (D)-Negative, Unsensitized"];
+    BiologicalFatherRhDPositive [label="Biological Father Rh (D)-Positive?"];
+    GestationPeriod [label="Gestation Period < 13 Weeks?"];
+
+    node [shape=rect, color=black, fontcolor=black];
+    BloodTypingAntibodyTestingFirstVisit [label="Rh (D) Blood typing & Antibody Testing at First Visit", shape=rect];
+    RepeatedAntibodyTesting2428Weeks [label="Repeated Antibody Testing at 24–28 Weeks", shape=rect];
+    FullDoseRhDImmunoglobulin [label="Full Dose Rh (D) Immunoglobulin", shape=rect];
+    HalfDoseRhDImmunoglobulin [label="50 µg Dose Rh (D) Immunoglobulin", shape=rect];
+
+    AllPregnantWomen -> BloodTypingAntibodyTestingFirstVisit
+    AllPregnantWomen -> RhDNegativeUnsensitized
+    RhDNegativeUnsensitized -> BiologicalFatherRhDPositive [label="No / Unknown"]
+    RhDNegativeUnsensitized -> RepeatedAntibodyTesting2428Weeks [label="Yes"]
+    BiologicalFatherRhDPositive -> FullDoseRhDImmunoglobulin [label="No"]
+    BiologicalFatherRhDPositive -> GestationPeriod [label="Yes"]
+    GestationPeriod -> FullDoseRhDImmunoglobulin [label="No"]
+    GestationPeriod -> HalfDoseRhDImmunoglobulin [label="Yes"]
+}

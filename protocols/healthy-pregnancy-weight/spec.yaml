@@ -16,3 +16,5 @@ tags:
   - category: "Treatment"
     label: "Counseling"
 
+- category: "Guideline"
+  label: "USPSTF"

@@ -1,0 +1,21 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+
+    start [label="Adolescents and adults", shape=rectangle];
+    hasHIV [label="Does not have HIV?"];
+    atIncreasedRisk [label="At increased risk of HIV?"];
+    sexualActivityOrInjectionDrugUse [label="Engages in sexual activity or injection drug use?"];
+    highTransmissionRisk [label="High risk due to needle-sharing injection drug use\nor condomless receptive anal intercourse?"];
+    prescribePrEP [label="Prescribe PrEP using effective antiretroviral therapy\nFrequency: As per clinical guidelines", shape=rectangle, color=black, fontcolor=black];
+
+    start -> hasHIV
+    hasHIV -> atIncreasedRisk [label="Yes"]
+    hasHIV -> end [label="No", shape=rectangle]
+    atIncreasedRisk -> sexualActivityOrInjectionDrugUse [label="Yes"]
+    atIncreasedRisk -> end [label="No", shape=rectangle]
+    sexualActivityOrInjectionDrugUse -> highTransmissionRisk [label="Yes"]
+    sexualActivityOrInjectionDrugUse -> end [label="No", shape=rectangle]
+    highTransmissionRisk -> prescribePrEP [label="Yes"]
+    highTransmissionRisk -> end [label="No", shape=rectangle]
+}

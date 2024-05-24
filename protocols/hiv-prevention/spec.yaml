@@ -1,0 +1,15 @@
+status: "draft"
+
+contributors:
+- username: "willb0246"
+  name: "William Burke"
+
+reference_papers:
+- title: "Preexposure Prophylaxis to Prevent Acquisition of HIV US Preventive Services Task Force Recommendation Statement"
+  description: "A recommendation by the US Preventive Services Task Force on the use of preexposure prophylaxis with antiretroviral therapy for the prevention of HIV, aimed at adolescents and adults at increased risk of HIV acquisition. The paper highlights the importance of HIV prevention, outlines the population at risk, and emphasizes the substantial net benefit of antiretroviral therapy in reducing the risk of HIV."
+  url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/prevention-of-human-immunodeficiency-virus-hiv-infection-pre-exposure-prophylaxis"
+
+tags:
+- category: "Treatment"
+  labels:
+  - "Preexposure Prophylaxis (PrEP)"
