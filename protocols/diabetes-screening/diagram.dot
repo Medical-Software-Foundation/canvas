@@ -1,0 +1,18 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    start [shape=plaintext, label="Nonpregnant adults aged 35 to 70 with overweight or obesity"];
+    check_symptoms [label="Shows symptoms of diabetes?"];
+    has_overweight_or_obesity [label="Has overweight or obesity?"];
+    perform_screening [shape=rectangle,color=black,fontcolor=black,label="Perform Screening\n(Fasting plasma glucose, HbA1c level, Oral glucose tolerance test)"];
+    offer_interventions [shape=rectangle,color=black,fontcolor=black,label="Offer or refer to preventive interventions"];
+    no_action [shape=rectangle, color=black, fontcolor=black, label="No Screening Recommended"];
+    
+    start -> check_symptoms
+    check_symptoms -> has_overweight_or_obesity [label="No"]
+    check_symptoms -> no_action [label="Yes"]
+    has_overweight_or_obesity -> perform_screening [label="Yes"]
+    has_overweight_or_obesity -> no_action [label="No"]
+    perform_screening -> offer_interventions
+}

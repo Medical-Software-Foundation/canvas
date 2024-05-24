@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Prediabetes and Type 2 Diabetes"
+    description: "Recommendations on screening for prediabetes and type 2 diabetes in adults"
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/screening-for-prediabetes-and-type-2-diabetes"
+
+tags:
+  - category: "Conditions"
+    label: "Diabeties"
+
+  - category: "Diagnostics"
+    label: "Screening"
