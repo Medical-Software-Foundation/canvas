@@ -1,0 +1,36 @@
+digraph MND_Sialorrhea_Clinical_Flowsheet {
+    node [shape=box, style=filled, color=lightblue];
+
+    start [label="Person with MND has problems with saliva"];
+    assess [label="Assess the volume and viscosity of saliva,\n respiratory function, swallowing,\n diet, posture, and oral care"];
+    
+    drooling [label="Person with MND has problems with drooling (sialorrhea)"];
+    advice [label="Provide advice on swallowing, diet,\nposture, positioning, oral care, and suctioning"];
+    
+    first_line [label="Consider antimuscarinic medicine"];
+  
+    glycopyrrolate [label="Consider glycopyrrolate"];
+
+    botox_referral [label="Consider referral to a specialist for Botulinum toxin A"];
+    
+    thick_saliva [label="Person with MND has thick, tenacious saliva"];
+    review_meds [label="Review all current medicines,\n especially treatments for sialorrhea"];
+    thick_saliva_advice [label="Provide advice on swallowing, \ndiet, posture, positioning, oral care,\nsuctioning, and hydration"];
+    treatment [label="Consider treatment with humidification,\n nebulizers, and carbocisteine"];
+    
+    start -> assess;
+    assess -> drooling;
+    drooling -> advice;
+    advice -> glycopyrrolate[label="Cognitive impairment"]; 
+    advice -> first_line[label="No cognitive impairment"]; 
+
+    assess -> thick_saliva;
+    thick_saliva -> review_meds;
+    review_meds -> thick_saliva_advice;
+    thick_saliva_advice -> treatment;
+
+    first_line -> botox_referral[label="If treatment failure"]
+    glycopyrrolate -> botox_referral[label="If treatment failure"]
+
+
+}

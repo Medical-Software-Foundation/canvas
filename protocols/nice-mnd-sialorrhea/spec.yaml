@@ -1,0 +1,20 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "NICE Motor Neurone Disease guideline: treatment of saliva problems"
+    description: "The clinical flowsheet corresponds to section 1.8.1x of the NICE MND guideline, laying out recommendations for the treatment of saliva problems in patients with MND"
+    url: "https://www.nice.org.uk/guidance/ng42/resources/motor-neurone-disease-assessment-and-management-pdf-1837449470149"
+
+tags:
+  - category: "Conditions"
+    labels: "Motor Neuron Disease"
+
+  - category: "Treatment"
+    labels:
+      - "antimuscarinics"
+      - "glycopyrrolate"
+      - "botulinum toxin"
