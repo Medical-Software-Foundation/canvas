@@ -1,0 +1,45 @@
+digraph OttawaAnkleRules {
+    node [shape=box, style="filled", color="lightblue"];
+    edge [color="black"];
+    
+    start [label="Acute Ankle Injury", shape=ellipse, color="lightgrey"];
+    location [label="Location of Pain"];
+    malleolar [label="Malleolar Zone"];
+    midfoot [label="Midfoot Zone"];
+    
+    malleolarTendernessLateral [label="Bone tenderness at\nposterior edge or tip of lateral malleolus?"];
+    malleolarTendernessMedial [label="Bone tenderness at\nposterior edge or tip of medial malleolus?"];
+    malleolarWeightBearing [label="Inability to bear weight\nimmediately after injury AND in ED?\nPatient unable to take four steps"];
+    
+    midfootTenderness5th [label="Bone tenderness at\nbase of 5th metatarsal?"];
+    midfootTendernessNavicular [label="Bone tenderness at\nnavicular?"];
+    midfootWeightBearing [label="Inability to bear weight\nimmediately after injury AND in ED?\nPatient unable to take four steps"];
+    
+    ankleXray [label="Ankle X-ray indicated", shape=ellipse, color="red"];
+    footXray [label="Foot X-ray indicated", shape=ellipse, color="red"];
+    noXray [label="No X-ray indicated", shape=ellipse, color="green"];
+    
+    start -> location;
+    location -> malleolar [label="Malleolar"];
+    location -> midfoot [label="Midfoot"];
+    
+    malleolar -> malleolarTendernessLateral;
+    malleolarTendernessLateral -> ankleXray [label="Yes"];
+    malleolarTendernessLateral -> malleolarTendernessMedial [label="No"];
+    
+    malleolarTendernessMedial -> ankleXray [label="Yes"];
+    malleolarTendernessMedial -> malleolarWeightBearing [label="No"];
+    
+    malleolarWeightBearing -> ankleXray [label="Yes"];
+    malleolarWeightBearing -> noXray [label="No"];
+    
+    midfoot -> midfootTenderness5th;
+    midfootTenderness5th -> footXray [label="Yes"];
+    midfootTenderness5th -> midfootTendernessNavicular [label="No"];
+    
+    midfootTendernessNavicular -> footXray [label="Yes"];
+    midfootTendernessNavicular -> midfootWeightBearing [label="No"];
+    
+    midfootWeightBearing -> footXray [label="Yes"];
+    midfootWeightBearing -> noXray [label="No"];
+}
