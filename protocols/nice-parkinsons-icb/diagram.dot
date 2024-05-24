@@ -1,0 +1,29 @@
+digraph G {
+    node [shape=box];
+    rankdir=TB;
+    
+    start [label="Patient with Parkinson's disease\nand problematic impulse control disorder"];
+    
+    advice [label="Seek advice from a healthcare professional\nwith specialist expertise in Parkinson's disease"];
+    start -> advice;
+    
+    discuss [label="Discuss with patient and family:\n- How the impulse control disorder is affecting life\n- Possible treatments\n- Benefits and disadvantages of reducing/stopping dopaminergic therapy"];
+    advice -> discuss;
+    
+    modify [label="Gradually reduce any dopamine agonist"];
+    discuss -> modify;
+    
+    monitor [label="Monitor for improvement of impulse control disorder\nand symptoms of dopamine agonist withdrawal"];
+    modify -> monitor;
+    
+    effective [label="Impulse control disorder improves?"];
+    monitor -> effective;
+    
+    yes_effective [label="Continue monitoring"];
+    no_effective [label="Impulse control disorder does not improve"];
+    effective -> yes_effective [label="Yes"];
+    effective -> no_effective [label="No"];
+    
+    therapy [label="Offer specialist cognitive behavioural therapy\n(CBT) targeted at impulse control disorders"];
+    no_effective -> therapy;
+}

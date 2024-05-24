@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "NICE Parkinson's disease guideline: treatment of Impulse Control Disorder"
+    description: "The clinical flowsheet corresponds to section 1.4.6 to 1.4.9 of the 2017 Parkinson's guideline, which deals with the treatment of Impulse Control Disorders"
+    url: "https://www.nice.org.uk/guidance/ng71/resources/parkinsons-disease-in-adults-pdf-1837629189061"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Parkinson's disease"
+      - "Impulse Control Disorder"
+
+  - category: "Treatment"
+    labels:
+      - "CBT"
+      - "dopamine receptor agonists"
