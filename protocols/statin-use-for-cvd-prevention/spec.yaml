@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Statin Use for the Primary Prevention of Cardiovascular Disease in Adults"
+    description: "Recommendation regarding the use of statins for reducing cardiovascular disease (CVD)-related morbidity, mortality, and all-cause mortality."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/statin-use-in-adults-preventive-medication"
+
+tags:
+  - category: "Conditions"
+    label: "CVD Risk"
+
+  - category: "Diagnostics"
+    label: "Prevention"

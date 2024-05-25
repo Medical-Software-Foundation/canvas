@@ -1,0 +1,23 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+
+    start [label="Adult 40 years or older\nwithout known CVD,\nno signs/symptoms of CVD", shape=box];
+    hasOneOrMoreRiskFactors [label="Has 1 or more CVD risk factors\n(dyslipidemia, diabetes,\nhypertension, smoking)?"];
+    estimatedTenYearRiskOver10 [label="Estimated 10-year CVD event risk\n>= 10%?"];
+    estimatedTenYearRisk7_5to10 [label="Estimated 10-year CVD event risk\n7.5-10%?"];
+    over75 [label="Age > 75 years?"];
+    
+    prescribeStatin [label="Prescribe statin\n(B recommendation)", shape=box];
+    selectivelyOfferStatin [label="Selectively offer statin\n(C recommendation)", shape=box];
+    currentEvidenceInsufficient [label="Current evidence insufficient\n(I statement)", shape=box];
+    
+    start -> hasOneOrMoreRiskFactors
+    hasOneOrMoreRiskFactors -> estimatedTenYearRiskOver10 [label="Yes"]
+    hasOneOrMoreRiskFactors -> currentEvidenceInsufficient [label="No"]
+    estimatedTenYearRiskOver10 -> prescribeStatin [label="Yes"]
+    estimatedTenYearRiskOver10 -> estimatedTenYearRisk7_5to10 [label="No"]
+    estimatedTenYearRisk7_5to10 -> selectivelyOfferStatin [label="Yes"]
+    estimatedTenYearRisk7_5to10 -> over75 [label="No"]
+    over75 -> currentEvidenceInsufficient
+}
