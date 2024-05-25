@@ -1,0 +1,14 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+    
+    A [label="Person younger than 18 years?", shape=diamond];
+    B [label="Already uses tobacco?", shape=diamond];
+    C [label="Provide interventions (education or brief counseling) to prevent initiation of tobacco use", shape=rectangle, color=black, fontcolor=black];
+    D [label="Evidence is insufficient for recommendations on cessation interventions", shape=rectangle, color=black, fontcolor=black];
+
+    A -> B [label="yes"];
+    A -> C [label="no"];
+    B -> C [label="no"];
+    B -> D [label="yes"];
+}

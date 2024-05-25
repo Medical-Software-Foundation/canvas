@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Primary Care Interventions for Prevention and Cessation of Tobacco Use in Children and Adolescents"
+    description: "Recommendation by reviewing the evidence on primary care interventions aimed at preventing and ceasing tobacco use among children and adolescents."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/tobacco-and-nicotine-use-prevention-in-children-and-adolescents-primary-care-interventions"
+
+tags:
+  - category: "Conditions"
+    label: "Tobacco Usage"
+
+  - category: "Diagnostics"
+    label: "Prevention"
