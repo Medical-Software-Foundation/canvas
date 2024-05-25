@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Unhealthy Drug Use"
+    description: "Recommendations on screening for unhealthy drug use in adults, including adolescents and pregnant women, by focusing on the benefits and harms of screening and interventions."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/drug-use-illicit-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Drug Usage"
+
+  - category: "Diagnostics"
+    label: "Screening"

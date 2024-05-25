@@ -1,0 +1,17 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    start [label="Population in primary care settings", shape=box];
+    age [label="Age ≥18 or 12-17 years?"];
+    diagnosed_disorder [label="Currently diagnosed drug use disorder or referred for treatment?"];
+    screen_adults [label="Screen adults ≥18 years by asking questions about drug use", shape=box];
+    no_action_adolescents [label="Insufficient evidence for screening adolescents", shape=box];
+    exclude [label="Exclude from screening", shape=box];
+    
+    start -> age
+    age -> diagnosed_disorder [label="18 years or older"];
+    age -> no_action_adolescents [label="12-17 years"];
+    diagnosed_disorder -> screen_adults [label="No"];
+    diagnosed_disorder -> exclude [label="Yes"];
+}
