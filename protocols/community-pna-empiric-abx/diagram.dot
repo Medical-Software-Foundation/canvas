@@ -1,0 +1,40 @@
+digraph CAPAntibioticTherapy {
+    node [shape=box, style="filled", color="lightblue"];
+    edge [color="black"];
+    
+    start [label="Community-Acquired Pneumonia (CAP) Diagnosis", shape=ellipse, color="lightgrey"];
+    
+    comorbidities [label="Are any of the following present:\n Comorbidities\nRecent antibiotic use\nAge ≥ 65\nSmoking"];
+    
+    penicillinAllergy [label="Penicillin Allergy/Intolerance?"];
+    cephalosporinAllergy [label="Cephalosporin Allergy?"];
+    cephalosporinAllergyComorbid [label="Cephalosporin Allergy?"];
+    structuralLungDiseaseComorbid [label="Structural Lung Disease?"];
+    
+    betaLactamMacrolide [label="Amoxicillin-Clavulanate + Macrolide or + Doxycycline"];
+    thirdGenCephalosporinMacrolide [label="3rd Gen Cephalosporin + Macrolide or + Doxycycline"];
+    respiratoryFluoroquinolone [label="Respiratory Fluoroquinolone\n(e.g., Levofloxacin, Moxifloxacin)"];
+    lefamulinOmadacycline [label="Fluoroquinolone, Lefamulin, or Omadacycline"];
+    fluoroLefamulinorOmadacycline [label="Fluoroquinolone, Lefamulin, or Omadacycline"];
+    macrolide [label="Amoxicillin + Macrolide or + Doxycycline"];
+    penicillinAllergyComorbid [label="Penicillin Allergy/Intolerance?"];
+    
+    start -> comorbidities;
+    comorbidities -> penicillinAllergy [label="No"];
+    comorbidities -> penicillinAllergyComorbid [label="Yes"];
+    
+    penicillinAllergy -> cephalosporinAllergy [label="Yes"];
+    penicillinAllergy -> macrolide [label="No"];
+    
+    cephalosporinAllergy ->  fluoroLefamulinorOmadacycline[label="Yes"];
+    cephalosporinAllergy -> thirdGenCephalosporinMacrolide [label="No"];
+    
+    penicillinAllergyComorbid -> cephalosporinAllergyComorbid [label="Yes"];
+    penicillinAllergyComorbid -> betaLactamMacrolide [label="No"];
+    
+    cephalosporinAllergyComorbid -> structuralLungDiseaseComorbid [label="Yes"];
+    cephalosporinAllergyComorbid -> thirdGenCephalosporinMacrolide [label="No"];
+    
+    structuralLungDiseaseComorbid -> respiratoryFluoroquinolone [label="Yes"];
+    structuralLungDiseaseComorbid -> lefamulinOmadacycline [label="No"];
+}
