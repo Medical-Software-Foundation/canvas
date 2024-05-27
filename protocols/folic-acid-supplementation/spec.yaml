@@ -1,20 +1,21 @@
 status: "draft"
 
 contributors:
-- username: "willb0246"
-  name: "William Burke"
+  - username: "willb0246"
+    name: "William Burke"
 
 reference_papers:
-- title: "Folic Acid Supplementation to Prevent Neural Tube Defects"
-  description: "This paper from the US Preventive Services Task Force provides a recommendation for folic acid supplementation to prevent neural tube defects in offspring, emphasizing the need for persons planning or who could become pregnant to take a daily supplement containing 0.4 to 0.8 mg of folic acid."
-  url: "https://jama.jamanetwork.com/article.aspx?articleid=2791090"
+  - title: "Folic Acid Supplementation to Prevent Neural Tube Defects"
+    description: "This paper from the US Preventive Services Task Force provides a recommendation for folic acid supplementation to prevent neural tube defects in offspring, emphasizing the need for persons planning or who could become pregnant to take a daily supplement containing 0.4 to 0.8 mg of folic acid."
+    url: "https://jama.jamanetwork.com/article.aspx?articleid=2791090"
 
 tags:
-- category: "Conditions"
-    labels: "Pregnancy"
-
-- category: "Treatment"
-  label: "Prevention"
-
-- category: "Guideline"
-  label: "USPSTF"
+  - category: "Conditions"
+    labels:
+      - "Pregnancy"
+  - category: "Treatment"
+    labels:
+      - "Prevention"
+  - category: "Guideline"
+    labels:
+      - "USPSTF"

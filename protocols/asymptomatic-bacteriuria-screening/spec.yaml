@@ -1,20 +1,21 @@
 status: "draft"
 
 contributors:
-- username: "willb0246"
+  - username: "willb0246"
     name: "William Burke"
 
 reference_papers:
-- title: "Screening for Asymptomatic Bacteriuria in Adults: US Preventive Services Task Force Recommendation Statement"
+  - title: "Screening for Asymptomatic Bacteriuria in Adults: US Preventive Services Task Force Recommendation Statement"
     description: "This paper provides US Preventive Services Task Force recommendations on screening for asymptomatic bacteriuria in adults, highlighting its importance for pregnant women to reduce perinatal complications and arguing against screening in nonpregnant adults due to lack of net benefits."
     url: "https://jamanetwork.com/journals/jama/fullarticle/2753392"
 
 tags:
-- category: "Healthcare Practice"
+  - category: "Healthcare Practice"
     labels: 
     - "Pregnancy"
     - "Bacteriuria"
     - "Urine Screening"
     - "US Preventive Services Task Force"
-- category: "Target Population"
-    label: "Pregnant and Nonpregnant Adults"
+  - category: "Target Population"
+    label: 
+    - "Pregnant and Nonpregnant Adults"

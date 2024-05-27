@@ -11,13 +11,17 @@ reference_papers:
 
 tags:
   - category: "Conditions"
-    labels: "Anxiety"
+    labels: 
+    - "Anxiety"
 
   - category: "Diagnostics"
-    label: "screening"
+    label: 
+    - "screening"
 
   - category: "Conditions"
-    label: "Mental Health"
+    label: 
+    - "Mental Health"
 
-- category: "Guideline"
-  label: "USPSTF"
+  - category: "Guideline"
+    label: 
+    - "USPSTF"
