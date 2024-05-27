@@ -1,0 +1,12 @@
+digraph G {
+    rankdir=TB
+    
+    node [shape=rectangle,color=blue,fontcolor=blue];
+    start[label="Is the patient pregnant?"];
+    
+    
+    node [shape=rectangle];
+    screen_recomm[label="Early screening for syphilis infection",color=blue,fontcolor=blue];
+    
+    start -> screen_recomm [label="Yes"];
+}

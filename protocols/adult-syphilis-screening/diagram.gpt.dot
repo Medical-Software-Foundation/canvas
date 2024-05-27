@@ -1,0 +1,24 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    start[label="Nonpregnant Adolescents and Adults who have ever been sexually active"];
+    atIncreasedRisk[label="At increased risk for syphilis?"];
+    riskFactors[label="Has any risk factor\n(MSM, HIV, STDs, Illicit drugs, Incarceration, Sex work, Military service)?"];
+    communityPrevalence[label="High community prevalence of syphilis?"];
+    
+    screenTraditional[label="Screen annually or every 3-6 months\nTraditional Algorithm (VDRL/RPR test, confirm with TP-PA)", shape=rectangle, color=black, fontcolor=black];
+    screenReverse[label="Screen annually or every 3-6 months\nReverse Sequence Algorithm (Treponemal test, confirm with nontreponemal test)", shape=rectangle, color=black, fontcolor=black];
+    
+    noScreening[label="No Screening Recommended", shape=rectangle, color=black, fontcolor=black];
+
+    start -> atIncreasedRisk
+    atIncreasedRisk -> riskFactors [label="Yes"]
+    atIncreasedRisk -> noScreening [label="No"]
+    riskFactors -> communityPrevalence [label="No"]
+    riskFactors -> screenTraditional [label="Yes"]
+    riskFactors -> screenReverse [label="Yes"]
+    communityPrevalence -> screenTraditional [label="Yes"]
+    communityPrevalence -> screenReverse [label="Yes"]
+    communityPrevalence -> noScreening [label="No"]
+}

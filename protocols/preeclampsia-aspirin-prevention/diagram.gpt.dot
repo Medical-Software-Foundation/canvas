@@ -1,0 +1,19 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+
+    start [label="Pregnant Persons", shape=rectangle]
+    highRisk [label="High Risk for Preeclampsia?"]
+    moderateRisk [label="Moderate Risk for Preeclampsia?"]
+    recommendationHigh [label="Recommend low-dose aspirin (81mg/day) after 12 weeks of gestation", shape=rectangle]
+    recommendationModerateTwo [label="Recommend low-dose aspirin (81mg/day) after 12 weeks of gestation if ≥2 moderate-risk factors", shape=rectangle]
+    considerModerateOne [label="Consider low-dose aspirin (81mg/day) after 12 weeks of gestation if 1 moderate-risk factor", shape=rectangle]
+    noRecommendation [label="Do not recommend low-dose aspirin", shape=rectangle]
+    
+    start -> highRisk
+    highRisk -> recommendationHigh [label="Yes"]
+    highRisk -> moderateRisk [label="No"]
+    moderateRisk -> recommendationModerateTwo [label="≥2 moderate-risk factors"]
+    moderateRisk -> considerModerateOne [label="1 moderate-risk factor"]
+    moderateRisk -> noRecommendation [label="No or Low Risk"]
+}

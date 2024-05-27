@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+- username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+- title: "Screening for Syphilis Infection in Nonpregnant Adolescents and Adults: US Preventive Services Task Force Reaffirmation Recommendation Statement"
+    description: "This paper reaffirms the 2016 recommendation by the US Preventive Services Task Force for screening for syphilis infection in nonpregnant adolescents and adults who are at increased risk. It underlines the importance of screening due to the substantial net benefit in early detection and prevention of late-stage disease, sexual transmission, and other serious health complications associated with untreated syphilis."
+    url: "jama.jamanetwork.com/article.aspx?doi=10.1001/jama.2022.15322"
+
+tags:
+  - category: "Diagnostics"
+    label: "screening"
+
+  - category: "Guideline"
+    label: "USPSTF"

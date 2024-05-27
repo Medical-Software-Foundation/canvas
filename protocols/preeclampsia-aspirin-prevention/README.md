@@ -1,0 +1,13 @@
+The medical protocol outlined focuses on the prevention of preeclampsia using low-dose aspirin in pregnant individuals who are at high risk. Preeclampsia is a severe condition characterized by high blood pressure and often proteinuria, affecting both maternal and infant health significantly. Moreover, it disproportionately impacts certain racial and ethnic groups, with non-Hispanic Black women experiencing higher rates of morbidity and mortality related to preeclampsia.
+
+The protocol has been developed by the US Preventive Services Task Force (USPSTF) with the aim of updating their 2014 recommendation. It specifically targets pregnant individuals who are at high risk for preeclampsia and have no prior adverse effects or contraindications to low-dose aspirin use.
+
+### Studied Group:
+The population under consideration includes pregnant persons identified as having a high risk for developing preeclampsia. This category encompasses those with a history of preeclampsia, multifetal gestation, chronic hypertension, type 1 or 2 diabetes, pregestational diabetes, kidney disease, autoimmune diseases, and other factors contributing to increased risk, such as advanced maternal age (>35 years), high body mass index (BMI), and using assisted reproductive technology for conception.
+
+### Recommended Actions:
+The protocol recommends the administration of low-dose aspirin (81 mg/day) as a preventive measure starting from after 12 weeks of gestation. The use of low-dose aspirin is supported by evidence indicating its substantial net benefit in reducing the risk for preeclampsia itself as well as related outcomes, including preterm birth, small for gestational age or intrauterine growth restriction, and perinatal mortality.
+
+This recommendation emphasizes addressing the disparities in preeclampsia outcomes by providing clear criteria for identifying individuals at high risk and recommending preventive measures. The protocol also underscores the importance of considering social and health inequities, specifically highlighting the heightened vulnerability of Black individuals to preeclampsia and its severe complications due to broader societal and healthcare access issues.
+
+In summary, this medical protocol offers a comprehensive approach to preeclampsia prevention through the strategic use of low-dose aspirin in individuals at elevated risk, targeting both the reduction of direct health impacts and addressing underlying disparities in morbidity and mortality rates associated with the condition.

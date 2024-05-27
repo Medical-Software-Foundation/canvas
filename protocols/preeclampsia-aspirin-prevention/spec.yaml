@@ -1,0 +1,16 @@
+status: "draft"
+
+contributors:
+- username: "willb0246"
+  name: "William Burke"
+reference_papers:
+- title: "Aspirin Use to Prevent Preeclampsia and Related Morbidity and Mortality"
+  description: "This paper discusses the US Preventive Services Task Force's recommendation on the use of low-dose aspirin (81 mg/d) after 12 weeks of gestation in persons at high risk for preeclampsia to reduce the incidence of preeclampsia, preterm birth, small for gestational age/intrauterine growth restriction, and perinatal mortality. It emphasizes the importance of recognizing the risk factors and disparities in the prevalence and outcomes of preeclampsia."
+  url: "doi:10.1001/jama.2021.14781"
+
+tags:
+  - category: "Treatment"
+    label: "Prevention"
+
+  - category: "Guideline"
+    label: "USPSTF"

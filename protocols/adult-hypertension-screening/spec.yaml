@@ -3,15 +3,15 @@ status: "draft"
 contributors:
 - username: "willb0246"
   name: "William Burke"
-  
+
 reference_papers:
 - title: "Screening for Hypertension in Adults: US Preventive Services Task Force Reaffirmation Recommendation Statement"
   description: "This paper reaffirms the 2015 recommendation by the US Preventive Services Task Force (USPSTF) on the importance of screening for hypertension in adults. It evaluates the benefits and harms of screening for hypertension, the accuracy of office blood pressure measurement for initial screening, and the accuracy of various confirmatory blood pressure measurement methods. It concludes that screening for hypertension in adults has substantial net benefit."
   url: "https://jamanetwork.com/journals/jama/fullarticle/2779735"
 
 tags:
-- category: "Healthcare Screening"
-  labels: ["Hypertension", "Preventive Care", "US Preventive Services Task Force", "Blood Pressure Measurement"]
+  - category: "Diagnostics"
+    label: "screening"
 
-- category: "Recommendation Grade"
-  label: "A"
+  - category: "Guideline"
+    label: "USPSTF"
