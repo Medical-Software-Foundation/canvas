@@ -1,0 +1,21 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+    
+    A [label="Adult ≥ 18 years or older", shape=diamond];
+    B [label="Pregnant?", shape=diamond];
+    D [label="Screen for asymptomatic bacteriuria using urine culture at first prenatal visit or at 12 to 16 weeks of gestation", shape=rectangle, color=black, fontcolor=black];
+    E [label="Do not screen for asymptomatic bacteriuria", shape=rectangle, color=black, fontcolor=black];
+    F [label="Chronic medical or urinary tract conditions?", shape=diamond];
+    G [label="Hospitalized or living in institutions such as nursing homes?", shape=diamond];
+    
+    
+    G -> B [label="No"];
+    A -> F [label="Yes"];
+    F -> G [label="No"];
+    F -> E [label="Yes"];
+    G -> E [label="Yes"];
+    B -> D [label="Yes"];
+    B -> E [label="No"];
+    A -> E [label="No"];
+}
