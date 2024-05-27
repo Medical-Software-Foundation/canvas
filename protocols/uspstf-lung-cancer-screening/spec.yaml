@@ -1,28 +1,28 @@
-status: "draft"
-
+status: draft
 contributors:
-  - username: "dmhardin102"
-    name: "David Hardin"
-
+  - username: dmhardin102
+    name: David Hardin
 reference_papers:
-  - title: "Screening for Lung Cancer US Preventive Services Task Force Recommendation Statement"
-    description: > "The USPSTF recommends annual screening for lung cancer with LDCT in adults aged 50 to 80 years 
-    who have a 20 pack-year smoking history and currently smoke or have quit within the past 15 years."
-    url: "https://jamanetwork.com/journals/jama/fullarticle/2777244"
-
-  - title: "Final Recommendation Statement Lung Cancer: Screening"
-    description: "Screening Adults aged 50 to 80 years who have a 20 pack-year smoking history and currently smoke or have quit within the past 15 years"
-    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening"
-
+  - title: >-
+      Screening for Lung Cancer US Preventive Services Task Force Recommendation
+      Statement
+    description: >-
+      The USPSTF recommends annual screening for lung cancer with LDCT in adults
+      aged 50 to 80 years who have a 20 pack-year smoking history and currently
+      smoke or have quit within the past 15 years.
+    url: 'https://jamanetwork.com/journals/jama/fullarticle/2777244'
+  - title: 'Final Recommendation Statement Lung Cancer: Screening'
+    description: >-
+      Screening Adults aged 50 to 80 years who have a 20 pack-year smoking
+      history and currently smoke or have quit within the past 15 years
+    url: >-
+      https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/lung-cancer-screening
 tags:
-  - category: "Conditions"
-    labels: "tobacco use"
-  
-  - category: "Conditions"
-    labels: "lung cancer"
-
-  - category: "Diagnostics"
-    label: "screening"
-  
-  - category: "Diagnostics"
-    label: "computed tomography"
+  - category: Conditions
+    labels: tobacco use
+  - category: Conditions
+    labels: lung cancer
+  - category: Diagnostics
+    label: screening
+  - category: Diagnostics
+    label: computed tomography
