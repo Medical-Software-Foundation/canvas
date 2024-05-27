@@ -1,23 +1,17 @@
-status: "draft"
-
+status: draft
 contributors:
-  - username: "dmhardin102"
-    name: "David Hardin"
-
+  - username: dmhardin102
+    name: David Hardin
 reference_papers:
-  - title: "The Ottawa knee rules A useful clinical decision tool"
-    description: "Criteria for Knee XR Imaging in Acute Injury"
-    url: "https://www.racgp.org.au/afp/2012/april/the-ottawa-knee-rules"
-
+  - title: The Ottawa knee rules A useful clinical decision tool
+    description: Criteria for Knee XR Imaging in Acute Injury
+    url: 'https://www.racgp.org.au/afp/2012/april/the-ottawa-knee-rules'
 tags:
-  - category: "Conditions"
-    labels: "knee injury"
-
-  - category: "Diagnostics"
-    label: "injury"
-  
-  - category: "Diagnostics"
-    label: "radiography"
-
-- category: "specialty"
-    label: "orthopedics"
+  - category: Conditions
+    labels: knee injury
+  - category: Diagnostics
+    label: injury
+  - category: Diagnostics
+    label: radiography
+  - category: specialty
+    label: orthopedics
