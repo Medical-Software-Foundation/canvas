@@ -1,0 +1,32 @@
+digraph OpioidRiskTool {
+    node [shape=box, style="filled", color="lightblue"];
+    edge [color="black"];
+    
+    start [label="Patient Considered for Long-Term Opioid Therapy", shape=ellipse, color="lightgrey"];
+    
+    familyHistory [label="Family History of Substance Abuse\n- Alcohol (Male 3, Female 1)\n- Illegal drugs (Male 3, Female 2)\n- Prescription drugs (Male 4, Female 4)"];
+    
+    personalHistory [label="Personal History of Substance Abuse\n- Alcohol (Male 3, Female 3)\n- Illegal drugs (Male 4, Female 4)\n- Prescription drugs (Male 5, Female 5)"];
+    
+    age [label="Age (between 16-45) (1 point)"];
+    sexualAbuse [label="History of Preadolescent Sexual Abuse (Female 3, Male 0)"];
+    
+    psychologicalDisease [label="Psychological Disease\n- ADD, OCD, Bipolar, Schizophrenia (2 points)\n- Depression (1 point)"];
+    
+    calculateScore [label="Calculate ORT Score"];
+    
+    lowRisk [label="Low Risk (0-3 points)", shape=ellipse, color="green"];
+    moderateRisk [label="Moderate Risk (4-7 points)", shape=ellipse, color="yellow"];
+    highRisk [label="High Risk (8 or more points)", shape=ellipse, color="red"];
+    
+    start -> familyHistory;
+    familyHistory -> personalHistory;
+    personalHistory -> age;
+    age -> sexualAbuse;
+    sexualAbuse -> psychologicalDisease;
+    psychologicalDisease -> calculateScore;
+    
+    calculateScore -> lowRisk [label="0-3 points"];
+    calculateScore -> moderateRisk [label="4-7 points"];
+    calculateScore -> highRisk [label="8 or more points"];
+}
