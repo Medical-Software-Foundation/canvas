@@ -1,0 +1,21 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: Opioid Risk Tool
+    description: >-
+      The Opioid Risk Tool (ORT) is a brief, self-report screening tool designed
+      for use with adult patients in primary care settings to assess risk for
+      opioid abuse among individuals prescribed opioids for treatment of chronic
+      pain.
+    url: 'https://nida.nih.gov/sites/default/files/opioidrisktool.pdf'
+tags:
+  - category: Organization
+    labels: NIDA
+  - category: Conditions
+    labels: opioid abuse
+  - category: Conditions
+    label: chronic pain
+  - category: Diagnostics
+    label: screening
