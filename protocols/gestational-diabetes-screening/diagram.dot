@@ -1,0 +1,17 @@
+digraph G {
+    rankdir=TB
+
+    node [shape=diamond,color=blue,fontcolor=blue];
+    Pregnant "Pregnant?\n[Not previously diagnosed\nwith type 1 or 2 diabetes]"
+    gestationAge "Gestation Age\n>= 24 weeks?"
+
+    node [shape=rectangle,color=black,fontcolor=black];
+    Screen "Screen for Gestational\nDiabetes"
+    NoScreen "No specific recommendation\nfor screening"
+    NotPregnant "Not eligible for\nGestational Diabetes Screening"
+
+    Pregnant -> NotPregnant [label="No"]
+    Pregnant -> gestationAge [label="Yes"]
+    gestationAge -> Screen [label="Yes"]
+    gestationAge -> NoScreen [label="No"]
+}

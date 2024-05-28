@@ -1,0 +1,19 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Gestational Diabetes"
+    description: "Recommendations for screening asymptomatic pregnant persons for gestational diabetes to improve maternal and fetal outcomes"
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/gestational-diabetes-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Pregnancy"
+  - category: "Conditions"
+    label: "Diabetes"
+
+  - category: "Diagnostics"
+    label: "Screening"
