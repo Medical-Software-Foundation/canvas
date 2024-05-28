@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Hepatitis B Virus Infection in Adolescents and Adults"
+    description: "Recommendations for screening asymptomatic, nonpregnant adolescents and adults for Hepatitis B Virus (HBV) infection, aiming to prevent chronic liver disease and improve overall health outcomes."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/hepatitis-b-virus-infection-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Hepatitis"
+
+
+  - category: "Diagnostics"
+    label: "Screening"
