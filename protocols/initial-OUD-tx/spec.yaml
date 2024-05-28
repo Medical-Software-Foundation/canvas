@@ -1,0 +1,22 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: Approach to medication treatment for opioid use disorder
+    description: >-
+      Outline of evaluation and initial treatment decisions for medication
+      assisted therapy in opioid use disorder.
+    url: >-
+      https://www.uptodate.com/contents/opioid-use-disorder-pharmacologic-management
+tags:
+  - category: Organization
+    labels: UpToDate
+  - category: Conditions
+    labels: opioid abuse
+  - category: Medication
+    label: buprenorphine
+  - category: Medication
+    label: methadone
+  - category: Medication
+    label: naltrexone
