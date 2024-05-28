@@ -1,0 +1,30 @@
+digraph MATTherapy {
+    node [shape=box, style="filled", color="lightblue"];
+    edge [color="black"];
+    
+    start [label="Is the individual physically dependent on opioids?", shape=ellipse, color="lightgrey"];
+    
+    detoxification [label="Has the patient undergone medically supervised withdrawal?"];
+    counseling [label="Addiction counseling and mutual help groups\nDiscuss with individual the risks and benefits of pharmacologic management of opioid use disorder\nEncourage treatment with naltrexone (LAI)"];
+    naltrexone [label="LAI naltrexone\nMonitor for 3 to 6 months"];
+    buprenorphine [label="Treat with transmucosal buprenorphine for 3 to 6 months"];
+    monitor [label="Has the treatment goal been reached?"];
+    methadone [label="Start methadone\nMonitor for 3 to 6 months"];
+    continue [label="Continue to monitor and treat with medications and psychosocial intervention"];
+    intensive [label="Add more intensive psychosocial intervention/treatment in conjunction with medication management"];
+    
+    start -> detoxification [label="Yes"];
+    start -> counseling [label="No"];
+    
+    detoxification -> naltrexone [label="Yes"];
+    detoxification -> buprenorphine [label="No"];
+    
+    naltrexone -> monitor;
+    buprenorphine -> monitor;
+    
+    monitor -> continue [label="Yes"];
+    monitor -> methadone [label="No"];
+    
+    methadone -> continue [label="Yes"];
+    methadone -> intensive [label="No"];
+}
