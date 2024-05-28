@@ -1,0 +1,22 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: >-
+      Community-acquired pneumonia- Empiric outpatient antibiotic selection in
+      adults
+    description: >-
+      Guidelines for determination of initial empiric antibiotic therapy in
+      adults diagnosed with community acquired pneumonia.
+    url: >-
+      https://www.uptodate.com/contents/image?csi=fc941f13-2506-4485-972f-44656a41b894&source=contentShare&imageKey=ID%2F111829
+tags:
+  - category: Organization
+    labels: UpToDate
+  - category: Conditions
+    labels: pneumonia
+  - category: Specialty
+    label: infectious disease
+  - category: Setting
+    label: outpatient
