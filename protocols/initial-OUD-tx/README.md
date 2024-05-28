@@ -30,7 +30,7 @@ This protocol outlines the initial medication therapy options for Medication-Ass
          - **Yes:** Continue to monitor and treat with medications and psychosocial intervention
          - **No:** Add more intensive psychosocial intervention/treatment in conjunction with medication management
 
-## Protocol Caveats
+## Special Considerations
 
 - **Detoxification:**
   - The protocol varies based on whether the patient has undergone medically supervised withdrawal.
