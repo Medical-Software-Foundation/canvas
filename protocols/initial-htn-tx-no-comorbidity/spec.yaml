@@ -1,0 +1,22 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: >-
+      Approach to antihypertensive drug therapy- Patients without indications
+      for a specific drug
+    description: >-
+      Initial treatment of hypertension in patients without comorbidities or
+      compelling indications for a specific drug
+    url: >-
+      https://www.uptodate.com/contents/choice-of-drug-therapy-in-primary-essential-hypertension
+tags:
+  - category: Organization
+    labels: UpToDate
+  - category: Conditions
+    labels: Hypertension
+  - category: Medications
+    label: Anti-hypertesive Drugs
+  - category: Disease Management
+    label: Initial Treatment
