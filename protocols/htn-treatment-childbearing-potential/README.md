@@ -2,7 +2,7 @@
 
 This protocol outlines the treatment steps for managing hypertension in women who are pregnant or could potentially become pregnant. It emphasizes the use of medications that are safe during pregnancy and a stepwise approach to achieving blood pressure control.
 
-## Summary of the Protocol
+## Protocol Outline
 
 1. **Assess Pregnancy Potential:**
    - Could the patient become pregnant?
@@ -40,14 +40,14 @@ This protocol outlines the treatment steps for managing hypertension in women wh
   - Many antihypertensive agents should be avoided in patients who are pregnant and therefore should not be used among females who could become pregnant. Conversely, patients who have undergone surgical sterilization or who are using a long-acting contraceptive (IUDs or etonogestrel implant) have unintended pregnancy rates of <1% and could reasonably be prescribed a medication that would typically be contraindicated in pregnancy.
 
 - **Monitoring and Causes of Ineffectiveness:**
-  - Δ The most common causes of lack of response to antihypertensive drug therapy are:
+  - The most common causes of lack of response to antihypertensive drug therapy are:
     - Medication nonadherence
     - White coat effect
     - Improper blood pressure measurement
   - Thus, when drug therapy interventions appear to be ineffective, the clinician should consider nonadherence and ensure that blood pressure is evaluated properly.
 
 - **Diuretics in Pregnancy:**
-  - ◊ If a patient taking a thiazide-like or thiazide-type diuretic becomes pregnant, a discussion with the patient about discontinuing the drug or reducing the dose should ensue. Although there are theoretical concerns about diuretics adversely affecting the physiologic increase in plasma volume during pregnancy, there is no evidence that these agents are teratogenic or adversely affect pregnancy.
+  - If a patient taking a thiazide-like or thiazide-type diuretic becomes pregnant, a discussion with the patient about discontinuing the drug or reducing the dose should ensue. Although there are theoretical concerns about diuretics adversely affecting the physiologic increase in plasma volume during pregnancy, there is no evidence that these agents are teratogenic or adversely affect pregnancy.
 
 - **Frequency of Monitoring:**
-  - § Among patients with controlled blood pressure, the frequency of monitoring varies but is typically every 3 to 6 months.
+  - Among patients with controlled blood pressure, the frequency of monitoring varies but is typically every 3 to 6 months.
