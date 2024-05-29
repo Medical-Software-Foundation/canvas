@@ -1,0 +1,29 @@
+digraph HypertensionTherapy {
+    node [shape=box, style="filled", color="lightblue"];
+    edge [color="black"];
+    
+    start [label="All motivated hypertensive patients should receive counseling about lifestyle interventions to lower BP", shape=ellipse, color="lightgrey"];
+    
+    systolic [label="Is the systolic pressure >20 mmHg above the goal and/or is the diastolic pressure >10 mmHg above the goal?"];
+    acr [label="ACR ≥300 mg/g?"];
+    aceInhibitor [label="Initiate an ACE inhibitor (or ARB) plus a dihydropyridine calcium channel blocker"];
+    aceArb [label="Initiate an ACE inhibitor (or ARB)"];
+    aceDihydro [label="Initiate an ACE inhibitor (or ARB) or a dihydropyridine calcium channel blocker"];
+    combineAce [label="Combine an ACE inhibitor (or ARB) and a dihydropyridine calcium channel blocker"];
+    thiazide [label="Add a thiazide-like diuretic"];
+    resistant [label="Apparent resistant hypertension"];
+    
+    start -> systolic;
+    systolic -> aceInhibitor [label="Yes"];
+    systolic -> acr [label="No"];
+    
+    acr -> aceArb [label="Yes"];
+    acr -> aceDihydro [label="No"];
+    
+    aceInhibitor -> combineAce [label="BP remains uncontrolled"];
+    aceArb -> combineAce [label="BP remains uncontrolled"];
+    aceDihydro -> combineAce [label="BP remains uncontrolled"];
+    
+    combineAce -> thiazide [label="BP remains uncontrolled"];
+    thiazide -> resistant [label="BP remains uncontrolled"];
+}
