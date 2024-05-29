@@ -1,0 +1,31 @@
+digraph HypertensionPregnancy {
+    node [shape=box, style="filled", color="lightblue"];
+    edge [color="black"];
+    
+    start [label="Could the patient become pregnant?", shape=ellipse, color="lightgrey"];
+    
+    nifedipine [label="Initiate nifedipine ER\nUsual starting dose is 30 or 60 mg once daily;\ntitrate dose every 2 to 4 weeks as needed, up to 90 mg once daily\nAmlodipine is a reasonable alternative"];
+    standardTherapy [label="Treat with standard first-line antihypertensive therapy"];
+    bpControlled1 [label="Blood pressure controlled?"];
+    thiazide [label="Add a thiazide-like diuretic (e.g., chlorthalidone)\nUsual starting dose is 12.5 mg daily with titration to 25 mg once daily, if needed, in 2 to 4 weeks"];
+    bpControlled2 [label="Blood pressure controlled?"];
+    labetalol [label="Add labetalol\nUsual starting dose is 100 mg orally twice daily; titrate dose every 2 to 4 weeks as needed\nTypical maximum dose 400 mg orally twice daily\nCarvedilol and metoprolol are reasonable alternatives\nConsider referral to a hypertension specialist for evaluation of barriers to hypertension control and secondary hypertension"];
+    bpControlled3 [label="Blood pressure controlled?"];
+    routineMonitoring [label="Routine monitoring"];
+    specialistReferral [label="Refer to a hypertension specialist for evaluation and management of apparent resistant hypertension"];
+    
+    start -> nifedipine [label="Yes"];
+    start -> standardTherapy [label="No"];
+    
+    nifedipine -> bpControlled1;
+    bpControlled1 -> routineMonitoring [label="Yes"];
+    bpControlled1 -> thiazide [label="No"];
+    
+    thiazide -> bpControlled2;
+    bpControlled2 -> routineMonitoring [label="Yes"];
+    bpControlled2 -> labetalol [label="No"];
+    
+    labetalol -> bpControlled3;
+    bpControlled3 -> routineMonitoring [label="Yes"];
+    bpControlled3 -> specialistReferral [label="No"];
+}
