@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Hepatitis C Virus Infection in Adolescents and Adults"
+    description: "Guidelines for the screening of hepatitis C virus (HCV) infection in adults, aiming to reduce the prevalence and prevent complications associated with chronic hepatitis C infection."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/hepatitis-c-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Hepatitis C"
+
+
+  - category: "Diagnostics"
+    label: "Screening"

@@ -1,0 +1,36 @@
+digraph G {
+    rankdir=TB
+    
+    node [shape=diamond, color=blue, fontcolor=blue];
+    
+    A [label="Is the person an adult aged 18 to 79 years?"];
+    B [label="Does the person have past or current injection drug use?"];
+    C [label="Is the person a pregnant adult?"];
+    D [label="Is the person younger than 18 years or older than 79 years but at high risk?"];
+    
+    node [shape=rect, color=black, fontcolor=black];
+    
+    A_YES [label="Recommend Screening", shape=rect];
+    B_YES [label="Recommend Screening", shape=rect];
+    C_YES [label="Recommend Screening", shape=rect];
+    D_YES [label="Consider Screening", shape=rect];
+    NOPE [label="No Screening", shape=rect];
+    
+    A -> A_YES [label="Yes"];
+    A -> B [label="No"];
+    B -> B_YES [label="Yes"];
+    B -> C [label="No"];
+    C -> C_YES [label="Yes"];
+    C -> D [label="No"];
+    D -> D_YES [label="Yes"];
+    D -> NOPE [label="No"];
+    
+    A_YES -> E [label="Screening Protocol", shape=none];
+    B_YES -> E [label="Screening Protocol", shape=none];
+    C_YES -> E [label="Screening Protocol", shape=none];
+    D_YES -> E [label="Screening Protocol", shape=none];
+    
+    node [shape=rect, color=green, fontcolor=green];
+    
+    E [label="Screen with anti-HCV antibody testing followed by PCR testing for HCV RNA"];
+}
