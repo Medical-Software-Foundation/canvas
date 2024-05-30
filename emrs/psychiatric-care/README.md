@@ -1,12 +1,11 @@
 ## Conditions Managed
-The EMR is optimized to manage conditions such as depression, anxiety, bipolar disorder, schizophrenia, and substance use disorders. It is tailored to address the needs of diverse patient populations, including adolescents, adults, and older adults, with specialized modules for each age group.
+The EMR is optimized to manage common conditions such as major depressive disorder, bipolar disorder, schizophrenia, anxiety disorders, and substance use disorders. It also caters to age-specific concerns within the adult population, addressing the unique needs of young adults (18-25) and older adults (65+), ensuring tailored care for all stages of adulthood.
 
 ## Scope of Treatments
-Common treatment interventions documented within the EMR include pharmacotherapy, cognitive behavioral therapy (CBT), motivational interviewing, and group therapy sessions. The system is designed to support medication management, psychotherapy session tracking, and integrated care plans.
+Common treatment interventions include pharmacotherapy, psychotherapy, cognitive-behavioral therapy, and medication-assisted treatment for addiction. The system supports integrated treatment plans, combining multiple modalities to provide comprehensive care tailored to each patient's unique needs and treatment goals.
 
 ## Settings of Care
-Care teams interact with patients through multiple modalities, including in-person office visits, secure text messaging, phone calls, and video conferencing. The EMR supports seamless integration of these communication methods, ensuring continuity of care and real-time updates to patient records.
+Care teams interact with patients through various settings, including in-person office visits, secure text messaging, phone consultations, and video conferencing. The EMR facilitates seamless communication and coordination among providers, ensuring continuity of care across different settings and improving patient engagement and accessibility to services.
 
 ## Protocols
-The EMR incorporates widely-used protocols such as the DSM-5 criteria for diagnosis, the use of standardized screening tools like the PHQ-9 and GAD-7, and evidence-based guidelines for medication-assisted treatment (MAT) for substance use disorders. Customizable care pathways are available to adapt to individual patient needs and treatment responses.
-
+The most-used protocols include standardized screening and diagnostic tools like the PHQ-9 for depression and the GAD-7 for anxiety, along with evidence-based treatment pathways for medication management and psychotherapy. The EMR incorporates guidelines from recognized bodies such as the American Psychiatric Association and the Substance Abuse and Mental Health Services Administration, ensuring adherence to best practices in the care of this population.
