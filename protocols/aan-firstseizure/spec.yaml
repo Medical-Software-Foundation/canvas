@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "American Academy of Neurology: Management of an unprovoked first seizure in adults"
+    description: "Evidence-based guideline for management of first seizure"
+    url: "https://www.neurology.org/doi/pdfdirect/10.1212/WNL.0000000000001487"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "First seizure"
+      - "Epilepsy"
+
+  - category: "Treatment"
+    label: 
+      - "Antiepileptic drugs"
+

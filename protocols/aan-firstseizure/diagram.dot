@@ -1,0 +1,42 @@
+digraph G {
+    rankdir=LR;
+    node [shape=box, style=rounded];
+    
+    start [label="Adults with an unprovoked first seizure"];
+    
+    risk_info [label="Inform patient about\nrisk of recurrence\nin the first 2 years\n(21%–45%)"];
+    risk_factors [label="Clinical variables associated with increased risk:"];
+    brain_insult [label="Prior brain insult"];
+    eeg_abnormalities [label="EEG with epileptiform abnormalities"];
+    brain_imaging [label="Significant brain-imaging abnormality"];
+    nocturnal_seizure [label="Nocturnal seizure"];
+    
+    aed_therapy [label="Inform patient about immediate AED therapy:"];
+    reduce_risk [label="Reduces recurrence risk within first 2 years"];
+    quality_of_life [label="May not improve quality of life"];
+    long_term_prognosis [label="Unlikely to improve long-term prognosis\nfor sustained seizure remission"];
+    aed_adverse_events [label="Risk of AED adverse events (AEs): 7% to 31%"];
+
+    clinician_recommendations [label="Clinician decision whether to start AED therapy"];
+    weigh_risks [label="Weigh risk of recurrence against AEs of AED therapy"];
+    patient_preferences [label="Consider educated patient preferences"];
+    advise_treatment [label="Advise that immediate treatment reduces\nseizure risk over 2 years but doesn't\nimprove long-term prognosis"];
+    
+    start -> risk_info;
+    risk_info -> risk_factors;
+    risk_factors -> brain_insult;
+    risk_factors -> eeg_abnormalities;
+    risk_factors -> brain_imaging;
+    risk_factors -> nocturnal_seizure;
+    
+    start -> aed_therapy;
+    aed_therapy -> reduce_risk;
+    aed_therapy -> quality_of_life;
+    aed_therapy -> long_term_prognosis;
+    aed_therapy -> aed_adverse_events;
+    
+    start -> clinician_recommendations;
+    clinician_recommendations -> weigh_risks;
+    clinician_recommendations -> patient_preferences;
+    clinician_recommendations -> advise_treatment;
+}
