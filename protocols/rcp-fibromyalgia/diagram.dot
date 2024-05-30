@@ -1,0 +1,29 @@
+digraph FM_Clinical_Flowsheet {
+    node [shape=box, fontname="Arial"];
+    
+    Start [label="Start"];
+    UnequivocalSymptoms [label="Symptoms and signs\nfor fibromyalgia are unequivocal?"];
+    NoReferral [label="No referral needed"];
+    ReferralNeeded [label="Referral to specialist service needed"];
+    EquivocalSymptoms [label="FMS symptoms are continually equivocal"];
+    DiagnosticUncertainty [label="Clear diagnostic uncertainty"];
+    ComplexConditions [label="Presence of complex multiple health conditions"];
+    RheumatologyPainMedicine [label="Refer to rheumatology or pain medicine services"];
+    NeurologyServices [label="Refer to neurology services"];
+    OtherSymptoms [label="Symptoms that need\ninvestigating but are outside the\nclinician’s scope of practice"]
+
+    Start -> UnequivocalSymptoms;
+    UnequivocalSymptoms -> NoReferral [label="Yes"];
+    UnequivocalSymptoms  -> EquivocalSymptoms [label="No"];
+    UnequivocalSymptoms  -> DiagnosticUncertainty [label="No"];
+    UnequivocalSymptoms  -> ComplexConditions [label="No"];
+    UnequivocalSymptoms  -> OtherSymptoms [label="No"];
+    
+    EquivocalSymptoms   -> ReferralNeeded;
+    DiagnosticUncertainty  -> ReferralNeeded;
+    ComplexConditions -> ReferralNeeded;
+    OtherSymptoms  -> ReferralNeeded;
+    ReferralNeeded -> NeurologyServices [label="To exclude neurological disease"]
+    ReferralNeeded -> RheumatologyPainMedicine [label="To confirm diagnosis and exclude others"]
+    
+}

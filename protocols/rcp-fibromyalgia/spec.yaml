@@ -1,0 +1,20 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "RCP guidelines for the diagnosis of fibromyalgia syndrome"
+    description: "Subsection of the general fibromyalgia guideline, outlining when to refer patients for specialty services"
+    url: "https://www.nice.org.uk/guidance/ng71/resources/parkinsons-disease-in-adults-pdf-1837629189061"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Fibromyalgia"
+
+  - category: "Diagnosis"
+    labels:
+      - "neurology"
+      - "rheumatology"
