@@ -1,0 +1,22 @@
+digraph ClusterHeadacheProphylaxis {
+    node [shape=box];
+
+    start [label="Start"];
+    pregnant [label="Patient Pregnant?"]
+
+    verapamil_prophylaxis [label="Consider verapamil for prophylactic\n treatment during a bout of cluster headache"];
+    unfamiliar_verapamil [label="Unfamiliar with its use for cluster headache?"];
+    seek_specialist_advice [label="Seek specialist advice before starting verapamil,\n including advice on ECG monitoring"];
+
+    non_responding_headache [label="Cluster headache not responding to verapamil?"];
+    seek_specialist_advice_non_response [label="Seek specialist advice for cluster headache\nthat does not respond to verapamil"];
+    seek_specialist_advice_pregnancy [label="Seek specialist advice if treatment for\ncluster headache is needed"];
+
+    start -> pregnant
+    pregnant -> seek_specialist_advice_pregnancy [label="Yes"];
+    pregnant -> verapamil_prophylaxis [label="No"];
+    verapamil_prophylaxis -> unfamiliar_verapamil;
+    unfamiliar_verapamil -> seek_specialist_advice [label="Yes"];
+    verapamil_prophylaxis -> non_responding_headache;
+    non_responding_headache -> seek_specialist_advice_non_response;
+}
