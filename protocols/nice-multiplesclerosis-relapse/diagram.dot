@@ -1,0 +1,33 @@
+digraph MS_Relapse_Diagnosis_and_Treatment {
+    node [shape=box];
+    
+    start [label="Person with MS"];
+    
+    diagnose [label="Diagnose a relapse of MS",shape="diamond",fillcolor="lightgrey"];
+    new_symptoms [label="Develops new symptoms"];
+    worsening_symptoms [label="Has worsening of existing symptoms"];
+    symptoms_duration [label="Symptoms last for more than 24 hours in \nthe absence of infection or any other cause"];
+    discriminate [label="Discriminate between the \nrelapse and fluctuations in disease or progression"];
+    lessthan [label="Symptoms present less than 3 months?"];
+    
+    assess_treatment [label="Assess and offer treatment for \nrelapses that affect the person's \nability to perform their usual tasks\nwithin 14 days"];
+    offer_treatment [label="Offer treatment for relapse with\noral methylprednisolone 0.5 g daily for 5 days"];
+    consider_iv [label="Consider intravenous methylprednisolone 1 g daily for 3 to 5 days"];
+    iv_criteria_1 [label="Oral steroids have failed or not been tolerated?"];
+    iv_criteria_2 [label="admission to hospital is needed for severe\nrelapse or monitoring of medical/psychological\nconditions such as diabetes or depression?"];
+
+    start -> new_symptoms;
+    start -> worsening_symptoms;
+    new_symptoms -> symptoms_duration;
+    worsening_symptoms -> symptoms_duration;
+    symptoms_duration -> discriminate;
+    discriminate -> lessthan;
+    lessthan->diagnose
+    
+    diagnose-> assess_treatment;
+    assess_treatment -> iv_criteria_2
+    iv_criteria_2 -> consider_iv [label="yes"]
+    iv_criteria_2 ->offer_treatment [label="no"]
+    offer_treatment ->iv_criteria_1;
+    iv_criteria_1 -> consider_iv;
+}

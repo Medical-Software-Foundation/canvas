@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "NICE Multiple Sclerosis"
+    description: "The clinical flowsheet corresponds to section 1.7.1-9 of the NICE MS guideline, laying out recommendations for recognition and treatment of MS relapses"
+    url: "https://www.nice.org.uk/guidance/ng220/resources/multiple-sclerosis-in-adults-management-pdf-66143828948677"
+
+tags:
+  - category: "Conditions"
+    labels: "Multiple sclerosis"
+
+  - category: "Treatment"
+    labels:
+      - "methyprednisolone"
