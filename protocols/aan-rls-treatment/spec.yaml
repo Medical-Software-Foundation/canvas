@@ -1,0 +1,20 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "American Academy of Neurology: Treatment of restless legs syndrome in adults"
+    description: "Evidence-based guideline for management of Restless Leg Syndrome"
+    url: "https://www.neurology.org/doi/pdfdirect/10.1212/wnl.0000000000003388?casa_token=pVCSh8o68y4AAAAA:feMgNIF01Z1s52q1x1PmQNTzArrRjNeEqvJq3SYcsl7t5vmzMM3eNMrLyADQwksh0SvUtJRGr9LcDuXA"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Restless leg syndrom"
+
+  - category: "Treatment"
+    label: 
+      - "Pharmacological measures"
+      - "Non-pharmacological measures"

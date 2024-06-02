@@ -1,0 +1,86 @@
+digraph RLS_Treatment {
+    node [shape=box];
+
+    start [label="Patient with RLS", shape=circle, style=filled, fillcolor=lightblue];
+    moderate_severe_RLS [label="Moderate to Severe RLS"];
+    target_sleep [label="Target Sleep?"];
+    
+  
+    pharmacologic_agent [label="Consider pharmacological agents\n based on treatment goals"]
+    vibrating_pads [label="Vibrating pads"]
+    nonpharmacologic [label=" Consider nonpharmacologic approaches"];
+    serum_ferritin [label="Serum Ferritin ≤ 75 µg/L"];
+    secondary_RLS [label="Secondary RLS (ESRD/HD)"];
+    ferrous_sulfate_vitC [label="Prescribe ferrous sulfate\n and vitamin C"];
+    vitamin_C_E [label="Prescribe Vitamin C and E, \nconsider exercise and levodopa"];
+    IV_FCM [label="Intravenous ferric carboxymaltose"];
+    gabapentin_enacarbil[label="Gabapentin enacarbil"];
+    pneumatic_compression[label="Pneumatic compression"];
+    concomitant_psychiatric [label="Concomitant Psychiatric Symptoms?", fontcolor="blue", color="blue"];
+    improve_QoL [label="Improve QoL?", fontcolor="red", color="red"];
+    avoid_augmentation [label="Avoid Augmentation", fontcolor="maroon",color="maroon"];
+    subjective_sleep[label="Subjective sleep",fontcolor="orange",color="orange"]
+    objective_sleep[label="Objective sleep", fontcolor="green",color="green"]
+    PLMS[label="PLMS",fontcolor="purple",color="purple"]
+    oxycodone_naloxone[label="Consider oxycodone/naloxone"];
+    start -> nonpharmacologic;
+    start -> serum_ferritin;
+    
+
+    serum_ferritin -> ferrous_sulfate_vitC [label="Yes"];
+    serum_ferritin -> secondary_RLS [label="No"];
+    secondary_RLS -> vitamin_C_E [label="Yes"];
+    secondary_RLS -> moderate_severe_RLS [label="No"];
+
+    moderate_severe_RLS -> pharmacologic_agent
+    pharmacologic_agent  -> target_sleep;
+    pharmacologic_agent  -> concomitant_psychiatric;
+    pharmacologic_agent  -> improve_QoL;
+    pharmacologic_agent  -> avoid_augmentation;
+    pharmacologic_agent -> oxycodone_naloxone [label="No response to first line agents?"]
+    
+    target_sleep -> subjective_sleep;
+    target_sleep -> objective_sleep;
+    target_sleep -> PLMS;
+
+    PLMS -> ropinirole[color="purple"];
+    PLMS -> pramipexole[color="purple"];
+    PLMS -> rotigotine[color="purple"];
+    PLMS -> cabergoline[color="purple"];
+    PLMS -> pregabalin[color="purple"];
+
+    objective_sleep -> ropinirole[color="green"];
+    objective_sleep -> gabapentin_enacarbil[color="green"];
+    objective_sleep -> pregabalin[color="green"];
+
+    subjective_sleep -> cabergoline[color="orange"];
+    subjective_sleep -> gabapentin_enacarbil[color="orange"];
+    subjective_sleep -> ropinirole[color="orange"];
+    subjective_sleep -> pramipexole[color="orange"];
+    subjective_sleep -> pregabalin[color="orange"];
+    subjective_sleep -> rotigotine[color="orange"];
+    subjective_sleep -> levodopa[color="orange"];
+
+    concomitant_psychiatric -> ropinirole[color="blue"];
+    concomitant_psychiatric -> pramipexole[color="blue"];
+    concomitant_psychiatric -> gabapentin_enacarbil[color="blue"];
+
+    improve_QoL -> ropinirole[color="red"];
+    improve_QoL -> pramipexole[color="red"];
+    improve_QoL -> cabergoline[color="red"];
+    improve_QoL -> gabapentin_enacarbil[color="red"];
+    improve_QoL -> IV_FCM[color="red"];
+    improve_QoL -> rotigotine[color="red"];
+    improve_QoL -> pregabalin[color="red"];
+
+    avoid_augmentation -> pregabalin[label="long term",color="maroon",fontcolor="maroon"];
+    avoid_augmentation -> cabergoline[label="short term",color="maroon",fontcolor="maroon"];
+
+    nonpharmacologic -> pneumatic_compression;
+    nonpharmacologic -> NIRS;
+    nonpharmacologic -> rTMS;
+    nonpharmacologic -> vibrating_pads;
+    nonpharmacologic -> tDCS;
+
+
+}
