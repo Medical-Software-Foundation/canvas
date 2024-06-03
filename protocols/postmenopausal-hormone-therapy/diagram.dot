@@ -1,0 +1,21 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    start[label="Postmenopausal Persons"];
+    intact_uterus[label="Intact Uterus?"];
+    use_combined_therapy[label="Use of Combined\nEstrogen and Progestin"];
+    had_hysterectomy[label="Had a Hysterectomy?"];
+    use_estrogen_only[label="Use of Estrogen Alone"];
+    
+    no_intervention[label="Recommend Against\nCombined Estrogen and Progestin",shape=rect,color=black,fontcolor=black];
+    no_intervention_hysterectomy[label="Recommend Against\nEstrogen Alone",shape=rect,color=black,fontcolor=black];
+
+    start -> intact_uterus
+    intact_uterus -> use_combined_therapy [label="Yes"]
+    intact_uterus -> had_hysterectomy [label="No"]
+    use_combined_therapy -> no_intervention
+    had_hysterectomy -> use_estrogen_only [label="Yes"]
+    had_hysterectomy -> no_intervention [label="No"]
+    use_estrogen_only -> no_intervention_hysterectomy
+}

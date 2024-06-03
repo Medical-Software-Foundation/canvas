@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Hormone Therapy for the Primary Prevention of Chronic Conditions in Postmenopausal Persons"
+    description: "Recommendations on the use of hormone therapy for the primary prevention of chronic conditions in postmenopausal individuals."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/menopausal-hormone-therapy-preventive-medication"
+
+tags:
+  - category: "Conditions"
+    label: "Postmenopause"
+
+
+  - category: "Diagnostics"
+    label: "Prevention"
