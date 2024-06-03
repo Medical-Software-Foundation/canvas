@@ -1,0 +1,22 @@
+status: "draft"
+
+contributors:
+  - username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+  - title: "Screening for Depression and Suicide Risk in Children and Adolescents: US Preventive Services Task Force Recommendation Statement"
+    description: "This paper provides the US Preventive Services Task Force recommendations for screening for major depressive disorder (MDD) and suicide risk in children and adolescents. It updates the 2014 and 2016 recommendations, concluding that screening adolescents aged 12 to 18 years for MDD has a moderate net benefit but finds insufficient evidence for screening children 11 years or younger for MDD or for screening for suicide risk in children and adolescents due to a lack of evidence."
+    url: "https://jamanetwork.com/journals/jama/fullarticle/10.1001/jama.2022.16946"
+
+tags:
+  - category: "Age Group"
+    labels: ["Adolescents", "Children"]
+  - category: "Health Condition"
+    label: "Major Depressive Disorder (MDD)"
+  - category: "Recommendation Type"
+    label: "Screening"
+  - category: "Evidence Level"
+    label: "Moderate to Insufficient"
+  - category: "Health Outcome"
+    label: "Depression Symptoms, Suicide Risk"

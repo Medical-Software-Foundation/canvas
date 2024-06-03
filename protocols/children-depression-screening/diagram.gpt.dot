@@ -1,0 +1,13 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+    
+    A [label="Is the patient aged 12 to 18 years?", shape=diamond]
+    B [label="Screen for MDD using appropriate screening instruments", shape=rectangle]
+    C [label="Is the patient 11 years or younger?", shape=diamond]
+    D [label="Evidence on screening for MDD is insufficient", shape=rectangle]
+
+    A -> B [label="Yes"]
+    A -> C [label="No"]
+    C -> D [label="Yes"]
+}
