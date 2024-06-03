@@ -1,0 +1,40 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    start [label="Start\nAll Individuals", shape=rectangle, color=black, fontcolor=black];
+    
+    hasCervix [label="Has a cervix?"];
+    age [label="Age"];
+    age21to29 [label="21 to 29 years?"];
+    age30to65 [label="30 to 65 years?"];
+    hadHysterectomy [label="Had hysterectomy\nwith cervix removal?"];
+    historyHighGradeLesionOrCancer [label="History of high-grade\nprecancerous lesion or\ncervical cancer?"];
+    
+    screening21to29 [label="Screen every 3 years with cervical cytology", shape=rectangle, color=green, fontcolor=green];
+    screening30to65Cytology [label="Screen every 3 years with cervical cytology", shape=rectangle, color=green, fontcolor=green];
+    screening30to65HPV [label="Screen every 5 years with hrHPV testing", shape=rectangle, color=green, fontcolor=green];
+    screening30to65CoTesting [label="Screen every 5 years with hrHPV + cytology (cotesting)", shape=rectangle, color=green, fontcolor=green];
+    notRecommendedUnder21 [label="Not recommended to screen", shape=rectangle, color=red, fontcolor=red];
+    notRecommendedOver65 [label="Not recommended to screen if had adequate prior screening", shape=rectangle, color=red, fontcolor=red];
+    notRecommendedHysterectomyNoHistory [label="Not recommended to screen", shape=rectangle, color=red, fontcolor=red];
+    
+    start -> hasCervix
+    hasCervix -> age [label="Yes"];
+    hasCervix -> notRecommendedHysterectomyNoHistory [label="No"];
+    
+    age -> age21to29 [label="<21"];
+    age -> age30to65 [label="21-65"];
+    age -> notRecommendedOver65 [label=">65"];
+    
+    age21to29 -> screening21to29
+    age30to65 -> age30to65Cytology [label="Yes"];
+    age30to65 -> screening30to65HPV
+    age30to65 -> screening30to65CoTesting
+    
+    hadHysterectomy -> historyHighGradeLesionOrCancer [label="Yes"];
+    hadHysterectomy -> notRecommendedHysterectomyNoHistory [label="No"];
+    
+    historyHighGradeLesionOrCancer -> notRecommendedHysterectomyNoHistory [label="No"];
+    historyHighGradeLesionOrCancer -> age [label="Yes"];
+}

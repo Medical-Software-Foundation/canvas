@@ -1,0 +1,18 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+    
+    A [label="Woman ≥35 years old?", shape=diamond];
+    B [label="At increased risk for breast cancer?", shape=diamond];
+    C [label="At low risk for adverse medication effects?", shape=diamond];
+    
+    D [label="Offer tamoxifen, raloxifene, or aromatase inhibitors\nFrequency: As per clinical decision", shape=rectangle, color=black, fontcolor=black];
+    E [label="Do not offer tamoxifen, raloxifene, or aromatase inhibitors", shape=rectangle, color=black, fontcolor=black];
+    
+    A -> B [label="Yes"];
+    A -> E [label="No"];
+    B -> C [label="Yes"];
+    B -> E [label="No"];
+    C -> D [label="Yes"];
+    C -> E [label="No"];
+}

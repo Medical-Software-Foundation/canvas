@@ -1,0 +1,30 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];        
+
+    start [label="Start", shape=rectangle];
+    isAdult45Plus [label="Is the patient\n45 years or older?"];
+    isAdult50To75 [label="Is the patient aged\n50 to 75 years?"];
+    isAdult45To49 [label="Is the patient aged\n45 to 49 years?"];
+    isAdult76To85 [label="Is the patient aged\n76 to 85 years?"];
+    hasScreeningHistory [label="Has previous\nscreening?"];
+    
+    node [shape=rectangle, color=black, fontcolor=black];
+    recommendScreening50To75 [label="Recommend screening\n(A recommendation)"];
+    recommendScreening45To49 [label="Recommend screening\n(B recommendation)"];
+    considerScreening76To85 [label="Consider screening\n(C recommendation)"];
+    noAction [label="No screening\nrecommended", shape=rectangle];
+    notEligible [label="Not eligible\nfor screening", shape=rectangle];
+    
+    start -> isAdult45Plus
+    isAdult45Plus -> isAdult50To75 [label="Yes"];
+    isAdult45Plus -> notEligible [label="No"];
+    isAdult50To75 -> recommendScreening50To75 [label="Yes"];
+    isAdult50To75 -> isAdult45To49 [label="No"];
+    isAdult45To49 -> recommendScreening45To49 [label="Yes"];
+    isAdult45To49 -> isAdult76To85 [label="No"];
+    isAdult76To85 -> hasScreeningHistory [label="Yes"];
+    hasScreeningHistory -> considerScreening76To85 [label="Yes"];
+    hasScreeningHistory -> noAction [label="No"];
+    isAdult76To85 -> noAction [label="No"];
+}

@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+  - title: "Screening for Colorectal Cancer: US Preventive Services Task Force Recommendation Statement"
+    description: "This paper provides updated recommendations for colorectal cancer screening in adults, emphasizing the importance of screening to reduce colorectal cancer incidence and mortality. It updates the 2016 recommendation by the US Preventive Services Task Force (USPSTF) and discusses the benefits and harms of screening across different age groups, as well as various screening strategies."
+    url: "https://jamanetwork.com/journals/jama/fullarticle/2780257"
+
+tags:
+  - category: "Screening Guidelines"
+    labels: "Colorectal Cancer, USPSTF, Screening Recommendations"
+
+  - category: "Healthcare"
+    label: "Preventive Care"

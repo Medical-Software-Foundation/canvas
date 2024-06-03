@@ -1,0 +1,23 @@
+status: "draft"
+
+contributors:
+  - username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+  - title: "Medication Use to Reduce Risk of Breast Cancer: US Preventive Services Task Force Recommendation Statement"
+    description: "This paper updates the 2013 US Preventive Services Task Force (USPSTF) recommendation on medications for risk reduction of primary breast cancer. It reviews evidence on the accuracy of risk assessment methods, effectiveness, adverse effects, and subgroup variations of risk-reducing medications such as tamoxifen, raloxifene, or aromatase inhibitors."
+    url: "https://jamanetwork.com/journals/jama/fullarticle/2749217"
+
+tags:
+  - category: "Health Condition"
+    labels:
+    - "Breast Cancer"
+    - "Risk Reduction"
+  - category: "Medication"
+    labels:
+    - "Tamoxifen"
+    - "Raloxifene"
+    - "Aromatase Inhibitors"
+  - category: "Target Population"
+    label: "Postmenopausal Women at Increased Risk for Breast Cancer"
