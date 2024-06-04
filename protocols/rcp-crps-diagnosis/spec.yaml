@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "RCP guidelines for the diagnosis of Complex Regional Pain Syndrome"
+    description: "Subsection of the RCP Complex Regional Pain Syndrome Pathways focussing on diagnosis"
+    url: "https://www.rcplondon.ac.uk/file/10437/download"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Complex Regional Pain Syndrome"
+
+  - category: "Diagnosis"
+    labels:
+      - "neurology"
+      - "rheumatology"
+      - "orthopaedics"

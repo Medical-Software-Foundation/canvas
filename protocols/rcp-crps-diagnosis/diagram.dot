@@ -1,0 +1,20 @@
+digraph CRPS_Diagnosis_Flowsheet {
+    rankdir=TB;
+    node [shape=box, style=filled, color=lightblue];
+
+    start [label="Patient presents with limb pain >4 weeks post-injury"];
+    exclude_alt [label="Exclude alternative diagnoses"];
+    suspect_CRPS [label="Suspect CRPS"];
+    budapest_criteria [label="Apply Budapest Criteria (Appendix 4)"];
+    communicate_diagnosis [label="Communicate diagnosis with caution and reassurance"];
+    document_diagnosis [label="Document CRPS diagnosis in ED notes"];
+    notify_GP [label="Notify GP and patient's normal care provider"];
+    diagnostic_uncertainty [label="Is there diagnostic uncertainty?"];
+    refer_specialist [label="Refer to Pain Medicine, Neurology, Rheumatology, or Orthopaedics"];
+    end [label="Continue with normal care protocol"];
+
+    start -> exclude_alt -> suspect_CRPS -> budapest_criteria;
+    budapest_criteria -> communicate_diagnosis -> document_diagnosis -> notify_GP -> diagnostic_uncertainty;
+    diagnostic_uncertainty -> refer_specialist [label="Yes"];
+    diagnostic_uncertainty -> end [label="No"];
+}
