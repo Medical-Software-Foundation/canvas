@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Screening for Abdominal Aortic Aneurysm"
+    description: "Recommendations on the screening for abdominal aortic aneurysm (AAA) using ultrasonography in asymptomatic adults aged 50 years or older, based on the evidence of its benefits and harms."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/abdominal-aortic-aneurysm-screening"
+
+tags:
+  - category: "Conditions"
+    label: "Aortic Aneurysm"
+
+
+  - category: "Diagnostics"
+    label: "Screening"

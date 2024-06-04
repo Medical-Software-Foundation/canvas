@@ -1,0 +1,26 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    start [label="All asymptomatic adults 50 years or older", shape=rectangle]
+    age [label="Age 65 to 75?", shape=diamond, color=blue, fontcolor=blue]
+    everSmoked [label="Ever smoked?", shape=diamond, color=blue, fontcolor=blue]
+    sex [label="Sex?", shape=diamond, color=blue, fontcolor=blue]
+    familyHistory [label="Family history of AAA?", shape=diamond, color=blue, fontcolor=blue]
+
+    ultrasonographyMenEverSmoked [label="1-time screening for AAA with ultrasonography", shape=rectangle, color=black, fontcolor=black]
+    ultrasonographyMenNeverSmoked [label="Selectively offer screening for AAA with ultrasonography", shape=rectangle, color=black, fontcolor=black]
+    againstWomenNeverSmoked [label="Against routine screening for AAA", shape=rectangle, color=black, fontcolor=black]
+    insufficientEvidence [label="Insufficient evidence to assess balance of benefits and harms", shape=rectangle, color=black, fontcolor=black]
+
+    start -> age
+    age -> everSmoked [label="Yes"]
+    age -> insufficientEvidence [label="No"]
+    everSmoked -> ultrasonographyMenEverSmoked [label="Yes"]
+    everSmoked -> ultrasonographyMenNeverSmoked [label="No"]
+    everSmoked -> sex [label="Yes"]
+    sex -> familyHistory [label="Female"]
+    familyHistory -> againstWomenNeverSmoked [label="No"]
+    familyHistory -> insufficientEvidence [label="Yes"]
+    sex -> againstWomenNeverSmoked [label="Female, No Family History"]
+}
