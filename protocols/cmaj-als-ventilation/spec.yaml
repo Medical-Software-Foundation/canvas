@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "Canadian best practice recommendations for the management of amyotrophic lateral sclerosis: ventilation"
+    description: "Evidence-based guideline for ventilation of ALS patients"
+    url: "https://www.cmaj.ca/content/192/46/e1453"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "ALS"
+      - "Amyotrophic Lateral Sclerosis"
+
+  - category: "Treatment"
+    label: 
+      - "Non-invasive ventilation"
+

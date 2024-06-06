@@ -1,0 +1,56 @@
+digraph ALS_Ventilation {
+    node [shape=box];
+
+    // Start
+    start [label="Patient with ALS", shape=ellipse];
+
+    // Criteria for NIV initiation
+    criteria [label="Criteria for\nNIV initiation"];
+
+    // Specific Criteria Nodes
+    symptoms [label="Symptoms of respiratory insufficiency,\nincluding orthopnea"];
+    snip [label="SNIP ≤ 40 cm H2O or\nMIP ≤ 40 cm H2O"];
+    fvc65 [label="Upright reliable\nFVC < 65%"];
+    fvc80 [label="FVC sitting or supine < 80%\nwith symptoms or signs\nof respiratory insufficiency"];
+    hypercapnia [label="Daytime hypercapnia\npCO2 > 45 mm Hg"];
+    nocturnal [label="Abnormal nocturnal oximetry\nor symptomatic sleep-disordered breathing"];
+    
+    // Initiate NIV
+    initiate_niv [label="Initiate NIV\nwithin 4 weeks"];
+
+    // Additional Management Nodes
+    in_home [label="Ensure in-home NIV\nrespiratory support for education,\ntitration, and troubleshooting"];
+    inform [label="Inform patients that NIV may change\nsurvival trajectory and\nend-of-life experience"];
+    ongoing_assess [label="Ongoing assessments by specialized\nrespiratory therapist, including device download\nand possibly nocturnal oximetry"];
+    oxygen [label=" Consider oxygen if hypoxemia\nremains after optimal NIV pressure"];
+    mouthpiece [label="Consider mouthpiece ventilation\nduring the day"];
+    invasive [label="Invasive ventilation option\nif NIV ineffective"];
+    advanced_planning [label="Discuss advanced care planning,\ngoals of care, and all\nrespiratory interventions"];
+    tracheostomy [label="Consider tracheostomy for upper airway obstruction\nwith vocal cord paresis; discuss\nlong-term invasive ventilation"];
+
+    // Edges
+    start -> criteria;
+    criteria -> symptoms;
+    criteria -> snip;
+    criteria -> fvc65;
+    criteria -> fvc80;
+    criteria -> hypercapnia;
+    criteria -> nocturnal;
+
+    symptoms -> initiate_niv;
+    snip -> initiate_niv;
+    fvc65 -> initiate_niv;
+    fvc80 -> initiate_niv;
+    hypercapnia -> initiate_niv;
+    nocturnal -> initiate_niv;
+
+
+    initiate_niv -> in_home;
+    initiate_niv -> inform;
+    initiate_niv -> ongoing_assess;
+    initiate_niv -> oxygen;
+    initiate_niv -> mouthpiece;
+    initiate_niv -> invasive;
+    initiate_niv -> advanced_planning;
+    initiate_niv -> tracheostomy;
+}
