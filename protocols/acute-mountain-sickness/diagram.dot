@@ -1,0 +1,38 @@
+digraph AMS {
+    node [shape=box];
+    
+    Start [shape=ellipse, label="Start Evaluation"];
+    Assess_Risk [label="Assess Risk Level\n(History, Rate of Ascent)"];
+    Symptoms_AMS [label="Symptoms of AMS?\n(Headache, Nausea, Fatigue, Dizziness)", shape=diamond];
+    AMS_Diagnosis [label="Diagnose AMS\n(Lake Louise Score, Clinical Symptoms)"];
+    AMS_Severity [label="Assess Severity of AMS", shape=diamond];
+    Mild_AMS [label="Mild AMS\n(Monitor, Rest, Medications)"];
+    Severe_AMS [label="Severe AMS\n(Descent, Oxygen, Medications)"];
+    Acetazolamide [label="Acetazolamide\n125-250 mg every 12h", style=filled, fillcolor=lightblue];
+    Dexamethasone [label="Dexamethasone\n4 mg every 6h", style=filled, fillcolor=lightblue];
+    Descent [label="Immediate Descent", style=filled, fillcolor=lightblue];
+    Supplemental_Oxygen [label="Supplemental Oxygen\n(SpO2 > 90%)", style=filled, fillcolor=lightblue];
+    Monitor_Improvement [label="Monitor Improvement", shape=ellipse];
+    Recovery [label="Recovery", shape=ellipse, style=filled, fillcolor=green];
+    Further_Assessment [label="Further Assessment Needed?", shape=diamond];
+    End [shape=ellipse, label="End"];
+
+    Start -> Assess_Risk;
+    Assess_Risk -> Symptoms_AMS [label="Yes"];
+    Symptoms_AMS -> AMS_Diagnosis [label="Yes"];
+    Symptoms_AMS -> End [label="No"];
+    AMS_Diagnosis -> AMS_Severity;
+    AMS_Severity -> Mild_AMS [label="Mild"];
+    AMS_Severity -> Severe_AMS [label="Severe"];
+    Mild_AMS -> Acetazolamide;
+    Mild_AMS -> Dexamethasone;
+    Mild_AMS -> Monitor_Improvement;
+    Severe_AMS -> Descent;
+    Severe_AMS -> Supplemental_Oxygen;
+    Severe_AMS -> Dexamethasone;
+    Severe_AMS -> Monitor_Improvement;
+    Monitor_Improvement -> Recovery [label="Improving"];
+    Monitor_Improvement -> Further_Assessment [label="Not Improving"];
+    Further_Assessment -> AMS_Diagnosis [label="Yes"];
+    Further_Assessment -> Recovery [label="No"];
+}
