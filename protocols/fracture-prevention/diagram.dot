@@ -1,0 +1,20 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    A [label="All community-dwelling adults", shape=box, color=black]
+    B [label="Postmenopausal women?"]
+    C [label="Supplementation with >400 IU of vitamin D and >1000 mg of calcium?", shape=diamond, color=blue]
+    D [label="Supplementation with ≤400 IU of vitamin D and ≤1000 mg of calcium?", shape=diamond, color=blue]
+    E [label="Men or premenopausal women?"]
+    F [label="Recommend against daily supplementation with ≤400 IU of vitamin D and ≤1000 mg of calcium\n(D recommendation)", shape=box, color=black]
+    G [label="Current evidence is insufficient to assess benefits and harms\n(I statement)", shape=box, color=black]
+    
+    A -> B
+    B -> C [label="Yes"]
+    B -> D [label="No"]
+    B -> E [label="No"]
+    C -> G
+    D -> F
+    E -> G
+}

@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "VitaminD,Calcium,orCombinedSupplementationforthePrimary Prevention of Fractures in Community-Dwelling Adults"
+    description: "The protocol aims to assess the benefits and harms of vitamin D and calcium supplementation in the prevention of fractures among adults."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/vitamin-d-calcium-or-combined-supplementation-for-the-primary-prevention-of-fractures-in-adults-preventive-medication"
+
+tags:
+  - category: "Conditions"
+    label: "Fracture"
+
+
+  - category: "Diagnostics"
+    label: "Prevention"
