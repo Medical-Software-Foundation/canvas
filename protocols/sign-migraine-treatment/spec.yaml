@@ -1,0 +1,27 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "SIGN guideline 155 for the pharmacological management of migraine"
+    description: ""
+    url: "https://www.sign.ac.uk/media/2077/sign-155-migraine-2023-update-v3.pdf"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Migraine"
+
+  - category: "Treatments"
+    labels:
+      - "Propranolol"
+      - "Candesartan"
+      - "Amitriptyline"
+      - "Topiramate"
+      - "Erenumab"
+      - "Galcanezumab"
+      - "Fremanezumab"
+      - "Eptinezumab"
+      - "Botolinum Toxin A"

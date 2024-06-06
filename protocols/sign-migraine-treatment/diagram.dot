@@ -1,0 +1,62 @@
+digraph MigraineTreatment {
+    node [shape=box, style=filled, fillcolor=lightyellow, fontname="Helvetica"];
+
+    subgraph cluster_acute {
+        label = "2.1 Acute Treatment";
+        style = filled;
+        color = lightgrey;
+        
+        FirstLine [label="First line treatments"]
+        Aspirin [label="Aspirin\n(900 mg)"];
+        Ibuprofen [label="Ibuprofen\n(400 mg)"];
+        IncIbuprofen [label="Increase dose to\n600 mg"];
+        Sumatriptan [label="Sumatriptan 50-100 mg)"];
+        AltTriptan [label="Cycle through other triptans"];
+        TreatmentFailed [label="First line treatments failed?", shape="diamond"]
+
+        ComboTherapy [label="Combination Therapy\n(Sumatriptan 50-85 mg + Naproxen 500 mg)"];
+        
+        FirstLine -> Aspirin;
+        FirstLine -> Ibuprofen;
+        FirstLine -> Sumatriptan;
+
+        Ibuprofen -> IncIbuprofen [label="Treatment failure?"]
+        Sumatriptan -> AltTriptan [label="Treatment failure?"]
+        FirstLine -> TreatmentFailed
+        TreatmentFailed -> ComboTherapy
+
+    }
+
+    subgraph cluster_prevention {
+        label = "2.2 Prevention of Migraine";
+        style = filled;
+        color = lightgrey;
+
+        Oral [label="Oral preventers"]
+        Propranolol [label="Propranolol\n(80-160 mg daily)"];
+        Topiramate [label="Topiramate\n(50-100 mg daily)"];
+        Amitriptyline [label="Amitriptyline\n(25-150 mg at night)"];
+        Candesartan [label="Candesartan\n(16 mg daily)"];
+        OralFail [label="3 preventers tried\nand medication overuse addressed?", shape="diamond"]
+        Botulinum [label="Botulinum toxin A"];
+        CGRP_MAbs [label="CGRP Monoclonal Antibodies"];
+        ChronicMigraine [label="Chronic Migraine"];
+        EpisodicMigraine [label="Episodic Migraine"];
+        
+
+        Oral -> Propranolol;
+        Oral -> Amitriptyline;
+        Oral -> Candesartan;
+        Oral -> Topiramate;
+        Topiramate -> OralFail;
+        Amitriptyline -> OralFail;
+        Candesartan-> OralFail;
+        Propranolol-> OralFail;
+        OralFail -> ChronicMigraine;
+        OralFail -> EpisodicMigraine;
+        EpisodicMigraine -> CGRP_MAbs;
+        ChronicMigraine -> Botulinum;
+        ChronicMigraine -> CGRP_MAbs;
+
+    }
+}

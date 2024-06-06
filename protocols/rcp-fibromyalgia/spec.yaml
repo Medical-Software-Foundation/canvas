@@ -14,7 +14,7 @@ tags:
     labels: 
       - "Fibromyalgia"
 
-  - category: "Diagnosis"
+  - category: "Specialties"
     labels:
       - "neurology"
       - "rheumatology"
