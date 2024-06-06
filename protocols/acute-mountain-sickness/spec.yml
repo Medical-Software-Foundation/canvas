@@ -1,0 +1,23 @@
+status: "draft"
+
+contributors:
+  - username: "dmhardin102"
+    name: "David Hardin"
+
+reference_papers:
+  - title: "Wilderness Medical Society Clinical Practice Guidelines for the Prevention, Diagnosis, and Treatment of Acute Altitude Illness: 2024 Update"
+    description: "Evidence-based guidelines for the prevention, diagnosis, and treatment of acute altitude illness."
+    url: "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2146318/pdf/canfamphys00073-0108.pdf"
+
+tags:
+  - category: "Conditions"
+    labels: "acute mountain sickness"
+  
+  - category: "Organization"
+    label: "Wilderness Medical Society"
+  
+  - category: "Treatments"
+    label: "acetazolamide"
+  
+  - category: "Treatments"
+    label: "supplemental oxygen"
