@@ -1,0 +1,15 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    start [label="Start: All adults 19 years or older", shape=box, color=black, fontcolor=black]
+    depression_screening [label="Screen for Depression?", color=blue, fontcolor=blue]
+    suicide_risk_screening [label="Screen for Suicide Risk?", color=blue, fontcolor=blue]
+    recommend_depression_screening [label="Recommend screening for depression\nFrequency & Tool: Not Specified", shape=box, color=black, fontcolor=black]
+    insufficient_evidence_suicide [label="Insufficient evidence to recommend\nscreening for suicide risk", shape=box, color=black, fontcolor=black]
+
+    start -> depression_screening
+    depression_screening -> recommend_depression_screening [label="Yes"]
+    depression_screening -> suicide_risk_screening [label="No"]
+    suicide_risk_screening -> insufficient_evidence_suicide [label="Yes/No"]
+}

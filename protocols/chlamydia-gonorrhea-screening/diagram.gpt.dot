@@ -1,0 +1,18 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    a [label="Asymptomatic, sexually active adolescents and adults, including pregnant persons?", shape=diamond];
+    b [label="Sexually active women 24 years or younger?", shape=diamond];
+    c [label="Sexually active women 25 years or older at increased risk?", shape=diamond];
+    d [label="Screen for chlamydia\n(B recommendation)", shape=rect, color=black, fontcolor=black];
+    e [label="Screen for gonorrhea\n(B recommendation)", shape=rect, color=black, fontcolor=black];
+    f [label="Insufficient evidence for men\n(I statement)", shape=rect, color=black, fontcolor=black];
+
+    a -> b [label="Yes"];
+    a -> c [label="No"];
+    b -> d;
+    b -> e;
+    c -> d;
+    c -> e;
+    a -> f [label="No"];
+}

@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "willb0246"
+    name: "William Burke"
+
+reference_papers:
+  - title: "Screening for Depression and Suicide Risk in Adults: US Preventive Services Task Force Recommendation Statement"
+    description: "This paper from the US Preventive Services Task Force provides a recommendation statement on screening for major depressive disorder (MDD) and assessing suicide risk in adults, including pregnant and postpartum individuals. The document concludes with a moderate certainty that screening for MDD in adult populations offers moderate net benefits, but evidence is insufficient to determine the overall benefits and harms of screening specifically for suicide risk in these populations."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/screening-depression-suicide-risk-adults"
+
+tags:
+  - category: "Health Screening"
+    labels: ["Depression", "Suicide Risk", "Adults", "US Preventive Services Task Force", "Screening Recommendations"]
+
+  - category: "Population"
+    label: "Adults"

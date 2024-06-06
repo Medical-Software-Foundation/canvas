@@ -1,0 +1,13 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    start [label="Children aged 6 months to 5 years", shape=rectangle];
+    screeningAge [label="Age 3 to 5 years?"];
+    screenRecommendation [label="Vision screening at least once", shape=rectangle];
+    noScreening [label="Not recommended\nfor routine screening", shape=rectangle];
+    
+    start -> screeningAge
+    screeningAge -> screenRecommendation [label="Yes"]
+    screeningAge -> noScreening [label="No"]
+}

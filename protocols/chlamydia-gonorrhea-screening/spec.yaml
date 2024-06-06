@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "willb0246"
+    name: "William Burke"
+    
+reference_papers:
+  - title: "Screening for Chlamydia and Gonorrhea: US Preventive Services Task Force Recommendation Statement"
+    description: "This paper presents the updated recommendations by the US Preventive Services Task Force (USPSTF) for screening for chlamydia and gonorrhea in sexually active adolescents and adults, including pregnant persons. It outlines the importance of screening, the population targeted, the evidence assessment, and the specific recommendations based on a systematic review commissioned to evaluate the benefits and harms of such screenings."
+    url: "https://jama.com"
+
+tags:
+  - category: "Healthcare Policy"
+    labels: ["Chlamydia Screening", "Gonorrhea Screening", "Sexually Transmitted Infections"]
+
+  - category: "Public Health Recommendations"
+    label: "US Preventive Services Task Force"
