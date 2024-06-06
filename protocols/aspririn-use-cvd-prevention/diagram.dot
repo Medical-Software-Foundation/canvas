@@ -1,0 +1,27 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, style=filled, color=lightblue, fontcolor=black];
+
+    start [label="Adult >=40 years old\nwithout signs/symptoms of CVD\nor known CVD, and\nnot at increased risk for bleeding", shape=box, style=filled, color=gray, fontcolor=white];
+    age4060 [label="Age 40 to 59 years?"];
+    cvdRisk10 [label="10% or greater\n10-year CVD risk?"];
+    notIncreasedBleedingRisk [label="Not at increased risk for bleeding?"];
+    dailyAspirinWillingness [label="Willing to take low-dose aspirin daily?"];
+    age60Plus [label="Age 60 years or older?"];
+
+    dailyLowDoseRecommendation [label="Recommend low-dose aspirin\nfor primary prevention of CVD", shape=box, style=filled, color=lightgreen, fontcolor=black];
+    noAspirinUse [label="Recommend against initiating\nlow-dose aspirin use", shape=box, style=filled, color=salmon, fontcolor=black];
+    individualDecision [label="Individual decision. Benefit small.", shape=box, style=filled, color=lightgray, fontcolor=black];
+
+    start -> age4060
+    age4060 -> cvdRisk10 [label="Yes"]
+    cvdRisk10 -> notIncreasedBleedingRisk[label="Yes"]
+    notIncreasedBleedingRisk -> dailyAspirinWillingness[label="Yes"]
+    dailyAspirinWillingness -> individualDecision[label="Yes"]
+    notIncreasedBleedingRisk -> noAspirinUse[label="No"]
+    dailyAspirinWillingness -> noAspirinUse[label="No"]
+    
+    age4060 -> age60Plus[label="No"]
+    cvdRisk10 -> noAspirinUse[label="No"]
+    age60Plus -> noAspirinUse[label="Yes"]
+}

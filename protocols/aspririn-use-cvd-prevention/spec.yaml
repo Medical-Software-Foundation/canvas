@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Aspirin Use to Prevent Cardiovascular Disease"
+    description: "Recommendations on the use of low-dose aspirin for the primary prevention of cardiovascular disease (CVD) in adults."
+    url: "https://www.uspreventiveservicestaskforce.org/uspstf/recommendation/aspirin-to-prevent-cardiovascular-disease-preventive-medication"
+
+tags:
+  - category: "Conditions"
+    label: "Cardiovascular Diseases"
+
+
+  - category: "Diagnostics"
+    label: "Prevention"
