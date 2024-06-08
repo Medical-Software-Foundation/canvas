@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "European Federation of Neurological Societies: guidelines on management of narcolepsy - excessive daytime sleepiness"
+    description: "Evidence-based guideline for management of excessive daytime sleepiness in narcolepsy"
+    url: "https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1468-1331.2006.01473.x"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Narcolepsy"
+
+  - category: "Treatment"
+    label: 
+      - "Modafinil"
+      - "Sodium oxybate"
+      - "Methylphenidate"
