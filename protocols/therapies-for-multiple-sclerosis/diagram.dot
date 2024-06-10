@@ -1,0 +1,49 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+
+    start [label="Adult with Multiple Sclerosis (MS)", shape=rectangle];
+    new_diagnosis [label="Newly diagnosed MS?", shape=diamond];
+    patient_preferences [label="Patient preferences considered?", shape=diamond];
+    understanding_DMT [label="Counseled on DMT effects?", shape=diamond];
+    readiness [label="Evaluate readiness to initiate DMT?", shape=diamond];
+    comorbid_conditions [label="Counseled on comorbid conditions?", shape=diamond];
+    adherence_barriers [label="Evaluated barriers to adherence?", shape=diamond];
+    first_demyelinating_event [label="First demyelinating event with \n>=2 brain lesions?", shape=diamond];
+    cis_or_relapsing [label="CIS or relapsing MS without recent relapse or new MRI activity?", shape=diamond];
+    recent_relapse_or_mri_activity [label="Recent clinical relapse or MRI activity?", shape=diamond];
+    medication_adherence [label="Monitor medication adherence and AEs?", shape=diamond];
+    reproductive_plans [label="Discuss reproductive plans?", shape=diamond];
+    male_reproductive_plans [label="Men: Discuss reproductive plans before DMT?", shape=diamond];
+    mitoxantrone_risks [label="Consider risks of mitoxantrone?", shape=diamond];
+
+
+    start -> new_diagnosis
+    new_diagnosis -> patient_preferences [label="Yes"]
+    patient_preferences -> understanding_DMT 
+    understanding_DMT -> readiness 
+    readiness -> comorbid_conditions
+    comorbid_conditions -> adherence_barriers
+    adherence_barriers -> first_demyelinating_event
+    first_demyelinating_event -> cis_or_relapsing [label="No"]
+    cis_or_relapsing -> recent_relapse_or_mri_activity [label="Yes"]
+    recent_relapse_or_mri_activity -> medication_adherence [label="Yes"]
+    medication_adherence -> reproductive_plans
+    reproductive_plans -> male_reproductive_plans
+    first_demyelinating_event -> mitoxantrone_risks [label="Yes"]
+    mitoxantrone_risks -> end [label="No", shape=rectangle]
+
+    counselDMT [label="Counsel on DMT options", shape=rectangle];
+    patient_preferences -> counselDMT [label="No"]
+    understanding_DMT -> counselDMT [label="No"]
+    readiness -> counselDMT [label="No"]
+    comorbid_conditions -> counselDMT [label="No"]
+    adherence_barriers -> counselDMT [label="No"]
+    cis_or_relapsing -> counselDMT [label="No"]
+    recent_relapse_or_mri_activity -> counselDMT [label="No"]
+    medication_adherence -> counselDMT [label="No"]
+    
+    male_reproductive_plans -> counselDMT [label="No"]
+    new_diagnosis -> counselDMT [label="No"]
+
+}

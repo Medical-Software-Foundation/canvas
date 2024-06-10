@@ -1,0 +1,20 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Practice Guideline: Disease-modifying Therapiesfor Adults with Multiple Sclerosis"
+    description: "To provide evidence-based recommendations for clinicians on the initiation, switching, and discontinuation of disease-modifying therapies (DMTs) in adults with Multiple Sclerosis (MS)."
+    url: "https://www.aan.com/Guidelines/home/GuidelineDetail/899"
+
+tags:
+  - category: "Conditions"
+    label: "Multiple Sclerosis"
+
+
+  - category: "Diagnostics"
+    label: "Therapy"
+  - category: "organization"
+    label: "AAN"
