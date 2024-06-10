@@ -1,4 +1,4 @@
-![Canvas Healthwise Integration](https://images.prismic.io/canvas-website/ZmdD7Zm069VX1nE3_healthwise_400.png?auto=format,compress)
+![Canvas Healthwise Integration](https://images.prismic.io/canvas-website/ZmdGRJm069VX1nFe_healthwise_200.png?auto=format,compress)
 
 
 # Healthwise Education Content Integration
