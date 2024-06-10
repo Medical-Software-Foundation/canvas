@@ -1,0 +1,21 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "NICE guideline for Stroke and transient ischaemic attack in over 16s: diagnosis and initial management"
+    description: "The clinical flowsheet corresponds to section 1.4.1 to 1.4.9 of the 2023 NICE guidelines for stroke and TIA managemnt"
+    url: "file:///Users/alexandremathy/Desktop/stroke-and-transient-ischaemic-attack-in-over-16s-diagnosis-and-initial-management-pdf-66141665603269.pdf"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Stroke"
+      - "Transient Ischemic Attacks"
+
+  - category: "Treatment"
+    labels:
+      - "Thrombolysis"
+      - "Thrombectomy"

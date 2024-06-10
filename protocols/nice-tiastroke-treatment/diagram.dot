@@ -1,0 +1,29 @@
+digraph G {
+  node [shape=box];
+  
+  subgraph cluster_0 {
+    label = "Pharmacological treatments and thrombectomy for acute stroke";
+
+    Acute_Ischemic_Stroke [label="Acute Ischaemic Stroke"];
+    Alteplase_Conditions [label="Within 4.5 hours of symptom onset?\nExclude intracranial haemorrhage by imaging?"];
+    Alteplase_Treatment [label="Offer Thrombolysis with Alteplase",shape="diamond"];
+
+    Thrombectomy_Treatment [label=" Offer Thrombectomy",shape="diamond"];
+    Thrombectomy_Clinical_Status [label="mRS < 3?\nNIHSS score > 5?"];
+    Thrombectomy_Conditions_1 [label="Within 6 hours of symptom onset?\n Confirmed proximal anterior circulation occlusion by CTA or MRA?"];
+    Thrombectomy_Conditions_2 [label="Between 6 to 24 hours from last known well?\n Confirmed proximal anterior circulation occlusion by CTA or MRA?\n Potential to salvage brain tissue shown by imaging?"];
+    Thrombectomy_Conditions_3 [label="Up to 24 hours from last known well?\nConfirmed proximal posterior circulation occlusion by CTA or MRA?\nPotential to salvage brain tissue shown by imaging?"];
+    
+    Acute_Ischemic_Stroke -> Alteplase_Conditions;
+    Alteplase_Conditions -> Alteplase_Treatment[label="yes"];
+    Alteplase_Treatment -> Thrombectomy_Clinical_Status;
+    Alteplase_Conditions -> Thrombectomy_Clinical_Status [label="no"];
+    Thrombectomy_Clinical_Status -> Thrombectomy_Conditions_1 ;
+    Thrombectomy_Conditions_1 -> Thrombectomy_Treatment[label="yes"];
+    Thrombectomy_Conditions_1 -> Thrombectomy_Conditions_2[label="no"];
+    Thrombectomy_Conditions_2 -> Thrombectomy_Treatment[label="yes"];
+    Thrombectomy_Conditions_2 -> Thrombectomy_Conditions_3[label="no"];
+    Thrombectomy_Conditions_3 -> Thrombectomy_Treatment[label="yes"];
+    
+  }
+}
