@@ -1,4 +1,5 @@
-<img src="https://images.prismic.io/canvas-website/ZmdD7Zm069VX1nE3_healthwise_400.png" width="200px">
+![Canvas Healthwise Integration](https://images.prismic.io/canvas-website/ZmdD7Zm069VX1nE3_healthwise_400.png?auto=format,compress)
+
 
 # Healthwise Education Content Integration
 
