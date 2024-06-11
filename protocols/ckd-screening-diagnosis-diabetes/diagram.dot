@@ -1,0 +1,32 @@
+digraph CKD_Diabetes {
+    node [shape=box];
+
+    Start [shape=ellipse, label="Start Evaluation"];
+    Annual_Screening [label="Annual Screening for Albuminuria and eGFR"];
+    Albuminuria [label="Check Urinary Albumin-to-Creatinine Ratio (UACR)"];
+    eGFR [label="Calculate eGFR (CKD-EPI equation)"];
+    Normal_Results [label="Normal Results\n(UACR < 30 mg/g, eGFR >= 60 mL/min/1.73 m2)", shape=diamond];
+    Abnormal_Results [label="Abnormal Results\n(UACR >= 30 mg/g, eGFR < 60 mL/min/1.73 m2)", shape=diamond];
+    Repeat_Testing [label="Repeat Testing\n(2 of 3 samples in 3-6 months)"];
+    Normal_Monitoring [label="Normal Monitoring\n(Annual Checks)"];
+    CKD_Classification [label="Classify CKD\n(Stage 1-5 based on eGFR, UACR)"];
+    Refer_Nephrologist [label="Refer to Nephrologist"];
+    Stages_1_2 [label="Stage 1-2 CKD\n(eGFR >= 60, UACR >= 30 mg/g)"];
+    Stages_3_5 [label="Stage 3-5 CKD\n(eGFR < 60)"];
+    CKD_Treatment [label="Manage CKD\n(RAS Blockers, SGLT2 Inhibitors, Glycemic Control, BP Management)"];
+    Monitor_Progression [label="Monitor CKD Progression"];
+    
+    Start -> Annual_Screening;
+    Annual_Screening -> Albuminuria;
+    Albuminuria -> eGFR;
+    eGFR -> Normal_Results;
+    eGFR -> Abnormal_Results;
+    Normal_Results -> Normal_Monitoring [label="Yes"];
+    Abnormal_Results -> Repeat_Testing [label="Yes"];
+    Repeat_Testing -> CKD_Classification [label="Abnormal Results"];
+    CKD_Classification -> Stages_1_2 [label="Stage 1-2"];
+    CKD_Classification -> Stages_3_5 [label="Stage 3-5"];
+    Stages_1_2 -> CKD_Treatment;
+    Stages_3_5 -> Refer_Nephrologist;
+    CKD_Treatment -> Monitor_Progression;
+}
