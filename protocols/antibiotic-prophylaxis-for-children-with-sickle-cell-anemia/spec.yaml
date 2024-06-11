@@ -1,0 +1,17 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Antibiotic Prophylaxis Among Children with Sickle Cell Anemia"
+    description: "Recommendations to ensure that children with Sickle Cell Anemia (SCA) receive appropriate antibiotic prophylaxis to prevent infections and associated complications."
+    url: "https://p4qm.org/measures/3166"
+
+tags:
+  - category: "Conditions"
+    label: "Sickle Cell Anemia"
+    
+  - category: "Diagnostics"
+    label: "Prevention"
