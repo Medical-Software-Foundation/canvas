@@ -1,0 +1,25 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: >-
+      Wilderness Medical Society Clinical Practice Guidelines for the Prevention
+      and Treatment of Acute Altitude Illness: 2019 Update
+    description: >-
+      Guidelines for specific treatment of High Altitude Pulmonary Edema in
+      context of acute altitude illness
+    url: >-
+      https://journals.sagepub.com/doi/full/10.1016/j.wem.2019.04.006#table3-jwem201904006
+tags:
+  - category: Organization
+    label: Wilderness Medical Society
+  - category: Conditions
+    labels:
+      - altitude illness
+      - pulmonary edema
+  - category: Treatments
+    labels:
+      - nifedipine
+      - portable hyperbaric chamber
+      - oxygen
