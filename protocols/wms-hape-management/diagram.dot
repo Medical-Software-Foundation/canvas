@@ -1,0 +1,39 @@
+digraph HAPE {
+    node [shape=box];
+    
+    Start [shape=ellipse, label="Start Evaluation"];
+    Assess_Risk [label="Assess Risk Level\n(History, Rate of Ascent)"];
+    Symptoms_HAPE [label="Symptoms of HAPE?\n(Dyspnea on Exertion, Cough, Fatigue, Cyanosis)", shape=diamond];
+    HAPE_Diagnosis [label="Diagnose HAPE\n(Clinical Symptoms, Pulse Oximetry, Chest X-ray)"];
+    HAPE_Severity [label="Assess Severity of HAPE", shape=diamond];
+    Mild_HAPE [label="Mild HAPE\n(Monitor, Oxygen, Medications)"];
+    Severe_HAPE [label="Severe HAPE\n(Descent, Oxygen, Medications)"];
+    Nifedipine [label="Nifedipine\n30 mg every 12h or 20 mg every 8h", style=filled, fillcolor=lightblue];
+    Descent [label="Immediate Descent", style=filled, fillcolor=lightblue];
+    Supplemental_Oxygen [label="Supplemental Oxygen\n(SpO2 > 90%)", style=filled, fillcolor=lightblue];
+    Hyperbaric_Chamber [label="Portable Hyperbaric Chamber", style=filled, fillcolor=lightblue];
+    Monitor_Improvement [label="Monitor Improvement", shape=ellipse];
+    Recovery [label="Recovery", shape=ellipse, style=filled, fillcolor=green];
+    Further_Assessment [label="Further Assessment Needed?", shape=diamond];
+    End [shape=ellipse, label="End"];
+
+    Start -> Assess_Risk;
+    Assess_Risk -> Symptoms_HAPE [label="Yes"];
+    Symptoms_HAPE -> HAPE_Diagnosis [label="Yes"];
+    Symptoms_HAPE -> End [label="No"];
+    HAPE_Diagnosis -> HAPE_Severity;
+    HAPE_Severity -> Mild_HAPE [label="Mild"];
+    HAPE_Severity -> Severe_HAPE [label="Severe"];
+    Mild_HAPE -> Nifedipine;
+    Mild_HAPE -> Supplemental_Oxygen;
+    Mild_HAPE -> Monitor_Improvement;
+    Severe_HAPE -> Descent;
+    Severe_HAPE -> Supplemental_Oxygen;
+    Severe_HAPE -> Hyperbaric_Chamber;
+    Severe_HAPE -> Nifedipine;
+    Severe_HAPE -> Monitor_Improvement;
+    Monitor_Improvement -> Recovery [label="Improving"];
+    Monitor_Improvement -> Further_Assessment [label="Not Improving"];
+    Further_Assessment -> HAPE_Diagnosis [label="Yes"];
+    Further_Assessment -> Recovery [label="No"];
+}
