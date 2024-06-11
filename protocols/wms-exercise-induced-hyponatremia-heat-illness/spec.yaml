@@ -1,0 +1,32 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: >-
+      Wilderness Medical Society Clinical Practice Guidelines for the Management
+      of Exercise-Associated Hyponatremia 2019 Update
+    description: >-
+      Guidelines for field evaluation and treatment exercise induced
+      hyponatremia and heat illness
+    url: 'https://journals.sagepub.com/doi/full/10.1016/j.wem.2019.11.003'
+tags:
+  - category: Organization
+    label: Wilderness Medical Society
+  - category: Medical domain
+    labels:
+      - sports medicine
+      - wilderness medicine
+      - emergency medicine
+  - category: Conditions
+    labels:
+      - heat illness
+      - electrolyte disturbance
+      - hyponatremia
+      - dehydration
+  - category: Treatments
+    labels:
+      - hypertonic saline
+      - D5 normal saline
+      - normal saline
+      - iv fluids
