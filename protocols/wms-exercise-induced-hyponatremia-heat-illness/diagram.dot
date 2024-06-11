@@ -1,0 +1,36 @@
+digraph EAH {
+    node [shape=box];
+
+    Start [shape=ellipse, label="Symptomatic or collapse during or after exercise"];
+    Altered_Mental_Status [label="Altered mental status?", shape=diamond];
+    AMS_Yes [label="YES\nConfusion, Altered sensorium, Vomiting, Seizure, Coma, Ataxia, Collapse, Dyspnea"];
+    AMS_No [label="NO\nWeakness, Dizziness, Headache, Nausea, Vomiting, Muscle cramps"];
+    Alternative_Diagnoses1 [label="Consider alternative diagnoses**"];
+    Alternative_Diagnoses2 [label="Consider alternative diagnoses**"];
+    Severe_EAH [label="Severe EAH\nLarge fluid intake, Dyspnea"];
+    Heat_Stroke [label="Heat stroke\nConfirmed or suspected temperature > 40°C (104°F)"];
+    Mild_EAH [label="Mild EAH\nBloated feeling, Weight gain, Normal vital signs, No orthostasis"];
+    Heat_Exhaustion [label="Heat Exhaustion/Dehydration\nThirst, Orthostatic symptoms, Dry mucous membranes"];
+    Treatment_Severe_EAH [label="Treatment: Severe EAH\nIV bolus 100 mL HTS\nMay repeat up to 3 doses every 10 minutes or until neurological symptoms subside"];
+    Treatment_Heat_Stroke [label="Treatment: Heat Stroke\nAggressive immersion/conductive cooling\nIV 1-2 L NS/D5NS\n(Consider IV HTS if progression to severe EAH)"];
+    Treatment_Mild_EAH [label="Treatment: Mild EAH\nFluid restrict until diuresis\nSalty snacks*\nOral hypertonic solution*\nMonitor for progression to severe EAH"];
+    Treatment_Heat_Exhaustion [label="Treatment: Heat Exhaustion/Dehydration\nDrink to comfort‡\nAvoid forced fluids\nRest in the shade\nCold water dousing for cooling\nMonitor for progression to heat stroke"];
+    Transport [label="TRANSPORT TO MEDICAL CARE"];
+    Notes [label="**Alternative diagnoses include: hypoglycemia, hyperglycemia, altitude illness, infection, myocardial infarction, endocrine issues, toxin ingestion/drugs"];
+
+    Start -> Altered_Mental_Status;
+    Altered_Mental_Status -> AMS_Yes [label="YES"];
+    Altered_Mental_Status -> AMS_No [label="NO"];
+    AMS_Yes -> Severe_EAH;
+    AMS_Yes -> Heat_Stroke;
+    AMS_Yes -> Alternative_Diagnoses1;
+    AMS_No -> Mild_EAH;
+    AMS_No -> Heat_Exhaustion;
+    AMS_No -> Alternative_Diagnoses2;
+    Severe_EAH -> Treatment_Severe_EAH;
+    Heat_Stroke -> Treatment_Heat_Stroke;
+    Mild_EAH -> Treatment_Mild_EAH;
+    Heat_Exhaustion -> Treatment_Heat_Exhaustion;
+    Treatment_Severe_EAH -> Transport;
+    Treatment_Heat_Stroke -> Transport;
+}
