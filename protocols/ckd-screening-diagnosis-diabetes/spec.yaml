@@ -1,0 +1,31 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: >-
+      Chronic Kidney Disease and Risk Management Standards of Medical Care in
+      Diabetes—2022
+    description: >-
+      Guidelines for screening and diagnosis of chronic kidney disease in
+      diabetic patients
+    url: >-
+      https://diabetesjournals.org/care/article/45/Supplement_1/S175/138914/11-Chronic-Kidney-Disease-and-Risk-Management
+tags:
+  - category: Organization
+    label: American Diabetes Organization
+  - category: Medical specialty
+    labels:
+      - nephrology
+      - primary care
+      - endocrinology
+  - category: Conditions
+    labels:
+      - diabetes mellitus
+      - chronic kidney disease
+      - proteinuria
+  - category: Treatments
+    labels:
+      - ACE Inhibitor
+      - SGLT-2 Inhibitor
+      - Angiotensin receptor blocker
