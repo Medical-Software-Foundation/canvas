@@ -1,0 +1,13 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    Denominator [label="All children 3 months to 5 years old with SCA", shape=diamond];
+    Numerator [label="Children dispensed appropriate antibiotic prophylaxis for >= 300 days", shape=diamond];
+    Recommendation [label="Screening and Frequency", shape=rectangle, color=black, fontcolor=black];
+
+    Denominator -> Numerator [label="Identification"];
+    Numerator -> Recommendation [label="Qualifies for screening?"];
+
+    Recommendation [label="Dispense appropriate antibiotics for at least 300 days within the measurement year", shape=rectangle];
+}
