@@ -1,0 +1,45 @@
+digraph G {
+    node [shape=box];
+    Diagnosis [label="Orthostatic Hypotension (OH) Diagnosis", shape="diamond"];
+    Criteria [label="Fall in BP within 3 min of active standing or HUT"];
+    ManagementGoals [label="Management Goals"];
+    ImproveFunction [label="Improve patient's functional capacity and quality of life"];
+    PreventInjury [label="Prevent injury"];
+    ManagementStrategy [label="Management strategy", shape="diamond"];
+    EducationTraining [label="Education, advice, and training"];
+    FactorsInfluenceBP [label="Factors influencing BP (foods, habits, positions, drugs)"];
+    PhysicalMeasures [label="Physical Measures"];
+    LegCrossing [label="Leg crossing"];
+    Squatting [label="Squatting"];
+    AbdominalBinders [label="Elastic abdominal binders and stockings"];
+    Exercise [label="Careful exercise"];
+    WaterSaltIntake [label="Increased water (2-2.5 L/day)\nand salt ingestion (>8g or 150 mmol/day)"];
+    Medications [label="Medications"];
+    Fludrocortisone [label="Fludrocortisone (0.1-0.2 mg/day)"];
+    Sympathomimetics [label="Sympathomimetics"];
+    Midodrine [label="Midodrine (start with 2.5 mg b.i.d. and increase to 10 mg t.i.d.)"];
+    Ephedrine [label="Ephedrine (15 mg t.i.d.)"];
+    DOPS [label="DOPS (200-400 mg daily)"];
+
+    Criteria -> Diagnosis;
+    Diagnosis -> ManagementGoals;
+    ManagementGoals -> ImproveFunction;
+    ManagementGoals -> PreventInjury;
+    ImproveFunction -> ManagementStrategy;
+    PreventInjury -> ManagementStrategy;
+    ManagementStrategy -> EducationTraining;
+    EducationTraining -> FactorsInfluenceBP;
+    ManagementStrategy -> PhysicalMeasures;
+    PhysicalMeasures -> LegCrossing;
+    PhysicalMeasures -> Squatting;
+    PhysicalMeasures -> AbdominalBinders;
+    PhysicalMeasures -> Exercise;
+    ManagementStrategy -> WaterSaltIntake;
+    ManagementStrategy -> Medications;
+    Medications -> Fludrocortisone;
+    Fludrocortisone -> Sympathomimetics [label="second line"];
+    Sympathomimetics -> Midodrine;
+    Sympathomimetics -> Ephedrine;
+    Medications -> DOPS [label="dopamine beta-hydroxylase\ndeﬁciency"];
+
+}

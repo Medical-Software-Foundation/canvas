@@ -1,0 +1,25 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "European Federation of Neurological Societies guidelines on the diagnosis and management of orthostatic hypotension"
+    description: "Evidence-based guideline for management of orthostatic hypotension"
+    url: "https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1468-1331.2006.01512.x"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Orthostatic hypotension"
+
+  - category: "Treatment"
+    label: 
+      - "Fludocortisone"
+      - "L-DOPS"
+      - "Methylphenidate"
+      - "Midrodrine"
+      - "Ephedrine"  
+      - "Elastic abdominal binders and stockings"
+
