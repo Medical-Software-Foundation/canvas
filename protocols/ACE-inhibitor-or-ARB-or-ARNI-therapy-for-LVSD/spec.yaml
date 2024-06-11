@@ -1,0 +1,18 @@
+status: "draft"
+
+contributors:
+  - username: "jubaer145"
+    name: "Jubaer Hossain"
+
+reference_papers:
+  - title: "Heart Failure (HF): Angiotensin-Converting Enzyme (ACE) Inhibitor or Angiotensin Receptor Blocker (ARB) or Angiotensin Receptor-Neprilysin Inhibitor (ARNI) Therapy for Left Ventricular Systolic Dysfunction (LVSD)"
+    description: "Recommendations to ensure that patients with heart failure (HF) and left ventricular systolic dysfunction (LVSD) are prescribed appropriate medications—ACE inhibitors, ARBs, or ARNIs—to improve patient outcomes and reduce the risk of morbidity and mortality associated with HF."
+    url: "https://p4qm.org/measures/0081"
+
+tags:
+  - category: "Conditions"
+    label: "Heart Failure"
+
+
+  - category: "Diagnostics"
+    label: "Therapy"

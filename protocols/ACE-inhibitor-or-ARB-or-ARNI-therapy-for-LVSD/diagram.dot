@@ -1,0 +1,28 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond,color=blue,fontcolor=blue];
+    
+    start [label="Start", shape=rectangle]
+    age18Plus [label="Age 18 and older?"]
+    hfDiagnosis [label="Diagnosed with heart failure?"]
+    lvefUnder40 [label="LVEF < 40%?"]
+    medicalExclusion [label="Medical reason for not prescribing ACE/ARB/ARNI?"]
+    patientExclusion [label="Patient reason for not prescribing ACE/ARB/ARNI?"]
+    systemExclusion [label="System reason for not prescribing ACE/ARB/ARNI?"]
+    prescribe [label="Prescribe ACE/ARB/ARNI", shape=rectangle]
+    noPrescribe [label="Do not prescribe ACE/ARB/ARNI", shape=rectangle]
+    
+    start -> age18Plus
+    age18Plus -> hfDiagnosis [label="Yes"]
+    age18Plus -> noPrescribe [label="No"]
+    hfDiagnosis -> lvefUnder40 [label="Yes"]
+    hfDiagnosis -> noPrescribe [label="No"]
+    lvefUnder40 -> medicalExclusion [label="Yes"]
+    lvefUnder40 -> noPrescribe [label="No"]
+    medicalExclusion -> patientExclusion [label="No"]
+    medicalExclusion -> noPrescribe [label="Yes"]
+    patientExclusion -> systemExclusion [label="No"]
+    patientExclusion -> noPrescribe [label="Yes"]
+    systemExclusion -> prescribe [label="No"]
+    systemExclusion -> noPrescribe [label="Yes"]
+}
