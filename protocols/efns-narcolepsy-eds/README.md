@@ -1,9 +1,6 @@
 # EFNS guidelines on management of narcolepsy: Excessive Daytime Sleepiness
 **Developed by**: European Federation of Neurological Societies
 
-**Description**:
-This corresponds to the subsection of the the
-
 # Treatment of Excessive Daytime Sleepiness in Narcolepsy
 
 ## First-Line Treatment

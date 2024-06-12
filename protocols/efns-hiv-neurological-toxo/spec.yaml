@@ -1,0 +1,26 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "Guidelines for the diagnosis and management of neurological complications of HIV infection: Cerebral toxoplasmosis"
+    description: "Evidence-based guideline for diagnosis and treatment of cerebral toxoplasmosis"
+    url: "https://onlinelibrary.wiley.com/doi/epdf/10.1111/j.1468-1331.2004.00856.x"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "HIV"
+      - "Cerebral toxoplasmosis"
+
+  - category: "Treatment"
+    labels: 
+      - "Pyrimethamine"
+      - "Sulfadiazine"
+      - "Trimethoprim/sulfamethoxazole"
+      - "Clarithromycin"
+      - "Azithromycin"
+      - "Dapsone"
+      - "Atovaquone"

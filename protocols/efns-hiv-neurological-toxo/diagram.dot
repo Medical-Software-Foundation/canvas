@@ -1,0 +1,52 @@
+digraph CerebralToxoplasmosis {
+    node [shape=box, style=filled, color=lightblue];
+
+    Start [label="Suspected Cerebral Toxoplasmosis"];
+    
+    subgraph cluster_diagnosis {
+        label="Diagnosis";
+        style=filled;
+        color=lightgrey;
+        
+        NeuroDeficits [label="Progressive Neurological Deficits"];
+        Imaging [label="Contrast-enhancing Mass Lesion(s) on CT/MRI"];
+        TreatmentResponse [label="Successful Response to Treatment within 2 Weeks"];
+        
+        Diagnosis [label="Diagnosis: Cerebral Toxoplasmosis", shape=ellipse, color=lightgreen];
+        
+        NeuroDeficits -> Diagnosis [label="Yes"];
+        Imaging -> Diagnosis [label="Yes"];
+        TreatmentResponse -> Diagnosis [label="Yes"];
+    }
+    
+    subgraph cluster_treatment {
+        label="Treatment";
+        style=filled;
+        color=lightgrey;
+        
+        PyrimethamineSulfadiazine [label="Pyrimethamine 200 mg load, then 50 mg/day + Sulfadiazine 1 g four times daily (oral)"];
+        Alternative1 [label="Trimethroprim/sulfamethoxazol (TMP) 2.5–5 mg/kg (TMP) q.i.d."];
+        Alternative2 [label="Pyrimethamine 50 mg/day + Clarithromycin 1 g twice daily"];
+        Alternative3 [label="Pyrimethamine 50 mg/day + Azithromycin 600–1800 mg/day"];
+        Alternative4 [label="Pyrimethamine 50 mg/day + Dapsone 100 mg/day"];
+        Alternative5 [label="Atovaquone 750 mg four times daily (oral)"];
+        
+        SecondaryProphylaxis [label="Secondary Prophylaxis: Pyrimethamine 50 mg/day + Sulfadiazine 500 mg four times daily or Atovaquone 750 mg four times daily"];
+    }
+    
+    Start -> NeuroDeficits;
+    Start -> Imaging;
+    Start -> TreatmentResponse;
+    Diagnosis -> PyrimethamineSulfadiazine [label="Primary Therapy"];
+    Diagnosis -> Alternative1 [label="Alternative Therapy"];
+    Diagnosis -> Alternative2 [label="Alternative Therapy"];
+    Diagnosis -> Alternative3 [label="Alternative Therapy"];
+    Diagnosis -> Alternative4 [label="Alternative Therapy"];
+    Diagnosis -> Alternative5 [label="Alternative Therapy"];
+    PyrimethamineSulfadiazine -> SecondaryProphylaxis [label="6 weeks"];
+    Alternative1 -> SecondaryProphylaxis [label="6 weeks"];
+    Alternative2 -> SecondaryProphylaxis [label="6 weeks"];
+    Alternative3 -> SecondaryProphylaxis [label="6 weeks"];
+    Alternative4 -> SecondaryProphylaxis [label="6 weeks"];
+    Alternative5 -> SecondaryProphylaxis [label="6 weeks"];
+}
