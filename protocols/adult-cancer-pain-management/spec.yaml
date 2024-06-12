@@ -1,0 +1,15 @@
+status: "draft"
+
+contributors:
+- username: "willb0246"
+  name: "William Burke"
+reference_papers:
+- title: "Cancer pain management in adults"
+  description: "This guideline provides brief, point-of-care recommendations for the screening, assessment, and management of cancer-related pain in adults, focusing on chronic pain and excluding acute pain caused by treatments or experienced by survivors. It outlines both pharmacological and non-pharmacological management strategies and emphasizes the importance of patient awareness and self-management."
+  url: "https://www.cancer.org.au/clinical-guidelines/cancer-pain-management"
+
+tags:
+- category: "Healthcare Guidelines"
+  labels: ["Cancer Pain Management", "Chronic Pain", "Adults"]
+- category: "Pain Management"
+  label: "Non-Pharmacological Strategies"

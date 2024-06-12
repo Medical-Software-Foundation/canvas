@@ -1,0 +1,24 @@
+digraph G {
+    rankdir=TB
+    node [shape=diamond, color=blue, fontcolor=blue];
+    
+    Start [label="Adult Cancer Patient", shape=rectangle];
+    HasPain [label="Has Pain?"];
+    PainType [label="Type of Pain?"];
+    NonOpioidIntolerant [label="Non-Opioid Intolerant?"];
+    MildPainAction [label="Non-Opioid Analgesics\nFrequency: As needed", shape=rectangle];
+    ModeratePainAction [label="Weak Opioid + Non-Opioid\nFrequency: Scheduled", shape=rectangle];
+    SeverePainAction [label="Strong Opioid\nFrequency: Scheduled + Rescue Doses", shape=rectangle];
+    NeuropathicPainAction [label="Adjuvants for Neuropathic Pain\nFrequency: As per protocol", shape=rectangle];
+    InterventionalProcedure [label="Consider Interventional Procedure\nBased on case review", shape=rectangle];
+
+    Start -> HasPain
+    HasPain -> PainType [label="Yes"];
+    HasPain -> End [label="No", shape=rectangle];
+    PainType -> NonOpioidIntolerant [label="Mild"];
+    PainType -> ModeratePainAction [label="Moderate"];
+    PainType -> SeverePainAction [label="Severe"];
+    PainType -> NeuropathicPainAction [label="Neuropathic"];
+    NonOpioidIntolerant -> MildPainAction [label="No"];
+    NonOpioidIntolerant -> ModeratePainAction [label="Yes"];
+}
