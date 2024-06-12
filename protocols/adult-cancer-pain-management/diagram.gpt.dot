@@ -10,7 +10,6 @@ digraph G {
     ModeratePainAction [label="Weak Opioid + Non-Opioid\nFrequency: Scheduled", shape=rectangle];
     SeverePainAction [label="Strong Opioid\nFrequency: Scheduled + Rescue Doses", shape=rectangle];
     NeuropathicPainAction [label="Adjuvants for Neuropathic Pain\nFrequency: As per protocol", shape=rectangle];
-    InterventionalProcedure [label="Consider Interventional Procedure\nBased on case review", shape=rectangle];
 
     Start -> HasPain
     HasPain -> PainType [label="Yes"];
