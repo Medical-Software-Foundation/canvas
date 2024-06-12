@@ -1,0 +1,29 @@
+digraph Insulin_Titration {
+    node [shape=box];
+
+    Initiate_Insulin [label="Start with bedtime intermediate-acting insulin or\nbedtime or morning long-acting insulin;\ncan initiate with 10 units or 0.2 units per kg"];
+    Check_Fasting_Glucose [label="Check fasting glucose (fingerstick) usually daily and\nincrease dose, typically by 2 units every 3 days until fasting levels\nare in target range (80-130 mg/dL or 4.4-7.2 mmol/L)*;\ncan increase dose in larger increments, e.g., by 4 units every 3 days,\nif fasting glucose >180 mg/dL (>10 mmol/L)"];
+    Hypoglycemia [label="If hypoglycemia occurs, or fasting glucose level <80 mg/dL (4.4 mmol/L)*,\nreduce bedtime dose by 4 units or 10% ~ whichever is greater"];
+    A1C_2_3_Months [label="A1C ≥7% after 2-3 months?", shape=diamond];
+    Check_Glucose_Range [label="If fasting glucose in target range (80-130 mg/dL or 4.4-7.2 mmol/L)*,\ncheck glucose pre-lunch, -dinner, and -bed;\ndepending on glucose results, add second injection;\ncan usually begin with approximately 4 units and adjust by 2 units every 3 days\nuntil glucose in range"];
+    Pre_Lunch_Glucose [label="Pre-lunch glucose out of range;\nadd rapid-acting insulin at breakfast"];
+    Pre_Dinner_Glucose [label="Pre-dinner glucose out of range;\nadd NPH insulin at breakfast or rapid-acting at lunch"];
+    Pre_Bed_Glucose [label="Pre-bed glucose out of range;\nadd rapid-acting insulin at dinner"];
+    A1C_3_Months [label="A1C ≥7% after 3 months?", shape=diamond];
+    Continue_Regimen [label="Continue regimen;\ncheck A1C every 3 months"];
+    Recheck_Glucose_Levels [label="Recheck pre-meal glucose levels and if out of range,\nmay need to add another injection; if A1C continues to be out of range,\ncheck 2-hour postprandial levels and adjust preprandial rapid-acting insulin"];
+    
+    Initiate_Insulin -> Check_Fasting_Glucose;
+    Check_Fasting_Glucose -> Hypoglycemia;
+    Check_Fasting_Glucose -> A1C_2_3_Months;
+    A1C_2_3_Months -> Check_Glucose_Range [label="Yes"];
+    A1C_2_3_Months -> Continue_Regimen [label="No"];
+    Check_Glucose_Range -> Pre_Lunch_Glucose;
+    Check_Glucose_Range -> Pre_Dinner_Glucose;
+    Check_Glucose_Range -> Pre_Bed_Glucose;
+    Pre_Lunch_Glucose -> A1C_3_Months;
+    Pre_Dinner_Glucose -> A1C_3_Months;
+    Pre_Bed_Glucose -> A1C_3_Months;
+    A1C_3_Months -> Continue_Regimen [label="No"];
+    A1C_3_Months -> Recheck_Glucose_Levels [label="Yes"];
+}
