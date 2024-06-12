@@ -1,0 +1,21 @@
+digraph StrokeTreatmentFlowsheet {
+    rankdir=TB;
+
+    node [shape=box, style=filled, color=lightgrey];
+    
+    Start [label="Patient with Ischaemic Stroke or High-Risk TIA in the past 24 hours"];
+    
+    MinorStrokeOrModerateTIA [label="Non-cardioembolic minor ischaemic stroke\n(NIHSS score of 3 or less)\nor\nHigh-risk TIA (ABCD2 score of 4 or more)"];
+    MildToModerateStrokeOrSevereTIA [label="Non-cardioembolic mild to moderate ischaemic stroke\n(NIHSS score of 5 or less)\nor\nHigh-risk TIA (ABCD2 score of 6 or more\nor other high-risk features)"];
+
+    MinorTreatment [label="21-days Dual Antiplatelet Therapy\n(Aspirin + Clopidogrel)\nFollowed by Antiplatelet Monotherapy"];
+    ModerateTreatment [label="30-days Dual Antiplatelet Therapy\n(Aspirin + Ticagrelor)\nFollowed by Antiplatelet Monotherapy"];
+
+    Start -> MinorStrokeOrModerateTIA;
+    Start -> MildToModerateStrokeOrSevereTIA;
+
+    MinorStrokeOrModerateTIA -> MinorTreatment;
+    MildToModerateStrokeOrSevereTIA -> ModerateTreatment;
+
+
+}

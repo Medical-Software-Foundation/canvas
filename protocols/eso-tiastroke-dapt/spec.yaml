@@ -1,0 +1,23 @@
+status: "draft"
+
+contributors:
+  - username: "amathy"
+    name: "Alexandre Mathy"
+
+reference_papers:
+  - title: "ESO Guidelines on the Treatment of Stroke"
+    description: "Guidelines for the treatment of non-cardioembolic minor and mild to moderate ischaemic stroke and high-risk TIA"
+    url: "https://journals.sagepub.com/doi/pdf/10.1177/23969873211000877"
+
+tags:
+  - category: "Conditions"
+    labels: 
+      - "Ischaemic Stroke"
+      - "TIA"
+
+  - category: "Treatment"
+    labels: 
+      - "Aspirin"
+      - "Clopidogrel"
+      - "Ticagrelor"
+      - "DAPT"
