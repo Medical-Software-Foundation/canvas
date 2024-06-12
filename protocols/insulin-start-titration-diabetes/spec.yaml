@@ -1,0 +1,33 @@
+status: draft
+contributors:
+  - username: dmhardin102
+    name: David Hardin
+reference_papers:
+  - title: >-
+      Initiation and adjustment of insulin regimens in type 2 diabetes mellitus
+    description: >-
+      Guidelines for starting and titrating insulin in diabetic patients requiring therapy
+    url: >-
+      https://www.uptodate.com/contents/initial-management-of-hyperglycemia-in-adults-with-type-2-diabetes-mellitus
+tags:
+  - category: Organization
+    label: UpToDate
+  - category: Medical specialty
+    labels:
+      - nephrology
+      - primary care
+      - endocrinology
+  - category: Conditions
+    labels:
+      - diabetes mellitus
+      - chronic kidney disease
+      - proteinuria
+  - category: Treatments
+    labels:
+      - Insulin
+      - Long-acting insulin
+      - Intermediate-acting insulin
+  - category: Diagnostics
+    labels:
+      - Hemoglobin A1c
+      - blood glucose
