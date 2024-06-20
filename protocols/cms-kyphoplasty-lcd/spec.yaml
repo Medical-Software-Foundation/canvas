@@ -1,0 +1,23 @@
+status: "draft"
+
+contributors:
+  - username: "dmhardin102"
+    name: "David Hardin"
+
+reference_papers:
+  - title: "Percutaneous Vertebral Augmentation (PVA) for Vertebral Compression Fracture (VCF)"
+    description: "Local Coverage Determination of medical necessity and payment rules for percutaneous vertebral augmentation"
+    url: "https://www.cms.gov/medicare-coverage-database/view/lcd.aspx?lcdid=35130"
+
+tags:
+  - category: "Conditions"
+    labels: "osteoporosis"
+
+  - category: "Conditions"
+    labels: "vertebral compression fracture"
+
+  - category: "Procedures"
+    label: "kyphoplasty"
+
+  - category: "specialty"
+    label: "pain management"
