@@ -1,0 +1,31 @@
+digraph {
+    Check_OVF [label="Osteoporotic Vertebral Fracture discovered on Imaging"];
+    Check_Symptoms [label="Is the Patient Symptomatic?"];
+    Check_Hospitalized [label="Is the Patient Hospitalized?"];
+    Severe_Pain_Hospitalized [label="Severe Pain (NRS/VAS ≥ 8)"];
+    Moderate_Severe_Pain [label="Moderate to Severe Pain (NRS/VAS ≥ 5)"];
+    Check_NSM [label="Attempted Non-Surgical Management (NSM)"];
+    Worsening_Stable_Pain [label="Worsening Pain or Stable Pain with Additional Criteria"];
+    Criteria1 [label="> 25% Vertebral Body Height Reduction"];
+    Criteria2 [label="Kyphotic Deformity"];
+    Criteria3 [label="Severe Impact on Daily Functioning (RDQ > 17)"];
+    Proceed_Procedure [label="Proceed with Percutaneous Vertebral Augmentation (PVA)"];
+    Not_Eligible [label="Not Eligible for Procedure"];
+    
+    Check_OVF -> Check_Symptoms;
+    Check_Symptoms -> Check_Hospitalized [label="Yes"];
+    Check_Symptoms -> Not_Eligible [label="No"];
+    Check_Hospitalized -> Severe_Pain_Hospitalized [label="Yes"];
+    Check_Hospitalized -> Moderate_Severe_Pain [label="No"];
+    Severe_Pain_Hospitalized -> Proceed_Procedure;
+    Moderate_Severe_Pain -> Check_NSM [label="Yes"];
+    Check_NSM -> Worsening_Stable_Pain;
+    Check_NSM -> Not_Eligible [label="No"];
+    Worsening_Stable_Pain -> Criteria1;
+    Worsening_Stable_Pain -> Criteria2;
+    Worsening_Stable_Pain -> Criteria3;
+    Criteria1 -> Proceed_Procedure;
+    Criteria2 -> Proceed_Procedure;
+    Criteria3 -> Proceed_Procedure;
+    Worsening_Stable_Pain -> Not_Eligible [label="No Criteria Met"];
+}
