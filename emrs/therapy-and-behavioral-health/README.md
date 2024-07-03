@@ -8,4 +8,4 @@ Common treatment interventions include cognitive behavioral therapy (CBT), diale
 Care teams interact with patients through a variety of secure methods, including video conferencing, phone calls, and encrypted text messaging. In-person office visits are also supported when necessary, ensuring comprehensive care. The EMR system seamlessly integrates these modalities, allowing for a fluid and flexible approach to patient care, regardless of the setting.
 
 ## Protocols
-The most-used protocols for this population include evidence-based guidelines for managing depression and anxiety, such as the PHQ-9 and GAD-7 assessments. For PTSD, protocols emphasize trauma-focused CBT. Eating disorder management follows the Ma
+The most-used protocols for this population include evidence-based guidelines for managing depression and anxiety, such as the PHQ-9 and GAD-7 assessments. For PTSD, protocols emphasize trauma-focused CBT. Eating disorder management includes protocols related to the family-based Maudsley method.
