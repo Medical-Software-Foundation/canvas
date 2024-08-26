@@ -1,5 +1,5 @@
 ### Target Population
-Designed for patients enrolled in a weight loss program. ISuitable for any patient undergoing a program who has completed the “Weight Loss Program Status Questionnaire.”
+Designed for patients enrolled in a weight loss program. Suitable for any patient undergoing a program who has completed the “Weight Loss Program Status Questionnaire.”
 ### Recommendations
 Display’s the patient’s current program status prominently through a banner alert on the patient summary page. The banner provides real-time information about the patient’s progress or current state in the weight loss program, such as "Intake," "Condition Screening," "Treatment," or "Disqualified."
 ### Importance
