@@ -1,4 +1,4 @@
-![Canvas zus-aggregated-profile-hie-integration](https://images.prismic.io/canvas-website/ZsyLr0aF0TcGJZdL_zus-logo.png?auto=format,compress)
+![Canvas zus-aggregated-profile-hie-integration](https://images.prismic.io/canvas-website/ZszEeUaF0TcGJZ4D_zuslogo.png?auto=format,compress)
 
 # Zus Aggregated Profile HIE Integration
 
