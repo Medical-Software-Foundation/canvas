@@ -1,4 +1,4 @@
-![Canvas twilio-sms-text-messaging-integration](https://images.prismic.io/canvas-website/ZszEeUaF0TcGJZ4D_zuslogo.png?auto=format,compress)
+![Canvas twilio-sms-text-messaging-integration](https://images.prismic.io/canvas-website/ZsyLsUaF0TcGJZdN_twilio-logo.png?auto=format,compress)
 
 # Twilio SMS Text Messaging Integration
 
