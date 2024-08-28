@@ -2,7 +2,7 @@
 
 # ClaimMD Insurance Clearinghouse Integration
 
-## Claim.MD Helps Healthcare Providers, Software Vendors and Insurance Carriers Manage Electronic Medical Transactions Easily.
+## Simply Clean Claims
 - Extensive insurance network links providers to Medicare, Medicaid, Blues, and thousands of commercial insurance companies across the country.
 - Provider enrollment workflow simplifies your organization's healthcare billing paperwork and portal completion process.
 - Facilitates realtime benefits & eligibility verification in the X12 270/271 formats, with responses easily viewable in Canvas.
