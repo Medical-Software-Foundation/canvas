@@ -1,4 +1,4 @@
-![Canvas googla-calendar-integration](https://images.prismic.io/canvas-website/ZsyLq0aF0TcGJZdG_gcal-logo.png?auto=format,compress)
+![Canvas googla-calendar-integration](https://images.prismic.io/canvas-website/ZtHOa0aF0TcGJl1q_gcal.png?auto=format,compress)
 
 # Google Calendar Integration
 
