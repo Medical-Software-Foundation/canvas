@@ -1,0 +1,8 @@
+### Target Population
+This protocol is designed for adult patients, particularly those aged 35 and older, as well as younger patients who present specific risk factors for diabetes. The risk factors include a high Body Mass Index (BMI), certain ethnic backgrounds, a family history of diabetes, cardiovascular conditions, or a diagnosis of polycystic ovary syndrome (PCOS).
+### Recommendations
+The protocol recommends screening eligible patients for prediabetes or diabetes using an A1c test every three years. For patients with a BMI of 25 or higher (23 or higher for Asian Americans) and at least one additional risk factor, screening is advised regardless of age. If a patient has already undergone an A1c test within the past three years, no further testing is necessary. If not, the protocol will prompt clinicians to order the test.
+### Importance
+Diabetes is a significant and growing health concern, and early detection is crucial for managing the disease and preventing complications. This protocol identifies patients at higher risk for diabetes and ensures they receive appropriate screening. By implementing these measures, healthcare providers can proactively manage the health of their patients, potentially preventing the progression from prediabetes to diabetes.
+### Conclusion
+Implementing this protocol in a medical record software system helps streamline the identification and screening of patients at risk for diabetes. By automating the process, clinicians can efficiently manage patient care, ensuring that those who need screening are identified promptly, and those already screened are not subjected to unnecessary tests. This approach supports better clinical outcomes through early detection and intervention.
