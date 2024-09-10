@@ -1,0 +1,8 @@
+# Patient Populations
+The Health-Related Social Needs (HRSN) questionnaire is suitable for patients in a medical practice who may be facing social challenges impacting their health. It aims to address factors like living conditions, food insecurity, transportation issues, safety concerns, and emotional well-being. Patients who may benefit from social support services or interventions could be particularly apt for this questionnaire.
+
+# Diagnostic and Treatment Purposes
+Results from the HRSN questionnaire can be utilized to diagnose and address social determinants of health that impact patients' overall well-being. The responses can guide healthcare providers in identifying patients at risk of food insecurity, housing instability, transportation barriers, social isolation, or experiencing abuse. This information can help in tailoring treatment plans, referrals to social services, or interventions to improve patients' social and emotional health.
+
+# Author and Validation
+The Health-Related Social Needs (HRSN) questionnaire does not have a specified attributed author listed in the database description. However, the questionnaire's content and structure align with the principles of social determinants of health research, highlighting its validity in addressing factors beyond traditional medical issues. The design of the questionnaire suggests a well-researched approach to identifying and addressing social needs that can impact patient health outcomes.
