@@ -1,0 +1,11 @@
+## Appropriate Patient Populations
+
+The Eating Disorder Examination Questionnaire (EDE-Q) is a valuable tool initially designed for individuals exhibiting symptoms of eating disorders such as anorexia nervosa, bulimia nervosa, and binge-eating disorder. However, its utility extends beyond these specific conditions, making it appropriate for use in adolescents and adults who have concerns about their eating behaviors, body image, and weight control practices. The EDE-Q’s comprehensive nature allows healthcare providers to assess subtle eating behavior disruptions even in a primary care or general psychiatric setting, making it a versatile instrument for diverse patient populations.
+
+## Diagnostic and Treatment Applications
+
+The EDE-Q provides insights into a patient's eating habits, attitudes towards food, and body image issues, which are essential for both diagnostic and treatment purposes. Diagnostically, the EDE-Q helps identify the presence and severity of eating disorder symptoms, providing a quantitative basis for clinical assessment and diagnosis. For treatment purposes, the questionnaire's results can be employed to monitor changes in eating behaviors and cognitive patterns over time, thus guiding therapeutic interventions. Whether used individually or alongside clinical interviews and other assessment tools, the EDE-Q facilitates a targeted approach to both therapy and treatment planning, enabling healthcare providers to address critical areas such as dietary restrictions, purging behaviors, and body dissatisfaction.
+
+## Authorship and Validation
+
+The EDE-Q is attributed to researchers Dr. Christopher G. Fairburn and his colleagues, who developed it as a self-report version of the Eating Disorder Examination (EDE) interview. This questionnaire has undergone extensive validation through research studies, demonstrating excellent reliability and validity across various populations and settings. The widespread empirical support for the EDE-Q underscores its effectiveness in accurately capturing eating disorder-related psychopathology, making it a trusted instrument among clinicians and researchers alike. Additionally, ongoing studies continue to evaluate and refine the EDE-Q, ensuring that it remains relevant and accurate in detecting eating disorder symptoms in diverse patient groups.
