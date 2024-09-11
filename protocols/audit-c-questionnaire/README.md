@@ -1,4 +1,3 @@
-```markdown
 ### Appropriate Patient Populations for AUDIT-C
 
 The Alcohol Use Disorders Identification Test - Consumption (AUDIT-C) questionnaire is particularly suitable for adult patient populations, including those seen in primary care, mental health services, and substance abuse treatment programs. Designed as a concise screen, the AUDIT-C is adept at flagging risky drinking behaviors, alcohol abuse, and potential dependence across various demographics. Though versatile in its applicability, it is generally recommended for use in individuals aged 18 and over. The simplicity and brevity of the questionnaire make it an optimal choice for routine screenings, allowing healthcare providers to efficiently identify individuals who may benefit from more extensive evaluations or interventions related to alcohol consumption.
@@ -10,4 +9,3 @@ The results of the AUDIT-C questionnaire play a vital role in both diagnostic an
 ### Validation and Authorship of the AUDIT-C
 
 The AUDIT-C questionnaire is a derivative of the original Alcohol Use Disorders Identification Test (AUDIT), which was developed by the World Health Organization (WHO) as a standardized tool for detecting alcohol consumption patterns and related disorders. The AUDIT-C specifically focuses on the consumption aspect, making it a more streamlined version for quick screenings. Extensive research has validated the efficacy and reliability of the AUDIT-C in various healthcare settings. Studies have demonstrated that it maintains a high sensitivity and specificity for identifying at-risk drinking behaviors and alcohol use disorders. Moreover, its validation across diverse populations ensures that it is a robust and reliable tool for clinicians globally. As a LOINC-coded instrument (72109-2 for the questionnaire and 75626-2 for scoring), it integrates seamlessly into electronic health records (EHRs), facilitating ease of use and consistent application in clinical practice.
-```
