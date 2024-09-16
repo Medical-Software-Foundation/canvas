@@ -1,8 +1,8 @@
 ## Target Population
-Asthmatic patients or individuals at risk for asthma.
+Patients with an active diagnosis of asthma.
 
 ## Recommendations
-Clinicians should use this protocol to streamline the process of identifying patients with asthma during health maintenance checkups. The automated alert system ensures clinicians are notified when a diagnosis has been made and helps prioritize patient outreach.
+Creates a list that can be leverage within the populations module to track asthmatic patients.
 
 ## Importance
 Helps to streamline the process of identifying patients with asthma during routine health checkups. If a patient has asthma, it sends a prompt to contact them, which may involve scheduling follow-up appointments or updating their care plan. The system automatically alerts staff when a diagnosis is found, making it easier to prioritize patient outreach.
