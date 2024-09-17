@@ -1,13 +1,23 @@
-## Target Population
-Designed for women aged 50-74 who are eligible for breast cancer screening. Specifically, it applies to those who have not had a mammogram within the last 27 months, or have a history of mastectomy.
+## Key Objectives:
+ - You will learn the patient population targeted in the Breast Cancer Screening protocol.
+ - You will learn the measure description for the Breast Cancer Screening protocol.
+ - You will learn about exclusions from the Breast Cancer Screening protocol.
+ - You will learn about interventions available for the Breast Cancer Screening protocol. 
+## Population:
+ - All patients born as female and that have an age between 51 inclusive and 74 exclusive.
+ - CANVAS: All patients born as female and that have age between 50 inclusive and 75 exclusive.
 
-## Recommendations
-1. For Patients Due for Screening: Schedule a mammogram for women who have not had one within the specified timeframe.
-  
-2. For Patients with a History of Mastectomy: Women who have undergone a bilateral mastectomy or have a history of unilateral mastectomy should be excluded from this screening measure.
+## Exclusions:
+ - Bilateral or serial R/L mastectomy documented in past surgical history
 
-## Importance
-This protocol  recommends biennial mammograms for women aged 50-74.
-
-## Conclusion
-The protocol automates the identification of women who need breast cancer screening.
+## Intervention:
+ - At least one breast cancer screening imaging study during the last cycle (default: 27 months) including full field digital mammography and digital mammography with tomosynthesis.
+ - Imaging report must be uploaded/come in via Data Integration and must also be reviewed by the provider to complete the intervention. Data Integration imaging report template must be linked to 24606-6 LOINC, these include:
+    - mammography, diagnostic; bilateral
+    - mammography, diagnostic; unilateral
+    - mammography, screening; bilateral 
+ 
+## Roles
+ - Provider
+ - Clinical staff
+ - Population Health
