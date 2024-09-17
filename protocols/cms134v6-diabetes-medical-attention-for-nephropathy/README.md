@@ -1,11 +1,20 @@
-## Target Population
-Patients aged 18 to 75 diagnosed with diabetes (Type 1 or Type 2) who need nephropathy screening or have evidence of nephropathy. It excludes patients with secondary diabetes and those in hospice care during the measurement year.
-
-## Recommendations
-The protocol ensures that patients with diabetes receive a nephropathy screening test annually. If patients have a related diagnosis, active treatment, or relevant lab results, the protocol acknowledges their nephropathy status. Otherwise, clinicians are prompted to order a urine microalbumin test to assess kidney function.
-
-## Importance
-Diabetes is a leading cause of kidney failure, responsible for 44% of new cases in the U.S. in 2011. Early detection and management of nephropathy in diabetic patients are crucial for preventing severe complications like dialysis or kidney transplant. Regular screening for nephropathy is essential for slowing disease progression, reducing healthcare costs, and improving patient outcomes.
-
-## Conclusion
-This protocol streamlines diabetes care by integrating nephropathy screening recommendations into clinical workflows. It identifies patients needing nephropathy evaluation and prompts clinicians to order the appropriate tests, helping manage diabetes-related complications efficiently.
+## Key Objectives:
+ - You will learn which patient population is targeted in the Medical Attention for Nephropathy protocol. 
+ - You will learn about the measure description for the Medical Attention for Nephropathy protocol. 
+ - You will learn about exclusions from the Medical Attention for Nephropathy protocol. 
+ - You will learn about interventions available for the Medical Attention for Nephropathy protocol. 
+## Patient Population:
+ - Patients 18-75 years of age with diabetes mellitus with a visit during the measurement period. 
+## Measure Description:
+ - The percentage of patients 18-75 years of age with diabetes mellitus who had a nephropathy screening test or evidence of nephropathy (visit with nephrology, ace/arb medication, or renal diagnosis) within last 12 months. 
+## Exclusions:
+ - Excludes patients who were in hospice care during the measurement year.
+## Intervention:
+ - Order a urine microalbumin test or complete POC testing. 
+ - Lab results must be uploaded/come in via Data Integration and must also be reviewed by the provider to complete the intervention. If entering a historical microalbumin test via Data Integration, a lab report with a recorded results linked to the 14957-5 LOINC code must be used. These include: 
+     - Albumin, Urine
+     - Albumin/Creatinine Ratio, Random Urine
+## Roles:
+ - Provider
+ - Clinical staff
+ - Population Health
