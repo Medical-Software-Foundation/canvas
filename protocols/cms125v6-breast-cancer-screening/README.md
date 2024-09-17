@@ -1,8 +1,3 @@
-## Key Objectives:
- - You will learn the patient population targeted in the Breast Cancer Screening protocol.
- - You will learn the measure description for the Breast Cancer Screening protocol.
- - You will learn about exclusions from the Breast Cancer Screening protocol.
- - You will learn about interventions available for the Breast Cancer Screening protocol. 
 ## Population:
  - All patients born as female and that have an age between 51 inclusive and 74 exclusive.
  - CANVAS: All patients born as female and that have age between 50 inclusive and 75 exclusive.
@@ -16,8 +11,3 @@
     - mammography, diagnostic; bilateral
     - mammography, diagnostic; unilateral
     - mammography, screening; bilateral 
- 
-## Roles
- - Provider
- - Clinical staff
- - Population Health
