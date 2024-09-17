@@ -1,8 +1,3 @@
-## Key Objectives:
- - You will learn what patient population is targeted in the Colorectal Cancer Screening protocol.
- - You will learn about the measure description for the Colorectal Cancer Screening protocol. 
- - You will learn about exclusions from the Colorectal Cancer Screening protocol. 
- - You will learn about interventions available for the Colorectal Cancer Screening protocol. 
 ## Patient Population:
  - Patients 45-75 years of age
 ## Measure Description:
@@ -25,7 +20,3 @@
    - Colonoscopy
   - Consult Report
    - Colonoscopy
-## Roles:
- - Provider
- - Clinical staff
- - Population Health
