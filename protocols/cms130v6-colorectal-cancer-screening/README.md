@@ -1,21 +1,31 @@
-## Target Population
-Designed for adults aged 50 to 75 who are eligible for colorectal cancer screening. Hylighting individuals who have not received appropriate screening.
-## Recommendations
-The protocol recommends screening for colorectal cancer using several methods:
-
- - Fecal Occult Blood Test (FOBT) during the measurement period.
- - Flexible Sigmoidoscopy within the last four years.
- - Colonoscopy within the last nine years.
- - FIT-DNA (Fecal Immunochemical Test-DNA) within the last two years.
- - CT Colonography within the last four years.
-
-If a patient is due for a screening, order: 
- - FOBT
- - FIT-DNA
- - Flexible Sigmoidoscopy
- - CT Colonography
- - Colonoscopy
-## Importance
-Patients within the target age range receive timely and appropriate screening.
-## Conclusion
-This protocol assists in compliance with colorectal cancer screening guidelines.
+## Key Objectives:
+ - You will learn what patient population is targeted in the Colorectal Cancer Screening protocol.
+ - You will learn about the measure description for the Colorectal Cancer Screening protocol. 
+ - You will learn about exclusions from the Colorectal Cancer Screening protocol. 
+ - You will learn about interventions available for the Colorectal Cancer Screening protocol. 
+## Patient Population:
+ - Patients 45-75 years of age
+## Measure Description:
+ - Percentage of adults 45-75 years of age who had appropriate screening for colorectal cancer
+## Exclusions:
+ - Patients with a diagnosis or past history of total colectomy or colorectal cancer, must be documented in past surgical history.
+ - Patients who were in hospice care during the measurement year.
+## Intervention:
+ - Order one of the following stool based tests:
+  - High sensitivity gFOBT within last 12 months
+  - FIT within last 12 months. 
+  - Order sDNA-FIT every 12-36 months.
+ - Order one of the following direct visualization tests:
+  - Colonoscopy every 10 years
+  - Flexible Sigmoidoscopy every 5 years
+  - Flexible Sigmoidoscopy every 10 years in combination with FIT every 12 months
+ - Order a CT Colonography (Result captured in Data Integration via Imaging Report) every 5 years
+ - Imaging reports or Specialist Consult Report must be uploaded via Data Integration and must also be reviewed by the provider to complete the intervention. Data Integration imaging exams and specialty consult reports to use include:
+  - Imaging
+   - Colonoscopy
+  - Consult Report
+   - Colonoscopy
+## Roles:
+ - Provider
+ - Clinical staff
+ - Population Health
