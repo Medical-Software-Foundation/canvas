@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "rx_search_result_price_annotation_example",
+    "description": "This plugin shows how you can annotate medication search results during prescription workflows.",
+    "components": {
+        "protocols": [
+            {
+                "class": "rx_search_result_price_annotation_example.protocols.random_drug_price_annotation_handler:RandomDrugPriceAnnotationExample",
+                "description": "A protocol that does xyz...",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
