@@ -1,0 +1,47 @@
+digraph Protocol {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="Pregnant women aged 18 years and older, with a singleton pregnancy, presenting with high blood pressure (systolic BP ≥ 140 mmHg or diastolic BP ≥ 90 mmHg) at any point during pregnancy."];
+    SubsetScreening [label="Subset Considered for Screening" shape=box style=rounded color=green fontcolor=green comment="Pregnant women identified from the initial population who have one or more high-risk factors for developing preeclampsia."];
+    ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Women with known contraindications to antihypertensive medications, severe comorbid conditions, non-compliance with prenatal care, or known fetal anomalies incompatible with life."];
+    DiagnosticInterventions [label="Diagnostic Interventions" shape=box style=rounded color=green fontcolor=green comment="Regular blood pressure monitoring, urine protein testing, blood tests, ultrasound assessments, and non-stress tests or biophysical profiles as indicated."];
+    SuccessfulScreens [label="Conditions for Successful Screens" shape=box style=rounded color=green fontcolor=green comment="Blood pressure readings consistently below 140/90 mmHg, absence of significant proteinuria, normal lab test results, normal fetal growth, and no signs of severe preeclampsia."];
+
+    HRF1 [label="History of Preeclampsia" shape=ellipse color=blue fontcolor=blue comment="History of preeclampsia in a previous pregnancy."];
+    HRF2 [label="Chronic Hypertension" shape=ellipse color=blue fontcolor=blue comment="Chronic hypertension."];
+    HRF3 [label="Pre-existing Diabetes" shape=ellipse color=blue fontcolor=blue comment="Pre-existing diabetes (Type 1 or Type 2)."];
+    HRF4 [label="Renal Disease" shape=ellipse color=blue fontcolor=blue comment="Renal disease."];
+    HRF5 [label="Autoimmune Disorders" shape=ellipse color=blue fontcolor=blue comment="Autoimmune disorders such as lupus or antiphospholipid syndrome."];
+    HRF6 [label="Multiple Gestation" shape=ellipse color=blue fontcolor=blue comment="Multiple gestation (twins or more)."];
+    HRF7 [label="Obesity" shape=ellipse color=blue fontcolor=blue comment="Obesity (BMI ≥ 30)."];
+    HRF8 [label="Advanced Maternal Age" shape=ellipse color=blue fontcolor=blue comment="Advanced maternal age (≥ 35 years)."];
+
+    InitialPopulation -> HRF1 [label="if" color=blue fontcolor=blue];
+    HRF1 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> HRF2 [label="if" color=blue fontcolor=blue];
+    HRF2 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> HRF3 [label="if" color=blue fontcolor=blue];
+    HRF3 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> HRF4 [label="if" color=blue fontcolor=blue];
+    HRF4 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> HRF5 [label="if" color=blue fontcolor=blue];
+    HRF5 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> HRF6 [label="if" color=blue fontcolor=blue];
+    HRF6 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> HRF7 [label="if" color=blue fontcolor=blue];
+    HRF7 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> HRF8 [label="if" color=blue fontcolor=blue];
+    HRF8 -> SubsetScreening [label="then" color=blue fontcolor=blue];
+
+    SubsetScreening -> ExclusionCriteria [label="if" color=blue fontcolor=blue];
+    ExclusionCriteria -> DiagnosticInterventions [label="then" color=blue fontcolor=blue];
+
+    DiagnosticInterventions -> SuccessfulScreens [label="if" color=blue fontcolor=blue];
+}
