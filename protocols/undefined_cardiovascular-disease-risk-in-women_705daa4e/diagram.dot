@@ -1,0 +1,54 @@
+digraph CVD_Risk_Evaluation {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="Women aged 40-75 years who are visiting a primary care clinic for routine health assessments"];
+    SubsetScreening [label="Subset Considered for Screening" shape=box style=rounded color=green fontcolor=green comment="Women within the initial population who meet specific criteria"];
+    ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Women who meet any exclusion criteria"];
+    SuccessfulScreen [label="Successful Screen" shape=box style=rounded color=green fontcolor=green comment="Women who have undergone comprehensive assessment and identified as high risk"];
+    FollowUp [label="Follow-Up" shape=box style=rounded color=green fontcolor=green comment="Annual reassessment and continuous monitoring for high-risk women"];
+
+    // Criterion nodes
+    Menopause [label="Menopause" shape=ellipse color=blue fontcolor=blue comment="Women who have entered menopause"];
+    Hypertension [label="Hypertension" shape=ellipse color=blue fontcolor=blue comment="History of hypertension"];
+    Diabetes [label="Diabetes" shape=ellipse color=blue fontcolor=blue comment="History of diabetes mellitus"];
+    Smoking [label="Smoking" shape=ellipse color=blue fontcolor=blue comment="History of smoking"];
+    HighBMI [label="High BMI" shape=ellipse color=blue fontcolor=blue comment="BMI greater than 25"];
+    HighHDL [label="High HDL" shape=ellipse color=blue fontcolor=blue comment="High HDL cholesterol levels"];
+    KnownCVD [label="Known CVD" shape=ellipse color=blue fontcolor=blue comment="Known history of cardiovascular disease"];
+    BreastCancer [label="Breast Cancer" shape=ellipse color=blue fontcolor=blue comment="Currently undergoing treatment for breast cancer"];
+    ChronicIllness [label="Chronic Illness" shape=ellipse color=blue fontcolor=blue comment="Severe chronic illnesses limiting life expectancy to less than 1 year"];
+    CognitiveImpairment [label="Cognitive Impairment" shape=ellipse color=blue fontcolor=blue comment="Cognitive impairments preventing informed consent"];
+    ComprehensiveAssessment [label="Comprehensive Assessment" shape=ellipse color=blue fontcolor=blue comment="Comprehensive assessment of all risk factors"];
+    HighRiskIdentification [label="High Risk Identification" shape=ellipse color=blue fontcolor=blue comment="Identification of women at high risk for CVD"];
+    PersonalizedPlan [label="Personalized Plan" shape=ellipse color=blue fontcolor=blue comment="Development of a personalized risk management plan"];
+    Referral [label="Referral" shape=ellipse color=blue fontcolor=blue comment="Referral to a cardiologist or specialist if necessary"];
+
+    // Edges
+    InitialPopulation -> SubsetScreening [label="if" color=blue fontcolor=blue];
+    SubsetScreening -> Menopause [label="if" color=blue fontcolor=blue];
+    SubsetScreening -> Hypertension [label="if" color=blue fontcolor=blue];
+    SubsetScreening -> Diabetes [label="if" color=blue fontcolor=blue];
+    SubsetScreening -> Smoking [label="if" color=blue fontcolor=blue];
+    SubsetScreening -> HighBMI [label="if" color=blue fontcolor=blue];
+    SubsetScreening -> HighHDL [label="if" color=blue fontcolor=blue];
+    Menopause -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    Hypertension -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    Diabetes -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    Smoking -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    HighBMI -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    HighHDL -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    ExclusionCriteria -> KnownCVD [label="if" color=blue fontcolor=blue];
+    ExclusionCriteria -> BreastCancer [label="if" color=blue fontcolor=blue];
+    ExclusionCriteria -> ChronicIllness [label="if" color=blue fontcolor=blue];
+    ExclusionCriteria -> CognitiveImpairment [label="if" color=blue fontcolor=blue];
+    KnownCVD -> SuccessfulScreen [label="then" color=blue fontcolor=blue];
+    BreastCancer -> SuccessfulScreen [label="then" color=blue fontcolor=blue];
+    ChronicIllness -> SuccessfulScreen [label="then" color=blue fontcolor=blue];
+    CognitiveImpairment -> SuccessfulScreen [label="then" color=blue fontcolor=blue];
+    SuccessfulScreen -> ComprehensiveAssessment [label="if" color=blue fontcolor=blue];
+    ComprehensiveAssessment -> HighRiskIdentification [label="and" color=blue fontcolor=blue];
+    HighRiskIdentification -> PersonalizedPlan [label="and" color=blue fontcolor=blue];
+    PersonalizedPlan -> Referral [label="and" color=blue fontcolor=blue];
+    Referral -> FollowUp [label="then" color=blue fontcolor=blue];
+}
