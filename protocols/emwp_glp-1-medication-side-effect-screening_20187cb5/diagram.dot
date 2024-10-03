@@ -1,0 +1,31 @@
+digraph Protocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPop [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All patients currently prescribed GLP-1 receptor agonists, including but not limited to medications such as liraglutide, exenatide, dulaglutide, and semaglutide."];
+    SubsetScreen [label="Subset Considered for Screening" shape=box style=rounded color=green fontcolor=green comment="Patients who have been on GLP-1 medications for a minimum duration of 4 weeks, as side effects may not be immediately apparent. Patients who have not had a documented side effect screening in the past 3 months."];
+    Exclusion [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Patients with a known allergy or hypersensitivity to GLP-1 medications. Patients who have discontinued GLP-1 medications within the last 4 weeks. Patients currently participating in a clinical trial that includes regular monitoring for side effects of GLP-1 medications. Patients with a terminal illness or in palliative care where the focus is on comfort rather than active management of medication side effects."];
+    DiagnosticInterventions [label="Diagnostic Interventions" shape=box style=rounded color=green fontcolor=green comment="Conduct a comprehensive review of the patient's medical history and current symptoms. Perform laboratory tests as indicated, including but not limited to renal function tests, liver function tests, and pancreatic enzyme levels. Utilize patient-reported outcome measures (PROMs) to assess the presence and severity of common side effects such as nausea, vomiting, diarrhea, and abdominal pain."];
+    SuccessfulScreens [label="Conditions for Successful Screens" shape=box style=rounded color=green fontcolor=green comment="Identification and documentation of any new or worsening side effects since the initiation of GLP-1 therapy. Clear communication of findings to the patient, including education on potential side effects and their management. Recommendation for consultation with a healthcare provider if significant side effects are identified, or if the patient expresses concern about their medication. Follow-up plan established for patients with identified side effects, including potential medication adjustment or discontinuation if necessary."];
+
+    // Criterion nodes
+    MinDuration [label="Min Duration" shape=ellipse color=blue fontcolor=blue comment="Patients who have been on GLP-1 medications for a minimum duration of 4 weeks."];
+    NoRecentScreen [label="No Recent Screen" shape=ellipse color=blue fontcolor=blue comment="Patients who have not had a documented side effect screening in the past 3 months."];
+    NoAllergy [label="No Allergy" shape=ellipse color=blue fontcolor=blue comment="Patients with a known allergy or hypersensitivity to GLP-1 medications."];
+    NotDiscontinued [label="Not Discontinued" shape=ellipse color=blue fontcolor=blue comment="Patients who have discontinued GLP-1 medications within the last 4 weeks."];
+    NotInTrial [label="Not In Trial" shape=ellipse color=blue fontcolor=blue comment="Patients currently participating in a clinical trial that includes regular monitoring for side effects of GLP-1 medications."];
+    NotTerminal [label="Not Terminal" shape=ellipse color=blue fontcolor=blue comment="Patients with a terminal illness or in palliative care where the focus is on comfort rather than active management of medication side effects."];
+
+    // Edges
+    InitialPop -> MinDuration [label="if" color=blue fontcolor=blue];
+    MinDuration -> NoRecentScreen [label="and" color=blue fontcolor=blue];
+    NoRecentScreen -> SubsetScreen [label="then" color=blue fontcolor=blue];
+
+    SubsetScreen -> NoAllergy [label="if" color=blue fontcolor=blue];
+    NoAllergy -> NotDiscontinued [label="and" color=blue fontcolor=blue];
+    NotDiscontinued -> NotInTrial [label="and" color=blue fontcolor=blue];
+    NotInTrial -> NotTerminal [label="and" color=blue fontcolor=blue];
+    NotTerminal -> DiagnosticInterventions [label="then" color=blue fontcolor=blue];
+
+    DiagnosticInterventions -> SuccessfulScreens [label="then" color=blue fontcolor=blue];
+}
