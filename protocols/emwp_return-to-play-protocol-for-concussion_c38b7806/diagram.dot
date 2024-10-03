@@ -1,0 +1,50 @@
+digraph ReturnToPlayProtocol {
+    rankdir=TB;
+
+    // Populations
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All individuals who have participated in sports activities and have been diagnosed with a concussion."];
+    SubsetScreening [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals from the initial population who meet specific criteria for screening."];
+    Excluded [label="Excluded from Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals excluded from screening based on specific criteria."];
+    SuccessfulScreen [label="Successful Screen", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals who meet all conditions for successful screening."];
+
+    // Criteria for Subset Screening
+    DiagnosedConcussion [label="Diagnosed Concussion", shape=ellipse, color=blue, fontcolor=blue, comment="Diagnosed with a concussion by a qualified healthcare professional."];
+    PostAcutePhase [label="Post-Acute Phase", shape=ellipse, color=blue, fontcolor=blue, comment="Currently in the post-acute phase of concussion recovery, typically defined as 24 hours post-injury."];
+    InitialEvaluation [label="Initial Evaluation", shape=ellipse, color=blue, fontcolor=blue, comment="Received initial medical evaluation and management according to standard concussion care guidelines."];
+
+    // Exclusion Criteria
+    SevereSymptoms [label="Severe Symptoms", shape=ellipse, color=blue, fontcolor=blue, comment="Presence of severe or worsening neurological symptoms that require immediate medical intervention."];
+    MultipleConcussions [label="Multiple Concussions", shape=ellipse, color=blue, fontcolor=blue, comment="History of multiple concussions with prolonged recovery periods."];
+    CoexistingConditions [label="Coexisting Conditions", shape=ellipse, color=blue, fontcolor=blue, comment="Co-existing medical conditions that may complicate concussion recovery."];
+    NoClearance [label="No Medical Clearance", shape=ellipse, color=blue, fontcolor=blue, comment="Lack of medical clearance from a healthcare professional to begin the return-to-play protocol."];
+
+    // Conditions for Successful Screen
+    BaselineCognitive [label="Baseline Cognitive Function", shape=ellipse, color=blue, fontcolor=blue, comment="Return to baseline levels of cognitive function as evidenced by neurocognitive testing."];
+    NormalBalance [label="Normal Balance", shape=ellipse, color=blue, fontcolor=blue, comment="Exhibits normal balance and coordination comparable to pre-injury levels."];
+    NoSymptoms [label="No Symptoms", shape=ellipse, color=blue, fontcolor=blue, comment="Reports no concussion-related symptoms or a significant reduction in symptoms."];
+    MedicalClearance [label="Medical Clearance", shape=ellipse, color=blue, fontcolor=blue, comment="Receives medical clearance from a healthcare professional to progress through the stages of the return-to-play protocol."];
+
+    // Paths
+    InitialPopulation -> DiagnosedConcussion [label="if", color=blue, fontcolor=blue];
+    DiagnosedConcussion -> PostAcutePhase [label="and", color=blue, fontcolor=blue];
+    PostAcutePhase -> InitialEvaluation [label="and", color=blue, fontcolor=blue];
+    InitialEvaluation -> SubsetScreening [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> SevereSymptoms [label="if", color=blue, fontcolor=blue];
+    SevereSymptoms -> Excluded [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> MultipleConcussions [label="if", color=blue, fontcolor=blue];
+    MultipleConcussions -> Excluded [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> CoexistingConditions [label="if", color=blue, fontcolor=blue];
+    CoexistingConditions -> Excluded [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> NoClearance [label="if", color=blue, fontcolor=blue];
+    NoClearance -> Excluded [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> BaselineCognitive [label="if", color=blue, fontcolor=blue];
+    BaselineCognitive -> NormalBalance [label="and", color=blue, fontcolor=blue];
+    NormalBalance -> NoSymptoms [label="and", color=blue, fontcolor=blue];
+    NoSymptoms -> MedicalClearance [label="and", color=blue, fontcolor=blue];
+    MedicalClearance -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+}
