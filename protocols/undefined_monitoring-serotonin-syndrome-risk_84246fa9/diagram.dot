@@ -1,0 +1,30 @@
+digraph SerotoninSyndromeProtocol {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients prescribed medications known to increase serotonin levels or interact with serotonergic agents."];
+    ScreeningSubset [label="Screening Subset", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients prescribed two or more serotonergic medications or a combination with a medication known to potentiate serotonin syndrome."];
+    ExclusionCriteria [label="Exclusion Criteria", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients with a history of serotonin syndrome not on medications, stable regimen for 6+ months, or under palliative care."];
+    DiagnosticInterventions [label="Diagnostic Interventions", shape=box, style=rounded, color=green, fontcolor=green, comment="Monitoring symptoms, lab tests, and use of assessment tools for serotonin syndrome."];
+    SuccessfulScreens [label="Successful Screens", shape=box, style=rounded, color=green, fontcolor=green, comment="Identification of symptoms, medication adjustment, patient education, and follow-up assessments."];
+
+    TwoOrMoreMeds [label="Two or More Meds", shape=ellipse, color=blue, fontcolor=blue, comment="Patients prescribed two or more serotonergic medications."];
+    PotentiateCombo [label="Potentiate Combo", shape=ellipse, color=blue, fontcolor=blue, comment="Combination of serotonergic medication and a medication known to potentiate serotonin syndrome."];
+    HistoryNoMeds [label="History No Meds", shape=ellipse, color=blue, fontcolor=blue, comment="Patients with a history of serotonin syndrome not on serotonergic medications."];
+    StableRegimen [label="Stable Regimen", shape=ellipse, color=blue, fontcolor=blue, comment="Patients on a stable regimen for more than six months without changes and no history of serotonin syndrome."];
+    PalliativeCare [label="Palliative Care", shape=ellipse, color=blue, fontcolor=blue, comment="Patients under palliative care where risk is outweighed by benefits."];
+
+    InitialPopulation -> TwoOrMoreMeds [label="if", color=blue, fontcolor=blue];
+    TwoOrMoreMeds -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+    InitialPopulation -> PotentiateCombo [label="if", color=blue, fontcolor=blue];
+    PotentiateCombo -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> HistoryNoMeds [label="if", color=blue, fontcolor=blue];
+    HistoryNoMeds -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+    ScreeningSubset -> StableRegimen [label="if", color=blue, fontcolor=blue];
+    StableRegimen -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+    ScreeningSubset -> PalliativeCare [label="if", color=blue, fontcolor=blue];
+    PalliativeCare -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> DiagnosticInterventions [label="if", color=blue, fontcolor=blue];
+    DiagnosticInterventions -> SuccessfulScreens [label="then", color=blue, fontcolor=blue];
+}
