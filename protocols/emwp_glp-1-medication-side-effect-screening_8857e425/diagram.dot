@@ -1,0 +1,29 @@
+digraph Protocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All patients currently prescribed GLP-1 receptor agonists, including but not limited to medications such as liraglutide, exenatide, dulaglutide, semaglutide, and albiglutide."];
+    SubsetForScreening [label="Subset Considered for Screening" shape=box style=rounded color=green fontcolor=green comment="Patients who have been on GLP-1 medications for a minimum duration of 4 weeks, as side effects may not be immediately apparent. Patients who have not had a documented side effect screening in the past 3 months."];
+    ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Patients with documented allergies or contraindications to GLP-1 medications. Patients who are currently hospitalized or in acute care settings, where side effect management is part of the inpatient care protocol. Patients who have discontinued GLP-1 medications for more than 4 weeks prior to the screening date."];
+    DiagnosticInterventions [label="Diagnostic Interventions" shape=box style=rounded color=green fontcolor=green comment="Conduct a comprehensive review of the patient's medical history and current symptoms. Administer a standardized questionnaire to assess common side effects associated with GLP-1 medications, including gastrointestinal symptoms (nausea, vomiting, diarrhea), injection site reactions, and any signs of pancreatitis or thyroid tumors. Perform necessary laboratory tests if indicated by the questionnaire responses, such as serum amylase and lipase levels for suspected pancreatitis."];
+    SuccessfulScreens [label="Conditions for Successful Screens" shape=box style=rounded color=green fontcolor=green comment="Identification and documentation of any side effects experienced by the patient. Clear communication of findings to the patient, including education on potential side effects and their management. Recommendation for consultation with a healthcare provider if significant side effects are identified, or if the patient expresses concern about their medication. Follow-up plan established for patients with identified side effects, including potential medication adjustment or discontinuation if necessary."];
+
+    // Criterion nodes
+    MinDuration [label="Min Duration" shape=ellipse color=blue fontcolor=blue comment="Patients who have been on GLP-1 medications for a minimum duration of 4 weeks."];
+    NoRecentScreening [label="No Recent Screening" shape=ellipse color=blue fontcolor=blue comment="Patients who have not had a documented side effect screening in the past 3 months."];
+    NoAllergies [label="No Allergies" shape=ellipse color=blue fontcolor=blue comment="Patients with no documented allergies or contraindications to GLP-1 medications."];
+    NotHospitalized [label="Not Hospitalized" shape=ellipse color=blue fontcolor=blue comment="Patients who are not currently hospitalized or in acute care settings."];
+    NotDiscontinued [label="Not Discontinued" shape=ellipse color=blue fontcolor=blue comment="Patients who have not discontinued GLP-1 medications for more than 4 weeks prior to the screening date."];
+
+    // Edges
+    InitialPopulation -> MinDuration [label="if" color=blue fontcolor=blue];
+    MinDuration -> NoRecentScreening [label="and" color=blue fontcolor=blue];
+    NoRecentScreening -> SubsetForScreening [label="then" color=blue fontcolor=blue];
+
+    SubsetForScreening -> NoAllergies [label="if" color=blue fontcolor=blue];
+    NoAllergies -> NotHospitalized [label="and" color=blue fontcolor=blue];
+    NotHospitalized -> NotDiscontinued [label="and" color=blue fontcolor=blue];
+    NotDiscontinued -> DiagnosticInterventions [label="then" color=blue fontcolor=blue];
+
+    DiagnosticInterventions -> SuccessfulScreens [label="then" color=blue fontcolor=blue];
+}
