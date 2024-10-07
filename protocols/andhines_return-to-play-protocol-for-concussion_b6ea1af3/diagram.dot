@@ -1,0 +1,51 @@
+digraph ReturnToPlayProtocol {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="The initial population includes all individuals who have participated in sports activities and have been diagnosed with a concussion."];
+    SubsetScreening [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="The subset considered for screening includes individuals from the initial population who meet specific criteria."];
+    ExclusionCriteria [label="Exclusion Criteria", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals from the subset will be excluded from the screening if they meet any of the specified criteria."];
+    DiagnosticInterventions [label="Diagnostic Interventions", shape=box, style=rounded, color=green, fontcolor=green, comment="The diagnostic interventions for the return-to-play protocol include specific assessments and evaluations."];
+    SuccessfulScreen [label="Successful Screen", shape=box, style=rounded, color=green, fontcolor=green, comment="A successful screen is defined by specific conditions being met."];
+
+    C1 [label="Diagnosed by Healthcare Professional", shape=ellipse, color=blue, fontcolor=blue, comment="Have been diagnosed with a concussion by a qualified healthcare professional."];
+    C2 [label="Under Care of Healthcare Provider", shape=ellipse, color=blue, fontcolor=blue, comment="Are currently under the care of a healthcare provider who is responsible for managing their concussion recovery."];
+    C3 [label="Completed Initial Rest", shape=ellipse, color=blue, fontcolor=blue, comment="Have completed an initial period of physical and cognitive rest as recommended by their healthcare provider."];
+
+    E1 [label="Not Cleared by Healthcare Professional", shape=ellipse, color=blue, fontcolor=blue, comment="Have not been cleared by a healthcare professional to begin the return-to-play protocol."];
+    E2 [label="Ongoing Symptoms", shape=ellipse, color=blue, fontcolor=blue, comment="Exhibit ongoing symptoms of concussion, such as headaches, dizziness, or cognitive impairment, that have not improved with rest."];
+    E3 [label="History of Multiple Concussions", shape=ellipse, color=blue, fontcolor=blue, comment="Have a history of multiple concussions or other neurological conditions that may complicate recovery."];
+    E4 [label="Under 18 Without Consent", shape=ellipse, color=blue, fontcolor=blue, comment="Are under the age of 18 and have not received parental or guardian consent to participate in the return-to-play protocol."];
+
+    D1 [label="Baseline Assessments", shape=ellipse, color=blue, fontcolor=blue, comment="Baseline cognitive and physical assessments to establish the individual's pre-concussion status."];
+    D2 [label="Regular Symptom Monitoring", shape=ellipse, color=blue, fontcolor=blue, comment="Regular monitoring of symptoms using standardized concussion assessment tools, such as the SCAT5."];
+    D3 [label="Gradual Physical Activity", shape=ellipse, color=blue, fontcolor=blue, comment="Gradual, stepwise increase in physical activity, starting with light aerobic exercise and progressing to sport-specific drills, non-contact training, and full-contact practice, as tolerated."];
+    D4 [label="Continuous Evaluation", shape=ellipse, color=blue, fontcolor=blue, comment="Continuous evaluation by a healthcare professional to assess symptom resolution and readiness to advance to the next stage of the protocol."];
+
+    S1 [label="Symptom-Free at Each Stage", shape=ellipse, color=blue, fontcolor=blue, comment="The individual remains symptom-free at each stage of the return-to-play protocol."];
+    S2 [label="Performance at or Above Baseline", shape=ellipse, color=blue, fontcolor=blue, comment="The individual demonstrates cognitive and physical performance at or above baseline levels."];
+    S3 [label="Medical Clearance", shape=ellipse, color=blue, fontcolor=blue, comment="The individual receives medical clearance from a healthcare professional to return to full sports participation."];
+    S4 [label="Understanding of Risks", shape=ellipse, color=blue, fontcolor=blue, comment="The individual and, if applicable, their parent or guardian, understand the risks of returning to play and have been educated on the signs and symptoms of concussion."];
+
+    InitialPopulation -> SubsetScreening [label="if", color=blue, fontcolor=blue];
+    SubsetScreening -> C1 [label="if", color=blue, fontcolor=blue];
+    C1 -> C2 [label="and", color=blue, fontcolor=blue];
+    C2 -> C3 [label="and", color=blue, fontcolor=blue];
+    C3 -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+
+    ExclusionCriteria -> E1 [label="if", color=blue, fontcolor=blue];
+    E1 -> E2 [label="or", color=blue, fontcolor=blue];
+    E2 -> E3 [label="or", color=blue, fontcolor=blue];
+    E3 -> E4 [label="or", color=blue, fontcolor=blue];
+    E4 -> DiagnosticInterventions [label="then", color=blue, fontcolor=blue];
+
+    DiagnosticInterventions -> D1 [label="if", color=blue, fontcolor=blue];
+    D1 -> D2 [label="and", color=blue, fontcolor=blue];
+    D2 -> D3 [label="and", color=blue, fontcolor=blue];
+    D3 -> D4 [label="and", color=blue, fontcolor=blue];
+    D4 -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    SuccessfulScreen -> S1 [label="if", color=blue, fontcolor=blue];
+    S1 -> S2 [label="and", color=blue, fontcolor=blue];
+    S2 -> S3 [label="and", color=blue, fontcolor=blue];
+    S3 -> S4 [label="and", color=blue, fontcolor=blue];
+}
