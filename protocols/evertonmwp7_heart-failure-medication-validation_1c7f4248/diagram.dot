@@ -1,0 +1,30 @@
+digraph ClinicalProtocol {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients within the healthcare system who have an active prescription for any heart failure medication."];
+    SubsetScreening [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients from the initial population who do not have an active diagnosis of heart failure documented in their medical records."];
+    ExclusionCriteria1 [label="Exclusion: Inactive HF", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have a documented history of heart failure that is currently inactive or in remission."];
+    ExclusionCriteria2 [label="Exclusion: Off-label Use", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who are prescribed heart failure medication for off-label use with documented clinical justification."];
+    ExclusionCriteria3 [label="Exclusion: Clinical Trial", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who are part of a clinical trial involving heart failure medication with appropriate documentation."];
+    DiagnosticIntervention1 [label="Review Medical History", shape=ellipse, color=blue, fontcolor=blue, comment="Review the patient's medical history and current medication list."];
+    DiagnosticIntervention2 [label="Clinical Assessment", shape=ellipse, color=blue, fontcolor=blue, comment="Conduct a clinical assessment to determine if there are symptoms indicative of heart failure."];
+    DiagnosticIntervention3 [label="Perform Diagnostic Tests", shape=ellipse, color=blue, fontcolor=blue, comment="Perform diagnostic tests as necessary, such as echocardiogram, BNP/NT-proBNP levels, or chest X-ray, to assess cardiac function."];
+    DiagnosticIntervention4 [label="Consult Prescribing Physician", shape=ellipse, color=blue, fontcolor=blue, comment="Consult with the prescribing physician to discuss the rationale for the heart failure medication."];
+    SuccessfulScreen1 [label="Active HF Diagnosis", shape=box, style=rounded, color=green, fontcolor=green, comment="Confirmation of an active heart failure diagnosis through clinical assessment and diagnostic testing, leading to the continuation of the heart failure medication."];
+    SuccessfulScreen2 [label="Alternative Diagnosis", shape=box, style=rounded, color=green, fontcolor=green, comment="Identification of an alternative diagnosis or clinical justification for the use of heart failure medication, leading to documentation and validation of the current treatment plan."];
+    SuccessfulScreen3 [label="Discontinue/Adjust Medication", shape=box, style=rounded, color=green, fontcolor=green, comment="Discontinuation or adjustment of heart failure medication if no clinical justification is found, with appropriate follow-up and monitoring."];
+
+    InitialPopulation -> SubsetScreening [label="if", color=blue, fontcolor=blue];
+    SubsetScreening -> ExclusionCriteria1 [label="if", color=blue, fontcolor=blue];
+    SubsetScreening -> ExclusionCriteria2 [label="if", color=blue, fontcolor=blue];
+    SubsetScreening -> ExclusionCriteria3 [label="if", color=blue, fontcolor=blue];
+    ExclusionCriteria1 -> DiagnosticIntervention1 [label="then", color=blue, fontcolor=blue];
+    ExclusionCriteria2 -> DiagnosticIntervention1 [label="then", color=blue, fontcolor=blue];
+    ExclusionCriteria3 -> DiagnosticIntervention1 [label="then", color=blue, fontcolor=blue];
+    DiagnosticIntervention1 -> DiagnosticIntervention2 [label="and", color=blue, fontcolor=blue];
+    DiagnosticIntervention2 -> DiagnosticIntervention3 [label="and", color=blue, fontcolor=blue];
+    DiagnosticIntervention3 -> DiagnosticIntervention4 [label="and", color=blue, fontcolor=blue];
+    DiagnosticIntervention4 -> SuccessfulScreen1 [label="then", color=blue, fontcolor=blue];
+    DiagnosticIntervention4 -> SuccessfulScreen2 [label="then", color=blue, fontcolor=blue];
+    DiagnosticIntervention4 -> SuccessfulScreen3 [label="then", color=blue, fontcolor=blue];
+}
