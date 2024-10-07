@@ -1,0 +1,8 @@
+status: "draft"
+contributors:
+  - username: "unknown"
+reference_papers:
+  - title: "Protocol for Evaluating Heart Failure Medication Use in Patients"
+    description: "This protocol outlines the process for validating the use of heart failure medications in patients without an active heart failure diagnosis. It includes criteria for screening, exclusion, and diagnostic interventions. The goal is to confirm the necessity of heart failure medication through clinical assessment and testing, or to identify alternative justifications for its use. Adjustments to medication are made if no justification is found, ensuring appropriate follow-up and monitoring."
+    url: ""
+
