@@ -1,0 +1,59 @@
+digraph CholesterolManagementProtocol {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="Adults aged 20 years and older. Individuals with no prior diagnosis of hyperlipidemia or cardiovascular disease."];
+    ScreeningSubset [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Subset of individuals considered for cholesterol screening."];
+    ExclusionCriteria [label="Exclusion Criteria", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals excluded from screening based on specific criteria."];
+    DiagnosticInterventions [label="Diagnostic Interventions", shape=box, style=rounded, color=green, fontcolor=green, comment="Diagnostic tests and assessments for cholesterol levels."];
+    SuccessfulScreens [label="Conditions for Successful Screens", shape=box, style=rounded, color=green, fontcolor=green, comment="Criteria for successful cholesterol screening outcomes."];
+    FollowUpManagement [label="Follow-up and Management", shape=box, style=rounded, color=green, fontcolor=green, comment="Management and follow-up for individuals with abnormal cholesterol levels."];
+
+    // Criterion Nodes
+    FamilyHistory [label="Family History", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals with a family history of hyperlipidemia or cardiovascular disease."];
+    HighBMI [label="High BMI", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals with a Body Mass Index (BMI) of 25 or higher."];
+    HypertensionDiabetes [label="Hypertension or Diabetes", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals with a history of hypertension or diabetes."];
+    SmokingSedentary [label="Smoking or Sedentary", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals who smoke or have a sedentary lifestyle."];
+    Pregnant [label="Pregnant", shape=ellipse, color=blue, fontcolor=blue, comment="Pregnant individuals."];
+    LipidMedication [label="Lipid Medication", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals currently on lipid-lowering medication."];
+    AllergyStatins [label="Allergy to Statins", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals with a known allergy to statins or other lipid-lowering agents."];
+    RecentIllness [label="Recent Illness or Surgery", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals with a recent acute illness or surgery (within the last 3 months)."];
+    TotalCholesterol [label="Total Cholesterol < 200", shape=ellipse, color=blue, fontcolor=blue, comment="Total cholesterol level less than 200 mg/dL."];
+    LDLCholesterol [label="LDL Cholesterol < 100", shape=ellipse, color=blue, fontcolor=blue, comment="LDL cholesterol level less than 100 mg/dL."];
+    HDLCholesterol [label="HDL Cholesterol > 40/50", shape=ellipse, color=blue, fontcolor=blue, comment="HDL cholesterol level greater than 40 mg/dL for men and 50 mg/dL for women."];
+    Triglycerides [label="Triglycerides < 150", shape=ellipse, color=blue, fontcolor=blue, comment="Triglycerides level less than 150 mg/dL."];
+    ModifiableFactors [label="Modifiable Factors", shape=ellipse, color=blue, fontcolor=blue, comment="Identification of modifiable lifestyle factors contributing to elevated cholesterol levels."];
+
+    // Edges
+    InitialPopulation -> FamilyHistory [label="if", color=blue, fontcolor=blue];
+    InitialPopulation -> HighBMI [label="if", color=blue, fontcolor=blue];
+    InitialPopulation -> HypertensionDiabetes [label="if", color=blue, fontcolor=blue];
+    InitialPopulation -> SmokingSedentary [label="if", color=blue, fontcolor=blue];
+
+    FamilyHistory -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+    HighBMI -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+    HypertensionDiabetes -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+    SmokingSedentary -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> Pregnant [label="if", color=blue, fontcolor=blue];
+    ScreeningSubset -> LipidMedication [label="if", color=blue, fontcolor=blue];
+    ScreeningSubset -> AllergyStatins [label="if", color=blue, fontcolor=blue];
+    ScreeningSubset -> RecentIllness [label="if", color=blue, fontcolor=blue];
+
+    Pregnant -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+    LipidMedication -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+    AllergyStatins -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+    RecentIllness -> ExclusionCriteria [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> DiagnosticInterventions [label="then", color=blue, fontcolor=blue];
+
+    DiagnosticInterventions -> TotalCholesterol [label="if", color=blue, fontcolor=blue];
+    TotalCholesterol -> LDLCholesterol [label="and", color=blue, fontcolor=blue];
+    LDLCholesterol -> HDLCholesterol [label="and", color=blue, fontcolor=blue];
+    HDLCholesterol -> Triglycerides [label="and", color=blue, fontcolor=blue];
+    Triglycerides -> ModifiableFactors [label="and", color=blue, fontcolor=blue];
+
+    ModifiableFactors -> SuccessfulScreens [label="then", color=blue, fontcolor=blue];
+
+    SuccessfulScreens -> FollowUpManagement [label="then", color=blue, fontcolor=blue];
+}
