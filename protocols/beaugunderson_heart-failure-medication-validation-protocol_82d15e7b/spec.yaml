@@ -1,0 +1,8 @@
+status: "draft"
+contributors:
+  - username: "unknown"
+reference_papers:
+  - title: "Validation Protocol for Heart Failure Medication Usage"
+    description: "This protocol outlines the process for validating the use of heart failure medications among patients. It includes identifying patients without a heart failure diagnosis, applying exclusion criteria, and conducting diagnostic interventions. The goal is to confirm appropriate medication use through diagnosis or alternative rationale, or to recommend further evaluation if necessary."
+    url: ""
+

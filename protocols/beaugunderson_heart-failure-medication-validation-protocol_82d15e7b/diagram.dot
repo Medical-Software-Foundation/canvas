@@ -1,0 +1,38 @@
+digraph ClinicalProtocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients within the healthcare system who have an active prescription for any heart failure medication."];
+    SubsetScreening [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients from the initial population who do not have an active diagnosis of heart failure in their medical records."];
+    SuccessfulScreen [label="Successful Screens", shape=box, style=rounded, color=green, fontcolor=green, comment="Confirmation of an appropriate diagnosis of heart failure in the patient's medical record, justifying the use of heart failure medication."];
+
+    // Criterion nodes
+    NoHFDiagnosis [label="No HF Diagnosis", shape=ellipse, color=blue, fontcolor=blue, comment="Patients do not have an active diagnosis of heart failure in their medical records."];
+    Exclusion1 [label="Exclusion: Other Uses", shape=ellipse, color=blue, fontcolor=blue, comment="Patients have a documented reason for taking heart failure medication other than heart failure, such as hypertension or other off-label uses."];
+    Exclusion2 [label="Exclusion: Evaluation", shape=ellipse, color=blue, fontcolor=blue, comment="Patients are currently undergoing evaluation for heart failure, as indicated by pending diagnostic tests or referrals to a cardiologist."];
+    ReviewHistory [label="Review History", shape=ellipse, color=blue, fontcolor=blue, comment="Review of the patient's medical history and current medication list by a clinical pharmacist or healthcare provider."];
+    ConsultProvider [label="Consult Provider", shape=ellipse, color=blue, fontcolor=blue, comment="Consultation with the prescribing healthcare provider to confirm the rationale for the heart failure medication."];
+    ScheduleTests [label="Schedule Tests", shape=ellipse, color=blue, fontcolor=blue, comment="Scheduling of diagnostic tests such as echocardiograms, BNP tests, or other relevant cardiac assessments."];
+    ConfirmDiagnosis [label="Confirm Diagnosis", shape=ellipse, color=blue, fontcolor=blue, comment="Confirmation of an appropriate diagnosis of heart failure in the patient's medical record."];
+    DocumentAlternative [label="Document Alternative", shape=ellipse, color=blue, fontcolor=blue, comment="Appropriate documentation of the alternative rationale for the medication use."];
+    FollowUp [label="Follow-Up", shape=ellipse, color=blue, fontcolor=blue, comment="Recommendation for a follow-up appointment with a cardiologist or primary care provider for further evaluation."];
+
+    // Edges
+    InitialPopulation -> NoHFDiagnosis [label="if", color=blue, fontcolor=blue];
+    NoHFDiagnosis -> SubsetScreening [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> Exclusion1 [label="if", color=blue, fontcolor=blue];
+    SubsetScreening -> Exclusion2 [label="if", color=blue, fontcolor=blue];
+    Exclusion1 -> ReviewHistory [label="and", color=blue, fontcolor=blue];
+    Exclusion2 -> ReviewHistory [label="and", color=blue, fontcolor=blue];
+    ReviewHistory -> ConsultProvider [label="and", color=blue, fontcolor=blue];
+    ConsultProvider -> ScheduleTests [label="and", color=blue, fontcolor=blue];
+    ScheduleTests -> ConfirmDiagnosis [label="and", color=blue, fontcolor=blue];
+    ConfirmDiagnosis -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    ScheduleTests -> DocumentAlternative [label="and", color=blue, fontcolor=blue];
+    DocumentAlternative -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    ScheduleTests -> FollowUp [label="and", color=blue, fontcolor=blue];
+    FollowUp -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+}
