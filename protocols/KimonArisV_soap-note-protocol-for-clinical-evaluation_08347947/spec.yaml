@@ -1,0 +1,8 @@
+status: "draft"
+contributors:
+  - username: "unknown"
+reference_papers:
+  - title: "SOAP Note Protocol for Clinical Evaluation and Screening"
+    description: "This protocol outlines the use of SOAP notes for clinical evaluations, detailing the initial population, screening subset, exclusion criteria, and diagnostic interventions. It emphasizes the importance of a comprehensive SOAP note for successful patient assessment and management, ensuring accurate documentation and effective communication among healthcare providers. The protocol also specifies conditions for successful screens, including thorough completion of all SOAP sections, accurate information, patient education, and scheduling of follow-up appointments or referrals."
+    url: ""
+
