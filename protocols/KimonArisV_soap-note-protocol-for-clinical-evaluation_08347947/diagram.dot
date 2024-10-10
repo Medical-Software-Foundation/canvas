@@ -1,0 +1,47 @@
+digraph SOAP_Note_Protocol {
+    rankdir=TB;
+
+    // Population nodes
+    Initial_Population [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients presenting for clinical evaluation"];
+    Subset_Screening [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients with scheduled non-emergency consultation"];
+    Successful_Screen [label="Successful Screen", shape=box, style=rounded, color=green, fontcolor=green, comment="Completion of comprehensive SOAP note"];
+
+    // Criterion nodes
+    Routine_Visit [label="Routine Visit", shape=ellipse, color=blue, fontcolor=blue, comment="Scheduled appointment for non-emergency consultation"];
+    Exclusion_1 [label="Exclusion 1", shape=ellipse, color=blue, fontcolor=blue, comment="Acute, life-threatening conditions"];
+    Exclusion_2 [label="Exclusion 2", shape=ellipse, color=blue, fontcolor=blue, comment="Unable to communicate effectively"];
+    Exclusion_3 [label="Exclusion 3", shape=ellipse, color=blue, fontcolor=blue, comment="Admitted for inpatient care, not stable"];
+    Exclusion_4 [label="Exclusion 4", shape=ellipse, color=blue, fontcolor=blue, comment="Opted out of SOAP note process"];
+    Subjective [label="Subjective", shape=ellipse, color=blue, fontcolor=blue, comment="Gathering patient's history and complaints"];
+    Objective [label="Objective", shape=ellipse, color=blue, fontcolor=blue, comment="Physical examination and diagnostic tests"];
+    Assessment [label="Assessment", shape=ellipse, color=blue, fontcolor=blue, comment="Formulating differential diagnosis"];
+    Plan [label="Plan", shape=ellipse, color=blue, fontcolor=blue, comment="Developing management plan"];
+    SOAP_Complete [label="SOAP Complete", shape=ellipse, color=blue, fontcolor=blue, comment="All SOAP sections completed"];
+    Accurate_Info [label="Accurate Info", shape=ellipse, color=blue, fontcolor=blue, comment="Information is accurate and up-to-date"];
+    Patient_Informed [label="Patient Informed", shape=ellipse, color=blue, fontcolor=blue, comment="Patient informed of diagnosis and plan"];
+    Follow_Up [label="Follow-Up", shape=ellipse, color=blue, fontcolor=blue, comment="Follow-up appointments or referrals scheduled"];
+
+    // Edges
+    Initial_Population -> Routine_Visit [label="if", color=blue, fontcolor=blue];
+    Routine_Visit -> Subset_Screening [label="then", color=blue, fontcolor=blue];
+
+    Subset_Screening -> Exclusion_1 [label="if", color=blue, fontcolor=blue];
+    Subset_Screening -> Exclusion_2 [label="if", color=blue, fontcolor=blue];
+    Subset_Screening -> Exclusion_3 [label="if", color=blue, fontcolor=blue];
+    Subset_Screening -> Exclusion_4 [label="if", color=blue, fontcolor=blue];
+
+    Exclusion_1 -> Successful_Screen [label="then", color=blue, fontcolor=blue];
+    Exclusion_2 -> Successful_Screen [label="then", color=blue, fontcolor=blue];
+    Exclusion_3 -> Successful_Screen [label="then", color=blue, fontcolor=blue];
+    Exclusion_4 -> Successful_Screen [label="then", color=blue, fontcolor=blue];
+
+    Subset_Screening -> Subjective [label="if", color=blue, fontcolor=blue];
+    Subjective -> Objective [label="and", color=blue, fontcolor=blue];
+    Objective -> Assessment [label="and", color=blue, fontcolor=blue];
+    Assessment -> Plan [label="and", color=blue, fontcolor=blue];
+    Plan -> SOAP_Complete [label="and", color=blue, fontcolor=blue];
+    SOAP_Complete -> Accurate_Info [label="and", color=blue, fontcolor=blue];
+    Accurate_Info -> Patient_Informed [label="and", color=blue, fontcolor=blue];
+    Patient_Informed -> Follow_Up [label="and", color=blue, fontcolor=blue];
+    Follow_Up -> Successful_Screen [label="then", color=blue, fontcolor=blue];
+}
