@@ -1,0 +1,40 @@
+digraph ClinicalProtocol {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPop [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="The initial population includes all patients who are currently prescribed medications known to increase serotonin levels."];
+    ScreeningSubset [label="Subset Considered for Screening" shape=box style=rounded color=green fontcolor=green comment="Subset includes patients on additional medications that may interact to increase the risk of serotonin syndrome."];
+    ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Patients excluded if they have a history of serotonin syndrome, discontinued medications, or are under palliative care."];
+    DiagnosticInterventions [label="Diagnostic Interventions" shape=box style=rounded color=green fontcolor=green comment="Diagnostic interventions include medication review, clinical assessment, and laboratory tests."];
+    SuccessfulScreen [label="Successful Screen" shape=box style=rounded color=green fontcolor=green comment="A screen is successful if drug interactions are addressed, patients are educated, and follow-up is scheduled."];
+
+    // Criterion Nodes
+    MedsIncreaseSerotonin [label="Meds Increase Serotonin" shape=ellipse color=blue fontcolor=blue comment="Patients prescribed medications known to increase serotonin levels."];
+    AdditionalMeds [label="Additional Meds" shape=ellipse color=blue fontcolor=blue comment="Patients on additional medications that may interact to increase the risk of serotonin syndrome."];
+    NoHistorySS [label="No History of SS" shape=ellipse color=blue fontcolor=blue comment="Patients with no documented history of serotonin syndrome."];
+    DiscontinuedMeds [label="Discontinued Meds" shape=ellipse color=blue fontcolor=blue comment="Patients who have discontinued all serotonergic medications for at least 5 half-lives."];
+    NotPalliativeCare [label="Not Palliative Care" shape=ellipse color=blue fontcolor=blue comment="Patients not under palliative care."];
+    MedReview [label="Medication Review" shape=ellipse color=blue fontcolor=blue comment="Comprehensive medication review to identify potential drug interactions."];
+    ClinicalAssessment [label="Clinical Assessment" shape=ellipse color=blue fontcolor=blue comment="Clinical assessment for symptoms of serotonin syndrome."];
+    LabTests [label="Laboratory Tests" shape=ellipse color=blue fontcolor=blue comment="Laboratory tests to rule out other causes of symptoms."];
+    AddressInteractions [label="Address Interactions" shape=ellipse color=blue fontcolor=blue comment="Potential drug interactions are identified and addressed."];
+    EducatePatients [label="Educate Patients" shape=ellipse color=blue fontcolor=blue comment="Patients are educated about the signs and symptoms of serotonin syndrome."];
+    ScheduleFollowUp [label="Schedule Follow-Up" shape=ellipse color=blue fontcolor=blue comment="Follow-up appointments are scheduled."];
+
+    // Edges
+    InitialPop -> MedsIncreaseSerotonin [label="if" color=blue fontcolor=blue];
+    MedsIncreaseSerotonin -> ScreeningSubset [label="then" color=blue fontcolor=blue];
+    ScreeningSubset -> AdditionalMeds [label="if" color=blue fontcolor=blue];
+    AdditionalMeds -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    ExclusionCriteria -> NoHistorySS [label="if" color=blue fontcolor=blue];
+    NoHistorySS -> DiscontinuedMeds [label="and" color=blue fontcolor=blue];
+    DiscontinuedMeds -> NotPalliativeCare [label="and" color=blue fontcolor=blue];
+    NotPalliativeCare -> DiagnosticInterventions [label="then" color=blue fontcolor=blue];
+    DiagnosticInterventions -> MedReview [label="if" color=blue fontcolor=blue];
+    MedReview -> ClinicalAssessment [label="and" color=blue fontcolor=blue];
+    ClinicalAssessment -> LabTests [label="and" color=blue fontcolor=blue];
+    LabTests -> SuccessfulScreen [label="then" color=blue fontcolor=blue];
+    SuccessfulScreen -> AddressInteractions [label="if" color=blue fontcolor=blue];
+    AddressInteractions -> EducatePatients [label="and" color=blue fontcolor=blue];
+    EducatePatients -> ScheduleFollowUp [label="and" color=blue fontcolor=blue];
+}
