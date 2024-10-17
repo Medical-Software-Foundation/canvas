@@ -1,0 +1,38 @@
+digraph ImmunizationProtocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="The initial population includes all individuals aged 6 months and older who are eligible for vaccination according to the latest CDC guidelines."];
+    ScreeningSubset [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="From the initial population, the subset considered for screening includes individuals who have not received the current season's flu vaccine, have not received the latest COVID-19 vaccine booster or primary series as recommended by health authorities, and are not currently experiencing acute illness with fever."];
+    Excluded [label="Excluded", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals from the subset will be excluded from receiving the vaccines if they have a known history of severe allergic reaction to any component of the flu or COVID-19 vaccines, are currently experiencing moderate to severe acute illness, with or without fever, have a history of Guillain-Barré Syndrome within 6 weeks following a previous dose of influenza vaccine, are younger than the minimum age approved for the specific COVID-19 vaccine formulation, or have received another vaccine within the last 14 days."];
+    SuccessfulScreen [label="Successful Screen", shape=box, style=rounded, color=green, fontcolor=green, comment="Conditions for successful screens include confirmation that the individual has not received the current season's flu vaccine or the latest COVID-19 vaccine booster/primary series, absence of any exclusion criteria, informed consent obtained, and successful administration of the appropriate vaccine(s) without immediate adverse reactions."];
+
+    // Criterion nodes
+    NotFluVaccine [label="Not Flu Vaccine", shape=ellipse, color=blue, fontcolor=blue, comment="Have not received the current season's flu vaccine."];
+    NotCOVIDVaccine [label="Not COVID Vaccine", shape=ellipse, color=blue, fontcolor=blue, comment="Have not received the latest COVID-19 vaccine booster or primary series as recommended by health authorities."];
+    NoAcuteIllness [label="No Acute Illness", shape=ellipse, color=blue, fontcolor=blue, comment="Are not currently experiencing acute illness with fever."];
+    NoSevereAllergy [label="No Severe Allergy", shape=ellipse, color=blue, fontcolor=blue, comment="Have no known history of severe allergic reaction to any component of the flu or COVID-19 vaccines."];
+    NoModerateIllness [label="No Moderate Illness", shape=ellipse, color=blue, fontcolor=blue, comment="Are not currently experiencing moderate to severe acute illness, with or without fever."];
+    NoGBSHistory [label="No GBS History", shape=ellipse, color=blue, fontcolor=blue, comment="Have no history of Guillain-Barré Syndrome within 6 weeks following a previous dose of influenza vaccine."];
+    AgeAppropriate [label="Age Appropriate", shape=ellipse, color=blue, fontcolor=blue, comment="Are older than the minimum age approved for the specific COVID-19 vaccine formulation."];
+    NoRecentVaccine [label="No Recent Vaccine", shape=ellipse, color=blue, fontcolor=blue, comment="Have not received another vaccine within the last 14 days."];
+    InformedConsent [label="Informed Consent", shape=ellipse, color=blue, fontcolor=blue, comment="Informed consent obtained from the individual or their guardian."];
+    SuccessfulAdmin [label="Successful Administration", shape=ellipse, color=blue, fontcolor=blue, comment="Successful administration of the appropriate vaccine(s) without immediate adverse reactions."];
+
+    // Edges
+    InitialPopulation -> ScreeningSubset [label="if", color=blue, fontcolor=blue];
+    ScreeningSubset -> NotFluVaccine [label="if", color=blue, fontcolor=blue];
+    NotFluVaccine -> NotCOVIDVaccine [label="and", color=blue, fontcolor=blue];
+    NotCOVIDVaccine -> NoAcuteIllness [label="and", color=blue, fontcolor=blue];
+    NoAcuteIllness -> Excluded [label="then", color=blue, fontcolor=blue];
+
+    Excluded -> NoSevereAllergy [label="if", color=blue, fontcolor=blue];
+    NoSevereAllergy -> NoModerateIllness [label="and", color=blue, fontcolor=blue];
+    NoModerateIllness -> NoGBSHistory [label="and", color=blue, fontcolor=blue];
+    NoGBSHistory -> AgeAppropriate [label="and", color=blue, fontcolor=blue];
+    AgeAppropriate -> NoRecentVaccine [label="and", color=blue, fontcolor=blue];
+    NoRecentVaccine -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    SuccessfulScreen -> InformedConsent [label="if", color=blue, fontcolor=blue];
+    InformedConsent -> SuccessfulAdmin [label="and", color=blue, fontcolor=blue];
+}
