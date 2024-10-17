@@ -1,0 +1,44 @@
+digraph ClinicalProtocol {
+    rankdir=TB;
+
+    // Populations
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients within the healthcare system who have an active prescription for any heart failure medication."];
+    SubsetScreening [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients from the initial population who do not have an active diagnosis of heart failure in their medical records."];
+    SuccessfulScreen [label="Successful Screens", shape=box, style=rounded, color=green, fontcolor=green, comment="Confirmation of an appropriate diagnosis of heart failure, leading to the continuation of the medication. Identification of an alternative clinical justification for the medication, leading to the continuation of the medication. If no justification is found, recommendation for discontinuation of the medication or further evaluation for potential heart failure diagnosis."];
+
+    // Criteria
+    NoActiveHF [label="No Active HF Diagnosis", shape=ellipse, color=blue, fontcolor=blue, comment="Patients from the initial population who do not have an active diagnosis of heart failure in their medical records."];
+    ExclusionHistory [label="History of HF Inactive/Remission", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have a documented history of heart failure that is currently inactive or in remission."];
+    ExclusionOffLabel [label="Off-label Use with Justification", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who are prescribed heart failure medication for off-label use with documented clinical justification."];
+    ExclusionTrial [label="Clinical Trial Participation", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who are part of a clinical trial involving heart failure medication with appropriate documentation."];
+    ReviewHistory [label="Review Medical History", shape=ellipse, color=blue, fontcolor=blue, comment="Review of the patient's medical history and records to confirm the absence of a heart failure diagnosis."];
+    ConsultProvider [label="Consult Prescribing Provider", shape=ellipse, color=blue, fontcolor=blue, comment="Consultation with the prescribing healthcare provider to discuss the rationale for the heart failure medication."];
+    DiagnosticTests [label="Conduct Diagnostic Tests", shape=ellipse, color=blue, fontcolor=blue, comment="If necessary, conduct diagnostic tests such as echocardiogram, BNP/NT-proBNP levels, or other relevant cardiac assessments to evaluate the presence of heart failure."];
+    ConfirmDiagnosis [label="Confirm HF Diagnosis", shape=ellipse, color=blue, fontcolor=blue, comment="Confirmation of an appropriate diagnosis of heart failure."];
+    AlternativeJustification [label="Alternative Justification", shape=ellipse, color=blue, fontcolor=blue, comment="Identification of an alternative clinical justification for the medication."];
+
+    // Paths
+    InitialPopulation -> NoActiveHF [label="if", color=blue, fontcolor=blue];
+    NoActiveHF -> SubsetScreening [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> ExclusionHistory [label="if", color=blue, fontcolor=blue];
+    ExclusionHistory -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> ExclusionOffLabel [label="if", color=blue, fontcolor=blue];
+    ExclusionOffLabel -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> ExclusionTrial [label="if", color=blue, fontcolor=blue];
+    ExclusionTrial -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> ReviewHistory [label="if", color=blue, fontcolor=blue];
+    ReviewHistory -> ConsultProvider [label="and", color=blue, fontcolor=blue];
+    ConsultProvider -> DiagnosticTests [label="and", color=blue, fontcolor=blue];
+    DiagnosticTests -> ConfirmDiagnosis [label="and", color=blue, fontcolor=blue];
+    ConfirmDiagnosis -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> ReviewHistory [label="if", color=blue, fontcolor=blue];
+    ReviewHistory -> ConsultProvider [label="and", color=blue, fontcolor=blue];
+    ConsultProvider -> DiagnosticTests [label="and", color=blue, fontcolor=blue];
+    DiagnosticTests -> AlternativeJustification [label="and", color=blue, fontcolor=blue];
+    AlternativeJustification -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+}
