@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Protocol for Screening and Immunization Against Flu and COVID-19"
+    description: "This protocol outlines the criteria and procedures for immunizing individuals aged 6 months and older against seasonal flu and COVID-19. It details the subset of individuals considered for screening, exclusion criteria, diagnostic interventions, and conditions for successful vaccination. The aim is to ensure safe and effective immunization, reducing infection and transmission risks in the community. Key steps include reviewing medical history, assessing health status, and obtaining informed consent before administering vaccines."
+    url: ""
+
