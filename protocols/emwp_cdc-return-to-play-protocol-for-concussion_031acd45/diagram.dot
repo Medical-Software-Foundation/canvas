@@ -1,0 +1,35 @@
+digraph ReturnToPlayProtocol {
+    rankdir=TB;
+
+    // Populations
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All individuals who have participated in sports activities and have been diagnosed with a concussion."];
+    SubsetScreening [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals from the initial population who have been medically evaluated and diagnosed with a concussion by a healthcare professional and have completed an initial rest period."];
+    SuccessfulScreen [label="Successful Screen", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals who have successfully completed the protocol and are cleared to return to play."];
+
+    // Criteria
+    MedEval [label="Medically Evaluated", shape=ellipse, color=blue, fontcolor=blue, comment="Diagnosed with a concussion by a healthcare professional."];
+    RestPeriod [label="Completed Rest Period", shape=ellipse, color=blue, fontcolor=blue, comment="Completed an initial rest period as recommended by a healthcare provider."];
+    NoAcuteSymptoms [label="No Acute Symptoms", shape=ellipse, color=blue, fontcolor=blue, comment="Acute symptoms have significantly reduced."];
+    NoHistory [label="No History of Complications", shape=ellipse, color=blue, fontcolor=blue, comment="No history of multiple concussions or other neurological disorders unless cleared by a specialist."];
+    Compliance [label="Able to Comply", shape=ellipse, color=blue, fontcolor=blue, comment="Able to comply with the protocol without other medical contraindications."];
+    BaselineAssess [label="Baseline Assessment", shape=ellipse, color=blue, fontcolor=blue, comment="Baseline cognitive and physical assessments to establish pre-injury status."];
+    PostInjuryEval [label="Post-Injury Evaluation", shape=ellipse, color=blue, fontcolor=blue, comment="Post-injury cognitive and physical evaluations."];
+    GradualIncrease [label="Gradual Increase in Activity", shape=ellipse, color=blue, fontcolor=blue, comment="Gradual, stepwise increase in physical activity monitored by healthcare professionals."];
+    SymptomFree [label="Symptom-Free Progression", shape=ellipse, color=blue, fontcolor=blue, comment="Remain symptom-free at each stage for at least 24 hours before progressing."];
+    FinalClearance [label="Final Clearance", shape=ellipse, color=blue, fontcolor=blue, comment="Final clearance by a qualified healthcare provider ensuring symptom-free status and return to baseline function."];
+
+    // Edges
+    InitialPopulation -> MedEval [label="if", color=blue, fontcolor=blue];
+    MedEval -> RestPeriod [label="and", color=blue, fontcolor=blue];
+    RestPeriod -> NoAcuteSymptoms [label="and", color=blue, fontcolor=blue];
+    NoAcuteSymptoms -> NoHistory [label="and", color=blue, fontcolor=blue];
+    NoHistory -> Compliance [label="and", color=blue, fontcolor=blue];
+    Compliance -> SubsetScreening [label="then", color=blue, fontcolor=blue];
+
+    SubsetScreening -> BaselineAssess [label="if", color=blue, fontcolor=blue];
+    BaselineAssess -> PostInjuryEval [label="and", color=blue, fontcolor=blue];
+    PostInjuryEval -> GradualIncrease [label="and", color=blue, fontcolor=blue];
+    GradualIncrease -> SymptomFree [label="and", color=blue, fontcolor=blue];
+    SymptomFree -> FinalClearance [label="and", color=blue, fontcolor=blue];
+    FinalClearance -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+}

@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "CDC's Concussion Return-to-Play Protocol for Athletes"
+    description: "This protocol outlines the CDC's guidelines for athletes returning to play after a concussion. It includes initial population criteria, screening subsets, exclusion criteria, diagnostic interventions, and conditions for successful progression through recovery stages. Athletes must be symptom-free for 24 hours at each stage before advancing, with final clearance by a healthcare provider. The protocol ensures safe return to sports by monitoring cognitive and physical recovery, emphasizing gradual reintroduction to activity, and requiring professional medical evaluation throughout the process."
+    url: ""
+
