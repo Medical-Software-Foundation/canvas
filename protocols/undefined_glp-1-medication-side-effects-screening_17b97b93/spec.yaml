@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Systematic Screening Protocol for GLP-1 Medication Side Effects"
+    description: "This protocol outlines the systematic screening process for identifying side effects in patients on GLP-1 receptor agonists. It includes criteria for patient selection, exclusion, and diagnostic interventions. The process involves reviewing medical history, administering questionnaires, and conducting lab tests if needed. Successful screenings require documenting side effects, communicating findings, and recommending follow-up consultations. All outcomes are recorded in the patient's electronic health record for future reference."
+    url: ""
+
