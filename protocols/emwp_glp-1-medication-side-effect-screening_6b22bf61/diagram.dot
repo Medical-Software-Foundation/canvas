@@ -1,0 +1,32 @@
+digraph Protocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPop [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All patients currently prescribed GLP-1 receptor agonists, including but not limited to medications such as liraglutide, exenatide, dulaglutide, and semaglutide."];
+    SubsetScreen [label="Subset Considered for Screening" shape=box style=rounded color=green fontcolor=green comment="Patients from the initial population who have been on GLP-1 medications for a minimum duration of 4 weeks, as side effects may become more apparent after this period. Patients who have not had a documented side effect screening in the past 3 months."];
+    Exclusion [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Patients with a documented allergy or hypersensitivity to GLP-1 medications. Patients who have discontinued GLP-1 medications within the last 4 weeks. Patients currently hospitalized for any reason, as their side effect profile may be confounded by other treatments or conditions. Patients under palliative care where the focus is on comfort rather than active management of side effects."];
+    Diagnostic [label="Diagnostic Interventions" shape=box style=rounded color=green fontcolor=green comment="Conduct a structured interview or questionnaire to assess for common side effects associated with GLP-1 medications, including but not limited to gastrointestinal symptoms (nausea, vomiting, diarrhea), injection site reactions, and signs of pancreatitis (abdominal pain, elevated pancreatic enzymes). Perform laboratory tests if indicated by symptoms, such as serum amylase and lipase levels for suspected pancreatitis. Review patient-reported outcomes and any self-monitoring data related to blood glucose levels and weight changes."];
+    SuccessfulScreen [label="Conditions for Successful Screens" shape=box style=rounded color=green fontcolor=green comment="Identification and documentation of any new or worsening side effects since the last assessment. Clear communication of findings to the patient, including reassurance if no significant side effects are identified. Recommendation for consultation with a healthcare provider if any moderate to severe side effects are detected, or if the patient expresses concern about their medication. Follow-up plan established for re-evaluation or further diagnostic testing if necessary."];
+
+    // Criterion nodes
+    MinDuration [label="Min 4 Weeks on GLP-1" shape=ellipse color=blue fontcolor=blue comment="Patients from the initial population who have been on GLP-1 medications for a minimum duration of 4 weeks."];
+    NoRecentScreen [label="No Screening in 3 Months" shape=ellipse color=blue fontcolor=blue comment="Patients who have not had a documented side effect screening in the past 3 months."];
+    NoAllergy [label="No Allergy to GLP-1" shape=ellipse color=blue fontcolor=blue comment="Patients with a documented allergy or hypersensitivity to GLP-1 medications."];
+    NotDiscontinued [label="Not Discontinued in 4 Weeks" shape=ellipse color=blue fontcolor=blue comment="Patients who have discontinued GLP-1 medications within the last 4 weeks."];
+    NotHospitalized [label="Not Hospitalized" shape=ellipse color=blue fontcolor=blue comment="Patients currently hospitalized for any reason."];
+    NotPalliative [label="Not Under Palliative Care" shape=ellipse color=blue fontcolor=blue comment="Patients under palliative care where the focus is on comfort rather than active management of side effects."];
+
+    // Edges
+    InitialPop -> MinDuration [label="if" color=blue fontcolor=blue];
+    MinDuration -> NoRecentScreen [label="and" color=blue fontcolor=blue];
+    NoRecentScreen -> SubsetScreen [label="then" color=blue fontcolor=blue];
+
+    SubsetScreen -> NoAllergy [label="if" color=blue fontcolor=blue];
+    NoAllergy -> NotDiscontinued [label="and" color=blue fontcolor=blue];
+    NotDiscontinued -> NotHospitalized [label="and" color=blue fontcolor=blue];
+    NotHospitalized -> NotPalliative [label="and" color=blue fontcolor=blue];
+    NotPalliative -> Exclusion [label="then" color=blue fontcolor=blue];
+
+    Exclusion -> Diagnostic [label="if" color=blue fontcolor=blue];
+    Diagnostic -> SuccessfulScreen [label="then" color=blue fontcolor=blue];
+}
