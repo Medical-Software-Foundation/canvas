@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "emwp"
+referencePapers:
+  - title: "Protocol for Monitoring and Preventing Serotonin Syndrome in At-Risk Patients"
+    description: "This protocol outlines the monitoring of patients on serotonergic medications to prevent serotonin syndrome. It includes identifying at-risk patients, conducting diagnostic interventions, and ensuring successful screening through medication review and patient education. Exclusion criteria are specified for those with a history of serotonin syndrome or under palliative care. The goal is to enhance patient safety by addressing potential drug interactions and educating patients on recognizing symptoms."
+    url: ""
+
