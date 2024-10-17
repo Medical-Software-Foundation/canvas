@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Protocol for Monitoring and Screening Serotonin Syndrome Risk in Patients"
+    description: "This protocol outlines the monitoring and screening process for patients at risk of serotonin syndrome. It identifies the initial population, screening subset, and exclusion criteria. Diagnostic interventions include medication reviews and clinical assessments. Successful screens involve addressing drug interactions, educating patients on symptoms, and scheduling follow-ups."
+    url: ""
+
