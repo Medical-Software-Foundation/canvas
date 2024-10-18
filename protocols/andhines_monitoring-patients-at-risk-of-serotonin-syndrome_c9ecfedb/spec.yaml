@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Protocol for Monitoring and Managing Serotonin Syndrome Risk"
+    description: "This protocol outlines the monitoring of patients at risk of serotonin syndrome due to medication interactions. It includes identifying a subset of patients for screening, exclusion criteria, and diagnostic interventions. Successful screening involves identifying risk factors and taking clinical actions such as medication adjustments, patient education, and monitoring plans. The goal is to ensure patient safety by proactively managing the risk of serotonin syndrome in patients on serotonergic and interacting medications."
+    url: ""
+
