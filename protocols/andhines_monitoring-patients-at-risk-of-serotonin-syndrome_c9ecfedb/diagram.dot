@@ -1,0 +1,36 @@
+digraph SerotoninSyndromeProtocol {
+    rankdir=TB;
+
+    // Populations
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients prescribed medications known to increase serotonin levels."];
+    ScreeningSubset [label="Screening Subset", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients prescribed additional medications that may interact to increase the risk of serotonin syndrome."];
+    ExcludedPatients [label="Excluded Patients", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients meeting exclusion criteria."];
+    SuccessfulScreen [label="Successful Screen", shape=box, style=rounded, color=green, fontcolor=green, comment="Identification and documentation of potential risk factors for serotonin syndrome."];
+
+    // Criteria
+    AdditionalMeds [label="Additional Medications", shape=ellipse, color=blue, fontcolor=blue, comment="Patients prescribed additional medications that may interact to increase the risk of serotonin syndrome."];
+    NoHistorySS [label="No History of SS", shape=ellipse, color=blue, fontcolor=blue, comment="No documented history of serotonin syndrome while off serotonergic medications."];
+    StableRegimen [label="Stable Regimen", shape=ellipse, color=blue, fontcolor=blue, comment="Stable regimen of interacting medications for more than 6 months without symptoms."];
+    NoContraindications [label="No Contraindications", shape=ellipse, color=blue, fontcolor=blue, comment="No contraindications to diagnostic interventions."];
+    MedReview [label="Medication Review", shape=ellipse, color=blue, fontcolor=blue, comment="Comprehensive medication review to identify potential drug interactions."];
+    ClinicalAssessment [label="Clinical Assessment", shape=ellipse, color=blue, fontcolor=blue, comment="Clinical assessment for symptoms of serotonin syndrome."];
+    LabTests [label="Laboratory Tests", shape=ellipse, color=blue, fontcolor=blue, comment="Laboratory tests to rule out other causes of symptoms."];
+
+    // Paths
+    InitialPopulation -> AdditionalMeds [label="if", color=blue, fontcolor=blue];
+    AdditionalMeds -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> NoHistorySS [label="if", color=blue, fontcolor=blue];
+    NoHistorySS -> ExcludedPatients [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> StableRegimen [label="if", color=blue, fontcolor=blue];
+    StableRegimen -> ExcludedPatients [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> NoContraindications [label="if", color=blue, fontcolor=blue];
+    NoContraindications -> ExcludedPatients [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> MedReview [label="if", color=blue, fontcolor=blue];
+    MedReview -> ClinicalAssessment [label="and", color=blue, fontcolor=blue];
+    ClinicalAssessment -> LabTests [label="and", color=blue, fontcolor=blue];
+    LabTests -> SuccessfulScreen [label="then", color=blue, fontcolor=blue];
+}
