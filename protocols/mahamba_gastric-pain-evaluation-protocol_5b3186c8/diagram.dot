@@ -1,0 +1,31 @@
+digraph ClinicalProtocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="Adults aged 18 years and older with gastric pain and no known risk factors for gastric conditions"];
+    ScreeningSubset [label="Subset Considered for Screening", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients with persistent gastric pain >2 weeks and no relief from antacids or dietary changes"];
+    ExclusionCriteria [label="Exclusion Criteria", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients with risk factors, alarm symptoms, history of gastric surgery, or pregnant"];
+    DiagnosticInterventions [label="Diagnostic Interventions", shape=box, style=rounded, color=green, fontcolor=green, comment="Initial assessment, non-invasive testing, and further evaluation if needed"];
+    SuccessfulScreens [label="Successful Screens", shape=box, style=rounded, color=green, fontcolor=green, comment="Identification of cause, symptom resolution, documentation, and follow-up plan"];
+
+    // Criterion nodes
+    PersistentPain [label="Persistent Pain >2 weeks", shape=ellipse, color=blue, fontcolor=blue, comment="Persistent gastric pain lasting more than two weeks"];
+    NoRelief [label="No Relief from Antacids/Diet", shape=ellipse, color=blue, fontcolor=blue, comment="No relief from over-the-counter antacids or dietary modifications"];
+    NoRiskFactors [label="No Risk Factors", shape=ellipse, color=blue, fontcolor=blue, comment="No known risk factors for gastric conditions"];
+    NoAlarmSymptoms [label="No Alarm Symptoms", shape=ellipse, color=blue, fontcolor=blue, comment="No alarm symptoms such as unexplained weight loss, persistent vomiting, gastrointestinal bleeding, or anemia"];
+    NoHistorySurgery [label="No History of Surgery", shape=ellipse, color=blue, fontcolor=blue, comment="No history of gastric surgery or known gastrointestinal disorders"];
+    NotPregnant [label="Not Pregnant", shape=ellipse, color=blue, fontcolor=blue, comment="Not pregnant"];
+
+    // Edges
+    InitialPopulation -> PersistentPain [label="if", color=blue, fontcolor=blue];
+    PersistentPain -> NoRelief [label="and", color=blue, fontcolor=blue];
+    NoRelief -> ScreeningSubset [label="then", color=blue, fontcolor=blue];
+
+    ScreeningSubset -> NoRiskFactors [label="if", color=blue, fontcolor=blue];
+    NoRiskFactors -> NoAlarmSymptoms [label="and", color=blue, fontcolor=blue];
+    NoAlarmSymptoms -> NoHistorySurgery [label="and", color=blue, fontcolor=blue];
+    NoHistorySurgery -> NotPregnant [label="and", color=blue, fontcolor=blue];
+    NotPregnant -> DiagnosticInterventions [label="then", color=blue, fontcolor=blue];
+
+    DiagnosticInterventions -> SuccessfulScreens [label="then", color=blue, fontcolor=blue];
+}
