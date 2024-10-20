@@ -1,0 +1,43 @@
+digraph G {
+  rankdir=TB;
+
+  // Population nodes
+  InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All patients aged 65 years and older who have a documented diagnosis of emphysema"];
+  ScreeningSubset [label="Subset Considered for Screening" shape=box style=rounded color=green fontcolor=green comment="Patients from the initial population who present with symptoms indicative of pneumonia or have had recent exposure to individuals with respiratory infections"];
+  ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Patients with a documented allergy or contraindication to standard pneumonia diagnostic procedures, undergoing treatment for another acute respiratory condition, or with end-stage COPD receiving palliative care only"];
+  DiagnosticInterventions [label="Diagnostic Interventions" shape=box style=rounded color=green fontcolor=green comment="Physical examination, chest X-ray, CBC, sputum culture, pulse oximetry, and consideration of CT scan"];
+  SuccessfulScreens [label="Conditions for Successful Screens" shape=box style=rounded color=green fontcolor=green comment="Confirmation of pneumonia diagnosis, identification of causative organism, stabilization of oxygen saturation, initiation of appropriate antibiotic therapy, and monitoring of patient response"];
+
+  // Criterion nodes
+  Symptoms [label="Symptoms" shape=ellipse color=blue fontcolor=blue comment="Cough, fever, shortness of breath, chest pain, increased sputum production"];
+  Exposure [label="Exposure" shape=ellipse color=blue fontcolor=blue comment="Recent exposure to individuals with respiratory infections"];
+  AllergyContraindication [label="Allergy/Contraindication" shape=ellipse color=blue fontcolor=blue comment="Documented allergy or contraindication to standard pneumonia diagnostic procedures"];
+  AcuteRespCondition [label="Acute Respiratory Condition" shape=ellipse color=blue fontcolor=blue comment="Currently undergoing treatment for another acute respiratory condition"];
+  EndStageCOPD [label="End-Stage COPD" shape=ellipse color=blue fontcolor=blue comment="End-stage COPD receiving palliative care only"];
+  RadiologicalEvidence [label="Radiological Evidence" shape=ellipse color=blue fontcolor=blue comment="Radiological evidence of pneumonia (e.g., infiltrates on chest X-ray)"];
+  CausativeOrganism [label="Causative Organism" shape=ellipse color=blue fontcolor=blue comment="Identification of causative organism through sputum culture"];
+  OxygenStabilization [label="Oxygen Stabilization" shape=ellipse color=blue fontcolor=blue comment="Stabilization of oxygen saturation levels with supplemental oxygen"];
+  AntibioticTherapy [label="Antibiotic Therapy" shape=ellipse color=blue fontcolor=blue comment="Initiation of appropriate antibiotic therapy based on guidelines and culture results"];
+  MonitoringReassessment [label="Monitoring/Reassessment" shape=ellipse color=blue fontcolor=blue comment="Monitoring and reassessment of patient response to treatment within 48-72 hours"];
+
+  // Edges
+  InitialPopulation -> Symptoms [label="if" color=blue fontcolor=blue];
+  InitialPopulation -> Exposure [label="if" color=blue fontcolor=blue];
+  Symptoms -> ScreeningSubset [label="then" color=blue fontcolor=blue];
+  Exposure -> ScreeningSubset [label="then" color=blue fontcolor=blue];
+
+  ScreeningSubset -> AllergyContraindication [label="if" color=blue fontcolor=blue];
+  ScreeningSubset -> AcuteRespCondition [label="if" color=blue fontcolor=blue];
+  ScreeningSubset -> EndStageCOPD [label="if" color=blue fontcolor=blue];
+  AllergyContraindication -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+  AcuteRespCondition -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+  EndStageCOPD -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+
+  ScreeningSubset -> DiagnosticInterventions [label="if" color=blue fontcolor=blue];
+  DiagnosticInterventions -> RadiologicalEvidence [label="and" color=blue fontcolor=blue];
+  RadiologicalEvidence -> CausativeOrganism [label="and" color=blue fontcolor=blue];
+  CausativeOrganism -> OxygenStabilization [label="and" color=blue fontcolor=blue];
+  OxygenStabilization -> AntibioticTherapy [label="and" color=blue fontcolor=blue];
+  AntibioticTherapy -> MonitoringReassessment [label="and" color=blue fontcolor=blue];
+  MonitoringReassessment -> SuccessfulScreens [label="then" color=blue fontcolor=blue];
+}
