@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Pneumonia Protocol for Elderly Patients with Emphysema"
+    description: "This protocol outlines the steps for identifying and treating pneumonia in patients aged 65 and older with emphysema. It includes criteria for initial population, screening, and exclusions, as well as diagnostic interventions like physical exams, chest X-rays, and sputum cultures. Successful screening conditions involve confirming pneumonia through radiological evidence and clinical symptoms, identifying causative organisms, and initiating appropriate antibiotic therapy. Patient response is monitored within 48-72 hours to ensure improvement."
+    url: ""
+
