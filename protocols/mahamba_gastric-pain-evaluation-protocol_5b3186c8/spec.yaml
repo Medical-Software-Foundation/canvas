@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "mahamba"
+referencePapers:
+  - title: "Protocol for Evaluating Gastric Pain in Low-Risk Adults"
+    description: "This protocol outlines the evaluation process for adults with gastric pain but no risk factors. It includes initial assessments, non-invasive tests, and further evaluations if needed. Exclusion criteria involve known risk factors and alarm symptoms. Successful screening identifies the cause of pain and ensures symptom resolution with a documented treatment plan and follow-up."
+    url: ""
+
