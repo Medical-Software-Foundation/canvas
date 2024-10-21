@@ -1,0 +1,50 @@
+digraph EczemaProtocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All pediatric patients aged 0 to 18 years with symptoms consistent with eczema"];
+    SubsetInConsideration [label="Subset in Consideration" shape=box style=rounded color=green fontcolor=green comment="Children clinically diagnosed with eczema"];
+    ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Children excluded from the protocol"];
+    ProtocolSatisfied [label="Protocol Satisfied" shape=box style=rounded color=green fontcolor=green comment="Children satisfying the protocol"];
+
+    // Criterion nodes
+    Pruritus [label="Pruritus" shape=ellipse color=blue fontcolor=blue comment="Presence of pruritus (itching)"];
+    Lesions [label="Lesions" shape=ellipse color=blue fontcolor=blue comment="Eczematous lesions with typical morphology and age-specific patterns"];
+    History [label="History" shape=ellipse color=blue fontcolor=blue comment="Chronic or relapsing history of dermatitis"];
+    FamilyHistory [label="Family History" shape=ellipse color=blue fontcolor=blue comment="Family history of atopy"];
+    
+    OtherConditions [label="Other Conditions" shape=ellipse color=blue fontcolor=blue comment="Presence of other dermatological conditions that mimic eczema"];
+    Hypersensitivity [label="Hypersensitivity" shape=ellipse color=blue fontcolor=blue comment="Known hypersensitivity or contraindication to standard eczema treatments"];
+    Infections [label="Infections" shape=ellipse color=blue fontcolor=blue comment="Presence of secondary skin infections"];
+    Immunocompromised [label="Immunocompromised" shape=ellipse color=blue fontcolor=blue comment="Immunocompromised status"];
+    ClinicalTrial [label="Clinical Trial" shape=ellipse color=blue fontcolor=blue comment="Current participation in another clinical trial for eczema treatment"];
+
+    DiagnosticActions [label="Diagnostic Actions" shape=ellipse color=blue fontcolor=blue comment="Confirm diagnosis and document severity"];
+    TherapeuticActions [label="Therapeutic Actions" shape=ellipse color=blue fontcolor=blue comment="Initiate treatment and educate caregivers"];
+    AdministrativeActions [label="Administrative Actions" shape=ellipse color=blue fontcolor=blue comment="Schedule follow-ups and document outcomes"];
+    OtherActions [label="Other Actions" shape=ellipse color=blue fontcolor=blue comment="Provide referrals and psychological support"];
+
+    // Edges
+    InitialPopulation -> Pruritus [label="if" color=blue fontcolor=blue];
+    Pruritus -> Lesions [label="and" color=blue fontcolor=blue];
+    Lesions -> History [label="and" color=blue fontcolor=blue];
+    History -> FamilyHistory [label="and" color=blue fontcolor=blue];
+    FamilyHistory -> SubsetInConsideration [label="then" color=blue fontcolor=blue];
+
+    SubsetInConsideration -> OtherConditions [label="if" color=blue fontcolor=blue];
+    OtherConditions -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    SubsetInConsideration -> Hypersensitivity [label="if" color=blue fontcolor=blue];
+    Hypersensitivity -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    SubsetInConsideration -> Infections [label="if" color=blue fontcolor=blue];
+    Infections -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    SubsetInConsideration -> Immunocompromised [label="if" color=blue fontcolor=blue];
+    Immunocompromised -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    SubsetInConsideration -> ClinicalTrial [label="if" color=blue fontcolor=blue];
+    ClinicalTrial -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+
+    SubsetInConsideration -> DiagnosticActions [label="if" color=blue fontcolor=blue];
+    DiagnosticActions -> TherapeuticActions [label="and" color=blue fontcolor=blue];
+    TherapeuticActions -> AdministrativeActions [label="and" color=blue fontcolor=blue];
+    AdministrativeActions -> OtherActions [label="and" color=blue fontcolor=blue];
+    OtherActions -> ProtocolSatisfied [label="then" color=blue fontcolor=blue];
+}
