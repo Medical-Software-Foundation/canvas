@@ -1,0 +1,26 @@
+digraph Protocol {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients currently receiving care within the healthcare system."];
+    SubsetConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients within the initial population who have been prescribed GLP-1 receptor agonists."];
+    Exclusion1 [label="Discontinued >30 days", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have discontinued GLP-1 medications for more than 30 days."];
+    Exclusion2 [label="Allergies/Contraindications", shape=ellipse, color=blue, fontcolor=blue, comment="Patients with documented allergies or contraindications to GLP-1 medications."];
+    Exclusion3 [label="Clinical Trial", shape=ellipse, color=blue, fontcolor=blue, comment="Patients currently enrolled in a clinical trial that includes a protocol for monitoring GLP-1 medication side effects."];
+    Diagnostic [label="Diagnostic", shape=ellipse, color=blue, fontcolor=blue, comment="Conduct a systematic screening for side effects associated with GLP-1 medications at each patient visit."];
+    Therapeutic [label="Therapeutic", shape=ellipse, color=blue, fontcolor=blue, comment="Evaluate severity of side effects and adjust medication if necessary."];
+    Administrative [label="Administrative", shape=ellipse, color=blue, fontcolor=blue, comment="Document findings in EHR and schedule follow-ups."];
+    Consultation [label="Consultation", shape=ellipse, color=blue, fontcolor=blue, comment="Recommend specialist consultation if severe side effects are identified."];
+    ReviewUpdate [label="Review and Update", shape=ellipse, color=blue, fontcolor=blue, comment="Review the protocol annually to incorporate new evidence or changes in clinical guidelines."];
+
+    InitialPopulation -> SubsetConsideration [label="if", color=blue, fontcolor=blue];
+    SubsetConsideration -> Exclusion1 [label="if", color=blue, fontcolor=blue];
+    SubsetConsideration -> Exclusion2 [label="if", color=blue, fontcolor=blue];
+    SubsetConsideration -> Exclusion3 [label="if", color=blue, fontcolor=blue];
+    Exclusion1 -> Diagnostic [label="then", color=blue, fontcolor=blue];
+    Exclusion2 -> Diagnostic [label="then", color=blue, fontcolor=blue];
+    Exclusion3 -> Diagnostic [label="then", color=blue, fontcolor=blue];
+    Diagnostic -> Therapeutic [label="and", color=blue, fontcolor=blue];
+    Therapeutic -> Administrative [label="and", color=blue, fontcolor=blue];
+    Administrative -> Consultation [label="and", color=blue, fontcolor=blue];
+    Consultation -> ReviewUpdate [label="and", color=blue, fontcolor=blue];
+}
