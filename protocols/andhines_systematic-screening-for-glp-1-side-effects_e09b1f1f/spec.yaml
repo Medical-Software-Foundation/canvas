@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Screening Protocol for GLP-1 Medication Side Effects"
+    description: "This protocol outlines systematic screening for side effects in patients on GLP-1 receptor agonists. It includes diagnostic, therapeutic, administrative, and consultation actions to manage side effects like gastrointestinal symptoms, pancreatitis, and hypoglycemia. Exclusion criteria involve patients off GLP-1 for over 30 days, with allergies, or in clinical trials. The protocol mandates documentation in EHRs, follow-up scheduling, and annual reviews to update practices based on new evidence or guidelines."
+    url: ""
+
