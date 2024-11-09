@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "andhines"
+referencePapers:
+  - title: "Protocol for Evaluating Heart Failure Medication Usage Without Diagnosis"
+    description: "This protocol outlines steps to validate the use of heart failure medication in patients without an active heart failure diagnosis. It includes reviewing medical records, recommending clinical evaluations, updating diagnoses, and assessing medication appropriateness. Administrative tasks involve documenting outcomes and notifying healthcare providers, while follow-up actions ensure patient communication and treatment plan updates."
+    url: ""
+

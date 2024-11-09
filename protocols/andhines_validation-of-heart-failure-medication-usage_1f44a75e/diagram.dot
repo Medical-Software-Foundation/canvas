@@ -1,0 +1,20 @@
+digraph G {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPop [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All patients within the healthcare system who have an active prescription for any heart failure medication."];
+    SubsetConsideration [label="Subset in Consideration" shape=box style=rounded color=green fontcolor=green comment="Patients from the initial population who do not have an active diagnosis of heart failure in their medical records."];
+
+    // Criterion Nodes
+    NoHFDiagnosis [label="No HF Diagnosis" shape=ellipse color=blue fontcolor=blue comment="Review the patient's medical records to confirm the absence of an active heart failure diagnosis."];
+    NotForOtherReasons [label="Not for Other Reasons" shape=ellipse color=blue fontcolor=blue comment="Patients who do not have a documented reason for taking heart failure medication other than heart failure."];
+    NotInTrial [label="Not in Trial" shape=ellipse color=blue fontcolor=blue comment="Patients who are not part of a clinical trial or research study where heart failure medication is being used for investigational purposes."];
+    NoPendingDiagnosis [label="No Pending Diagnosis" shape=ellipse color=blue fontcolor=blue comment="Patients who do not have a pending diagnosis or are under evaluation for heart failure."];
+
+    // Edges
+    InitialPop -> NoHFDiagnosis [label="if" color=blue fontcolor=blue];
+    NoHFDiagnosis -> NotForOtherReasons [label="and" color=blue fontcolor=blue];
+    NotForOtherReasons -> NotInTrial [label="and" color=blue fontcolor=blue];
+    NotInTrial -> NoPendingDiagnosis [label="and" color=blue fontcolor=blue];
+    NoPendingDiagnosis -> SubsetConsideration [label="then" color=blue fontcolor=blue];
+}
