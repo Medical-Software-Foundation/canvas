@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "andhines"
+referencePapers:
+  - title: "CDC's Concussion Return-to-Play Protocol for Athletes"
+    description: "This protocol outlines the steps for athletes to safely return to sports after a concussion. It includes initial rest, a gradual return-to-play process, medical clearance, education, and post-return monitoring. Exclusion criteria ensure only those properly diagnosed and evaluated are included. The protocol emphasizes symptom-free progression through stages and requires documentation and education to minimize the risk of further injury."
+    url: ""
+

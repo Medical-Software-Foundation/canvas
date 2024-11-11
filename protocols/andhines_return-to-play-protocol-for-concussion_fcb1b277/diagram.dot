@@ -1,0 +1,35 @@
+digraph ReturnToPlayProtocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All individuals who have participated in sports activities and have been diagnosed with a concussion."];
+    SubsetInConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals from the initial population who have been medically evaluated and diagnosed with a concussion by a qualified healthcare professional."];
+
+    // Criterion nodes
+    MedicallyEvaluated [label="Medically Evaluated", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals who have been medically evaluated and diagnosed with a concussion."];
+    SportsRelatedConcussion [label="Sports-Related Concussion", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals who have sustained a concussion during sports activities."];
+    NoPreExistingConditions [label="No Pre-existing Conditions", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals without pre-existing neurological conditions that may complicate the concussion recovery process, unless cleared by a specialist."];
+    CompletedRestPeriod [label="Completed Rest Period", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals who have completed the initial rest period as recommended by their healthcare provider."];
+    SymptomsResolved [label="Symptoms Resolved", shape=ellipse, color=blue, fontcolor=blue, comment="Individuals who exhibit prolonged post-concussion symptoms that have resolved to baseline levels."];
+
+    InitialRest [label="Initial Rest", shape=ellipse, color=blue, fontcolor=blue, comment="Ensure a period of physical and cognitive rest immediately following the concussion, as recommended by a healthcare provider."];
+    GradualReturn [label="Gradual Return-to-Play", shape=ellipse, color=blue, fontcolor=blue, comment="Follow a stepwise return-to-play protocol with stages of increasing physical activity."];
+    MedicalClearance [label="Medical Clearance", shape=ellipse, color=blue, fontcolor=blue, comment="Obtain written clearance from a healthcare professional experienced in concussion management."];
+    EducationDocumentation [label="Education and Documentation", shape=ellipse, color=blue, fontcolor=blue, comment="Educate the athlete and document each stage of the return-to-play process."];
+    PostReturnMonitoring [label="Post-Return Monitoring", shape=ellipse, color=blue, fontcolor=blue, comment="Continue to monitor the athlete for any recurrence of symptoms after returning to play."];
+
+    // Edges
+    InitialPopulation -> MedicallyEvaluated [label="if", color=blue, fontcolor=blue];
+    MedicallyEvaluated -> SportsRelatedConcussion [label="and", color=blue, fontcolor=blue];
+    SportsRelatedConcussion -> NoPreExistingConditions [label="and", color=blue, fontcolor=blue];
+    NoPreExistingConditions -> CompletedRestPeriod [label="and", color=blue, fontcolor=blue];
+    CompletedRestPeriod -> SymptomsResolved [label="and", color=blue, fontcolor=blue];
+    SymptomsResolved -> SubsetInConsideration [label="then", color=blue, fontcolor=blue];
+
+    SubsetInConsideration -> InitialRest [label="if", color=blue, fontcolor=blue];
+    InitialRest -> GradualReturn [label="and", color=blue, fontcolor=blue];
+    GradualReturn -> MedicalClearance [label="and", color=blue, fontcolor=blue];
+    MedicalClearance -> EducationDocumentation [label="and", color=blue, fontcolor=blue];
+    EducationDocumentation -> PostReturnMonitoring [label="and", color=blue, fontcolor=blue];
+    PostReturnMonitoring -> SubsetInConsideration [label="then", color=blue, fontcolor=blue];
+}
