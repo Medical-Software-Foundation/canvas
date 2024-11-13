@@ -1,0 +1,52 @@
+digraph RTP_Protocol {
+    rankdir=TB;
+    node [shape=box,style=rounded,color=green,fontcolor=green];
+    Suspected_Concussion [label="Suspected\nConcussion", comment="All individuals presenting with signs, symptoms, or suspected diagnosis of a concussion sustained during participation in organized or recreational sports activities."];
+    Confirmed_Concussion [label="Confirmed\nConcussion", comment="Individuals confirmed to have a concussion based on clinical evaluation."];
+    Excluded_Moderate_Severe_TBI [label="Excluded:\nModerate/Severe TBI", comment="Individuals with suspected or confirmed moderate to severe traumatic brain injury (TBI) requiring hospitalization or specialized neurosurgical intervention."];
+    Excluded_Preexisting_Neuro [label="Excluded:\nPre-existing Neuro", comment="Individuals with pre-existing neurological conditions that may confound concussion assessment and management."];
+    Excluded_Cervical_Spine [label="Excluded:\nCervical Spine Injury", comment="Individuals with suspected cervical spine injury."];
+    Initial_Assessment [label="Initial\nAssessment", comment="Remove from Play, Clinical Evaluation, Rest, Symptom Monitoring, Education"];
+    Stage_1 [label="Stage 1:\nSymptom-Limited\nActivity", comment="Light aerobic exercise at an intensity that does not provoke symptoms."];
+    Stage_2 [label="Stage 2:\nLight Aerobic\nExercise", comment="Increased intensity and duration of aerobic exercise. Introduction of sport-specific movements."];
+    Stage_3 [label="Stage 3:\nSport-Specific\nExercise", comment="Progression to more complex sport-specific drills with increased intensity and duration. No contact activities."];
+    Stage_4 [label="Stage 4:\nNon-Contact\nTraining", comment="Participation in regular training activities with the team, excluding contact."];
+    Stage_5 [label="Stage 5:\nFull Contact\nPractice", comment="Return to full contact practice following medical clearance."];
+    Return_to_Play [label="Return to\nPlay", comment="Return to full competition."];
+
+
+    node [shape=ellipse,color=blue,fontcolor=blue];
+    Clinically_Confirmed [label="Clinically\nConfirmed", comment="Confirmed to have a concussion based on clinical evaluation."];
+    Mod_Sev_TBI [label="Moderate/Severe\nTBI", comment="Suspected or confirmed moderate to severe TBI requiring hospitalization or specialized neurosurgical intervention."];
+    Preexisting_Neuro_Cond [label="Pre-existing\nNeurological\nCondition", comment="Pre-existing neurological conditions that may confound concussion assessment and management."];
+    Susp_Cervical_Spine_Inj [label="Suspected\nCervical Spine\nInjury", comment="Suspected cervical spine injury."];
+    Completed_Stage_1 [label="Completed\nStage 1", comment="Successfully completed Stage 1 without symptom recurrence."];
+    Completed_Stage_2 [label="Completed\nStage 2", comment="Successfully completed Stage 2 without symptom recurrence."];
+    Completed_Stage_3 [label="Completed\nStage 3", comment="Successfully completed Stage 3 without symptom recurrence."];
+    Completed_Stage_4 [label="Completed\nStage 4", comment="Successfully completed Stage 4 without symptom recurrence."];
+    Completed_Stage_5 [label="Completed\nStage 5", comment="Successfully completed Stage 5 without symptom recurrence."];
+    Medical_Clearance [label="Medical\nClearance", comment="Final medical clearance for return to play granted by a healthcare professional."];
+
+    edge [color=blue, fontcolor=blue];
+    Suspected_Concussion -> Clinically_Confirmed [label="if"];
+    Clinically_Confirmed -> Confirmed_Concussion [label="then"];
+    Suspected_Concussion -> Mod_Sev_TBI [label="if"];
+    Mod_Sev_TBI -> Excluded_Moderate_Severe_TBI [label="then"];
+    Suspected_Concussion -> Preexisting_Neuro_Cond [label="if"];
+    Preexisting_Neuro_Cond -> Excluded_Preexisting_Neuro [label="then"];
+    Suspected_Concussion -> Susp_Cervical_Spine_Inj [label="if"];
+    Susp_Cervical_Spine_Inj -> Excluded_Cervical_Spine [label="then"];
+    Confirmed_Concussion -> Initial_Assessment;
+    Initial_Assessment -> Stage_1;
+    Stage_1 -> Completed_Stage_1 [label="if"];
+    Completed_Stage_1 -> Stage_2 [label="then"];
+    Stage_2 -> Completed_Stage_2 [label="if"];
+    Completed_Stage_2 -> Stage_3 [label="then"];
+    Stage_3 -> Completed_Stage_3 [label="if"];
+    Completed_Stage_3 -> Stage_4 [label="then"];
+    Stage_4 -> Completed_Stage_4 [label="if"];
+    Completed_Stage_4 -> Stage_5 [label="then"];
+    Stage_5 -> Completed_Stage_5 [label="if"];
+    Completed_Stage_5 -> Medical_Clearance [label="and"];
+    Medical_Clearance -> Return_to_Play [label="then"];
+}
