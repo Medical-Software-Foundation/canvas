@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "andhines"
+referencePapers:
+  - title: "Return-to-Play Protocol for Sports-Related Concussion"
+    description: "This protocol outlines the steps for managing sports-related concussions, from initial assessment and removal from play to graduated return-to-play progression and medical clearance.  It emphasizes individualized care, symptom monitoring, and a stepwise approach to ensure safe return to sports activities."
+    url: ""
+
