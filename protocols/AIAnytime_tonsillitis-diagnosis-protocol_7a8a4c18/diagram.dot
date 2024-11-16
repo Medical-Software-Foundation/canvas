@@ -1,0 +1,39 @@
+digraph TonsillitisDiagnosisProtocol {
+    rankdir=TB;
+
+    // Population nodes
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All patients presenting with symptoms suggestive of tonsillitis"];
+    SubsetInConsideration [label="Subset in Consideration" shape=box style=rounded color=green fontcolor=green comment="Patients 3 years and older with at least two symptoms: sore throat, fever, swollen tonsils, or difficulty swallowing, and symptoms duration less than 10 days"];
+    ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Patients excluded if they have recurrent tonsillitis, peritonsillar abscess, immunocompromised status, allergy to antibiotics, or recent antibiotic use"];
+    ProtocolSatisfied [label="Protocol Satisfied" shape=box style=rounded color=green fontcolor=green comment="Patients who satisfy the protocol for tonsillitis diagnosis and management"];
+
+    // Criterion nodes
+    Age [label="Age >= 3" shape=ellipse color=blue fontcolor=blue comment="Age: 3 years and older"];
+    Symptoms [label="2+ Symptoms" shape=ellipse color=blue fontcolor=blue comment="Presenting with at least two of the following symptoms: sore throat, fever, swollen tonsils, or difficulty swallowing"];
+    Duration [label="Duration < 10 days" shape=ellipse color=blue fontcolor=blue comment="Duration of symptoms: Less than 10 days"];
+    RecurrentTonsillitis [label="Recurrent Tonsillitis" shape=ellipse color=blue fontcolor=blue comment="Known history of recurrent tonsillitis (more than 5 episodes in a year)"];
+    PeritonsillarAbscess [label="Peritonsillar Abscess" shape=ellipse color=blue fontcolor=blue comment="Presence of peritonsillar abscess or other complications requiring immediate surgical intervention"];
+    Immunocompromised [label="Immunocompromised" shape=ellipse color=blue fontcolor=blue comment="Immunocompromised status (e.g., HIV, chemotherapy, long-term steroid use)"];
+    Allergy [label="Allergy to Antibiotics" shape=ellipse color=blue fontcolor=blue comment="Known allergy to penicillin or other first-line antibiotics for tonsillitis"];
+    RecentAntibioticUse [label="Recent Antibiotic Use" shape=ellipse color=blue fontcolor=blue comment="Recent antibiotic use within the past 2 weeks"];
+
+    // Edges
+    InitialPopulation -> Age [label="if" color=blue fontcolor=blue];
+    Age -> Symptoms [label="and" color=blue fontcolor=blue];
+    Symptoms -> Duration [label="and" color=blue fontcolor=blue];
+    Duration -> SubsetInConsideration [label="then" color=blue fontcolor=blue];
+
+    SubsetInConsideration -> RecurrentTonsillitis [label="if" color=blue fontcolor=blue];
+    SubsetInConsideration -> PeritonsillarAbscess [label="if" color=blue fontcolor=blue];
+    SubsetInConsideration -> Immunocompromised [label="if" color=blue fontcolor=blue];
+    SubsetInConsideration -> Allergy [label="if" color=blue fontcolor=blue];
+    SubsetInConsideration -> RecentAntibioticUse [label="if" color=blue fontcolor=blue];
+
+    RecurrentTonsillitis -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    PeritonsillarAbscess -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    Immunocompromised -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    Allergy -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+    RecentAntibioticUse -> ExclusionCriteria [label="then" color=blue fontcolor=blue];
+
+    SubsetInConsideration -> ProtocolSatisfied [label="then" color=blue fontcolor=blue];
+}
