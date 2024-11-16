@@ -1,4 +1,4 @@
-# Start building the future of healthcare NOW
+# Build your breakthrough on Canvas
 - Generate your client ID and client secret and build your first plugin in 5 minutes
 - Instant access to a rich community sandbox for health tech developers
 - Support and advice from physicians on call to support your development
