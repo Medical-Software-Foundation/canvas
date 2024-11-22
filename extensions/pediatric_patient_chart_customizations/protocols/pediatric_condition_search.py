@@ -145,9 +145,9 @@ class PediatricConditionSearch(BaseHandler):
         # the patient id from the command.
         patient_id = Command.objects.filter(id=self.target).values_list('patient__id', flat=True).first()
 
-        eighteen_years_ago = arrow.now().shift(years=-15).date().isoformat()
+        fifteen_years_ago = arrow.now().shift(years=-15).date().isoformat()
         patient_is_pediatric = Patient.objects.filter(
-            id=patient_id, birth_date__gt=eighteen_years_ago).exists()
+            id=patient_id, birth_date__gt=fifteen_years_ago).exists()
 
         # If the patient is not pediatric, do not alter the search.
         if not patient_is_pediatric:
