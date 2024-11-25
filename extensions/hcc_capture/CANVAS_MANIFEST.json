@@ -1,0 +1,56 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.2",
+    "name": "hcc_capture",
+    "description": "A workflow for promoting the capture of HCCs",
+    "components": {
+        "protocols": [
+            {
+                "class": "hcc_capture.protocols.condition_annotations:PatientChartConditionAnnotation",
+                "description": "A protocol that add HCC to diagnoses on the patient summary (conditions list)",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "hcc_capture.protocols.condition_annotations:ClaimConditionAnnotation",
+                "description": "A protocol that add HCC to diagnoses on claims...",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "hcc_capture.protocols.condition_search:AnnotateSearchResults",
+                "description": "A protocol that adds HCC to diagnoses in the condition search)",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "hcc_capture.protocols.surface_nonvalidated_coding_gaps:SurfaceNonvalidatedCodingGaps",
+                "description": "Presents the list of nonvalidated coding gaps and makes it easy to validate them.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
