@@ -13,6 +13,8 @@ class BridgePatientSync(BaseProtocol):
         EventType.Name(EventType.PATIENT_UPDATED)
         ]
 
+    CREATION_LOCKS = set()
+
     def compute(self):
         log.info('>>> BridgePatientSync.compute')
         
@@ -29,6 +31,13 @@ class BridgePatientSync(BaseProtocol):
         
         # Get a reference to the target patient
         canvas_patient = Patient.objects.get(id=self.target)
+
+        # Ensure not invoked more than once
+        if canvas_patient.id in BridgePatientSync.CREATION_LOCKS:
+            log.info('>>> Aborted due to BridgePatientSync.CREATION_LOCKS')
+            return []
+        else:
+            BridgePatientSync.CREATION_LOCKS.add(canvas_patient.id)
 
         # TODO: pass phone, email if available (Canvas doesn't require email)
         bridge_payload = {
@@ -60,6 +69,7 @@ class BridgePatientSync(BaseProtocol):
                     AddBannerAlert.Placement.CHART,
                     AddBannerAlert.Placement.APPOINTMENT_CARD,
                     AddBannerAlert.Placement.SCHEDULING_CARD,
+                    AddBannerAlert.Placement.PROFILE
                 ],
                 intent=AddBannerAlert.Intent.WARNING
             )
@@ -78,9 +88,10 @@ class BridgePatientSync(BaseProtocol):
                 AddBannerAlert.Placement.CHART,
                 AddBannerAlert.Placement.APPOINTMENT_CARD,
                 AddBannerAlert.Placement.SCHEDULING_CARD,
+                AddBannerAlert.Placement.PROFILE
             ],
             intent=AddBannerAlert.Intent.INFO,
-            href=f"{bridge_api_base_url}patients/{bridge_patient_data['id']}"
+            href=f"{bridge_ui_base_url}patients/{bridge_patient_data['id']}"
         )
 
         return [sync_banner.apply()]
