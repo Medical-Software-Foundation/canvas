@@ -3,7 +3,7 @@ from logger import log
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
 from canvas_sdk.utils import Http
-from canvas_sdk.effects.protocol_card import ProtocolCard, Recommendation
+from canvas_sdk.effects.banner_alert import AddBannerAlert
 from canvas_sdk.v1.data.patient import Patient
 
 
@@ -16,50 +16,71 @@ class BridgePatientSync(BaseProtocol):
     def compute(self):
         log.info('>>> BridgePatientSync.compute')
         
+        bridge_ui_base_url = self.secrets['BRIDGE_UI_BASE_URL']
         bridge_api_base_url = self.secrets['BRIDGE_API_BASE_URL']
         bridge_secret_api_key = self.secrets['BRIDGE_SECRET_API_KEY']
         
-        patient = Patient.objects.get(id=self.target)
-
-        # TODO: pass phone, email if available (Canvas doesn't require)
-        bridge_payload = {
-            "firstName": patient.first_name,
-            "lastName": patient.last_name,
-            "email": 'test_' + str(random.random())[2:] + '@canvasmedical.com',
-            "dateOfBirth": patient.birth_date.isoformat()
-        }
-            
         if bridge_api_base_url[-1] != '/':
             bridge_api_base_url += '/'
         
+        
+        if bridge_ui_base_url[-1] != '/':
+            bridge_ui_base_url += '/'
+        
+        # Get a reference to the target patient
+        canvas_patient = Patient.objects.get(id=self.target)
+
+        # TODO: pass phone, email if available (Canvas doesn't require email)
+        bridge_payload = {
+            "externalId": canvas_patient.id,
+            "firstName": canvas_patient.first_name,
+            "lastName": canvas_patient.last_name,
+            "email": 'patient_' + canvas_patient.id + '@canvasmedical.com',
+            "dateOfBirth": canvas_patient.birth_date.isoformat()
+        }
+        
+        # Create the patient in Bridge
+        # TODO: Check for or otherwise manage duplicates?
         http = Http()
         resp = http.post(
-            bridge_api_base_url + 'patients/',
+            bridge_api_base_url + 'patients/', json=bridge_payload,
             headers={"X-API-Key": bridge_secret_api_key})
 
-        log.info(f'>>> resp.status_code: {resp.status_code} ')
-        log.info(f'>>> resp.text: {resp.text} ')
-        try:
-            log.info(f'>>> resp.json(): {resp.json()} ')
-        except Exception as e:
-            log.info(f'>>> resp.json resulted in error {e}')
+        # If the post is unsuccessful, notify end users
+        # TODO: implement workflow to remedy this, 
+        # TODO: e.g. end user manually completes a questionnaire with the Bridge link?
+        if resp.status_code != 200:
+            log.error(f'bridge-patient-sync FAILED with status {resp.status_code}')
+            log.info(resp.text)
+            sync_warning = AddBannerAlert(
+                patient_id=canvas_patient.id,
+                key='bridge-patient-sync',
+                narrative='No link to patient in Bridge',
+                placement=[
+                    AddBannerAlert.Placement.CHART,
+                    AddBannerAlert.Placement.APPOINTMENT_CARD,
+                    AddBannerAlert.Placement.SCHEDULING_CARD,
+                ],
+                intent=AddBannerAlert.Intent.WARNING
+            )
+            return [sync_warning.apply()]
 
-        # TODO display bridge patient url as button in protocol card
-        p = ProtocolCard(
-            patient_id=self.target,
-            key="bridge-patient-link",
-            title="Link to Patient in Bridge",
-            narrative="This patient is automatically sync'd from Canvas to Bridge.",
-            recommendations=[]
-        )
+        # Otherwise, get the resulting patient info and build the link to Bridge
+        bridge_patient_data = resp.json()
 
-        # TODO: construct href from post response (assuming patient identifier included)
-        p.add_recommendation(
-            title="", button="Bridge Patient", href="https://app.usebridge.xyz/patients/pat_TTKgod72yXIIdaW7"
-        )
-
-        # TODO: how to store Canvas patient url in Bridge for backlinking?
-        # TODO: is it enough to store Bridge patient url in protocol card?
+        # TODO: is it enough to store Bridge patient url in banner alert?
         # TODO: better to get into `externally exposable id` field?
+        sync_banner = AddBannerAlert(
+            patient_id=canvas_patient.id,
+            key='bridge-patient-sync',
+            narrative='View patient in Bridge',
+            placement=[
+                AddBannerAlert.Placement.CHART,
+                AddBannerAlert.Placement.APPOINTMENT_CARD,
+                AddBannerAlert.Placement.SCHEDULING_CARD,
+            ],
+            intent=AddBannerAlert.Intent.INFO,
+            href=f"{bridge_api_base_url}patients/{bridge_patient_data['id']}"
+        )
 
-        return [p.apply()]
+        return [sync_banner.apply()]

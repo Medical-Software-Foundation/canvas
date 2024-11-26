@@ -7,7 +7,7 @@
         "protocols": [
             {
                 "class": "bridge.protocols.bridge_patient_sync:BridgePatientSync",
-                "description": "Update patients in Bridge based on creation or changes to patients in Canvas",
+                "description": "Create or update patients in Bridge based on creation or changes to patients in Canvas",
                 "data_access": {
                     "event": "",
                     "read": [],
@@ -20,7 +20,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": ["BRIDGE_API_BASE_URL", "BRIDGE_SECRET_API_KEY"],
+    "secrets": ["BRIDGE_UI_BASE_URL", "BRIDGE_API_BASE_URL", "BRIDGE_SECRET_API_KEY"],
     "tags": {},
     "references": [],
     "license": "",
