@@ -1,13 +1,13 @@
 {
-    "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "sdk_version": "0.3.1",
+    "plugin_version": "0.0.7",
     "name": "bridge",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Bridge integration for Canvas",
     "components": {
         "protocols": [
             {
-                "class": "bridge.protocols.my_protocol:Protocol",
-                "description": "A protocol that does xyz...",
+                "class": "bridge.protocols.bridge_patient_sync:BridgePatientSync",
+                "description": "Update patients in Bridge based on creation or changes to patients in Canvas",
                 "data_access": {
                     "event": "",
                     "read": [],
@@ -20,7 +20,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["BRIDGE_API_BASE_URL", "BRIDGE_SECRET_API_KEY"],
     "tags": {},
     "references": [],
     "license": "",
