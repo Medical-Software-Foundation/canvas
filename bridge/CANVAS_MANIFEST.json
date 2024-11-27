@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.3.1",
+    "plugin_version": "0.0.11",
+    "name": "bridge",
+    "description": "Bridge integration for Canvas",
+    "components": {
+        "protocols": [
+            {
+                "class": "bridge.protocols.bridge_patient_sync:BridgePatientSync",
+                "description": "Create or update patients in Bridge based on creation or changes to patients in Canvas",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["BRIDGE_UI_BASE_URL", "BRIDGE_API_BASE_URL", "BRIDGE_SECRET_API_KEY"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
