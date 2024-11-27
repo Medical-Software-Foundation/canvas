@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "nabla-ai-parser"
+version = "0.1.0"
+description = ""
+authors = ["Canvas Engineering <engineering@canvasmedical.com>"]
+readme = "nabla_ai_parser/README.md"
+packages = [
+    { include = "nabla_ai_parser" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.12"
+pytest = "^8.3.3"
+rapidfuzz = "^3.10.1"
+canvas = "^0.7.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
