@@ -23,7 +23,7 @@ class Ccp004v1(ClinicalQualityMeasure):
         version = '2020-04-02v1'
 
         description = 'All patients with Diagnosis Of Diabetes.'
-        information = 'https://canvas-medical.zendesk.com/hc/en-us'
+        information = 'https://canvas-medical.help.usepylon.com/'
 
         identifiers = ['CCP004v1']
 
@@ -41,7 +41,7 @@ class Ccp004v1(ClinicalQualityMeasure):
 
         show_in_chart = False
 
-        references = ['Canvas Medical CCP, https://canvas-medical.zendesk.com/hc/en-us']
+        references = ['Canvas Medical CCP, https://canvas-medical.help.usepylon.com/']
 
     @cached_property
     def date_of_diagnosis(self) -> Union[Any, str]:

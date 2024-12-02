@@ -17,7 +17,7 @@ class Hcc004v1(ClinicalQualityMeasure):
         version = '2019-02-12v1'
         description = ('All patients with potential dysrhythmia based on an '
                        'active medication without associated active problem.')
-        information = 'https://canvas-medical.zendesk.com/hc/en-us/articles/360059083773-Dysrhythmia-Suspects-HCC004v1'  # noqa: E501
+        information = 'https://canvas-medical.help.usepylon.com/articles/7052809697-protocol-dysrhythmia-suspects-hcc004v1'  # noqa: E501
 
         identifiers = ['HCC004v1']
 
@@ -31,7 +31,7 @@ class Hcc004v1(ClinicalQualityMeasure):
         ]
 
         references = [
-            'Canvas Medical HCC, https://canvas-medical.zendesk.com/hc/en-us/articles/360059083773-Dysrhythmia-Suspects-HCC004v1'  # noqa: E501
+            'Canvas Medical HCC, https://canvas-medical.help.usepylon.com/articles/7052809697-protocol-dysrhythmia-suspects-hcc004v1'  # noqa: E501
         ]
 
         compute_on_change_types = [

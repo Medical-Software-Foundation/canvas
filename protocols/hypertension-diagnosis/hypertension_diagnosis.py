@@ -22,7 +22,7 @@ class Ccp003v1(ClinicalQualityMeasure):
         title = 'Diagnosis Of Hypertension'
         version = '2020-04-02v1'
         description = 'All patients with Diagnosis Of Hypertension.'
-        information = 'https://canvas-medical.zendesk.com/hc/en-us'
+        information = 'https://canvas-medical.help.usepylon.com/'
 
         identifiers = ['CCP003v1']
 
@@ -41,7 +41,7 @@ class Ccp003v1(ClinicalQualityMeasure):
 
         show_in_chart = False
 
-        references = ['Canvas Medical CCP, https://canvas-medical.zendesk.com/hc/en-us']
+        references = ['Canvas Medical CCP, https://canvas-medical.help.usepylon.com/']
 
     @cached_property
     def date_of_diagnosis(self) -> str:

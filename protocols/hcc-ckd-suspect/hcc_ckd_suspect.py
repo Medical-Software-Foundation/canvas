@@ -22,8 +22,7 @@ class Hcc002v2(ClinicalQualityMeasure):
 
         description = ('All patients with evidence of two or more elevated eGFR values '
                        'and no active CKD problem on the Conditions List.')
-        information = ('https://canvas-medical.zendesk.com/hc/en-us/articles/'
-                       '360059083713-CKD-Suspect-HCC002v2')  # noqa: E501
+        information = ('https://canvas-medical.help.usepylon.com/articles/6051758367-ckd-suspect')  # noqa: E501
 
         identifiers = ['HCC002v2']
 
@@ -38,7 +37,7 @@ class Hcc002v2(ClinicalQualityMeasure):
 
         references = [(
             'Canvas Medical HCC, '
-            'https://canvas-medical.zendesk.com/hc/en-us/articles/360059083713-CKD-Suspect-HCC002v2'  # noqa: E501
+            'https://canvas-medical.help.usepylon.com/articles/6051758367-ckd-suspect'  # noqa: E501
         )]
 
         compute_on_change_types = [

@@ -42,7 +42,7 @@ class Ccp002v1(ClinicalQualityMeasure):
         version = '2020-03-24v1'
 
         description = f'All patients with {MINIMUM_AGE}+ with chronic conditions to be reached.'
-        information = 'https://canvas-medical.zendesk.com/hc/en-us/articles/360059084173-COVID-19-Risk-Assessment-Follow-Up-Protocol'
+        information = 'https://canvas-medical.help.usepylon.com/articles/7397344673-covid19-risk-followup'
 
         identifiers = ['CCP002v1']
 
@@ -57,7 +57,7 @@ class Ccp002v1(ClinicalQualityMeasure):
         show_in_chart = False
 
         references = [
-            'Canvas Medical CCP, https://canvas-medical.zendesk.com/hc/en-us/articles/360059084173-COVID-19-Risk-Assessment-Follow-Up-Protocol'
+            'Canvas Medical CCP, https://canvas-medical.help.usepylon.com/articles/7397344673-covid19-risk-followup'
         ]
 
         compute_on_change_types = [

@@ -32,7 +32,7 @@ class Ccp001v1(ClinicalQualityMeasure):
         changelog = "Initial release"
 
         description = 'All patients with COVID Questionnaire completed Date < 7 days ago and >  5 days ago.'
-        information = 'https://canvas-medical.zendesk.com/hc/en-us/articles/360059084173-COVID-19-Risk-Assessment-Follow-Up-Protocol'
+        information = 'hhttps://canvas-medical.help.usepylon.com/articles/7397344673-covid19-risk-followup'
 
         identifiers = ['CCP001v1']
 
@@ -50,7 +50,7 @@ class Ccp001v1(ClinicalQualityMeasure):
         ]
 
         references = [
-            'Canvas Medical CCP, https://canvas-medical.zendesk.com/hc/en-us/articles/360059084173-COVID-19-Risk-Assessment-Follow-Up-Protocol'
+            'Canvas Medical CCP, hhttps://canvas-medical.help.usepylon.com/articles/7397344673-covid19-risk-followup'
         ]
 
         show_in_chart = False

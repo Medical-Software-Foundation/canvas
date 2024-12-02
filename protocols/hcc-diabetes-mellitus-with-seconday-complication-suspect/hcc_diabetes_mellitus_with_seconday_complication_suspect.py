@@ -29,7 +29,7 @@ class Hcc003v1(ClinicalQualityMeasure):
         title = 'Diabetes Mellitus With Secondary Complication Suspect'
         version = '2019-02-12v1'
         description = 'All patients with diabetes, uncomplicated AND a 2ndary condition often associated with diabetes.'  # noqa: E501
-        information = 'https://canvas-medical.zendesk.com/hc/en-us/articles/360057221174-Diabetes-Mellitus-With-Secondary-Complication-Suspect-HCC003v1'  # noqa: E501
+        information = 'https://canvas-medical.help.usepylon.com/articles/2137336140-protocol-diabetes-mellitus-secondary-complication'  # noqa: E501
 
         identifiers = ['HCC003v1']
 
@@ -43,7 +43,7 @@ class Hcc003v1(ClinicalQualityMeasure):
         ]
 
         references = [
-            'Canvas Medical HCC, https://canvas-medical.zendesk.com/hc/en-us/articles/360057221174-Diabetes-Mellitus-With-Secondary-Complication-Suspect-HCC003v1'  # noqa: E501
+            'Canvas Medical HCC, https://canvas-medical.help.usepylon.com/articles/2137336140-protocol-diabetes-mellitus-secondary-complication'  # noqa: E501
         ]
 
         compute_on_change_types = [

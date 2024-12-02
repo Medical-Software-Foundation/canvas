@@ -21,7 +21,7 @@ class Hcc001v1(ClinicalQualityMeasure):
         title = 'Problem List Hygiene'
         version = '2019-02-12v1'
         description = 'All patients with active condition not assessed within the last year.'
-        information = 'https://canvas-medical.zendesk.com/hc/en-us/articles/360059083693-Problem-List-Hygiene-HCC001v1'  # noqa: E501
+        information = 'https://canvas-medical.help.usepylon.com/articles/9943822292-protocol-problem-list-hygiene'  # noqa: E501
 
         identifiers = ['HCC001v1']
 
@@ -35,7 +35,7 @@ class Hcc001v1(ClinicalQualityMeasure):
         ]
 
         references = [
-            'Canvas Medical HCC, https://canvas-medical.zendesk.com/hc/en-us/articles/360059083693-Problem-List-Hygiene-HCC001v1'  # noqa: E501
+            'Canvas Medical HCC, https://canvas-medical.help.usepylon.com/articles/9943822292-protocol-problem-list-hygiene'  # noqa: E501
         ]
 
         compute_on_change_types = [
