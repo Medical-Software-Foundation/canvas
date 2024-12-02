@@ -24,9 +24,9 @@ class Ccp005v1(ClinicalQualityMeasure):
         version = '2020-04-02v1'
 
         description = 'All patients with Diagnosis Of Asthma.'
-        information = 'https://canvas-medical.zendesk.com/hc/en-us'
+        information = 'https://canvas-medical.help.usepylon.com/'
 
-        references = ['Canvas Medical CCP, https://canvas-medical.zendesk.com/hc/en-us']
+        references = ['Canvas Medical CCP, https://canvas-medical.help.usepylon.com/']
 
         identifiers = ['CCP005v1']
 
