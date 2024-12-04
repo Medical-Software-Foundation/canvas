@@ -9,7 +9,7 @@ from logger import log
 class Protocol(BaseProtocol):
     """A Plugin for interpreting Nabla transcripts."""
 
-    RESPONDS_TO = EventType.Name(EventType.CLIPBOARD_COMMAND__POST_ORIGINATE)
+    RESPONDS_TO = EventType.Name(EventType.CLIPBOARD_COMMAND__POST_INSERTED_INTO_NOTE)
 
     def compute(self) -> list[Effect]:
         """Parse the transcript coming from a Clipboard command and return a list of effects to originate Commands."""

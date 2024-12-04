@@ -22,7 +22,7 @@ class AssessmentParser(CommandParser):
         if not icd_10_codes:
             return output
 
-        if not context or "patient" not in context:
+        if not context or "patient" not in context or "id" not in context["patient"]:
             return output
 
         patient_id = context["patient"]["id"]
