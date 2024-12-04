@@ -3,7 +3,7 @@
 ## Overview
 
 The AI Scribe Transcript Parser Plugin is designed to interpret the output of AI medical scribes. 
-It processes "originate clipboard command" events and parses their content into  commands within a note.
+It processes `CLIPBOARD_COMMAND__POST_INSERTED_INTO_NOTE` events and parses their content into commands within a note.
 
 ---
 
