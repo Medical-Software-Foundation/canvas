@@ -139,7 +139,7 @@ class PediatricConditionSearch(BaseHandler):
         results = self.context.get("results")
 
         if results is None:
-            return [Effect(type=EffectType.AUTOCOMPLETE_SEARCH_RESULTS, payload=json.dumps(None))]
+            return []
 
         # This event's target is the command we are searching within. Look up
         # the patient id from the command.
@@ -151,7 +151,7 @@ class PediatricConditionSearch(BaseHandler):
 
         # If the patient is not pediatric, do not alter the search.
         if not patient_is_pediatric:
-            return [Effect(type=EffectType.AUTOCOMPLETE_SEARCH_RESULTS, payload=json.dumps(None))]
+            return []
 
         # Create our container for modified search results
         post_processed_results = []
