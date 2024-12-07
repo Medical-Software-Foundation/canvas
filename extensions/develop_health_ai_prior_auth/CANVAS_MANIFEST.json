@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.8.2",
+    "plugin_version": "0.0.1",
+    "name": "develop_health_ai_prior_auth",
+    "description": "Medication benefit verification and AI prior authorization via Develop Health",
+    "components": {
+        "protocols": [
+            {
+                "class": "develop_health_ai_prior_auth.handlers.benefit_verification:BenefitVerification",
+                "description": "Benefit verification integration and workflows",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "develop_health_ai_prior_auth.handlers.prior_authorization:PriorAuthorization",
+                "description": "Prior authorization integration and workflows",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["DEVELOP_HEALTH_API_BASE_URL", "DEVELOP_HEALTH_API_KEY", "DEVELOP_HEALTH_DRUG_LIST"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
