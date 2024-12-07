@@ -6,7 +6,7 @@
     "components": {
         "protocols": [
             {
-                "class": "develop_health_ai_prior_auth.handlers.benefit_verification:BenefitVerification",
+                "class": "develop_health_ai_prior_auth.protocols.benefit_verification:BenefitVerification",
                 "description": "Benefit verification integration and workflows",
                 "data_access": {
                     "event": "",
@@ -15,7 +15,7 @@
                 }
             },
             {
-                "class": "develop_health_ai_prior_auth.handlers.prior_authorization:PriorAuthorization",
+                "class": "develop_health_ai_prior_auth.protocols.prior_authorization:PriorAuthorization",
                 "description": "Prior authorization integration and workflows",
                 "data_access": {
                     "event": "",

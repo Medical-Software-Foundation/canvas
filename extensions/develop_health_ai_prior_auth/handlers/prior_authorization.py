@@ -7,7 +7,9 @@ from logger import log
 
 
 class PriorAuthorization(BaseHandler):
-    RESPONDS_TO = []]
+    RESPONDS_TO = [
+        EventType.Name(EventType.QUESTIONNAIRE_COMMAND__POST_UPDATE),
+    ]
 
     def compute(self) -> list[Effect]:
         return []
