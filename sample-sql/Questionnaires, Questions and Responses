@@ -1,0 +1,6 @@
+-- reports on all questionnaires, the associated questions and the response options
+SELECT *
+FROM api_questionnaire aq
+LEFT JOIN public.api_questionnairequestionmap a on aq.id = a.questionnaire_id
+LEFT JOIN public.api_question q on a.question_id = q.id
+LEFT JOIN public.api_responseoptionset ar on q.response_option_set_id = ar.id
