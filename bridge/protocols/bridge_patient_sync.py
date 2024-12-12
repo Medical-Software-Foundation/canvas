@@ -36,7 +36,7 @@ class BridgePatientSync(BaseProtocol):
     def compute(self):
         canvas_patient_id = self.target
         event_type = self.event.type
-        log.info(f'>>> BridgePatientSync.compute {event_type} for {canvas_patient_id}')
+        log.info(f'>>> BridgePatientSync.compute {EventType.Name(event_type)} for {canvas_patient_id}')
 
         http = Http()
         log.info('>>> Fetching Bridge patient')
@@ -53,6 +53,10 @@ class BridgePatientSync(BaseProtocol):
         
         if bridge_patient_id and event_type == EventType.PATIENT_CREATED:
             log.info(f'>>> Skipping create patient; Bridge patient already exists')
+            return []
+        
+        if not bridge_patient_id and event_type == EventType.PATIENT_UPDATED:
+            log.error('>>> Missing Bridge patient ID to update; skipping')
             return []
         
         # Get a reference to the target patient
