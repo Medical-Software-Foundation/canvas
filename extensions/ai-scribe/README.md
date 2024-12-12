@@ -2,31 +2,16 @@
 
 ## Overview
 
-The AI Scribe Transcript Parser Plugin is designed to interpret the output of AI medical scribes. 
-It processes `CLIPBOARD_COMMAND__POST_INSERTED_INTO_NOTE` events and parses their content into commands within a note.
+The Any Scribe Extension enables organizations to streamline operational efficiency in using an AI scribe alongside Canvas. The extension interprets output created by an AI scribes into Canvas commands within a note. In the process of creating Canvas commands, the extension also parses the content of the AI scribe output into the associated commands. Commands created by the Any Scribe retain all of the same properties of user created commands. To trigger the Any Scribe Extension when installed in a Canvas instance, a user can simply paste the output into a new line in a note.
+
+The Any Scribe Extension utilizies the `CLIPBOARD_COMMAND__POST_INSERTED_INTO_NOTE` event.
 
 ---
 
 ## Installation
 
-Follow these steps to install the plugin:
-
-1. Install the package:
-   ```bash
-   pip install .
-   ```
-
-2. Register the plugin with your Canvas instance:
    ```bash
    canvas install ai_scribe
    ```
 
----
 
-## Running Tests
-
-Ensure the plugin functions as expected by running the test suite:
-
-```bash
-pytest .
-```
