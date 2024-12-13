@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.3.1",
-    "plugin_version": "0.0.12",
+    "plugin_version": "0.0.13",
     "name": "bridge",
     "description": "Bridge integration for Canvas",
     "components": {
