@@ -39,25 +39,18 @@ class BridgePatientSync(BaseProtocol):
         log.info(f'>>> BridgePatientSync.compute {EventType.Name(event_type)} for {canvas_patient_id}')
 
         http = Http()
-        log.info('>>> Fetching Bridge patient')
-        get_bridge_patient = http.get(
-            f'{self.bridge_api_base_url}/patients/{canvas_patient_id}',
-            headers=self.bridge_request_headers
-        )
-        log.info(f'>>> Received response with status {get_bridge_patient.status_code}')
 
         bridge_patient_id = None
-        if get_bridge_patient.status_code == 200:
-            log.info(f'>>> Found Bridge patient with id {bridge_patient_id}')
-            bridge_patient_id = get_bridge_patient.json()['id']
-        
-        if bridge_patient_id and event_type == EventType.PATIENT_CREATED:
-            log.info(f'>>> Skipping create patient; Bridge patient already exists')
-            return []
+        if event_type == EventType.PATIENT_UPDATED:
+            get_bridge_patient = http.get(
+                f'{self.bridge_api_base_url}/patients/v2/{canvas_patient_id}',
+                headers=self.bridge_request_headers
+            )
+            bridge_patient_id = get_bridge_patient.json()['id'] if get_bridge_patient.status_code == 200 else None
         
         if not bridge_patient_id and event_type == EventType.PATIENT_UPDATED:
-            log.error('>>> Missing Bridge patient ID to update; skipping')
-            return []
+            log.info('>>> Missing Bridge patient for update; trying create instead')
+            event_type = EventType.PATIENT_CREATED
         
         # Get a reference to the target patient
         canvas_patient = Patient.objects.get(id=canvas_patient_id)
@@ -75,7 +68,7 @@ class BridgePatientSync(BaseProtocol):
             # Add placeholder email when creating the Bridge patient since it's required
             bridge_payload['email'] = 'patient_' + canvas_patient.id + '@canvasmedical.com'
         
-        base_request_url = f'{self.bridge_api_base_url}/patients'
+        base_request_url = f'{self.bridge_api_base_url}/patients/v2'
         # If we have a Bridge patient id, we know this is an update, so we'll append it to the request URL
         request_url = f'{base_request_url}/{bridge_patient_id}' if bridge_patient_id else base_request_url
 
@@ -85,6 +78,10 @@ class BridgePatientSync(BaseProtocol):
             json=bridge_payload,
             headers=self.bridge_request_headers
         )
+
+        if event_type == EventType.PATIENT_CREATED and resp.status_code == 409:
+            log.info(f'>>> Bridge patient already exists for {canvas_patient_id}')
+            return []
 
         # If the post is unsuccessful, notify end users
         # TODO: implement workflow to remedy this, 
