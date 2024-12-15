@@ -1,0 +1,27 @@
+-- Retrieves detailed patient information, including name, preferred name, date of birth, address, and contact details.
+
+SELECT
+    -- Patient information
+    ap.key AS patient_key,
+    ap.first_name || ' ' || ap.last_name AS patient_name,
+    ap.nickname AS preferred_name,
+    ap.birth_date AS DOB,
+    ap.mrn AS patient_mrn,
+    ap.sex_at_birth AS birth_sex,
+
+    -- Address details
+    a.use AS address_use,
+    a.type AS address_type,
+    CONCAT_WS(' ', a.line1, a.line2, a.city || ', ' || a.state_code, a.postal_code) AS patient_address,
+
+    -- Contact details - may cause multiple rows for each patient
+    p.system AS contact_type,
+    p.use AS contact_use,
+    p.value AS contact_value,
+    p.has_consent AS contact_consent_status
+FROM
+    api_patient ap
+-- Links patients to their address records
+LEFT JOIN public.api_patientaddress a ON ap.id = a.patient_id
+-- Links patients to their contact point records
+LEFT JOIN public.api_patientcontactpoint p ON ap.id = p.patient_id;
