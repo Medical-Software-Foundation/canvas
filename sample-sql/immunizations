@@ -1,0 +1,41 @@
+-- Retrieves active patient immunization records, including patient details, CVX codes, and immunization metadata.
+
+SELECT
+    -- Patient details
+    api_patient.key,
+    api_patient.first_name,
+    api_patient.last_name,
+    date(api_patient.birth_date),
+    
+    -- Immunization coding details
+    api_immunizationcoding.code AS CVX,
+    api_immunizationcoding.display,
+    
+    -- Immunization metadata
+    date(api_immunization.created),
+    api_immunization.lot_number,
+    api_immunization.manufacturer,
+    api_immunization.exp_date_original,
+    api_immunization.sig_original
+FROM
+    api_immunization
+-- Links immunizations to their coding details (e.g., CVX codes)
+JOIN
+    api_immunizationcoding
+ON
+    api_immunization.id = api_immunizationcoding.immuniz
+-- Links immunizations to patient records
+JOIN
+    api_patient
+ON
+    api_immunization.patient_id = api_patient.id
+WHERE
+    -- Filter by the CVX coding system
+    api_immunizationcoding.system ILIKE '<http://hl7.org/fhir/sid/cvx>'
+    -- Exclude deleted immunization records
+    AND api_immunization.deleted = 'FALSE'
+    -- Include only active patients
+    AND api_patient.active = 'true'
+ORDER BY
+    -- Sort results by patient key in descending order
+    api_patient.key DESC;
