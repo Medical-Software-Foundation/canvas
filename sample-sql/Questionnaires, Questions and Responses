@@ -1,6 +1,25 @@
 -- reports on all questionnaires, the associated questions and the response options
-SELECT *
+SELECT
+    CASE
+        WHEN aq.status = 'AC' THEN 'Active'
+        WHEN aq.status = 'IN' THEN 'Inactive'
+        ELSE aq.status
+    END AS questionnaire_status,
+    aq.name as questionnaire_name,
+    aq.use_case_in_charting as command,
+    aq.scoring_function_name as custom_scoring_function,
+    aq.code_system as questionnaire_code_system,
+    aq.code as questionnaire_codingm,
+    aq.use_in_shx as questionnaire_used_socialhx,
+    aq.carry_forward as questionnaire_carryforward,
+    q.name as question_name,
+    q.code_system as question_code_system,
+    q.code as question_code,
+    ar.name as response_name,
+    ar.type as response_type,
+    ar.code_system as response_code_system,
+    ar.code as response_code
 FROM api_questionnaire aq
-LEFT JOIN public.api_questionnairequestionmap a on aq.id = a.questionnaire_id
-LEFT JOIN public.api_question q on a.question_id = q.id
-LEFT JOIN public.api_responseoptionset ar on q.response_option_set_id = ar.id
+LEFT JOIN public.api_questionnairequestionmap a ON aq.id = a.questionnaire_id
+LEFT JOIN public.api_question q ON a.question_id = q.id
+LEFT JOIN public.api_responseoptionset ar ON q.response_option_set_id = ar.id;
