@@ -1,0 +1,54 @@
+# requires Tellescope ID as external identifier
+
+from canvas_workflow_kit.constants import CHANGE_TYPE
+from canvas_workflow_kit.intervention import BannerAlertIntervention
+from canvas_workflow_kit.protocol import (
+    STATUS_DUE,
+    ClinicalQualityMeasure,
+    ProtocolResult,
+)
+
+TELLESCOPE_ID_EXTERNAL_ID_TYPE = "Tellescope"
+
+class TellescopeBannerProtocol(ClinicalQualityMeasure):
+
+    class Meta:
+        title = "Tellescope ID Banner Protocol"
+        description = "Displays a banner with a link to the patient's Tellescope Chart"
+        version = "v1.0.0"
+        types = ["Banner"]
+        compute_on_change_types = [CHANGE_TYPE.PATIENT]
+
+
+    def fetch_patient_tellescope_id(self):
+        """Fetch the patient's Tellescope ID from external identifiers."""
+        patient_external_identifiers = self.patient.patient.get("externalIdentifiers", [])
+        
+        tellescope_id = next(
+            (
+                identifier.get("value")
+                for identifier in patient_external_identifiers
+                if identifier.get("identifierType") == TELLESCOPE_ID_EXTERNAL_ID_TYPE
+            ),
+            None,
+        )
+        return tellescope_id
+
+    def compute_results(self):
+        result = ProtocolResult()
+        tellescope_id = self.fetch_patient_tellescope_id()
+
+        if tellescope_id:
+            tellescope_url = f"https://business.tellescope.com/endusers/{tellescope_id}"
+            # Narrative and link provided via href
+            tellescope_banner = BannerAlertIntervention(
+                narrative="Link to Tellescope Chart",
+                placement=["profile", "chart"],
+                intent="info",
+                href=tellescope_url,  # Functional link to the Tellescope chart
+            )
+            result.recommendations.append(tellescope_banner)
+            result.status = STATUS_DUE
+            result.due_in = -1  # Display immediately
+            
+        return result
