@@ -15,4 +15,4 @@ Bridge is a plug-and-play insurance enabler for telehealth providers.
 - Enable telehealth clinics to offer their patients insurance covered care within weeks.
 - Tap into a nationwide insurance coverage.
 - Leverage patient-facing and back office technology specifically designed for telehealth workflows.
-- End-to RCM capabilities.
+- End-to-end RCM capabilities.
