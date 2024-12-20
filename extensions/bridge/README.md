@@ -5,11 +5,11 @@
 ## Automatically sync your Canvas patients to your Bridge account
 ### Canvas + Bridge
 - The Canvas and Bridge integration extension allows customers to seamlessly sync their patients from Canvas to Bridge whenever a patient is created or updated.
-- From the UI, users can easily navigate from your patient in Canvas to your patient in Bridge.
+- From the UI, users can easily navigate from their patient in Canvas to their patient in Bridge.
 
 ### Implementation requirements
 - Bridge account and API keys
-- Canvas API credential and SDK
+- Canvas API credentials and SDK
 
 ### About Bridge
 Bridge is a plug-and-play insurance enabler for telehealth providers
