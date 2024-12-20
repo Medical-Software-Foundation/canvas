@@ -162,3 +162,8 @@ cython_debug/
 #.idea/
 
 .DS_Store
+
+# Data Migations
+# Ignore any PHI or secrets
+data-migrations/data_migrations/config.ini
+data-migrations/data_migrations/avon_migration/PHI
