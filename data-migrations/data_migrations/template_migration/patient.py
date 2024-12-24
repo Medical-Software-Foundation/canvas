@@ -1,7 +1,7 @@
-import re, pytz, arrow
+import re, pytz, arrow, csv, json
 from collections import defaultdict
 
-from customer_migrations.utils import fetch_from_json, write_to_json
+from data_migrations.utils import fetch_from_json, write_to_json
 
 def validate_date(value):
     try:
@@ -16,6 +16,24 @@ def validate_date(value):
     return False, None
 
 class PatientLoaderMixin:
+    """
+        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
+        It will confirm the headers it expects as outlined in the template and validate each column.
+        Trying to convert or confirm the formats are what we expect:
+
+        Required Formats/Values (Case Insensitive):  
+        Date of Birth: YYYY-MM-DD, YYYY-M-DD, YYYY-M-D, YYYY/MM/DD, YYYY/M/DD, YYYY/M/D, YYYY.MM.DD, YYYY.M.DD, YYYY.M.D, 
+                       MM/DD/YYYY", M/D/YYYY, M/DD/YYYY, MM-DD-YYYY, M-D-YYYY, M-DD-YYYY, MM.DD.YYYY, M.D.YYY, M.DD.YYYY
+        Sex at Birth: Male, M, Female, F, Unknown, UNK, Other, OTH  
+        State Code: 2 letter state code  
+        Postal Code: 5 digit US postal code  
+        Mobile & Home Number: 10 digit US phone number  
+        Mobile & Email Consent: Yes, Y, No, N, True, T, False, F
+        Email: Letter/Number/SpecialCharacter@domain (e.g., email-1273@email.io)  
+        Timezone: EST,EDT,ET,America/New_York,CST,CDT,CT,America/Chicago,MST,MDT,MT,America/Denver,PDT,PST,PT
+    """
+
+
     def validate_header(self, headers):
         # confirms the csv's headers are the expected list
         accepted_headers = {
@@ -33,7 +51,7 @@ class PatientLoaderMixin:
             "Country",
             "Mobile Phone Number",
             "Mobile Text Consent",
-            "Home Phone Number"
+            "Home Phone Number",
             "Email",
             "Email Consent",
             "Timezone",
@@ -44,7 +62,7 @@ class PatientLoaderMixin:
             raise ValueError(f"Incorrect headers! These headers were missing {missing_headers} from the supplied csv with headers: {headers}")
 
     def validate_required(self, value, field_name):
-        # validates a required field is not empty
+        """ validates a required field is not empty """
         if not value:
             return False, f"Patient is missing {field_name}"
         return True, value
@@ -75,6 +93,8 @@ class PatientLoaderMixin:
         pass
 
     def validate_required_birth_date(self, value, _):
+        """ Validate a date"""
+
         # accept YYYY-MM-DD, YYYY-M-DD, YYYY-M-D, YYYY/MM/DD, YYYY/M/DD, YYYY/M/D, YYYY.MM.DD, YYYY.M.DD, YYYY.M.D, 
         # MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYY", "M.DD.YYYY
         if not value:
@@ -87,7 +107,7 @@ class PatientLoaderMixin:
         return valid, date_value
 
     def validate_state_code(self, value, _):
-        # accept only the 2 character state codes
+        """ accept only the 2 character state codes """
         if not value:
             return True, value
         
@@ -97,7 +117,7 @@ class PatientLoaderMixin:
         return False, f"Invalid state code: {value}"
 
     def validate_postal_code(self, value, _):
-        # finds the first 5 digits for postal code
+        """ finds the first 5 digits for postal code """
         if not value:
             return True, value
             
@@ -107,9 +127,12 @@ class PatientLoaderMixin:
         return False, f"Invalid postal code: {value}"
 
     def validate_phone_number(self, value, _):
-        # removes any non digits and validates the length is 10
+        """ removes any non digits and validates the length is 10 """
         if not value:
             return True, value
+
+        if value.startswith('+1'):
+            value = value[2:]
             
         number = [i for i in value if i.isdigit()]
         if len(number) == 10:
@@ -117,7 +140,11 @@ class PatientLoaderMixin:
         return False, f"Invalid phone number: {value}"
 
     def validate_consent(self, value, field):
-        # accept TRUE, FALSE, true, false, T, F, t, f
+        """ Validates a boolean fields 
+
+            accept TRUE, FALSE, true, false, T, F, t, f
+        """
+
         if not value:
             return True, False
             
@@ -137,6 +164,7 @@ class PatientLoaderMixin:
             return False, f"Invalid true/false {field} given: {value}"
 
     def validate_email(self, value, _):
+        """ Validate an email format """
         if not value:
             return True, value
             
@@ -147,6 +175,7 @@ class PatientLoaderMixin:
         return True, value
 
     def validate_timezone(self, value, _):
+        """ Validate a timezone value """
         if not value:
             return True, value
 
@@ -171,11 +200,14 @@ class PatientLoaderMixin:
         except KeyError:
             pass
             
+        # if its not part of the expected values, just make sure it is a valid timezone with the pytz library
         if value in pytz.all_timezones:
             return True, value
         return False, f"Invalid timezone given: {value}"
 
     def validate_address(self, row):
+        """ Validate address elements """
+
         # if at least one address field is supplied, we need all 
         required_fields = ["Address Line 1", "City", "State", "Postal Code"]
         if any([row[i] for i in ["Address Line 1",
@@ -186,49 +218,42 @@ class PatientLoaderMixin:
             if missing_fields := [f for f in ["Address Line 1", "City", "State", "Postal Code"] if not row[f]]:
                 return f"Address detected for patient but missing some required fields ({missing_fields})"
 
-    def validate(self, filename, delimiter='|'):
-        """ Loop throw the CSV file to validate each row has the correct columns and values
-
-            Required Formats/Values (Case Insensitive):  
-            Date of Birth: YYYY-MM-DD, YYYY-M-DD, YYYY-M-D, YYYY/MM/DD, YYYY/M/DD, YYYY/M/D, YYYY.MM.DD, YYYY.M.DD, YYYY.M.D, 
-                           MM/DD/YYYY", M/D/YYYY, M/DD/YYYY, MM-DD-YYYY, M-D-YYYY, M-DD-YYYY, MM.DD.YYYY, M.D.YYY, M.DD.YYYY
-            Sex at Birth: Male, M, Female, F, Unknown, UNK, Other, OTH  
-            State Code: 2 letter state code  
-            Postal Code: 5 digit US postal code  
-            Mobile & Home Number: 10 digit US phone number  
-            Mobile & Email Consent: Yes, Y, No, N, True, T, False, F
-            Email: Letter/Number/SpecialCharacter@domain (e.g., email-1273@email.io)  
-            Timezone: EST,EDT,ET,America/New_York,CST,CDT,CT,America/Chicago,MST,MDT,MT,America/Denver,PDT,PST,PT
-
+    def validate(self, delimiter='|'):
+        """ 
+            Loop throw the CSV file to validate each row has the correct columns and values
+            Append validated rows to a list to use to load. 
+            Export errors to a file/console
+            
         """
         validated_rows = []
         errors = defaultdict(list)
-        with open(filename, "r") as patient_file:
+        with open(self.patient_csv_file, "r") as patient_file:
             reader = csv.DictReader(patient_file, delimiter=delimiter)
 
-            validate_header(reader.fieldnames)
+            self.validate_header(reader.fieldnames)
 
             validations = {
-                "First Name": validate_required,
-                "Last Name": validate_required,
-                "Date of Birth": validate_required_birth_date,
-                "Sex at Birth": validate_required_sex_at_birth,
-                "State": validate_state_code,
-                "Postal Code": validate_postal_code,
-                "Home Phone Numer": validate_phone_number,
-                "Mobile Phone Number": validate_phone_number,
-                "Mobile Text Consent": validate_consent,
-                "Email": validate_email,
-                "Email Consent": validate_consent,
-                "Timezone": validate_timezone,
+                "First Name": self.validate_required,
+                "Last Name": self.validate_required,
+                "Date of Birth": self.validate_required_birth_date,
+                "Sex at Birth": self.validate_required_sex_at_birth,
+                "State": self.validate_state_code,
+                "Postal Code": self.validate_postal_code,
+                "Home Phone Number": self.validate_phone_number,
+                "Mobile Phone Number": self.validate_phone_number,
+                "Mobile Text Consent": self.validate_consent,
+                "Email": self.validate_email,
+                "Email Consent": self.validate_consent,
+                "Timezone": self.validate_timezone,
             }
             
             for row in reader:
+                error = False
 
-                error_msg = validate_address(row)
+                error_msg = self.validate_address(row)
                 if error_msg:
                     errors[f"{row['First Name']} {row['Last Name']}"].append(error_msg)
-                
+                    error = True
                 
                 for field, validator_func in validations.items():
                     valid, value = validator_func(row[field].strip(), field)
@@ -236,15 +261,18 @@ class PatientLoaderMixin:
                         row[field] = value
                     else:
                         errors[f"{row['First Name']} {row['Last Name']}"].append(value)
+                        error = True
 
-                validated_rows.append(row)
+                if not error:
+                    validated_rows.append(row)
 
         if errors:
-            print(json.dumps(errors, indent=4))
+            print(f"Some rows contained errors, please see {self.validation_error_file}.")
+            write_to_json(self.validation_error_file, errors)
         else:
             print('All rows have passed validation!')
 
-
+        return validated_rows
 
 
     def load(self, validated_rows, system_unique_identifier):
@@ -253,11 +281,15 @@ class PatientLoaderMixin:
             loops through to send them off the FHIR Patient Create
 
             Outputs a JSON map of the patient identifier to canvas key
+            If any patient error, the error message will output to the errored file
         """
 
         patient_map = fetch_from_json(self.patient_map_file) 
 
+        total_count = len(validated_rows)
         for i, row in enumerate(validated_rows):
+            print(f'Ingesting Patient ({i+1}/{total_count})')
+
             patient_identifier = ""
             identifiers = []
             for j in range(1, 4):
@@ -359,10 +391,19 @@ class PatientLoaderMixin:
 
             # print(json.dumps(payload, indent=2))
             
-            patient_key = self.fumage_helper.perform_create("Patient", payload)
-            print(f"Successfully made ({i+1} {row['First Name']} {row['Last Name']}: https://{fumage_helper.environment}.canvasmedical.com/patient/{patient_key}")    
+            try:
+                patient_key = self.fumage_helper.perform_create(payload)
+                print(f"    Successfully made {row['First Name']} {row['Last Name']}: https://{self.environment}.canvasmedical.com/patient/{patient_key}")    
+                
+                if patient_identifier:
+                    patient_map[patient_identifier] = patient_key
+                    write_to_json(self.patient_map_file, patient_map)
+            except Exception as e:
+                # if any FHIR request failed, output to file to go back and fix
+                e = str(e).replace('\n', '')
+                with open(self.patient_error_file, 'a') as errored:
+                    print(' Errored patient outputing error message to file...')
+                    errored.write(f"{patient_identifier}|{row['First Name']}|{row['Last Name']}|{e}\n")
 
-            if patient_identifier:
-                patient_map[patient_identifier] = patient_key
-                write_to_json(self.patient_map_file, patient_map)
+
 

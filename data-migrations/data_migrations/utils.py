@@ -1,4 +1,4 @@
-import csv, json, pdfkit, requests
+import csv, json, requests
 from urllib.parse import urlencode
 from decouple import Config, RepositoryIni
 
@@ -82,7 +82,7 @@ def read_json_file(path_to_file, is_fhir=False, list_attribute=None):
     return records
 
 def get_ontologies_token(environment):
-    ini = RepositoryIni('customer_migratons/config.ini')
+    ini = RepositoryIni('../config.ini')
     ini.SECTION = environment
     config = Config(ini)
 
@@ -93,12 +93,7 @@ def load_fhir_settings(environment):
     """
         Used to authenticate 
     """
-    import os
-
-    # Get the current working directory
-    cwd = os.getcwd()
-    print(cwd)
-    ini = RepositoryIni('customer-migrations/customer_migrations/config.ini')
+    ini = RepositoryIni('../config.ini')
     ini.SECTION = environment
     config = Config(ini)
 
