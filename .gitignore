@@ -168,3 +168,4 @@ cython_debug/
 data-migrations/data_migrations/config.ini
 data-migrations/data_migrations/avon_migration/PHI
 data-migrations/data_migrations/avon_migration/results/PHI
+data-migrations/data_migrations/avon_migration/PHI
