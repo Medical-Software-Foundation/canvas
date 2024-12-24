@@ -295,7 +295,7 @@ class PatientLoaderMixin:
             for j in range(1, 4):
                 system = row.get(f'Identifier System {j}')
                 value = row.get(f'Identifier Value {j}')
-                if system and row:
+                if system and value:
                     identifiers.append(
                         {
                             "system": row[f'Identifier System {j}'],
@@ -304,8 +304,6 @@ class PatientLoaderMixin:
                     )
                     if system == system_unique_identifier:
                         patient_identifier = value
-                else:
-                    break
 
             if patient_identifier and patient_identifier in patient_map:
                 print('  Skipping...patient already ingested')
