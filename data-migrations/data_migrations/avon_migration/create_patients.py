@@ -23,9 +23,9 @@ class PatientLoader(PatientLoaderMixin):
 
     def __init__(self, environment, *args, **kwargs):
         self.patient_map_file = 'PHI/patient_id_map.json'
-        self.patient_csv_file = 'PHI/patients_valid.csv'
+        self.csv_file = 'PHI/patients_valid.csv'
         self.validation_error_file = 'results/PHI/errored_patient_validation.json'
-        self.patient_error_file = 'results/PHI/errored_patients.csv'
+        self.error_file = 'results/PHI/errored_patients.csv'
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
         self.avon_helper = AvonHelper(environment)
