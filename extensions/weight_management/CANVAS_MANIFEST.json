@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "weight_management",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "protocols": [
+            {
+                "class": "weight_management.protocols.glp1_weight_calculation_banner.py:GLP1WeightCalculationBanner",
+                "description": "Display the patient’s highest weight before starting a GLP-1 and calculate the patient’s BMI at that time. Dynamically display the amount of weight loss.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["STARTING_WEIGHT_QUESTION_CODE"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
