@@ -162,3 +162,9 @@ cython_debug/
 #.idea/
 
 .DS_Store
+
+# Data Migations
+# Ignore any PHI or secrets
+*/config.ini
+*/PHI
+
