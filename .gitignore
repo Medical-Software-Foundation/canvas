@@ -165,9 +165,6 @@ cython_debug/
 
 # Data Migations
 # Ignore any PHI or secrets
-data-migrations/data_migrations/config.ini
-data-migrations/data_migrations/avon_migration/PHI
-data-migrations/data_migrations/avon_migration/results/PHI
-data-migrations/data_migrations/avon_migration/PHI
-data-migrations/data_migrations/athena_migration/PHI
+*/config.ini
+*/PHI
 
