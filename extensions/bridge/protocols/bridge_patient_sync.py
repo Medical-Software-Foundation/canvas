@@ -36,10 +36,15 @@ class BridgePatientSync(BaseProtocol):
     
     @property
     def bridge_patient_metadata(self):
-        return {
-            'canvasPatientId': self.target,
-            'canvasUrl': self.secrets['CANVAS_BASE_URL'],
+        metadata = {
+            'canvasPatientId': self.target
         }
+
+        canvas_url = self.secrets['CANVAS_BASE_URL']
+        if canvas_url:
+            metadata['canvasUrl'] = canvas_url
+
+        return metadata
 
     def compute(self):
         canvas_patient_id = self.target
