@@ -6,7 +6,7 @@
     "components": {
         "protocols": [
             {
-                "class": "weight_management.protocols.glp1_weight_calculation_banner.py:GLP1WeightCalculationBanner",
+                "class": "weight_management.protocols.glp1_weight_calculation_banner:GLP1WeightCalculationBanner",
                 "description": "Display the patient’s highest weight before starting a GLP-1 and calculate the patient’s BMI at that time. Dynamically display the amount of weight loss.",
                 "data_access": {
                     "event": "",
