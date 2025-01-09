@@ -154,7 +154,8 @@ class MappingMixin:
 
     def map_patient(self, patient):
         # make sure patient is in the mapped patients
-        if not patient_key := self.patient_map.get(patient):
+        patient_key = self.patient_map.get(patient)
+        if not patient_key:
             raise Exception(f'    Ignoring due no patient map with {patient}')
 
         return patient_key
@@ -164,8 +165,8 @@ class MappingMixin:
         if not provider:
             return
 
-        if hasattr(self, doctor_map):
-            practitioner_key = self.doctor_map.get(str(practitioner_key))
+        if hasattr(self, "doctor_map"):
+            practitioner_key = self.doctor_map.get(str(provider))
 
             if not practitioner_key:
                 raise Exception(f'    Ignoring due no doctor map with {provider}')
@@ -175,7 +176,7 @@ class MappingMixin:
 
     def map_location(self, location):
         # map the location if needed
-        if hasattr(self, location_map):
+        if hasattr(self, "location_map"):
             location_key = self.location_map.get(str(location))
 
             if not location_key:
@@ -183,3 +184,19 @@ class MappingMixin:
 
             return location_key
         return location
+
+class FileWriterMixin:
+
+    def ignore_row(self, _id, ignore_reason):
+        ignore_reason = str(ignore_reason).replace('\n', '')
+        with open(self.ignore_file, 'a') as file:
+            print(f' Ignoring row due to "{ignore_reason}')
+            file.write(f"{_id}|{ignore_reason}\n")
+
+    def error_row(self, data, error, file=None):
+        """If anything fails, output to file to go back and fix"""
+        error = str(error).replace('\n', '')
+        with open(file or self.error_file, 'a') as file:
+            print(' Errored row outputing error message to file...')
+            file.write(f"{data}|{error}\n")
+

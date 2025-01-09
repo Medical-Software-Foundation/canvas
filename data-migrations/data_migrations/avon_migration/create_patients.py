@@ -30,7 +30,7 @@ class PatientLoader(PatientLoaderMixin):
         self.fumage_helper = load_fhir_settings(environment)
         self.avon_helper = AvonHelper(environment)
 
-    def make_patient_csv(self, delimiter='|'):
+    def make_csv(self, delimiter='|'):
         """
             Fetch the Patient Records from Avon API
             and convert the JSON into a CSV with the columns that match
@@ -114,10 +114,10 @@ if __name__ == '__main__':
 
     # Make the Avon API call to their List Patients endpoint and convert the JSON return 
     # to the template CSV loader
-    loader.make_patient_csv(delimiter=delimiter)
+    loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
-    valid_patient_rows = loader.validate(delimiter=delimiter)
+    valid_rows = loader.validate(delimiter=delimiter)
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    loader.load(valid_patient_rows, system_unique_identifier='Avon ID')
+    loader.load(valid_rows, system_unique_identifier='Avon ID')

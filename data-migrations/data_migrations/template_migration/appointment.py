@@ -2,9 +2,9 @@ import re, pytz, arrow, csv, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from utils import validate_header, validate_required, validate_datetime, MappingMixin
+from data_migrations.template_migration.utils import validate_header, validate_required, validate_datetime, MappingMixin, FileWriterMixin
 
-class AppointmentLoaderMixin(MappingMixin):
+class AppointmentLoaderMixin(MappingMixin, FileWriterMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
         It will confirm the headers it expects as outlined in the template and validate each column.
@@ -61,7 +61,6 @@ class AppointmentLoaderMixin(MappingMixin):
                     "End Date/Time",
                     "Duration",
                     "Provider"
-
                 }  
             )
 
@@ -88,7 +87,7 @@ class AppointmentLoaderMixin(MappingMixin):
                         errors[key].append(value)
                         error = True
 
-                valid, field_or_error_msg = validate_end_time(row)
+                valid, field_or_error_msg = self.validate_end_time(row)
                 if not valid:
                     errors[key].append(field_or_error_msg)
                     error = True
@@ -114,7 +113,7 @@ class AppointmentLoaderMixin(MappingMixin):
         free_text = row['Reason for Visit Text']
         reason_code = {}
 
-        if hasattr(self, rfv_map):
+        if hasattr(self, "rfv_map"):
             rfv = self.rfv_map.get(str(rfv_code))
 
         if rfv_code:
@@ -133,7 +132,7 @@ class AppointmentLoaderMixin(MappingMixin):
         return reason_code
 
 
-    def load(self, validated_rows, system_unique_identifier):
+    def load(self, validated_rows, system_unique_identifier, end_date_time_frame=None):
         """
             Takes the validated rows from self.validate() and 
             loops through to send them off the FHIR Create
@@ -142,15 +141,21 @@ class AppointmentLoaderMixin(MappingMixin):
             If any  error, the error message will output to the errored file
         """
 
-        patient_map = fetch_from_json(self.patient_map_file) 
+        end_date_time_frame = arrow.get(end_date_time_frame) if end_date_time_frame else None 
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
+            print(row)
 
-            if row['id'] in self.done_records:
-                print(' Already did record')
+            if row['ID'] in self.done_records or row['ID'] in self.ignore_records:
+                print(' Already looked at record')
+                continue
+
+            start_time = arrow.get(row["Start Date / Time"])
+            if end_date_time_frame and start_time > end_date_time_frame:
+                self.ignore_row(row['ID'], f"Ignoring due to start time of {start_time.isoformat()}")
                 continue
 
             patient = row['Patient Identifier']
@@ -161,11 +166,8 @@ class AppointmentLoaderMixin(MappingMixin):
                 practitioner_key = self.map_provider(row['Provider'])
                 location = self.map_location(row['Location'])
             except BaseException as e:
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(f' {e}')
-                    errored.write(f"{row['id']}|{row['patient']}|{patient_key}|{e}\n")
-                    continue
+                self.ignore_row(row['ID'], e)
+                continue
 
 
             payload = {
@@ -187,8 +189,8 @@ class AppointmentLoaderMixin(MappingMixin):
                 "supportingInformation":[
                     {"reference": f"Location/{location}"}
                 ],
-                "start": arrow.get("Start Date / Time"),
-                "end": arrow.get("End Date/Time"),
+                "start": start_time.isoformat(),
+                "end": arrow.get(row["End Date/Time"]).isoformat(),
                 "participant":[
                     {
                         "actor": {"reference": f"Patient/{patient_key}"},
@@ -214,18 +216,15 @@ class AppointmentLoaderMixin(MappingMixin):
                     "address": meeting_link
                 }
 
-            # print(json.dumps(payload, indent=2))
+            #print(json.dumps(payload, indent=2))
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
                 with open(self.done_file, 'a') as done:
                     print(' Complete Apt')
                     done.write(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}\n")
-            except BaseException as e:            
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(' Errored Apt')
-                    errored.write(f"{row['ID']}|{patient}|{patient_key}|{e}\n")
+            except BaseException as e:
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
                 continue 
 
 
@@ -234,9 +233,5 @@ class AppointmentLoaderMixin(MappingMixin):
                 try:                
                     self.fumage_helper.check_in_and_lock_appointment(canvas_id)
                 except BaseException as e:
-                    e = str(e).replace('\n', '')
-                    with open(self.errored_note_state_event_file, 'a') as errored_state:
-                        print(' Errored NSCE')
-                        errored_state.write(f"{row['ID']}|{patient}|{patient_key}|{e}\n")
-        
+                    self.error_row(f"{row['ID']}|{patient}|{patient_key}", e, file=self.errored_note_state_event_file)
         

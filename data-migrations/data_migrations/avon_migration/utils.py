@@ -1,5 +1,6 @@
-import csv, requests
+import csv, requests, os
 from decouple import Config, RepositoryIni
+from data_migrations.utils import fetch_from_json, write_to_json
 
 class AvonHelper:
     """
@@ -14,7 +15,7 @@ class AvonHelper:
         self.base_url = f"https://{self.avon_base_subdomain}.avonhealth.com/"
         self.avon_header = self.get_avon_headers()
 
-    def fetch_records(self, data_type, param_string=''):
+    def fetch_records(self, data_type, json_file, param_string=''):
         """ Performs a Avon API Call to fetch data with a certain 
         URL and search parameters
         
@@ -22,11 +23,15 @@ class AvonHelper:
         is an all or nothing response
         """
         print(f'Fetching records for {data_type}')
+
+        if os.path.isfile(json_file):
+            return fetch_from_json(json_file)
         
         url = f'{self.base_url}{data_type}?{param_string}'
         response = requests.get(url, headers=self.avon_header)
         try:
-            return response.json()['data']
+            data = response.json()['data']
+            write_to_json(json_file, data)
         except:
             raise Exception(response.text)
 
