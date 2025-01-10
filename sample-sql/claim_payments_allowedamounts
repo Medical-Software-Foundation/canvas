@@ -1,0 +1,52 @@
+-- This report displays claim payment data including the procedure codes, total amount paid and includes the allowed amount provided by the payor
+
+SELECT
+    -- Patient details
+    ap.first_name || ' ' || ap.last_name AS patient_name,
+    ap.key AS patient_key,
+
+    -- Claim details
+    c.id AS claim_id,
+    c.account_number AS claim_account,
+    c.externally_exposable_id AS claim_external_id,
+    q.proc_code AS procedure_code,
+    q.display AS display_text,
+    q.units AS units,
+
+    -- Payment collection details
+    pc.check_number AS check_number,
+    pc.check_date AS check_date,
+
+    -- Aggregated payment amount
+    SUM(nlp.amount) AS total_amount,
+
+    -- Allowed amount
+    SUM(lia.amount) AS total_allowed_amount
+FROM
+    quality_and_revenue_claim c
+LEFT JOIN public.quality_and_revenue_claimlineitem q 
+    ON c.id = q.claim_id
+LEFT JOIN public.quality_and_revenue_baseposting bp 
+    ON c.id = bp.claim_id
+LEFT JOIN public.quality_and_revenue_lineitemallowed lia 
+    ON q.id = lia.billing_line_item_id
+LEFT JOIN quality_and_revenue_newlineitempayment nlp 
+    ON nlp.posting_id = bp.id
+LEFT JOIN quality_and_revenue_paymentcollection pc 
+    ON bp.payment_collection_id = pc.id
+LEFT JOIN public.api_note an 
+    ON c.note_id = an.id
+LEFT JOIN public.api_patient ap 
+    ON an.patient_id = ap.id
+GROUP BY
+    ap.first_name,
+    ap.last_name,
+    ap.key,
+    c.id,
+    c.account_number,
+    c.externally_exposable_id,
+    q.proc_code,
+    q.display,
+    q.units,
+    pc.check_number,
+    pc.check_date;
