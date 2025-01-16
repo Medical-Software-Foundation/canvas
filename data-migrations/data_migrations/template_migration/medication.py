@@ -2,7 +2,7 @@ import re, pytz, arrow, csv, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from utils import validate_header, validate_required, validate_date, validate_enum, MappingMixin
+from data_migrations.template_migration.utils import validate_header, validate_required, validate_date, validate_enum, MappingMixin
 
 class MedicationLoaderMixin(MappingMixin):
     """
@@ -14,6 +14,93 @@ class MedicationLoaderMixin(MappingMixin):
             Patient Identifier: Canvas key, unique identifier defined on the demographics page 
             Status: Active, Resolved
     """
+    def map(self):
+        _map = fetch_from_json(self.med_mapping_file)
+        total = len(_map)
+        for i, (key, item) in enumerate(_map.items()):
+            name, code = key.split('|')
+            print()
+            print(f'{key} ({i+1}/{total})')
+            if item:
+                continue
+
+            options = []
+            name_list = name.split(' ')
+            found_coding = None
+
+            if code:
+                search_parameters = {
+                    'code': f'http://www.nlm.nih.gov/research/umls/rxnorm|{code}'
+                }
+                
+                response = self.fumage_helper.search("Medication", search_parameters)
+                
+                if response.status_code != 200:
+                    raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
+                    
+                response_json = response.json()
+                if response_json.get('total') == 1:
+                    _map[key] = response_json['entry'][0]['resource']['code']['coding']
+                    print('1', _map[key])
+                    continue
+                elif response_json.get('total') != 0:
+                    found = False
+                    for entry in response_json['entry']:
+                        coding = entry['resource']['code']['coding']
+                        if coding[0]['display'].split(' ')[0].lower() == name_list[0].lower():
+                            _map[key] = coding
+                            print('2', coding)
+                            found = True
+                            found_coding = True
+                            break
+                    if not found:
+                        for e in response_json.get('entry', []):
+                            c = e['resource']['code']['coding']
+                            if c not in options:
+                                options.append(c)
+
+                    else:
+                        continue
+
+            for i in reversed(range(len(name_list))):
+                text = " ".join(name_list[:i+1]).strip()
+                if text:
+                    search_parameters = {
+                        '_text': " ".join(name_list[:i+1])
+                    }
+                
+                    response = self.fumage_helper.search("Medication", search_parameters)
+                    if response.status_code != 200:
+                        raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
+                    
+                    response_json = response.json()
+                    if response_json.get('total') == 1: 
+                        coding = response_json['entry'][0]['resource']['code']['coding']
+                        if any([c['code'] == code for c in coding if c['system'] == 'http://www.nlm.nih.gov/research/umls/rxnorm']):
+                            _map[key] = coding
+                            print(coding)
+                            found_coding = True
+                            continue
+                    elif response_json.get('total') > 1:
+                        for entry in response_json['entry']:
+                            coding = entry['resource']['code']['coding']
+                            if coding[0]['display'].lower() == name.lower():
+                                _map[key] = coding
+                                print(coding)
+                                found_coding = True                               
+                                break
+                    if not found_coding:
+                        for e in response_json.get('entry', []):
+                            c = e['resource']['code']['coding']
+                            if c not in options:
+                                options.append(c)
+
+
+            if not _map[key]:
+                print(f'Giving all options, {options}')
+                _map[key] = options
+
+        write_to_json(self.med_mapping_file, _map)
 
     def validate(self, delimiter='|'):
         """ 
