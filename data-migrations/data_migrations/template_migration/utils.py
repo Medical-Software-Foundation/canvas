@@ -1,11 +1,16 @@
-import arrow 
+import arrow
+import pytz
+import re
+
 
 def validate_date(value, field_name):
+    if not value:
+        return True, ""
     try:
         return True, arrow.get(value).format("YYYY-MM-DD")
     except:
         for format in ["MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYYY", "M.DD.YYYY"]:
-            try: 
+            try:
                 return True, arrow.get(value, format).format("YYYY-MM-DD")
             except:
                 pass
@@ -13,6 +18,8 @@ def validate_date(value, field_name):
     return False, f"Invalid {field_name} format: {value}"
 
 def validate_datetime(value, field_name):
+    if not value:
+        return True, ""
     try:
         return True, arrow.get(value).isoformat()
     except:
@@ -25,7 +32,7 @@ def validate_required(value, field_name):
     return True, value
 
 def validate_header(headers, accepted_headers):
-    # confirms the csv's headers are the expected list          
+    # confirms the csv's headers are the expected list
     if missing_headers := [h for h in accepted_headers if h not in headers]:
         raise ValueError(f"Incorrect headers! These headers were missing {missing_headers} from the supplied csv with headers: {headers}")
 
@@ -33,7 +40,7 @@ def validate_state_code(value, field_name):
     """ accept only the 2 character state codes """
     if not value:
         return True, value
-    
+
     accepted_states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
     if value in accepted_states:
         return True, value
@@ -43,7 +50,7 @@ def validate_postal_code(value, field_name):
     """ finds the first 5 digits for postal code """
     if not value:
         return True, value
-        
+
     first_five_digits = [i for i in value if i.isdigit()][:5]
     if len(first_five_digits) == 5:
         return True, "".join(first_five_digits)
@@ -56,21 +63,21 @@ def validate_phone_number(value, field_name):
 
     if value.startswith('+1'):
         value = value[2:]
-        
+
     number = [i for i in value if i.isdigit()]
     if len(number) == 10:
         return True, "".join(number)
     return False, f"Invalid {field_name}: {value}"
 
 def validate_boolean(value, field_name):
-    """ Validates a boolean fields 
+    """ Validates a boolean field
 
         accept TRUE, FALSE, true, false, T, F, t, f
     """
 
     if not value:
         return True, False
-        
+
     mapping = {
         "TRUE": True,
         "T": True,
@@ -91,9 +98,9 @@ def validate_email(value, field_name):
     """ Validate an email format """
     if not value:
         return True, value
-        
+
     match = re.match(r"^(?!\.)[\w!#$%&'*+/=?^`{|}~.-]+(?<!\.)@[a-zA-Z\d.-]+\.[a-zA-Z]{2,}$", value.lower())
-   
+
     if not match:
       return False, f"Invalid {field_name}: {value}"
     return True, value
@@ -123,7 +130,7 @@ def validate_timezone(value, field_name):
         return True, mapping[value.upper()]
     except KeyError:
         pass
-        
+
     # if its not part of the expected values, just make sure it is a valid timezone with the pytz library
     if value in pytz.all_timezones:
         return True, value
@@ -132,17 +139,18 @@ def validate_timezone(value, field_name):
 def validate_address(row):
     """ Validate address elements """
 
-    # if at least one address field is supplied, we need all 
+    # if at least one address field is supplied, we need all
     required_fields = ["Address Line 1", "City", "State", "Postal Code"]
     if any([row[i] for i in ["Address Line 1",
                             "Address Line 2",
                             "City",
                             "State",
-                            "Postal Code"]]):                
+                            "Postal Code"]]):
         if missing_fields := [f for f in ["Address Line 1", "City", "State", "Postal Code"] if not row[f]]:
             return f"Address detected for row but missing some required fields ({missing_fields})"
 
-def validate_enum(value, possible_options):
+def validate_enum(value, field, **kwargs):
+    possible_options = kwargs.get("possible_options")
     if not value:
         return True, value
 
@@ -200,3 +208,7 @@ class FileWriterMixin:
             print(' Errored row outputing error message to file...')
             file.write(f"{data}|{error}\n")
 
+    def done_row(self, data, file=None):
+        with open(file or self.done_file, 'a') as done:
+            print(' Complete')
+            done.write(f"{data}\n")

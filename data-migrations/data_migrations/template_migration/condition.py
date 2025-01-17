@@ -2,36 +2,45 @@ import re, pytz, arrow, csv, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from utils import validate_header, validate_required, validate_date, validate_enum, MappingMixin
+from data_migrations.template_migration.note import NoteMixin
+from data_migrations.template_migration.utils import (
+    validate_header,
+    validate_required,
+    validate_date,
+    validate_enum,
+    MappingMixin,
+    FileWriterMixin,
+)
 
-class ConditionLoaderMixin(MappingMixin):
+
+class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
     """
-        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
+        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect:
 
-        Required Formats/Values (Case Insensitive):  
+        Required Formats/Values (Case Insensitive):
             Patient Identifier: Canvas key, unique identifier defined on the demographics page
             Clinical Status: Active, Resolved
             ICD-10 Code: Conditions with codes that are not ICD-10 will not render properly in Canvas
-            Onset Date: MM/DD/YYYY or YYYY-MM-DD  
-            Resolved Date: MM/DD/YYYY or YYYY-MM-DD  
+            Onset Date: MM/DD/YYYY or YYYY-MM-DD
+            Resolved Date: MM/DD/YYYY or YYYY-MM-DD
             Recorded Provider: Staff Canvas key.  If omitted, defaults to Canvas Bot
     """
 
     def validate(self, delimiter='|'):
-        """ 
+        """
             Loop throw the CSV file to validate each row has the correct columns and values
-            Append validated rows to a list to use to load. 
+            Append validated rows to a list to use to load.
             Export errors to a file/console
-            
+
         """
         validated_rows = []
         errors = defaultdict(list)
         with open(self.csv_file, "r") as file:
             reader = csv.DictReader(file, delimiter=delimiter)
 
-            validate_header(reader.fieldnames, 
+            validate_header(reader.fieldnames,
                 accepted_headers = {
                     "ID",
                     "Patient Identifier",
@@ -42,7 +51,7 @@ class ConditionLoaderMixin(MappingMixin):
                     "Resolved Date",
                     "Recorded Provider"
 
-                }  
+                }
             )
 
             validations = {
@@ -53,16 +62,16 @@ class ConditionLoaderMixin(MappingMixin):
                 "Resolved Date": validate_date,
                 "Clinical Status": (validate_enum, {"possible_options": ['active', 'resolved']})
             }
-            
+
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
-                
+
                 for field, validator_func in validations.items():
                     kwargs = {}
-                    if isinstance(validator_func, tuple): 
+                    if isinstance(validator_func, tuple):
                         validator_func, kwargs = validator_func
-                    
+
                     valid, value = validator_func(row[field].strip(), field, **kwargs)
                     if valid:
                         row[field] = value
@@ -81,23 +90,23 @@ class ConditionLoaderMixin(MappingMixin):
 
         return validated_rows
 
-    def load(self, validated_rows, system_unique_identifier):
+    def load(self, validated_rows):
         """
-            Takes the validated rows from self.validate() and 
+            Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
 
-            Outputs to CSV to keep track of records 
+            Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
 
-        self.patient_map = fetch_from_json(self.patient_map_file) 
+        self.patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
-        print(f'      Found {len(validated_rows)} appointments')
+        print(f'      Found {len(validated_rows)} records')
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
 
-            if row['id'] in self.done_records:
+            if row['ID'] in self.done_records:
                 print(' Already did record')
                 continue
 
@@ -107,20 +116,20 @@ class ConditionLoaderMixin(MappingMixin):
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
                 practitioner_key = self.map_provider(row['Recorded Provider'])
+                note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key)
             except BaseException as e:
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(f' {e}')
-                    errored.write(f"{row['id']}|{row['patient']}|{patient_key}|{e}\n")
-                    continue
-
+                self.error_row(
+                    f"{row['ID']}|{patient}|{patient_key}",
+                    e
+                )
+                continue
 
             payload = {
                 "resourceType": "Condition",
                 "extension": [
                     {
                         "url": "http://schemas.canvasmedical.com/fhir/extensions/note-id",
-                        "valueId": note_key,
+                        "valueId": note_id,
                     }
                 ],
                 "clinicalStatus": {
@@ -146,6 +155,7 @@ class ConditionLoaderMixin(MappingMixin):
                     "coding": [{
                         "system": "http://hl7.org/fhir/sid/icd-10-cm",
                         "code": row['ICD-10 Code'],
+                        # "display": row['ICD-10 Display'] # TODO - get display from ontologies code/display lookup file
                     }]
                 },
                 "subject": {
@@ -169,12 +179,6 @@ class ConditionLoaderMixin(MappingMixin):
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
-                with open(self.done_file, 'a') as done:
-                    print(' Complete')
-                    done.write(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}\n")
-            except BaseException as e:            
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(' Errored')
-                    errored.write(f"{row['ID']}|{patient}|{patient_key}|{e}\n")
-                continue 
+                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+            except BaseException as e:
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
