@@ -4,7 +4,7 @@ from data_migrations.utils import fetch_from_json, write_to_json
 
 class AvonHelper:
     """
-        Helper mixin for accessing the Avon API 
+        Helper mixin for accessing the Avon API
 
         settings need to be correctly set up in the config.ini file
     """
@@ -16,22 +16,23 @@ class AvonHelper:
         self.avon_header = self.get_avon_headers()
 
     def fetch_records(self, data_type, json_file, param_string=''):
-        """ Performs a Avon API Call to fetch data with a certain 
+        """ Performs an Avon API Call to fetch data with a certain
         URL and search parameters
-        
-        In the docs there is no mention of pagination, so their List API 
-        is an all or nothing response
+
+        In the docs there is no mention of pagination, so their List API
+        is an all or nothing response.
         """
         print(f'Fetching records for {data_type}')
 
         if os.path.isfile(json_file):
             return fetch_from_json(json_file)
-        
+
         url = f'{self.base_url}{data_type}?{param_string}'
         response = requests.get(url, headers=self.avon_header)
         try:
             data = response.json()['data']
             write_to_json(json_file, data)
+            return data
         except:
             raise Exception(response.text)
 

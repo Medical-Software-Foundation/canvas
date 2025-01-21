@@ -4,8 +4,8 @@ from decouple import Config, RepositoryIni
 
 def fetch_complete_csv_rows(filename, key='id', delimiter='|'):
     """
-        Return a distinct set of all the unique identifiers of a csv. 
-        Used to know what records have already been processed to avoid 
+        Return a distinct set of all the unique identifiers of a csv.
+        Used to know what records have already been processed to avoid
         duplicating records
     """
     with open(filename, 'r') as file:
@@ -29,8 +29,8 @@ def write_to_json(filename, data):
 
 def fetch_from_csv(filename, key='patient', delimiter=','):
     """
-        Load a CSV file and 
-        return as a dict with the argument key as the keys and a list of all the 
+        Load a CSV file and
+        return as a dict with the argument key as the keys and a list of all the
         records for that unique key
     """
     data = defaultdict(list)
@@ -40,16 +40,16 @@ def fetch_from_csv(filename, key='patient', delimiter=','):
             # ignore patients we didn't ingest in the instance
             if key == 'patient' and row[key] not in self.patient_map:
                 continue
-            
+
             data[row[key]].append(row)
 
     return data
 
 def read_json_file(path_to_file, is_fhir=False, list_attribute=None):
-    """ Each of the JSON files given has each line corresponding to 
-    all the records related to one patient. 
+    """ Each of the JSON files given has each line corresponding to
+    all the records related to one patient.
 
-    We want to return a dictionary with the patient's athenapatientid as the key, 
+    We want to return a dictionary with the patient's athenapatientid as the key,
     so we can iterate over each patient when ingesting data
     """
     records = {}
@@ -92,7 +92,7 @@ def get_ontologies_token(environment):
 
 def load_fhir_settings(environment):
     """
-        Used to authenticate 
+        Used to authenticate
     """
     ini = RepositoryIni('../config.ini')
     ini.SECTION = environment
@@ -113,8 +113,12 @@ class FHIRHelper:
         self.client_secret = settings.get("CLIENT_SECRET")
         self.instance_name = settings.get("INSTANCE_NAME")
 
-        self.base_url = f"https://{self.instance_name}.canvasmedical.com"
-        self.base_fhir_url = f"https://fumage-{self.instance_name}.canvasmedical.com"
+        if self.instance_name == "localhost":
+            self.base_url = "http://localhost:8000"
+            self.base_fhir_url = "http://localhost:8888"
+        else:
+            self.base_url = f"https://{self.instance_name}.canvasmedical.com"
+            self.base_fhir_url = f"https://fumage-{self.instance_name}.canvasmedical.com"
 
         self.get_fhir_api_token()
         if not self.client_id or not self.client_secret or not self.instance_name:
@@ -209,9 +213,9 @@ class FHIRHelper:
 
     def build_patient_external_identifier_map(self, system, output_file):
         """ When ingesting patients from an EMR into Canvas, it is best that the
-        unique identifier for that patient in the EMR is loaded as an identifier in the 
+        unique identifier for that patient in the EMR is loaded as an identifier in the
         FHIR Patient Create endpoint. So this function will create a JSON
-        map of the EMR identifier to the canvas patient key. 
+        map of the EMR identifier to the canvas patient key.
 
         This will help ensure all the historic records are added to the correct patient chart
         """
@@ -230,7 +234,7 @@ class FHIRHelper:
             if response.status_code != 200:
                 raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
 
-            print(f'Performed search with url: {response.url}')    
+            print(f'Performed search with url: {response.url}')
             response_json = response.json()
             for item in response_json['entry']:
                 for identifier in item['resource']['identifier']:
@@ -267,7 +271,7 @@ class FHIRHelper:
 
     def check_in_and_lock_appointment(self, canvas_appointment_id, note_id):
         """
-            For a historical data migration, we want to mark all appointments loaded and completed, 
+            For a historical data migration, we want to mark all appointments loaded and completed,
             so this function will find the note associated to each appointment,
             check in the note and then lock the note via the Note API
         """
@@ -279,11 +283,11 @@ class FHIRHelper:
             note_id = read_response.json()["extension"][0]['valueId']
 
         base_url = f"https://{self.environment}.canvasmedical.com/core/api/notes/v1/Note/{note_id}"
-        
+
         check_in_response = requests.request("PATCH", base_url, headers=self.fumage_helper.headers, data=json.dumps({"stateChange": "CVD"}))
-        if check_in_response.status_code != 200 and 'CVD -> CVD' not in check_in_response.text:                
+        if check_in_response.status_code != 200 and 'CVD -> CVD' not in check_in_response.text:
             raise Exception(f"Failed to perform {check_in_response.url}. \n {check_in_response.text}")
 
         lock_response = requests.request("PATCH", base_url, headers=self.fumage_helper.headers, data=json.dumps({"stateChange": "LKD"}))
-        if lock_response.status_code != 200:                
+        if lock_response.status_code != 200:
             raise Exception(f"Failed to perform {lock_response.url}. \n {lock_response.text}")

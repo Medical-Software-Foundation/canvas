@@ -3,8 +3,8 @@ from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
 from data_migrations.template_migration.utils import (
-    validate_date, 
-    validate_required, 
+    validate_date,
+    validate_required,
     validate_header,
     validate_state_code,
     validate_postal_code,
@@ -17,19 +17,19 @@ from data_migrations.template_migration.utils import (
 
 class PatientLoaderMixin:
     """
-        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
+        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect:
 
-        Required Formats/Values (Case Insensitive):  
-        Date of Birth: YYYY-MM-DD, YYYY-M-DD, YYYY-M-D, YYYY/MM/DD, YYYY/M/DD, YYYY/M/D, YYYY.MM.DD, YYYY.M.DD, YYYY.M.D, 
+        Required Formats/Values (Case Insensitive):
+        Date of Birth: YYYY-MM-DD, YYYY-M-DD, YYYY-M-D, YYYY/MM/DD, YYYY/M/DD, YYYY/M/D, YYYY.MM.DD, YYYY.M.DD, YYYY.M.D,
                        MM/DD/YYYY", M/D/YYYY, M/DD/YYYY, MM-DD-YYYY, M-D-YYYY, M-DD-YYYY, MM.DD.YYYY, M.D.YYY, M.DD.YYYY
-        Sex at Birth: Male, M, Female, F, Unknown, UNK, Other, OTH  
-        State Code: 2 letter state code  
-        Postal Code: 5 digit US postal code  
-        Mobile & Home Number: 10 digit US phone number  
+        Sex at Birth: Male, M, Female, F, Unknown, UNK, Other, OTH
+        State Code: 2 letter state code
+        Postal Code: 5 digit US postal code
+        Mobile & Home Number: 10 digit US phone number
         Mobile & Email Consent: Yes, Y, No, N, True, T, False, F
-        Email: Letter/Number/SpecialCharacter@domain (e.g., email-1273@email.io)  
+        Email: Letter/Number/SpecialCharacter@domain (e.g., email-1273@email.io)
         Timezone: EST,EDT,ET,America/New_York,CST,CDT,CT,America/Chicago,MST,MDT,MT,America/Denver,PDT,PST,PT
     """
 
@@ -39,7 +39,7 @@ class PatientLoaderMixin:
 
         if not value:
             return False, f"Patient is missing sex at birth"
-            
+
         mapping = {
             "M": "M",
             "MALE": "M",
@@ -55,32 +55,32 @@ class PatientLoaderMixin:
             return True, mapping[value.upper()]
         except KeyError:
             return False, f"Invalid sex_at_birth given: {value}"
-        
+
         pass
 
     def validate_required_birth_date(self, value, _):
         """ Validate a date"""
 
-        # accept YYYY-MM-DD, YYYY-M-DD, YYYY-M-D, YYYY/MM/DD, YYYY/M/DD, YYYY/M/D, YYYY.MM.DD, YYYY.M.DD, YYYY.M.D, 
+        # accept YYYY-MM-DD, YYYY-M-DD, YYYY-M-D, YYYY/MM/DD, YYYY/M/DD, YYYY/M/D, YYYY.MM.DD, YYYY.M.DD, YYYY.M.D,
         # MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYY", "M.DD.YYYY
         if not value:
             return False, f"Patient is missing birth date"
-        
+
         return validate_date(value, field_name='birth date')
 
     def validate(self, delimiter='|'):
-        """ 
+        """
             Loop throw the CSV file to validate each row has the correct columns and values
-            Append validated rows to a list to use to load. 
+            Append validated rows to a list to use to load.
             Export errors to a file/console
-            
+
         """
         validated_rows = []
         errors = defaultdict(list)
         with open(self.csv_file, "r") as file:
             reader = csv.DictReader(file, delimiter=delimiter)
 
-            validate_header(reader.fieldnames, 
+            validate_header(reader.fieldnames,
                 accepted_headers = {
                     "First Name",
                     "Middle Name",
@@ -102,7 +102,7 @@ class PatientLoaderMixin:
                     "Timezone",
                     "Clinical Note",
                     "Administrative Note",
-                }  
+                }
             )
 
             validations = {
@@ -119,7 +119,7 @@ class PatientLoaderMixin:
                 "Email Consent": validate_boolean,
                 "Timezone": validate_timezone,
             }
-            
+
             for row in reader:
                 error = False
 
@@ -127,7 +127,7 @@ class PatientLoaderMixin:
                 if error_msg:
                     errors[f"{row['First Name']} {row['Last Name']}"].append(error_msg)
                     error = True
-                
+
                 for field, validator_func in validations.items():
                     valid, value = validator_func(row[field].strip(), field)
                     if valid:
@@ -150,14 +150,14 @@ class PatientLoaderMixin:
 
     def load(self, validated_rows, system_unique_identifier):
         """
-            Takes the validated rows from self.validate() and 
+            Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
 
-            Outputs to CSV to keep track of records 
+            Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
 
-        patient_map = fetch_from_json(self.patient_map_file) 
+        patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
         for i, row in enumerate(validated_rows):
@@ -185,14 +185,14 @@ class PatientLoaderMixin:
             payload = {
                 "resourceType": "Patient",
                 "extension":(
-                    [{ 
+                    [{
                         "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex",
                         "valueCode": row["Sex at Birth"]
-                    }] + 
+                    }] +
                     ([{
                         "url": "http://hl7.org/fhir/StructureDefinition/tz-code",
                         "valueCode": row['Timezone']
-                    }] if row['Timezone'] else []) + 
+                    }] if row['Timezone'] else []) +
                     ([{
                         "url": "http://schemas.canvasmedical.com/fhir/extensions/clinical-note",
                         "valueString": row['Clinical Note']
@@ -225,14 +225,14 @@ class PatientLoaderMixin:
                     "value": row['Mobile Phone Number'],
                     "use": "mobile",
                     "rank": 1
-                }] if row['Mobile Phone Number'] else []) + 
+                }] if row['Mobile Phone Number'] else []) +
                 ([{
                     "system": "phone",
                     "value": row['Home Phone Number'],
                     "use": "home",
                     "rank": 2
-                }] if row['Home Phone Number'] else []) + 
-                ([{                
+                }] if row['Home Phone Number'] else []) +
+                ([{
                     "extension":[{
                         "url": "http://schemas.canvasmedical.com/fhir/extensions/has-consent",
                         "valueBoolean": row["Email Consent"]
@@ -261,11 +261,11 @@ class PatientLoaderMixin:
                 payload['identifier'] = identifiers
 
             # print(json.dumps(payload, indent=2))
-            
+
             try:
                 patient_key = self.fumage_helper.perform_create(payload)
-                print(f"    Successfully made {row['First Name']} {row['Last Name']}: https://{self.environment}.canvasmedical.com/patient/{patient_key}")    
-                
+                print(f"    Successfully made {row['First Name']} {row['Last Name']}: https://{self.environment}.canvasmedical.com/patient/{patient_key}")
+
                 if patient_identifier:
                     patient_map[patient_identifier] = patient_key
                     write_to_json(self.patient_map_file, patient_map)

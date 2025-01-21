@@ -5,18 +5,18 @@ from utils import AvonHelper
 
 class PatientLoader(PatientLoaderMixin):
     """
-        Load Patients from Avon to Canvas. 
+        Load Patients from Avon to Canvas.
 
         First makes the Avon List API call and converts the results into a CSV
         then loops through the CSV to validate the columns according to Canvas Data Migration Template
         and lastly loads the validated rows into Canvas via FHIR
 
         It also produces multiple files:
-        - The patient_map_file keeps track of the Avon unique identifier to the canvas patient key. 
+        - The patient_map_file keeps track of the Avon unique identifier to the canvas patient key.
           This allows for all other data types for data migration to be linked to the correct patient
         - The patient_error_file keeps track of any errors that happen during FHIR ingestion and keeps
           track of any patients that may need manual fixing and replaying
-        - The validation_error_file keeps track of all the Avon patients that failed the validation of 
+        - The validation_error_file keeps track of all the Avon patients that failed the validation of
           the Canvas Data Migration Template and why they failed
     """
 
@@ -38,7 +38,7 @@ class PatientLoader(PatientLoaderMixin):
             the Canvas Data Migration Template
         """
 
-        data = self.avon_helper.fetch_records("v2/patients", self.json_file, param_string='')
+        data = self.avon_helper.fetch_records("v2/patients", param_string='', json_file=self.json_file)
 
         headers = {
             "First Name",
@@ -73,7 +73,7 @@ class PatientLoader(PatientLoaderMixin):
             "261665006": "Unknown",
         }
 
-        with open(self.patient_csv_file, 'w') as f:
+        with open(self.csv_file, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=headers, delimiter=delimiter)
             writer.writeheader()
 
@@ -113,7 +113,7 @@ if __name__ == '__main__':
     loader = PatientLoader(environment='phi-collaborative-test')
     delimiter = ','
 
-    # Make the Avon API call to their List Patients endpoint and convert the JSON return 
+    # Make the Avon API call to their List Patients endpoint and convert the JSON return
     # to the template CSV loader
     # loader.make_csv(delimiter=delimiter)
 

@@ -7,19 +7,19 @@ from customer_migrations.utils import fetch_from_csv, fetch_complete_csv_rows, f
 class DataImportLoader:
     """
         During a historical Data Migration, at Canvas we create a historical data note to store a patient's
-        allergies, problems, medications, and vaccines all in one place. 
+        allergies, problems, medications, and vaccines all in one place.
     """
 
     def __init__(self, environment, *args, **kwargs):
         self.patient_map_file = 'PHI/patient_id_map.json'
         self.note_map_file = 'PHI/note_map.csv'
         self.finished_patient_file = 'results/patients_finished.csv'
-        
+
         self.done_allergies_file = 'results/done_allergies.csv'
         self.done_medications_file = 'results/done_medications.csv'
         self.done_problems_file = 'results/done_problems.csv'
         self.done_vaccines_file = 'results/done_vaccines.csv'
-        
+
         self.errored_allergies_file = 'results/errored_allergies.csv'
         self.errored_medications_file = 'results/errored_medications.csv'
         self.errored_problems_file = 'results/errored_problems.csv'
@@ -29,8 +29,8 @@ class DataImportLoader:
         self.problems_file = 'PHI/problems.csv'
         self.medications_file = 'PHI/medications.csv'
         self.vaccines_file = 'PHI/patient_vaccine_records.csv'
-        
-        self.patient_map = fetch_from_json(self.patient_map_file) 
+
+        self.patient_map = fetch_from_json(self.patient_map_file)
         self.note_map = fetch_from_csv(self.note_map_file)
         self.finished_patient_ids = fetch_complete_csv_rows(self.finished_patient_file, 'dr_chrono_id')
         self.done_allergies = fetch_complete_csv_rows(self.done_allergies_file)
@@ -45,10 +45,10 @@ class DataImportLoader:
         self.drchrono_helper = DrChronoHelper(self.environment)
 
     def create_medication_coding_map(self, filename, data, fhir_resource, ignore_func=None):
-        
+
         if os.path.isfile(filename):
             return fetch_from_json(filename)
-        
+
         _map = {}
 
         for _, rows in data.items():
@@ -60,7 +60,7 @@ class DataImportLoader:
 
                 if (ignore_func and ignore_func(row)) or key in _map:
                     continue
-                
+
                 name_list = name.split(' ')
                 found_coding = None
                 for i in reversed(range(len(name_list))):
@@ -69,18 +69,18 @@ class DataImportLoader:
                         search_parameters = {
                             '_text': " ".join(name_list[:i+1])
                         }
-                    
+
                         response = self.fumage_helper.search(fhir_resource, search_parameters)
                         if response.status_code != 200:
                             raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
-                        
+
                         response_json = response.json()
-                        if response_json.get('total') == 1: 
+                        if response_json.get('total') == 1:
                             coding = response_json['entry'][0]['resource']['code']['coding']
                             if any([c['code'] == code for c in coding if c['system'] == 'http://www.nlm.nih.gov/research/umls/rxnorm']):
                                 found_coding = coding
                                 break
-                            
+
                 if found_coding:
                     _map[key] = coding
                     print(f"{key} - {_map[key]}")
@@ -90,12 +90,12 @@ class DataImportLoader:
                     search_parameters = {
                         'code': f'http://www.nlm.nih.gov/research/umls/rxnorm|{code}'
                     }
-                    
+
                     response = self.fumage_helper.search(fhir_resource, search_parameters)
-                    
+
                     if response.status_code != 200:
                         raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
-                        
+
                     response_json = response.json()
                     if response_json.get('total') == 1:
                         _map[key] = response_json['entry'][0]['resource']['code']['coding']
@@ -117,7 +117,7 @@ class DataImportLoader:
                 print()
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(_map, f, ensure_ascii=False, indent=4)
-        
+
         return _map
 
     def create_allergy_coding_map(self, filename, data, fhir_resource, ignore_func=None):
@@ -131,10 +131,10 @@ class DataImportLoader:
             print(f'Performing {response.url}')
             if response.status_code != 200:
                 raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
-                
+
             response_json = response.json()
             if response_json.get('total') == 1:
-                _map[key] = response_json['entry'][0]['resource']['code']['coding']                    
+                _map[key] = response_json['entry'][0]['resource']['code']['coding']
             elif response_json.get('total') != 0:
                 _map[key] = response_json['entry']
             else:
@@ -147,8 +147,8 @@ class DataImportLoader:
                 code = row['rxnorm']
 
                 if ignore_func and ignore_func(row):
-                    continue          
-                
+                    continue
+
                 if code and code not in _map:
                     search_parameters = {
                         'code': f'http://www.nlm.nih.gov/research/umls/rxnorm|{code}'
@@ -166,13 +166,13 @@ class DataImportLoader:
 
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(_map, f, ensure_ascii=False, indent=4)
-        
+
         return _map
 
     def create_vaccine_coding_map(self, filename, data):
         if os.path.isfile(filename):
             return fetch_from_json(filename)
-        
+
         unique_map = []
 
         for _, rows in data.items():
@@ -222,7 +222,7 @@ class DataImportLoader:
                     output.write(f"{cvx_code}|{cpt_code}|{name}|{found}|{mappings[0]}\n")
                 else:
                     output.write(f"{cvx_code}|{cpt_code}|{name}|{found or False}|{'|'.join(str(m) for m in mappings)}\n")
-        
+
         # upload to s3
         file = 'vaccine_coding_map.csv'
         from django.core.files.storage import default_storage
@@ -235,20 +235,20 @@ class DataImportLoader:
     def get_or_create_historical_data_input_note(self, canvas_patient_key, drchrono_patient_id):
         if drchrono_patient_id in self.note_map:
             return self.note_map[drchrono_patient_id][0]['note_key']
-        
+
         payload = {
           "noteTypeName": "DrChrono Data Migration",
           "patientKey": canvas_patient_key,
-          "providerKey": "5eede137ecfe4124b8b773040e33be14",
+          "providerKey": "5eede137ecfe4124b8b773040e33be14", # canvas bot key
           "encounterStartTime": "2024-03-01T13:00:00.016852Z"
         }
 
         base_url = f"https://{self.environment}.canvasmedical.com/core/api/notes/v1/Note"
         response = requests.request("POST", base_url, headers=self.fumage_helper.headers, data=json.dumps(payload))
-        
+
         if response.status_code != 201:
             raise Exception(f"Failed to perform {response.url}. \n {response.text}")
-            
+
         response_json = response.json()
         note_key = response_json['noteKey']
 
@@ -256,7 +256,7 @@ class DataImportLoader:
             note_map.write(f"{drchrono_patient_id}|{canvas_patient_key}|{note_key}\n")
 
         self.note_map[canvas_patient_key] = [{"patient": drchrono_patient_id, 'patient_key': canvas_patient_key, 'note_key': note_key}]
-        
+
         return note_key
 
     def make_sure_note_is_unlocked(self, note_key):
@@ -275,7 +275,7 @@ class DataImportLoader:
             return
 
         response = requests.request("PATCH", base_url, headers=self.fumage_helper.headers, data=json.dumps(payload))
-        if response.status_code != 200:                
+        if response.status_code != 200:
             raise Exception(f"Failed to perform {response.url}. \n {response.text}")
 
     def lock_note(self, note_key):
@@ -286,10 +286,10 @@ class DataImportLoader:
 
         base_url = f"https://{self.environment}.canvasmedical.com/core/api/notes/v1/Note/{note_key}"
         response = requests.request("PATCH", base_url, headers=self.fumage_helper.headers, data=json.dumps(payload))
-        
-        if response.status_code != 200 and "LKD -> LKD" not in response.text:                
+
+        if response.status_code != 200 and "LKD -> LKD" not in response.text:
             print(f"Failed to perform {response.url}. \n {response.text}")
-           
+
         return note_key
 
     def ingest_allergies(self, patient_key, note_key, patients_allergies):
@@ -320,7 +320,7 @@ class DataImportLoader:
                 continue # do not create an allergy that we couldn't map to FDB
 
             for fdb_code in fdb_codes:
-            
+
                 payload = {
                     "resourceType": "AllergyIntolerance",
                     "extension": [
@@ -360,7 +360,7 @@ class DataImportLoader:
                         ([{"text": f"Notes: allergy['notes']"}] if allergy['notes'] else [])
                     )
                 }
-            
+
                 # print(json.dumps(payload, indent=2))
                 try:
                     canvas_id = self.fumage_helper.perform_create(payload, note_key)
@@ -378,7 +378,7 @@ class DataImportLoader:
         for medication in patients_medications:
             if medication['id'] in self.done_medications:
                 continue
-                
+
             payload = {
                 "resourceType": "MedicationStatement",
                 "extension": [
@@ -434,14 +434,14 @@ class DataImportLoader:
                 e = str(e).replace('\n', '')
                 with open(self.errored_medications_file, 'a') as errored_medications:
                     errored_medications.write(f"{medication['id']}|{medication['patient']}|{patient_key}|{e}\n")
-    
+
     def ingest_problems(self, patient_key, note_key, patients_problems):
-        
+
         print(f'      Found {len(patients_problems)} problems')
         for problem in patients_problems:
             if problem['id'] in self.done_problems:
                 continue
-            
+
             if problem['snomed_ct_code'] == '55607006':
                 continue
 
@@ -450,17 +450,17 @@ class DataImportLoader:
                     "system": "http://hl7.org/fhir/sid/icd-10-cm",
                     "code": problem['icd_code'],
                     "display": problem['name']
-                }] if problem['icd_version'] == '10' and problem['icd_code'] else []) + 
+                }] if problem['icd_version'] == '10' and problem['icd_code'] else []) +
                 ([{
                     "system": "http://snomed.info/sct",
                     "code": problem['snomed_ct_code'],
                     "display": problem['name']
-                }] if problem['snomed_ct_code'] else []) 
+                }] if problem['snomed_ct_code'] else [])
             )
 
             if not coding:
                 continue
-            
+
             payload = {
                 "resourceType": "Condition",
                 "extension": [
@@ -511,7 +511,7 @@ class DataImportLoader:
                 e = str(e).replace('\n', '')
                 with open(self.errored_problems_file, 'a') as errored_problems:
                     errored_problems.write(f"{problem['id']}|{problem['patient']}|{patient_key}|{e}\n")
-    
+
     def ingest_vaccines(self, patient_key, note_key, patients_vaccines):
 
         print(f'      Found {len(patients_vaccines)} vaccines')
@@ -557,13 +557,13 @@ class DataImportLoader:
                     "type": "Patient"
                 },
                 "occurrenceDateTime": vaccine['administration_start'][:10],
-                "primarySource": False, 
+                "primarySource": False,
                 "note": (
                     ([{"text": vaccine['comments']}] if vaccine['comments'] else []) +
                     ([{"text": f'Name: {vaccine_inventory[0]["name"]}, Lot number: {vaccine_inventory[0]["lot_number"]},  Expiration: {vaccine_inventory[0]["expiry"]}, Manufacturer: {vaccine_inventory[0]["manufacturer"]}'}] if vaccine_inventory else [])
                 )
             }
-            
+
             # print(json.dumps(payload, indent=2))
             try:
                 canvas_id = self.fumage_helper.perform_create(payload, note_key)
@@ -587,7 +587,7 @@ class DataImportLoader:
         self.inventory_vaccines = self.drchrono_helper.fetch_drchrono_records_from_file('inventory_vaccines', filename='PHI/inventory_vaccines.csv', key='id')
 
         print('Done')
-    
+
     def load(self):
 
         patient_count = len(self.patient_map)
@@ -596,7 +596,7 @@ class DataImportLoader:
                 continue
 
             note_key = self.get_or_create_historical_data_input_note(canvas_patient_key, drchrono_patient_id)
-            
+
             print(f'Creating Historical Records for {drchrono_patient_id}/{canvas_patient_key} ({i+1}/{patient_count})')
             self.ingest_allergies(canvas_patient_key, note_key, self.allergies.get(drchrono_patient_id, []))
             self.ingest_medications(canvas_patient_key, note_key, self.medications.get(drchrono_patient_id, []))
@@ -604,7 +604,7 @@ class DataImportLoader:
             self.ingest_vaccines(canvas_patient_key, note_key, self.vaccines.get(drchrono_patient_id, []))
 
             self.lock_note(note_key)
-                
+
         print('Done')
 
     def ingest_patient_vaccines(self):
@@ -614,12 +614,12 @@ class DataImportLoader:
             canvas_patient_key = self.patient_map[drchrono_patient_id]
 
             note_key = self.get_or_create_historical_data_input_note(canvas_patient_key, drchrono_patient_id)
-            
+
             print(f'Creating Vaccine Records for {drchrono_patient_id}/{canvas_patient_key} ({i+1}/{patient_count})')
             self.ingest_vaccines(canvas_patient_key, note_key, self.vaccines.get(drchrono_patient_id, []))
 
             self.lock_note(note_key)
-                
+
         print('Done')
 
     def lock_all_notes(self):
@@ -632,7 +632,7 @@ class DataImportLoader:
                 self.lock_note(note_key)
 
                 with open(self.finished_patient_file, 'a') as patients_finished:
-                    patients_finished.write(f'{drchrono_patient_id}|{canvas_patient_key}\n')    
+                    patients_finished.write(f'{drchrono_patient_id}|{canvas_patient_key}\n')
 
     def deal_with_errored_medications(self):
         to_remap = set()
