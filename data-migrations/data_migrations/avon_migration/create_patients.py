@@ -23,7 +23,8 @@ class PatientLoader(PatientLoaderMixin):
 
     def __init__(self, environment, *args, **kwargs):
         self.patient_map_file = 'PHI/patient_id_map.json'
-        self.csv_file = 'PHI/patients_valid.csv'
+        self.csv_file = 'PHI/patients.csv'
+        self.json_file = 'PHI/patients.json'
         self.validation_error_file = 'results/PHI/errored_patient_validation.json'
         self.error_file = 'results/PHI/errored_patients.csv'
         self.environment = environment
@@ -37,7 +38,7 @@ class PatientLoader(PatientLoaderMixin):
             the Canvas Data Migration Template
         """
 
-        data = self.avon_helper.fetch_records("v2/patients", param_string='')
+        data = self.avon_helper.fetch_records("v2/patients", self.json_file, param_string='')
 
         headers = {
             "First Name",
@@ -114,10 +115,10 @@ if __name__ == '__main__':
 
     # Make the Avon API call to their List Patients endpoint and convert the JSON return 
     # to the template CSV loader
-    loader.make_csv(delimiter=delimiter)
+    # loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
     valid_rows = loader.validate(delimiter=delimiter)
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    loader.load(valid_rows, system_unique_identifier='Avon ID')
+    # loader.load(valid_rows, system_unique_identifier='Avon ID')

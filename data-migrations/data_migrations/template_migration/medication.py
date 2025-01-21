@@ -32,12 +32,12 @@ class MedicationLoaderMixin(MappingMixin):
                 search_parameters = {
                     'code': f'http://www.nlm.nih.gov/research/umls/rxnorm|{code}'
                 }
-                
+
                 response = self.fumage_helper.search("Medication", search_parameters)
-                
+
                 if response.status_code != 200:
                     raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
-                    
+
                 response_json = response.json()
                 if response_json.get('total') == 1:
                     _map[key] = response_json['entry'][0]['resource']['code']['coding']
@@ -68,13 +68,13 @@ class MedicationLoaderMixin(MappingMixin):
                     search_parameters = {
                         '_text': " ".join(name_list[:i+1])
                     }
-                
+
                     response = self.fumage_helper.search("Medication", search_parameters)
                     if response.status_code != 200:
                         raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
-                    
+
                     response_json = response.json()
-                    if response_json.get('total') == 1: 
+                    if response_json.get('total') == 1:
                         coding = response_json['entry'][0]['resource']['code']['coding']
                         if any([c['code'] == code for c in coding if c['system'] == 'http://www.nlm.nih.gov/research/umls/rxnorm']):
                             _map[key] = coding
@@ -87,7 +87,7 @@ class MedicationLoaderMixin(MappingMixin):
                             if coding[0]['display'].lower() == name.lower():
                                 _map[key] = coding
                                 print(coding)
-                                found_coding = True                               
+                                found_coding = True
                                 break
                     if not found_coding:
                         for e in response_json.get('entry', []):

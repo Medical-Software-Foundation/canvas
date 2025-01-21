@@ -35,6 +35,7 @@ class AppointmentLoader(AppointmentLoaderMixin):
         self.ignore_records = fetch_complete_csv_rows(self.ignore_file)
         self.validation_error_file = 'results/PHI/errored_appointment_validation.json'
         self.error_file = 'results/errored_appointments.csv'
+        self.errored_note_state_event_file = 'results/errored_note_state_events.csv'
         self.done_file = 'results/done_appointments.csv'
         self.done_records = fetch_complete_csv_rows(self.done_file)
         self.environment = environment

@@ -1,8 +1,8 @@
-import re, pytz, arrow, csv, json
+import csv, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from utils import (
+from data_migrations.template_migration.utils import (
     validate_date, 
     validate_required, 
     validate_header,
@@ -80,7 +80,7 @@ class PatientLoaderMixin:
         with open(self.csv_file, "r") as file:
             reader = csv.DictReader(file, delimiter=delimiter)
 
-            self.validate_header(reader.fieldnames, 
+            validate_header(reader.fieldnames, 
                 accepted_headers = {
                     "First Name",
                     "Middle Name",

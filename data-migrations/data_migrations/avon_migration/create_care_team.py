@@ -1,9 +1,8 @@
 import csv, os
-from data_migrations.utils import load_fhir_settings, fetch_from_json, fetch_complete_csv_rows
-from data_migrations.template_migration.appointment import AppointmentLoaderMixin
+from data_migrations.utils import load_fhir_settings, fetch_from_json, fetch_complete_csv_rows, write_to_json
 from utils import AvonHelper
 
-class AppointmentLoader(AppointmentLoaderMixin):
+class CareTeam:
     """
         Load Care Team from Avon to Canvas. 
 
@@ -31,19 +30,29 @@ class AppointmentLoader(AppointmentLoaderMixin):
         self.doctor_map = fetch_from_json("mappings/doctor_map.json")
         self.json_file = "PHI/care_team.json"
         self.csv_file = 'PHI/care_team.csv'
-        self.ignore_file = 'results/ignored_appointments.csv'
+        # self.ignore_file = 'results/ignored_care_team.csv'
         # self.ignore_records = fetch_complete_csv_rows(self.ignore_file)
-        # self.validation_error_file = 'results/PHI/errored_appointment_validation.json'
-        # self.error_file = 'results/errored_appointments.csv'
-        # self.done_file = 'results/done_appointments.csv'
+        # self.validation_error_file = 'results/PHI/errored_care_team_validation.json'
+        # self.error_file = 'results/errored_care_team.csv'
+        # self.done_file = 'results/done_care_team.csv'
         # self.done_records = fetch_complete_csv_rows(self.done_file)
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
         self.avon_helper = AvonHelper(environment)
 
-        # default needed for mapping
-        self.default_location = "9e757329-5ab1-4722-bab9-cc25002fa5c0"
-        self.default_note_type = "avon_historical_note"
+        self.patient_name_map_file = 'PHI/patient_name_map.json'
+        self.patient_name_map = self.make_patient_name_map()
+
+
+
+    def make_patient_name_map(self):
+        if os.path.isfile(self.patient_name_map_file):
+            return fetch_from_json(self.patient_name_map_file)
+
+        patients = fetch_from_json("PHI/patients.json")
+        _map = {p['id']: f'{p["first_name"]} {p["last_name"]}'}
+        write_to_json(_map, self.patient_name_map_file)
+
 
     def make_csv(self, delimiter='|'):
         """
@@ -57,18 +66,11 @@ class AppointmentLoader(AppointmentLoaderMixin):
 
         data = self.avon_helper.fetch_records("v2/care_teams", self.json_file, param_string='')
 
+        # create a patient map
+        
+
         # headers = {
-        #     "ID",
-        #     "Patient Identifier",
-        #     "Appointment Type",
-        #     "Reason for Visit Code",
-        #     "Reason for Visit Text",
-        #     "Location",
-        #     "Meeting Link",
-        #     "Start Date / Time",
-        #     "End Date/Time",
-        #     "Duration",
-        #     "Provider"
+
         # }
 
         # with open(self.csv_file, 'w') as f:
@@ -88,24 +90,14 @@ class AppointmentLoader(AppointmentLoaderMixin):
         #         patient = row['attendees'][0]['attendee']
 
         #         writer.writerow({
-        #             "ID": row.get('id'),
-        #             "Patient Identifier": row['attendees'][0]['attendee'],
-        #             "Appointment Type": self.default_note_type,
-        #             "Reason for Visit Code": "",
-        #             "Reason for Visit Text": row['name'],
-        #             "Location": self.default_note_type,
-        #             "Meeting Link": row.get('video_call', {}).get('join_url') or "",
-        #             "Start Date / Time": row['start_time'],
-        #             "End Date/Time": row['end_time'],
-        #             "Duration": "",
-        #             "Provider": row['host']
+
         #         })
 
         #     print("CSV successfully made")
 
 if __name__ == '__main__':
     # change the customer_identifier to what is defined in your config.ini file
-    loader = AppointmentLoader(environment='phi-collaborative-test')
+    loader = CareTeam(environment='phi-collaborative-test')
     delimiter = '|'
 
     # Make the Avon API call to their List Patients endpoint and convert the JSON return 
