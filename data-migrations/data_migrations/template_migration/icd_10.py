@@ -55,8 +55,8 @@ class OntologiesDataFetcher:
         return code_display_map
 
     def write_to_file(self, data):
-        with open('./output/ontologies_icd10_codes_map.json', 'w') as f:
-            json.dump(data, f)
+        with open('./mappings/icd10_map.json', 'w') as f:
+            json.dump(data, f, indent=4)
 
     def run(self):
         data = ontologies_data_fetcher.generate_map()
