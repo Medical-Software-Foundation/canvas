@@ -6,7 +6,7 @@
     "components": {
         "protocols": [
             {
-                "class": "weight_management.protocols.glp1_weight_calculation_banner:GLP1WeightCalculationBanner",
+                "class": "weight_management.protocols.glp1_weight_calculation_banner:GLP1WeightWorkflow",
                 "description": "Display the patient’s highest weight before starting a GLP-1 and calculate the patient’s BMI at that time. Dynamically display the amount of weight loss.",
                 "data_access": {
                     "event": "",
@@ -20,7 +20,13 @@
         "effects": [],
         "views": []
     },
-    "secrets": ["STARTING_WEIGHT_QUESTION_CODE"],
+    "secrets": [
+        "STARTING_WEIGHT_QUESTION_CODE",
+        "COMORBIDITIES_QUESTION_CODE",
+        "CURRENT_GLP-1_QUESTION_CODE",
+        "LENGTH_OF_TREATMENT_QUESTION_CODE",
+        "SA_CODE"
+    ],
     "tags": {},
     "references": [],
     "license": "",
