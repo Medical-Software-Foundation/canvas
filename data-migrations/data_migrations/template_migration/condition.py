@@ -28,6 +28,14 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
             Recorded Provider: Staff Canvas key.  If omitted, defaults to Canvas Bot
     """
 
+    def validate_icd10_display_name(self, row):
+        icd10_code = row["ICD-10 Code"].replace(".", "").replace("-", "")
+        if icd10_code in self.icd10_map:
+            return False, self.icd10_map[icd10_code]
+        else:
+            err_msg = f"Display lookup for ICD-10 Code {icd10_code} not found."
+            return True, err_msg
+
     def validate(self, delimiter='|'):
         """
             Loop throw the CSV file to validate each row has the correct columns and values
@@ -50,7 +58,6 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "Free text notes",
                     "Resolved Date",
                     "Recorded Provider"
-
                 }
             )
 
@@ -78,6 +85,12 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     else:
                         errors[key].append(value)
                         error = True
+
+                error, value = self.validate_icd10_display_name(row)
+                if error:
+                    errors[key].append(value)
+                else:
+                    row["ICD-10 Display"] = value
 
                 if not error:
                     validated_rows.append(row)
@@ -155,7 +168,7 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "coding": [{
                         "system": "http://hl7.org/fhir/sid/icd-10-cm",
                         "code": row['ICD-10 Code'],
-                        # "display": row['ICD-10 Display'] # TODO - get display from ontologies code/display lookup file
+                        "display": row['ICD-10 Display']
                     }]
                 },
                 "subject": {

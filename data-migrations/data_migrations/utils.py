@@ -197,7 +197,7 @@ class FHIRHelper:
         if response.status_code != 201:
             raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
 
-        return response.headers['location'].replace(f'http://fumage-{self.instance_name}.canvasmedical.com/{payload["resourceType"]}/', '').replace('/_history/1', '')
+        return response.headers['location'].replace(f'http://fumage-{self.instance_name}.canvasmedical.com/{payload["resourceType"]}/', '').replace('/_history/1', '').replace(f'http://localhost:8888/{payload["resourceType"]}/', '')
 
     def update(
         self, resource_type: str, resource_id: str, payload: dict

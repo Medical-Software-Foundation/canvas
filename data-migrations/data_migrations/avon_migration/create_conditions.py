@@ -44,9 +44,11 @@ class ConditionLoader(ConditionLoaderMixin):
         self.avon_helper = AvonHelper(environment)
         self.note_map_file = "mappings/historical_note_map.json"
         self.note_map = fetch_from_json(self.note_map_file)
+        self.icd10_map_file = "../template_migration/mappings/icd10_map.json"
+        self.icd10_map = fetch_from_json(self.icd10_map_file)
 
         # default needed for mapping
-        self.default_location = "c403e466-0147-4ece-8f70-f1caecd55ec6"
+        self.default_location = "227f6c9f-b8fd-46f7-a5f6-81ce1caa4be4"
         self.default_note_type_name = "Historical Note"
         super().__init__(*args, **kwargs)
 
@@ -90,6 +92,7 @@ class ConditionLoader(ConditionLoaderMixin):
                 })
 
             print("CSV successfully made")
+
 
 if __name__ == '__main__':
     # change the customer_identifier to what is defined in your config.ini file
