@@ -26,26 +26,30 @@ class ConditionLoader(ConditionLoaderMixin):
 
 
     def __init__(self, environment, *args, **kwargs):
+        self.data_type = 'conditions'
+
+        self.med_mapping_file = "mappings/medication_coding_map.json"
         self.patient_map_file = 'PHI/patient_id_map.json'
-        self.patient_map = fetch_from_json(self.patient_map_file)
-        self.doctor_map = fetch_from_json("mappings/doctor_map.json")
-        self.json_file = "PHI/conditions.json"
-        self.csv_file = 'PHI/conditions.csv'
-        self.ignore_file = 'results/ignored_conditions.csv'
-        self.ignore_records = fetch_complete_csv_rows(self.ignore_file)
-        self.validation_error_file = 'results/PHI/errored_condition_validation.json'
-        self.error_file = 'results/errored_conditions.csv'
-        self.done_file = 'results/done_conditions.csv'
-        self.done_records = fetch_complete_csv_rows(self.done_file)
+        self.note_map_file = "mappings/historical_note_map.json"
+        self.csv_file = f'PHI/{self.data_type}.csv'
+        self.validation_error_file = f'results/errored_{self.data_type}_validation.json'
+        self.error_file = f'results/errored_{self.data_type}.csv'
+        self.done_file = f'results/done_{self.data_type}.csv'
+
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
 
-        self.note_map_file = "mappings/historical_note_map.json"
+        self.done_records = fetch_complete_csv_rows(self.done_file)
+        self.patient_map = fetch_from_json(self.patient_map_file)
         self.note_map = fetch_from_json(self.note_map_file)
+        self.doctor_map = fetch_from_json("mappings/doctor_map.json")
+
+        self.icd10_map_file = "../template_migration/mappings/icd10_map.json"
+        self.icd10_map = fetch_from_json(self.icd10_map_file)
 
         # default needed for mapping
-        self.default_location = "c403e466-0147-4ece-8f70-f1caecd55ec6"
-        self.default_note_type_name = "Icon Historical Note"
+        self.default_location = "afad4e70-ca25-4a32-9f5c-2c83e2877b43"
+        self.default_note_type_name = "Icon Data Migration"
         super().__init__(*args, **kwargs)
 
 
@@ -58,4 +62,4 @@ if __name__ == '__main__':
     valid_rows = loader.validate(delimiter=delimiter)
 
     # # If you are ready to load the rows that have passed validation to your Canvas instance
-    #loader.load(valid_rows)
+    loader.load(valid_rows)

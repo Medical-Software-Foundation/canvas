@@ -124,10 +124,11 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
+        ids = set()
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
 
-            if row['ID'] in self.done_records:
+            if row['ID'] in ids or row['ID'] in self.done_records:
                 print(' Already did record')
                 continue
 
@@ -203,5 +204,6 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
                 self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+                ids.add(row['ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)

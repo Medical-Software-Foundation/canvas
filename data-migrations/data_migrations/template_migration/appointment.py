@@ -145,11 +145,12 @@ class AppointmentLoaderMixin(MappingMixin, FileWriterMixin):
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
+        ids = set()
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
             print(row)
 
-            if row['ID'] in self.done_records or row['ID'] in self.ignore_records:
+            if row['ID'] in ids or row['ID'] in self.done_records or row['ID'] in self.ignore_records:
                 print(' Already looked at record')
                 continue
 
@@ -220,12 +221,11 @@ class AppointmentLoaderMixin(MappingMixin, FileWriterMixin):
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
-                with open(self.done_file, 'a') as done:
-                    print(' Complete Apt')
-                    done.write(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}\n")
+                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+                ids.add(row['ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
-                continue 
+                continue
 
 
             # need to check in and lock the appointment if appointment is historical

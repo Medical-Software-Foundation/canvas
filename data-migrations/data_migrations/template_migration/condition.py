@@ -32,9 +32,8 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
         icd10_code = row["ICD-10 Code"].replace(".", "").replace("-", "")
         if icd10_code in self.icd10_map:
             return False, self.icd10_map[icd10_code]
-        else:
-            err_msg = f"Display lookup for ICD-10 Code {icd10_code} not found."
-            return True, err_msg
+
+        return True, f"Display lookup for ICD-10 Code {icd10_code} not found."
 
     def validate(self, delimiter='|'):
         """
@@ -62,29 +61,29 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
             )
 
             validations = {
-                "Patient Identifier": validate_required,
-                "Clinical Status": validate_required,
-                "ICD-10 Code": validate_required,
-                "Onset Date": validate_date,
-                "Resolved Date": validate_date,
-                "Clinical Status": (validate_enum, {"possible_options": ['active', 'resolved']})
+                "Patient Identifier": [validate_required],
+                "ICD-10 Code": [validate_required],
+                "Onset Date": [validate_date],
+                "Resolved Date": [validate_date],
+                "Clinical Status": [validate_required, (validate_enum, {"possible_options": ['active', 'resolved']})]
             }
 
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
 
-                for field, validator_func in validations.items():
-                    kwargs = {}
-                    if isinstance(validator_func, tuple):
-                        validator_func, kwargs = validator_func
+                for field, validator_funcs in validations.items():
+                    for validator_func in validator_funcs:
+                        kwargs = {}
+                        if isinstance(validator_func, tuple):
+                            validator_func, kwargs = validator_func
 
-                    valid, value = validator_func(row[field].strip(), field, **kwargs)
-                    if valid:
-                        row[field] = value
-                    else:
-                        errors[key].append(value)
-                        error = True
+                        valid, value = validator_func(row[field].strip(), field, **kwargs)
+                        if valid:
+                            row[field] = value
+                        else:
+                            errors[key].append(value)
+                            error = True
 
                 error, value = self.validate_icd10_display_name(row)
                 if error:
@@ -116,10 +115,11 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
+        ids = set()
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
 
-            if row['ID'] in self.done_records:
+            if row['ID'] in ids or row['ID'] in self.done_records:
                 print(' Already did record')
                 continue
 
@@ -188,10 +188,11 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "reference": f"Practitioner/{practitioner_key}"
                 }
 
-            # print(json.dumps(payload, indent=2))
+            #print(json.dumps(payload, indent=2))
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
                 self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+                ids.add(row['ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
