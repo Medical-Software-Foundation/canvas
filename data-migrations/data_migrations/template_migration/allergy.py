@@ -2,9 +2,18 @@ import re, pytz, arrow, csv, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from utils import validate_header, validate_required, validate_date, validate_enum, MappingMixin
+from data_migrations.template_migration.utils import (
+    validate_header,
+    validate_required,
+    validate_date,
+    validate_enum,
+    MappingMixin,
+    FileWriterMixin
+)
+from data_migrations.template_migration.note import NoteMixin
 
-class AllergyLoaderMixin(MappingMixin):
+
+class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
         It will confirm the headers it expects as outlined in the template and validate each column.
@@ -46,29 +55,31 @@ class AllergyLoaderMixin(MappingMixin):
             )
 
             validations = {
-                "Patient Identifier": validate_required,
-                "Clinical Status": validate_required,
-                "Type": validate_required,
-                "FDB Code": validate_required,
-                "Onset Date": validate_date,
-                "Clinical Status": (validate_enum, {"possible_options": ['active', 'inactive']})
+                "ID": [validate_required],
+                "Patient Identifier": [validate_required],
+                "Clinical Status": [validate_required],
+                "Type": [validate_required, (validate_enum, {'possible_options': ['allergy', 'intolerance']})],
+                "FDB Code": [validate_required],
+                "Onset Date": [validate_date],
+                "Clinical Status": [(validate_enum, {"possible_options": ['active', 'inactive']})]
             }
             
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
                 
-                for field, validator_func in validations.items():
-                    kwargs = {}
-                    if isinstance(validator_func, tuple): 
-                        validator_func, kwargs = validator_func
-                    
-                    valid, value = validator_func(row[field].strip(), field, **kwargs)
-                    if valid:
-                        row[field] = value
-                    else:
-                        errors[key].append(value)
-                        error = True
+                for field, validator_funcs in validations.items():
+                    for validator_func in validator_funcs:
+                        kwargs = {}
+                        if isinstance(validator_func, tuple): 
+                            validator_func, kwargs = validator_func
+                        
+                        valid, value = validator_func(row[field].strip(), field, **kwargs)
+                        if valid:
+                            row[field] = value
+                        else:
+                            errors[key].append(value)
+                            error = True
 
                 if not error:
                     validated_rows.append(row)
@@ -81,7 +92,7 @@ class AllergyLoaderMixin(MappingMixin):
 
         return validated_rows
 
-    def load(self, validated_rows, system_unique_identifier):
+    def load(self, validated_rows, note_kwargs={}):
         """
             Takes the validated rows from self.validate() and 
             loops through to send them off the FHIR Create
@@ -97,7 +108,7 @@ class AllergyLoaderMixin(MappingMixin):
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
 
-            if row['id'] in self.done_records:
+            if row['ID'] in self.done_records:
                 print(' Already did record')
                 continue
 
@@ -107,12 +118,10 @@ class AllergyLoaderMixin(MappingMixin):
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
                 practitioner_key = self.map_provider(row['Recorded Provider'])
+                note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
             except BaseException as e:
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(f' {e}')
-                    errored.write(f"{row['id']}|{row['patient']}|{patient_key}|{e}\n")
-                    continue
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                continue
 
 
             payload = {
@@ -120,7 +129,7 @@ class AllergyLoaderMixin(MappingMixin):
                 "extension": [
                     {
                         "url": "http://schemas.canvasmedical.com/fhir/extensions/note-id",
-                        "valueId": note_key,
+                        "valueId": note_id,
                     }
                 ],
                 "clinicalStatus": {
@@ -134,7 +143,7 @@ class AllergyLoaderMixin(MappingMixin):
                 "verificationStatus": {
                     "coding": [
                         {
-                            "system": "http://terminology.hl7.org/CodeSystem/rowintolerance-verification",
+                            "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
                             "code": "confirmed",
                             "display": "Confirmed"
                         }
@@ -146,7 +155,8 @@ class AllergyLoaderMixin(MappingMixin):
                     "coding": [
                         {
                             "system": "http://www.fdbhealth.com/",
-                            "code": row['FDB Code']
+                            "code": row['FDB Code'],
+                            "display": row["Name"]
                         }
                     ]
                 },
@@ -154,7 +164,7 @@ class AllergyLoaderMixin(MappingMixin):
                     "reference": f"Patient/{patient_key}"
                 },
                 "note": (
-                    ([{"text": row['reaction']}] if row['reaction'] else []) +
+                    ([{"text": row['Reaction']}] if row['Reaction'] else []) +
                     ([{"text": f"Notes: {row['Free Text Note']}"}] if row['Free Text Note'] else [])
                 )
             }
@@ -167,16 +177,10 @@ class AllergyLoaderMixin(MappingMixin):
                 }
 
 
-            # print(json.dumps(payload, indent=2))
+            #print(json.dumps(payload, indent=2))
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
-                with open(self.done_file, 'a') as done:
-                    print(' Complete')
-                    done.write(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}\n")
-            except BaseException as e:            
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(' Errored')
-                    errored.write(f"{row['ID']}|{patient}|{patient_key}|{e}\n")
-                continue 
+                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+            except BaseException as e:
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)

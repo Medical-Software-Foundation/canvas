@@ -4,7 +4,17 @@ from collections import defaultdict
 from data_migrations.utils import fetch_from_json, write_to_json
 from data_migrations.template_migration.utils import validate_header, validate_required, validate_date, validate_enum, MappingMixin
 
-class MedicationLoaderMixin(MappingMixin):
+from data_migrations.template_migration.utils import (
+    validate_header,
+    validate_required,
+    MappingMixin,
+    FileWriterMixin
+)
+from data_migrations.template_migration.note import NoteMixin
+from data_migrations.template_migration.commands import CommandMixin
+
+
+class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
         It will confirm the headers it expects as outlined in the template and validate each column.
@@ -120,7 +130,9 @@ class MedicationLoaderMixin(MappingMixin):
                     "Patient Identifier",
                     "Status",
                     "RxNorm/FDB Code",
-                    "SIG"
+                    "SIG",
+                    "Medication Name",
+                    "Original Code"
                 }  
             )
 
@@ -158,7 +170,7 @@ class MedicationLoaderMixin(MappingMixin):
 
         return validated_rows
 
-    def load(self, validated_rows, system_unique_identifier):
+    def load(self, validated_rows, note_kwargs={}):
         """
             Takes the validated rows from self.validate() and 
             loops through to send them off the FHIR Create
@@ -170,11 +182,12 @@ class MedicationLoaderMixin(MappingMixin):
         self.patient_map = fetch_from_json(self.patient_map_file) 
 
         total_count = len(validated_rows)
-        print(f'      Found {len(validated_rows)} appointments')
+        print(f'      Found {len(validated_rows)} records')
+        ids = set()
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
 
-            if row['id'] in self.done_records:
+            if row['ID'] in ids or row['ID'] in self.done_records:
                 print(' Already did record')
                 continue
 
@@ -183,12 +196,10 @@ class MedicationLoaderMixin(MappingMixin):
             try:
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
+                note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
             except BaseException as e:
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(f' {e}')
-                    errored.write(f"{row['id']}|{row['patient']}|{patient_key}|{e}\n")
-                    continue
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                continue
 
 
             payload = {
@@ -196,7 +207,7 @@ class MedicationLoaderMixin(MappingMixin):
                 "extension": [
                     {
                         "url": "http://schemas.canvasmedical.com/fhir/extensions/note-id",
-                        "valueId": note_key,
+                        "valueId": note_id,
                     }
                 ],
                 "status": row['Status'],
@@ -210,42 +221,83 @@ class MedicationLoaderMixin(MappingMixin):
                 ] if row['SIG'] else [])
             }
 
-            # mapping_key = f"{row['rxnorm']}|{row['name']}".lower()
-            # found_code = self.medication_map.get(mapping_key)
-            # if found_code:
-            #     if type(found_code) == str:
-            #         found_code = eval(found_code)
-            #     code = next(item['code'] for item in found_code if item["system"] == 'http://www.fdbhealth.com/')
-            #     payload["medicationReference"] = {
-            #         "reference": f"Medication/fdb-{code}",
-            #     }
-            # elif row['ndc'] and row['ndc'] != '0':
-            #     payload["medicationCodeableConcept"] =  {"coding": [
-            #         {
-            #             "system": "http://hl7.org/fhir/sid/ndc",
-            #             "code": row['ndc'],
-            #             "display": row['name']
-            #         }
-            #     ]}
-            # else:
-            #     payload["medicationCodeableConcept"] =  {"coding": [
-            #         {
-            #             "system": "unstructured",
-            #             "code": "N/A",
-            #             "display": row['name'] or row['signature_note'] or row['notes']
-            #         }
-            #     ]}
+            # add the right coding depending on if it unstructured or FDB
+            if row["RxNorm/FDB Code"] == 'unstructured':
+                payload["medicationCodeableConcept"] =  {"coding": [
+                    {
+                        "system": "unstructured",
+                        "code": "N/A",
+                        "display": row['Medication Name']
+                    }
+                ]}
+            else:
+                payload["medicationReference"] = {
+                    "reference": f'Medication/fdb-{row["RxNorm/FDB Code"]}',
+                }
 
-            # print(json.dumps(payload, indent=2))
+            #print(json.dumps(payload, indent=2))
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
-                with open(self.done_file, 'a') as done:
-                    print(' Complete')
-                    done.write(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}\n")
-            except BaseException as e:            
-                e = str(e).replace('\n', '')
-                with open(self.errored_file, 'a') as errored:
-                    print(' Errored')
-                    errored.write(f"{row['ID']}|{patient}|{patient_key}|{e}\n")
-                continue 
+                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+                ids.add(row['ID'])
+            except BaseException as e:
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+
+    def load_via_commands_api(self, validated_rows, note_kwargs={}):
+        """
+            Takes the validated rows from self.validate() and 
+            loops through to send them off the FHIR Create
+
+            Outputs to CSV to keep track of records 
+            If any  error, the error message will output to the errored file
+        """
+        self.patient_map = fetch_from_json(self.patient_map_file) 
+
+        total_count = len(validated_rows)
+        print(f'      Found {len(validated_rows)} records')
+        ids = set()
+        for i, row in enumerate(validated_rows):
+            print(f'Ingesting ({i+1}/{total_count})')
+
+            if row['ID'] in ids or row['ID'] in self.done_records:
+                print(' Already did record')
+                continue
+
+            patient = row['Patient Identifier']
+            patient_key = ""
+            try:
+                # try mapping required Canvas identifiers
+                patient_key = self.map_patient(patient)
+                note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
+                coding = self.med_mapping[f"{row['Medication Name']}|{row['Original Code']}"]
+            except BaseException as e:
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                continue
+
+
+            code = next(item['code'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
+            text = next(item['display'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
+
+            payload = {
+                "noteKey": note_id,
+                "schemaKey": "medicationStatement",
+                "values": {
+                    "sig": row['SIG'],
+                    "medication": {
+                        "text": text,
+                        "value": code,
+                        "extra": {
+                            "coding": coding
+                        }
+                    }
+                }
+            }
+
+            try:
+                canvas_id = self.create_command(payload)
+                self.commit_command(canvas_id)
+                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+                ids.add(row['ID'])
+            except BaseException as e:
+                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)

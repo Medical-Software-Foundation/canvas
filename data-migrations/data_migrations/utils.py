@@ -291,3 +291,4 @@ class FHIRHelper:
         lock_response = requests.request("PATCH", base_url, headers=self.fumage_helper.headers, data=json.dumps({"stateChange": "LKD"}))
         if lock_response.status_code != 200:
             raise Exception(f"Failed to perform {lock_response.url}. \n {lock_response.text}")
+

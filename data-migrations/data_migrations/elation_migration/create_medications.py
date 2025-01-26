@@ -25,21 +25,29 @@ class MedicationLoader(MedicationLoaderMixin):
 
 
     def __init__(self, environment, *args, **kwargs):
-        # self.patient_map_file = 'PHI/patient_id_map.json'
-        # self.patient_map = fetch_from_json(self.patient_map_file)
-        # self.doctor_map = fetch_from_json("mappings/doctor_map.json")
+        self.data_type = 'medications'
+
+        self.med_mapping_file = "mappings/medication_coding_map.json"
+        self.patient_map_file = 'PHI/patient_id_map.json'
+        self.note_map_file = "mappings/historical_note_map.json"
         self.original_csv_file = "PHI/Icon ShareFile Data - medications.csv"
-        self.csv_file = 'PHI/medications.csv'
-        # self.ignore_file = 'results/ignored_appointments.csv'
-        # self.ignore_records = fetch_complete_csv_rows(self.ignore_file)
-        # self.validation_error_file = 'results/PHI/errored_appointment_validation.json'
-        # self.error_file = 'results/errored_appointments.csv'
-        # self.done_file = 'results/done_appointments.csv'
-        # self.done_records = fetch_complete_csv_rows(self.done_file)
+        self.csv_file = f'PHI/{self.data_type}.csv'
+        self.validation_error_file = f'results/PHI/errored_{self.data_type}_validation.json'
+        self.error_file = f'results/errored_{self.data_type}.csv'
+        self.done_file = f'results/done_{self.data_type}.csv'
+
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
 
-        self.med_mapping_file = "mappings/medication_coding_map.json"
+        self.done_records = fetch_complete_csv_rows(self.done_file)
+        self.patient_map = fetch_from_json(self.patient_map_file)
+        self.note_map = fetch_from_json(self.note_map_file)
+        self.med_mapping = fetch_from_json(self.med_mapping_file)
+
+        # default needed for mapping
+        self.default_location = "afad4e70-ca25-4a32-9f5c-2c83e2877b43"
+        self.default_note_type_name = "Icon Data Migration"
+        super().__init__(*args, **kwargs)
 
     def make_fdb_mapping(self, delimiter='|'):
         mapping = {}
@@ -58,16 +66,16 @@ class MedicationLoader(MedicationLoaderMixin):
             the Canvas Data Migration Template
         """
         headers = {
-            "Unique ID",
+            "ID",
             "Patient Identifier",
             "Status",
             "RxNorm/FDB Code",
             "SIG",
             "Medication Name",
+            "Original Code"
         }
 
         # id,Patient_Id,DISPLAYED_MEDICATION_NAME,CUI,MEDICATION_TYPE,FULFILLMENT_TYPE
-
 
 
         with open(self.csv_file, 'w') as f:
@@ -77,13 +85,21 @@ class MedicationLoader(MedicationLoaderMixin):
             with open(self.original_csv_file, 'r') as file:
                 reader = csv.DictReader(file, delimiter=delimiter)
                 for row in reader:
+                    mapping_found = self.med_mapping.get(f"{row['DISPLAYED_MEDICATION_NAME']}|{row['CUI']}")
+
+                    if mapping_found:
+                        code = next(item['code'] for item in mapping_found if item["system"] == 'http://www.fdbhealth.com/')
+                    else:
+                        code = "unstructured"
+
                     writer.writerow({
-                        "Unique ID": row['id'],
+                        "ID": row['id'],
                         "Patient Identifier": row['Patient_Id'],
-                        "Status": "",
-                        "RxNorm/FDB Code": row['CUI'],
+                        "Status": "active",
+                        "RxNorm/FDB Code": code,
                         "SIG": "",
                         "Medication Name": row['DISPLAYED_MEDICATION_NAME'],
+                        "Original Code": row['CUI']
                     })
 
                 print("CSV successfully made")
@@ -99,10 +115,12 @@ if __name__ == '__main__':
 
     # Make the Avon API call to their List Patients endpoint and convert the JSON return 
     # to the template CSV loader
-    loader.make_csv(delimiter=delimiter)
+    #loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
-    #valid_rows = loader.validate(delimiter=delimiter)
+    valid_rows = loader.validate(delimiter=delimiter)
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    #loader.load(valid_rows, system_unique_identifier='avon', end_date_time_frame="2025-01-01")
+    #loader.load(valid_rows, {"encounter_start_time": "2025-01-31"})
+
+    loader.load_via_commands_api(valid_rows, note_kwargs={"encounter_start_time": "2025-01-31"})
