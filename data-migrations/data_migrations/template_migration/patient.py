@@ -270,11 +270,4 @@ class PatientLoaderMixin:
                     patient_map[patient_identifier] = patient_key
                     write_to_json(self.patient_map_file, patient_map)
             except Exception as e:
-                # if any FHIR request failed, output to file to go back and fix
-                e = str(e).replace('\n', '')
-                with open(self.error_file, 'a') as errored:
-                    print(' Errored patient outputing error message to file...')
-                    errored.write(f"{patient_identifier}|{row['First Name']}|{row['Last Name']}|{e}\n")
-
-
-
+                self.error_row(f"{patient_identifier}|{row['First Name']}|{row['Last Name']}", e)

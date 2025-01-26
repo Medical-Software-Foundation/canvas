@@ -358,7 +358,7 @@ class AppointmentLoader:
 		for apt_id in errored:
 			print(apt_id)
 			try:
-				self.check_in_and_lock_appointment(apt_id)
+				self.fumage_helper.check_in_and_lock_appointment(apt_id)
 				print('  complete')
 			except Exception as e:
 				print(e)

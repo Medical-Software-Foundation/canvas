@@ -96,7 +96,7 @@ class ConditionLoader(ConditionLoaderMixin):
 
 if __name__ == '__main__':
     # change the customer_identifier to what is defined in your config.ini file
-    loader = ConditionLoader(environment='localhost')
+    loader = ConditionLoader(environment='phi-collaborative-test')
     delimiter = '|'
 
     # Make the Avon API call to their List Appointments endpoint and convert the JSON return
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
-    valid_rows = loader.validate(delimiter=delimiter)
+    #valid_rows = loader.validate(delimiter=delimiter)
 
     # # If you are ready to load the rows that have passed validation to your Canvas instance
-    loader.load(valid_rows)
+    #loader.load(valid_rows)

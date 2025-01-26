@@ -3,8 +3,10 @@ from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
 from data_migrations.template_migration.utils import validate_header, validate_required, validate_datetime, MappingMixin, FileWriterMixin
+from data_migrations.template_migration.note import NoteMixin
 
-class AppointmentLoaderMixin(MappingMixin, FileWriterMixin):
+
+class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
         It will confirm the headers it expects as outlined in the template and validate each column.

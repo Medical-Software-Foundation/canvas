@@ -93,8 +93,8 @@ class AppointmentLoader(AppointmentLoaderMixin):
                     "Patient Identifier": row['attendees'][0]['attendee'],
                     "Appointment Type": self.default_note_type,
                     "Reason for Visit Code": "",
-                    "Reason for Visit Text": row['name'],
-                    "Location": self.default_note_type,
+                    "Reason for Visit Text": row['name'].split('between')[0],
+                    "Location": self.default_location,
                     "Meeting Link": row.get('video_call', {}).get('join_url') or "",
                     "Start Date / Time": row['start_time'],
                     "End Date/Time": row['end_time'],
@@ -117,4 +117,4 @@ if __name__ == '__main__':
     valid_rows = loader.validate(delimiter=delimiter)
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    loader.load(valid_rows, system_unique_identifier='avon', end_date_time_frame="2025-01-01")
+    #loader.load(valid_rows, system_unique_identifier='avon', end_date_time_frame="2025-01-01")
