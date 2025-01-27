@@ -2,7 +2,7 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "growth_charts",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "This protocol enables you to input observations into growth charts and generate graphs.",
     "components": {
         "protocols": [
             {
