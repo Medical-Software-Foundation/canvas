@@ -43,6 +43,11 @@
     border: 1px solid #d4d4d4;
     border-radius: 4px;
   }
+  @media print {
+    .pageBreak {
+      page-break-after: always;
+    }
+  }
 </style>
 <div id="container" class="container">
   <div class="buttonWrapper">
@@ -77,7 +82,7 @@ const chartSize = {
   width: 700,
   height: 450,
   marginTop: 20,
-  marginRight: 20,
+  marginRight: 40,
   marginBottom: 30,
   marginLeft: 30,
 };
@@ -111,16 +116,20 @@ function convertValues(value, type, unit) {
 }
 
 function unitsLabel(unit, type) {
+  if (type === dataTypes.Generic) {
+    return "";
+  }
+
   return unit === unitsTypes.LBS
     ? type === dataTypes.Weight
-      ? "lbs"
-      : "inches"
+      ? "(lbs)"
+      : "(inches)"
     : type === dataTypes.Weight
-    ? "kg"
-    : "cm";
+    ? "(kg)"
+    : "(cm)";
 }
 
-function createChart({ data, layerData, xType, yType, yLabel }, units) {
+function createChart({ data, layerData, xType, yType, xLabel, yLabel }, units) {
   const dataValues = data.map((d) => ({
     x: convertValues(d.x, xType, units),
     y: convertValues(d.y, yType, units),
@@ -162,7 +171,17 @@ function createChart({ data, layerData, xType, yType, yLabel }, units) {
       "transform",
       `translate(0,${chartSize.height - chartSize.marginBottom})`
     )
-    .call(d3.axisBottom(x).ticks(10).tickSizeOuter(0));
+    .call(d3.axisBottom(x).ticks(10).tickSizeOuter(0))
+    .call((g) =>
+      g
+        .append("text")
+        .attr("x", 30)
+        .attr("y", 35)
+        .attr("fill", "currentColor")
+        .attr("text-anchor", "start")
+        .attr("font-size", "12px")
+        .text(`${xLabel} ${unitsLabel(units, xType)}`)
+    );
 
   // Add the vertical axis.
   svg
@@ -178,7 +197,7 @@ function createChart({ data, layerData, xType, yType, yLabel }, units) {
         .attr("fill", "currentColor")
         .attr("text-anchor", "start")
         .attr("font-size", "12px")
-        .text(`${yLabel} - ${unitsLabel(units, yType)}`)
+        .text(`${yLabel} ${unitsLabel(units, yType)}`)
     );
 
   // Compute the points in pixel space as [x, y, z], where z is the name of the series.
@@ -187,7 +206,7 @@ function createChart({ data, layerData, xType, yType, yLabel }, units) {
   const layerPoints = layerValues.map((d) => [
     x(d.x),
     y(d.y),
-    `${parseInt(d.y)} ${unitsLabel(units, yType)} - ${parseInt(d.x)}`,
+    `${parseFloat(d.y).toFixed(1)} ${unitsLabel(units, yType)}`,
   ]);
 
   // Group the points by series.
@@ -301,7 +320,7 @@ function generateGraphs(graphs, units) {
     const c = createChart(g, units);
 
     const graphContainer = document.createElement('div');
-    graphContainer.className = 'graphContainer';
+    graphContainer.className = 'graphContainer pageBreak';
 
     const titleWrapper = document.createElement('div');
     titleWrapper.className = 'titleWrapper';

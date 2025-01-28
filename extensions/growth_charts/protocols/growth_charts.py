@@ -66,6 +66,7 @@ class GenerateVitalsGraphs(ActionButton):
         is_less_than_36_months_old = age_in_months < 36
 
         observation_weight = Observation.objects.for_patient(self.target).filter(name="weight")
+        observation_height = Observation.objects.for_patient(self.target).filter(name="height")
         observation_length = Observation.objects.for_patient(self.target).filter(name="length")
         observation_bmi = Observation.objects.for_patient(self.target).filter(name="bmi")
         observation_head_circumference = Observation.objects.for_patient(self.target).filter(name="head_circumference")
@@ -89,6 +90,13 @@ class GenerateVitalsGraphs(ActionButton):
                 age_in_months = get_age_in_months(birth_date, note.datetime_of_service)
                 length_in_cm = convert_in_to_cm(obs.value)
                 length_for_age[age_in_months] = length_in_cm
+
+        for obs in observation_height:
+            if obs.value:
+                note = Note.objects.get(dbid=obs.note_id)
+                age_in_months = get_age_in_months(birth_date, note.datetime_of_service)
+                height_in_cm = convert_in_to_cm(obs.value)
+                length_for_age[age_in_months] = height_in_cm
 
         for obs in observation_head_circumference:
             if obs.value:
