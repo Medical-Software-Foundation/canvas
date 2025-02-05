@@ -269,26 +269,26 @@ class FHIRHelper:
 
         return False
 
-    def check_in_and_lock_appointment(self, canvas_appointment_id, note_id):
+    def check_in_and_lock_appointment(self, canvas_appointment_id, note_id=None):
         """
             For a historical data migration, we want to mark all appointments loaded and completed,
             so this function will find the note associated to each appointment,
             check in the note and then lock the note via the Note API
         """
         if canvas_appointment_id and not note_id:
-            read_response = self.fumage_helper.read("Appointment", canvas_appointment_id)
+            read_response = self.read("Appointment", canvas_appointment_id)
             if read_response.status_code != 200:
                 raise Exception("Failed to find appointment note to lock")
 
             note_id = read_response.json()["extension"][0]['valueId']
 
-        base_url = f"https://{self.environment}.canvasmedical.com/core/api/notes/v1/Note/{note_id}"
+        base_url = f"{self.base_url}/core/api/notes/v1/Note/{note_id}"
 
-        check_in_response = requests.request("PATCH", base_url, headers=self.fumage_helper.headers, data=json.dumps({"stateChange": "CVD"}))
+        check_in_response = requests.request("PATCH", base_url, headers=self.headers, data=json.dumps({"stateChange": "CVD"}))
         if check_in_response.status_code != 200 and 'CVD -> CVD' not in check_in_response.text:
             raise Exception(f"Failed to perform {check_in_response.url}. \n {check_in_response.text}")
 
-        lock_response = requests.request("PATCH", base_url, headers=self.fumage_helper.headers, data=json.dumps({"stateChange": "LKD"}))
+        lock_response = requests.request("PATCH", base_url, headers=self.headers, data=json.dumps({"stateChange": "LKD"}))
         if lock_response.status_code != 200:
             raise Exception(f"Failed to perform {lock_response.url}. \n {lock_response.text}")
 

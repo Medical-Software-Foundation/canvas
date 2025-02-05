@@ -43,7 +43,7 @@ class AppointmentLoader(AppointmentLoaderMixin):
         self.avon_helper = AvonHelper(environment)
 
         # default needed for mapping
-        self.default_location = "9e757329-5ab1-4722-bab9-cc25002fa5c0"
+        self.default_location = "247ad67a-5eed-4a26-a2d8-1951949a37d4"
         self.default_note_type = "avon_historical_note"
 
     def make_csv(self, delimiter='|'):
@@ -85,8 +85,6 @@ class AppointmentLoader(AppointmentLoaderMixin):
                 if len(row['attendees']) != 1:
                     self.ignore_row(row['id'], "Attendees list does not contain only 1")
                     continue
-
-                patient = row['attendees'][0]['attendee']
 
                 writer.writerow({
                     "ID": row.get('id'),

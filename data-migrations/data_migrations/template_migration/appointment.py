@@ -8,22 +8,22 @@ from data_migrations.template_migration.note import NoteMixin
 
 class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
     """
-        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
+        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect:
 
-        Required Formats/Values (Case Insensitive):  
+        Required Formats/Values (Case Insensitive):
             Patient Identifier: Canvas key, unique identifier defined on the demographics page
             Appointment Type: Active, Resolved
-            Location:  Location ID configured in Canvas. 
+            Location:  Location ID configured in Canvas.
             Start / End Date/time: YYYY-MM-DDTHH:mm:ssZZ
             Duration: Time in minutes
-            Recorded Provider: Staff Canvas key. 
+            Recorded Provider: Staff Canvas key.
     """
 
     def validate_end_time(self, row):
-        """ Confirm there is an end date set for the appointment, 
-        It is confirmed that Start Date / Time is already there. 
+        """ Confirm there is an end date set for the appointment,
+        It is confirmed that Start Date / Time is already there.
         Need to ensure duration or End Date Time is there
         """
 
@@ -39,18 +39,18 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
         return False, "Unable to calculate appointment end date/time"
 
     def validate(self, delimiter='|'):
-        """ 
+        """
             Loop throw the CSV file to validate each row has the correct columns and values
-            Append validated rows to a list to use to load. 
+            Append validated rows to a list to use to load.
             Export errors to a file/console
-            
+
         """
         validated_rows = []
         errors = defaultdict(list)
         with open(self.csv_file, "r") as file:
             reader = csv.DictReader(file, delimiter=delimiter)
 
-            validate_header(reader.fieldnames, 
+            validate_header(reader.fieldnames,
                 accepted_headers = {
                     "ID",
                     "Patient Identifier",
@@ -63,7 +63,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "End Date/Time",
                     "Duration",
                     "Provider"
-                }  
+                }
             )
 
             validations = {
@@ -72,16 +72,16 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 "Provider": validate_required,
                 "Start Date / Time": validate_datetime,
             }
-            
+
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
-                
+
                 for field, validator_func in validations.items():
                     kwargs = {}
-                    if isinstance(validator_func, tuple): 
+                    if isinstance(validator_func, tuple):
                         validator_func, kwargs = validator_func
-                    
+
                     valid, value = validator_func(row[field].strip(), field, **kwargs)
                     if valid:
                         row[field] = value
@@ -136,14 +136,14 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
     def load(self, validated_rows, system_unique_identifier, end_date_time_frame=None):
         """
-            Takes the validated rows from self.validate() and 
+            Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
 
-            Outputs to CSV to keep track of records 
+            Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
 
-        end_date_time_frame = arrow.get(end_date_time_frame) if end_date_time_frame else None 
+        end_date_time_frame = arrow.get(end_date_time_frame) if end_date_time_frame else None
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
@@ -190,7 +190,9 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 },
                 "reasonCode":[self.map_rfv(row)],
                 "supportingInformation":[
-                    {"reference": f"Location/{location}"}
+                    {
+                        "reference": f"Location/{location}"
+                    }
                 ],
                 "start": start_time.isoformat(),
                 "end": arrow.get(row["End Date/Time"]).isoformat(),
@@ -213,11 +215,28 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "reference": "#appointment-meeting-endpoint",
                     "type": "Endpoint"
                 })
-                payload['contained'] = {
-                    "resourceType": "Endpoint",
-                    "id": "appointment-meeting-endpoint",
-                    "address": meeting_link
-                }
+                payload['contained'] = [
+                    {
+                        "resourceType": "Endpoint",
+                        "id": "appointment-meeting-endpoint",
+                        "address": meeting_link,
+                        "status": "fulfilled",
+                        "connectionType": {
+                            "code": "https"
+                        },
+                        "payloadType":
+                        [
+                            {
+                                "coding":
+                                [
+                                    {
+                                        "code": "video-call"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
 
             #print(json.dumps(payload, indent=2))
 
@@ -232,8 +251,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
             # need to check in and lock the appointment if appointment is historical
             if payload['status'] == 'fulfilled':
-                try:                
+                try:
                     self.fumage_helper.check_in_and_lock_appointment(canvas_id)
                 except BaseException as e:
                     self.error_row(f"{row['ID']}|{patient}|{patient_key}", e, file=self.errored_note_state_event_file)
-        
