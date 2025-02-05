@@ -48,8 +48,8 @@ class ConditionLoader(ConditionLoaderMixin):
         self.icd10_map = fetch_from_json(self.icd10_map_file)
 
         # default needed for mapping
-        self.default_location = "227f6c9f-b8fd-46f7-a5f6-81ce1caa4be4"
-        self.default_note_type_name = "Historical Note"
+        self.default_location = "9e757329-5ab1-4722-bab9-cc25002fa5c0"
+        self.default_note_type_name = "Avon Data Migration"
         super().__init__(*args, **kwargs)
 
     def make_csv(self, delimiter='|'):
