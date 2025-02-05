@@ -3,9 +3,14 @@ growth_charts
 
 ## Description
 
-This plugin enables you to input observations, such as height, weight, etc., into growth charts provided by WHO and CDC. These charts are designed for children and adolescents and help determine their current percentile, which shows how their measurements compare to others of the same age and gender.
+This plugin enables you to input observations, such as height, weight, etc., into growth charts provided by WHO and CDC. These charts are designed for children and adolescents and help determine their current percentile, which shows how their measurements compare to others of the same age and sex.
 
-To do this we are using a template that accepts an array of the following parameters:
+Users can toggle between the WHO and CDC charts, select their unit of measurement, and print from this plugin driven modal.
+
+![growth-charts](/extensions/growth_charts/growth-charts.png)
+
+
+To create these visualizations, we are using a template that accepts an array of the following parameters:
 
     data - file containing the main graph data (x, y, z)
     title - graph title
