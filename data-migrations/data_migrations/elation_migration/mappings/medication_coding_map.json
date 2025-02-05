@@ -1466,17 +1466,17 @@
         }
     ],
     "Levothyroxine Sodium 112 MCG Tab|311302": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "296237",
-                            "display": "levothyroxine 112 mcg tablet"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "966248",
-                            "display": "levothyroxine 112 mcg tablet"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "296237",
+            "display": "levothyroxine 112 mcg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "966248",
+            "display": "levothyroxine 112 mcg tablet"
+        }
+    ],
     "Propranolol ER 80 mg Cap ER 24hr|312689": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -2740,17 +2740,17 @@
         }
     ],
     "Albuterol Sulfate HFA 108 (90 Base) MCG/ACT Aerosol Solution|745682": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "279394",
-                            "display": "albuterol sulfate HFA 90 mcg/actuation aerosol inhaler"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "801092",
-                            "display": "albuterol sulfate HFA 90 mcg/actuation aerosol inhaler"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "279394",
+            "display": "albuterol sulfate HFA 90 mcg/actuation aerosol inhaler"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "801092",
+            "display": "albuterol sulfate HFA 90 mcg/actuation aerosol inhaler"
+        }
+    ],
     "Albuterol Sulfate HFA 108 (90 Base) MCG/ACT Aerosol Solution|2123072": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -5658,17 +5658,17 @@
         }
     ],
     "Ciprodex 0.3-0.1 % Suspension Otic|404930": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "451215",
-                            "display": "Ciprodex 0.3 %-0.1 % ear drops,suspension"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "403908",
-                            "display": "Ciprodex 0.3 %-0.1 % ear drops,suspension"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "451215",
+            "display": "Ciprodex 0.3 %-0.1 % ear drops,suspension"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "403908",
+            "display": "Ciprodex 0.3 %-0.1 % ear drops,suspension"
+        }
+    ],
     "Vascepa 1 GM Cap|1304979": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -6357,17 +6357,17 @@
         }
     ],
     "Ventolin HFA 108 (90 Base) MCG/ACT Aerosol Solution Inhalation|353534": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "297987",
-                            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "801092",
-                            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "297987",
+            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "801092",
+            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
+        }
+    ],
     "Ventolin HFA 108 (90 Base) MCG/ACT Aerosol Solution Inhalation|2123072": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -6443,17 +6443,17 @@
         }
     ],
     "Ventolin HFA 108 (90 Base) MCG/ACT Aerosol Solution Inhalation|8887": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "297987",
-                            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "801092",
-                            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "297987",
+            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "801092",
+            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
+        }
+    ],
     "Ventolin HFA 108 (90 Base) MCG/ACT Aerosol Solution Inhalation|745679": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -6499,17 +6499,17 @@
         }
     ],
     "Ventolin HFA 108 (90 Base) MCG/ACT Aerosol Solution Inhalation|307782": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "297987",
-                            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "801092",
-                            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "297987",
+            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "801092",
+            "display": "Ventolin HFA 90 mcg/actuation aerosol inhaler"
+        }
+    ],
     "Pravastatin Sodium 10 mg Tab|904458": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -7322,17 +7322,17 @@
         }
     ],
     "NovoLOG FlexPen 100 UNIT/ML Solution Pen-injector|284810": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "448625",
-                            "display": "Novolog FlexPen U-100 Insulin aspart 100 unit/mL (3 mL) subcutaneous"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "1653202",
-                            "display": "Novolog FlexPen U-100 Insulin aspart 100 unit/mL (3 mL) subcutaneous"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "448625",
+            "display": "Novolog FlexPen U-100 Insulin aspart 100 unit/mL (3 mL) subcutaneous"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1653202",
+            "display": "Novolog FlexPen U-100 Insulin aspart 100 unit/mL (3 mL) subcutaneous"
+        }
+    ],
     "Insulin Degludec FlexTouch 100 UNIT/ML Solution Pen-injector|1670011": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -7729,12 +7729,12 @@
         }
     ],
     "PreserVision AREDS Cap|829647": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "580110",
-                            "display": "PreserVision AREDS-2 250 mg-90 mg-40 mg-1 mg capsule"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "580110",
+            "display": "PreserVision AREDS-2 250 mg-90 mg-40 mg-1 mg capsule"
+        }
+    ],
     "Zinc Gluconate 100 mg Tab|198902": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -7910,17 +7910,17 @@
         }
     ],
     "Vitamin D3 1.25 mg (50000 UT) Cap|705728": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "290138",
-                            "display": "cholecalciferol (vitamin D3) 125 mcg (5,000 unit) capsule"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "240029",
-                            "display": "cholecalciferol (vitamin D3) 125 mcg (5,000 unit) capsule"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "290138",
+            "display": "cholecalciferol (vitamin D3) 125 mcg (5,000 unit) capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "240029",
+            "display": "cholecalciferol (vitamin D3) 125 mcg (5,000 unit) capsule"
+        }
+    ],
     "Hydrocortisone (Perianal) 2.5 % Crm|310879": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -7957,7 +7957,18 @@
             "display": "Cough and Cold (chlorpheniramine-DM) 4 mg-30 mg tablet"
         }
     ],
-    "Cough & Cold 4/30 mg Tab|248512": [],
+    "Cough & Cold 4/30 mg Tab|248512": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "476074",
+            "display": "Cough and Cold (chlorpheniramine-DM) 4 mg-30 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1421985",
+            "display": "Cough and Cold (chlorpheniramine-DM) 4 mg-30 mg tablet"
+        }
+    ],
     "Fish Oil 500 mg Cap|1092409": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -9415,17 +9426,17 @@
         }
     ],
     "Clindamycin Phos-Benzoyl Perox 1.2-5 % Gel|1301618": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "550266",
-                            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "1540241",
-                            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
-                        }
-                    ],
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "550266",
+            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1540241",
+            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
+        }
+    ],
     "Clindamycin Phos-Benzoyl Perox 1.2-5 % Gel|1540241": [
         {
             "system": "http://www.fdbhealth.com/",
@@ -9463,15 +9474,1420 @@
         }
     ],
     "Clindamycin Phos-Benzoyl Perox 1.2-2.5 % Gel|828975": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": "550266",
-                            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
-                        },
-                        {
-                            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
-                            "code": "1540241",
-                            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
-                        }
-                    ]
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "550266",
+            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1540241",
+            "display": "clindamycin 1.2 % (1 % base)-benzoyl peroxide 5 % topical gel"
+        }
+    ],
+    "Zithromax Z-Pak 250 mg Tab|539819": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "192882",
+            "display": "Zithromax Z-Pak 250 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "308460",
+            "display": "Zithromax Z-Pak 250 mg tablet"
+        }
+    ],
+    "Zithromax Z-Pak 250 mg Tab|308460": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "192882",
+            "display": "Zithromax Z-Pak 250 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "308460",
+            "display": "Zithromax Z-Pak 250 mg tablet"
+        }
+    ],
+    "Lidocaine 4 % Patch|248266": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "166759",
+            "display": "lidocaine 4 % topical patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1737778",
+            "display": "lidocaine 4 % topical patch"
+        }
+    ],
+    "Lidocaine 4 % Patch|1012994": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "605524",
+            "display": "lidocaine HCl 4 % topical patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1012994",
+            "display": "lidocaine HCl 4 % topical patch"
+        }
+    ],
+    "Lidocaine 4 % Patch|1737778": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "166759",
+            "display": "lidocaine 4 % topical patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1737778",
+            "display": "lidocaine 4 % topical patch"
+        }
+    ],
+    "Triamcinolone Acetonide 0.1 % Oint|1085636": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "242254",
+            "display": "triamcinolone acetonide 0.1 % topical ointment"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1085636",
+            "display": "triamcinolone acetonide 0.1 % topical ointment"
+        }
+    ],
+    "Triamcinolone Acetonide 0.1 % Oint|106255": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "242254",
+            "display": "triamcinolone acetonide 0.1 % topical ointment"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1085636",
+            "display": "triamcinolone acetonide 0.1 % topical ointment"
+        }
+    ],
+    "Anoro Ellipta 62.5-25 MCG/ACT Aerosol Powder Breath Activated|1487520": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "580958",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487519",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487524",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487527",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487528",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        }
+    ],
+    "Anoro Ellipta 62.5-25 MCG/ACT Aerosol Powder Breath Activated|1487519": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "580958",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487519",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487524",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487527",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487528",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        }
+    ],
+    "Anoro Ellipta 62.5-25 MCG/ACT Aerosol Powder Breath Activated|1487527": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "580958",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487519",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487524",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487527",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1487528",
+            "display": "Anoro Ellipta 62.5 mcg-25 mcg/actuation powder for inhalation"
+        }
+    ],
+    "HYDROcodone-Acetaminophen 5/300 mg Tab|856987": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "476332",
+            "display": "hydrocodone 5 mg-acetaminophen 300 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "856987",
+            "display": "hydrocodone 5 mg-acetaminophen 300 mg tablet"
+        }
+    ],
+    "Ezetimibe 10 mg Tab|349556": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "446639",
+            "display": "ezetimibe 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "349556",
+            "display": "ezetimibe 10 mg tablet"
+        }
+    ],
+    "Brimonidine Tartrate 0.2 % Solution|861200": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "249555",
+            "display": "brimonidine 0.2 % eye drops"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "861200",
+            "display": "brimonidine 0.2 % eye drops"
+        }
+    ],
+    "Dorzolamide 2 % Solution|310015": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "297032",
+            "display": "dorzolamide 2 % eye drops"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310015",
+            "display": "dorzolamide 2 % eye drops"
+        }
+    ],
+    "Losartan Potassium-HCTZ 100/12.5 mg Tab|979464": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "475457",
+            "display": "losartan 100 mg-hydrochlorothiazide 12.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "979464",
+            "display": "losartan 100 mg-hydrochlorothiazide 12.5 mg tablet"
+        }
+    ],
+    "Losartan Potassium-HCTZ 100/12.5 mg Tab|597400": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "218840",
+            "display": "losartan 100 mg-hydrochlorothiazide 25 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "979471",
+            "display": "losartan 100 mg-hydrochlorothiazide 25 mg tablet"
+        }
+    ],
+    "Clindamycin Phosphate 1 % Swab|797274": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "248407",
+            "display": "clindamycin phosphate 1 % topical swab"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "797274",
+            "display": "clindamycin phosphate 1 % topical swab"
+        }
+    ],
+    "Vitamin D (Ergocalciferol) 1.25 mg (50000 UT) Cap|358363": [],
+    "Vitamin D (Ergocalciferol) 1.25 mg (50000 UT) Cap|901040": [],
+    "Vitamin D (Ergocalciferol) 1.25 mg (50000 UT) Cap|1367410": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "280014",
+            "display": "Vitamin D2 1,250 mcg (50,000 unit) capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1367410",
+            "display": "Vitamin D2 1,250 mcg (50,000 unit) capsule"
+        }
+    ],
+    "Carvedilol 25 mg Tab|200033": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "158839",
+            "display": "carvedilol 25 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "200033",
+            "display": "carvedilol 25 mg tablet"
+        }
+    ],
+    "Methocarbamol 750 mg Tab|197944": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "224947",
+            "display": "methocarbamol 750 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197944",
+            "display": "methocarbamol 750 mg tablet"
+        }
+    ],
+    "Metoprolol Tartrate 100 mg Tab|311675": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "174363",
+            "display": "metoprolol tartrate 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "866511",
+            "display": "metoprolol tartrate 100 mg tablet"
+        }
+    ],
+    "Metoprolol Tartrate 100 mg Tab|866511": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "174363",
+            "display": "metoprolol tartrate 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "866511",
+            "display": "metoprolol tartrate 100 mg tablet"
+        }
+    ],
+    "Hydrocortisone 10 mg Tab|197782": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "272039",
+            "display": "hydrocortisone 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197782",
+            "display": "hydrocortisone 10 mg tablet"
+        }
+    ],
+    "Cosyntropin 0.25 mg Solution|251039": [],
+    "Hydroxychloroquine Sulfate 200 mg Tab|979092": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "275134",
+            "display": "hydroxychloroquine 200 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "979092",
+            "display": "hydroxychloroquine 200 mg tablet"
+        }
+    ],
+    "Hydroxychloroquine Sulfate 200 mg Tab|197796": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "275134",
+            "display": "hydroxychloroquine 200 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "979092",
+            "display": "hydroxychloroquine 200 mg tablet"
+        }
+    ],
+    "Nystatin 100000 UNIT/ML Suspension|312055": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "159268",
+            "display": "nystatin 100,000 unit/mL oral suspension"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312055",
+            "display": "nystatin 100,000 unit/mL oral suspension"
+        }
+    ],
+    "Nystatin 100000 UNIT/GM Crm|543546": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "242629",
+            "display": "nystatin 100,000 unit/gram topical cream"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "543546",
+            "display": "nystatin 100,000 unit/gram topical cream"
+        }
+    ],
+    "sulfaSALAzine 500 mg Tab|198232": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "165759",
+            "display": "sulfasalazine 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "198232",
+            "display": "sulfasalazine 500 mg tablet"
+        }
+    ],
+    "Timolol Maleate 0.5 % Solution Ophthalmic|1923430": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "232368",
+            "display": "Timolol Maleate (Ophth) 0.5 % (gelFrm) eye solution"
+        }
+    ],
+    "Timolol Maleate 0.5 % Solution Ophthalmic|1992303": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "238183",
+            "display": "timolol 0.5 % eye drops"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1992303",
+            "display": "timolol 0.5 % eye drops"
+        }
+    ],
+    "Timolol Maleate 0.5 % Solution Ophthalmic|313409": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "232368",
+            "display": "Timolol Maleate (Ophth) 0.5 % (gelFrm) eye solution"
+        }
+    ],
+    "amLODIPine Besylate-Valsartan 10/320 mg Tab|722131": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551471",
+            "display": "amlodipine 10 mg-valsartan 320 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "722131",
+            "display": "amlodipine 10 mg-valsartan 320 mg tablet"
+        }
+    ],
+    "Nebivolol 2.5 mg Tab|751618": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "553916",
+            "display": "nebivolol 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "751618",
+            "display": "nebivolol 2.5 mg tablet"
+        }
+    ],
+    "NIFEdipine ER 30 mg Tab ER 24hr|198034": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "200428",
+            "display": "nifedipine ER 30 mg tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "198034",
+            "display": "nifedipine ER 30 mg tablet,extended release"
+        }
+    ],
+    "Calcitonin (Salmon) 200 UNIT/ACT Solution|313919": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "232454",
+            "display": "calcitonin (salmon) 200 unit/actuation nasal spray"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313919",
+            "display": "calcitonin (salmon) 200 unit/actuation nasal spray"
+        }
+    ],
+    "Aspirin Low Dose 81 mg Tab Chewable|318272": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "157934",
+            "display": "Aspirin Child 81 mg chewable tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "318272",
+            "display": "Aspirin Child 81 mg chewable tablet"
+        }
+    ],
+    "Aspirin Low Dose 81 mg Tab Chewable|215444": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "169003",
+            "display": "Low-Dose Aspirin 81 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "243670",
+            "display": "Low-Dose Aspirin 81 mg tablet"
+        }
+    ],
+    "Aspirin Low Dose 81 mg Tab delayed rel|215444": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "435865",
+            "display": "Adult Low Dose Aspirin 81 mg tablet,delayed release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "308416",
+            "display": "Adult Low Dose Aspirin 81 mg tablet,delayed release"
+        }
+    ],
+    "Aspirin Low Dose 81 mg Tab delayed rel|308416": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "205780",
+            "display": "aspirin 81 mg tablet,delayed release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "308416",
+            "display": "aspirin 81 mg tablet,delayed release"
+        }
+    ],
+    "Ibandronate Sodium 150 mg Tab|579525": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "473676",
+            "display": "ibandronate 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "904932",
+            "display": "ibandronate 150 mg tablet"
+        }
+    ],
+    "Ibandronate Sodium 150 mg Tab|904932": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "473676",
+            "display": "ibandronate 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "904932",
+            "display": "ibandronate 150 mg tablet"
+        }
+    ],
+    "Omega-3-acid Ethyl Esters 1 GM Cap|577208": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "472769",
+            "display": "omega-3 acid ethyl esters 1 gram capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "577208",
+            "display": "omega-3 acid ethyl esters 1 gram capsule"
+        }
+    ],
+    "clonazePAM 0.5 mg Tab|197527": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "184458",
+            "display": "clonazepam 0.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197527",
+            "display": "clonazepam 0.5 mg tablet"
+        }
+    ],
+    "oxyCODONE-Acetaminophen 5/325 mg Tab|1049221": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "218930",
+            "display": "oxycodone-acetaminophen 5 mg-325 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1049221",
+            "display": "oxycodone-acetaminophen 5 mg-325 mg tablet"
+        }
+    ],
+    "oxyCODONE-Acetaminophen 5/325 mg Tab|198063": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "218930",
+            "display": "oxycodone-acetaminophen 5 mg-325 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1049221",
+            "display": "oxycodone-acetaminophen 5 mg-325 mg tablet"
+        }
+    ],
+    "glipiZIDE ER 10 mg Tab ER 24hr|315107": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "181840",
+            "display": "glipizide ER 10 mg tablet, extended release 24 hr"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "315107",
+            "display": "glipizide ER 10 mg tablet, extended release 24 hr"
+        }
+    ],
+    "Potassium Chloride ER 8 MEQ Tab ER|312488": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "226181",
+            "display": "potassium chloride ER 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "potassium chloride ER 8 mEq tablet,extended release"
+        }
+    ],
+    "Potassium Chloride ER 8 MEQ Tab ER|314163": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "226181",
+            "display": "potassium chloride ER 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "potassium chloride ER 8 mEq tablet,extended release"
+        }
+    ],
+    "Potassium Chloride ER 8 MEQ Tab ER|312529": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "226181",
+            "display": "potassium chloride ER 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "potassium chloride ER 8 mEq tablet,extended release"
+        }
+    ],
+    "Klor-Con 8 MEQ Tab ER|217907": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "233586",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "832718",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        }
+    ],
+    "Klor-Con 8 MEQ Tab ER|312488": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "233586",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "832718",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        }
+    ],
+    "Klor-Con 8 MEQ Tab ER|217908": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "233586",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "832718",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        }
+    ],
+    "Klor-Con 8 MEQ Tab ER|314163": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "233586",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "832718",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        }
+    ],
+    "Klor-Con 8 MEQ Tab ER|217905": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "233586",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "832718",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        }
+    ],
+    "Klor-Con 8 MEQ Tab ER|312529": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "233586",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312529",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "832718",
+            "display": "Klor-Con 8 mEq tablet,extended release"
+        }
+    ],
+    "Modafinil 100 mg Tab|260218": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "299000",
+            "display": "modafinil 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "260218",
+            "display": "modafinil 100 mg tablet"
+        }
+    ],
+    "Amoxicillin 875 mg Tab|308194": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "222079",
+            "display": "amoxicillin 875 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "308194",
+            "display": "amoxicillin 875 mg tablet"
+        }
+    ],
+    "Torsemide 10 mg Tab|198369": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "194408",
+            "display": "torsemide 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "198369",
+            "display": "torsemide 10 mg tablet"
+        }
+    ],
+    "Neomycin-Polymyxin-Dexameth 3.5-10000-0.1  Suspension|309680": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "241948",
+            "display": "neomycin-polymyxin-dexameth 3.5 mg/mL-10,000 unit/mL-0.1% eye drops"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "309680",
+            "display": "neomycin-polymyxin-dexameth 3.5 mg/mL-10,000 unit/mL-0.1% eye drops"
+        }
+    ],
+    "levETIRAcetam 500 mg Tab|311289": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "176050",
+            "display": "levetiracetam 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "311289",
+            "display": "levetiracetam 500 mg tablet"
+        }
+    ],
+    "Lantus SoloStar 100 UNIT/ML Solution Pen-injector Subcutaneous|847230": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551714",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "847230",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "847232",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        }
+    ],
+    "Lantus SoloStar 100 UNIT/ML Solution Pen-injector Subcutaneous|261551": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551714",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "847230",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "847232",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        }
+    ],
+    "Lantus SoloStar 100 UNIT/ML Solution Pen-injector Subcutaneous|751546": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551714",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "847230",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "847232",
+            "display": "Lantus Solostar U-100 Insulin 100 unit/mL (3 mL) subcutaneous pen"
+        }
+    ],
+    "Ramipril 10 mg Cap|261962": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "295862",
+            "display": "ramipril 10 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "261962",
+            "display": "ramipril 10 mg capsule"
+        }
+    ],
+    "Xarelto 2.5 mg Tab|2059015": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "586376",
+            "display": "Xarelto 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2059015",
+            "display": "Xarelto 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2059017",
+            "display": "Xarelto 2.5 mg tablet"
+        }
+    ],
+    "Xarelto 2.5 mg Tab|1114199": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "586376",
+            "display": "Xarelto 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2059015",
+            "display": "Xarelto 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2059017",
+            "display": "Xarelto 2.5 mg tablet"
+        }
+    ],
+    "oxyCODONE-Acetaminophen 10/325 mg Tab|1049214": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "229129",
+            "display": "oxycodone-acetaminophen 10 mg-325 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1049214",
+            "display": "oxycodone-acetaminophen 10 mg-325 mg tablet"
+        }
+    ],
+    "oxyCODONE-Acetaminophen 10/325 mg Tab|349279": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "229129",
+            "display": "oxycodone-acetaminophen 10 mg-325 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1049214",
+            "display": "oxycodone-acetaminophen 10 mg-325 mg tablet"
+        }
+    ],
+    "Ipratropium Bromide 0.02 % Solution|836358": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "293173",
+            "display": "ipratropium bromide 0.02 % solution for inhalation"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "836358",
+            "display": "ipratropium bromide 0.02 % solution for inhalation"
+        }
+    ],
+    "levETIRAcetam 1000 mg Tab|387003": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "545074",
+            "display": "levetiracetam 1,000 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "387003",
+            "display": "levetiracetam 1,000 mg tablet"
+        }
+    ],
+    "Medrol 4 mg Tab Therapy Pack|259966": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "208766",
+            "display": "Medrol 4 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "259966",
+            "display": "Medrol 4 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "260330",
+            "display": "Medrol 4 mg tablet"
+        }
+    ],
+    "Medrol 4 mg Tab Therapy Pack|202702": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "183845",
+            "display": "Medrol (Pak) 4 mg tablets in a dose pack"
+        }
+    ],
+    "Gleevec 100 mg Tab|403878": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "450055",
+            "display": "Gleevec 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "403878",
+            "display": "Gleevec 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "404588",
+            "display": "Gleevec 100 mg tablet"
+        }
+    ],
+    "Gleevec 100 mg Tab|282386": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "450055",
+            "display": "Gleevec 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "403878",
+            "display": "Gleevec 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "404588",
+            "display": "Gleevec 100 mg tablet"
+        }
+    ],
+    "Ketoconazole 2 % Shampoo|106336": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "164619",
+            "display": "ketoconazole 2 % shampoo"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "106336",
+            "display": "ketoconazole 2 % shampoo"
+        }
+    ],
+    "Fluocinolone Acetonide Scalp 0.01 % Oil|1191307": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "255079",
+            "display": "fluocinolone 0.01 % topical body oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1191307",
+            "display": "fluocinolone 0.01 % topical body oil"
+        }
+    ],
+    "Clobetasol Propionate 0.05 % Solution|861487": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "284840",
+            "display": "clobetasol 0.05 % scalp solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "861487",
+            "display": "clobetasol 0.05 % scalp solution"
+        }
+    ],
+    "Clobetasol Propionate 0.05 % Solution|562272": [],
+    "Fluconazole 150 mg Tab|197699": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "175283",
+            "display": "fluconazole 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197699",
+            "display": "fluconazole 150 mg tablet"
+        }
+    ],
+    "metroNIDAZOLE 0.75 % Gel|142046": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "183150",
+            "display": "metronidazole 0.75 % (37.5 mg/5 gram) vaginal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "142046",
+            "display": "metronidazole 0.75 % (37.5 mg/5 gram) vaginal gel"
+        }
+    ],
+    "Valsartan-hydroCHLOROthiazide 320/12.5 mg Tab|636042": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "545310",
+            "display": "valsartan 320 mg-hydrochlorothiazide 12.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "636042",
+            "display": "valsartan 320 mg-hydrochlorothiazide 12.5 mg tablet"
+        }
+    ],
+    "dilTIAZem ER Coated Beads 240 mg Cap ER 24hr|830837": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "169724",
+            "display": "diltiazem ER (XR/XT) 240 mg capsule,extended release 24 hr, controlled"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "830837",
+            "display": "diltiazem ER (XR/XT) 240 mg capsule,extended release 24 hr, controlled"
+        }
+    ],
+    "Xarelto 20 mg Tab|1114199": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "568102",
+            "display": "Xarelto 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1232086",
+            "display": "Xarelto 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1232088",
+            "display": "Xarelto 20 mg tablet"
+        }
+    ],
+    "Xarelto 20 mg Tab|1232086": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "568102",
+            "display": "Xarelto 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1232086",
+            "display": "Xarelto 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1232088",
+            "display": "Xarelto 20 mg tablet"
+        }
+    ],
+    "Tadalafil 10 mg Tab|484814": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "453502",
+            "display": "tadalafil 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "484814",
+            "display": "tadalafil 10 mg tablet"
+        }
+    ],
+    "Testosterone Cypionate 200 mg/ML Solution Intramuscular|314265": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "275753",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2047882",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "835840",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        }
+    ],
+    "Testosterone Cypionate 200 mg/ML Solution Intramuscular|835840": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "275753",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2047882",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "835840",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        }
+    ],
+    "Testosterone Cypionate 200 mg/ML Solution Intramuscular|2047882": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "275753",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2047882",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "835840",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        }
+    ],
+    "Acetaminophen 500 mg Tab|198440": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "165458",
+            "display": "Acetaminophen Extra Strength 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "198440",
+            "display": "Acetaminophen Extra Strength 500 mg tablet"
+        }
+    ],
+    "Torsemide 20 mg Tab|198371": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "165453",
+            "display": "torsemide 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "198371",
+            "display": "torsemide 20 mg tablet"
+        }
+    ],
+    "Buprenorphine HCl-Naloxone 8/2 mg Tab Sublingual|351267": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "448277",
+            "display": "buprenorphine 8 mg-naloxone 2 mg sublingual tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "351267",
+            "display": "buprenorphine 8 mg-naloxone 2 mg sublingual tablet"
+        }
+    ],
+    "Neomycin-Polymyxin-HC 1 % Solution|204423": [],
+    "Methocarbamol 500 mg Tab|197943": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "155071",
+            "display": "methocarbamol 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197943",
+            "display": "methocarbamol 500 mg tablet"
+        }
+    ],
+    "Topiramate 100 mg Tab|199889": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "285722",
+            "display": "topiramate 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "199889",
+            "display": "topiramate 100 mg tablet"
+        }
+    ],
+    "Citalopram Hydrobromide 20 mg Tab|200371": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "222717",
+            "display": "citalopram 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "200371",
+            "display": "citalopram 20 mg tablet"
+        }
+    ],
+    "Trulicity 0.75 mg/0.5ML Solution Pen-injector Subcutaneous|1551295": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "582683",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1551295",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1551300",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Trulicity 0.75 mg/0.5ML Solution Pen-injector Subcutaneous|1551296": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "582683",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1551295",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1551300",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Oxybutynin Chloride ER 5 mg Tab ER 24hr|863636": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "258320",
+            "display": "oxybutynin chloride ER 5 mg tablet,extended release 24 hr"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "863636",
+            "display": "oxybutynin chloride ER 5 mg tablet,extended release 24 hr"
+        }
+    ],
+    "Oxybutynin Chloride ER 5 mg Tab ER 24hr|636620": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "258320",
+            "display": "oxybutynin chloride ER 5 mg tablet,extended release 24 hr"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "863636",
+            "display": "oxybutynin chloride ER 5 mg tablet,extended release 24 hr"
+        }
+    ],
+    "Oxybutynin Chloride ER 5 mg Tab ER 24hr|312155": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "258320",
+            "display": "oxybutynin chloride ER 5 mg tablet,extended release 24 hr"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "863636",
+            "display": "oxybutynin chloride ER 5 mg tablet,extended release 24 hr"
+        }
+    ],
+    "Abilify 10 mg Tab|349545": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "446836",
+            "display": "Abilify 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "349545",
+            "display": "Abilify 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "352307",
+            "display": "Abilify 10 mg tablet"
+        }
+    ],
+    "Abilify 10 mg Tab|352393": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "446836",
+            "display": "Abilify 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "349545",
+            "display": "Abilify 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "352307",
+            "display": "Abilify 10 mg tablet"
+        }
+    ],
+    "FLUoxetine 40 mg Cap|313989": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "151828",
+            "display": "fluoxetine 40 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313989",
+            "display": "fluoxetine 40 mg capsule"
+        }
+    ],
+    "Latanoprost 0.005 % Solution Ophthalmic|314072": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "153566",
+            "display": "latanoprost 0.005 % eye drops"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "314072",
+            "display": "latanoprost 0.005 % eye drops"
+        }
+    ],
+    "Timolol Maleate 0.25 % Solution Ophthalmic|198283": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "191797",
+            "display": "Timolol Maleate (Ophth) 0.25 % eye solution"
+        }
+    ],
+    "Timolol Maleate 0.25 % Solution Ophthalmic|1923428": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "235594",
+            "display": "timolol maleate 0.25 % eye drops"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1923428",
+            "display": "timolol maleate 0.25 % eye drops"
+        }
+    ],
+    "Potassium Citrate ER 5 MEQ (540 mg) Tab ER|199376": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "293050",
+            "display": "potassium citrate ER 5 mEq (540 mg) tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "199376",
+            "display": "potassium citrate ER 5 mEq (540 mg) tablet,extended release"
+        }
+    ]
 }

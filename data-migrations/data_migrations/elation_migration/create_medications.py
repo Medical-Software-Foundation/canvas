@@ -30,7 +30,7 @@ class MedicationLoader(MedicationLoaderMixin):
         self.med_mapping_file = "mappings/medication_coding_map.json"
         self.patient_map_file = 'PHI/patient_id_map.json'
         self.note_map_file = "mappings/historical_note_map.json"
-        self.original_csv_file = "PHI/Icon ShareFile Data - medications.csv"
+        self.original_csv_file = "PHI/Icon ShareFile Data (Updated) - NEW MEDS.csv"
         self.csv_file = f'PHI/{self.data_type}.csv'
         self.validation_error_file = f'results/PHI/errored_{self.data_type}_validation.json'
         self.error_file = f'results/errored_{self.data_type}.csv'
@@ -50,14 +50,15 @@ class MedicationLoader(MedicationLoaderMixin):
         super().__init__(*args, **kwargs)
 
     def make_fdb_mapping(self, delimiter='|'):
-        mapping = {}
         with open(self.original_csv_file, 'r') as file:
             reader = csv.DictReader(file, delimiter=delimiter)
             for row in reader:
-                mapping[f"{row['DISPLAYED_MEDICATION_NAME']}|{row['CUI']}"] = {}
+                key = f"{row['DISPLAYED_MEDICATION_NAME']}|{row['CUI']}"
+                if key not in self.med_mapping:
+                    print(key)
+                    self.med_mapping[key] = []
 
-        write_to_json(self.med_mapping_file, mapping)
-        self.map(mapping)
+        write_to_json(self.med_mapping_file, self.med_mapping)
 
     def make_csv(self, delimiter='|'):
         """

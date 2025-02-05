@@ -24,11 +24,19 @@ class NoteMixin:
         if canvas_patient_key in self.note_map:
             return self.note_map[canvas_patient_key]
 
+        note_key = self.create_note(canvas_patient_key, **kwargs)
+
+        self.note_map[canvas_patient_key] = note_key
+        write_to_json(self.note_map_file, self.note_map)
+
+        return note_key
+
+    def create_note(self, canvas_patient_key, **kwargs):
         payload = {
             "noteTypeName": kwargs.get("note_type_name", self.default_note_type_name),
             "patientKey": canvas_patient_key,
-            "providerKey": "5eede137ecfe4124b8b773040e33be14", # canvas bot
-            "encounterStartTime": kwargs.get("encounter_start_time", arrow.now().isoformat()),
+            "providerKey": kwargs.get("provider_key", "5eede137ecfe4124b8b773040e33be14"), # canvas bot
+            "encounterStartTime": kwargs.get("encounter_start_time") or arrow.now().isoformat(),
             "practiceLocationKey": kwargs.get("practice_location_key", self.default_location)
         }
 
@@ -38,9 +46,9 @@ class NoteMixin:
             raise Exception(f"Failed to perform {response.url}. \n {response.text}")
 
         response_json = response.json()
-        note_key = response_json['noteKey']
+        return response_json['noteKey']
 
-        self.note_map[canvas_patient_key] = note_key
-        write_to_json(self.note_map_file, self.note_map)
-
-        return note_key
+    def perform_note_state_change(self, note_id, state='LKD'):
+        response = requests.request("PATCH", f"{self.base_url}/{note_id}", headers=self.fumage_helper.headers, data=json.dumps({"stateChange": state}))
+        if response.status_code != 200 and f"{state} -> {state}" not in response.text:
+            raise Exception(f"Failed to perform {response.url}. \n {response.text}")

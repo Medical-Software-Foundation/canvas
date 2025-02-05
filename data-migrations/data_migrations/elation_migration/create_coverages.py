@@ -29,7 +29,7 @@ class CoverageLoader(CoverageLoaderMixin):
         self.json_file = f"PHI/{self.data_type}.json"
         self.csv_file = f'PHI/{self.data_type}.csv'
         self.ignore_file = f'results/ignored_{self.data_type}.csv'
-        self.validation_error_file = f'results/PHI/errored_{self.data_type}_validation.json'
+        self.validation_error_file = f'results/errored_{self.data_type}_validation.json'
         self.error_file = f'results/errored_{self.data_type}.csv'
         self.done_file = f'results/done_{self.data_type}.csv'
         self.payor_map = fetch_from_json("mappings/payor_map.json")

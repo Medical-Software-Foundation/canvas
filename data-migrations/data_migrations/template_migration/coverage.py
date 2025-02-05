@@ -63,31 +63,32 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
             )
 
             validations = {
-                "ID": validate_required,
-                "Patient Identifier": validate_required,
-                "Subscriber": validate_required,
-                "Member ID": validate_required,
-                "Coverage Start Date": validate_date,
-                "Payor ID": validate_required,
-                "Order": (validate_enum, {"possible_options": ['1', '2', '3', '4', '5']}),
-                "Relationship to Subscriber": (validate_enum, {"possible_options": ['self', 'child', 'spouse', 'other', 'injured']})
+                "ID": [validate_required],
+                "Patient Identifier": [validate_required],
+                "Subscriber": [validate_required],
+                "Member ID": [validate_required],
+                "Coverage Start Date": [validate_date],
+                "Payor ID": [validate_required],
+                "Order": [validate_required, (validate_enum, {"possible_options": ['1', '2', '3', '4', '5']})],
+                "Relationship to Subscriber": [(validate_enum, {"possible_options": ['self', 'child', 'spouse', 'other', 'injured']})]
             }
 
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
 
-                for field, validator_func in validations.items():
-                    kwargs = {}
-                    if isinstance(validator_func, tuple):
-                        validator_func, kwargs = validator_func
+                for field, validator_funcs in validations.items():
+                    for validator_func in validator_funcs:
+                        kwargs = {}
+                        if isinstance(validator_func, tuple):
+                            validator_func, kwargs = validator_func
 
-                    valid, value = validator_func(row[field].strip(), field, **kwargs)
-                    if valid:
-                        row[field] = value
-                    else:
-                        errors[key].append(value)
-                        error = True
+                        valid, value = validator_func(row[field].strip(), field, **kwargs)
+                        if valid:
+                            row[field] = value
+                        else:
+                            errors[key].append(value)
+                            error = True
 
                 if not error:
                     validated_rows.append(row)
