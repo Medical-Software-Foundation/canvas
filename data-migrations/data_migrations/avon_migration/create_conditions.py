@@ -86,9 +86,9 @@ class ConditionLoader(ConditionLoaderMixin):
                     "Clinical Status": "active" if row["active"] else "resolved",
                     "ICD-10 Code": row["name"],
                     "Onset Date": row["onset_date"] or "",
-                    "Resolved Date": row["end_date"] or "",
+                    "Resolved Date": row["end_date"] if row["end_date"] and not row["active"] else "",
                     "Recorded Provider": row["created_by"],
-                    "Free text notes": row["comment"],
+                    "Free text notes": row["comment"].replace("\n", "\\n") if row["comment"] else "",
                 })
 
             print("CSV successfully made")
