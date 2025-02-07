@@ -6,8 +6,8 @@
     "components": {
         "protocols": [
             {
-                "class": "weight_management.protocols.glp1_weight_calculation_banner:GLP1WeightWorkflow",
-                "description": "Display the patient’s highest weight before starting a GLP-1 and calculate the patient’s BMI at that time. Dynamically display the amount of weight loss.",
+                "class": "weight_management.protocols.glp1_weight_workflow:GLP1WeightWorkflow",
+                "description": "In a banner on the patient's timeline display the patient’s highest weight before starting a GLP-1, BMI at that time, and the percentage of weight loss. Also auto generate any diagnoses based on BMI and HPI command with information on patient's GLP-1 journey",
                 "data_access": {
                     "event": "",
                     "read": [],

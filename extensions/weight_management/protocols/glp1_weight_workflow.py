@@ -69,13 +69,13 @@ class GLP1WeightWorkflow(BaseProtocol):
         return None, None, None
 
     def get_comorbidities(self, interview_id):
-        # need to find the starting weight in the the vineyard intake questionnaire
+        # Find the comorbidities in a structured assessment question
         answers = InterviewQuestionResponse.objects.filter(
             interview_id=interview_id,
             question__code=self.secrets['COMORBIDITIES_QUESTION_CODE'] or "GLP1-MedHx-002" # this is the default question in Canvas template
         ).exclude(response_option_value='').values_list('response_option_value', flat=True)
 
-        # if no questionnaire filled out, return early
+        # if no SA filled out, return early
         if not answers:
             return None
 
@@ -85,8 +85,8 @@ class GLP1WeightWorkflow(BaseProtocol):
         answers[last_index] = f'and {answers[last_index]}'
         return ", ".join(answers)
 
-    def get_current_glp1(self, patient):
-        # need to find the current glp1 in the intake questionnaire
+    def get_current_glp1_and_length_of_treatment(self, patient):
+        # Find the current glp1 in the intake questionnaire
         answer = InterviewQuestionResponse.objects.filter(
             interview__patient=patient,
             interview__deleted=False, 
@@ -100,10 +100,14 @@ class GLP1WeightWorkflow(BaseProtocol):
             return None
 
         log.info(f'Current GLP-1: {answer.response_option_value}')
-        return answer.response_option_value
+        if 'none' in answer.response_option_value.lower():
+            return ""
+
+        return (f"{answer.response_option_value} and has been on "
+                    f"GLP-1 therapy for the last {self.get_len_of_treatment(patient)} months.\n\n")
 
     def get_len_of_treatment(self, patient):
-        # need to find the starting weight in the the intake questionnaire
+        # Find the starting weight in the the intake questionnaire
         answer = InterviewQuestionResponse.objects.filter(
             interview__patient=patient,
             interview__deleted=False, 
@@ -118,10 +122,9 @@ class GLP1WeightWorkflow(BaseProtocol):
 
         log.info(f'Length of GLP-1 Treatment (months): {answer.response_option_value}')
         return answer.response_option_value
-
-      
+    
     def get_starting_weight(self, patient):
-        # need to find the starting weight in the the vineyard intake questionnaire
+        # Find the starting weight in the intake questionnaire
         answer = InterviewQuestionResponse.objects.filter(
             interview__patient=patient,
             interview__deleted=False, 
@@ -142,7 +145,7 @@ class GLP1WeightWorkflow(BaseProtocol):
             return None
             
     def get_current_bmi(self, patient, current_weight):
-        # need to find current weight in the vital command
+        # Find current weight in the vital command and calculate BMI
         current_height = Observation.objects.filter(
             patient=patient,
             deleted=False, 
@@ -161,7 +164,7 @@ class GLP1WeightWorkflow(BaseProtocol):
         return bmi
 
     def get_current_weight(self, patient):
-        # need to find current weight in the vital command
+        # Find current weight in the vital command
         current_weight = Observation.objects.filter(
             patient=patient,
             deleted=False, 
@@ -180,7 +183,7 @@ class GLP1WeightWorkflow(BaseProtocol):
         return current_weight.value
 
     def get_starting_height(self, patient):
-        # need to find current height in the vital command
+        # Find current height in the vital command
         starting_height = Observation.objects.filter(
             patient=patient,
             deleted=False, 
@@ -197,7 +200,7 @@ class GLP1WeightWorkflow(BaseProtocol):
         return starting_height.value
 
     def compute_banner(self, patient):
-        """Compute the banner text by finding all the patient's vital values needed"""
+        """Compute the Weight Loss banner by finding all the patient's vital values needed"""
         return_early = (None, None, None, None)
 
         # need to find the starting weight in the intake questionnaire
@@ -230,6 +233,7 @@ class GLP1WeightWorkflow(BaseProtocol):
         )
 
     def calculate_age(self, dob):
+        # function to find the age in years/months of the patient
         difference = relativedelta(arrow.now().date(), dob)
         months_old = difference.years * 12 + difference.months
 
@@ -239,6 +243,7 @@ class GLP1WeightWorkflow(BaseProtocol):
         return f"{difference.years} years"
 
     def get_sex(self, patient):
+        # Mapping for sex to be user friendly
         sex = patient.sex_at_birth
 
         _map = {
@@ -282,7 +287,6 @@ class GLP1WeightWorkflow(BaseProtocol):
 
             # originate a diagnose command depending on starting BMI
             obesity_dx, diagnose_code = self.get_obsesity_class(starting_bmi)
-
             if diagnose_code:
                 diagnoses = Command.objects.filter(note_id=note_dbid, schema_key='diagnose')
                 if not any([d.data.get('diagnose', {}).get('value') == diagnose_code.replace('.', '') for d in diagnoses]):
@@ -296,29 +300,28 @@ class GLP1WeightWorkflow(BaseProtocol):
                     log.info(f"Diagnose already found so skipping: {diagnose_code}")
 
 
-
+            # originate or edit HPI command
             fields = {
                 'note_uuid': str(note_uuid),
                 'narrative': (
                     f"{patient.first_name} is a {self.calculate_age(patient.birth_date)} old "
                     f"{self.get_sex(patient)} with a history of {obesity_dx} establishing for "
                     "weight management and related condition care.\n\n" 
-                    f"{self.get_current_glp1(patient)} and has been on "
-                    f"GLP-1 therapy for the last {self.get_len_of_treatment(patient)} months.\n\n"
+                    f"{self.get_current_glp1_and_length_of_treatment(patient)}"
                     f"Original BMI of {starting_bmi} with a current BMI of "
                     f"{self.get_current_bmi(patient, current_weight)} and has lost {weight_loss}% of their starting body weight.\n\n"
                     f"{patient.first_name} also has reported the following comorbidities: {comorbidities}"
                 )
             }
-            hpi = Command.objects.filter(note_id=note_dbid, schema_key='hpi', state='staged').order_by('created').first()
-            if hpi:
-                fields['command_uuid'] = str(hpi.id)
+            hpi_found = Command.objects.filter(note_id=note_dbid, schema_key='hpi', state='staged').order_by('created').first()
+            if hpi_found:
+                fields['command_uuid'] = str(hpi_found.id)
                 hpi = HistoryOfPresentIllnessCommand(**fields)
                 effects.append(hpi.edit())
-                log.info(f"HPI updated on note: {note_dbid}")
+                log.info(f"HPI updated on note: {note_dbid} with {fields}")
             else:
                 hpi = HistoryOfPresentIllnessCommand(**fields)
                 effects.append(hpi.originate(line_number=1))
-                log.info(f"HPI created on note: {note_dbid}")
+                log.info(f"HPI created on note: {note_dbid} with {fields}")
 
         return effects
