@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Spravato Patient Monitoring Form and Instructions"
+    description: "This document provides detailed instructions and a form for monitoring patients undergoing Spravato treatment, including required fields and guidelines for healthcare providers."
+    url: "https://www.spravatoforms.com"
+
