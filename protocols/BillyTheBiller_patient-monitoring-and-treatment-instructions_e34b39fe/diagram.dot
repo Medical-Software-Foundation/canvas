@@ -1,0 +1,18 @@
+digraph {
+    rankdir=TB;
+
+    // Populations
+    spravato [label="Spravato Treatment" shape=box, style=rounded, color=green, fontcolor=green];
+    monitoring_form [label="Patient Monitoring Form" shape=box, style=rounded, color=green, fontcolor=green];
+    janssen [label="Report to Janssen" shape=box, style=rounded, color=green, fontcolor=green];
+
+    // Criteria
+    data_collection [label="Data Collection" shape=ellipse, color=blue, fontcolor=blue, comment="Collect data for required patient monitoring form"];
+    report_variables [label="Report Variables" shape=ellipse, color=blue, fontcolor=blue, comment="Report variables back to Janssen"];
+
+    // Edges
+    spravato -> data_collection [label="if", color=blue, fontcolor=blue];
+    data_collection -> monitoring_form [label="then", color=blue, fontcolor=blue];
+    monitoring_form -> report_variables [label="if", color=blue, fontcolor=blue];
+    report_variables -> janssen [label="then", color=blue, fontcolor=blue];
+}
