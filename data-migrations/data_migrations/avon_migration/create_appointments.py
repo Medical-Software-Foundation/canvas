@@ -1,7 +1,8 @@
 import csv, os
 from data_migrations.utils import load_fhir_settings, fetch_from_json, fetch_complete_csv_rows
 from data_migrations.template_migration.appointment import AppointmentLoaderMixin
-from utils import AvonHelper
+from data_migrations.avon_migration.utils import AvonHelper
+
 
 class AppointmentLoader(AppointmentLoaderMixin):
     """
