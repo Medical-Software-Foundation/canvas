@@ -15,65 +15,65 @@ from data_migrations.template_migration.note import NoteMixin
 
 class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
     """
-        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
+        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect:
 
-        Required Formats/Values (Case Insensitive):  
+        Required Formats/Values (Case Insensitive):
             Patient Identifier: Canvas key, unique identifier defined on the demographics page
             Clinical Status: Active, Resolved
-            Type: Allergy, Intolerance 
-            Onset Date: MM/DD/YYYY or YYYY-MM-DD  
+            Type: Allergy, Intolerance
+            Onset Date: MM/DD/YYYY or YYYY-MM-DD
             Recorded Provider: Staff Canvas key.  If omitted, defaults to Canvas Bot
     """
 
     def validate(self, delimiter='|'):
-        """ 
+        """
             Loop throw the CSV file to validate each row has the correct columns and values
-            Append validated rows to a list to use to load. 
+            Append validated rows to a list to use to load.
             Export errors to a file/console
-            
+
         """
         validated_rows = []
         errors = defaultdict(list)
         with open(self.csv_file, "r") as file:
             reader = csv.DictReader(file, delimiter=delimiter)
 
-            validate_header(reader.fieldnames, 
+            validate_header(reader.fieldnames,
                 accepted_headers = {
                     "ID",
                     "Patient Identifier",
                     "Clinical Status",
                     "Type",
                     "FDB Code",
+                    "Name",
                     "Onset Date",
                     "Free Text Note",
                     "Reaction",
                     "Recorded Provider"
-
-                }  
+                }
             )
 
             validations = {
                 "ID": [validate_required],
                 "Patient Identifier": [validate_required],
-                "Clinical Status": [validate_required],
+                "Clinical Status": [validate_required, (validate_enum, {"possible_options": ['active', 'inactive']})],
                 "Type": [validate_required, (validate_enum, {'possible_options': ['allergy', 'intolerance']})],
                 "FDB Code": [validate_required],
+                "Name": [validate_required],
                 "Onset Date": [validate_date],
-                "Clinical Status": [(validate_enum, {"possible_options": ['active', 'inactive']})]
             }
-            
+
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
-                
+
                 for field, validator_funcs in validations.items():
                     for validator_func in validator_funcs:
                         kwargs = {}
-                        if isinstance(validator_func, tuple): 
+                        if isinstance(validator_func, tuple):
                             validator_func, kwargs = validator_func
-                        
+
                         valid, value = validator_func(row[field].strip(), field, **kwargs)
                         if valid:
                             row[field] = value
@@ -94,14 +94,14 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
     def load(self, validated_rows, note_kwargs={}):
         """
-            Takes the validated rows from self.validate() and 
+            Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
 
-            Outputs to CSV to keep track of records 
+            Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
 
-        self.patient_map = fetch_from_json(self.patient_map_file) 
+        self.patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
@@ -124,65 +124,66 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
                 continue
 
-
-            payload = {
-                "resourceType": "AllergyIntolerance",
-                "extension": [
-                    {
-                        "url": "http://schemas.canvasmedical.com/fhir/extensions/note-id",
-                        "valueId": note_id,
-                    }
-                ],
-                "clinicalStatus": {
-                    "coding": [
+            # If an FDB code is delimited with "```", then we need to make 2 records - one for each code;
+            fdb_codes = row["FDB Code"].split("```")
+            for fdb in fdb_codes:
+                payload = {
+                    "resourceType": "AllergyIntolerance",
+                    "extension": [
                         {
-                            "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
-                            "code": row['Clinical Status']
+                            "url": "http://schemas.canvasmedical.com/fhir/extensions/note-id",
+                            "valueId": note_id,
                         }
                     ],
-                },
-                "verificationStatus": {
-                    "coding": [
-                        {
-                            "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
-                            "code": "confirmed",
-                            "display": "Confirmed"
-                        }
-                    ],
-                    "text": "Confirmed"
-                },
-                "type": row['Type'],
-                "code": {
-                    "coding": [
-                        {
-                            "system": "http://www.fdbhealth.com/",
-                            "code": row['FDB Code'],
-                            "display": row["Name"]
-                        }
-                    ]
-                },
-                "patient": {
-                    "reference": f"Patient/{patient_key}"
-                },
-                "note": (
-                    ([{"text": row['Reaction']}] if row['Reaction'] else []) +
-                    ([{"text": f"Notes: {row['Free Text Note']}"}] if row['Free Text Note'] else [])
-                )
-            }
-
-            if onset := row['Onset Date']:
-                payload['onsetDateTime'] = onset
-            if practitioner_key:
-                payload['recorder'] = {
-                    "reference": f"Practitioner/{practitioner_key}"
+                    "clinicalStatus": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+                                "code": row['Clinical Status']
+                            }
+                        ],
+                    },
+                    "verificationStatus": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+                                "code": "confirmed",
+                                "display": "Confirmed"
+                            }
+                        ],
+                        "text": "Confirmed"
+                    },
+                    "type": row['Type'],
+                    "code": {
+                        "coding": [
+                            {
+                                "system": "http://www.fdbhealth.com/",
+                                "code": fdb,
+                                "display": row["Name"]
+                            }
+                        ]
+                    },
+                    "patient": {
+                        "reference": f"Patient/{patient_key}"
+                    },
+                    "note": (
+                        ([{"text": row['Reaction']}] if row['Reaction'] else []) +
+                        ([{"text": f"Notes: {row['Free Text Note']}"}] if row['Free Text Note'] else [])
+                    )
                 }
 
+                if onset := row['Onset Date']:
+                    payload['onsetDateTime'] = onset
+                if practitioner_key:
+                    payload['recorder'] = {
+                        "reference": f"Practitioner/{practitioner_key}"
+                    }
 
-            #print(json.dumps(payload, indent=2))
+                # print(json.dumps(payload, indent=2))
 
-            try:
-                canvas_id = self.fumage_helper.perform_create(payload)
-                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
-                ids.add(row['ID'])
-            except BaseException as e:
-                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                try:
+                    canvas_id = self.fumage_helper.perform_create(payload)
+                    self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}|{fdb}")
+                    ids.add(row['ID'])
+                except BaseException as e:
+                    self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
