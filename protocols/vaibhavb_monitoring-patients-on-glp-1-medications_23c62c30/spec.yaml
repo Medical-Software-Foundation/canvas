@@ -1,7 +1,7 @@
 status: "draft"
 githubUrl: ""
 contributors:
-  - username: "unknown"
+  - username: "vaibhavb"
 referencePapers:
   - title: "Protocol for Monitoring GLP-1 Medication Patients"
     description: "This protocol outlines the monitoring process for patients on GLP-1 receptor agonists. It includes systematic screening, patient education, consultation recommendations, documentation, and follow-up actions to manage side effects effectively. Exclusion criteria are specified to ensure appropriate patient selection. The goal is to enhance patient safety and optimize therapeutic outcomes through regular assessments and coordinated care."
