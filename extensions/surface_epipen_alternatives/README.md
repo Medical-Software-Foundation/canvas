@@ -1,4 +1,4 @@
-surface_epipen_alternatives
+Surface Epipen Alternatives
 ===========================
 
 ## Description
