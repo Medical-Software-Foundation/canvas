@@ -60,7 +60,7 @@ class AllergyLoader(AllergyLoaderMixin):
                     continue
 
                 clinical_status = None
-                if row["active"] is True:
+                if row["active"] is True or row["active"] is None:
                     clinical_status = "active"
                 elif row["active"] is False:
                     clinical_status = "inactive"
