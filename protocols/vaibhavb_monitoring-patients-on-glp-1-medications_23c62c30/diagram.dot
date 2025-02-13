@@ -1,0 +1,23 @@
+digraph {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients currently prescribed GLP-1 receptor agonists, including but not limited to medications such as exenatide, liraglutide, dulaglutide, semaglutide, and albiglutide."];
+    SubsetInConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients from the initial population who have been on GLP-1 medications for at least 4 weeks."];
+    ExcludedPopulation [label="Excluded Population", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients who meet any of the exclusion criteria."];
+
+    // Criterion Nodes
+    OnGLP1For4Weeks [label="On GLP-1 for ≥4 weeks", shape=ellipse, color=blue, fontcolor=blue, comment="Patients have been on GLP-1 medications for at least 4 weeks."];
+    NotDiscontinued [label="Not Discontinued", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have not discontinued GLP-1 medications."];
+    NoAllergies [label="No Allergies", shape=ellipse, color=blue, fontcolor=blue, comment="Patients without documented allergies or adverse reactions to GLP-1 medications that have led to discontinuation."];
+    NotInTrial [label="Not in Clinical Trial", shape=ellipse, color=blue, fontcolor=blue, comment="Patients not currently participating in a clinical trial that includes monitoring for GLP-1 medication side effects."];
+
+    // Edges
+    InitialPopulation -> OnGLP1For4Weeks [label="if", color=blue, fontcolor=blue];
+    OnGLP1For4Weeks -> SubsetInConsideration [label="then", color=blue, fontcolor=blue];
+
+    InitialPopulation -> NotDiscontinued [label="if", color=blue, fontcolor=blue];
+    NotDiscontinued -> NoAllergies [label="and", color=blue, fontcolor=blue];
+    NoAllergies -> NotInTrial [label="and", color=blue, fontcolor=blue];
+    NotInTrial -> ExcludedPopulation [label="then", color=blue, fontcolor=blue];
+}
