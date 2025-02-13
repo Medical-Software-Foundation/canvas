@@ -1,6 +1,6 @@
-# HCC Capture Plugin for Canvas
+# HCC Capture Extension for Canvas
 
-This Canvas plugin facilitates the capture of HCC codes.
+This Canvas extension facilitates the capture of HCC codes.
 
 - Presents Care Gaps in the patient chart, with recommendations for CDI
   reviewers to validate them. Validation moves them to the Coding Gaps section
