@@ -23,15 +23,15 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
         - All coverages must be added to Canvas before migration can run
         - Payor ID must match payor ID in your instance
         - Payor ID can be found by utilizing the OrganizationSearch FHIR endpoint
-             
-        Required Formats/Values:  
+
+        Required Formats/Values:
             Patient Identifier: Canvas key, unique identifier defined on the demographics page
             Type: Supported list available in CoverageCreate documentation
             Subscriber: Only required if patient is not subscriber - Canvas key, unique identifier defined on the demographics page
             Relationship to Subscriber: self, child, spouse, other, injured
-            Coverage Start Date: MM/DD/YYYY or YYYY-MM-DD  
+            Coverage Start Date: MM/DD/YYYY or YYYY-MM-DD
             Order: Number 1-5
-            "                                           
+            "
     """
 
     def validate(self, delimiter='|'):
@@ -111,6 +111,23 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
 
             return payor_id
         return payor
+
+    def find_subscriber(self, first_name: str, last_name: str, dob: str):
+        # Performs a Fumage search to find a patient based on first_name, last_name and dob;
+        # Will return the patient ID from the source API by doing a reverse mapping from the Canvas
+        # patient key.
+        print("Looking up subscriber")
+        patient_search_response = self.fumage_helper.search(
+            "Patient",
+            {
+                "given": first_name,
+                "family": last_name,
+                "birthDate": dob
+            }
+        )
+        response_data = patient_search_response.json()
+        if response_data['total'] == 1:
+            return self.reverse_patient_map.get(response_data['entry'][0]['resource']['id'])
 
     def load(self, validated_rows):
         """

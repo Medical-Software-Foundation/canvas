@@ -24,17 +24,18 @@ class AvonHelper:
         """
         print(f'Fetching records for {data_type}')
 
-        if os.path.isfile(json_file):
+        if json_file and os.path.isfile(json_file):
             return fetch_from_json(json_file)
 
         url = f'{self.base_url}{data_type}?{param_string}'
         response = requests.get(url, headers=self.avon_header)
         try:
             data = response.json()['data']
-            write_to_json(json_file, data)
+            if json_file:
+                write_to_json(json_file, data)
             return data
         except:
-            raise Exception(response.text)
+            raise Exception(f"{response.status_code}: {response.text}")
 
     def get_config_settings(self):
         """ Load the config.ini file that contains avon auth variables """

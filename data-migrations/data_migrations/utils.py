@@ -90,6 +90,12 @@ def get_ontologies_token(environment):
     return config("ontologies_key", cast=str)
 
 
+def reverse_mapping(json_file):
+    # Reverses a mapping file by swapping the key/value positions.
+    data_dict = fetch_from_json(json_file)
+    return {val: key for key, val in data_dict.items()}
+
+
 def load_fhir_settings(environment):
     """
         Used to authenticate
