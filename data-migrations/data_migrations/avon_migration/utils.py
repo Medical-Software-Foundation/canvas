@@ -37,6 +37,13 @@ class AvonHelper:
         except:
             raise Exception(f"{response.status_code}: {response.text}")
 
+
+    def fetch_resource(self, uri):
+        url = f'{self.base_url}{uri}'
+        response = requests.get(url, headers=self.avon_header)
+        return response.json()
+
+
     def get_config_settings(self):
         """ Load the config.ini file that contains avon auth variables """
         ini = RepositoryIni('../config.ini')
