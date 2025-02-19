@@ -1,3 +1,5 @@
+# Automate Tasks Based on Lab Orders
+
 ## Description
 
 When ordering labs, staff follow up is often necessary. You may want to alert phlebotomists that an order has been placed, or you may need to ensure the patient goes to their local patient service centers (PSC).
