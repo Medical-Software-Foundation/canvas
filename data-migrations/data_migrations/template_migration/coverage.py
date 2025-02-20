@@ -129,7 +129,7 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
         if response_data['total'] == 1:
             return self.reverse_patient_map.get(response_data['entry'][0]['resource']['id'])
 
-    def load(self, validated_rows):
+    def load(self, validated_rows, **kwargs):
         """
             Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
@@ -156,7 +156,10 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
                 subscriber_key = self.map_patient(row['Subscriber'])
-                payer_id = self.map_payor(row['Payor ID'])
+                if kwargs.get("map_payor") is False:
+                    payer_id = row['Payor ID']
+                else:
+                    payer_id = self.map_payor(row['Payor ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
                 continue
