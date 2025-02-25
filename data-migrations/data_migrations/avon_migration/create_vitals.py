@@ -18,6 +18,7 @@ class VitalsLoader(VitalsMixin):
         self.avon_helper = AvonHelper(environment)
         self.fumage_helper = load_fhir_settings(environment)
         self.default_location = "9e757329-5ab1-4722-bab9-cc25002fa5c0"
+        self.default_note_type_name = "Avon Data Migration"
         self.doctor_map = fetch_from_json("mappings/doctor_map.json")
         self.error_file = 'results/errored_vitals.csv'
         self.done_file = 'results/done_vitals.csv'

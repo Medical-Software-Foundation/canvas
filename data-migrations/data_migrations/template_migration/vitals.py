@@ -99,6 +99,36 @@ class VitalsMixin(NoteMixin, CommandMixin, MappingMixin, FileWriterMixin):
 
             provider_key = self.doctor_map.get(row["created_by"], "5eede137ecfe4124b8b773040e33be14") # fallback to canvas bot
 
+            vitals_values = {}
+
+            if height := row["height"]:
+                vitals_values["height"] = str(height)
+
+            if weight := row["weight_lbs"]:
+                lbs, ounces = self.convert_weight_to_lbs_ounces(weight)
+                vitals_values["weight_lbs"] = lbs
+                vitals_values["weight_oz"] = ounces
+
+            if body_temperature := row["body_temperature"]:
+                vitals_values["body_temperature"] = str(body_temperature)
+
+            # some values in the commands payload are integers; convert those here
+            for val in ["pulse", "respiration_rate", "oxygen_saturation", "blood_pressure_systole", "blood_pressure_diastole"]:
+                if row[val]:
+                    try:
+                        int_value = int(row[val])
+                        vitals_values[val] = int_value
+                    except ValueError as e:
+                        print(f"Invalid integer value for {val} - {row[val]}")
+
+            if comment := row["comment"]:
+                vitals_values["note"] = comment
+
+            # ignore the record if there are no vitals values present (some of them may be all null)
+            if not vitals_values:
+                self.ignore_row(row['id'], "Ignoring due to vital sign data all null")
+                continue
+
             try:
                 vitals_import_note = self.create_note(
                     note_type_name="Vitals Data Import",
@@ -111,32 +141,7 @@ class VitalsMixin(NoteMixin, CommandMixin, MappingMixin, FileWriterMixin):
                 self.error_row(f"{row['id']}|{row['patient']}|{patient_key}", e)
                 continue
 
-            vitals_values = {
-                "note": row["comment"],
-            }
-
-            if height := row["height"]:
-                vitals_values["height"] = str(height)
-
-            if weight := row["weight_lbs"]:
-                lbs, ounces = self.convert_weight_to_lbs_ounces(weight)
-                vitals_values["weight_lbs"] = lbs
-                vitals_values["weight_oz"] = ounces
-
-            if body_temperature := row["body_temperature"]:
-                vitals_values["body_temperature"] = str(row["body_temperature"])
-
-            # some values in the commands payload are integers; convert those here
-            for val in ["pulse", "respiration_rate", "oxygen_saturation", "blood_pressure_systole", "blood_pressure_diastole"]:
-                if row[val]:
-                    try:
-                        int_value = int(row[val])
-                        vitals_values[val] = int_value
-                    except ValueError as e:
-                        print(f"Invalid integer value for {val} - {row[val]}")
-
             vitals_payload = {
-                "state": "committed",
                 "noteKey": vitals_import_note,
                 "schemaKey": "vitals",
                 "values": vitals_values
@@ -144,6 +149,7 @@ class VitalsMixin(NoteMixin, CommandMixin, MappingMixin, FileWriterMixin):
 
             try:
                 canvas_id = self.create_command(vitals_payload)
+                self.commit_command(canvas_id)
                 self.done_row(f"{row['id']}|{row['patient']}|{patient_key}|{canvas_id}")
                 ids.add(row['id'])
             except BaseException as e:
