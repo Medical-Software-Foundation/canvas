@@ -1,6 +1,6 @@
 ![Canvas Health Gorilla Integration](https://images.prismic.io/canvas-website/Zq1Lo0aF0TcGIqVX_health-gorilla-logo.png?auto=format,compress)
 
-# Health Gorilla Bi-directional Lab Integration
+# Health Gorilla Bidirectional Lab Integration
 
 ## Seamless lab orders and results from lab vendors across the country
 - Certified order and result integrations with National reference labs including LabCorp and Quest Diagnostics.
