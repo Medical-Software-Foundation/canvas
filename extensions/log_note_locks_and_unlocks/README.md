@@ -12,11 +12,11 @@ The handler is triggered by the `NOTE_STATE_CHANGE_EVENT_CREATED` event. It insp
 ## Example Log Output
 
 ```plaintext
-INFO: Note 12345 was just locked!
-INFO: Note 67890 was just unlocked!
-INFO: Note 54321 just entered state RVT!
+INFO: Note 3b25b581-a35b-4e96-bf20-2019b721c1bb was just locked!
+INFO: Note 8d77dbec-c7f2-4376-8dbe-e1699f1d7c90 was just unlocked!
+INFO: Note d9b787da-9386-49fc-8004-91ff707ba6d7 just entered state RVT!
+INFO: Note e175e4bc-7c88-4594-aa6e-0b49a7e95f4c just entered state SCH!
 ```
-
 
 ### Important Note!
 
