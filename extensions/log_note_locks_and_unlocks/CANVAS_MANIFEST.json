@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "log_note_locks_and_unlocks",
+    "description": "showcases the note state change events",
+    "components": {
+        "protocols": [
+            {
+                "class": "log_note_locks_and_unlocks.handlers.note_logger:LogNoteLocksAndUnlocks",
+                "description": "Log when a note is locked or unlocked",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
