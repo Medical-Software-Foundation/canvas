@@ -3,7 +3,7 @@ log_note_locks_and_unlocks
 
 ## Description
 
-A description of this plugin
+This extension tracks the lock and unlock events for notes
 
 ### Important Note!
 
