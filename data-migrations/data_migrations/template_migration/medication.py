@@ -16,12 +16,12 @@ from data_migrations.template_migration.commands import CommandMixin
 
 class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
     """
-        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
+        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect:
 
-        Required Formats/Values (Case Insensitive):  
-            Patient Identifier: Canvas key, unique identifier defined on the demographics page 
+        Required Formats/Values (Case Insensitive):
+            Patient Identifier: Canvas key, unique identifier defined on the demographics page
             Status: Active, Resolved
     """
     def map(self):
@@ -114,18 +114,18 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
         write_to_json(self.med_mapping_file, _map)
 
     def validate(self, delimiter='|'):
-        """ 
+        """
             Loop throw the CSV file to validate each row has the correct columns and values
-            Append validated rows to a list to use to load. 
+            Append validated rows to a list to use to load.
             Export errors to a file/console
-            
+
         """
         validated_rows = []
         errors = defaultdict(list)
         with open(self.csv_file, "r") as file:
             reader = csv.DictReader(file, delimiter=delimiter)
 
-            validate_header(reader.fieldnames, 
+            validate_header(reader.fieldnames,
                 accepted_headers = {
                     "ID",
                     "Patient Identifier",
@@ -134,7 +134,7 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                     "SIG",
                     "Medication Name",
                     "Original Code"
-                }  
+                }
             )
 
             validations = {
@@ -143,11 +143,11 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 "RxNorm/FDB Code": [validate_required],
                 "Status": [validate_required, (validate_enum, {"possible_options": ['active', 'resolved']})]
             }
-            
+
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
-                
+
                 for field, validator_funcs in validations.items():
                     for validator_func in validator_funcs:
                         kwargs = {}
@@ -174,14 +174,14 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
 
     def load(self, validated_rows, note_kwargs={}):
         """
-            Takes the validated rows from self.validate() and 
+            Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
 
-            Outputs to CSV to keep track of records 
+            Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
 
-        self.patient_map = fetch_from_json(self.patient_map_file) 
+        self.patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
@@ -202,7 +202,6 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
                 continue
-
 
             payload = {
                 "resourceType": "MedicationStatement",
@@ -248,13 +247,13 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
 
     def load_via_commands_api(self, validated_rows, note_kwargs={}):
         """
-            Takes the validated rows from self.validate() and 
+            Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
 
-            Outputs to CSV to keep track of records 
+            Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
-        self.patient_map = fetch_from_json(self.patient_map_file) 
+        self.patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
@@ -272,7 +271,7 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
                 note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
-                coding = self.med_mapping[f"{row['Medication Name']}|{row['Original Code']}"]
+                coding = self.med_mapping[f"{row['Medication Name']}|{row.get("Original Code", "")}"]
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
                 continue
