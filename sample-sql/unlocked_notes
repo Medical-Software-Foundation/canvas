@@ -36,5 +36,5 @@ JOIN api_patient p ON p.id = n.patient_id
 WHERE
     -- Include only notes with a service date before today
     n.datetime_of_service < current_date
-    -- Exclude notes in the following states: Deleted (DLT), Locked (LKD), or Closed (CLD)
+    -- Exclude notes in the following states: Deleted (DLT), Locked (LKD), or Cancelled (CLD)
     AND nsc.state NOT IN ('DLT', 'LKD', 'CLD');
