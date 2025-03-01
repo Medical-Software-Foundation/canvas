@@ -1,8 +1,9 @@
 import csv
+import os
 
 from data_migrations.template_migration.medication import MedicationLoaderMixin
 from data_migrations.avon_migration.utils import AvonHelper
-from data_migrations.utils import fetch_from_json, write_to_json, load_fhir_settings
+from data_migrations.utils import fetch_complete_csv_rows, fetch_from_json, write_to_json, load_fhir_settings
 
 
 class PrescriptionLoader(MedicationLoaderMixin):
@@ -10,10 +11,24 @@ class PrescriptionLoader(MedicationLoaderMixin):
         self.environment = environment
         self.avon_helper = AvonHelper(environment)
         self.patient_map_file = 'PHI/patient_id_map.json'
+        self.patient_map = fetch_from_json(self.patient_map_file)
         self.json_file = "PHI/prescriptions.json"
         self.csv_file = "PHI/prescriptions.csv"
         self.med_mapping_file = 'mappings/medication_coding_map.json'
+        self.med_mapping = fetch_from_json(self.med_mapping_file)
         self.fumage_helper = load_fhir_settings(environment=environment)
+        self.default_location = "9e757329-5ab1-4722-bab9-cc25002fa5c0"
+        self.default_note_type_name = "Avon Data Migration"
+        self.validation_error_file = "results/PHI/errored_prescription_validation.json"
+        self.ignore_file = "results/ignored_prescriptions.csv"
+        self.ignore_records = fetch_complete_csv_rows(self.ignore_file)
+        self.error_file = 'results/errored_prescriptions.csv'
+        self.done_file = 'results/done_prescriptions.csv'
+        self.done_records = fetch_complete_csv_rows(self.done_file)
+        self.note_map_file = "mappings/historical_note_map.json"
+        self.note_map = fetch_from_json(self.note_map_file)
+
+        super().__init__(*args, **kwargs)
 
     def make_fdb_mapping(self, delimiter='|'):
         fdb_mapping_dict = {}
@@ -28,6 +43,10 @@ class PrescriptionLoader(MedicationLoaderMixin):
         write_to_json(self.med_mapping_file, fdb_mapping_dict)
 
     def make_csv(self, delimiter="|"):
+        if os.path.isfile(self.csv_file):
+            print('CSV already exists')
+            return None
+
         prescriptions = []
 
         for patient_id in fetch_from_json(self.patient_map_file).keys():
@@ -48,6 +67,7 @@ class PrescriptionLoader(MedicationLoaderMixin):
             "RxNorm/FDB Code",
             "SIG",
             "Medication Name",
+            "Original Code",
         ]
 
         with open(self.csv_file, 'w') as f:
@@ -55,13 +75,29 @@ class PrescriptionLoader(MedicationLoaderMixin):
             writer.writeheader()
 
             for row in prescriptions:
+
+                mapping_found = self.med_mapping.get(f"{row['name']}|")
+                print(row['name'])
+                if mapping_found:
+                    code = next(item['code'] for item in mapping_found if item["system"] == 'http://www.fdbhealth.com/')
+                    if not code:
+                        code = "unstructured"
+                else:
+                    print("unstructured")
+                    code = "unstructured"
+
+                patient_identifier = row['patient']
+                if patient_identifier.startswith("user_user_"):
+                    patient_identifier = patient_identifier.replace("user_user_", "user_")
+
                 writer.writerow({
                     "ID": row["id"],
-                    "Patient Identifier": row["patient"],
+                    "Patient Identifier": patient_identifier,
                     "Status": "active" if not row["inactive_at"] else "inactive",
-                    "RxNorm/FDB Code": "unstructured",
+                    "RxNorm/FDB Code": code,
                     "SIG": row["directions"],
                     "Medication Name": row["name"],
+                    "Original Code": ""
                 })
 
         print("Successfully made CSV")
@@ -71,6 +107,10 @@ if __name__ == "__main__":
     loader = PrescriptionLoader(environment='phi-collaborative-test')
     delimiter = '|'
 
+    # loader.make_fdb_mapping()
+    # loader.map()
+
     # loader.make_csv(delimiter=delimiter)
-    loader.make_fdb_mapping()
-    loader.map()
+
+    valid_rows = loader.validate(delimiter=delimiter)
+    loader.load_via_commands_api(valid_rows)

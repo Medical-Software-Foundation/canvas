@@ -22,6 +22,8 @@ class CoverageLoader(CoverageLoaderMixin):
         self.note_map_file = "mappings/historical_note_map.json"
         self.note_map = fetch_from_json(self.note_map_file)
         self.fumage_helper = load_fhir_settings(environment)
+        self.payor_mapping_file = "mappings/payor_mapping.json"
+        self.payor_mapping = fetch_from_json(self.payor_mapping_file)
 
         self.doctor_map = fetch_from_json("mappings/doctor_map.json")
         self.validation_error_file = 'results/PHI/errored_coverage_validation.json'
@@ -94,12 +96,15 @@ class CoverageLoader(CoverageLoaderMixin):
                     "Subscriber": subscriber,
                     "Member ID": row["insurance_card"]["member_id"],
                     "Relationship to Subscriber": subscriber_relationship,
-                    "Coverage Start Date": "", # TODO - get from CX - not in the data;
-                    "Payor ID": "", # TODO - need payor mapping for this;
+                    "Coverage Start Date": "2025-03-03",
+                    "Payor ID": self.payor_mapping.get(f"{row["insurance_card"]["payer_id"]}|{row["insurance_card"]["payer_name"]}", ""),
                     "Order": coverage_order,
                     "Group Number": row["insurance_card"]["group_number"] or "",
                     "Plan Name": row["insurance_card"]["plan_name"] or ""
                 }
+
+                if not row_to_write["Payor ID"]:
+                    self.ignore_row(row["id"], "Ignoring due to no payor mapping")
 
                 writer.writerow(row_to_write)
 
@@ -111,6 +116,6 @@ if __name__ == "__main__":
     loader = CoverageLoader(environment='phi-collaborative-test')
     delimiter = '|'
 
-    loader.make_csv(delimiter=delimiter)
-    # valid_rows = loader.validate(delimiter=delimiter)
-    # loader.load(valid_rows)
+    # loader.make_csv(delimiter=delimiter)
+    valid_rows = loader.validate(delimiter=delimiter)
+    loader.load(valid_rows, map_payor=False)
