@@ -9,7 +9,7 @@ def validate_date(value, field_name):
     try:
         return True, arrow.get(value).format("YYYY-MM-DD")
     except:
-        for format in ["MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYYY", "M.DD.YYYY"]:
+        for format in ["MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYYY", "M.DD.YYYY", "MMMM DD, YYYY", "MMM DD, YYYY", "MMMM D, YYYY", "MMM D, YYYY", "MMMM Do, YYYY", "MMM Do, YYYY"]:
             try:
                 return True, arrow.get(value, format).format("YYYY-MM-DD")
             except:
@@ -173,6 +173,9 @@ class MappingMixin:
         if not provider:
             return
 
+        if provider == 'canvas-bot':
+            return "5eede137ecfe4124b8b773040e33be14"
+
         if hasattr(self, "doctor_map"):
             practitioner_key = self.doctor_map.get(str(provider))
 
@@ -205,7 +208,7 @@ class FileWriterMixin:
         """If anything fails, output to file to go back and fix"""
         error = str(error).replace('\n', '')
         with open(file or self.error_file, 'a') as file:
-            print(' Errored row outputing error message to file...')
+            print(f' Errored row outputing error message to file...{error}')
             file.write(f"{data}|{error}\n")
 
     def done_row(self, data, file=None):

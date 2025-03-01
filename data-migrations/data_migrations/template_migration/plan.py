@@ -13,12 +13,12 @@ from data_migrations.template_migration.note import NoteMixin
 from data_migrations.template_migration.commands import CommandMixin
 
 
-class HPILoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
+class PlanLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect
-    """
+    """        
 
     def validate(self, delimiter='|'):
         """ 
@@ -122,7 +122,7 @@ class HPILoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
 
             payload = {
                 "noteKey": note_id,
-                "schemaKey": "hpi",
+                "schemaKey": "plan",
                 "values": {
                     "narrative": row['Narrative']
                 }

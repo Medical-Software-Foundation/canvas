@@ -1,6 +1,7 @@
 import csv, json, requests
 from urllib.parse import urlencode
 from decouple import Config, RepositoryIni
+from collections import defaultdict
 
 def fetch_complete_csv_rows(filename, key='id', delimiter='|'):
     """

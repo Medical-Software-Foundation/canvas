@@ -5,63 +5,60 @@ from data_migrations.utils import fetch_from_json, write_to_json
 from data_migrations.template_migration.utils import (
     validate_header,
     validate_required,
-    validate_datetime,
+    validate_date,
+    validate_enum,
     MappingMixin,
     FileWriterMixin
 )
-from data_migrations.template_migration.note import NoteMixin
-from data_migrations.template_migration.commands import CommandMixin
 
 
-class HPILoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
+class ConsentLoaderMixin(MappingMixin, FileWriterMixin):
     """
-        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow. 
+        Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect
     """
 
     def validate(self, delimiter='|'):
-        """ 
+        """
             Loop throw the CSV file to validate each row has the correct columns and values
-            Append validated rows to a list to use to load. 
+            Append validated rows to a list to use to load.
             Export errors to a file/console
-            
+
         """
         validated_rows = []
         errors = defaultdict(list)
         with open(self.csv_file, "r") as file:
             reader = csv.DictReader(file, delimiter=delimiter)
 
-            validate_header(reader.fieldnames, 
+            validate_header(reader.fieldnames,
                 accepted_headers = {
                     "ID",
                     "Patient Identifier",
-                    "DOS",
-                    "Location",
-                    "Provider",
-                    "Note Type Name",
-                    "Narrative",
-                    "Note ID",
-                    "Note Title"
-                }  
+                    "Status",
+                    "Code",
+                    "Date"
+                }
             )
 
             validations = {
                 "ID": [validate_required],
                 "Patient Identifier": [validate_required],
-                "DOS": [validate_required, validate_datetime],
+                "Status": [validate_required, (validate_enum, {"possible_options": ['active', 'rejected']})],
+                "Code": [validate_required],
+                "Date": [validate_date],
             }
-            
+
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
-                
+
                 for field, validator_funcs in validations.items():
                     for validator_func in validator_funcs:
                         kwargs = {}
-                        if isinstance(validator_func, tuple): 
+                        if isinstance(validator_func, tuple):
                             validator_func, kwargs = validator_func
-                        
+
                         valid, value = validator_func(row[field].strip(), field, **kwargs)
                         if valid:
                             row[field] = value
@@ -80,15 +77,16 @@ class HPILoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
 
         return validated_rows
 
-    def load_via_commands_api(self, validated_rows):
+    def load(self, validated_rows, note_kwargs={}):
         """
-            Takes the validated rows from self.validate() and 
-            loops through to send them off the Commands Create
+            Takes the validated rows from self.validate() and
+            loops through to send them off the FHIR Create
 
-            Outputs to CSV to keep track of records 
+            Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
-        self.patient_map = fetch_from_json(self.patient_map_file) 
+
+        self.patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
         print(f'      Found {len(validated_rows)} records')
@@ -105,33 +103,38 @@ class HPILoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
             try:
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
-                practitioner_key = self.map_provider(row.get('Provider'))
-                if note_id := row.get("Note ID"):
-                    self.perform_note_state_change(note_id, 'ULK')
-                else:
-                    note_id = self.create_note(patient_key, **{
-                        "note_type_name": row['Note Type Name'],
-                        "provider_key": practitioner_key,
-                        "encounter_start_time": row['DOS'],
-                        "practice_location_key": row['Location'],
-                        "title": row.get("Note Title")
-                    })
             except BaseException as e:
-                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                self.ignore_row(f"{row['ID']}", e)
                 continue
 
             payload = {
-                "noteKey": note_id,
-                "schemaKey": "hpi",
-                "values": {
-                    "narrative": row['Narrative']
+                "resourceType": "Consent",
+                "status": row['Status'],
+                "scope": {},
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "INTERNAL",
+                                "code": row['Code'],
+                            }
+                        ]
+                    }
+                ],
+                "patient": {
+                    "reference": f"Patient/{patient_key}"
+                },
+                "provision": {
+                    "period": {
+                        "start": row['Date']
+                    }
                 }
             }
 
+            # print(json.dumps(payload, indent=2))
+
             try:
-                canvas_id = self.create_command(payload)
-                self.commit_command(canvas_id)
-                self.perform_note_state_change(note_id)
+                canvas_id = self.fumage_helper.perform_create(payload)
                 self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
                 ids.add(row['ID'])
             except BaseException as e:

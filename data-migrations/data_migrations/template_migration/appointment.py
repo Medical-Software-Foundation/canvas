@@ -150,8 +150,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
         ids = set()
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
-            print(row)
-
+ 
             if row['ID'] in ids or row['ID'] in self.done_records or row['ID'] in self.ignore_records:
                 print(' Already looked at record')
                 continue

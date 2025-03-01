@@ -73,3 +73,46 @@ class AvonHelper:
             'Authorization': f'Bearer {token_response.json()["access_token"]}',
             'x-jwt': jwt_response.json()['jwt']
         }
+
+class CalComHelper:
+    """
+        Helper mixin for accessing the cal.com API
+
+        settings need to be correctly set up in the config.ini file
+    """
+
+    def __init__(self, environment):
+        self.environment = environment
+        self.get_config_settings()
+        self.base_url = "https://api.cal.com/"
+        self.headers = {
+            "cal-api-version": "2024-08-13",
+            "Authorization": f"Bearer {self.cal_api_key}"
+        }
+
+    def get_config_settings(self):
+        """ Load the config.ini file that contains avon auth variables """
+        ini = RepositoryIni('../config.ini')
+        ini.SECTION = self.environment
+        config = Config(ini)
+
+        self.cal_api_key = config("cal_api_key", cast=str)
+
+    def fetch_records(self, data_type, json_file, param_string=''):
+        """ Performs an Cal.com API Call to fetch data with a certain
+        URL and search parameters
+        """
+        print(f'Fetching records for {data_type}')
+
+        if json_file and os.path.isfile(json_file):
+            return fetch_from_json(json_file)
+
+        url = f'{self.base_url}{data_type}?{param_string}'
+        response = requests.get(url, headers=self.headers)
+        try:
+            data = response.json()['data']
+            if json_file:
+                write_to_json(json_file, data)
+            return data
+        except:
+            raise Exception(f"{response.status_code}: {response.text}")

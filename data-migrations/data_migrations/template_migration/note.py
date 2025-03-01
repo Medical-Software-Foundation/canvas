@@ -6,12 +6,12 @@ from data_migrations.utils import write_to_json
 
 
 class NoteMixin:
-    def __init__(self) -> None:
+    def get_base_url(self) -> None:
         uri = "/core/api/notes/v1/Note"
         if self.environment == "localhost":
-            self.base_url = f"http://localhost:8000{uri}"
+            return f"http://localhost:8000{uri}"
         else:
-            self.base_url = f"https://{self.environment}.canvasmedical.com{uri}"
+            return f"https://{self.environment}.canvasmedical.com{uri}"
 
     def get_or_create_historical_data_input_note(self, canvas_patient_key, **kwargs) -> str:
         """
@@ -37,10 +37,11 @@ class NoteMixin:
             "patientKey": canvas_patient_key,
             "providerKey": kwargs.get("provider_key", "5eede137ecfe4124b8b773040e33be14"), # canvas bot
             "encounterStartTime": kwargs.get("encounter_start_time") or arrow.now().isoformat(),
-            "practiceLocationKey": kwargs.get("practice_location_key", self.default_location)
+            "practiceLocationKey": kwargs.get("practice_location_key", self.default_location),
+            "title": kwargs.get("note_title") or ""
         }
 
-        response = requests.request("POST", self.base_url, headers=self.fumage_helper.headers, data=json.dumps(payload))
+        response = requests.request("POST", self.get_base_url(), headers=self.fumage_helper.headers, data=json.dumps(payload))
 
         if response.status_code != 201:
             raise Exception(f"Failed to perform {response.url}. \n {response.text}")
@@ -49,6 +50,6 @@ class NoteMixin:
         return response_json['noteKey']
 
     def perform_note_state_change(self, note_id, state='LKD'):
-        response = requests.request("PATCH", f"{self.base_url}/{note_id}", headers=self.fumage_helper.headers, data=json.dumps({"stateChange": state}))
-        if response.status_code != 200 and f"{state} -> {state}" not in response.text:
+        response = requests.request("PATCH", f"{self.get_base_url()}/{note_id}", headers=self.fumage_helper.headers, data=json.dumps({"stateChange": state}))
+        if response.status_code != 200 and f"{state} -> {state}" not in response.text and "NEW -> ULK" not in response.text:
             raise Exception(f"Failed to perform {response.url}. \n {response.text}")
