@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Automated Task Management for Incomplete Patient Notes"
+    description: "This protocol outlines a system for identifying and managing patient notes that are left open or closed without required coding by care navigators using the Canvas platform. It involves monitoring note status, generating tasks, and notifying care navigators to ensure timely resolution and reduce billing workflow issues."
+    url: ""
+
