@@ -1,0 +1,18 @@
+digraph {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All care navigators using the Canvas platform for managing patient notes"];
+    SubsetConsideration [label="Subset in Consideration" shape=box style=rounded color=green fontcolor=green comment="Notes created by care navigators that are either left open beyond a predefined time frame or closed without the required coding"];
+    ExclusionCriteria [label="Exclusion Criteria" shape=box style=rounded color=green fontcolor=green comment="Notes that are closed with all required coding within the predefined time frame or intentionally left open due to ongoing patient care activities"];
+    Diagnostic [label="Diagnostic" shape=ellipse color=blue fontcolor=blue comment="Implement a monitoring system using Canvas SDK plugins to track the status of notes and identify notes that meet the criteria"];
+    Administrative [label="Administrative" shape=ellipse color=blue fontcolor=blue comment="Automatically generate a task within the Canvas platform for each identified note and assign it to the care navigator"];
+    Therapeutic [label="Therapeutic" shape=ellipse color=blue fontcolor=blue comment="Notify the care navigator of the task, prompting them to either close the note with the required coding or update the note status"];
+    Completion [label="Completion" shape=ellipse color=blue fontcolor=blue comment="Set a completion deadline for the task to ensure timely resolution and monitor task completion"];
+
+    InitialPopulation -> SubsetConsideration [label="if" color=blue fontcolor=blue];
+    SubsetConsideration -> ExclusionCriteria [label="and" color=blue fontcolor=blue];
+    ExclusionCriteria -> Diagnostic [label="then" color=blue fontcolor=blue];
+    Diagnostic -> Administrative [label="and" color=blue fontcolor=blue];
+    Administrative -> Therapeutic [label="and" color=blue fontcolor=blue];
+    Therapeutic -> Completion [label="and" color=blue fontcolor=blue];
+}
