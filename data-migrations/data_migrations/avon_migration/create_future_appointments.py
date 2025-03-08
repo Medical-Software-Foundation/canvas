@@ -110,7 +110,7 @@ class FutureAppointmentLoader(AppointmentLoaderMixin):
 
             for row in data:
                 # skip over appointments that have been cancelled
-                if row['status_history'][-1]['status'] == 'cancelled':
+                if row['status'] == 'cancelled':
                     self.ignore_row(row['id'], "Apt is cancelled")
                     continue
 

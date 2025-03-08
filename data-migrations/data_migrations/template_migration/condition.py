@@ -131,10 +131,7 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 practitioner_key = self.map_provider(row['Recorded Provider'])
                 note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key)
             except BaseException as e:
-                self.error_row(
-                    f"{row['ID']}|{patient}|{patient_key}",
-                    e
-                )
+                self.ignore_row(row['ID'], e)
                 continue
 
             payload = {

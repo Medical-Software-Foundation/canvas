@@ -82,7 +82,7 @@ class VitalsLoader(VitalsMixin):
 
 if __name__ == "__main__":
     loader = VitalsLoader('phi-collaborative-test')
-    # loader.make_csv()
+    #loader.make_csv()
 
     valid_rows = loader.validate()
     loader.load(valid_rows)

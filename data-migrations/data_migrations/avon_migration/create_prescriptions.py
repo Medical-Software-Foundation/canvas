@@ -31,22 +31,17 @@ class PrescriptionLoader(MedicationLoaderMixin):
         super().__init__(*args, **kwargs)
 
     def make_fdb_mapping(self, delimiter='|'):
-        fdb_mapping_dict = {}
-        with open(self.csv_file, 'r') as file:
-            reader = csv.DictReader(file, delimiter=delimiter)
-            for row in reader:
-                key = f"{row['Medication Name']}|"
-                if key not in fdb_mapping_dict:
-                    print(key)
-                    fdb_mapping_dict[key] = []
+        fdb_mapping_dict = fetch_from_json(self.med_mapping_file)
+        reader = fetch_from_json(self.json_file)
+        for row in reader:
+            key = f"{row['name']}|"
+            if key not in fdb_mapping_dict:
+                print(key)
+                fdb_mapping_dict[key] = []
 
         write_to_json(self.med_mapping_file, fdb_mapping_dict)
 
-    def make_csv(self, delimiter="|"):
-        if os.path.isfile(self.csv_file):
-            print('CSV already exists')
-            return None
-
+    def make_json(self):
         prescriptions = []
 
         for patient_id in fetch_from_json(self.patient_map_file).keys():
@@ -59,6 +54,13 @@ class PrescriptionLoader(MedicationLoaderMixin):
             prescriptions.extend(data)
 
         write_to_json(self.json_file, prescriptions)
+
+    def make_csv(self, delimiter="|"):
+        if os.path.isfile(self.csv_file):
+            print('CSV already exists')
+            return None
+
+        prescriptions = fetch_from_json(self.json_file)
 
         headers = [
             "ID",
@@ -77,13 +79,12 @@ class PrescriptionLoader(MedicationLoaderMixin):
             for row in prescriptions:
 
                 mapping_found = self.med_mapping.get(f"{row['name']}|")
-                print(row['name'])
                 if mapping_found:
                     code = next(item['code'] for item in mapping_found if item["system"] == 'http://www.fdbhealth.com/')
                     if not code:
                         code = "unstructured"
                 else:
-                    print("unstructured")
+                    print(f"Unstructured for {row['name']}")
                     code = "unstructured"
 
                 patient_identifier = row['patient']
@@ -107,10 +108,13 @@ if __name__ == "__main__":
     loader = PrescriptionLoader(environment='phi-collaborative-test')
     delimiter = '|'
 
-    # loader.make_fdb_mapping()
+    #loader.make_json()
+
+    #loader.make_fdb_mapping()
     # loader.map()
 
-    # loader.make_csv(delimiter=delimiter)
+    #loader.make_csv(delimiter=delimiter)
 
     valid_rows = loader.validate(delimiter=delimiter)
+    #loader.load(valid_rows)
     loader.load_via_commands_api(valid_rows)

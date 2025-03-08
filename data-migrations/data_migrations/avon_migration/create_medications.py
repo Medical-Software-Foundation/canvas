@@ -20,6 +20,7 @@ class MedicationLoader(MedicationLoaderMixin):
         self.done_file = 'results/done_medications.csv'
         self.done_records = fetch_complete_csv_rows(self.done_file)
         self.error_file = 'results/errored_medications.csv'
+        self.ignore_file = 'results/ignored_medications.csv'
 
         self.default_location = "9e757329-5ab1-4722-bab9-cc25002fa5c0"
         self.default_note_type_name = "Avon Data Migration"
@@ -41,12 +42,12 @@ class MedicationLoader(MedicationLoaderMixin):
             and convert the JSON into a CSV with the columns that match
             the Canvas Data Migration Template
         """
-        # if os.path.isfile(self.csv_file):
-        #     print('CSV already exists')
-        #     return None
+        if os.path.isfile(self.csv_file):
+            print('CSV already exists')
+            return None
 
-        # data = self.avon_helper.fetch_records("v2/medications", self.json_file, param_string='')
-        data = fetch_from_json(self.json_file)
+        data = self.avon_helper.fetch_records("v2/medications", self.json_file, param_string='')
+        # data = fetch_from_json(self.json_file)
 
         headers = {
             "ID",
@@ -63,6 +64,10 @@ class MedicationLoader(MedicationLoaderMixin):
             writer.writeheader()
 
             for row in data:
+                if not row['name'] or row['name'] == '—':
+                    self.ignore_row(row['id'], "No medication name found")
+                    continue
+
                 medication_status = None
                 if row["active"] is True:
                     medication_status = "active"
@@ -73,7 +78,7 @@ class MedicationLoader(MedicationLoaderMixin):
                     {
                         "ID": row["id"],
                         "Patient Identifier": row["patient"],
-                        "Status": medication_status,
+                        "Status": medication_status or "active",
                         "RxNorm/FDB Code": "unstructured",
                         "SIG": row["sig"] or "",
                         "Medication Name": row["name"] or "",
@@ -87,6 +92,6 @@ if __name__ == "__main__":
     loader = MedicationLoader(environment='phi-collaborative-test')
     delimiter = '|'
 
-    # loader.make_csv(delimiter=delimiter)
+    #loader.make_csv(delimiter=delimiter)
     valid_rows = loader.validate(delimiter=delimiter)
     loader.load(valid_rows)

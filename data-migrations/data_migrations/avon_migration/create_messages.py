@@ -60,16 +60,17 @@ class MessageLoader(MessageLoaderMixin):
 
                 # If a patient is on the thread, see if we have a Canvas patient mapping
                 patient_key = None
+                patient_count = 0
                 if patient := row['patient']:
                     try:
                         patient_key = self.map_patient(patient)
+                        patient_count += 1
                     except BaseException as e:
                         self.error_row(f"{row['id']}|{patient}|{patient_key}", f"Main patient: {e}")
                         continue
                 
                 # make sure we have a provider mapping to Canvas for the participants in the thread
                 participant_map = {}
-                patient_count = 0
                 for participant in row['participants']:
                     if participant == patient:
                         continue

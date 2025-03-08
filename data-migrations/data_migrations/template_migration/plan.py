@@ -117,7 +117,7 @@ class PlanLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
                         "title": row.get("Note Title")
                     })
             except BaseException as e:
-                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                self.ignore_row(row['ID'], e)
                 continue
 
             payload = {

@@ -35,7 +35,7 @@ class ConditionLoader(ConditionLoaderMixin):
         self.csv_file = 'PHI/conditions.csv'
         self.ignore_file = 'results/ignored_conditions.csv'
         self.ignore_records = fetch_complete_csv_rows(self.ignore_file)
-        self.validation_error_file = 'results/PHI/errored_condition_validation.json'
+        self.validation_error_file = 'results/errored_condition_validation.json'
         self.error_file = 'results/errored_conditions.csv'
         self.done_file = 'results/done_conditions.csv'
         self.done_records = fetch_complete_csv_rows(self.done_file)
@@ -80,14 +80,91 @@ class ConditionLoader(ConditionLoaderMixin):
             writer.writeheader()
 
             for row in data:
+                if row["name"] is None or not row['name'].strip():
+                    self.ignore_row(row['id'], "No condition name found to map")
+                    continue
+
+                name_map = {
+                    "ADHD": "F909",
+                    "Attention deficit disorder": "F909",
+                    "B12 deificiency": "D518",
+                    "Bloating": "R140",
+                    "BRCA 1": "Z1501",
+                    "chronic low back Pain": "M545",
+                    "DCIS": "D0510",
+                    "DVT": "I82409",
+                    "dyslipdemia": "E785",
+                    "Dyslipidemia": "E785",
+                    "eczema": "L209",
+                    "Endometrial Cancer": "C541",
+                    "Endometrosis": "N809",
+                    "eosionphilic esophagitis": "K200",
+                    "Factor 2 Mutation": "D6852",
+                    "Factor V Leiden": "D682",
+                    "fibroids": "D250",
+                    "GERD": "K219",
+                    "Hashimotos": "E063",
+                    "Hashimoto's": "E063",
+                    "hot flash": "N951",
+                    "HTN": "I10",
+                    "Hx of DVT and PE s/p COVID vaccine": "Z86718",
+                    "Hypertrophic Cardiomyopathy": "I422",
+                    "Hypothyrodism": "E039",
+                    "Hypovitaminosis": "E569",
+                    "Kidney stones": "N200",
+                    "Leukopenia": "D72819",
+                    "Low Ferritin": "E611",
+                    "Low ferritin": "E611",
+                    "low libdo": "R6882",
+                    "May-Thurner Syndrome": "I871",
+                    "Menopause": "N951",
+                    "Migraines": "G43909",
+                    "Migrane": "G43909",
+                    "Migranes": "G43909",
+                    "migranes": "G43909",
+                    "Migranes with aura": "G43109",
+                    "MTHFR": "E7212",
+                    "MTHFR gene": "E7212",
+                    "MTHRF-hetrozygeous": "E7212",
+                    "Osteopenia": "M8580",
+                    "OSTEOPENIA": "M8580",
+                    "osteopenia": "M8580",
+                    "Osteopenia": "M8580",
+                    "PCOS": "E282",
+                    "Pericarditis/Pericardial Effusion": "I319",
+                    "Perimenopause": "N959",
+                    "persistent perceptual postural dizziness PPPD": "G90A",
+                    "Post-menopause": "N950",
+                    "Post-Menopause": "N950",
+                    "Post-Menopause,": "N950",
+                    "Postmenopause": "N950",
+                    "Pre-diabetic": "R7303",
+                    "Prediabetes,": "R7303",
+                    "Prediabetes": "R7303",
+                    "Premature ventricular contractions": "I493",
+                    "Provoked DVT": "I82409",
+                    "PTSD": "F4310",
+                    "Right Venous Thoracic Outlet Syndrome": "G540",
+                    "Seasonal Allergies": "J302",
+                    "Seasonal allergies": "J302",
+                    "Sjorgen's Syndrome": "M3500",
+                    "Stage 2 Right Mucinous Carcinoma.": "C561",
+                    "Subclinical Hypothyroidism": "E02",
+                    "submassive saddle pulmonary embolism": "I2602",
+                    "Thymic gland carcinoma": "C37",
+                    "Ventricular Fibrillation Arrest": "I4901",
+                    "VTE": "I8290",
+                    "weight gan": "R635",
+                }
+
                 writer.writerow({
                     "ID": row["id"],
                     "Patient Identifier": row["patient"],
                     "Clinical Status": "active" if row["active"] else "resolved",
-                    "ICD-10 Code": row["name"],
+                    "ICD-10 Code": name_map.get(row["name"].strip()) or row["name"],
                     "Onset Date": row["onset_date"] or "",
                     "Resolved Date": row["end_date"] if row["end_date"] and not row["active"] else "",
-                    "Recorded Provider": row["created_by"],
+                    "Recorded Provider": row["created_by"] if row["created_by"] != "user_null" else "5eede137ecfe4124b8b773040e33be14",
                     "Free text notes": row["comment"].replace("\n", "\\n") if row["comment"] else "",
                 })
 
@@ -101,10 +178,10 @@ if __name__ == '__main__':
 
     # Make the Avon API call to their List Appointments endpoint and convert the JSON return
     # to the template CSV loader
-    loader.make_csv(delimiter=delimiter)
+    #loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
-    #valid_rows = loader.validate(delimiter=delimiter)
+    valid_rows = loader.validate(delimiter=delimiter)
 
     # # If you are ready to load the rows that have passed validation to your Canvas instance
-    #loader.load(valid_rows)
+    loader.load(valid_rows)

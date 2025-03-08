@@ -200,7 +200,7 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 patient_key = self.map_patient(patient)
                 note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
             except BaseException as e:
-                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                self.ignore_row(row['ID'], e)
                 continue
 
             payload = {
@@ -271,7 +271,7 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
                 note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
-                coding = self.med_mapping[f"{row['Medication Name']}|{row.get("Original Code", "")}"]
+                coding = self.med_mapping[f"{row['Medication Name']}|{row.get('Original Code', '')}"]
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
                 continue

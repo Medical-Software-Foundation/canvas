@@ -94,7 +94,7 @@ class VitalsMixin(NoteMixin, CommandMixin, MappingMixin, FileWriterMixin):
             try:
                 patient_key = self.map_patient(row["patient"])
             except BaseException as e:
-                self.error_row(f"{row['id']}|{row['patient']}|{patient_key}", e)
+                self.ignore_row(row['id'], e)
                 continue
 
             provider_key = self.doctor_map.get(row["created_by"], "5eede137ecfe4124b8b773040e33be14") # fallback to canvas bot
@@ -149,11 +149,19 @@ class VitalsMixin(NoteMixin, CommandMixin, MappingMixin, FileWriterMixin):
 
             try:
                 canvas_id = self.create_command(vitals_payload)
-                self.commit_command(canvas_id)
-                self.done_row(f"{row['id']}|{row['patient']}|{patient_key}|{canvas_id}")
-                ids.add(row['id'])
             except BaseException as e:
                 self.error_row(f"{row['id']}|{row['patient']}|{patient_key}", e)
+                continue
+
+            self.done_row(f"{row['id']}|{row['patient']}|{patient_key}|{canvas_id}")
+            ids.add(row['id'])
+
+            try:
+                self.commit_command(canvas_id)
+            except BaseException as e:
+                self.error_row(f"{row['id']}|{row['patient']}|{patient_key}", e)
+                # still creates note, just unable to lock or commit command
+                continue
 
             # now lock the Vitals Import note
             try:

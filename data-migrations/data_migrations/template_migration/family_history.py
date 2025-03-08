@@ -113,9 +113,9 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
                 if not diagnosis_description:
                     diagnosis_description = self.icd10_map[row["icd_code"].replace(".", "")]
                     if comment:
-                        comment = f"{row["icd_code"]}\n{comment}"
+                        comment = f'{row["icd_code"]}\n{comment}'
                     else:
-                        comment = f"{row["icd_code"]}"
+                        comment = f'{row["icd_code"]}'
 
                 family_history_dict = {
                     "text": diagnosis_description,

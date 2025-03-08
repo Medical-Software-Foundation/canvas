@@ -76,6 +76,6 @@ if __name__ == "__main__":
     loader = FamilyHistoryLoader('phi-collaborative-test')
     delimiter = '|'
 
-    loader.make_csv(delimiter=delimiter)
-    # valid_rows = loader.validate(delimiter="|")
-    # loader.load(valid_rows)
+    #loader.make_csv(delimiter=delimiter)
+    valid_rows = loader.validate(delimiter="|")
+    loader.load(valid_rows)

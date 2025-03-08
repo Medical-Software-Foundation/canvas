@@ -97,14 +97,15 @@ class CoverageLoader(CoverageLoaderMixin):
                     "Member ID": row["insurance_card"]["member_id"],
                     "Relationship to Subscriber": subscriber_relationship,
                     "Coverage Start Date": "2025-03-03",
-                    "Payor ID": self.payor_mapping.get(f"{row["insurance_card"]["payer_id"]}|{row["insurance_card"]["payer_name"]}", ""),
+                    "Payor ID": self.payor_mapping.get(f'{row["insurance_card"]["payer_id"]}|{row["insurance_card"]["payer_name"]}', ""),
                     "Order": coverage_order,
                     "Group Number": row["insurance_card"]["group_number"] or "",
                     "Plan Name": row["insurance_card"]["plan_name"] or ""
                 }
 
                 if not row_to_write["Payor ID"]:
-                    self.ignore_row(row["id"], "Ignoring due to no payor mapping")
+                    self.ignore_row(row["id"], f'Ignoring due to no payor mapping for {row["insurance_card"]["payer_id"]}|{row["insurance_card"]["payer_name"]}')
+                    continue
 
                 writer.writerow(row_to_write)
 
@@ -116,6 +117,6 @@ if __name__ == "__main__":
     loader = CoverageLoader(environment='phi-collaborative-test')
     delimiter = '|'
 
-    # loader.make_csv(delimiter=delimiter)
+    #loader.make_csv(delimiter=delimiter)
     valid_rows = loader.validate(delimiter=delimiter)
-    loader.load(valid_rows, map_payor=False)
+    #loader.load(valid_rows, map_payor=False)

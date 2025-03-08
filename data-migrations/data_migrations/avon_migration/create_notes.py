@@ -36,7 +36,7 @@ class NoteTemplateLoader(HPILoaderMixin, PlanLoaderMixin, QuestionnaireResponseL
 
     def get_manual_input(self, row):
         dos_string = input(f"What should the date in YYYY-MM-DD be for {row['name']}: ")
-        dos = validate_date(dos_string, 'DOS')
+        valid, dos = validate_date(dos_string, 'DOS')
         return dos
 
     def make_csv(self, delimiter="|"):
@@ -89,7 +89,7 @@ class NoteTemplateLoader(HPILoaderMixin, PlanLoaderMixin, QuestionnaireResponseL
                     "DOS": f'{dos}T09:00:00-05:00',
                     "Provider": created_by
                 }
-                print(row)
+                # print(row)
                 for section in row['sections']:
                     for answer in section['answers']:
                         if answer['response']:
@@ -113,9 +113,6 @@ class NoteTemplateLoader(HPILoaderMixin, PlanLoaderMixin, QuestionnaireResponseL
             total_count = len(rows)
             print(f'      Found {len(rows)} records')
             for i, row in enumerate(rows):
-                if i < 59:
-                    continue
-
                 print(f'Ingesting ({i+1}/{total_count})')
 
                 patient = row['Patient Identifier']
@@ -123,7 +120,6 @@ class NoteTemplateLoader(HPILoaderMixin, PlanLoaderMixin, QuestionnaireResponseL
                 try:
                     # try mapping required Canvas identifiers
                     patient_key = self.map_patient(patient)
-                    practitioner_key = self.map_provider(row.get('Provider'))
                     if row['Appointment ID']:
                         apt_map = appointments.get(row['Appointment ID'])
                         if apt_map:
@@ -138,6 +134,7 @@ class NoteTemplateLoader(HPILoaderMixin, PlanLoaderMixin, QuestionnaireResponseL
                     elif row['ID'] in self.notes_template_map:
                         note_id = self.notes_template_map[row['ID']]
                     else:
+                        practitioner_key = self.map_provider(row.get('Provider'))
                         note_id = self.create_note(patient_key, **{
                             "note_type_name": self.default_note_type_name,
                             "provider_key": practitioner_key,
@@ -154,7 +151,7 @@ class NoteTemplateLoader(HPILoaderMixin, PlanLoaderMixin, QuestionnaireResponseL
                 command_row = {
                     "Patient Identifier": row['Patient Identifier'],
                     "DOS": row['DOS'],
-                    "Provider": row["Provider"],
+                    "Provider": row["Provider"] if row["Provider"] != "user_null" else "5eede137ecfe4124b8b773040e33be14",
                     "Note Type Name": self.default_note_type_name,
                     "Note ID": note_id,
                 }

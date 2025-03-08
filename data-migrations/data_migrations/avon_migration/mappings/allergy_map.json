@@ -105,5 +105,18 @@
     "Sesame": ["1-1179"],
     "Shellfish-derived Products": ["1-900584", "6-11754"],
     "Skin Adhesive (external)": ["6-11496"],
-    "Sulfadiazine": ["2-9703"]
+    "Sulfadiazine": ["2-9703"],
+    "Creatine": ["2-19553"],
+    "Disulfiram": ["2-1436"],
+    "Dogs": ["6-16087"],
+    "Epinephrine": ["2-3300"],
+    "Heparin Containing Compounds": ["6-15153"],
+    "Gabapentin Containing Compounds": ["6-4415"],
+    "gluten": ["1-20"],
+    "Vegetables": ["6-10625"],
+    "Metronidazole Containing Compounds": ["6-2958"],
+    "Iodine Containing Compounds": ["6-3150"],
+    "Cortizone": ["2-6028"],
+    "Gadolinium Containing Compounds": ["1-900059"],
+    "Sulfonamides": ["1-491"]
 }

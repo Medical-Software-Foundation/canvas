@@ -110,10 +110,10 @@ if __name__ == '__main__':
 
     # Make the Avon API call to their List Appointments endpoint and convert the JSON return
     # to the template CSV loader
-    loader.make_csv(delimiter=delimiter)
+    #loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
     valid_rows = loader.validate(delimiter=delimiter)
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    loader.load(valid_rows, system_unique_identifier='avon', end_date_time_frame="2025-02-20")
+    loader.load(valid_rows, system_unique_identifier='avon', end_date_time_frame="2025-03-07")

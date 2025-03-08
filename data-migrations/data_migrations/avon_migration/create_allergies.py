@@ -82,12 +82,14 @@ class AllergyLoader(AllergyLoaderMixin):
                     "Recorded Provider": recorded_provider,
                 }
 
-                fdb_codes = self.allergy_map.get(row["name"], [])
+                fdb_codes = self.allergy_map.get(row["name"].strip(), [])
                 if fdb_codes:
                     row_to_write["FDB Code"] = "```".join(fdb_codes)
                     row_to_write["Free Text Note"] = row["comment"] or ""
                     row_to_write["Name"] = row["name"]
                 else:
+                    print(f"No mapping for {row['name']}")
+
                     row_to_write["FDB Code"] = "1-143" # Code for no allergy information available
                     free_text_note = row["name"]
                     if row["comment"]:
@@ -105,10 +107,10 @@ if __name__ == "__main__":
 
     # Make the Avon API call to their List Appointments endpoint and convert the JSON return
     # to the template CSV loader
-    loader.make_csv(delimiter=delimiter)
+    #loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
-    # valid_rows = loader.validate(delimiter=delimiter)
+    valid_rows = loader.validate(delimiter=delimiter)
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    # loader.load(valid_rows)
+    loader.load(valid_rows)

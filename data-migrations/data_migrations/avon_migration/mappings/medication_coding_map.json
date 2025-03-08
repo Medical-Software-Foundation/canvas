@@ -2833,5 +2833,79 @@
             "code": "313387",
             "display": "Armour Thyroid 30 mg tablet"
         }
+    ],
+    "Bactrim DS Oral Tablet 800-160 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "429198",
+            "display": "Bactrim DS 800 mg-160 mg tablet"
+        }
+    ],
+    "Ferrous Gluconate Oral Tablet 324 (38 Fe) MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "547609",
+            "display": "ferrous gluconate 324 mg (38 mg iron) tablet"
+        }
+    ],
+    "Arginine HCl  Powder|": [],
+    "Zepbound Subcutaneous Solution 5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "617140",
+            "display": "Zepbound 5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "estradiol 0.01% with testosterone 0.1% in versa base  Testosterone Transdermal Gel 10 MG/ACT (2%) - 1 App|": [],
+    "ESTRADIOL 0.06% 1.25G GEL PUMP|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "468383",
+            "display": "estradiol 1.25 gram/actuation (0.06%) transdermal gel pump"
+        }
+    ],
+    "Albuterol Sulfate HFA Inhalation Aerosol Solution 108 (90 Base) MCG/ACT|": [],
+    "Spacer to be used with inhaler|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "450678",
+            "display": "inhalational spacing device"
+        }
+    ],
+    "0.25 mL of 1% topical testosterone in HRT base. Disp 15 grams and refill 5.|": [],
+    "Sertraline HCl Oral Tablet 100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "187550",
+            "display": "sertraline 100 mg tablet"
+        }
+    ],
+    "Clobetasol Propionate External Cream 0.05 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "192623",
+            "display": "clobetasol 0.05 % topical cream"
+        }
+    ],
+    "Clobetasol Propionate External Lotion 0.05 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "861505",
+            "display": "clobetasol 0.05 % topical lotion in pump"
+        }
+    ],
+    "Amphetamine-Dextroamphetamine Oral Tablet 10 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "184255",
+            "display": "dextroamphetamine-amphetamine 10 mg tablet"
+        }
+    ],
+    "Tretinoin External Gel 0.025 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "232495",
+            "display": "tretinoin 0.025 % topical gel"
+        }
     ]
 }

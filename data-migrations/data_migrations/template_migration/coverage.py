@@ -161,7 +161,7 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
                 else:
                     payer_id = self.map_payor(row['Payor ID'])
             except BaseException as e:
-                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                self.ignore_row(row['ID'], e)
                 continue
 
             payload = {
