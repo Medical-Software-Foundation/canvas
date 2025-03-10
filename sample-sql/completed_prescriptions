@@ -1,8 +1,14 @@
--- Retrieves all prescriptions written, filtering out deleted, uncommitted commands, and test patients.
+/*
+This query retrieves all prescriptions written in the last week while filtering out:
+- Deleted prescriptions
+- Uncommitted prescriptions
+- Test patient prescriptions
+*/
 
 SELECT
     -- Patient details
     ap.mrn AS patient_medrecordnumber,
+    ap.key AS patient_key,
     ap.first_name AS patient_first_name,
     ap.last_name AS patient_last_name,
     ap.birth_date AS patient_DOB,
@@ -13,6 +19,7 @@ SELECT
     rx.sig_original_input AS SIG,
     rx.dispense_quantity AS quantity_to_dispense,
     rx.count_of_refills_allowed AS refills,
+    rx.status as erx_status,
 
     -- Prescriber details
     st.first_name || ' ' || st.last_name AS prescriber_name
