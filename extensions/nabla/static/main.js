@@ -71,6 +71,8 @@ const getOrRefetchUserAccessToken = async () => {
     setUserTokens(data.access_token, data.refresh_token);
 }
 
+const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--!Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M384 336l-192 0c-8.8 0-16-7.2-16-16l0-256c0-8.8 7.2-16 16-16l140.1 0L400 115.9 400 320c0 8.8-7.2 16-16 16zM192 384l192 0c35.3 0 64-28.7 64-64l0-204.1c0-12.7-5.1-24.9-14.1-33.9L366.1 14.1c-9-9-21.2-14.1-33.9-14.1L192 0c-35.3 0-64 28.7-64 64l0 256c0 35.3 28.7 64 64 64zM64 128c-35.3 0-64 28.7-64 64L0 448c0 35.3 28.7 64 64 64l192 0c35.3 0 64-28.7 64-64l0-32-48 0 0 32c0 8.8-7.2 16-16 16L64 464c-8.8 0-16-7.2-16-16l0-256c0-8.8 7.2-16 16-16l32 0 0-48-32 0z" fill="#ffffff"/></svg>`;
+
 // Common utilities -----------------------------------------------------------
 
 const disableElementById = (elementId) => {
@@ -404,17 +406,47 @@ const digest = async () => {
     generatedNote = data.note;
 
     const sectionTitle = document.createElement("h3");
+    sectionTitle.classList.add("section-title");
     sectionTitle.innerHTML = "Note";
     note.appendChild(sectionTitle);
+
+    note.appendChild(createCopyButton());
+
+    const noteText = document.createElement("div");
+    noteText.classList.add("result-text");
+    note.appendChild(noteText);
 
     data.note.sections.forEach((section) => {
         const title = document.createElement("h4");
         title.innerHTML = section.title;
         const text = document.createElement("p");
         text.innerHTML = section.text;
-        note.appendChild(title);
-        note.appendChild(text);
+        noteText.appendChild(title);
+        noteText.appendChild(text);
     })
+}
+
+const copyResultTextToClipboard = (event) => {
+    var target = event.currentTarget;
+    // This means the result-text div must immediately follow the button in the
+    // DOM.
+    var resultText = target.nextElementSibling;
+
+    var elements = Array.from(resultText.children);
+
+    var clipboardContent = elements.map(function(e) {
+			return e.tagName == "H4" ? "\n" + e.textContent : e.textContent
+		}).join("\n").trim();
+
+    navigator.clipboard.writeText(clipboardContent);
+}
+
+const createCopyButton = () => {
+    const copyButton = document.createElement("button");
+    copyButton.classList.add("copy-button");
+    copyButton.innerHTML = copyIconSVG;
+    copyButton.onclick = copyResultTextToClipboard;
+    return copyButton;
 }
 
 const generateNormalizedData = async () => {
@@ -454,18 +486,25 @@ const generateNormalizedData = async () => {
     const data = await response.json();
 
     const sectionTitle = document.createElement("h3");
+    sectionTitle.classList.add("section-title");
     sectionTitle.innerHTML = "Normalized Data";
     normalizationContainer.appendChild(sectionTitle);
 
+    normalizationContainer.appendChild(createCopyButton());
+
+    const resultText = document.createElement("div");
+    resultText.classList.add("result-text");
+    normalizationContainer.appendChild(resultText);
+
     const conditionTitle = document.createElement("h4");
     conditionTitle.innerHTML = "Conditions:";
-    normalizationContainer.appendChild(conditionTitle);
+    resultText.appendChild(conditionTitle);
 
-    addConditions(data.conditions, normalizationContainer);
+    addConditions(data.conditions, resultText);
 
     const familyHistoryTitle = document.createElement("h4");
     familyHistoryTitle.innerHTML = "Family history:";
-    normalizationContainer.appendChild(familyHistoryTitle);
+    resultText.appendChild(familyHistoryTitle);
 
     const historyList = document.createElement("ul");
     data.family_history.forEach((member) => {
@@ -476,22 +515,22 @@ const generateNormalizedData = async () => {
         addConditions(member.conditions, memberListItem);
         historyList.appendChild(memberListItem);
     })
-    normalizationContainer.appendChild(historyList);
+    resultText.appendChild(historyList);
 
     enableAll();
 }
 
 const addConditions = (conditions, parent) => {
-    const conditionsList = document.createElement("ul");
     conditions.forEach((condition) => {
-        const element = document.createElement("li");
-        element.innerHTML = `${condition.coding.display.toUpperCase()} (${condition.coding.code})<br /><u>Clinical status:</u> ${condition.clinical_status}<br />`;
+        const element = document.createElement("p");
+        element.innerHTML = `${condition.coding.display.toUpperCase()} (${condition.coding.code})
+Clinical status: ${condition.clinical_status}
+`;
         if (condition.categories.length > 0) {
-            element.innerHTML += `<u>Categories:</u> [${ condition.categories.join() }]`;
+            element.innerHTML += `Categories: [${ condition.categories.join() }]`;
         }
-        conditionsList.appendChild(element);
+        parent.appendChild(element);
     })
-    parent.appendChild(conditionsList);
 }
 
 const generatePatientInstructions = async () => {
@@ -527,16 +566,23 @@ const generatePatientInstructions = async () => {
     stopThinking(patientInstructions);
 
     const sectionTitle = document.createElement("h3");
+    sectionTitle.classList.add("section-title");
     sectionTitle.innerHTML = "Patient Instructions";
     patientInstructions.appendChild(sectionTitle);
 
+    patientInstructions.appendChild(createCopyButton());
+
+    const resultText = document.createElement("div");
+    resultText.classList.add("result-text");
+    patientInstructions.appendChild(resultText);
+
     const instructionsTitle = document.createElement("h4");
     instructionsTitle.innerHTML = "Instructions: ";
-    patientInstructions.appendChild(instructionsTitle);
+    resultText.appendChild(instructionsTitle);
 
     const text = document.createElement("p");
     text.innerHTML = data.instructions;
-    patientInstructions.appendChild(text);
+    resultText.appendChild(text);
     enableAll();
 }
 

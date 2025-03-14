@@ -48,17 +48,21 @@ body {
     margin: 8px 0px;
 }
 
-.results>span {
+.result-text>span {
     white-space: pre-wrap;
 }
 
-.results>p {
+.result-text>p {
     white-space: pre-wrap;
 }
 
 li {
     list-style: disc;
     margin-bottom: 8px;
+}
+
+h3.section-title {
+  display: inline;
 }
 
 button {
@@ -78,6 +82,12 @@ button:hover {
 
 button:disabled {
   background-color: #272155;
+}
+
+button.copy-button {
+    margin-left: 5px;
+    width: 20px;
+    padding: 4px;
 }
 
 select {
