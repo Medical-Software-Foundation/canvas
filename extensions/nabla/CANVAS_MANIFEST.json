@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "nabla",
+    "description": "Ambient AI assistant",
+    "components": {
+        "protocols": [
+            {
+                "class": "nabla.handlers.nabla_ui:NablaLauncher",
+                "description": "A button to launch the nabla interface",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "nabla.handlers.nabla_ui:NablaApp",
+                "description": "An API to serve the nabla app",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["NABLA_OAUTH_CLIENT_ID", "JWK_PRIVATE_KEY", "JWK_PUBLIC_KEY"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
