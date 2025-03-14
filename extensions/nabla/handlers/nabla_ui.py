@@ -166,8 +166,8 @@ class NablaApp(SimpleAPI):
     @api.get("/")
     def index(self) -> list[Response | Effect]:
         context = {
-            "user_access_token": self.request.query_params.get("access_token", ["missing"])[0],
-            "user_refresh_token": self.request.query_params.get("refresh_token", ["missing"])[0],
+            "user_access_token": self.request.query_params.get("access_token", ["missing"]),
+            "user_refresh_token": self.request.query_params.get("refresh_token", ["missing"]),
         }
         return [
             HTMLResponse(
