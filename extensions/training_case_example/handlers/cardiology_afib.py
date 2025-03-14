@@ -5,7 +5,7 @@ from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
 from canvas_sdk.v1.data import Staff, Patient
 from training_case_example.handlers.api_clients import NoteAPIClient
-from canvas_sdk.commands import ReasonForVisitCommand, HistoryOfPresentIllnessCommand
+from canvas_sdk.commands import ReasonForVisitCommand, HistoryOfPresentIllnessCommand, VitalsCommand
 
 from logger import log
 
@@ -41,8 +41,17 @@ class AfibCase(BaseProtocol):
         
         hpi = HistoryOfPresentIllnessCommand(
             note_uuid=note_id,
-            narrative='Patient reports 5 days of worsening fatigue and dizziness. <more>')
+            narrative=(
+                'Patient reports 5 days of worsening fatigue and dizziness. '
+                'Shortness of breath has increased over the last 12 hours.'))
         
+        vitals = VitalsCommand(
+            note_uuid=note_id,
+            blood_pressure_diastole=52,
+            blood_pressure_systole=88,
+            pulse=126, pulse_rhythm=VitalsCommand.PulseRhythm.IRREGULARLY_IRREGULAR
+        )
+
         # TODO: Add other chart data, e.g. external reports, past notes, etc
 
-        return [rfv.originate(), hpi.originate()]
+        return [rfv.originate(), hpi.originate(), vitals.originate()]
