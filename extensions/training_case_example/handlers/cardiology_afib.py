@@ -3,8 +3,8 @@ from time import sleep
 from canvas_sdk.effects import Effect
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
-from canvas_sdk.v1.data import Staff
-from extensions.training_case_example.handlers.api_clients import NoteAPIClient
+from canvas_sdk.v1.data import Staff, Patient
+from training_case_example.handlers.api_clients import NoteAPIClient
 from canvas_sdk.commands import ReasonForVisitCommand, HistoryOfPresentIllnessCommand
 
 from logger import log
@@ -16,6 +16,11 @@ class AfibCase(BaseProtocol):
     def compute(self) -> list[Effect]:
         log.info(f'self.target: {self.target}')
         log.info(f'self.context: {self.context}')
+
+        patient = Patient.objects.get(id=self.target)
+        if not patient.last_name.startswith('Case-Afib'):
+            log.info('Not a training case')
+            return []
         
         staff = Staff.objects.filter(active=True).exclude(npi_number='').order_by('created').last()
         log.info(f'staff: {staff}')
