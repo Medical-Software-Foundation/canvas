@@ -3,7 +3,7 @@
 <html>
 
 <head>
-    <title>Nabla Core API sample app</title>
+    <title>Nabla Ambient Scribe</title>
     <link rel="stylesheet" href="style.css">
     <script>
         window._canvas_nabla_extension_user_access_token = "{{ user_access_token }}";
@@ -14,231 +14,41 @@
 
 <body onload="initPage()">
     <div class="container">
-        <h1>Nabla Core API sample app</h1>
-
-        <div class="filters">
-            Demo type: 
-            <a href="#" id="ambient-encounter-link" class="active">Ambient encounter</a>
-             | 
-            <a href="#" id="dictated-note-link" class="">Dictated note</a>
-        </div>
+        <svg width="80" viewBox="0 0 80 23" fill="none">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M4.672 22.042V9.14l10.167 12.902h4.025V1.176h-4.701v12.872L4.026 1.176H0v20.866h4.672Zm23.526.324c1.969 0 3.409-1 3.996-1.793v1.47h4.437V7.346h-4.437v1.47c-.587-.794-2.027-1.793-3.996-1.793-3.85 0-6.817 3.497-6.817 7.67 0 4.174 2.968 7.672 6.817 7.672Zm1-4.027c-1.999 0-3.35-1.528-3.35-3.644s1.351-3.644 3.35-3.644c1.997 0 3.349 1.528 3.349 3.644s-1.352 3.644-3.35 3.644Zm19.264 4.027c3.85 0 6.817-3.498 6.817-7.671 0-4.174-2.967-7.67-6.817-7.67-1.968 0-3.408.998-3.996 1.792V0H40.03v22.042h4.437v-1.47c.588.794 2.028 1.794 3.996 1.794Zm-.998-4.027c-1.999 0-3.35-1.528-3.35-3.644s1.351-3.644 3.35-3.644c1.998 0 3.35 1.528 3.35 3.644s-1.352 3.644-3.35 3.644Zm14.77 3.703V0h-4.438v22.042h4.437Zm9.333.324c1.969 0 3.408-1 3.996-1.793v1.47H80V7.346h-4.437v1.47c-.588-.794-2.027-1.793-3.996-1.793-3.85 0-6.817 3.497-6.817 7.67 0 4.174 2.968 7.672 6.817 7.672Zm.999-4.027c-1.998 0-3.35-1.528-3.35-3.644s1.352-3.644 3.35-3.644 3.35 1.528 3.35 3.644-1.352 3.644-3.35 3.644Z" fill="white">
+          </path>
+        </svg>
 
         <hr>
 
-        <div id="token-error" class="hide">
-        </div>
-
-        <div class="encounter">
-            <div class="filter">
-                <label for="first-transcript-locale">First transcript locale:</label>
-                <select id="first-transcript-locale">
-                    <option value="ENGLISH_US" selected="selected">ENGLISH_US</option>
-                    <option value="ENGLISH_UK">ENGLISH_UK</option>
-                    <option value="FRENCH_FR">FRENCH_FR</option>
-                    <option value="SPANISH_ES">SPANISH_ES</option>
-                    <option value="SPANISH_MX">SPANISH_MX</option>
-                    <option value="ARMENIAN_AM">ARMENIAN_AM</option>
-                    <option value="BENGALI_IN">BENGALI_IN</option>
-                    <option value="CANTONESE_CN">CANTONESE_CN</option>
-                    <option value="CROATIAN_HR">CROATIAN_HR</option>
-                    <option value="FILIPINO_PH">FILIPINO_PH</option>
-                    <option value="GERMAN_DE">GERMAN_DE</option>
-                    <option value="GREEK_GR">GREEK_GR</option>
-                    <option value="GUJARATI_IN">GUJARATI_IN</option>
-                    <option value="HINDI_IN">HINDI_IN</option>
-                    <option value="ITALIAN_IT">ITALIAN_IT</option>
-                    <option value="JAPANESE_JP">JAPANESE_JP</option>
-                    <option value="KHMER_KH">KHMER_KH</option>
-                    <option value="KOREAN_KR">KOREAN_KR</option>
-                    <option value="MANDARIN_CN">MANDARIN_CN</option>
-                    <option value="POLISH_PL">POLISH_PL</option>
-                    <option value="PORTUGUESE_PT">PORTUGUESE_PT</option>
-                    <option value="PUNJABI_IN">PUNJABI_IN</option>
-                    <option value="RUSSIAN_RU">RUSSIAN_RU</option>
-                    <option value="SERBIAN_RS">SERBIAN_RS</option>
-                    <option value="TAMIL_IN">TAMIL_IN</option>
-                    <option value="TELUGU_IN">TELUGU_IN</option>
-                    <option value="THAI_TH">THAI_TH</option>
-                    <option value="VIETNAMESE_VN">VIETNAMESE_VN</option>
-                    <option value="ARABIC_LB">ARABIC_LB</option>
-                    <option value="ARABIC_EG">ARABIC_EG</option>
-                    <option value="ARABIC_SA">ARABIC_SA</option>
-                    <option value="ARABIC_MA">ARABIC_MA</option>
-                    <option value="HEBREW_IL">HEBREW_IL</option>
-                    <option value="URDU_IN">URDU_IN</option>
-                    <option value="PERSIAN_IR">PERSIAN_IR</option>
-                </select>
-            </div>
-
-            <div class="filters">
-                <label for="second-transcript-locale">Second transcript locale:</label>
-                <select id="second-transcript-locale">
-                    <option value="ENGLISH_US">ENGLISH_US</option>
-                    <option value="ENGLISH_UK">ENGLISH_UK</option>
-                    <option value="FRENCH_FR">FRENCH_FR</option>
-                    <option value="SPANISH_ES" selected="selected">SPANISH_ES</option>
-                    <option value="SPANISH_MX">SPANISH_MX</option>
-                    <option value="ARMENIAN_AM">ARMENIAN_AM</option>
-                    <option value="BENGALI_IN">BENGALI_IN</option>
-                    <option value="CANTONESE_CN">CANTONESE_CN</option>
-                    <option value="CROATIAN_HR">CROATIAN_HR</option>
-                    <option value="FILIPINO_PH">FILIPINO_PH</option>
-                    <option value="GERMAN_DE">GERMAN_DE</option>
-                    <option value="GREEK_GR">GREEK_GR</option>
-                    <option value="GUJARATI_IN">GUJARATI_IN</option>
-                    <option value="HINDI_IN">HINDI_IN</option>
-                    <option value="ITALIAN_IT">ITALIAN_IT</option>
-                    <option value="JAPANESE_JP">JAPANESE_JP</option>
-                    <option value="KHMER_KH">KHMER_KH</option>
-                    <option value="KOREAN_KR">KOREAN_KR</option>
-                    <option value="MANDARIN_CN">MANDARIN_CN</option>
-                    <option value="POLISH_PL">POLISH_PL</option>
-                    <option value="PORTUGUESE_PT">PORTUGUESE_PT</option>
-                    <option value="PUNJABI_IN">PUNJABI_IN</option>
-                    <option value="RUSSIAN_RU">RUSSIAN_RU</option>
-                    <option value="SERBIAN_RS">SERBIAN_RS</option>
-                    <option value="TAMIL_IN">TAMIL_IN</option>
-                    <option value="TELUGU_IN">TELUGU_IN</option>
-                    <option value="THAI_TH">THAI_TH</option>
-                    <option value="VIETNAMESE_VN">VIETNAMESE_VN</option>
-                    <option value="ARABIC_LB">ARABIC_LB</option>
-                    <option value="ARABIC_EG">ARABIC_EG</option>
-                    <option value="ARABIC_SA">ARABIC_SA</option>
-                    <option value="ARABIC_MA">ARABIC_MA</option>
-                    <option value="HEBREW_IL">HEBREW_IL</option>
-                    <option value="URDU_IN">URDU_IN</option>
-                    <option value="PERSIAN_IR">PERSIAN_IR</option>
-                </select>
-            </div>
-
-            <div class="filters">
-                <label for="note-locale">Note locale:</label>
-                <select id="note-locale">
-                    <option value="ENGLISH_US">ENGLISH_US</option>
-                    <option value="ENGLISH_UK">ENGLISH_UK</option>
-                    <option value="FRENCH_FR">FRENCH_FR</option>
-                </select>
-            </div>
-
-            <div class="filters">
-                <label for="note-template">Note template:</label>
-                <select id="note-template" onChange="onTemplateChange()">
-                    <option value="GENERIC_MULTIPLE_SECTIONS">General Medicine</option>
-                    <option value="GENERIC_SOAP">SOAP</option>
-                </select>
-            </div>
-
-            <div class="filters">
-                <label for="patient-context">Patient context:</label>
-                <textarea id="patient-context"></textarea>
-            </div>
-
-            <div class="filters">
-                <label for="note-sections">Section to customize below:</label>
-                <select id="note-sections" onChange="onSectionToCustomizeChange()"></select>
-            </div>
-
-            <div id="section-customization-fields">
-                <div class="filters">
-                    <label for="style-select">Style:</label>
-                    <select id="style-select" onChange="onSectionStyleChange()" >
-                        <option value="AUTO">Auto</option>
-                        <option value="PARAGRAPH">Paragraph</option>
-                        <option value="BULLET_POINTS">Bullet points</option>
-                    </select>
-                </div>
-
-                <div class="filters">
-                    <label for="custom-instruction">Custom instruction:</label>
-                    <textarea id="custom-instruction" onInput="onSectionCustomInstructionChange()" placeholder="Your custom instruction"></textarea>
-                </div>
-            </div>
-
-            <hr>
-
-            <div>
-                <button id="start-btn" onClick="startRecording()">Start consultation</button>
+        <div class="controls">
+            <button id="start-btn" onClick="startRecording()">Start recording</button>
+            <button id="stop-btn" class="hide" onClick="stopRecording()">Stop recording</button>
+            <div class="horizontal-controls">
                 <button id="generate-btn" onClick="generateNote()">Generate note</button>
                 <button id="normalize-btn" onClick="generateNormalizedData()">Generate normalized data</button>
                 <button id="patient-instructions-btn" onClick="generatePatientInstructions()">Generate patient
                     instructions</button>
-                <button id="clear-btn" onclick="clearEncounter()">Clear</button>
-            </div>
-
-            <div id="transcript" class="results">
-                <h3>Transcript:</h3>
-            </div>
-            <div id="note" class="results">
-                <h3>Note:</h3>
-            </div>
-            <div id="normalized-data" class="results">
-                <h3>Normalized data:</h3>
-            </div>
-            <div id="patient-instructions" class="results">
-                <h3>Patient instructions:</h3>
             </div>
         </div>
-        <div class="dictation hide">
-            <div class="filters">
-                <label for="dictationLocale">Dictation locale:</label>
-                <select id="dictationLocale">
-                    <option value="ENGLISH_US">ENGLISH_US</option>
-                    <option value="ENGLISH_UK">ENGLISH_UK</option>
-                    <option value="FRENCH_FR">FRENCH_FR</option>
-                    <option value="SPANISH_ES">SPANISH_ES</option>
-                    <option value="SPANISH_MX">SPANISH_MX</option>
-                    <option value="ARMENIAN_AM">ARMENIAN_AM</option>
-                    <option value="BENGALI_IN">BENGALI_IN</option>
-                    <option value="CANTONESE_CN">CANTONESE_CN</option>
-                    <option value="CROATIAN_HR">CROATIAN_HR</option>
-                    <option value="FILIPINO_PH">FILIPINO_PH</option>
-                    <option value="GERMAN_DE">GERMAN_DE</option>
-                    <option value="GREEK_GR">GREEK_GR</option>
-                    <option value="GUJARATI_IN">GUJARATI_IN</option>
-                    <option value="HINDI_IN">HINDI_IN</option>
-                    <option value="ITALIAN_IT">ITALIAN_IT</option>
-                    <option value="JAPANESE_JP">JAPANESE_JP</option>
-                    <option value="KHMER_KH">KHMER_KH</option>
-                    <option value="KOREAN_KR">KOREAN_KR</option>
-                    <option value="MANDARIN_CN">MANDARIN_CN</option>
-                    <option value="POLISH_PL">POLISH_PL</option>
-                    <option value="PORTUGUESE_PT">PORTUGUESE_PT</option>
-                    <option value="PUNJABI_IN">PUNJABI_IN</option>
-                    <option value="RUSSIAN_RU">RUSSIAN_RU</option>
-                    <option value="SERBIAN_RS">SERBIAN_RS</option>
-                    <option value="TAMIL_IN">TAMIL_IN</option>
-                    <option value="TELUGU_IN">TELUGU_IN</option>
-                    <option value="THAI_TH">THAI_TH</option>
-                    <option value="VIETNAMESE_VN">VIETNAMESE_VN</option>
-                    <option value="ARABIC_LB">ARABIC_LB</option>
-                    <option value="ARABIC_EG">ARABIC_EG</option>
-                    <option value="ARABIC_SA">ARABIC_SA</option>
-                    <option value="ARABIC_MA">ARABIC_MA</option>
-                    <option value="HEBREW_IL">HEBREW_IL</option>
-                    <option value="URDU_IN">URDU_IN</option>
-                    <option value="PERSIAN_IR">PERSIAN_IR</option>
-                </select>
-            </div>
 
-            <div class="filters">
-                <span style="margin-right: 8px;">Explicit punctuation:</span>
-                <label class="switch">
-                    <input id="punctuation-switch" type="checkbox" checked>
-                    <span class="slider round"></span>
-                </label>
-            </div>
-
-            <hr>
-
-            <div>
-                <button id="dictate-btn" onClick="startDictating()">Start</button>
-                <button id="pause-btn" onClick="pauseDictating()" disabled>Pause</button>
-            </div>
-
-            <div id="dictated-note" class="results">
-                <h3>Dictated note:</h3>
-            </div>
+        <div id="token-error" class="hide">
         </div>
+    </div>
+    <div class="results">
+        <div id="transcript" class="results">
+        </div>
+        <div id="note" class="results">
+        </div>
+        <div id="normalized-data" class="results">
+        </div>
+        <div id="patient-instructions" class="results">
+        </div>
+    </div>
+    <div class="bottom-container">
+      <div class="controls">
+          <button id="clear-btn" onclick="clearEncounter()">Clear</button>
+      </div>
     </div>
 </body>
 

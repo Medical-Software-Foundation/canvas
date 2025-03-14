@@ -11,9 +11,7 @@ let mediaSource;
 let mediaStream
 let thinkingId;
 const rawPCM16WorkerName = "raw-pcm-16-worker";
-let noteSectionsCustomization = {};
 let transcriptSeqId = 0;
-let dictateSeqId = 0;
 
 const CORE_API_BASE_URL = `${REGION}.api.nabla.com/v1/core`;
 
@@ -85,6 +83,20 @@ const enableElementById = (elementId) => {
     const element = document.getElementById(elementId);
     if (!element.hasAttribute("disabled")) return;
     element.removeAttribute("disabled");
+}
+
+const toggleStartStopVisibility = () => {
+    const startButton = document.getElementById("start-btn");
+    const stopButton = document.getElementById("stop-btn");
+    startButton.classList.toggle("hide");
+    stopButton.classList.toggle("hide");
+}
+
+const ensureStartButtonVisibility = () => {
+    const startButton = document.getElementById("start-btn");
+    const stopButton = document.getElementById("stop-btn");
+    startButton.classList.remove("hide");
+    stopButton.classList.add("hide");
 }
 
 const startThinking = (parent) => {
@@ -216,19 +228,19 @@ const enableAll = () => {
 }
 
 const clearTranscript = () => {
-    document.getElementById("transcript").innerHTML = "<h3>Transcript:</h3>";
+    document.getElementById("transcript").innerHTML = "";
 }
 
 const clearNoteContent = () => {
-    document.getElementById("note").innerHTML = "<h3>Note:</h3>";
+    document.getElementById("note").innerHTML = "";
 }
 
 const clearPatientInstructions = () => {
-    document.getElementById("patient-instructions").innerHTML = "<h3>Patient instructions:</h3>";
+    document.getElementById("patient-instructions").innerHTML = "";
 }
 
 const clearNormalizedData = () => {
-    document.getElementById("normalized-data").innerHTML = "<h3>Normalized data:</h3>";
+    document.getElementById("normalized-data").innerHTML = "";
 }
 
 const msToTime = (milli) => {
@@ -289,17 +301,19 @@ const initializeTranscriptConnection = async () => {
 
 const sleep = (duration) => new Promise((r) => setTimeout(r, duration));
 
-const startRecording = async () => {
-    if (getFirstTranscriptLocale() === getSecondTranscriptLocale()) {
-        const errorMessage = document.createElement("p");
-        errorMessage.classList.add("error");
-        errorMessage.innerText = "First and second transcript locales must be different."
-        document.getElementById("transcript").appendChild(errorMessage)
-        return;
-    }
-    clearTranscript();
-
+const stopRecording = async () => {
     enableElementById("generate-btn");
+    stopAudio();
+    await endConnection({ type: "END" });
+    toggleStartStopVisibility();
+    enableAll();
+}
+
+
+const startRecording = async () => {
+    toggleStartStopVisibility();
+
+    clearTranscript();
 
     transcriptSeqId = 0;
     await initializeTranscriptConnection();
@@ -330,7 +344,7 @@ const startRecording = async () => {
             type: "CONFIG",
             encoding: "PCM_S16LE",
             sample_rate: 16000,
-            speech_locales: [getFirstTranscriptLocale(), getSecondTranscriptLocale()],
+            speech_locales: ["ENGLISH_US"],
             streams: [
                 { id: "stream1", speaker_type: "unspecified" },
             ],
@@ -345,21 +359,10 @@ const startRecording = async () => {
     }
 }
 
-const getFirstTranscriptLocale = () => (
-    document.getElementById("first-transcript-locale")?.selectedOptions[0]?.value ?? "ENGLISH_US"
-)
-
-const getSecondTranscriptLocale = () => (
-    document.getElementById("second-transcript-locale")?.selectedOptions[0]?.value ?? "SPANISH_ES"
-)
-
 const generateNote = async () => {
     if (Object.keys(transcriptItems).length === 0) return;
 
     disableAll();
-
-    stopAudio();
-    await endConnection({ type: "END" });
 
     clearNoteContent();
     await digest();
@@ -370,13 +373,6 @@ const generateNote = async () => {
 const digest = async () => {
     startThinking(document.getElementById("note"));
 
-    const noteSectionsCustomizationArray = Object.entries(noteSectionsCustomization).map(
-        ([sectionKey, customizationOptions]) => ({
-            section_key: sectionKey,
-            ...customizationOptions
-        })
-    );
-
     const bearerToken = await getOrRefetchUserAccessToken();
     const response = await fetch(`https://${CORE_API_BASE_URL}/user/generate-note`, {
         method: 'POST',
@@ -385,11 +381,9 @@ const digest = async () => {
             'Authorization': `Bearer ${bearerToken}`
         },
         body: JSON.stringify({
-            note_template: getNoteTemplate(),
-            note_locale: getNoteLanguage(),
-            patient_context: getPatientContext(),
+            note_template: "GENERIC_MULTIPLE_SECTIONS",
+            note_locale: "ENGLISH_US",
             transcript_items: Object.values(transcriptItems).map((it) => ({ text: it, speaker_type: "unspecified" })),
-            note_sections_customization: noteSectionsCustomizationArray,
         })
     });
 
@@ -409,6 +403,10 @@ const digest = async () => {
     const data = await response.json();
     generatedNote = data.note;
 
+    const sectionTitle = document.createElement("h3");
+    sectionTitle.innerHTML = "Note";
+    note.appendChild(sectionTitle);
+
     data.note.sections.forEach((section) => {
         const title = document.createElement("h4");
         title.innerHTML = section.title;
@@ -419,18 +417,6 @@ const digest = async () => {
     })
 }
 
-const getNoteTemplate = () => (
-    document.getElementById("note-template")?.selectedOptions[0]?.value ?? "GENERIC_MULTIPLE_SECTIONS"
-)
-
-const getPatientContext = () => (
-    document.getElementById("patient-context")?.value
-)
-
-const getNoteLanguage = () => (
-    document.getElementById("note-locale")?.selectedOptions[0]?.value ?? "ENGLISH_US"
-)
-
 const generateNormalizedData = async () => {
     if (!generatedNote) return;
 
@@ -438,15 +424,6 @@ const generateNormalizedData = async () => {
     clearNormalizedData();
     const normalizationContainer = document.getElementById("normalized-data");
     startThinking(normalizationContainer);
-
-    const note_locale = getNoteLanguage();
-    if (!["FRENCH_FR", "ENGLISH_US", "ENGLISH_UK"].includes(note_locale)) {
-        const errorMessage = document.createElement("p");
-        errorMessage.classList.add("error");
-        errorMessage.innerText = "Normalized data are only available for note with locale FRENCH_FR, ENGLISH_US, ENGLISH_UK"
-        note.appendChild(errorMessage)
-        return;
-    }
 
     const bearerToken = await getOrRefetchUserAccessToken();
     const response = await fetch(`https://${CORE_API_BASE_URL}/user/generate-normalized-data`, {
@@ -457,8 +434,8 @@ const generateNormalizedData = async () => {
         },
         body: JSON.stringify({
             note: generatedNote,
-            note_template: getNoteTemplate(),
-            note_locale
+            note_template: "GENERIC_MULTIPLE_SECTIONS",
+            note_locale: "ENGLISH_US"
         })
     });
 
@@ -475,6 +452,10 @@ const generateNormalizedData = async () => {
     }
 
     const data = await response.json();
+
+    const sectionTitle = document.createElement("h3");
+    sectionTitle.innerHTML = "Normalized Data";
+    normalizationContainer.appendChild(sectionTitle);
 
     const conditionTitle = document.createElement("h4");
     conditionTitle.innerHTML = "Conditions:";
@@ -506,7 +487,7 @@ const addConditions = (conditions, parent) => {
         const element = document.createElement("li");
         element.innerHTML = `${condition.coding.display.toUpperCase()} (${condition.coding.code})<br /><u>Clinical status:</u> ${condition.clinical_status}<br />`;
         if (condition.categories.length > 0) {
-            element.innerHTML += "<u>Categories:</u> [${ condition.categories.join() }]";
+            element.innerHTML += `<u>Categories:</u> [${ condition.categories.join() }]`;
         }
         conditionsList.appendChild(element);
     })
@@ -531,7 +512,7 @@ const generatePatientInstructions = async () => {
         body: JSON.stringify({
             note: generatedNote,
             note_locale: "ENGLISH_US",
-            note_template: getNoteTemplate(),
+            note_template: "GENERIC_MULTIPLE_SECTIONS",
             instructions_locale: "ENGLISH_US",
             consultation_type: "IN_PERSON"
         })
@@ -544,6 +525,11 @@ const generatePatientInstructions = async () => {
     const data = await response.json();
 
     stopThinking(patientInstructions);
+
+    const sectionTitle = document.createElement("h3");
+    sectionTitle.innerHTML = "Patient Instructions";
+    patientInstructions.appendChild(sectionTitle);
+
     const instructionsTitle = document.createElement("h4");
     instructionsTitle.innerHTML = "Instructions: ";
     patientInstructions.appendChild(instructionsTitle);
@@ -557,256 +543,18 @@ const generatePatientInstructions = async () => {
 const clearEncounter = async () => {
     disableElementById("start-btn");
     disableAll();
-    stopAudio();
-    await endConnection({ type: "END" });
     clearNoteContent();
     clearNormalizedData();
     clearPatientInstructions();
     clearTranscript();
+    ensureStartButtonVisibility();
     enableElementById("start-btn");
-    enableAll();
-}
-
-
-// Dictated notes -------------------------------------------------------------
-
-const insertedDictatedItem = (data) => {
-    const dictationContainer = document.getElementById("dictated-note");
-    let dicatedItem = document.getElementById(data.id)
-    if (!dicatedItem) {
-        dicatedItem = document.createElement("span");
-        dicatedItem.setAttribute("id", data.id);
-        dicatedItem.setAttribute("data-start-offset", data.start_offset_ms);
-        insertElementByStartOffset(dicatedItem, dictationContainer)
-    }
-    dicatedItem.innerHTML = data.text + "&nbsp;";
-    if (data.is_final) {
-        dicatedItem.classList.remove("temporary-item")
-    } else if (!dicatedItem.classList.contains("temporary-item")) {
-        dicatedItem.classList.add("temporary-item")
-    }
-}
-
-const initializeDictationConnection = async () => {
-    const bearerToken = await getOrRefetchUserAccessToken();
-    websocket = new WebSocket(
-        `wss://${CORE_API_BASE_URL}/user/dictate-ws`,
-        ["dictate-protocol", "jwt-" + bearerToken]
-    );
-
-    websocket.onclose = (e) => {
-        console.log(`Websocket closed: ${e.code} ${e.reason}`);
-    };
-
-    websocket.onmessage = (mes) => {
-        if (websocket.readyState !== WebSocket.OPEN) {
-            console.log("ws not open");
-            return;
-        }
-        if (typeof mes.data === "string") {
-            const data = JSON.parse(mes.data);
-
-            if (data.type === "AUDIO_CHUNK_ACK") {
-                // This is where you'd remove audio chunks from your buffer
-            } else if (data.type === "DICTATION_ITEM") {
-                insertedDictatedItem(data);
-            } else if (data.type === "ERROR_MESSAGE") {
-                console.error(data.message);
-            }
-        }
-    };
-}
-
-const getDictationLocale = () => {
-    const dictationLocaleSelect = document.getElementById("dictationLocale");
-    return dictationLocaleSelect.selectedOptions && dictationLocaleSelect.selectedOptions.length > 0
-        ? dictationLocaleSelect.selectedOptions[0].value
-        : "ENGLISH_US";
-}
-
-const isPunctuationExplicit = () => {
-    return document.getElementById("punctuation-switch").checked;
-}
-
-const startDictating = async () => {
-    disableElementById("dictate-btn");
-    enableElementById("pause-btn");
-
-    dictateSeqId = 0;
-    await initializeDictationConnection();
-
-    // Await websocket being open
-    for (let i = 0; i < 10; i++) {
-        if (websocket.readyState !== WebSocket.OPEN) {
-            await sleep(100);
-        } else {
-            break;
-        }
-    }
-    if (websocket.readyState !== WebSocket.OPEN) {
-        throw new Error("Websocket did not open");
-    }
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        await initializeMediaStream((audioAsBase64String) => (JSON.stringify({
-            type: "AUDIO_CHUNK",
-            payload: audioAsBase64String,
-            seq_id: dictateSeqId++,
-        })));
-
-        const locale = getDictationLocale();
-        const config = {
-            type: "CONFIG",
-            encoding: "PCM_S16LE",
-            sample_rate: 16000,
-            speech_locale: locale,
-            dictate_punctuation: isPunctuationExplicit(),
-            enable_audio_chunk_ack: true,
-        };
-        websocket.send(JSON.stringify(config));
-
-        // pcm start
-        pcmWorker.port.start();
-    } else {
-        console.error("Microphone audio stream is not accessible on this browser");
-    }
-}
-
-const pauseDictating = async () => {
-    disableElementById("pause-btn");
-    stopAudio();
-    await endConnection({ type: "END" });
-    enableElementById("dictate-btn");
-}
-
-
-// Switch ambient encounter / dictated note ------------------------------------------
-
-const showAmbientEncounter = () => {
-    let ambientEncounterLink = document.getElementById("ambient-encounter-link");
-    let dictatedNoteLink = document.getElementById("dictated-note-link");
-    if (ambientEncounterLink.className.match("active")) return;
-
-    ambientEncounterLink.classList.add("active");
-    dictatedNoteLink.classList.remove("active");
-
-    for (let element of document.getElementsByClassName("encounter")) {
-        element.classList.remove("hide");
-    }
-    for (let element of document.getElementsByClassName("dictation")) {
-        element.classList.add("hide");
-    };
-}
-
-const showDictatedNote = () => {
-    let ambientEncounterLink = document.getElementById("ambient-encounter-link");
-    let dictatedNoteLink = document.getElementById("dictated-note-link");
-    if (dictatedNoteLink.className.match("active")) return;
-
-    ambientEncounterLink.classList.remove("active");
-    dictatedNoteLink.classList.add("active");
-
-    for (let element of document.getElementsByClassName("encounter")) {
-        element.classList.add("hide");
-    }
-
-    for (let element of document.getElementsByClassName("dictation")) {
-        element.classList.remove("hide");
-    }
 }
 
 const initPage = () => {
-    updateSectionsList();
     // Initial call to display an error message directly if the refresh token is expired:
     getOrRefetchUserAccessToken();
-    document.getElementById("ambient-encounter-link").addEventListener("click", showAmbientEncounter);
-    document.getElementById("dictated-note-link").addEventListener("click", showDictatedNote);
-}
-
-// Note customization ----------------------------------------------------------------
-
-const templateSectionsMap = {
-    "GENERIC_MULTIPLE_SECTIONS": [
-        "CHIEF_COMPLAINT",
-        "HISTORY_OF_PRESENT_ILLNESS",
-        "PAST_MEDICAL_HISTORY",
-        "PAST_SURGICAL_HISTORY",
-        "PAST_OBSTETRIC_HISTORY",
-        "FAMILY_HISTORY",
-        "SOCIAL_HISTORY",
-        "ALLERGIES",
-        "CURRENT_MEDICATIONS",
-        "IMMUNIZATIONS",
-        "VITALS",
-        "LAB_RESULTS",
-        "IMAGING_RESULTS",
-        "PHYSICAL_EXAM",
-        "ASSESSMENT",
-        "PLAN",
-        "PRESCRIPTION",
-        "APPOINTMENTS"
-    ],
-    "GENERIC_SOAP": [
-        "SUBJECTIVE",
-        "OBJECTIVE",
-        "ASSESSMENT",
-        "PLAN"
-    ],
-};
-
-const onTemplateChange = () => {
-    noteSectionsCustomization = {};
-    updateSectionsList();
-}
-
-const updateSectionsList = () => {
-    const template = getNoteTemplate();
-    const selectElement = document.getElementById("note-sections");
-    selectElement.innerHTML = "";
-
-    const sections = templateSectionsMap[template] || [];
-    sections.forEach((sectionKey) => {
-        const opt = document.createElement("option");
-        opt.value = sectionKey;
-        opt.innerText = sectionKey;
-        selectElement.appendChild(opt);
-    });
-
-    selectElement.value = sections[0] || "";
-    onSectionToCustomizeChange();
-}
-
-const onSectionToCustomizeChange = () => {
-    const selected = document.getElementById("note-sections").value;
-    if (!selected) {
-        document.getElementById("section-customization-fields").style.display = "none";
-        return;
-    }
-
-    document.getElementById("section-customization-fields").style.display = "inline-block";
-    const existing = noteSectionsCustomization[selected] || {};
-    document.getElementById("style-select").value = existing.style || "AUTO";
-    document.getElementById("custom-instruction").value = existing.custom_instruction || "";
-}
-
-const onSectionStyleChange = () => {
-    const sectionKey = document.getElementById("note-sections").value;
-    if (!sectionKey) return;
-
-    const styleValue = document.getElementById("style-select").value;
-
-    const customizationOptions = noteSectionsCustomization[sectionKey] ?? {};
-    customizationOptions.style = styleValue;
-    noteSectionsCustomization[sectionKey] = customizationOptions;
-}
-
-const onSectionCustomInstructionChange = () => {
-    const sectionKey = document.getElementById("note-sections").value;
-    if (!sectionKey) return;
-
-    const customInstructionValue = document.getElementById("custom-instruction").value;
-
-    const customizationOptions = noteSectionsCustomization[sectionKey] ?? {};
-    customizationOptions.custom_instruction = customInstructionValue;
-    noteSectionsCustomization[sectionKey] = customizationOptions;
+    disableAll();
+    ensureStartButtonVisibility();
+    enableElementById("start-btn");
 }

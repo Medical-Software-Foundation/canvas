@@ -1,21 +1,47 @@
+html, body {
+  height: 100%;
+}
+
 body {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: space-between;
     font-size: 14px;
-    font-family: Verdana, Geneva, Tahoma, sans-serif
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+    background-color: #3f4043;
+    color: white;
+    margin: 0px;
 }
 
 .container {
-    margin: 16px;
-    width: 960px;
-    overflow-y: auto;
+    height: 130px;
+    margin: 16px 16px 0px 16px;
+}
+
+.bottom-container {
+  margin-top: 5px;
+  margin-bottom: 60px;
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+.horizontal-controls {
+  display: flex;
+}
+
+.horizontal-controls>button {
+  margin-right: 5px;
+}
+
+.horizontal-controls>button:last-child {
+  margin-right: 0px;
 }
 
 .results {
-    border: 1px black dashed;
+    overflow-y: scroll;
     padding: 8px;
-    margin-top: 16px;
-    background-color: lightgray;
+    flex-grow: 2;
+    background-color: #282828;
 }
 
 .results>h3 {
@@ -30,25 +56,28 @@ body {
     white-space: pre-wrap;
 }
 
-.filters {
-    margin: 16px 0px;
-    display: flex;
-    flex-direction: row;
-    align-items: start;
-}
-
-.filters>label {
-    padding: 8px 0px;
-    margin-right: 8px;
-}
-
 li {
     list-style: disc;
     margin-bottom: 8px;
 }
 
 button {
+    background-color: #6151d5;
+    border-radius: 6px;
+    border: 0;
+    color: white;
+    font-weight: bold;
+    margin-bottom: 5px;
     padding: 8px;
+    width: 100%;
+}
+
+button:hover {
+  background-color: #aca3e9;
+}
+
+button:disabled {
+  background-color: #272155;
 }
 
 select {
@@ -138,27 +167,6 @@ input:checked+.slider:before {
 
 .slider.round:before {
     border-radius: 50%;
-}
-
-.hide {
-    display: none;
-}
-
-/* Section customization */
-
-#section-customization-fields {
-    display: none;
-    border: 2px solid #ccc;
-    padding: 8px;
-}
-
-#section-customization-fields .filters {
-    margin: 8px 0;
-}
-
-#custom-instruction {
-    width: 200px;
-    height: 60px;
 }
 
 #token-error {
