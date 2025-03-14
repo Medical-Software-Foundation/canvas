@@ -20,7 +20,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": ["FHIR_BASE_URL", "FHIR_API_KEY", "OPENAI_API_KEY"],
+    "secrets": ["FHIR_BASE_URL", "FHIR_API_KEY", "OPENAI_API_KEY", "CLIENT_ID", "CLIENT_SECRET"],
     "tags": {},
     "references": [],
     "license": "",
