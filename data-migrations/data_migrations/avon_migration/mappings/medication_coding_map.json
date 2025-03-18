@@ -1,0 +1,2911 @@
+{
+    "Estradiol Oral Tablet 0.5 MG|": [],
+    "Progesterone Oral Capsule 100 MG|": [],
+    "Testosterone Transdermal Gel 50 MG/5GM (1%)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "546036",
+            "display": "testosterone 50 mg/5 gram (1 %) transdermal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1597129",
+            "display": "testosterone 50 mg/5 gram (1 %) transdermal gel"
+        }
+    ],
+    "metFORMIN HCl Oral Tablet 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "155744",
+            "display": "metformin 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "861007",
+            "display": "metformin 500 mg tablet"
+        }
+    ],
+    "Estradiol Vaginal Tablet 10 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "560233",
+            "display": "estradiol 10 mcg vaginal tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "884707",
+            "display": "estradiol 10 mcg vaginal tablet"
+        }
+    ],
+    "Estradiol Vaginal Cream 0.1 MG/GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "277891",
+            "display": "estradiol 0.01% (0.1 mg/gram) vaginal cream"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310169",
+            "display": "estradiol 0.01% (0.1 mg/gram) vaginal cream"
+        }
+    ],
+    "Estradiol Transdermal Patch Twice Weekly 0.05 MG/24HR|": [],
+    "Testosterone  Powder|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "250180",
+            "display": "testosterone (bulk) powder"
+        }
+    ],
+    "Norethindrone Acetate Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "270962",
+            "display": "norethindrone acetate 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000405",
+            "display": "norethindrone acetate 5 mg tablet"
+        }
+    ],
+    "CombiPatch Transdermal Patch Twice Weekly 0.05-0.25 MG/DAY|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "259589",
+            "display": "CombiPatch 0.05 mg-0.25 mg/24 hr transdermal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1251499",
+            "display": "CombiPatch 0.05 mg-0.25 mg/24 hr transdermal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1251501",
+            "display": "CombiPatch 0.05 mg-0.25 mg/24 hr transdermal"
+        }
+    ],
+    "Estradiol Transdermal Patch Twice Weekly 0.075 MG/24HR|": [],
+    "Estradiol Transdermal Patch Twice Weekly 0.1 MG/24HR|": [],
+    "Estrace Vaginal Cream 0.1 MG/GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "221219",
+            "display": "Estrace Vaginal 0.1 mg/g cream"
+        }
+    ],
+    "Estradiol Transdermal Gel 1 MG/GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551279",
+            "display": "estradiol 1 mg/gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619683",
+            "display": "estradiol 1 mg/gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "Vivelle-Dot Transdermal Patch Twice Weekly 0.075 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "281273",
+            "display": "Vivelle-Dot 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1149632",
+            "display": "Vivelle-Dot 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1149634",
+            "display": "Vivelle-Dot 0.075 mg/24 hr transdermal patch"
+        }
+    ],
+    "Prometrium Oral Capsule 200 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "151287",
+            "display": "Prometrium 200 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "261319",
+            "display": "Prometrium 200 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312641",
+            "display": "Prometrium 200 mg capsule"
+        }
+    ],
+    "Estradiol Transdermal Gel 0.25 MG/0.25GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551281",
+            "display": "estradiol 0.25 mg/0.25 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619677",
+            "display": "estradiol 0.25 mg/0.25 gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "Estradiol Transdermal Patch Twice Weekly 0.025 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "223652",
+            "display": "estradiol 0.025 mg/24 hr weekly transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "242333",
+            "display": "estradiol 0.025 mg/24 hr weekly transdermal patch"
+        }
+    ],
+    "Naproxen Oral Tablet 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "612740",
+            "display": "naproxen 500 mg oral tablet-capsicum oleoresin 0.025 % cream kit"
+        }
+    ],
+    "Thyroid Oral Tablet 15 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "153037",
+            "display": "thyroid 15 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "314267",
+            "display": "thyroid 15 mg tablet"
+        }
+    ],
+    "Climara Pro Transdermal Patch Weekly 0.045-0.015 MG/DAY|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "453751",
+            "display": "Climara Pro 0.045 mg-0.015 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "402250",
+            "display": "Climara Pro 0.045 mg-0.015 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "402252",
+            "display": "Climara Pro 0.045 mg-0.015 mg/24 hr transdermal patch"
+        }
+    ],
+    "Vitamin D (Ergocalciferol) Oral Capsule 50000 UNIT|": [],
+    "CombiPatch Transdermal Patch Twice Weekly 0.05-0.14 MG/DAY|": [],
+    "Vagifem Vaginal Tablet 10 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "560246",
+            "display": "Vagifem 10 mcg vaginal tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "884707",
+            "display": "Vagifem 10 mcg vaginal tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "884709",
+            "display": "Vagifem 10 mcg vaginal tablet"
+        }
+    ],
+    "Zepbound Subcutaneous Solution Auto-injector 2.5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "619592",
+            "display": "Zepbound 2.5 mg/0.5 mL subcutaneous solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2644405",
+            "display": "Zepbound 2.5 mg/0.5 mL subcutaneous solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2679323",
+            "display": "Zepbound 2.5 mg/0.5 mL subcutaneous solution"
+        }
+    ],
+    "progesterone SR|": [],
+    "Testosterone cream comp|": [],
+    "Liothyronine Sodium Oral Tablet 5 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "175988",
+            "display": "liothyronine 25 mcg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "903697",
+            "display": "liothyronine 25 mcg tablet"
+        }
+    ],
+    "Estradiol Transdermal Gel 1.25 MG/1.25GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "601784",
+            "display": "estradiol 1.25 mg/1.25 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619685",
+            "display": "estradiol 1.25 mg/1.25 gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "Wegovy Subcutaneous Solution Auto-injector 1.7 MG/0.75ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "606784",
+            "display": "Wegovy 1.7 mg/0.75 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553901",
+            "display": "Wegovy 1.7 mg/0.75 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553903",
+            "display": "Wegovy 1.7 mg/0.75 mL subcutaneous pen injector"
+        }
+    ],
+    "Progesterone Oral Capsule 200 MG|": [],
+    "Doxycycline Monohydrate Oral Tablet 100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "205916",
+            "display": "doxycycline monohydrate 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1650142",
+            "display": "doxycycline monohydrate 100 mg tablet"
+        }
+    ],
+    "Doxycycline Hyclate Oral Tablet 100 MG|": [],
+    "Losartan Potassium Oral Tablet 25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "249335",
+            "display": "losartan 25 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "979485",
+            "display": "losartan 25 mg tablet"
+        }
+    ],
+    "Estradiol Transdermal Patch Twice Weekly 0.0375 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "281627",
+            "display": "estradiol 0.0375 mg/24 hr semiweekly transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "241946",
+            "display": "estradiol 0.0375 mg/24 hr semiweekly transdermal patch"
+        }
+    ],
+    "Marlissa Oral Tablet 0.15-30 MG-MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "572123",
+            "display": "Marlissa (28) 0.15 mg-0.03 mg tablet"
+        }
+    ],
+    "Estradiol Oral Tablet 1 MG|": [],
+    "Duavee Oral Tablet 0.45-20 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "580679",
+            "display": "Duavee 0.45 mg-20 mg tablet"
+        }
+    ],
+    "Compounded progesterone 50 mg|": [],
+    "Vitamin D (Ergocalciferol) Oral Capsule 1.25 MG (50000 UT)|": [],
+    "Estradiol Transdermal Patch Weekly 0.025 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "223652",
+            "display": "estradiol 0.025 mg/24 hr weekly transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "242333",
+            "display": "estradiol 0.025 mg/24 hr weekly transdermal patch"
+        }
+    ],
+    "Vitamin D3 Oral Capsule 1.25 MG (50000 UT)|": [],
+    "Lyllana Transdermal Patch Twice Weekly 0.0375 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "604713",
+            "display": "Lyllana 0.0375 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2399895",
+            "display": "Lyllana 0.0375 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "241946",
+            "display": "Lyllana 0.0375 mg/24 hr transdermal patch"
+        }
+    ],
+    "Lyllana Transdermal Patch Twice Weekly 0.075 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "604710",
+            "display": "Lyllana 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1149632",
+            "display": "Lyllana 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2399901",
+            "display": "Lyllana 0.075 mg/24 hr transdermal patch"
+        }
+    ],
+    "Estradiol Transdermal Gel 0.5 MG/0.5GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551280",
+            "display": "estradiol 0.5 mg/0.5 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619679",
+            "display": "estradiol 0.5 mg/0.5 gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "Estradiol Transdermal Gel 0.75 MG/0.75GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "598700",
+            "display": "estradiol 0.75 mg/0.75 gram (0.1%) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619681",
+            "display": "estradiol 0.75 mg/0.75 gram (0.1%) transdermal gel packet"
+        }
+    ],
+    "Premarin Vaginal Cream 0.625 MG/GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "219852",
+            "display": "Premarin 0.625 mg/g vaginal cream"
+        }
+    ],
+    "Menostar Transdermal Patch Weekly 14 MCG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "470780",
+            "display": "Menostar 14 mcg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "476545",
+            "display": "Menostar 14 mcg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "545276",
+            "display": "Menostar 14 mcg/24 hr transdermal patch"
+        }
+    ],
+    "Scream Cream|": [],
+    "Rosuvastatin Calcium Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "451293",
+            "display": "rosuvastatin 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "859424",
+            "display": "rosuvastatin 5 mg tablet"
+        }
+    ],
+    "Minoxidil Oral Tablet 2.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "205664",
+            "display": "minoxidil 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197987",
+            "display": "minoxidil 2.5 mg tablet"
+        }
+    ],
+    "Nextstellis Oral Tablet 3-14.2 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "606270",
+            "display": "Nextstellis 3 mg-14.2 mg (28) tablet"
+        }
+    ],
+    "Levora 0.15/30 (28) Oral Tablet 0.15-30 MG-MCG|": [],
+    "progesterone 300mg extended release |": [],
+    "Junel FE 1/20 Oral Tablet 1-20 MG-MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "450042",
+            "display": "Junel 1/20 (21) 1 mg-20 mcg tablet"
+        }
+    ],
+    "Yuvafem Vaginal Tablet 10 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "592083",
+            "display": "Yuvafem 10 mcg vaginal tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1797113",
+            "display": "Yuvafem 10 mcg vaginal tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "884707",
+            "display": "Yuvafem 10 mcg vaginal tablet"
+        }
+    ],
+    "Norgestimate-Eth Estradiol Oral Tablet 0.25-35 MG-MCG|": [],
+    "Intrarosa Vaginal Insert 6.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "593804",
+            "display": "Intrarosa 6.5 mg vaginal insert"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1927688",
+            "display": "Intrarosa 6.5 mg vaginal insert"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1927693",
+            "display": "Intrarosa 6.5 mg vaginal insert"
+        }
+    ],
+    "Imvexxy Maintenance Pack Vaginal Insert 10 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "597372",
+            "display": "Imvexxy Maintenance Pack 10 mcg vaginal insert"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "884707",
+            "display": "Imvexxy Maintenance Pack 10 mcg vaginal insert"
+        }
+    ],
+    "Testosterone 3 Mg/Gm Vbc (g)*|": [],
+    "YAZ Oral Tablet 3-0.02 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "476825",
+            "display": "YAZ (28) 3 mg-0.02 mg tablet"
+        }
+    ],
+    "Drospirenone-Ethinyl Estradiol Oral Tablet 3-0.02 MG|": [],
+    "est/test vaginal cream|": [],
+    "Evamist Transdermal Solution 1.53 MG/SPRAY|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "554222",
+            "display": "Evamist 1.53 mg/spray (1.7 %) transdermal spray"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "728118",
+            "display": "Evamist 1.53 mg/spray (1.7 %) transdermal spray"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "728122",
+            "display": "Evamist 1.53 mg/spray (1.7 %) transdermal spray"
+        }
+    ],
+    "Levothyroxine Sodium Oral Tablet 25 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "210792",
+            "display": "levothyroxine 25 mcg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "966220",
+            "display": "levothyroxine 25 mcg tablet"
+        }
+    ],
+    "Slynd Oral Tablet 4 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "599867",
+            "display": "Slynd 4 mg (28) tablet"
+        }
+    ],
+    "Zolpidem Tartrate Oral Tablet 10 MG|": [],
+    "Addyi Oral Tablet 100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "587462",
+            "display": "Addyi 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1665514",
+            "display": "Addyi 100 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1666391",
+            "display": "Addyi 100 mg tablet"
+        }
+    ],
+    "Testosterone Cypionate Intramuscular Solution 200 MG/ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "275753",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2047882",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "835840",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        }
+    ],
+    "Mounjaro Subcutaneous Solution Pen-injector 2.5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "611114",
+            "display": "Mounjaro 2.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601761",
+            "display": "Mounjaro 2.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601764",
+            "display": "Mounjaro 2.5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Lyllana Transdermal Patch Twice Weekly 0.025 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "604714",
+            "display": "Lyllana 0.025 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2399892",
+            "display": "Lyllana 0.025 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "248478",
+            "display": "Lyllana 0.025 mg/24 hr transdermal patch"
+        }
+    ],
+    "Mounjaro Subcutaneous Solution Auto-injector 2.5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "611114",
+            "display": "Mounjaro 2.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601761",
+            "display": "Mounjaro 2.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601764",
+            "display": "Mounjaro 2.5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Estring Vaginal Ring 7.5 MCG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "161089",
+            "display": "Estring 2 mg (7.5 mcg/24 hour) vaginal ring"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "848328",
+            "display": "Estring 2 mg (7.5 mcg/24 hour) vaginal ring"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "848330",
+            "display": "Estring 2 mg (7.5 mcg/24 hour) vaginal ring"
+        }
+    ],
+    "Vivelle-Dot Transdermal Patch Twice Weekly 0.1 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "170020",
+            "display": "Vivelle-Dot 0.1 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "242892",
+            "display": "Vivelle-Dot 0.1 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310183",
+            "display": "Vivelle-Dot 0.1 mg/24 hr transdermal patch"
+        }
+    ],
+    "Femring Vaginal Ring 0.1 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "449657",
+            "display": "Femring 0.1 mg/24 hr vaginal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "848342",
+            "display": "Femring 0.1 mg/24 hr vaginal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "848343",
+            "display": "Femring 0.1 mg/24 hr vaginal"
+        }
+    ],
+    "Divigel Transdermal Gel 0.25 MG/0.25GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551285",
+            "display": "Divigel 0.25 mg/0.25 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619677",
+            "display": "Divigel 0.25 mg/0.25 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619678",
+            "display": "Divigel 0.25 mg/0.25 gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "Ergocalciferol Oral Capsule 1.25 MG (50000 UT)|": [],
+    "Testosterone VersaCream 0.5gm = 5mg|": [],
+    "Norethindrone Oral Tablet 0.35 MG|": [],
+    "ALPRAZolam Oral Tablet 1 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "173662",
+            "display": "alprazolam 1 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197321",
+            "display": "alprazolam 1 mg tablet"
+        }
+    ],
+    "buPROPion HCl ER (XL) Oral Tablet Extended Release 24 Hour 150 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "451598",
+            "display": "bupropion HCl XL 150 mg 24 hr tablet, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "993541",
+            "display": "bupropion HCl XL 150 mg 24 hr tablet, extended release"
+        }
+    ],
+    "Levothyroxine Sodium Oral Capsule 100 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "217047",
+            "display": "levothyroxine 100 mcg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "892246",
+            "display": "levothyroxine 100 mcg tablet"
+        }
+    ],
+    "Imvexxy Starter Pack Vaginal Insert 4 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "597366",
+            "display": "Imvexxy Starter Pack 4 mcg vaginal insert, dose pack"
+        }
+    ],
+    "traZODone HCl Oral Tablet 50 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "169434",
+            "display": "trazodone 50 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "856377",
+            "display": "trazodone 50 mg tablet"
+        }
+    ],
+    "Vaginal Estrogen 0.1mg/gm, 0.2% Vit E, Ellage Base|": [],
+    "Prometrium Oral Capsule 100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "185240",
+            "display": "Prometrium 100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "260243",
+            "display": "Prometrium 100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "262080",
+            "display": "Prometrium 100 mg capsule"
+        }
+    ],
+    "Provera Oral Tablet 2.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "179253",
+            "display": "Provera 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000135",
+            "display": "Provera 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000139",
+            "display": "Provera 2.5 mg tablet"
+        }
+    ],
+    "Testosterone Cypionate Intramuscular Solution 100 MG/ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "185710",
+            "display": "testosterone cypionate 100 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "835829",
+            "display": "testosterone cypionate 100 mg/mL intramuscular oil"
+        }
+    ],
+    "Testosterone Transdermal Versacream - Systemic|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "175076",
+            "display": "testosterone 2.5 mg/24 hr transdermal 24 hour patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "199116",
+            "display": "testosterone 2.5 mg/24 hr transdermal 24 hour patch"
+        }
+    ],
+    "Veozah Oral Tablet 45 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "615122",
+            "display": "Veozah 45 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2637141",
+            "display": "Veozah 45 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2637147",
+            "display": "Veozah 45 mg tablet"
+        }
+    ],
+    "Rybelsus Oral Tablet 3 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "600879",
+            "display": "Rybelsus 3 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2200652",
+            "display": "Rybelsus 3 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2200654",
+            "display": "Rybelsus 3 mg tablet"
+        }
+    ],
+    "Testosterone Transdermal Gel 20.25 MG/ACT (1.62%)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "575573",
+            "display": "testosterone 1.62 % (20.25 mg/1.25 gram) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1597120",
+            "display": "testosterone 1.62 % (20.25 mg/1.25 gram) transdermal gel packet"
+        }
+    ],
+    "Escitalopram Oxalate Oral Tablet 10 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "445972",
+            "display": "escitalopram 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "349332",
+            "display": "escitalopram 10 mg tablet"
+        }
+    ],
+    "Divigel Transdermal Gel 0.5 MG/0.5GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551287",
+            "display": "Divigel 0.5 mg/0.5 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619679",
+            "display": "Divigel 0.5 mg/0.5 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619680",
+            "display": "Divigel 0.5 mg/0.5 gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "Lyllana Transdermal Patch Twice Weekly 0.05 MG/24HR|": [],
+    "Estrogel Transdermal Gel 0.75 MG/1.25 GM (0.06%)|": [],
+    "Estradiol/Estriol Vaginal Cream, V-Click|": [],
+    "Dotti Transdermal Patch Twice Weekly 0.025 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "599899",
+            "display": "Dotti 0.025 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2110774",
+            "display": "Dotti 0.025 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "248478",
+            "display": "Dotti 0.025 mg/24 hr transdermal patch"
+        }
+    ],
+    "Testosterone 1% Atrevis gel Apply 1 click (0.25 ML) topically to arm or leg daily|": [],
+    "compounded estradiol vaginal cream |": [],
+    "compounded estradiol vaginal cream|": [],
+    "metFORMIN HCl ER Oral Tablet Extended Release 24 Hour 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "287634",
+            "display": "metformin ER 500 mg tablet,extended release 24 hr"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "860975",
+            "display": "metformin ER 500 mg tablet,extended release 24 hr"
+        }
+    ],
+    "Dotti Transdermal Patch Twice Weekly 0.0375 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "599900",
+            "display": "Dotti 0.0375 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2110777",
+            "display": "Dotti 0.0375 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "241946",
+            "display": "Dotti 0.0375 mg/24 hr transdermal patch"
+        }
+    ],
+    "Dotti Transdermal Patch Twice Weekly 0.05 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "599901",
+            "display": "Dotti 0.05 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2110780",
+            "display": "Dotti 0.05 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "242891",
+            "display": "Dotti 0.05 mg/24 hr transdermal patch"
+        }
+    ],
+    "Vivelle-Dot Transdermal Patch Twice Weekly 0.05 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "257317",
+            "display": "Vivelle-Dot 0.05 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "242891",
+            "display": "Vivelle-Dot 0.05 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310176",
+            "display": "Vivelle-Dot 0.05 mg/24 hr transdermal patch"
+        }
+    ],
+    "Contrave Oral Tablet Extended Release 12 Hour 8-90 MG|": [],
+    "MICRONIZED PROGESTERONE 150MG|": [],
+    "Wegovy Subcutaneous Solution Auto-injector 0.5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "606781",
+            "display": "Wegovy 0.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553601",
+            "display": "Wegovy 0.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553603",
+            "display": "Wegovy 0.5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Compounded Semaglutide SQ|": [],
+    "Compounded tizepatide 25mg/mL|": [],
+    "Azithromycin Oral Tablet 250 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "172089",
+            "display": "azithromycin 250 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "308460",
+            "display": "azithromycin 250 mg tablet"
+        }
+    ],
+    "Diflucan Oral Tablet 150 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "193650",
+            "display": "Diflucan 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197699",
+            "display": "Diflucan 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "207108",
+            "display": "Diflucan 150 mg tablet"
+        }
+    ],
+    "Medrol Oral Tablet Therapy Pack 4 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "183845",
+            "display": "Medrol (Pak) 4 mg tablets in a dose pack"
+        }
+    ],
+    "Naratriptan HCl Oral Tablet 2.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "288928",
+            "display": "naratriptan 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "314135",
+            "display": "naratriptan 2.5 mg tablet"
+        }
+    ],
+    "Topiramate Oral Tablet 50 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "454519",
+            "display": "topiramate 50 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151226",
+            "display": "topiramate 50 mg tablet"
+        }
+    ],
+    "Divigel Transdermal Gel 1 MG/GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551288",
+            "display": "Divigel 1 mg/gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619683",
+            "display": "Divigel 1 mg/gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619684",
+            "display": "Divigel 1 mg/gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "L-Methylfolate-B6-B12 Oral Tablet 3-35-2 MG|": [],
+    "busPIRone HCl Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "155610",
+            "display": "buspirone 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "866094",
+            "display": "buspirone 5 mg tablet"
+        }
+    ],
+    "Estradiol Transdermal Patch Weekly 0.05 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "184702",
+            "display": "estradiol 0.05 mg/24 hr weekly transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "238003",
+            "display": "estradiol 0.05 mg/24 hr weekly transdermal patch"
+        }
+    ],
+    "Progesterone Micronized  Powder|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "271547",
+            "display": "progesterone micronized powder"
+        }
+    ],
+    "Minoxidil for Women External Foam 5 %|": [],
+    "Testim Transdermal Gel 50 MG/5GM (1%)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "448495",
+            "display": "Testim 50 mg/5 gram (1 %) transdermal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1597129",
+            "display": "Testim 50 mg/5 gram (1 %) transdermal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1597132",
+            "display": "Testim 50 mg/5 gram (1 %) transdermal gel"
+        }
+    ],
+    "Qsymia Oral Capsule Extended Release 24 Hour 3.75-23 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "574991",
+            "display": "Qsymia 3.75 mg-23 mg capsule, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1302839",
+            "display": "Qsymia 3.75 mg-23 mg capsule, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1302845",
+            "display": "Qsymia 3.75 mg-23 mg capsule, extended release"
+        }
+    ],
+    "Qsymia Oral Capsule Extended Release 24 Hour 7.5-46 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "574992",
+            "display": "Qsymia 7.5 mg-46 mg capsule, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1302827",
+            "display": "Qsymia 7.5 mg-46 mg capsule, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1302833",
+            "display": "Qsymia 7.5 mg-46 mg capsule, extended release"
+        }
+    ],
+    "Topiramate Oral Tablet 25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "197564",
+            "display": "topiramate 25 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "199888",
+            "display": "topiramate 25 mg tablet"
+        }
+    ],
+    "Topiramate ER Oral Capsule ER 24 Hour Sprinkle 25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "229530",
+            "display": "topiramate 25 mg sprinkle capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "205315",
+            "display": "topiramate 25 mg sprinkle capsule"
+        }
+    ],
+    "Phentermine HCl Oral Capsule 15 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "193292",
+            "display": "phentermine 15 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "968766",
+            "display": "phentermine 15 mg capsule"
+        }
+    ],
+    "Wegovy Subcutaneous Solution Auto-injector 0.25 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "606784",
+            "display": "Wegovy 1.7 mg/0.75 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553901",
+            "display": "Wegovy 1.7 mg/0.75 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553903",
+            "display": "Wegovy 1.7 mg/0.75 mL subcutaneous pen injector"
+        }
+    ],
+    "Ondansetron HCl Oral Tablet 4 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "183591",
+            "display": "ondansetron HCl 4 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "198052",
+            "display": "ondansetron HCl 4 mg tablet"
+        }
+    ],
+    "Vivelle-Dot Transdermal Patch Twice Weekly 0.025 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "445549",
+            "display": "Vivelle-Dot 0.025 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "248478",
+            "display": "Vivelle-Dot 0.025 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "284378",
+            "display": "Vivelle-Dot 0.025 mg/24 hr transdermal patch"
+        }
+    ],
+    "Minivelle Transdermal Patch Twice Weekly 0.025 MG/24HR|": [],
+    "Saxenda Subcutaneous Solution Pen-injector 18 MG/3ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "584911",
+            "display": "Saxenda 3 mg/0.5 mL (18 mg/3 mL) subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1598268",
+            "display": "Saxenda 3 mg/0.5 mL (18 mg/3 mL) subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "897122",
+            "display": "Saxenda 3 mg/0.5 mL (18 mg/3 mL) subcutaneous pen injector"
+        }
+    ],
+    "Citalopram Hydrobromide Oral Tablet 10 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "176094",
+            "display": "citalopram 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "283672",
+            "display": "citalopram 10 mg tablet"
+        }
+    ],
+    "Femring Vaginal Ring 0.05 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "449656",
+            "display": "Femring 0.05 mg/24 hr vaginal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "848331",
+            "display": "Femring 0.05 mg/24 hr vaginal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "848333",
+            "display": "Femring 0.05 mg/24 hr vaginal"
+        }
+    ],
+    "Vyleesi Subcutaneous Solution Auto-injector 1.75 MG/0.3ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "600247",
+            "display": "Vyleesi 1.75 mg/0.3 mL subcutaneous auto-injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2176316",
+            "display": "Vyleesi 1.75 mg/0.3 mL subcutaneous auto-injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2176321",
+            "display": "Vyleesi 1.75 mg/0.3 mL subcutaneous auto-injector"
+        }
+    ],
+    "Depo-Estradiol Intramuscular Oil 5 MG/ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "288776",
+            "display": "Depo-Estradiol 5 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "206417",
+            "display": "Depo-Estradiol 5 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310187",
+            "display": "Depo-Estradiol 5 mg/mL intramuscular oil"
+        }
+    ],
+    "Wegovy Subcutaneous Solution Auto-injector 2.4 MG/0.75ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "606785",
+            "display": "Wegovy 2.4 mg/0.75 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2554102",
+            "display": "Wegovy 2.4 mg/0.75 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2554104",
+            "display": "Wegovy 2.4 mg/0.75 mL subcutaneous pen injector"
+        }
+    ],
+    "Angeliq Oral Tablet 0.5-1 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "546319",
+            "display": "Angeliq 0.5 mg-1 mg tablet"
+        }
+    ],
+    "Mimvey Oral Tablet 1-0.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "561301",
+            "display": "Mimvey 1 mg-0.5 mg tablet"
+        }
+    ],
+    "Micronized Progesterone Slow Release|": [],
+    "Compound Arginine 12%, Sildenafil 1%, and Testosterone 0.2%|": [],
+    "Verapamil HCl ER Oral Capsule Extended Release 24 Hour 120 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "150388",
+            "display": "verapamil ER (SR) 120 mg tablet,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "897659",
+            "display": "verapamil ER (SR) 120 mg tablet,extended release"
+        }
+    ],
+    "Qulipta Oral Tablet 10 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "608126",
+            "display": "Qulipta 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2571836",
+            "display": "Qulipta 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2571842",
+            "display": "Qulipta 10 mg tablet"
+        }
+    ],
+    "Estradiol Oral Tablet 2 MG|": [],
+    "Wellbutrin XL Oral Tablet Extended Release 24 Hour 150 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "451599",
+            "display": "Wellbutrin XL 150 mg 24 hr tablet, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "993541",
+            "display": "Wellbutrin XL 150 mg 24 hr tablet, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "993545",
+            "display": "Wellbutrin XL 150 mg 24 hr tablet, extended release"
+        }
+    ],
+    "tirzepatide with levocarnitine month one|": [],
+    "Prempro Oral Tablet 0.625-5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "292010",
+            "display": "Prempro 0.625 mg-5 mg tablet"
+        }
+    ],
+    "Levothyroxine Sodium Oral Tablet 125 MCG|": [],
+    "Orilissa Oral Tablet 150 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "596950",
+            "display": "Orilissa 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2049852",
+            "display": "Orilissa 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2049858",
+            "display": "Orilissa 150 mg tablet"
+        }
+    ],
+    "Phentermine HCl Oral Tablet 37.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "200013",
+            "display": "phentermine 37.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "803353",
+            "display": "phentermine 37.5 mg tablet"
+        }
+    ],
+    "Ferrous Sulfate Oral Tablet 325 (65 Fe) MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "171643",
+            "display": "Iron (ferrous sulfate) 325 mg (65 mg iron) tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310325",
+            "display": "Iron (ferrous sulfate) 325 mg (65 mg iron) tablet"
+        }
+    ],
+    "Paxlovid (150/100) Oral Tablet Therapy Pack 10 x 150 MG & 10 x 100MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "610798",
+            "display": "Paxlovid 150 mg-100 mg tablets in a dose pack (Renal Dose)"
+        }
+    ],
+    "FLUoxetine HCl Oral Capsule 40 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "151828",
+            "display": "fluoxetine 40 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313989",
+            "display": "fluoxetine 40 mg capsule"
+        }
+    ],
+    "Imvexxy Maintenance Pack Vaginal Insert 4 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "597371",
+            "display": "Imvexxy Maintenance Pack 4 mcg vaginal insert"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2048917",
+            "display": "Imvexxy Maintenance Pack 4 mcg vaginal insert"
+        }
+    ],
+    "EluRyng Vaginal Ring 0.12-0.015 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "601668",
+            "display": "EluRyng 0.12 mg-0.015 mg/24 hr vaginal ring"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1367436",
+            "display": "EluRyng 0.12 mg-0.015 mg/24 hr vaginal ring"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2266506",
+            "display": "EluRyng 0.12 mg-0.015 mg/24 hr vaginal ring"
+        }
+    ],
+    "Testosterone Transdermal Gel 20.25 MG/1.25GM (1.62%)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "564162",
+            "display": "testosterone 20.25 mg/1.25 gram per pump act.(1.62 %) transdermal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1597076",
+            "display": "testosterone 20.25 mg/1.25 gram per pump act.(1.62 %) transdermal gel"
+        }
+    ],
+    "Minivelle Transdermal Patch Twice Weekly 0.075 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "576267",
+            "display": "Minivelle 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1149632",
+            "display": "Minivelle 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1357007",
+            "display": "Minivelle 0.075 mg/24 hr transdermal patch"
+        }
+    ],
+    "Minivelle Transdermal Patch Twice Weekly 0.1 MG/24HR|": [],
+    "Syringe Eccentric Tip  Miscellaneous 10 ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "272382",
+            "display": "BD Eccentric Tip Syringe 10 mL"
+        }
+    ],
+    "SUMAtriptan Succinate Oral Tablet 25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "182981",
+            "display": "sumatriptan 25 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "315223",
+            "display": "sumatriptan 25 mg tablet"
+        }
+    ],
+    "Estradiol-Norethindrone Acet Oral Tablet 1-0.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "204481",
+            "display": "estradiol-norethindrone acet 1 mg-0.5 mg tablet"
+        }
+    ],
+    "estradiol 0.01% with testosterone 0.1% in versa base|": [],
+    "0.5 mL of 1% topical testosterone in HRT base. Disp 15 grams and refill 5. 62.5mg/ml apply .1ml daily to |": [],
+    "Jencycla Oral Tablet 0.35 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "578491",
+            "display": "Jencycla 0.35 mg tablet"
+        }
+    ],
+    "DHEA compounded suppository|": [],
+    "Zepbound Subcutaneous Solution 2.5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "619592",
+            "display": "Zepbound 2.5 mg/0.5 mL subcutaneous solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2644405",
+            "display": "Zepbound 2.5 mg/0.5 mL subcutaneous solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2679323",
+            "display": "Zepbound 2.5 mg/0.5 mL subcutaneous solution"
+        }
+    ],
+    "Alendronate Sodium Oral Tablet 70 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "184359",
+            "display": "alendronate 70 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "904431",
+            "display": "alendronate 70 mg tablet"
+        }
+    ],
+    "Compounded Progesterone for pt with peanut allergy|": [],
+    "Ozempic (0.25 or 0.5 MG/DOSE) Subcutaneous Solution Pen-injector 2 MG/1.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "610611",
+            "display": "Ozempic 2 mg/dose (8 mg/3 mL) subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2599362",
+            "display": "Ozempic 2 mg/dose (8 mg/3 mL) subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2599365",
+            "display": "Ozempic 2 mg/dose (8 mg/3 mL) subcutaneous pen injector"
+        }
+    ],
+    "Wegovy Subcutaneous Solution Auto-injector 1 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "606782",
+            "display": "Wegovy 1 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553802",
+            "display": "Wegovy 1 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2553803",
+            "display": "Wegovy 1 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "testosterone|": [],
+    "Sertraline HCl Oral Tablet 50 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "287768",
+            "display": "sertraline 50 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312941",
+            "display": "sertraline 50 mg tablet"
+        }
+    ],
+    "Paxlovid (300/100) Oral Tablet Therapy Pack 20 x 150 MG & 10 x 100MG|": [],
+    "Mircette Oral Tablet 0.15-0.02/0.01 MG (21/5)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "205627",
+            "display": "Mircette (28) 0.15 mg-0.02 mg (21)/0.01 mg (5) tablet"
+        }
+    ],
+    "Ozempic (0.25 or 0.5 MG/DOSE) Subcutaneous Solution Pen-injector 2 MG/3ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "610611",
+            "display": "Ozempic 2 mg/dose (8 mg/3 mL) subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2599362",
+            "display": "Ozempic 2 mg/dose (8 mg/3 mL) subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2599365",
+            "display": "Ozempic 2 mg/dose (8 mg/3 mL) subcutaneous pen injector"
+        }
+    ],
+    "Escitalopram Oxalate Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "453864",
+            "display": "escitalopram 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "351249",
+            "display": "escitalopram 5 mg tablet"
+        }
+    ],
+    "medroxyPROGESTERone Acetate Oral Tablet 5 MG|": [],
+    "Rybelsus Oral Tablet 7 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "600880",
+            "display": "Rybelsus 7 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2200656",
+            "display": "Rybelsus 7 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2200658",
+            "display": "Rybelsus 7 mg tablet"
+        }
+    ],
+    "Estradiol/Testosterone topical gel|": [],
+    "Progesterone  Powder|": [],
+    "Estradiol Transdermal Gel 0.75 MG/1.25 GM (0.06%)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "468382",
+            "display": "estradiol 0.75 mg/1.25 gram (0.06%) transdermal gel"
+        }
+    ],
+    "Fluconazole Oral Tablet 150 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "175283",
+            "display": "fluconazole 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197699",
+            "display": "fluconazole 150 mg tablet"
+        }
+    ],
+    "metroNIDAZOLE Vaginal Gel 0.75 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "183150",
+            "display": "metronidazole 0.75 % (37.5 mg/5 gram) vaginal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "142046",
+            "display": "metronidazole 0.75 % (37.5 mg/5 gram) vaginal gel"
+        }
+    ],
+    "Progesterone compounded cream|": [],
+    "Ambien Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "289261",
+            "display": "Ambien 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "854876",
+            "display": "Ambien 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "854878",
+            "display": "Ambien 5 mg tablet"
+        }
+    ],
+    "Macrobid Oral Capsule 100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "214593",
+            "display": "Macrobid 100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1648755",
+            "display": "Macrobid 100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "539712",
+            "display": "Macrobid 100 mg capsule"
+        }
+    ],
+    "Progesterone E4M 25 Mg Vcaps|": [],
+    "valACYclovir HCl Oral Tablet 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "204203",
+            "display": "valacyclovir 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313565",
+            "display": "valacyclovir 500 mg tablet"
+        }
+    ],
+    "Synthroid Oral Tablet 112 MCG|": [],
+    "Levothyroxine Sodium Oral Tablet 112 MCG|": [],
+    "Scopolamine Transdermal Patch 72 Hour 1 MG/3DAYS|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "278720",
+            "display": "scopolamine 1 mg over 3 days transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "226552",
+            "display": "scopolamine 1 mg over 3 days transdermal patch"
+        }
+    ],
+    "Ondansetron Oral Tablet Disintegrating 4 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "285288",
+            "display": "ondansetron 4 mg disintegrating tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "104894",
+            "display": "ondansetron 4 mg disintegrating tablet"
+        }
+    ],
+    "Zepbound Subcutaneous Solution Auto-injector 7.5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "617141",
+            "display": "Zepbound 7.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601784",
+            "display": "Zepbound 7.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2669712",
+            "display": "Zepbound 7.5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Crinone Vaginal Gel 8 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "277383",
+            "display": "Crinone 8 % vaginal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "153580",
+            "display": "Crinone 8 % vaginal gel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312645",
+            "display": "Crinone 8 % vaginal gel"
+        }
+    ],
+    "Bijuva Oral Capsule 0.5-100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "617336",
+            "display": "Bijuva 0.5 mg-100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2632844",
+            "display": "Bijuva 0.5 mg-100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2632846",
+            "display": "Bijuva 0.5 mg-100 mg capsule"
+        }
+    ],
+    "buPROPion HCl ER (SR) Oral Tablet Extended Release 12 Hour 150 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "589901",
+            "display": "bupropion HCl 150 mg tablet,12 hr sustained-release(smoking deterrent)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1801289",
+            "display": "bupropion HCl 150 mg tablet,12 hr sustained-release(smoking deterrent)"
+        }
+    ],
+    "Estradiol Transdermal Patch Weekly 0.1 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "173706",
+            "display": "estradiol 0.1 mg/24hr weekly transdermal patch"
+        }
+    ],
+    "medroxyPROGESTERone Acetate Oral Tablet 2.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "177822",
+            "display": "medroxyprogesterone 2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000135",
+            "display": "medroxyprogesterone 2.5 mg tablet"
+        }
+    ],
+    "hydroCHLOROthiazide Oral Tablet 12.5 MG|": [],
+    "Compounded 20 mg progesterone |": [],
+    "Tesosterone (HRT) .25mg/gm Cream. Apply 4 pumps (2ml) topically every evening. (MD Pump) 60 Grams|": [],
+    "Micronized progesterone|": [],
+    "Premarin Oral Tablet 0.3 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "244777",
+            "display": "Premarin 0.3 mg tablet"
+        }
+    ],
+    "Zepbound Subcutaneous Solution Auto-injector 5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "619593",
+            "display": "Zepbound 5 mg/0.5 mL subcutaneous solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2644401",
+            "display": "Zepbound 5 mg/0.5 mL subcutaneous solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2679325",
+            "display": "Zepbound 5 mg/0.5 mL subcutaneous solution"
+        }
+    ],
+    "metroNIDAZOLE Oral Tablet 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "199432",
+            "display": "metronidazole 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "311681",
+            "display": "metronidazole 500 mg tablet"
+        }
+    ],
+    "Progesterone|": [],
+    "Topical Testosterone 0.5 mL of 1% topical testosterone in HRT base. Disp 15 grams|": [],
+    "estradiol 0.75 mg/actuation (0.06%) transdermal gel|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "468382",
+            "display": "estradiol 0.75 mg/1.25 gram (0.06%) transdermal gel"
+        }
+    ],
+    "Testosterone Micronized  Powder|": [],
+    "Covaryx Oral Tablet 1.25-2.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "550991",
+            "display": "Covaryx 1.25 mg-2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197670",
+            "display": "Covaryx 1.25 mg-2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "705919",
+            "display": "Covaryx 1.25 mg-2.5 mg tablet"
+        }
+    ],
+    "Premarin Oral Tablet 1.25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "160052",
+            "display": "Premarin 1.25 mg tablet"
+        }
+    ],
+    "Est Estrogens-Methyltest DS Oral Tablet 1.25-2.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "262983",
+            "display": "esterified estrogens-methyltestosterone 1.25 mg-2.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197670",
+            "display": "esterified estrogens-methyltestosterone 1.25 mg-2.5 mg tablet"
+        }
+    ],
+    "Estradiol 0.25 mg/0.25 g (0.1%) gel|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "551281",
+            "display": "estradiol 0.25 mg/0.25 gram (0.1 %) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619677",
+            "display": "estradiol 0.25 mg/0.25 gram (0.1 %) transdermal gel packet"
+        }
+    ],
+    "Dotti Transdermal Patch Twice Weekly 0.075 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "599902",
+            "display": "Dotti 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1149632",
+            "display": "Dotti 0.075 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2110783",
+            "display": "Dotti 0.075 mg/24 hr transdermal patch"
+        }
+    ],
+    "Premarin Oral Tablet 0.9 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "254687",
+            "display": "Premarin 0.9 mg tablet"
+        }
+    ],
+    "Brexafemme Oral Tablet 150 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "606827",
+            "display": "Brexafemme 150 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2560220",
+            "display": "Brexafemme 150 mg tablet"
+        }
+    ],
+    "Estradiol/Testosterone compounded cream for vulva|": [],
+    "Mounjaro Subcutaneous Solution Pen-injector 15 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "611119",
+            "display": "Mounjaro 15 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601755",
+            "display": "Mounjaro 15 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601758",
+            "display": "Mounjaro 15 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Trulicity Subcutaneous Solution Pen-injector 0.75 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "582683",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1551295",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1551300",
+            "display": "Trulicity 0.75 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Tranexamic Acid Oral Tablet 650 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "561230",
+            "display": "tranexamic acid 650 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "883826",
+            "display": "tranexamic acid 650 mg tablet"
+        }
+    ],
+    "Synthroid Oral Tablet 25 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "232437",
+            "display": "Synthroid 25 mcg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "966158",
+            "display": "Synthroid 25 mcg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "966220",
+            "display": "Synthroid 25 mcg tablet"
+        }
+    ],
+    "125 mg compounded progesterone |": [],
+    "Aygestin Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "201987",
+            "display": "Aygestin 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000405",
+            "display": "Aygestin 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000407",
+            "display": "Aygestin 5 mg tablet"
+        }
+    ],
+    "Vienva Oral Tablet 0.1-20 MG-MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "588892",
+            "display": "Vienva 0.1 mg-20 mcg tablet"
+        }
+    ],
+    "metFORMIN HCl ER (OSM) Oral Tablet Extended Release 24 Hour 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "287634",
+            "display": "metformin ER 500 mg tablet,extended release 24 hr"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "860975",
+            "display": "metformin ER 500 mg tablet,extended release 24 hr"
+        }
+    ],
+    "Diflucan Oral Tablet 200 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "289225",
+            "display": "Diflucan 200 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "197700",
+            "display": "Diflucan 200 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "207112",
+            "display": "Diflucan 200 mg tablet"
+        }
+    ],
+    "SCREAM CREAM|": [],
+    "Promethazine HCl Oral Tablet 12.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "182284",
+            "display": "promethazine 12.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "992438",
+            "display": "promethazine 12.5 mg tablet"
+        }
+    ],
+    "Desvenlafaxine Succinate ER Oral Tablet Extended Release 24 Hour 25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "584820",
+            "display": "desvenlafaxine succinate ER 25 mg tablet,extended release 24 hr"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1607617",
+            "display": "desvenlafaxine succinate ER 25 mg tablet,extended release 24 hr"
+        }
+    ],
+    "QUEtiapine Fumarate Oral Tablet 25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "150994",
+            "display": "quetiapine 25 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "312744",
+            "display": "quetiapine 25 mg tablet"
+        }
+    ],
+    "lamoTRIgine Oral Tablet 25 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "211249",
+            "display": "lamotrigine 25 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "282401",
+            "display": "lamotrigine 25 mg tablet"
+        }
+    ],
+    "Tretinoin External Cream 0.025 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "178065",
+            "display": "tretinoin 0.025 % topical cream"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "106302",
+            "display": "tretinoin 0.025 % topical cream"
+        }
+    ],
+    "100 mg sublingual compounded progesterone |": [],
+    "metFORMIN HCl Oral Solution 500 MG/5ML|": [],
+    "B12 Sublingual Tablet Sublingual 5000 MCG|": [],
+    "SR progesterone|": [],
+    "Vivelle-Dot Transdermal Patch Twice Weekly 0.0375 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "255488",
+            "display": "Vivelle-Dot 0.0375 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "241946",
+            "display": "Vivelle-Dot 0.0375 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310172",
+            "display": "Vivelle-Dot 0.0375 mg/24 hr transdermal patch"
+        }
+    ],
+    "Testosterone|": [],
+    "Augmentin Oral Tablet 500-125 MG|": [],
+    "PARoxetine HCl Oral Tablet 20 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "237883",
+            "display": "paroxetine 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1738495",
+            "display": "paroxetine 20 mg tablet"
+        }
+    ],
+    "Osphena Oral Tablet 60 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "577894",
+            "display": "Osphena 60 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1370976",
+            "display": "Osphena 60 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1370982",
+            "display": "Osphena 60 mg tablet"
+        }
+    ],
+    "Zolpidem Tartrate Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "270070",
+            "display": "zolpidem 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "854876",
+            "display": "zolpidem 5 mg tablet"
+        }
+    ],
+    "Levocetirizine Dihydrochloride Oral Tablet 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "552576",
+            "display": "levocetirizine 5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "855172",
+            "display": "levocetirizine 5 mg tablet"
+        }
+    ],
+    "Thyroid Oral Tablet 30 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "174288",
+            "display": "thyroid 30 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313387",
+            "display": "thyroid 30 mg tablet"
+        }
+    ],
+    "Divigel Transdermal Gel 0.75 MG/0.75GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "598719",
+            "display": "Divigel 0.75 mg/0.75 gram (0.1%) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619681",
+            "display": "Divigel 0.75 mg/0.75 gram (0.1%) transdermal gel packet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2619682",
+            "display": "Divigel 0.75 mg/0.75 gram (0.1%) transdermal gel packet"
+        }
+    ],
+    "Estradiol Transdermal Patch Weekly 0.0375 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "450718",
+            "display": "estradiol 0.0375 mg/24 hr weekly transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "403922",
+            "display": "estradiol 0.0375 mg/24 hr weekly transdermal patch"
+        }
+    ],
+    "150 mg compounded progesterone |": [],
+    "Testosterone Cypionate Injection Solution 200 MG/ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "275753",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2047882",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "835840",
+            "display": "testosterone cypionate 200 mg/mL intramuscular oil"
+        }
+    ],
+    "Fortesta Transdermal Gel 10 MG/ACT (2%)|": [],
+    "Neurontin Oral Capsule 400 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "263989",
+            "display": "Neurontin 400 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "105030",
+            "display": "Neurontin 400 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310432",
+            "display": "Neurontin 400 mg capsule"
+        }
+    ],
+    "Progesterone compounded in coconut oil gluten|": [],
+    "Compounded progesterone|": [],
+    "Clotrimazole-Betamethasone External Cream 1-0.05 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "156183",
+            "display": "clotrimazole-betamethasone 1-0.5 % topical cream"
+        }
+    ],
+    "metFORMIN HCl Oral Tablet 850 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "191479",
+            "display": "metformin 850 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "861010",
+            "display": "metformin 850 mg tablet"
+        }
+    ],
+    "Oral Micronized Progesterone capsules 25mg|": [],
+    "Propranolol HCl Oral Tablet 20 MG|": [],
+    "metFORMIN HCl ER Oral Tablet Extended Release 24 Hour 750 MG|": [],
+    "Prempro Oral Tablet 0.3-1.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "453559",
+            "display": "Prempro 0.3 mg-1.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000351",
+            "display": "Prempro 0.3 mg-1.5 mg tablet"
+        }
+    ],
+    "Vaginal/Vulval Bi-Est/Testosterone cream|": [],
+    "Oral Micronized Progesterone Slow Release 150mg |": [],
+    "Loestrin 1/20 (21) Oral Tablet 1-20 MG-MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "177652",
+            "display": "Loestrin Fe 1/20 (28-Day) 1 mg-20 mcg (21)/75 mg (7) tablet"
+        }
+    ],
+    "Erythromycin Ophthalmic Ointment 5 MG/GM|": [],
+    "Citalopram Hydrobromide Oral Tablet 20 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "222717",
+            "display": "citalopram 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "200371",
+            "display": "citalopram 20 mg tablet"
+        }
+    ],
+    "Amoxicillin-Pot Clavulanate Oral Tablet 875-125 MG|": [],
+    "Ciprofloxacin HCl Ophthalmic Solution 0.3 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "232452",
+            "display": "ciprofloxacin 0.3 % eye drops"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "309307",
+            "display": "ciprofloxacin 0.3 % eye drops"
+        }
+    ],
+    "Valtrex Oral Tablet 1 GM|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "257099",
+            "display": "Valtrex 1 gram tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "212448",
+            "display": "Valtrex 1 gram tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313564",
+            "display": "Valtrex 1 gram tablet"
+        }
+    ],
+    "Bijuva Oral Capsule 1-100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "598904",
+            "display": "Bijuva 1 mg-100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2108924",
+            "display": "Bijuva 1 mg-100 mg capsule"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2108930",
+            "display": "Bijuva 1 mg-100 mg capsule"
+        }
+    ],
+    "Propranolol HCl Oral Tablet 10 MG|": [],
+    "Mounjaro Subcutaneous Solution Pen-injector 10 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "611117",
+            "display": "Mounjaro 10 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601767",
+            "display": "Mounjaro 10 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601770",
+            "display": "Mounjaro 10 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "NP Thyroid Oral Tablet 30 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "562417",
+            "display": "NP Thyroid 30 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1724439",
+            "display": "NP Thyroid 30 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313387",
+            "display": "NP Thyroid 30 mg tablet"
+        }
+    ],
+    "Docusate Sodium Oral Capsule 100 MG|": [],
+    "ferrous fumarate 300 mg oral tablet|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "242108",
+            "display": "ferrous fumarate 300 mg (100 mg iron)/5 mL oral suspension"
+        }
+    ],
+    "Ciprofloxacin HCl Oral Tablet 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "204513",
+            "display": "ciprofloxacin 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "309309",
+            "display": "ciprofloxacin 500 mg tablet"
+        }
+    ],
+    "Imvexxy Starter Pack Vaginal Insert 10 MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "597368",
+            "display": "Imvexxy Starter Pack 10 mcg vaginal insert, dose pack"
+        }
+    ],
+    "Montelukast Sodium Oral Tablet 10 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "265564",
+            "display": "montelukast 10 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "200224",
+            "display": "montelukast 10 mg tablet"
+        }
+    ],
+    "Compounded progesterone |": [],
+    "Clindamycin Phosphate External Solution 1 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "199956",
+            "display": "Clindamycin Phosphate(Topical) 1 % topical"
+        }
+    ],
+    "Dotti Transdermal Patch Twice Weekly 0.1 MG/24HR|": [],
+    "Lyllana Transdermal Patch Twice Weekly 0.1 MG/24HR|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "604684",
+            "display": "Lyllana 0.1 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2399904",
+            "display": "Lyllana 0.1 mg/24 hr transdermal patch"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "242892",
+            "display": "Lyllana 0.1 mg/24 hr transdermal patch"
+        }
+    ],
+    "progesterone compounded |": [],
+    "hydroCHLOROthiazide Oral Capsule 12.5 MG|": [],
+    "Estradiol Valerate Intramuscular Oil 40 MG/ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "274985",
+            "display": "estradiol valerate 40 mg/mL intramuscular oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "310191",
+            "display": "estradiol valerate 40 mg/mL intramuscular oil"
+        }
+    ],
+    "Citalopram Hydrobromide Oral Tablet 40 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "168238",
+            "display": "citalopram 40 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "309314",
+            "display": "citalopram 40 mg tablet"
+        }
+    ],
+    "NP Thyroid Oral Tablet 120 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "593721",
+            "display": "NP Thyroid 120 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1923809",
+            "display": "NP Thyroid 120 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "208545",
+            "display": "NP Thyroid 120 mg tablet"
+        }
+    ],
+    "Compunded estradiol vaginal cream|": [],
+    "Levonorgest-Eth Estrad 91-Day Oral Tablet 0.15-0.03 &0.01 MG|": [],
+    "compounded testosterone|": [],
+    "Methylphenidate HCl ER (OSM) Oral Tablet Extended Release 18 MG|": [],
+    "Adderall XR Oral Capsule Extended Release 24 Hour 5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "443812",
+            "display": "Adderall XR 5 mg capsule,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "861237",
+            "display": "Adderall XR 5 mg capsule,extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "861238",
+            "display": "Adderall XR 5 mg capsule,extended release"
+        }
+    ],
+    "Amphetamine-Dextroamphet ER Oral Capsule Extended Release 24 Hour 5 MG|": [],
+    "compounded progesterone cream|": [],
+    "Escitalopram Oxalate Oral Tablet 20 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "445973",
+            "display": "escitalopram 20 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "351250",
+            "display": "escitalopram 20 mg tablet"
+        }
+    ],
+    "busPIRone HCl Oral Tablet 7.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "298900",
+            "display": "buspirone 15 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "866018",
+            "display": "buspirone 15 mg tablet"
+        }
+    ],
+    "Prempro Oral Tablet 0.45-1.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "449865",
+            "display": "Prempro 0.45 mg-1.5 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1000352",
+            "display": "Prempro 0.45 mg-1.5 mg tablet"
+        }
+    ],
+    "Prempro Oral Tablet 0.625-2.5 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "274584",
+            "display": "Prempro 0.625 mg-2.5 mg tablet"
+        }
+    ],
+    "buPROPion HCl Oral Tablet 75 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "251594",
+            "display": "bupropion HCl 75 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "993691",
+            "display": "bupropion HCl 75 mg tablet"
+        }
+    ],
+    "Wellbutrin XL Oral Tablet Extended Release 24 Hour 300 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "451600",
+            "display": "Wellbutrin XL 300 mg 24 hr tablet, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "993557",
+            "display": "Wellbutrin XL 300 mg 24 hr tablet, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "993564",
+            "display": "Wellbutrin XL 300 mg 24 hr tablet, extended release"
+        }
+    ],
+    "testosterone |": [],
+    "buPROPion HCl ER (XL) Oral Tablet Extended Release 24 Hour 300 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "451597",
+            "display": "bupropion HCl XL 300 mg 24 hr tablet, extended release"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "993557",
+            "display": "bupropion HCl XL 300 mg 24 hr tablet, extended release"
+        }
+    ],
+    "Sprintec 28 Oral Tablet 0.25-35 MG-MCG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "446338",
+            "display": "Sprintec (28) 0.25 mg-35 mcg tablet"
+        }
+    ],
+    "Progesterone 100 mg |": [],
+    "Azithromycin Oral Tablet 500 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "445655",
+            "display": "azithromycin 500 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "248656",
+            "display": "azithromycin 500 mg tablet"
+        }
+    ],
+    "Nitrofurantoin Monohyd Macro Oral Capsule 100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "193009",
+            "display": "Nitrofurantoin Monohyd Macro 100 mg capsule"
+        }
+    ],
+    "Clobetasol Propionate E External Cream 0.05 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "192623",
+            "display": "clobetasol 0.05 % topical cream"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "861495",
+            "display": "clobetasol 0.05 % topical cream"
+        }
+    ],
+    "Ozempic (1 MG/DOSE) Subcutaneous Solution Pen-injector 4 MG/3ML|": [],
+    "Minoxidil Oral Tablet 10 MG|": [],
+    "2% testosterone cream |": [],
+    "4% testosterone cream |": [],
+    "Escitalopram Oxalate Oral Solution 5 MG/5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "448540",
+            "display": "escitalopram 5 mg/5 mL oral solution"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "351285",
+            "display": "escitalopram 5 mg/5 mL oral solution"
+        }
+    ],
+    "Mounjaro Subcutaneous Solution Pen-injector 5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "611115",
+            "display": "Mounjaro 5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601743",
+            "display": "Mounjaro 5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601746",
+            "display": "Mounjaro 5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Mounjaro Subcutaneous Solution Pen-injector 7.5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "611116",
+            "display": "Mounjaro 7.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601784",
+            "display": "Mounjaro 7.5 mg/0.5 mL subcutaneous pen injector"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2601785",
+            "display": "Mounjaro 7.5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "Armour Thyroid Oral Tablet 30 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "271006",
+            "display": "Armour Thyroid 30 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "208535",
+            "display": "Armour Thyroid 30 mg tablet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "313387",
+            "display": "Armour Thyroid 30 mg tablet"
+        }
+    ],
+    "Bactrim DS Oral Tablet 800-160 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "429198",
+            "display": "Bactrim DS 800 mg-160 mg tablet"
+        }
+    ],
+    "Ferrous Gluconate Oral Tablet 324 (38 Fe) MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "547609",
+            "display": "ferrous gluconate 324 mg (38 mg iron) tablet"
+        }
+    ],
+    "Arginine HCl  Powder|": [],
+    "Zepbound Subcutaneous Solution 5 MG/0.5ML|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "617140",
+            "display": "Zepbound 5 mg/0.5 mL subcutaneous pen injector"
+        }
+    ],
+    "estradiol 0.01% with testosterone 0.1% in versa base  Testosterone Transdermal Gel 10 MG/ACT (2%) - 1 App|": [],
+    "ESTRADIOL 0.06% 1.25G GEL PUMP|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "468383",
+            "display": "estradiol 1.25 gram/actuation (0.06%) transdermal gel pump"
+        }
+    ],
+    "Albuterol Sulfate HFA Inhalation Aerosol Solution 108 (90 Base) MCG/ACT|": [],
+    "Spacer to be used with inhaler|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "450678",
+            "display": "inhalational spacing device"
+        }
+    ],
+    "0.25 mL of 1% topical testosterone in HRT base. Disp 15 grams and refill 5.|": [],
+    "Sertraline HCl Oral Tablet 100 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "187550",
+            "display": "sertraline 100 mg tablet"
+        }
+    ],
+    "Clobetasol Propionate External Cream 0.05 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "192623",
+            "display": "clobetasol 0.05 % topical cream"
+        }
+    ],
+    "Clobetasol Propionate External Lotion 0.05 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "861505",
+            "display": "clobetasol 0.05 % topical lotion in pump"
+        }
+    ],
+    "Amphetamine-Dextroamphetamine Oral Tablet 10 MG|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "184255",
+            "display": "dextroamphetamine-amphetamine 10 mg tablet"
+        }
+    ],
+    "Tretinoin External Gel 0.025 %|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "232495",
+            "display": "tretinoin 0.025 % topical gel"
+        }
+    ]
+}
