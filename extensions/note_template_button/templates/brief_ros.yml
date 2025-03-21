@@ -1,0 +1,102 @@
+name: Brief ROS
+form_type: ROS
+code_system: SNOMED
+code: "415300000"
+can_originate_in_charting: true
+questions:
+  - content: "Constitutional"
+    code_system: SNOMED
+    code: "91689009"
+    code_description: "Finding"
+    responses_code_system: SNOMED
+    responses_type: MULT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Fever"
+        code: "386661006"
+        code_description: "Fever (finding)"
+        value: "Fever"
+      - name: "Chills"
+        code: "274640006"
+        code_description: "Fever with chills (finding)"
+        value: "Chills"
+      - name: "Loss of appetite"
+        code: "79890006"
+        code_description: "Loss of appetite (finding)"
+        value: "Loss of appetite"
+  - content: "Cardiac"
+    code_system: SNOMED
+    code: "9168"
+    code_description: "Finding"
+    responses_code_system: SNOMED
+    responses_type: MULT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Chest pain"
+        code: "29857009"
+        code_description: "Chest pain (finding)"
+        value: "Chest pain"
+      - name: "Shortness of breath with exertion"
+        code: "267036007"
+        code_description: "Dyspnea (finding)"
+        value: "Shortness of breath with exertion"
+      - name: "Swelling in the legs"
+        code: "248480008"
+        code_description: "Leg swelling symptom (finding)"
+        value: "Swelling in the legs"
+  - content: "Respiratory"
+    code_system: SNOMED
+    code: "91689"
+    code_description: "Finding"
+    responses_code_system: SNOMED
+    responses_type: MULT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Cough"
+        code: "49727002"
+        code_description: "Cough (finding)"
+        value: "Cough"
+      - name: "Nocturnal dyspnea"
+        code: "248548009"
+        code_description: "Nocturnal dyspnea (finding)"
+        value: "Nocturnal dyspnea"
+      - name: "Shortness of breath"
+        code: "267036007"
+        code_description: "Dyspnea (finding)"
+        value: "Shortness of breath"
+  - content: "Musculoskeletal"
+    code_system: SNOMED
+    code: "916890"
+    code_description: "Finding"
+    responses_code_system: SNOMED
+    responses_type: MULT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Muscle aches or cramps"
+        code: "68962001"
+        code_description: "Muscle pain (finding)"
+        value: "Muscle aches or cramps"
+      - name: "Body aches"
+        code: "82991003"
+        code_description: "Generalized aches and pains (finding)"
+        value: "Body aches"
+      - name: "Arthritis"
+        code: "3723001"
+        code_description: "Arthritis (disorder)"
+        value: "Arthritis"
+  - content: "Skin"
+    code_system: SNOMED
+    code: "9168900"
+    code_description: "Finding"
+    responses_code_system: SNOMED
+    responses_type: MULT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Lumps/bumps"
+        code: "297960002"
+        code_description: "Mass of skin (finding)"
+        value: "Lumps/bumps"
+      - name: "Rash"
+        code: "162415008"
+        code_description: "Complaining of a rash (finding)"
+        value: "Rash"
