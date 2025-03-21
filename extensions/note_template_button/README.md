@@ -9,7 +9,7 @@ In this extension, the button will only appear in the note header for Office vis
 The note template will insert the following blank commands:
 - Reason for Visit (RFV)
 - History of Present Illness (HPI)
-  - Insert with dynamic variables: "`PATIENT` is a `AGE` year old `SEX` who presents today for"
+  - Insert with dynamic variables: "`PATIENT NAME` is a `AGE` year old `SEX` who presents today for"
 - Review of Systems (ROS)
 - Physical Exam
 - Diagnose
