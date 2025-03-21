@@ -124,7 +124,7 @@ class LabReportLoader:
                 },
                 "presentedForm": [
                     {
-                        "data": "",# b64_document_string, # base64 encoded PDF file
+                        "data": b64_document_string, # base64 encoded PDF file
                         "contentType": "application/pdf"
                     }
                 ],
