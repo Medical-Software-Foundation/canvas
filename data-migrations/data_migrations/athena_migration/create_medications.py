@@ -9,7 +9,20 @@ class MedicationLoader(MedicationLoaderMixin):
         self.environment = environment
         self.json_file = "PHI/medications.json"
         self.csv_file = 'PHI/medications.csv'
-        # self.fumage_helper = load_fhir_settings(environment)
+        self.fumage_helper = load_fhir_settings(environment)
+        self.med_mapping_file = "mappings/medication_coding_map.json"
+
+    def make_fdb_mapping(self, delimiter='|'):
+        data = fetch_from_json(self.json_file)
+        fdb_mapping_dict = {}
+        for row in data:
+            for med in row["medicationrequests"]:
+                if "medicationReference" in med and "display" in med["medicationReference"]:
+                    key = f"{med["medicationReference"]["display"]}|"
+                    if key not in fdb_mapping_dict:
+                        fdb_mapping_dict[key] = []
+        write_to_json(self.med_mapping_file, fdb_mapping_dict)
+
 
     def make_csv(self):
         headers = [
@@ -55,5 +68,7 @@ class MedicationLoader(MedicationLoaderMixin):
         print("CSV successfully made")
 
 if __name__ == "__main__":
-    loader = MedicationLoader(environment="localhost")
-    loader.make_csv()
+    loader = MedicationLoader(environment="phi-test-accomplish")
+    # loader.make_csv()
+    # loader.make_fdb_mapping()
+    loader.map()

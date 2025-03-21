@@ -9,6 +9,20 @@ class CoverageLoader(CoverageLoaderMixin):
         self.environment = environment
         self.json_file = "PHI/coverages.json"
         self.csv_file = "PHI/coverages.csv"
+        self.payer_mapping_csv_file = 'mappings/insurance_payer_mapping.csv'
+
+    def make_payer_mapping_file(self):
+        data = fetch_from_json(self.json_file)
+        payers = []
+        for patient_coverages in data:
+            for insurance in patient_coverages.get("insurances", []):
+                payer_pair = (insurance.get("insurancepackagepayerid", ""), insurance.get("insurancepayername", ""))
+                if payer_pair not in payers:
+                    payers.append(payer_pair)
+        with open(self.payer_mapping_csv_file, "w") as fhandle:
+            writer = csv.writer(fhandle, delimiter="\t")
+            writer.writerow(("Payer ID", "Payer Name",))
+            writer.writerows(payers)
 
     def make_csv(self):
         headers = [
@@ -47,4 +61,5 @@ class CoverageLoader(CoverageLoaderMixin):
 
 if __name__ == "__main__":
     loader = CoverageLoader(environment="localhost")
-    loader.make_csv()
+    # loader.make_csv()
+    loader.make_payer_mapping_file()
