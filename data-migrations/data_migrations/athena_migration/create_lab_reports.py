@@ -239,8 +239,7 @@ class LabReportLoader:
                 ]
             }
         )
-        if lab_values:
-            breakpoint()
+
         return api_payload
 
 
