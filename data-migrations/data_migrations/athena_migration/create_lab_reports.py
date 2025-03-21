@@ -124,7 +124,7 @@ class LabReportLoader:
                 },
                 "presentedForm": [
                     {
-                        "data": b64_document_string, # base64 encode PDF file
+                        "data": "",# b64_document_string, # base64 encoded PDF file
                         "contentType": "application/pdf"
                     }
                 ],
@@ -134,6 +134,8 @@ class LabReportLoader:
                 }
             }
         }
+
+        api_payload["parameter"].append(lab_report_parameter)
 
         lab_test_result_loinc = labresult.get("labresultloinc")
         if not lab_test_result_loinc:
@@ -148,7 +150,7 @@ class LabReportLoader:
             "resource": {
                 "resourceType": "Observation",
                 "code": {
-                    "text": "",
+                    "text": lab_test_result_display,
                     "coding": [
                         {
                             "system": "http://loinc.org",
@@ -226,6 +228,21 @@ class LabReportLoader:
                     }
                 ]
 
+            lab_values.append(lab_value_part)
+
+        api_payload["parameter"].append(
+            {
+                "name": "labTestCollection",
+                "part": [
+                    lab_test_part,
+                    *lab_values
+                ]
+            }
+        )
+        if lab_values:
+            breakpoint()
+        return api_payload
+
 
     def load(self):
         data = fetch_from_json(self.json_file)
@@ -234,7 +251,7 @@ class LabReportLoader:
             patient_enterprise_id = obj["patientdetails"]["enterpriseid"]
             for result in obj["labresults"]:
                 try:
-                    self.create_fhir_payload(result, patient_enterprise_id)
+                    payload = self.create_fhir_payload(result, patient_enterprise_id)
                 except ValidationError as e:
                     print(str(e))
 
