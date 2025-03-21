@@ -126,7 +126,7 @@ class NoteTemplateActionButton(ActionButton):
 
         hpi = HistoryOfPresentIllnessCommand(
             note_uuid=note_uuid,
-            narrative=f'{patient.first_name} {patient.last_name} is a {self.calculate_age(patient)} old {self.get_sex(patient)} who presents today for'
+            narrative=f'{patient.first_name} {patient.last_name} is a {self.calculate_age(patient)} year old {self.get_sex(patient)} who presents today for'
         )
 
         # brief_ros = Questionnaire.objects.get(
