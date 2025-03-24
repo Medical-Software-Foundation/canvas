@@ -1,21 +1,30 @@
 import base64
 import os
 import uuid
+import arrow
 
 from PIL import Image, ImageSequence
-from data_migrations.utils import fetch_from_json
+from data_migrations.utils import (
+    fetch_from_json,
+    write_to_json,
+    fetch_complete_csv_rows,
+    load_fhir_settings
+)
 
+from data_migrations.template_migration.lab_report import LabReportMixin
 
-class ValidationError(Exception):
-    pass
-
-
-class LabReportLoader:
+class LabReportLoader(LabReportMixin):
     def __init__(self, environment, *args, **kwargs):
         self.environment = environment
         self.json_file = "PHI/labresults/labresults.json"
         self.labresults_files_dir = "PHI/labresults"
         self.temp_pdf_dir = "PHI/pdf_temp"
+        self.validation_error_file = 'results/PHI/errored_labreport_validation.json'
+        self.done_file = 'results/done_lab_reports.csv'
+        self.done_records = fetch_complete_csv_rows(self.done_file)
+        self.error_file = 'results/errored_lab_reports.csv'
+        # self.fumage_helper = load_fhir_settings(environment)
+        super().__init__(*args, **kwargs)
 
 
     def base64_encode_file(self, file_path):
@@ -34,10 +43,8 @@ class LabReportLoader:
         output_path = f"{self.temp_pdf_dir}/{tiff_path.split("/")[-1]}".replace(".tiff", ".pdf")
 
         if len(images) == 1:
-            print("single page output")
             images[0].save(output_path)
         else:
-            print("multiple page output")
             images[0].save(output_path, save_all=True, append_images=images[1:])
         return output_path
 
@@ -54,22 +61,32 @@ class LabReportLoader:
         os.remove(output_path)
         return base64_encoded_string
 
+    def get_observation_date(self, labresult):
+        date_val = None
+
+        if observation_dt_val := labresult.get("observationdatetime"):
+            return observation_dt_val
+        elif observation_date_val := labresult.get("observationdate"):
+            date_val = observation_date_val
+        elif encounter_date_val := labresult.get("encounterdate"):
+            date_val = encounter_date_val
+
+        if date_val:
+            return arrow.get(date_val, "MM/DD/YYYY", tzinfo="America/New York").isoformat()
+        return None
+
     def create_fhir_payload(self, labresult, patient_enterprise_id):
+        validation_errors = []
+
         api_payload = {
             "resourceType": "Parameters",
             "parameter": []
         }
 
-        observation_date_val = labresult.get("observationdatetime")
-        if not observation_date_val:
-            observation_date_val = labresult.get("observationdate")
-            if not observation_date_val:
-                observation_date_val = labresult.get("encounterdate")
-
-            # TODO - convert to midnight America/New York time if it is a date value;
+        observation_date_val = self.get_observation_date(labresult)
 
         if not observation_date_val:
-            raise ValidationError("Missing observation date")
+            validation_errors.append("Missing observation date")
 
         b64_document_string = ""
         if labresult.get("originaldocument", {}).get("reference"):
@@ -86,8 +103,8 @@ class LabReportLoader:
             elif file_path.endswith(".jpeg") or file_path.endswith(".jpg"):
                 b64_document_string = self.convert_and_base64_encode([file_path], custom_name=labresult["labresultid"])
             else:
-                # This shouldn't ever be raised with the current file set we have.
-                raise ValidationError("Unsupported file format")
+                # This shouldn't ever happen with the current file set we have.
+                validation_errors.append("Unsupported file format for document")
         elif labresult.get("pages"):
             documents = [(page["pageordering"], page["reference"]) for page in labresult["pages"]]
             # sort to get the correct page ordering
@@ -96,11 +113,10 @@ class LabReportLoader:
             # pages either all have file references or none have file references; there aren't any that are partial;
             # If they are all missing, raise a validation error since we can't produce a file
             if not any(documents):
-                raise ValidationError("No references for file locations")
-            # TODO - check to see if any files are tiffs and not png; These may need to be processed differently;
+                validation_errors.append("No references found for file locations")
             b64_document_string = self.convert_and_base64_encode(documents, custom_name=labresult["labresultid"])
         else:
-            raise ValidationError("No file present in data")
+            validation_errors.append("No file present in data")
 
         lab_report_parameter = {
             "name": "labReport",
@@ -139,11 +155,11 @@ class LabReportLoader:
 
         lab_test_result_loinc = labresult.get("labresultloinc")
         if not lab_test_result_loinc:
-            raise ValidationError("Missing LOINC code for lab test results")
+            validation_errors.append("Missing LOINC code for lab test results")
 
         lab_test_result_display = labresult.get("description")
         if not lab_test_result_display:
-            raise ValidationError("Missing display for lab test results")
+            validation_errors.append("Missing display for lab test results")
 
         lab_test_part = {
             "name": "labTest",
@@ -170,15 +186,15 @@ class LabReportLoader:
 
             observation_status = observation.get("resultstatus", "final")
             if observation_status not in ["amended", "cancelled", "corrected", "entered-in-error", "final", "preliminary", "registered", "unknown"]:
-                raise ValidationError(f"Unsupported observation status - {observation_status}")
+                validation_errors.append(f"Unsupported observation status - {observation_status}")
 
             observation_loinc = observation.get("loinc")
             if not observation_loinc:
-                raise ValidationError("Missing observation loinc code")
+                validation_errors.append("Missing observation loinc code")
 
             observation_loinc_display = observation.get("analytename")
             if not observation_loinc_display:
-                raise ValidationError("Missing observation loinc display")
+                validation_errors.append("Missing observation loinc display")
 
             lab_value_part = {
                 "name": "labValue",
@@ -240,21 +256,36 @@ class LabReportLoader:
             }
         )
 
-        return api_payload
+        if validation_errors:
+            api_payload = None
+        return api_payload, validation_errors
 
 
-    def load(self):
+    def validate_record(self, labresult, patient_id):
+        payload, errors = self.create_fhir_payload(labresult, patient_id)
+        return payload, errors
+
+
+    def validate(self):
         data = fetch_from_json(self.json_file)
+
+        validation_errors = {}
+        valid_payloads = []
 
         for obj in data:
             patient_enterprise_id = obj["patientdetails"]["enterpriseid"]
             for result in obj["labresults"]:
-                try:
-                    payload = self.create_fhir_payload(result, patient_enterprise_id)
-                except ValidationError as e:
-                    print(str(e))
+                labresult_id = result["labresultid"]
+                payload, errors = self.validate_record(result, patient_enterprise_id)
+                if errors:
+                    validation_errors[labresult_id] = errors
+                else:
+                    valid_payloads.append((labresult_id, payload,))
+        write_to_json(self.validation_error_file, validation_errors)
+        return valid_payloads
 
 
 if __name__ == "__main__":
     loader = LabReportLoader(environment="localhost")
-    loader.load()
+    valid_rows = loader.validate()
+    # loader.load(valid_rows)
