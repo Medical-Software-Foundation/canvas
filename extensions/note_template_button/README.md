@@ -4,7 +4,7 @@
 
 For routine office visits, users can easily insert a note template with a click of button, saving providers time and streamline documentation.
 
-In this extension, the button will only appear in the note header for Office visits and when the notes is empty. 
+In this extension, the button will only appear in the note header for Office visits and when the note is empty. 
 
 The note template will insert the following blank commands:
 - Reason for Visit (RFV)
