@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "portal_disable_cancel_appts",
+    "description": "Disable the cancel appointment button on appointment cards",
+    "components": {
+        "protocols": [
+            {
+                "class": "portal_disable_cancel_appts.protocols.my_protocol:Protocol",
+                "description": "A protocol that does xyz...",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
