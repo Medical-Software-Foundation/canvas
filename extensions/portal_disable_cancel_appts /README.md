@@ -3,9 +3,6 @@ portal_disable_cancel_appts
 
 ## Description
 
-A description of this plugin
+This plugin will hide the option for patients to cancel their own appointments within the portal.
 
-### Important Note!
 
-The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it
-gets updated if you add, remove, or rename protocols.
