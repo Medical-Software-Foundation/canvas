@@ -1,11 +1,24 @@
-Nabla Ambient AI Assistant
-=====
+![Canvas Nabla Integration](https://images.prismic.io/canvas-website/Z-K-2HdAxsiBv4Qs_Nabla_logo_200px.png?auto=format,compress)
+
+# Nabla Ambient AI Assistant
+
 
 ## Description
 
-[Nabla](https://www.nabla.com/)
+Ambient AI can save physicians countless hours of administrative work and documentation by transcribing conversations and converting them into clinical notes.
+
+With the Canvas-Nabla integration, users can:
+- Access Nabla directly from the patient chart in the EMR
+- Initiate a recording session
+- Receive AI-generated clinical notes from the encounter
+- Copy notes from to clipboard
+
 
 ## Configuration
+
+Requirements:
+- Nabla user account
+- Access to Nabla Core API
 
 After installing, go to the plugin setting page and provide values for:
 
@@ -32,3 +45,8 @@ openssl rsa -pubout -in private_key.pem -out public_key.pem
 
 For more information see:
 [https://docs.nabla.com/guides/authentication](https://docs.nabla.com/guides/authentication)
+
+## About Nabla
+Nabla is the leading ambient AI assistant, reducing practitioner stress and improving patient care. Nabla produces AI-generated clinical notes in seconds from any encounter across all specialties. Powered by proprietary LLMs, fine-tuned to the medical field, Nabla's capabilities include AI-enabled medical coding identification and smooth EHR integrations.
+
+[Nabla](https://www.nabla.com/)
