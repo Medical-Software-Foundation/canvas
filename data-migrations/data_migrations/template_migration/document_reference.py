@@ -90,6 +90,12 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin):
         headers = list(rows[0].keys())
         return self.validate_rows(headers, rows)
 
+    def base64_encode_file(self, file_path):
+        with open(file_path, "rb") as fhandle:
+            contents = fhandle.read()
+            encoded_contents = base64.b64encode(contents)
+            return encoded_contents.decode("utf-8")
+
     def load(self, validated_rows, note_kwargs={}):
         """
             Takes the validated rows from self.validate() and
@@ -119,6 +125,10 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin):
             except BaseException as e:
                 self.ignore_row(row['ID'], e)
                 continue
+
+            base64_file_contents = row["Document"]
+            if base64_file_contents.endswith(".pdf"):
+                base64_file_contents = self.base64_encode_file(f'PHI/documents{row["Document"]}')
 
             payload = {
                 "resourceType": "DocumentReference",
@@ -183,7 +193,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin):
                     {
                         "attachment": {
                             "contentType": "application/pdf",
-                            "data": row['Document']
+                            "data": base64_file_contents
                         }
                     }
                 ]
