@@ -1,0 +1,37 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "recommend-PHQ9-for positive-PHQ2",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "protocols": [
+            {
+                "class": "recommend-PHQ9-for positive-PHQ2.protocols.phq_scoring_workflow:PHQWorkflow",
+                "description": "A protocol that scores the PHQ9/PHQ2 questionnaires and recommends a PHQ-9 screening for a positive PHQ2",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "templates/phq2_questionnaire.yml"
+            },
+            {
+                "template": "templates/phq9_questionnaire.yml"
+            }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

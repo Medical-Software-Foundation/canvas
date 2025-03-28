@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "phq-9-questionnaire",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "protocols": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "templates/phq9_questionnaire.yml"
+            }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

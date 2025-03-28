@@ -1,0 +1,56 @@
+name: PHQ-2
+form_type: QUES
+code_system: LOINC
+code: 58120-7
+can_originate_in_charting: true
+display_results_in_social_history_section: true
+prologue: Over the last 2 weeks, how often have you been bothered by any of the following problems?
+questions:
+  - content: "Little interest or pleasure in doing things?"
+    code_system: LOINC
+    code: 44250-9
+    code_description: "phq2"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: true
+    responses:
+      - name: "Not at all"
+        code: LA6568-5
+        code_description: ""
+        value: "0"
+      - name: "Several days"
+        code: LA6569-3
+        code_description: ""
+        value: "1"
+      - name: "More than half the days"
+        code: LA6570-1
+        code_description: ""
+        value: "2"
+      - name: "Nearly every day"
+        code: LA6571-9
+        code_description: ""
+        value: "3"
+  - content: "Feeling down, depressed, or hopeless?"
+    code_system: LOINC
+    code: 44255-8
+    code_description: "phq2"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: true
+    responses:
+      - name: "Not at all"
+        code: LA6568-5
+        code_description: ""
+        value: "0"
+      - name: "Several days"
+        code: LA6569-3
+        code_description: ""
+        value: "1"
+      - name: "More than half the days"
+        code: LA6570-1
+        code_description: ""
+        value: "2"
+      - name: "Nearly every day"
+        code: LA6571-9
+        code_description: ""
+        value: "3"
