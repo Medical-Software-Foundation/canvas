@@ -1,0 +1,37 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "recommend-GAD7-for-postitive-GAD2",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "protocols": [
+            {
+                "class": "recommend-GAD7-for-postitive-GAD2.protocols.gad_scoring_workflow:GADWorkflow",
+                "description": "A protocol that scores the GAD7/GAD2 questionnaires and recommends a GAD-7 screening for a positive GAD-2",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "templates/gad2_questionnaire.yml"
+            },
+            {
+                "template": "templates/gad7_questionnaire.yml"
+            }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

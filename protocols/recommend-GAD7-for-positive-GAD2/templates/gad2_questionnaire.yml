@@ -1,18 +1,18 @@
-name: PHQ-2
+name: GAD-2
 form_type: QUES
-code_system: LOINC
-code: 58120-7
+code_system: SNOMED
+code: "836551000000102"
 can_originate_in_charting: true
 display_results_in_social_history_section: true
-prologue: Over the last 2 weeks, how often have you been bothered by any of the following problems?
+prologue: Over the last 2 weeks, how often have you been bothered by the following problems?
 questions:
-  - content: "Little interest or pleasure in doing things?"
+  - content: "Feeling nervous, anxious or on edge?"
     code_system: LOINC
-    code: 44250-9
-    code_description: "phq2"
+    code: 69725-0
+    code_description: ""
     responses_code_system: LOINC
     responses_type: SING
-    display_result_in_social_history_section: true
+    display_result_in_social_history_section: false
     responses:
       - name: "Not at all"
         code: LA6568-5
@@ -36,7 +36,7 @@ questions:
     code_description: "phq2"
     responses_code_system: LOINC
     responses_type: SING
-    display_result_in_social_history_section: true
+    display_result_in_social_history_section: false
     responses:
       - name: "Not at all"
         code: LA6568-5
