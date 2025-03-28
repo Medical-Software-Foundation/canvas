@@ -1,5 +1,4 @@
-pediatric_patient_chart_customizations
-======================================
+# Pediatric Patient Chart Customizations
 
 ## Description
 

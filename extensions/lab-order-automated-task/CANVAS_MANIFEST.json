@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "lab_order_create_task",
+    "description": "This plugin creates a task to follow up on a lab order",
+    "components": {
+        "protocols": [
+            {
+                "class": "lab_order_create_task.protocols.lab_order_creates_task:Protocol",
+                "description": "This protocol will create a Task command in response to a Lab Order Created event",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

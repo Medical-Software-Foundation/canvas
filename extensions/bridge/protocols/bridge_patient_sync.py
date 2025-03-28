@@ -5,6 +5,7 @@ from canvas_sdk.utils import Http
 from canvas_sdk.effects.banner_alert import AddBannerAlert
 from canvas_sdk.v1.data.patient import Patient
 
+BRIDGE_SANDBOX = 'https://app.usebridge.xyz'
 
 class BridgePatientSync(BaseProtocol):
     RESPONDS_TO = [
@@ -22,16 +23,28 @@ class BridgePatientSync(BaseProtocol):
 
     @property
     def bridge_api_base_url(self):
-        return self.sanitize_url(self.secrets['BRIDGE_API_BASE_URL'])
+        return self.sanitize_url(self.secrets['BRIDGE_API_BASE_URL'] or f'{BRIDGE_SANDBOX}/api')
 
     @property
     def bridge_ui_base_url(self):
-        return self.sanitize_url(self.secrets['BRIDGE_UI_BASE_URL'])
+        return self.sanitize_url(self.secrets['BRIDGE_UI_BASE_URL'] or BRIDGE_SANDBOX)
 
     @property
     def bridge_request_headers(self):
         bridge_secret_api_key = self.secrets['BRIDGE_SECRET_API_KEY']
         return {'X-API-Key': bridge_secret_api_key}
+    
+    @property
+    def bridge_patient_metadata(self):
+        metadata = {
+            'canvasPatientId': self.target
+        }
+
+        canvas_url = self.secrets['CANVAS_BASE_URL']
+        if canvas_url:
+            metadata['canvasUrl'] = canvas_url
+
+        return metadata
 
     def compute(self):
         canvas_patient_id = self.target
@@ -67,6 +80,7 @@ class BridgePatientSync(BaseProtocol):
         if event_type == EventType.PATIENT_CREATED:
             # Add placeholder email when creating the Bridge patient since it's required
             bridge_payload['email'] = 'patient_' + canvas_patient.id + '@canvasmedical.com'
+            bridge_payload['metadata'] = self.bridge_patient_metadata
         
         base_request_url = f'{self.bridge_api_base_url}/patients/v2'
         # If we have a Bridge patient id, we know this is an update, so we'll append it to the request URL

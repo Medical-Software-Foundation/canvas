@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title>Nabla Ambient Scribe</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        window._canvas_nabla_extension_user_access_token = "{{ user_access_token }}";
+        window._canvas_nabla_extension_user_refresh_token = "{{ user_refresh_token }}";
+    </script>
+    <script type="text/javascript" src="main.js"></script>
+</head>
+
+<body onload="initPage()">
+    <div class="container">
+        <svg width="80" viewBox="0 0 80 23" fill="none">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M4.672 22.042V9.14l10.167 12.902h4.025V1.176h-4.701v12.872L4.026 1.176H0v20.866h4.672Zm23.526.324c1.969 0 3.409-1 3.996-1.793v1.47h4.437V7.346h-4.437v1.47c-.587-.794-2.027-1.793-3.996-1.793-3.85 0-6.817 3.497-6.817 7.67 0 4.174 2.968 7.672 6.817 7.672Zm1-4.027c-1.999 0-3.35-1.528-3.35-3.644s1.351-3.644 3.35-3.644c1.997 0 3.349 1.528 3.349 3.644s-1.352 3.644-3.35 3.644Zm19.264 4.027c3.85 0 6.817-3.498 6.817-7.671 0-4.174-2.967-7.67-6.817-7.67-1.968 0-3.408.998-3.996 1.792V0H40.03v22.042h4.437v-1.47c.588.794 2.028 1.794 3.996 1.794Zm-.998-4.027c-1.999 0-3.35-1.528-3.35-3.644s1.351-3.644 3.35-3.644c1.998 0 3.35 1.528 3.35 3.644s-1.352 3.644-3.35 3.644Zm14.77 3.703V0h-4.438v22.042h4.437Zm9.333.324c1.969 0 3.408-1 3.996-1.793v1.47H80V7.346h-4.437v1.47c-.588-.794-2.027-1.793-3.996-1.793-3.85 0-6.817 3.497-6.817 7.67 0 4.174 2.968 7.672 6.817 7.672Zm.999-4.027c-1.998 0-3.35-1.528-3.35-3.644s1.352-3.644 3.35-3.644 3.35 1.528 3.35 3.644-1.352 3.644-3.35 3.644Z" fill="white">
+          </path>
+        </svg>
+
+        <hr>
+
+        <div class="controls">
+            <button id="start-btn" onClick="startRecording()">Start recording</button>
+            <button id="stop-btn" class="hide" onClick="stopRecording()">Stop recording</button>
+            <div class="horizontal-controls">
+                <button id="generate-btn" onClick="generateNote()">Generate note</button>
+                <button id="normalize-btn" onClick="generateNormalizedData()">Generate normalized data</button>
+                <button id="patient-instructions-btn" onClick="generatePatientInstructions()">Generate patient
+                    instructions</button>
+            </div>
+        </div>
+
+        <div id="token-error" class="hide">
+        </div>
+    </div>
+    <div class="results">
+        <div id="transcript" class="results">
+        </div>
+        <div id="note" class="results">
+        </div>
+        <div id="normalized-data" class="results">
+        </div>
+        <div id="patient-instructions" class="results">
+        </div>
+    </div>
+    <div class="bottom-container">
+      <div class="controls">
+          <button id="clear-btn" onclick="clearEncounter()">Clear</button>
+      </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,79 @@
+name: Brief Exam
+form_type: EXAM
+code_system: INTERNAL
+code: "EXAM_BRIEF_EXAM"
+can_originate_in_charting: true
+questions:
+  - content: "Constitutional"
+    code_system: INTERNAL
+    code: "EXAM_BRIEF_EXAM_CONSTITUTIONAL_SYS"
+    code_description: "Finding"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Constitutional"
+        code: "EXAM_BRIEF_EXAM_CONSTITUTIONAL_FINDING"
+        code_description: "Finding"
+        value: "Alert, no acute distress. Well developed and nourished."
+  - content: "Skin"
+    code_system: INTERNAL
+    code: "EXAM_BRIEF_EXAM_SKIN_SYS"
+    code_description: "Finding"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Skin"
+        code: "EXAM_BRIEF_EXAM_SKIN_FINDING"
+        code_description: "Finding"
+        value: "Warm and dry, no suspicious lesions."
+  - content: "Pulmonary"
+    code_system: INTERNAL
+    code: "EXAM_BRIEF_EXAM_PULMONARY_SYS"
+    code_description: "Finding"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Pulmonary"
+        code: "EXAM_BRIEF_EXAM_PULMONARY_FINDING"
+        code_description: "Finding"
+        value: "Clear bilaterally to auscultation bilaterally."
+  - content: "Cardiovascular"
+    code_system: INTERNAL
+    code: "EXAM_BRIEF_EXAM_CARDIOVASCULAR_SYS"
+    code_description: "Finding"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Cardiovascular"
+        code: "EXAM_BRIEF_EXAM_CARDIOVASCULAR_FINDING"
+        code_description: "Finding"
+        value: "Regular rate and rhythm, S1, S2 normal, no murmurs."
+  - content: "Extremities"
+    code_system: INTERNAL
+    code: "EXAM_BRIEF_EXAM_EXTREMITIES_SYS"
+    code_description: "Finding"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Extremities"
+        code: "EXAM_BRIEF_EXAM_EXTREMITIES_FINDING"
+        code_description: "Finding"
+        value: "No clubbing, cyanosis, or edema."
+  - content: "Other"
+    code_system: INTERNAL
+    code: "EXAM_BRIEF_EXAM_OTHER_SYS"
+    code_description: "Finding"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Other"
+        code: "EXAM_BRIEF_EXAM_OTHER_FINDING"
+        code_description: "Finding"
+        value: ""
+

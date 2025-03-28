@@ -1,3 +1,5 @@
+# Screen for GLP-1 Agonist Side Effects
+
 ### Target Population
 This protocol is designed for patients who have recently started a GLP-1 receptor agonist medication, or have had a dose adjustment, particularly at least one week ago. GLP-1 medications are often prescribed for managing type 2 diabetes and obesity.
 ### Recommendations

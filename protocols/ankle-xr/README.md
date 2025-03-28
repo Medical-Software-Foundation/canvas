@@ -1,3 +1,5 @@
+# Ankle XR
+
 ### Target Population
 Patients presenting with an ankle injury who may require an X-ray to assess the severity of the injury. In cases where the injury meets criteria based on clinical guidelines described as the Ottawa Ankle Rules.
 ### Recommendations

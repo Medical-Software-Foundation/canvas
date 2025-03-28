@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<style>
+  .container {
+    width: 700px;
+    margin: 20px auto;
+    font-family: Lato, 'Helvetica Neue', Arial, Helvetica, sans-serif;
+  }
+  .buttonWrapper {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .button {
+    padding: 10px 25px;
+    background-color: #3b8fcf;
+    color: #fff;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+  }
+  .button:hover {
+    cursor: pointer;
+    background-color: #0f619f;
+  }
+  .category {
+    overflow: auto;
+  }
+  .hidden {
+    display: none;
+  }
+  .titleWrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+  }
+  .title {
+    font-size: 20px;
+    font-weight: bold;
+  }
+  .graphContainer {
+    margin: 20px 0;
+    padding: 20px;
+    border: 1px solid #d4d4d4;
+    border-radius: 4px;
+  }
+  @media print {
+    .pageBreak {
+      page-break-after: always;
+    }
+  }
+</style>
+<div id="container" class="container">
+  <div class="buttonWrapper">
+    <div id="categories">
+      <button class="button" onclick="onWHOClick()">WHO</button>
+      <button class="button" onclick="onCDCClick()">CDC</button>
+    </div>
+    <div>
+      <button class="button" onclick="onLbsClick()">lbs/inches</button>
+      <button class="button" onclick="onKgClick()">kg/cm</button>
+    </div>
+    <button class="button" onclick="printGraphs()">Print</button>
+  </div>
+
+  <!-- WHO tab -->
+  <div id="WHO" class="category">
+    <h1>WHO Child Growth Standards</h1>
+
+  </div>
+
+  <!-- CDC tab -->
+  <div id="CDC" class="category hidden">
+    <h1>CDC Growth Chart</h1>
+
+  </div>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+
+const chartSize = {
+  width: 700,
+  height: 450,
+  marginTop: 20,
+  marginRight: 40,
+  marginBottom: 30,
+  marginLeft: 30,
+};
+
+const unitsTypes = {
+  LBS: "lbs",
+  KG: "kg"
+}
+
+const dataTypes = {
+  Weight: "Weight",
+  Length: "Length",
+  Generic: "Generic"
+}
+
+function convertValues(value, type, unit) {
+  const conversionFactors = {
+    [unitsTypes.LBS]: {
+      [dataTypes.Weight]: 2.20462,
+      [dataTypes.Length]: 0.393701,
+      [dataTypes.Generic]: 1,
+    },
+    [unitsTypes.KG]: {
+      [dataTypes.Weight]: 1,
+      [dataTypes.Length]: 1,
+      [dataTypes.Generic]: 1,
+    },
+  };
+
+  return value * conversionFactors[unit][type];
+}
+
+function unitsLabel(unit, type) {
+  if (type === dataTypes.Generic) {
+    return "";
+  }
+
+  return unit === unitsTypes.LBS
+    ? type === dataTypes.Weight
+      ? "(lbs)"
+      : "(inches)"
+    : type === dataTypes.Weight
+    ? "(kg)"
+    : "(cm)";
+}
+
+function createChart({ data, layerData, xType, yType, xLabel, yLabel }, units) {
+  const dataValues = data.map((d) => ({
+    x: convertValues(d.x, xType, units),
+    y: convertValues(d.y, yType, units),
+    z: d.z,
+  }));
+
+  const layerValues = layerData.map((d) => ({
+    x: convertValues(d.x, xType, units),
+    y: convertValues(d.y, yType, units),
+  }));
+
+  // Create the positional scales.
+  const x = d3
+    .scaleLinear()
+    .domain(d3.extent(dataValues, (d) => d.x))
+    .range([chartSize.marginLeft, chartSize.width - chartSize.marginRight]);
+
+  const y = d3
+    .scaleLinear()
+    .domain(d3.extent(dataValues, (d) => d.y))
+    .nice()
+    .range([chartSize.height - chartSize.marginBottom, chartSize.marginTop]);
+
+  // Create the SVG container.
+  const svg = d3
+    .create("svg")
+    .attr("width", chartSize.width)
+    .attr("height", chartSize.height)
+    .attr("viewBox", [0, 0, chartSize.width, chartSize.height])
+    .attr(
+      "style",
+      "max-width: 100%; height: auto; overflow: visible; font-size: 14px;"
+    );
+
+  // Add the horizontal axis.
+  svg
+    .append("g")
+    .attr(
+      "transform",
+      `translate(0,${chartSize.height - chartSize.marginBottom})`
+    )
+    .call(d3.axisBottom(x).ticks(10).tickSizeOuter(0))
+    .call((g) =>
+      g
+        .append("text")
+        .attr("x", 30)
+        .attr("y", 35)
+        .attr("fill", "currentColor")
+        .attr("text-anchor", "start")
+        .attr("font-size", "12px")
+        .text(`${xLabel} ${unitsLabel(units, xType)}`)
+    );
+
+  // Add the vertical axis.
+  svg
+    .append("g")
+    .attr("transform", `translate(${chartSize.marginLeft},0)`)
+    .call(d3.axisLeft(y))
+    .call((g) => g.select("text").attr("font-size", "12px"))
+    .call((g) =>
+      g
+        .append("text")
+        .attr("x", -chartSize.marginLeft)
+        .attr("y", 0)
+        .attr("fill", "currentColor")
+        .attr("text-anchor", "start")
+        .attr("font-size", "12px")
+        .text(`${yLabel} ${unitsLabel(units, yType)}`)
+    );
+
+  // Compute the points in pixel space as [x, y, z], where z is the name of the series.
+  const points = dataValues.map((d) => [x(d.x), y(d.y), d.z]);
+
+  const layerPoints = layerValues.map((d) => [
+    x(d.x),
+    y(d.y),
+    `${parseFloat(d.y).toFixed(1)} ${unitsLabel(units, yType)}`,
+  ]);
+
+  // Group the points by series.
+  const groups = d3.rollup(
+    points,
+    (v) => Object.assign(v, { z: v[0][2] }),
+    (d) => d[2]
+  );
+
+  // Draw the lines.
+  const line = d3.line();
+  const path = svg
+    .append("g")
+    .attr("fill", "none")
+    .attr("stroke", "#9bd1fa")
+    .attr("stroke-width", 2)
+    .attr("stroke-linejoin", "round")
+    .attr("stroke-linecap", "round")
+    .selectAll("path")
+    .data(groups.values())
+    .join("path")
+    .style("mix-blend-mode", "multiply")
+    .attr("d", line) 
+    .each(function (d) {
+      const lastPoint = d[d.length - 1];
+      svg
+      .append("text")
+      .attr("x", lastPoint[0] + 8)
+      .attr("y", lastPoint[1])
+      .attr("dy", "0.35em")
+      .attr("font-size", "10px")
+      .attr("fill", "#000")
+      .text(d.z);
+    });
+
+    // Add a new layer with a line for layer x and y.
+  const layerLine = d3
+    .line()
+    .x((d) => x(d.x))
+    .y((d) => y(d.y));
+  
+  svg
+    .append("path")
+    .attr("fill", "none")
+    .attr("stroke", "#f797b9")
+    .attr("stroke-width", 3)
+    .attr("d", layerLine(layerValues));
+
+  svg
+    .append("g")
+    .selectAll("circle")
+    .data(layerPoints)
+    .join("circle")
+    .attr("cx", (d) => d[0])
+    .attr("cy", (d) => d[1])
+    .attr("r", 3)
+    .attr("fill", "#f797b9");
+
+  const layerDot = svg.append("g").attr("display", "none");
+  layerDot.append("circle").attr("r", 3.5);
+  layerDot.append("text").attr("text-anchor", "middle").attr("y", -20);
+
+  svg
+    .on("pointerenter", pointerEntered)
+    .on("pointermove", pointerMoved)
+    .on("pointerleave", pointerLeft)
+    .on("touchstart", (event) => event.preventDefault());
+
+  return svg.node();
+
+  function pointerMoved(event) {
+    const [xm, ym] = d3.pointer(event);
+    const i = d3.leastIndex(points, ([x, y]) => Math.hypot(x - xm, y - ym));
+    const vi = d3.leastIndex(layerPoints, ([x, y]) =>
+      Math.hypot(x - xm, y - ym)
+    );
+
+    const [x, y, k] = points[i];
+    const [vx, vy, vk] = layerPoints[vi];
+
+    path
+      .style("stroke", ({ z }) => (z === k ? null : "#ddd"))
+      .filter(({ z }) => z === k)
+      .raise();
+    
+    layerDot.attr("transform", `translate(${vx}, ${vy})`);
+    layerDot.select("text").text(`${vk}`).attr("background-color", "white");
+    layerDot.select("circle").attr("fill", "red");
+
+    svg.property("value", dataValues[i]).dispatch("input", { bubbles: true });
+  }
+
+  function pointerEntered() {
+    path.style("mix-blend-mode", null).style("stroke", "#ddd");
+    
+    layerDot.attr("display", null);
+  }
+
+  function pointerLeft() {
+    path.style("mix-blend-mode", "multiply").style("stroke", null);
+
+    layerDot.attr("display", "none");
+
+    svg.node().value = null;
+    svg.dispatch("input", { bubbles: true });
+  }
+}
+
+function generateGraphs(graphs, units) {
+  return graphs.map((g, index) => {
+    const c = createChart(g, units);
+
+    const graphContainer = document.createElement('div');
+    graphContainer.className = 'graphContainer pageBreak';
+
+    const titleWrapper = document.createElement('div');
+    titleWrapper.className = 'titleWrapper';
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'title';
+    titleDiv.textContent = g.title;
+
+    titleWrapper.appendChild(titleDiv);
+    graphContainer.appendChild(titleWrapper);
+
+    const graphDiv = document.createElement('div');
+    graphDiv.id = `graph${index + 1}`;
+    graphDiv.append(c);
+    graphContainer.appendChild(graphDiv);
+
+    const whoContainer = document.getElementById(g.tab);
+    whoContainer.appendChild(graphContainer);
+  });
+}
+
+// print current tab
+function printGraphs() {
+  window.print();
+}
+
+// switch between graphs
+function onWHOClick() {
+  document.getElementById("WHO").classList.remove("hidden");
+  document.getElementById("CDC").classList.add("hidden");
+}
+
+function onCDCClick() {
+  document.getElementById("WHO").classList.add("hidden");
+  document.getElementById("CDC").classList.remove("hidden");
+}
+
+function onLbsClick() {
+  graphs.map((g, index) => {
+    const c = createChart(g, unitsTypes.LBS);
+    const graph = document.getElementById(`graph${index + 1}`);
+    graph.replaceChildren(c);
+  });
+}
+
+function onKgClick() {
+  graphs.map((g, index) => {
+    const c = createChart(g, unitsTypes.KG);
+    const graph = document.getElementById(`graph${index + 1}`);
+    graph.replaceChildren(c);
+  });
+}
+
+// get graphs data from the context
+const graphs = {{ graphs|safe }};
+
+generateGraphs(graphs, unitsTypes.LBS);
+
+</script>

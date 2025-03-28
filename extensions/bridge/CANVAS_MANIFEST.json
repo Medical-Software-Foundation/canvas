@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.10.1",
-    "plugin_version": "0.1.13",
+    "plugin_version": "0.1.14",
     "name": "bridge",
     "description": "Bridge integration for Canvas",
     "components": {
@@ -20,7 +20,12 @@
         "effects": [],
         "views": []
     },
-    "secrets": ["BRIDGE_UI_BASE_URL", "BRIDGE_API_BASE_URL", "BRIDGE_SECRET_API_KEY"],
+    "secrets": [
+        "BRIDGE_UI_BASE_URL",
+        "BRIDGE_API_BASE_URL",
+        "BRIDGE_SECRET_API_KEY",
+        "CANVAS_BASE_URL"
+    ],
     "tags": {},
     "references": [],
     "license": "",
