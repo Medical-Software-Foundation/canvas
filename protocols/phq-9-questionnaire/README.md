@@ -1,3 +1,5 @@
+# PHQ-9 Questionnaire
+
 ## Appropriate Patient Populations
 
 The PHQ-9 questionnaire is a widely utilized tool designed for the assessment of depressive disorders. It is appropriate for screening in diverse patient populations, including adults and adolescents. Its applicability spans various healthcare settings such as primary care, outpatient clinics, and mental health facilities. Designed to be sensitive to the symptoms of depression, this questionnaire can effectively identify individuals who may be experiencing depressive episodes. Importantly, the PHQ-9 is versatile enough to be used across different demographic groups, facilitating its integration into a broad range of clinical environments without bias toward age, gender, or cultural background.
