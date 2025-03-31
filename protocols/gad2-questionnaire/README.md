@@ -1,3 +1,5 @@
+# GAD-2 Questionnaire
+
 ## Appropriate Patient Populations
 
 The GAD-2 questionnaire is a succinct screening tool specifically designed to identify symptoms of generalized anxiety disorder (GAD) in various patient populations. It is particularly valuable in primary care and mental health settings but can be implemented broadly across different medical specialties that encounter patients experiencing anxiety symptoms. As GAD can affect adolescents and adults alike, this easy-to-use tool is appropriate for virtually any patient demographic aged 13 and above. Whether utilized during routine checkups or more specialized psychiatric consultations, the GAD-2 serves as an efficient preliminary screening device to detect anxiety-related issues.
