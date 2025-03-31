@@ -1,3 +1,5 @@
+# GAD-7 Questionnaire
+
 ## Appropriate Patient Populations
 
 The GAD-7 (Generalized Anxiety Disorder-7) questionnaire is specifically designed to identify anxiety levels in patients who may be experiencing generalized anxiety disorder. It is appropriate for a broad range of patient populations, including adolescents and adults, who exhibit symptoms of anxiety. This tool can be particularly useful in primary care settings where initial anxiety screening is often conducted. Additionally, it can be employed in mental health clinics or specialist environments where more focused assessment of anxiety symptoms is required.
