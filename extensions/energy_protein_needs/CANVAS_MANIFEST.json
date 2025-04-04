@@ -1,0 +1,36 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "energy_protein_needs",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "protocols": [
+            {
+                "class": "energy_protein_needs.protocols.energy_protein_needs:Protocol",
+                "description": "Displays a banner alert with the FDEE calculated based on patient's age, gender, height, weight, and current activity level",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "templates/activity_factor_for_energy_needs_questionnaire.yml"
+            }
+        ]
+    },
+    "secrets": [
+        "CURRENT_ACTIVITY_LEVEL_QUESTION_CODE"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
