@@ -1,0 +1,36 @@
+name: Activity Factor for Energy Needs
+form_type: QUES
+code_system: INTERNAL
+code: activity-001
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+prologue: ''
+questions:
+- content: Current Activity Level
+  code_system: INTERNAL
+  code: activity-002
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: INTERNAL
+  responses_type: SING
+  responses:
+  - name: Sedentary *1.2
+    code: activity-003
+    code_description: ''
+    value: ''
+  - name: Lightly active *1.375
+    code: activity-004
+    code_description: ''
+    value: ''
+  - name: Moderately active *1.55
+    code: activity-005
+    code_description: ''
+    value: ''
+  - name: Active *1.725
+    code: activity-006
+    code_description: ''
+    value: ''
+  - name: Very active *1.9
+    code: activity-007
+    code_description: ''
+    value: ''
