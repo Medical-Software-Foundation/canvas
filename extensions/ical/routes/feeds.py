@@ -60,13 +60,6 @@ class Information(StaffSessionAuthMixin, SimpleAPI):
 
 
 class Calendars(SimpleAPI):
-    # 2. Add location calendar and organizer element to location and provider
-    #    calendars.
-    # 4. Using session-based auth, create an html page that lists all of a
-    #    provider's relevant calendar links. Their own link, plus all location
-    #    links.
-
-
     def authenticate(self, credentials: Credentials) -> bool:
         # Authentication is handled in `get_validated_calendar_identifier`,
         # where we assert a provided hash matches one we calculate ourselves
