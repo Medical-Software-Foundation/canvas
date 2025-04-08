@@ -18,7 +18,7 @@ class Protocol(BaseProtocol):
         Listen to vitals and questionnaire commands being committed. 
         Try to calculate the TDEE once the patient sex, age, height,
         weight, and current activity level is known. 
-        Add a banner alert with the calculated FDEE
+        Add a banner alert with the calculated TDEE
     """
 
     RESPONDS_TO = [
