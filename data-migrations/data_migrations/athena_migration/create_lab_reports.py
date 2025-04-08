@@ -23,7 +23,10 @@ class LabReportLoader(LabReportMixin):
         self.done_file = 'results/done_lab_reports.csv'
         self.done_records = fetch_complete_csv_rows(self.done_file)
         self.error_file = 'results/errored_lab_reports.csv'
-        # self.fumage_helper = load_fhir_settings(environment)
+        self.ignore_file = f"results/ignored_lab_reports.csv"
+        self.patient_map_file = 'PHI/patient_id_map.json'
+        self.patient_map = fetch_from_json(self.patient_map_file)
+        self.fumage_helper = load_fhir_settings(environment)
         super().__init__(*args, **kwargs)
 
 
@@ -75,7 +78,7 @@ class LabReportLoader(LabReportMixin):
             return arrow.get(date_val, "MM/DD/YYYY", tzinfo="America/New York").isoformat()
         return None
 
-    def create_fhir_payload(self, labresult, patient_enterprise_id):
+    def create_fhir_payload(self, labresult, canvas_patient_key):
         validation_errors = []
 
         api_payload = {
@@ -135,7 +138,7 @@ class LabReportLoader(LabReportMixin):
                     }
                 ],
                 "subject": {
-                    "reference": "Patient/xxx", # map to patient from patientdetails
+                    "reference": f"Patient/{canvas_patient_key}",
                     "type": "Patient"
                 },
                 "presentedForm": [
@@ -154,12 +157,14 @@ class LabReportLoader(LabReportMixin):
         api_payload["parameter"].append(lab_report_parameter)
 
         lab_test_result_loinc = labresult.get("labresultloinc")
-        if not lab_test_result_loinc:
-            validation_errors.append("Missing LOINC code for lab test results")
-
         lab_test_result_display = labresult.get("description")
-        if not lab_test_result_display:
-            validation_errors.append("Missing display for lab test results")
+        # If there is not sufficient information for the lab test (display, coding), then
+        # return early. The document will still be uploaded.
+        if not all([lab_test_result_display, lab_test_result_loinc]):
+            self.ignore_row(labresult["labresultid"], f"Missing lab test LOINC and/or display for labresult ID {labresult["labresultid"]}. Will still attempt to upload the document.")
+            if validation_errors:
+                api_payload = None
+            return api_payload, validation_errors
 
         lab_test_part = {
             "name": "labTest",
@@ -183,18 +188,24 @@ class LabReportLoader(LabReportMixin):
         lab_values = []
 
         for observation in labresult.get("observations", []):
+            observation_identifier = observation.get("observationidentifier", "")
 
             observation_status = observation.get("resultstatus", "final")
+            if observation_status == "incomplete":
+                observation_status = "preliminary"
             if observation_status not in ["amended", "cancelled", "corrected", "entered-in-error", "final", "preliminary", "registered", "unknown"]:
-                validation_errors.append(f"Unsupported observation status - {observation_status}")
+                self.ignore_row(labresult["labresultid"], f"Ignoring lab value with observationidentifier {observation_identifier} due to unsupported resultstatus. Will still attempt to upload the document.")
+                continue
 
             observation_loinc = observation.get("loinc")
             if not observation_loinc:
-                validation_errors.append("Missing observation loinc code")
+                self.ignore_row(labresult["labresultid"], f"Ignoring lab value with observationidentifier {observation_identifier} due to missing LOINC code. Will still attempt to upload the document.")
+                continue
 
             observation_loinc_display = observation.get("analytename")
             if not observation_loinc_display:
-                validation_errors.append("Missing observation loinc display")
+                self.ignore_row(labresult["labresultid"], f"Ignoring lab value with observationidentifier {observation_identifier} due to missing LOINC display. Will still attempt to upload the document.")
+                continue
 
             lab_value_part = {
                 "name": "labValue",
@@ -228,7 +239,7 @@ class LabReportLoader(LabReportMixin):
 
             # abnormalflag possible values are:
             # 'normal', 'alert low', 'below low normal', 'above high normal', 'low', 'high', 'abnormal', 'alert high', 'critical high';
-            # should we mark as abnormal for anything that is not 'normal'?
+            # Canvas only supports an 'Abnormal' status. Any status besides normal should be marked as abnormal in Canvas.
 
             if observation.get("abnormalflag") in ["alert low", "below low normal", "above high normal", "low", "high", "abnormal", "alert high", "critical high"]:
                 lab_value_part["resource"]["interpretation"] = [
@@ -261,8 +272,8 @@ class LabReportLoader(LabReportMixin):
         return api_payload, validation_errors
 
 
-    def validate_record(self, labresult, patient_id):
-        payload, errors = self.create_fhir_payload(labresult, patient_id)
+    def validate_record(self, labresult, canvas_patient_key):
+        payload, errors = self.create_fhir_payload(labresult, canvas_patient_key)
         return payload, errors
 
 
@@ -274,18 +285,33 @@ class LabReportLoader(LabReportMixin):
 
         for obj in data:
             patient_enterprise_id = obj["patientdetails"]["enterpriseid"]
+
             for result in obj["labresults"]:
                 labresult_id = result["labresultid"]
-                payload, errors = self.validate_record(result, patient_enterprise_id)
+
+                canvas_patient_key = ""
+                try:
+                    canvas_patient_key = self.map_patient(patient_enterprise_id)
+                except BaseException as e:
+                    self.ignore_row(labresult_id, e)
+                    continue
+
+                payload, errors = self.validate_record(result, canvas_patient_key)
                 if errors:
                     validation_errors[labresult_id] = errors
                 else:
-                    valid_payloads.append((labresult_id, payload,))
+                    valid_payload_dict = {
+                        "unique_attribute": labresult_id,
+                        "patient_id": patient_enterprise_id,
+                        "canvas_patient_key": canvas_patient_key,
+                        "payload": payload
+                    }
+                    valid_payloads.append(valid_payload_dict)
         write_to_json(self.validation_error_file, validation_errors)
         return valid_payloads
 
 
 if __name__ == "__main__":
-    loader = LabReportLoader(environment="localhost")
+    loader = LabReportLoader(environment="phi-test-accomplish")
     valid_rows = loader.validate()
-    # loader.load(valid_rows)
+    loader.load(valid_rows)

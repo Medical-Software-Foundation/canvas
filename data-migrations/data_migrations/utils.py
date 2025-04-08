@@ -194,7 +194,6 @@ class FHIRHelper:
         Make a FHIR Create call and return the ID of the resource created
         or raise an error if it failed to create
         """
-
         response = self.create(payload['resourceType'], payload)
 
         if response.status_code == 401:
@@ -205,6 +204,23 @@ class FHIRHelper:
             raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers['fumage-correlation-id']} \n {response.text}")
 
         return response.headers['location'].replace(f'http://fumage-{self.instance_name}.canvasmedical.com/{payload["resourceType"]}/', '').replace('/_history/1', '').replace(f'http://localhost:8888/{payload["resourceType"]}/', '')
+
+
+    def perform_create_lab_report(self, payload):
+        """
+        This has different endpoint and response requirements from a regular perform_create.
+        """
+        response = self.create("DiagnosticReport/$create-lab-report", payload)
+        if response.status_code == 401:
+            self.get_fhir_api_token()
+            return self.perform_create_lab_report(payload)
+
+        if response.status_code != 201:
+            raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers.get('fumage-correlation-id', "")} \n {response.text}")
+
+        response_body = response.json()
+        return response_body["parameter"][0]["valueReference"]["reference"].replace("DiagnosticReport/", "")
+
 
     def update(
         self, resource_type: str, resource_id: str, payload: dict
