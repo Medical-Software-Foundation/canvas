@@ -18,7 +18,7 @@ class Hcc005v1(ClinicalQualityMeasure):
         title = 'Annual Wellness Visit'
         version = '2019-11-04v1'
         description = 'Patient 65 or older due  for Annual Wellness Visit.'
-        information = 'https://canvas-medical.help.usepylon.com/articles/3810882246-protocol-annual-wellness-visit-hcc005v1'  # noqa: E501
+        information = 'https://canvas-medical.help.usepylon.com/articles/4408606761-care-protocols#annual-wellness-visit-hcc005v1-59'  # noqa: E501
 
         identifiers = ['HCC005v1']
 
@@ -32,7 +32,7 @@ class Hcc005v1(ClinicalQualityMeasure):
         ]
 
         references = [
-            'Canvas Medical HCC, https://canvas-medical.help.usepylon.com/articles/3810882246-protocol-annual-wellness-visit-hcc005v1'  # noqa: E501
+            'Canvas Medical HCC, https://canvas-medical.help.usepylon.com/articles/4408606761-care-protocols#annual-wellness-visit-hcc005v1-59'  # noqa: E501
         ]
 
         compute_on_change_types = [
