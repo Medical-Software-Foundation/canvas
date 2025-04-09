@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>iCal Links for {{logged_in_staff.first_name}} {{logged_in_staff.last_name}}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style>
+            body {
+                font-family: Lato,'Helvetica Neue',Arial,Helvetica,sans-serif;
+            }
+
+            input.calendar-url {
+                width: 250px;
+                height: 30px;
+                padding: 5px;
+            }
+
+            .calendar {
+                display: flex;
+                flex-direction: row;
+            }
+        </style>
+        <script>
+            window.addEventListener("load", () => {{
+                Array.from(document.getElementsByClassName("copy-btn")).map(
+                    function(button) {
+                        button.onclick = function(e) {
+                            var target = event.currentTarget;
+                            // This means the result-text div must immediately precede the button in the
+                            // DOM.
+                            var input = target.previousElementSibling;
+                            navigator.clipboard.writeText(input.value);
+                        }
+                    }
+                )
+            }});
+        </script>                         
+    </head>
+
+    <body>
+        <h1>iCal Links</h1>
+        <h3>Installation Instructions</h3>
+        <p>
+            <a target="_blank" href="https://support.google.com/calendar/answer/37100#:~:text=Use%20a%20link%20to%20add%20a%20public%20calendar">Google Calendar</a>
+        </p>
+        <p>
+            <a target="_blank" href="https://support.apple.com/guide/calendar/subscribe-to-calendars-icl1022/mac">Mac</a>
+        </p>
+        <p>
+            <a target="_blank" href="https://support.apple.com/guide/iphone/use-multiple-calendars-iph3d1110d4/ios">iOS</a>
+        </p>
+        <p>
+            <a target="_blank" href="https://support.microsoft.com/en-us/office/import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web-cff1429c-5af6-41ec-a5b4-74f2c278e98c#id0edd=work%2Fschool_account:~:text=Click%20Save.-,Subscribe%C2%A0to%C2%A0a%C2%A0calendar,-Sign%20into%20Outlook">Outlook</a>
+        </p>
+        
+        <h3>{{logged_in_staff.first_name}} {{logged_in_staff.last_name}}</h3>
+        <div class="calendar">
+            <input class="calendar-url" disabled=disabled value='{{personal_calendar_url}}'></input>
+            <button class="copy-btn">Copy</button>
+        </div>
+        <h3>Location Calendars</h3>
+        {% for location in location_calendars %}
+            <h4>{{location.label}}</h4>
+            <div class="calendar">
+                <input class="calendar-url" disabled=disabled value='{{location.url}}'></input>
+                <button class="copy-btn">Copy</button>
+            </div>
+        {% endfor %}
+    </body>
+</html>

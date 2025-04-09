@@ -1,0 +1,47 @@
+{
+    "sdk_version": "0.19.0",
+    "plugin_version": "0.0.1",
+    "name": "ical",
+    "description": "Provides calendar integration for appointments and events",
+    "components": {
+        "protocols": [
+            {
+                "class": "ical.routes.feeds:Calendars",
+                "description": "Returns ics files listing events",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "ical.routes.feeds:Information",
+                "description": "Lists links to subscribable calendars",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "ical.applications.calendar_links:CalendarLinks",
+                "name": "Calendar Links",
+                "description": "Show the calendar subscription links",
+                "scope": "global",
+                "icon": "static/calendar.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["CALENDAR_LINK_SALT__EXISTING_LINKS_BECOME_INVALID_IF_CHANGED"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
