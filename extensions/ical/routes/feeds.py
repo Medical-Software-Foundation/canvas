@@ -95,7 +95,7 @@ class Calendars(SimpleAPI):
         for appt in appt_data:
             ical.add_event(Event({
                 "id": appt.get("id"),
-                "event_title": appt.get("note_type__display"),
+                "event_title": appt.get("note_type__display") or "Unknown Event",
                 "start_time": appt.get("start_time"),
                 "duration_minutes": appt.get("duration_minutes"),
                 "location": appt.get("location__short_name"),
@@ -147,7 +147,7 @@ class Calendars(SimpleAPI):
         for appt in appt_data:
             ical.add_event(Event({
                 "id": appt.get("id"),
-                "event_title": appt.get("note_type__display"),
+                "event_title": appt.get("note_type__display") or "Unknown Event",
                 "start_time": appt.get("start_time"),
                 "duration_minutes": appt.get("duration_minutes"),
                 "location": appt.get("location__short_name"),
