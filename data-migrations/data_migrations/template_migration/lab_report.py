@@ -1,10 +1,11 @@
 from data_migrations.template_migration.utils import (
+    DocumentEncoderMixin,
     MappingMixin,
     FileWriterMixin
 )
 
 
-class LabReportMixin(MappingMixin, FileWriterMixin):
+class LabReportMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin):
     def load(self, validated_rows):
         ids = set()
         for payload_dict in validated_rows:

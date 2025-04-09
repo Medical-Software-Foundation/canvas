@@ -1,4 +1,4 @@
-import csv, json, base64
+import base64, csv, json, os
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
@@ -8,10 +8,11 @@ from data_migrations.template_migration.utils import (
     validate_date,
     validate_enum,
     MappingMixin,
-    FileWriterMixin
+    FileWriterMixin,
+    DocumentEncoderMixin,
 )
 
-class DocumentReferenceMixin(MappingMixin, FileWriterMixin):
+class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
@@ -32,7 +33,8 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin):
                 "Clinical Date",
                 "Category",
                 "Document",
-                "Description"
+                "Description",
+                "Provider",
             }
         )
 
@@ -126,9 +128,27 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin):
                 self.ignore_row(row['ID'], e)
                 continue
 
-            base64_file_contents = row["Document"]
-            if base64_file_contents.endswith(".pdf"):
-                base64_file_contents = self.base64_encode_file(f'PHI/documents{row["Document"]}')
+            file_list = json.loads(row["Document"])
+            b64_document_string = ""
+
+            if len(file_list) == 1:
+                file_path = file_list[0]
+                if file_path.endswith(".tiff") or file_path.endswith(".tif"):
+                    pdf_output = self.tiff_to_pdf(f"{self.documents_files_dir}{file_path}")
+                    b64_document_string = self.base64_encode_file(pdf_output)
+                    # clean up the file
+                    os.remove(pdf_output)
+                elif file_path.endswith(".pdf"):
+                    b64_document_string = self.base64_encode_file(f"{self.documents_files_dir}{file_path}")
+                elif file_path.endswith(".png"):
+                    b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{file_path}"])
+                elif file_path.endswith(".jpeg") or file_path.endswith(".jpg"):
+                    b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{file_path}"])
+                else:
+                # This shouldn't ever happen with the current file set we have.
+                    self.error_row(row["ID"], "Error converting document")
+            elif len(file_list) > 1:
+                b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{p}" for p in file_list])
 
             payload = {
                 "resourceType": "DocumentReference",
@@ -183,21 +203,24 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin):
                     "reference": f"Patient/{patient_key}",
                     "type": "Patient"
                 },
-                "author": [
-                    {
-                        "reference": "Practitioner/5eede137ecfe4124b8b773040e33be14",
-                        "type": "Practitioner"
-                    }
-                ],
                 "content": [
                     {
                         "attachment": {
                             "contentType": "application/pdf",
-                            "data": base64_file_contents
+                            "data": b64_document_string
                         }
                     }
                 ]
-              }
+            }
+
+            canvas_staff_key = self.doctor_map.get(row["Provider"])
+            if canvas_staff_key:
+                payload["author"] = [
+                    {
+                        "reference": f"Practitioner/{canvas_staff_key}",
+                        "type": "Practitioner"
+                    }
+                ]
 
             #print(json.dumps(payload, indent=2))
 

@@ -1,6 +1,5 @@
-import arrow
-import pytz
-import re
+import arrow, base64, pytz, os, re, uuid
+from PIL import Image, ImageSequence
 
 
 def validate_date(value, field_name):
@@ -215,3 +214,38 @@ class FileWriterMixin:
         with open(file or self.done_file, 'a') as done:
             print(' Complete')
             done.write(f"{data}\n")
+
+
+class DocumentEncoderMixin:
+    def base64_encode_file(self, file_path):
+        with open(file_path, "rb") as fhandle:
+            contents = fhandle.read()
+            encoded_contents = base64.b64encode(contents)
+            return encoded_contents.decode("utf-8")
+
+    def tiff_to_pdf(self, tiff_path):
+        image = Image.open(tiff_path)
+        images = []
+        for page in ImageSequence.Iterator(image):
+            page = page.convert("RGB")
+            images.append(page)
+
+        output_path = f"{self.temp_pdf_dir}/{tiff_path.split("/")[-1]}".replace(".tiff", ".pdf").replace(".tif", ".pdf")
+        if len(images) == 1:
+            images[0].save(output_path)
+        else:
+            images[0].save(output_path, save_all=True, append_images=images[1:])
+        return output_path
+
+    def convert_and_base64_encode(self, documents, custom_name=None):
+        images = [Image.open(img) for img in documents]
+        if custom_name:
+            output_path = f"{self.temp_pdf_dir}/{custom_name}.pdf"
+        else:
+            temp_uuid = str(uuid.uuid4())
+            output_path = f"{self.temp_pdf_dir}/{temp_uuid}.pdf"
+        images[0].save(output_path, "PDF", resolution=100.0, save_all=True, append_images=images[1:])
+        base64_encoded_string = self.base64_encode_file(output_path)
+        # clean up the temp file
+        os.remove(output_path)
+        return base64_encoded_string

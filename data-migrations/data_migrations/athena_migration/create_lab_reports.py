@@ -1,9 +1,6 @@
-import base64
 import os
-import uuid
 import arrow
 
-from PIL import Image, ImageSequence
 from data_migrations.utils import (
     fetch_from_json,
     write_to_json,
@@ -12,6 +9,7 @@ from data_migrations.utils import (
 )
 
 from data_migrations.template_migration.lab_report import LabReportMixin
+
 
 class LabReportLoader(LabReportMixin):
     def __init__(self, environment, *args, **kwargs):
@@ -28,41 +26,6 @@ class LabReportLoader(LabReportMixin):
         self.patient_map = fetch_from_json(self.patient_map_file)
         self.fumage_helper = load_fhir_settings(environment)
         super().__init__(*args, **kwargs)
-
-
-    def base64_encode_file(self, file_path):
-        with open(file_path, "rb") as fhandle:
-            contents = fhandle.read()
-            encoded_contents = base64.b64encode(contents)
-            return encoded_contents.decode("utf-8")
-
-    def tiff_to_pdf(self, tiff_path):
-        image = Image.open(tiff_path)
-        images = []
-        for page in ImageSequence.Iterator(image):
-            page = page.convert("RGB")
-            images.append(page)
-
-        output_path = f"{self.temp_pdf_dir}/{tiff_path.split("/")[-1]}".replace(".tiff", ".pdf")
-
-        if len(images) == 1:
-            images[0].save(output_path)
-        else:
-            images[0].save(output_path, save_all=True, append_images=images[1:])
-        return output_path
-
-    def convert_and_base64_encode(self, documents, custom_name=None):
-        images = [Image.open(f"{self.labresults_files_dir}{img}") for img in documents]
-        if custom_name:
-            output_path = f"{self.temp_pdf_dir}/{custom_name}.pdf"
-        else:
-            temp_uuid = str(uuid.uuid4())
-            output_path = f"{self.temp_pdf_dir}/{temp_uuid}.pdf"
-        images[0].save(output_path, "PDF", resolution=100.0, save_all=True, append_images=images[1:])
-        base64_encoded_string = self.base64_encode_file(output_path)
-        # clean up the temp file
-        os.remove(output_path)
-        return base64_encoded_string
 
     def get_observation_date(self, labresult):
         date_val = None
@@ -102,9 +65,9 @@ class LabReportLoader(LabReportMixin):
             elif file_path.endswith(".pdf"):
                 b64_document_string = self.base64_encode_file(f"{self.labresults_files_dir}{file_path}")
             elif file_path.endswith(".png"):
-                b64_document_string = self.convert_and_base64_encode([file_path], custom_name=labresult["labresultid"])
+                b64_document_string = self.convert_and_base64_encode([f"{self.labresults_files_dir}{file_path}"], custom_name=labresult["labresultid"])
             elif file_path.endswith(".jpeg") or file_path.endswith(".jpg"):
-                b64_document_string = self.convert_and_base64_encode([file_path], custom_name=labresult["labresultid"])
+                b64_document_string = self.convert_and_base64_encode([f"{self.labresults_files_dir}{file_path}"], custom_name=labresult["labresultid"])
             else:
                 # This shouldn't ever happen with the current file set we have.
                 validation_errors.append("Unsupported file format for document")
@@ -112,7 +75,7 @@ class LabReportLoader(LabReportMixin):
             documents = [(page["pageordering"], page["reference"]) for page in labresult["pages"]]
             # sort to get the correct page ordering
             documents.sort()
-            documents = [doc[1] for doc in documents]
+            documents = [f"{self.labresults_files_dir}{doc[1]}" for doc in documents]
             # pages either all have file references or none have file references; there aren't any that are partial;
             # If they are all missing, raise a validation error since we can't produce a file
             if not any(documents):
