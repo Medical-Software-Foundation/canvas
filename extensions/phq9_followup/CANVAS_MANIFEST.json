@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.32.0",
+    "plugin_version": "0.0.1",
+    "name": "phq9_followup",
+    "description": "Originates a PHQ-9 when an abnormal PHQ-2 is committed.",
+    "components": {
+        "protocols": [
+            {
+                "class": "phq9_followup.handlers.phq9_followup:PHQ9Followup",
+                "description": "Originates a PHQ-9 when an abnormal PHQ-2 is committed.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
