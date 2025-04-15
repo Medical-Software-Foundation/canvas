@@ -1,0 +1,40 @@
+digraph {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="The initial population includes all individuals who have participated in sports activities and have been diagnosed with a concussion by a qualified healthcare professional."];
+    SubsetInConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="The subset in consideration for the protocol includes individuals from the initial population who are aged 5 years and older, have been symptom-free for at least 24 hours, and have received medical clearance from a healthcare provider to begin the return-to-play process."];
+    ExcludedPopulation [label="Excluded Population", shape=box, style=rounded, color=green, fontcolor=green, comment="Individuals from the subset will be excluded from the protocol if they exhibit any new or worsening symptoms of concussion during the return-to-play process, have a history of multiple concussions or prolonged recovery from previous concussions, or are unable to follow the stepwise progression due to cognitive or physical limitations."];
+    ProtocolSatisfied [label="Protocol Satisfied", shape=box, style=rounded, color=green, fontcolor=green, comment="This protocol is designed to ensure a safe and structured return to sports activities following a concussion, minimizing the risk of further injury."];
+
+    // Criterion Nodes
+    Age5Plus [label="Age 5+", shape=ellipse, color=blue, fontcolor=blue, comment="Are aged 5 years and older."];
+    SymptomFree24h [label="Symptom-Free 24h", shape=ellipse, color=blue, fontcolor=blue, comment="Have been symptom-free for at least 24 hours."];
+    MedicalClearance [label="Medical Clearance", shape=ellipse, color=blue, fontcolor=blue, comment="Have received medical clearance from a healthcare provider to begin the return-to-play process."];
+    NoNewSymptoms [label="No New Symptoms", shape=ellipse, color=blue, fontcolor=blue, comment="Exhibit no new or worsening symptoms of concussion during the return-to-play process."];
+    NoHistory [label="No History", shape=ellipse, color=blue, fontcolor=blue, comment="Have no history of multiple concussions or prolonged recovery from previous concussions."];
+    FollowProgression [label="Follow Progression", shape=ellipse, color=blue, fontcolor=blue, comment="Are able to follow the stepwise progression without cognitive or physical limitations."];
+    InitialRest [label="Initial Rest", shape=ellipse, color=blue, fontcolor=blue, comment="Ensure a period of physical and cognitive rest until acute symptoms resolve."];
+    StepwiseProgression [label="Stepwise Progression", shape=ellipse, color=blue, fontcolor=blue, comment="Complete the stepwise return-to-play progression."];
+    MonitoringDocumentation [label="Monitoring & Documentation", shape=ellipse, color=blue, fontcolor=blue, comment="Continuously monitor for symptom recurrence and document each step."];
+    FinalClearance [label="Final Clearance", shape=ellipse, color=blue, fontcolor=blue, comment="Obtain final medical clearance from a healthcare provider before returning to full play."];
+
+    // Edges
+    InitialPopulation -> Age5Plus [label="if", color=blue, fontcolor=blue];
+    Age5Plus -> SymptomFree24h [label="and", color=blue, fontcolor=blue];
+    SymptomFree24h -> MedicalClearance [label="and", color=blue, fontcolor=blue];
+    MedicalClearance -> SubsetInConsideration [label="then", color=blue, fontcolor=blue];
+
+    SubsetInConsideration -> NoNewSymptoms [label="if", color=blue, fontcolor=blue];
+    NoNewSymptoms -> NoHistory [label="and", color=blue, fontcolor=blue];
+    NoHistory -> FollowProgression [label="and", color=blue, fontcolor=blue];
+    FollowProgression -> ProtocolSatisfied [label="then", color=blue, fontcolor=blue];
+
+    SubsetInConsideration -> ExcludedPopulation [label="", color=blue, fontcolor=blue];
+
+    ProtocolSatisfied -> InitialRest [label="if", color=blue, fontcolor=blue];
+    InitialRest -> StepwiseProgression [label="and", color=blue, fontcolor=blue];
+    StepwiseProgression -> MonitoringDocumentation [label="and", color=blue, fontcolor=blue];
+    MonitoringDocumentation -> FinalClearance [label="and", color=blue, fontcolor=blue];
+    FinalClearance -> ProtocolSatisfied [label="then", color=blue, fontcolor=blue];
+}
