@@ -1,13 +1,13 @@
 {
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
-    "name": "energy_protein_needs",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "name": "total_energy_needs",
+    "description": "Display banner alert with TDEE",
     "components": {
         "protocols": [
             {
-                "class": "energy_protein_needs.protocols.energy_protein_needs:Protocol",
-                "description": "Displays a banner alert with the FDEE calculated based on patient's age, gender, height, weight, and current activity level",
+                "class": "total_energy_needs.protocols.total_energy_needs:Protocol",
+                "description": "Displays a banner alert with the TDEE calculated based on patient's age, gender, height, weight, and current activity level",
                 "data_access": {
                     "event": "",
                     "read": [],

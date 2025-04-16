@@ -95,10 +95,10 @@ class Protocol(BaseProtocol):
         age = self.calculate_age(patient.birth_date)
 
         if not age: 
-            log.info(f"Patient {patient.id} is under 18, skipping energy protein needs calculation")
+            log.info(f"Patient {patient.id} is under 18, skipping energy needs calculation")
             return []
 
-        log.info(f"Attempting to calculation patient {patient.id} ({patient.sex_at_birth} - {age} year old) energy protein needs")
+        log.info(f"Attempting to calculation patient {patient.id} ({patient.sex_at_birth} - {age} year old) energy needs")
 
         self.filters =  {
             "patient": patient,
