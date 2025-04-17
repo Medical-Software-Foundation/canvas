@@ -1,0 +1,32 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "prapare",
+    "description": "PRAPARE Questionnaire and scoring",
+    "components": {
+        "protocols": [
+            {
+                "class": "prapare.protocols.prapare_scoring:PrapareQuestionnaireResult",
+                "description": "A protocol that provides a standardized score and narrative for the PRAPARE Questionnaire",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {"template": "templates/prapare_social_determinants_of_health_questionnaire.yml"}
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
