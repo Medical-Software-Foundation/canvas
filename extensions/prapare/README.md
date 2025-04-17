@@ -3,7 +3,7 @@ Depression Workflow
 
 ## Description
 
-This plugin is not finished yet! 
+TODO
 
 ### Important Note!
 
