@@ -10,6 +10,8 @@ PAPARE core question domains:
 - Money and resources
 - Social and emotional health
 
+The questionnaire also scores responses. Scores range from 0 to 22, with 0 indicating the participant reported no social determinant of health risks and 22 indicating the participant reported all measured risks.
+
 Learn more by visiting the [PRAPARE website](https://prapare.org/).
 
 ### Important Note!
