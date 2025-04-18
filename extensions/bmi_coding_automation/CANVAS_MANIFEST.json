@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "bmi_coding_automation",
+    "description": "Automate diagnosis of BMI related Z codes",
+    "components": {
+        "protocols": [
+            {
+                "class": "bmi_coding_automation.protocols.bmi_diagnosis:BMIDiagnosisProtocol",
+                "description": "Automate diagnosis of BMI related Z codes after vital command filled out",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
