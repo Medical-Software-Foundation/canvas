@@ -1,0 +1,551 @@
+name: PRAPARE Social Determinants of Health
+form_type: QUES
+code_system: LOINC
+code: 93025-5
+can_originate_in_charting: true
+display_results_in_social_history_section: true
+prologue: ''
+questions:
+- content: 1. Are you Hispanic or Latino?
+  code_system: LOINC
+  code: 56051-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 2. Which race(s) are you? Check all that apply
+  code_system: LOINC
+  code: 32624-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: MULT
+  responses:
+  - name: Asian
+    code: LA6156-9
+    code_description: ''
+    value: '1'
+  - name: White
+    code: LA4457-3
+    code_description: ''
+    value: '0'
+  - name: Pacific Islander
+    code: LA30187-1
+    code_description: ''
+    value: '1'
+  - name: Native Hawaiian
+    code: LA14045-1
+    code_description: ''
+    value: '1'
+  - name: Black/African American
+    code: LA14042-8
+    code_description: ''
+    value: '1'
+  - name: American Indian/Alaskan Native
+    code: LA4-4
+    code_description: ''
+    value: '1'
+  - name: Other
+    code: LA46-8
+    code_description: ''
+    value: '1'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '1'
+- content: 2a. If 'other' is selected for 2, add race here
+  code_system: INTERNAL
+  code: PRAPARE_1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: INTERNAL
+  responses_type: TXT
+  responses:
+  - name: txt
+    code: PRAPARE_2
+    code_description: ''
+    value: '0'
+- content: 3. At any point in the past 2 years, has season or migrant farm work been
+    your or your family’s main source of income?
+  code_system: LOINC
+  code: 93035-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 4. Have you been discharged from the armed forces of the United States?
+  code_system: LOINC
+  code: 93034-7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 5. What language are you most comfortable speaking?
+  code_system: LOINC
+  code: 54899-0
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: English
+    code: LA43-5
+    code_description: ''
+    value: '0'
+  - name: Other
+    code: LA30188-9
+    code_description: ''
+    value: '1'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 5a. If "other is selected for 5, add language here
+  code_system: INTERNAL
+  code: PRAPARE_3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: INTERNAL
+  responses_type: TXT
+  responses:
+  - name: txt
+    code: PRAPARE_4
+    code_description: ''
+    value: '0'
+- content: 6. How many family members, including yourself, do you currently live with?
+  code_system: LOINC
+  code: 63512-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: TXT
+  responses:
+  - name: txt
+    code: PRAPARE_5
+    code_description: ''
+    value: '0'
+- content: 7. What is your housing situation today?
+  code_system: LOINC
+  code: 71802-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: I have housing
+    code: LA30189-7
+    code_description: ''
+    value: '0'
+  - name: I do not have housing (staying with others, in a hotel, in a shelter, living
+      outside on the street, on a beach, in a car, or in a park)
+    code: LA30190-5
+    code_description: ''
+    value: '1'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 8. Are you worried about losing your housing?
+  code_system: LOINC
+  code: 93033-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: '9. What is the highest level of school that you
+
+    have finished?'
+  code_system: LOINC
+  code: 82589-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: Less than high school degree
+    code: LA30191-3
+    code_description: ''
+    value: '1'
+  - name: High school diploma or GED
+    code: LA30192-1
+    code_description: ''
+    value: '0'
+  - name: More than high school
+    code: LA30193-9
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 10. What is your current work situation?
+  code_system: LOINC
+  code: 67875-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: Unemployed
+    code: LA17956-6
+    code_description: ''
+    value: '1'
+  - name: Part time or temporary work
+    code: LA30138-4
+    code_description: ''
+    value: '1'
+  - name: Full-time work
+    code: LA30136-8
+    code_description: ''
+    value: '0'
+  - name: 'Otherwise unemployed but not seeking work (ex: student, retired, disabled,
+      unpaid primary care giver)'
+    code: LA30137-6
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 11. What is your main insurance?
+  code_system: LOINC
+  code: 76437-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: None/uninsured
+    code: LA30194-7
+    code_description: ''
+    value: '1'
+  - name: Medicaid
+    code: LA17849-3
+    code_description: ''
+    value: '0'
+  - name: CHIP Medicaid
+    code: LA30195-4
+    code_description: ''
+    value: '0'
+  - name: Medicare
+    code: LA15652-3
+    code_description: ''
+    value: '0'
+  - name: Other public insurance (not CHIP)
+    code: LA30196-2
+    code_description: ''
+    value: '0'
+  - name: Other public insurance (CHIP)
+    code: LA30197-0
+    code_description: ''
+    value: '0'
+  - name: Private insurance
+    code: LA6350-8
+    code_description: ''
+    value: '0'
+- content: '13.  During the past year, what was the total combined income for you and the family members you live with? This information will help us determine if you are eligible for any benefits.'
+  code_system: LOINC
+  code: 63586-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: TXT
+  responses:
+  - name: txt
+    code: PRAPARE_6
+    code_description: ''
+    value: '0'
+- content: 14. In the past year, have you or any family members you live with been
+    unable to get any of the following when it was really needed? Check all that apply.
+  code_system: LOINC
+  code: 93031-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: MULT
+  responses:
+  - name: Food
+    code: LA30125-1
+    code_description: ''
+    value: '1'
+  - name: Clothing
+    code: LA30126-9
+    code_description: ''
+    value: '1'
+  - name: Utilities
+    code: LA30124-4
+    code_description: ''
+    value: '1'
+  - name: Child Care
+    code: LA30127-7
+    code_description: ''
+    value: '1'
+  - name: Medicine or Any Health Care (Medical, Dental, Mental Health, Vision)
+    code: LA30128-5
+    code_description: ''
+    value: '1'
+  - name: Phone
+    code: LA30129-3
+    code_description: ''
+    value: '1'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+  - name: Other
+    code: LA30188-9
+    code_description: ''
+    value: '1'
+- content: 14a. If 'other' was selected for 14, explain here
+  code_system: INTERNAL
+  code: PRAPARE_7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: INTERNAL
+  responses_type: TXT
+  responses:
+  - name: txt
+    code: PRAPARE_8
+    code_description: ''
+    value: '0'
+- content: 15. Has lack of transportation kept you from medical appointments, meetings,
+    work, or from getting things needed for daily living? Check all that apply.
+  code_system: LOINC
+  code: 93030-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: Yes, it has kept me from medical appointments
+    code: LA30133-5
+    code_description: ''
+    value: '1'
+  - name: 'Yes, it has kept me from non-medical meetings,
+
+      appointments, work, or from getting things that
+
+      I need '
+    code: LA30134-3
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: '16. How often do you see or talk to people that you care about and feel
+    close to? (For example: talking to friends on the phone, visiting friends or family,
+    going to church or club meetings)'
+  code_system: LOINC
+  code: 93029-7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: Less than once a week
+    code: LA27722-0
+    code_description: ''
+    value: '1'
+  - name: 1 or 2 times a week
+    code: LA30130-1
+    code_description: ''
+    value: '1'
+  - name: 3 or 5 times a week
+    code: LA30131-9
+    code_description: ''
+    value: '0'
+  - name: 6 or more times a week
+    code: LA30132-7
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 17. Stress is when someone feels tense, nervous, anxious, or can’t sleep
+    at night because their mind is troubled. How stressed are you?
+  code_system: LOINC
+  code: '
+
+    LA30122-8'
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: Not at all
+    code: LA6568-5
+    code_description: ''
+    value: '0'
+  - name: A little bit
+    code: LA13863-8
+    code_description: ''
+    value: '0'
+  - name: Somewhat
+    code: LA13909-9
+    code_description: ''
+    value: '0'
+  - name: Quite a bit
+    code: LA13902-4
+    code_description: ''
+    value: '1'
+  - name: Very much
+    code: LA13914-9
+    code_description: ''
+    value: '1'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 18. (Optional) In the past year, have you spent more than 2 nights in a
+    row in a jail, prison, detention center, or juvenile correctional facility?
+  code_system: LOINC
+  code: 93028-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 19. (Optional) Are you a refugee?
+  code_system: LOINC
+  code: 93027-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 20. (Optional) Do you feel physically and emotionally safe where you currently
+    live?
+  code_system: LOINC
+  code: 93026-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '0'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '1'
+  - name: Unsure
+    code: LA14072-5
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
+- content: 21. (Optional) In the past year, have you been afraid of your partner or
+    ex-partner?
+  code_system: LOINC
+  code: 76501-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: 'Yes'
+    code: LA33-6
+    code_description: ''
+    value: '1'
+  - name: 'No'
+    code: LA32-8
+    code_description: ''
+    value: '0'
+  - name: Unsure
+    code: LA14072-5
+    code_description: ''
+    value: '0'
+  - name: I have not had a partner in the past year
+    code: LA4720-4
+    code_description: ''
+    value: '0'
+  - name: I choose not to answer this question
+    code: LA30122-8
+    code_description: ''
+    value: '0'
