@@ -113,12 +113,16 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 print(' Already did record')
                 continue
 
+            practitioner_key = ""
+            try:
+                practitioner_key = self.map_provider(row['Recorded Provider'])
+            except BaseException:
+                practitioner_key = "5eede137ecfe4124b8b773040e33be14" # canvas-bot
+
             patient = row['Patient Identifier']
             patient_key = ""
             try:
-                # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
-                practitioner_key = self.map_provider(row['Recorded Provider'])
                 note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
             except BaseException as e:
                 self.ignore_row(row['ID'], e)
@@ -178,8 +182,6 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     payload['recorder'] = {
                         "reference": f"Practitioner/{practitioner_key}"
                     }
-
-                # print(json.dumps(payload, indent=2))
 
                 try:
                     canvas_id = self.fumage_helper.perform_create(payload)
