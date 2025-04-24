@@ -87,11 +87,11 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                     response_json = response.json()
                     if response_json.get('total') == 1:
                         coding = response_json['entry'][0]['resource']['code']['coding']
-                        if any([c['code'] == code for c in coding if c['system'] == 'http://www.nlm.nih.gov/research/umls/rxnorm']):
+                        if any([c['code'] == code or c['display'].lower() == name.lower() for c in coding]):
                             _map[key] = coding
                             print(coding)
                             found_coding = True
-                            continue
+                            break
                     elif response_json.get('total') > 1:
                         for entry in response_json['entry']:
                             coding = entry['resource']['code']['coding']
@@ -106,12 +106,13 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                             if c not in options:
                                 options.append(c)
 
-
             if not _map[key]:
                 print(f'Giving all options, {options}')
                 _map[key] = options
 
-        write_to_json(self.med_mapping_file, _map)
+        sorted_items = sorted(_map.items(), key=lambda kv: kv[0].lower())
+        ordered = dict(sorted_items)
+        write_to_json(self.med_mapping_file, ordered)
 
     def validate(self, delimiter='|'):
         """
