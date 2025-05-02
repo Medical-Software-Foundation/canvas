@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "wi_pdmp",
+    "description": "An application that views the WI PDMP site.",
+    "url_permissions": [
+        {
+            "url": "https://pdmp.wi.gov/",
+            "permissions": ["ALLOW_SAME_ORIGIN", "SCRIPTS"]
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "wi_pdmp.apps.wi_pdmp_application:WIPDMPApplication",
+                "name": "WI PDMP",
+                "description": "An application that views the WI PDMP site.",
+                "icon" : "wi_pdmp.png",
+                "scope": "patient_specific"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
