@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "ny_pmp",
+    "description": "An application that views the NY PMP site.",
+    "url_permissions": [
+        {
+            "url": "https://commerce.health.state.ny.us/",
+            "permissions": ["ALLOW_SAME_ORIGIN", "SCRIPTS"]
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "ny_pmp.apps.ny_pmp_application:NYPMPApplication",
+                "name": "NY PMP",
+                "description": "An application that views the NY PMP site.",
+                "icon" : "ny_pmp.png",
+                "scope": "patient_specific"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

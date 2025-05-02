@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "ne_pdmp",
+    "description": "An application that views the NE PDMP site.",
+    "url_permissions": [
+        {
+            "url": "https://secure.cynchealth.org/",
+            "permissions": ["ALLOW_SAME_ORIGIN", "SCRIPTS"]
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "ne_pdmp.apps.ne_pdmp_application:NEPDMPApplication",
+                "name": "NE PDMP",
+                "description": "An application that views the NE PDMP site.",
+                "icon" : "ne_pdmp.png",
+                "scope": "patient_specific"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
