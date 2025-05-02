@@ -1,6 +1,9 @@
-ny_pmp
-=======
+# New York PMP
 
 ## Description
 
-Adds a link to the NY PMP site in the application drawer.
+A prescription drug monitoring program (PDMP or PMP) is an electronic database that tracks controlled substance prescriptions. Information from PDMPs can help clinicians identify patients who may be at risk for overdose and provide potentially lifesaving information and interventions. 
+
+This extension will launch the [New York PMP](https://commerce.health.state.ny.us/) in a new window.
+
+Visit [here](https://www.health.ny.gov/professionals/narcotic/prescription_monitoring/) for more information about the New York PMP.
