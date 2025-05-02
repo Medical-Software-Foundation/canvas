@@ -1,11 +1,6 @@
-ne_pdmp
+wi_pdmp
 =======
 
 ## Description
 
-A description of this plugin
-
-### Important Note!
-
-The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it
-gets updated if you add, remove, or rename protocols.
+Adds a link to the WI PDMP site in the application drawer.
