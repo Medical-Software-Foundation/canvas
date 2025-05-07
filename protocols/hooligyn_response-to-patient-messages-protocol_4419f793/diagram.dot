@@ -1,0 +1,29 @@
+digraph {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All healthcare providers and administrative staff with access to the Canvas Patient Portal within the healthcare organization."];
+    SubsetInConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="Healthcare providers and administrative staff who are assigned to manage patient communications through the Canvas Patient Portal."];
+
+    Exclusion1 [label="On Leave or Restricted Access", shape=ellipse, color=blue, fontcolor=blue, comment="Healthcare providers and administrative staff who are on leave or have restricted access to the Canvas Patient Portal."];
+    Exclusion2 [label="Not Trained or Authorized", shape=ellipse, color=blue, fontcolor=blue, comment="Staff members who are not trained or authorized to handle patient communications."];
+    Exclusion3 [label="Automated System Messages", shape=ellipse, color=blue, fontcolor=blue, comment="Automated system messages or notifications that do not require a human response."];
+
+    InitialPopulation -> SubsetInConsideration [label="if", color=blue, fontcolor=blue];
+    SubsetInConsideration -> Exclusion1 [label="and", color=blue, fontcolor=blue];
+    SubsetInConsideration -> Exclusion2 [label="and", color=blue, fontcolor=blue];
+    SubsetInConsideration -> Exclusion3 [label="and", color=blue, fontcolor=blue];
+
+    AdministrativeAction [label="Administrative Action", shape=ellipse, color=blue, fontcolor=blue, comment="Log into the Canvas Patient Portal at the beginning of each shift to check for new patient messages. Ensure that all patient messages are acknowledged within 24 hours of receipt."];
+    DiagnosticAction [label="Diagnostic Action", shape=ellipse, color=blue, fontcolor=blue, comment="Review the content of the patient message to determine the nature of the inquiry or concern. If the message pertains to a medical issue, assess whether it requires immediate attention or can be addressed during the next scheduled appointment."];
+    TherapeuticAction [label="Therapeutic Action", shape=ellipse, color=blue, fontcolor=blue, comment="Provide appropriate responses to patient inquiries, which may include clarifying medical instructions or treatment plans, offering reassurance or additional information as needed, and scheduling follow-up appointments if necessary."];
+    EscalationProtocol [label="Escalation Protocol", shape=ellipse, color=blue, fontcolor=blue, comment="If the message contains urgent or emergency medical concerns, escalate the issue to the appropriate healthcare provider immediately. Document the escalation process and any actions taken in the patient's medical record."];
+    Documentation [label="Documentation", shape=ellipse, color=blue, fontcolor=blue, comment="Record all communications with patients in the Canvas Patient Portal, ensuring that the information is accurate and up-to-date. Maintain confidentiality and adhere to HIPAA regulations when handling patient information."];
+    QualityAssurance [label="Quality Assurance", shape=ellipse, color=blue, fontcolor=blue, comment="Participate in regular audits of patient message responses to ensure compliance with the protocol. Engage in ongoing training and updates related to patient communication best practices."];
+
+    SubsetInConsideration -> AdministrativeAction [label="then", color=blue, fontcolor=blue];
+    AdministrativeAction -> DiagnosticAction [label="and", color=blue, fontcolor=blue];
+    DiagnosticAction -> TherapeuticAction [label="and", color=blue, fontcolor=blue];
+    TherapeuticAction -> EscalationProtocol [label="and", color=blue, fontcolor=blue];
+    EscalationProtocol -> Documentation [label="and", color=blue, fontcolor=blue];
+    Documentation -> QualityAssurance [label="and", color=blue, fontcolor=blue];
+}
