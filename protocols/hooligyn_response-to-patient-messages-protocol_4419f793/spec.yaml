@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Protocol for Managing Patient Messages in Canvas Portal"
+    description: "This protocol outlines the procedures for healthcare providers and staff to manage patient communications via the Canvas Patient Portal. It includes actions for logging in, message acknowledgment, diagnostic and therapeutic responses, escalation for urgent issues, documentation, and quality assurance. The protocol ensures timely, effective communication, enhancing patient satisfaction and care outcomes."
+    url: ""
+
