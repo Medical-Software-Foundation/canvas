@@ -1,0 +1,54 @@
+digraph {
+    rankdir=TB;
+
+    // Population nodes
+    TP [label="Target Population" shape=box style=rounded color=green fontcolor=green comment="Patients eligible for skin cancer screening based on protocol"];
+    QP [label="Qualified Population" shape=box style=rounded color=green fontcolor=green comment="Patients who meet all criteria for skin cancer screening"];
+    RP [label="Referred Population" shape=box style=rounded color=green fontcolor=green comment="Patients referred for skin cancer screening"];
+    DP [label="Declined Population" shape=box style=rounded color=green fontcolor=green comment="Patients who declined skin cancer screening"];
+
+    // Criterion nodes
+    A20_39 [label="Age 20-39, No screening in 3 years" shape=ellipse color=blue fontcolor=blue comment="Ages 20–39: No dermatology visit or skin cancer screening in the past 3 years"];
+    A40 [label="Age 40+, No screening in 12 months" shape=ellipse color=blue fontcolor=blue comment="Ages 40 and older: No dermatology visit or skin cancer screening in the past 12 months"];
+    FSF [label="Fair skin features" shape=ellipse color=blue fontcolor=blue comment="Fair skin features: red/blond hair, freckles, blue/light-colored eyes"];
+    M50 [label="More than 50 moles" shape=ellipse color=blue fontcolor=blue comment="More than 50 moles"];
+    FHM [label="Family history of melanoma" shape=ellipse color=blue fontcolor=blue comment="Family history of melanoma"];
+    PHC [label="Personal history of skin cancer" shape=ellipse color=blue fontcolor=blue comment="Personal history of basal cell or squamous cell skin cancer"];
+    FSE [label="Frequent/intense sun exposure" shape=ellipse color=blue fontcolor=blue comment="Frequent or intense sun exposure"];
+    HBS [label="History of blistering sunburns" shape=ellipse color=blue fontcolor=blue comment="History of blistering sunburn(s)"];
+    NCL [label="No new/changing lesion" shape=ellipse color=blue fontcolor=blue comment="Not currently presenting with a new or changing skin lesion"];
+    NR [label="No rash/dermatologic issue" shape=ellipse color=blue fontcolor=blue comment="Not currently presenting with a rash or other dermatologic issue requiring diagnostic evaluation"];
+
+    // Paths for Age 20-39
+    TP -> A20_39 [label="if" color=blue fontcolor=blue];
+    A20_39 -> FSF [label="and" color=blue fontcolor=blue];
+    A20_39 -> M50 [label="and" color=blue fontcolor=blue];
+    A20_39 -> FHM [label="and" color=blue fontcolor=blue];
+    A20_39 -> PHC [label="and" color=blue fontcolor=blue];
+    A20_39 -> FSE [label="and" color=blue fontcolor=blue];
+    A20_39 -> HBS [label="and" color=blue fontcolor=blue];
+
+    // Paths for Age 40+
+    TP -> A40 [label="if" color=blue fontcolor=blue];
+    A40 -> FSF [label="and" color=blue fontcolor=blue];
+    A40 -> M50 [label="and" color=blue fontcolor=blue];
+    A40 -> FHM [label="and" color=blue fontcolor=blue];
+    A40 -> PHC [label="and" color=blue fontcolor=blue];
+    A40 -> FSE [label="and" color=blue fontcolor=blue];
+    A40 -> HBS [label="and" color=blue fontcolor=blue];
+
+    // Common paths for both age groups
+    FSF -> NCL [label="and" color=blue fontcolor=blue];
+    M50 -> NCL [label="and" color=blue fontcolor=blue];
+    FHM -> NCL [label="and" color=blue fontcolor=blue];
+    PHC -> NCL [label="and" color=blue fontcolor=blue];
+    FSE -> NCL [label="and" color=blue fontcolor=blue];
+    HBS -> NCL [label="and" color=blue fontcolor=blue];
+
+    NCL -> NR [label="and" color=blue fontcolor=blue];
+    NR -> QP [label="then" color=blue fontcolor=blue];
+
+    // Actions
+    QP -> RP [label="if" color=blue fontcolor=blue];
+    QP -> DP [label="if" color=blue fontcolor=blue];
+}
