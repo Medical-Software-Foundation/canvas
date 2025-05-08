@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Protocol for Autonomous Dermatology Referrals for High-Risk Adults"
+    description: "This protocol allows medical assistants and nurses to initiate dermatology referrals for skin cancer screening in adults at increased risk, based on standing orders. It targets patients aged 20 and older who haven't had recent screenings and possess high-risk traits like fair skin or family history of melanoma. The protocol excludes those with new skin concerns. If criteria are met, patients are informed and referred for screening, with documentation of the process and any patient refusals."
+    url: ""
+
