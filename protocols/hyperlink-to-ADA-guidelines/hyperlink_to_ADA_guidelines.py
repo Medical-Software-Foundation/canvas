@@ -41,14 +41,14 @@ class GuidelinesLink(ClinicalQualityMeasure):
     def remainder_tasks(self, result: ProtocolResult):
         result.add_recommendation(
             HyperlinkRecommendation(
-                key='diabetes_standards_of_care_2023',
-                href='https://doi.org/10.2337/dc23-S001',
+                key='diabetes_standards_of_care_2025',
+                href='https://doi.org/10.2337/dc25-S001',
                 title='Access the guidelines',
                 button='ADA link',
             )
         )
         result.status = STATUS_DUE
-        result.add_narrative(('Diabetes standards of care 2023.'))
+        result.add_narrative(('Diabetes standards of care 2025.'))
 
     def numerator_tasks(self, result: ProtocolResult):
         result.status = STATUS_SATISFIED
