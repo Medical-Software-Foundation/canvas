@@ -1,3 +1,5 @@
+# Hyperlink to ADA Guidelines
+
 ### Target Population
 Designed for patients with a diagnosis of diabetes. It identifies individuals with active diabetes and provides specific recommendations relevant to their care.
 ### Recommendations
