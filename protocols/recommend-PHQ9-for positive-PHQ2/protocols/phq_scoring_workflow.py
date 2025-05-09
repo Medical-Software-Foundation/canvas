@@ -49,7 +49,7 @@ class PHQWorkflow(BaseProtocol):
 
         score = self.score(self.interview)
 
-        if not score:
+        if score is None:
             abnormal = False
             narrative = (
                 "Unable to score questionnaire due to missing questions"
@@ -103,7 +103,7 @@ class PHQWorkflow(BaseProtocol):
 
         score = self.score(self.interview)
 
-        if not score:
+        if score is None:
             abnormal = False
             narrative = (
                 "Unable to score questionnaire due to missing questions"
