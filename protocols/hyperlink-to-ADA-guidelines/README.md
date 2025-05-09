@@ -3,7 +3,7 @@
 ### Target Population
 Designed for patients with a diagnosis of diabetes. It identifies individuals with active diabetes and provides specific recommendations relevant to their care.
 ### Recommendations
-Clinicians provide a hyperlink to the latest ADA (American Diabetes Association) Standard of Care guidelines for diabetes management. The hyperlink directs to the 2023 guidelines and aims to facilitate easy access to up-to-date care standards.
+Clinicians provide a hyperlink to the latest ADA (American Diabetes Association) Standard of Care guidelines for diabetes management. The hyperlink directs to the 2025 guidelines and aims to facilitate easy access to up-to-date care standards.
 ### Importance
 Ensuring that clinicians have frictionless access to current guidelines is crucial for maintaining high standards of care. Healthcare providers can quickly access relevant information and ensure that their treatment approaches align with the latest recommendations.
 ### Conclusion
