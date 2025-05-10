@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.35.0",
+    "plugin_version": "0.35.0",
+    "name": "scoring_visualizer",
+    "description": "Scoring Visualizer Graph",
+    "components": {
+        "protocols": [
+            {
+                "class": "scoring_visualizer.protocols.visualizer:ScoringVisualizerButton",
+                "description": "An action button that shows a modal containing graphs for patient scoring.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "scoring_visualizer.protocols.visualizer:VisualApp",
+                "description": "An API to serve the scoring visualization button",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
