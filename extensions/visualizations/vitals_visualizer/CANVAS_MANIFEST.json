@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.35.0",
+    "plugin_version": "0.35.0",
+    "name": "vitals_visualizer",
+    "description": "Vitals Visualizer Graph",
+    "components": {
+        "protocols": [
+            {
+                "class": "vitals_visualizer.protocols.visualizer:VitalsVisualizerButton",
+                "description": "An action button that shows a modal containing graphs for patient vitals trends.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "vitals_visualizer.protocols.visualizer:VisualApp",
+                "description": "An API to serve the vital visualization button",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

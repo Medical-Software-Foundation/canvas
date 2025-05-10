@@ -1,0 +1,116 @@
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: "Roboto", sans-serif;
+    background: #f5f6f7;
+    color: #24292e;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 48px;
+    padding: 0 16px;
+    background: #fafbfc;
+    border-bottom: 1px solid #e1e4e8;
+}
+
+header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.control-group label {
+    font-size: 14px;
+    color: #57606a;
+}
+
+.controls select {
+    min-width: 140px;
+    height: 32px;
+    padding: 0 8px;
+    font-size: 14px;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
+    background: #ffffff;
+}
+
+.btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 14px;
+    line-height: 32px;
+    border: none;
+    border-radius: 4px;
+    background: #0366d6;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn:hover {
+    background: #0356b3;
+}
+
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    border: none;
+    background: transparent;
+    color: #d73a49;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.btn-icon:hover {
+    color: #b31d28;
+}
+
+.chart-container {
+    position: absolute;
+    top: 48px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    background: #f5f6f7;
+}
+
+.chart-wrapper {
+    flex: 1;
+    background: #ffffff;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(27, 31, 35, 0.08);
+}
+
+.chart-wrapper canvas {
+    flex: 1;
+    width: 100% !important;
+    height: 100% !important;
+}

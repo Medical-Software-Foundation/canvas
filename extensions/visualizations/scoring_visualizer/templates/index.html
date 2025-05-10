@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Patient Questionnaire Scoring Trends</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <header>
+        <h2>Patient Questionnaire Scoring Trends</h2>
+        <div class="controls">
+            <div class="control-group" id="graph1Ctrl">
+                <label for="obsSelect1">Metric #1</label>
+                <select id="obsSelect1"></select>
+            </div>
+            <button id="addGraphBtn" class="btn">Compare Metrics</button>
+            <div class="control-group" id="graph2Ctrl" style="display:none;">
+                <label for="obsSelect2">Metric #2</label>
+                <select id="obsSelect2"></select>
+                <button id="removeGraphBtn" class="btn-icon" aria-label="Remove Chart">&times;</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="chart-container">
+        <div class="chart-wrapper">
+            <canvas id="obsChart1"></canvas>
+        </div>
+        <div id="chart2Wrapper" class="chart-wrapper" style="display:none;">
+            <canvas id="obsChart2"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const dates = {{ dates|safe }};
+        const data = {{ data|safe }};
+
+        const select1 = document.getElementById('obsSelect1');
+        const select2 = document.getElementById('obsSelect2');
+        const addBtn = document.getElementById('addGraphBtn');
+        const removeBtn = document.getElementById('removeGraphBtn');
+        const graph2Ctrl = document.getElementById('graph2Ctrl');
+        const chart2Wrapper = document.getElementById('chart2Wrapper');
+
+        Object.keys(data).forEach(key => select1.add(new Option(key, key)));
+
+        function createChart(ctx, color = 'rgba(0,140,255,1)') {
+            return new Chart(ctx, {
+                type: 'line',
+                data: { labels: dates, datasets: [{ label: '', data: [], tension: 0.3, pointRadius: 6, pointHoverRadius: 8, borderWidth: 3, borderColor: color, fill: false, spanGaps: true }] },
+                options: {
+                    maintainAspectRatio: false, animation: { duration: 800, easing: 'easeOutQuad' }, plugins: { tooltip: { mode: 'index', intersect: false }, legend: { display: false } }, scales: { x: { title: { display: true, text: 'Date' } }, y: { title: { display: true, text: '' } } }
+                }
+            });
+        }
+
+        const chart1 = createChart(document.getElementById('obsChart1').getContext('2d'));
+        let chart2;
+
+        function updateChart(chart, obs) {
+            chart.data.datasets[0].data = data[obs];
+            chart.data.datasets[0].label = obs;
+            chart.options.scales.y.title.text = obs;
+            chart.update();
+        }
+
+        function filterSelect2() {
+            const val1 = select1.value;
+            select2.options.length = 0;
+            Object.keys(data).forEach(key => {
+                if (key !== val1) select2.add(new Option(key, key));
+            });
+        }
+
+        select1.addEventListener('change', () => {
+            updateChart(chart1, select1.value);
+            if (chart2) filterSelect2();
+        });
+
+        addBtn.addEventListener('click', () => {
+            addBtn.style.display = 'none';
+            graph2Ctrl.style.display = 'flex';
+            chart2Wrapper.style.display = 'flex';
+            filterSelect2();
+            chart2 = createChart(document.getElementById('obsChart2').getContext('2d'), 'rgba(255,99,132,1)');
+            select2.selectedIndex = 0;
+            updateChart(chart2, select2.value);
+            select2.addEventListener('change', () => updateChart(chart2, select2.value));
+        });
+
+        removeBtn.addEventListener('click', () => {
+            graph2Ctrl.style.display = 'none';
+            chart2Wrapper.style.display = 'none';
+            chart2.destroy(); chart2 = null;
+            addBtn.style.display = 'inline-block';
+        });
+
+        select1.selectedIndex = 0;
+        updateChart(chart1, select1.value);
+    </script>
+</body>
+
+</html>
