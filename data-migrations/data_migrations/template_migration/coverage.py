@@ -67,7 +67,7 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
                 "Patient Identifier": [validate_required],
                 "Subscriber": [validate_required],
                 "Member ID": [validate_required],
-                "Coverage Start Date": [validate_date],
+                "Coverage Start Date": [validate_date, validate_required],
                 "Payor ID": [validate_required],
                 "Order": [validate_required, (validate_enum, {"possible_options": ['1', '2', '3', '4', '5']})],
                 "Relationship to Subscriber": [(validate_enum, {"possible_options": ['self', 'child', 'spouse', 'other', 'injured']})]

@@ -4,22 +4,22 @@ from data_migrations.template_migration.appointment import AppointmentLoaderMixi
 
 class AppointmentLoader(AppointmentLoaderMixin):
     """
-        Load Appointments from Athena to Canvas. 
+        Load Appointments from Athena to Canvas.
 
         Takes the CSV accomplish exported and converts the results into our templated CSV
         then loops through the CSV to validate the columns according to Canvas Data Migration Template
         and lastly loads the validated rows into Canvas via FHIR
 
         It also produces multiple files:
-        - The done_file keeps track of the Avon unique identifier to the canvas 
-          appointment id and patient key. This helps ensure no duplicate data is transfered and 
+        - The done_file keeps track of the Avon unique identifier to the canvas
+          appointment id and patient key. This helps ensure no duplicate data is transfered and
           helps keep an audit of what was loaded.
         - The error_file keeps track of any errors that happen during FHIR ingestion and keeps
           track of any data that may need manual fixing and replaying
         - The ignore file keeps track of any records that were skipped over
-          during the ingest process potentially due to a patient not being 
+          during the ingest process potentially due to a patient not being
           in canvas, doctor not being in canvas, etc
-        - The validation_error_file keeps track of all the Avon records that failed the validation of 
+        - The validation_error_file keeps track of all the Avon records that failed the validation of
           the Canvas Data Migration Template and why they failed
     """
 
@@ -50,7 +50,7 @@ class AppointmentLoader(AppointmentLoaderMixin):
             the Canvas Data Migration Template
         """
         headers = {
-            "ID",
+            "Unique ID",
             "Patient Identifier",
             "Appointment Type",
             "Reason for Visit Code",
@@ -74,7 +74,7 @@ class AppointmentLoader(AppointmentLoaderMixin):
                 reader = csv.DictReader(file, delimiter=delimiter)
                 for row in reader:
                     writer.writerow({
-                        "ID": row['apptid'],
+                        "Unique ID": row['apptid'],
                         "Patient Identifier": row['enterpriseid'],
                         "Appointment Type": self.default_note_type,
                         "Reason for Visit Code": "",
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     loader = AppointmentLoader(environment='phi-test-accomplish')
     delimiter = '|'
 
-    # Make the Avon API call to their List Patients endpoint and convert the JSON return 
+    # Make the Avon API call to their List Patients endpoint and convert the JSON return
     # to the template CSV loader
     loader.make_csv(delimiter=delimiter)
 

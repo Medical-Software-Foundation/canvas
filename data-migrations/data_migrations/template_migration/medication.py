@@ -142,7 +142,7 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 "ID": [validate_required],
                 "Patient Identifier": [validate_required],
                 "RxNorm/FDB Code": [validate_required],
-                "Status": [validate_required, (validate_enum, {"possible_options": ['active', 'resolved']})]
+                "Status": [validate_required, (validate_enum, {"possible_options": ['active', 'stopped']})]
             }
 
             for row in reader:

@@ -1,7 +1,13 @@
-import csv, os
+import csv
+import arrow
 
 from data_migrations.template_migration.coverage import CoverageLoaderMixin
-from data_migrations.utils import fetch_from_json
+from data_migrations.utils import (
+    fetch_complete_csv_rows,
+    fetch_from_json,
+    load_fhir_settings,
+    reverse_mapping,
+)
 
 
 class CoverageLoader(CoverageLoaderMixin):
@@ -9,7 +15,17 @@ class CoverageLoader(CoverageLoaderMixin):
         self.environment = environment
         self.json_file = "PHI/coverages.json"
         self.csv_file = "PHI/coverages.csv"
-        self.payer_mapping_csv_file = 'mappings/insurance_payer_mapping.csv'
+        self.payer_mapping_csv_file = "mappings/insurance_payer_mapping.csv"
+        self.patient_map_file = 'PHI/patient_id_map.json'
+        self.reverse_patient_map = reverse_mapping(self.patient_map_file)
+        self.fumage_helper = load_fhir_settings(environment)
+        self.payor_mapping_file = "mappings/payor_mapping.json"
+        self.payor_mapping = fetch_from_json(self.payor_mapping_file)
+        self.ignore_file = "results/ignored_coverages.csv"
+        self.done_file = "results/done_coverages.csv"
+        self.error_file = "results/errored_coverages.csv"
+        self.validation_error_file = 'results/PHI/errored_coverage_validation.json'
+        self.done_records = fetch_complete_csv_rows(self.done_file)
 
     def make_payer_mapping_file(self):
         data = fetch_from_json(self.json_file)
@@ -45,21 +61,66 @@ class CoverageLoader(CoverageLoaderMixin):
             writer = csv.DictWriter(f, fieldnames=headers, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
             writer.writeheader()
 
+            relationship_map = {
+                "Self": "self",
+                "Child": "child",
+                "Spouse": "spouse",
+                "Other": "other",
+                "Unknown": "other",
+            }
+
             for row in data:
-                patient_id = row.get("patientdetails", {}).get("fhir-profile-reference", "").replace("Patient/", "")
+                patient_id = row.get("patientdetails", {}).get("enterpriseid", "")
                 for coverage in row["insurances"]:
                     coverage_id = coverage["insuranceid"]
-                    breakpoint()
+                    insurance_id_number = coverage.get("insuranceidnumber", "")
+                    relationship = relationship_map.get(coverage.get("relationshiptoinsured", ""), "")
+                    if relationship != "self" and all(
+                        [coverage.get("insurancepolicyholderfirstname"),
+                         coverage.get("insurancepolicyholderlastname"),
+                         coverage.get("insurancepolicyholderdob"),]
+                         ):
+                        subscriber_id = self.find_subscriber(
+                            coverage["insurancepolicyholderfirstname"],
+                            coverage["insurancepolicyholderlastname"],
+                            arrow.get(coverage["insurancepolicyholderdob"], "MM/DD/YYYY").date().isoformat(),
+                        )
+                        if not subscriber_id:
+                            subscriber_id = ""
+                    elif relationship == "self":
+                        subscriber_id = patient_id
+                    else:
+                        subscriber_id = ""
+
+                    coverage_start_date = ""
+                    if "issuedate" in coverage:
+                        coverage_start_date = arrow.get(coverage["issuedate"], "MM/DD/YYYY").date().isoformat()
+
+                    payor_id = ""
+                    if coverage.get("insurancepackagepayerid") or coverage.get("insurancepackagepayerid"):
+                        payor_id = self.payor_mapping.get(f'{coverage.get("insurancepackagepayerid", "")}|{coverage.get("insurancepayername", "")}', "")
 
                     row_to_write = {
                         "ID": coverage_id,
                         "Patient Identifier": patient_id,
                         "Type": "",
-
+                        "Subscriber": subscriber_id,
+                        "Member ID": insurance_id_number,
+                        "Relationship to Subscriber": relationship_map.get(coverage.get("relationshiptoinsured", ""), ""),
+                        "Coverage Start Date": coverage_start_date,
+                        "Payor ID": payor_id,
+                        "Order": coverage.get("sequencenumber", "1"),
+                        "Group Number": "",
+                        "Plan Name": coverage["insuranceplanname"],
                     }
+
+                    writer.writerow(row_to_write)
+        print("CSV successfully made")
 
 
 if __name__ == "__main__":
-    loader = CoverageLoader(environment="localhost")
-    # loader.make_csv()
-    loader.make_payer_mapping_file()
+    loader = CoverageLoader(environment="phi-test-accomplish")
+    # loader.make_payer_mapping_file()
+    loader.make_csv()
+    valid_rows = loader.validate(delimiter=",")
+    # loader.load(valid_rows, map_payor=False)

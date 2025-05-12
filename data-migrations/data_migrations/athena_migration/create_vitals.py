@@ -159,7 +159,7 @@ class VitalsLoader(VitalsMixin):
                                 encounter_start_time=arrow.get(date_taken, "MM/DD/YYYY").replace(tzinfo="America/New York").shift(hours=12).isoformat(),
                                 practice_location_key=self.default_location
                             )
-                            self.done_row(f"{unique_import_note_id}|{patient_id}|{patient_key}|{vitals_import_note}")
+                            self.done_row(f"{unique_import_note_id}|{patient_id}|{patient_key}||{vitals_import_note}")
                             ids.add(unique_import_note_id)
                         except Exception as e:
                             self.error_row(f"{unique_import_note_id}|{patient_id}|{patient_key}", e)
@@ -168,17 +168,6 @@ class VitalsLoader(VitalsMixin):
                         for reading_id, readings in patient_readings[src_id]["readings"].items():
                             values_dict = readings["values"]
                             unique_command_id = f"{src}~{src_id}~{reading_id}"
-
-                            # unique_createdby_values = list(set([i[1]["createdby"] for i in readings["values"].items()]))
-                            # provider_key = "5eede137ecfe4124b8b773040e33be14" # canvas-bot
-                            # # TODO - how to get provider key associated with the command and/or commit?
-                            # # is it possible using the commands API?
-
-                            # if len(unique_createdby_values) == 1:
-                            #     try:
-                            #         provider_key = self.map_provider(unique_createdby_values[1])
-                            #     except Exception:
-                            #         pass
 
                             height_dict = values_dict.get("VITALS.HEIGHT")
                             if height_dict:
@@ -243,6 +232,12 @@ class VitalsLoader(VitalsMixin):
                             else:
                                 reading_notes = ""
 
+                            if src == "FLOWSHEET":
+                                if not reading_notes:
+                                    reading_notes = "device-generated"
+                                else:
+                                    reading_notes = f"device-generated\n{reading_notes}"
+
                             vitals_values = {
                                 "note": reading_notes,
                                 "height": height,
@@ -272,7 +267,7 @@ class VitalsLoader(VitalsMixin):
 
                             try:
                                 command_id = self.create_command(vitals_payload)
-                                self.done_row(f"{unique_command_id}|{patient_id}|{patient_key}|{command_id}")
+                                self.done_row(f"{unique_command_id}|{patient_id}|{patient_key}|{command_id}|")
                                 ids.add(unique_command_id)
                             except BaseException as e:
                                 self.error_row(f"{unique_command_id}|{patient_id}|{patient_key}", e)

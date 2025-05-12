@@ -170,4 +170,5 @@ data-migrations/data_migrations/avon_migration/PHI
 data-migrations/data_migrations/avon_migration/results/PHI
 data-migrations/data_migrations/drchrono_migration/PHI
 data-migrations/data_migrations/athena_migration/PHI
+data-migrations/data_migrations/athena_migration/results/PHI
 data-migrations/data_migrations/elation_migration/PHI
