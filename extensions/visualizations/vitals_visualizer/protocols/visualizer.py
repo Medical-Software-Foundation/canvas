@@ -80,17 +80,19 @@ class VisualApp(SimpleAPI):
 
         for observation in patient_observations:
             value = observation.value
-            if observation.name == "weight" and value:
-                # convert
+            if not value or observation.name in ["note", "pulse_rhythm"]:
+                continue
+
+            if observation.name == "weight":
+                # convert from oz to lbs
                 value = float(observation.value) / 16
-            elif observation.name == "blood_pressure" and value:
+            elif observation.name == "blood_pressure":
                 # separate into systolic and diastolic
                 systolic_val, diastolic_val = value.split("/")
                 patient_vitals_dict[str(observation.is_member_of.id)]["values"]["Systolic BP (mmHg)"] = systolic_val
                 patient_vitals_dict[str(observation.is_member_of.id)]["values"]["Diastolic BP (mmHg)"] = diastolic_val
                 continue
-            elif observation.name in ["note", "pulse_rhythm"]:
-                continue
+
             patient_vitals_dict[str(observation.is_member_of.id)]["values"][vital_keys[observation.name]] = value
 
         # Sort records by datetime
