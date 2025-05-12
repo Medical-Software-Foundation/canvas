@@ -1,8 +1,8 @@
-# Questionnaire Scoring Visualizer
+# Scoring Visualizer
 
 ## Description
 
-Monitor patient progress over time with the Questionnaire Scoring Visualizer.
+Monitor patient progress over time with the Scoring Visualizer.
 
 For any scored questionnaire:
 - Open the visualizer from the Social Determinants action button in the patient summary
