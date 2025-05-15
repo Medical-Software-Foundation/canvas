@@ -1,3 +1,5 @@
+# Concussion: Return to Play Protocol
+
 ### Target Population
 Designed for patients diagnosed with a concussion, focusing on those who are involved in sports or activities where a return-to-play plan is relevant.
 
