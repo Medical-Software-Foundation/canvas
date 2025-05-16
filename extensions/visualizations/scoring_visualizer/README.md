@@ -11,4 +11,4 @@ For any scored questionnaire:
 - Compare multiple metrics in the same view
 - Identify trends and progress over time
 
-![Questionnaire Scoring Visualizer](https://images.prismic.io/canvas-website/aCJs8ydWJ-7kR-Ye_gad2_trend.png?auto=format,compress)
+![Questionnaire Scoring Visualizer](https://images.prismic.io/canvas-website/aCep9idWJ-7kSPla_gad2_scoring.png?auto=format,compress)
