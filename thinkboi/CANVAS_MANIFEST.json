@@ -1,0 +1,45 @@
+{
+  "sdk_version": "0.36.0",
+  "plugin_version": "0.1.0",
+  "name": "thinkboi",
+  "description": "Conjures thinkboi for inspiration",
+  "components": {
+    "protocols": [
+      {
+        "class": "thinkboi.handlers.motivator:YouCanJustDoThings",
+        "description": "Display thinkboi",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      },
+      {
+        "class": "thinkboi.handlers.launcher:GiveMeThinkboi",
+        "description": "Conjure thinkboi",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      }
+    ],
+    "commands": [],
+    "content": [],
+    "effects": [],
+    "views": []
+  },
+  "secrets": [
+    "AwsKey",
+    "AwsSecret",
+    "AwsBucket",
+    "AwsRegion",
+    "AudioIntervalSeconds",
+    "APISigningKey"
+  ],
+  "tags": {},
+  "references": [],
+  "license": "",
+  "diagram": false,
+  "readme": "./README.md"
+}
