@@ -268,18 +268,29 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
 
             patient = row['Patient Identifier']
             patient_key = ""
-            try:
-                # try mapping required Canvas identifiers
-                patient_key = self.map_patient(patient)
-                note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
+
+            if row["RxNorm/FDB Code"] == "unstructured":
+                text = row["Medication Name"]
+                code = row["Medication Name"]
+                coding = [
+                    {
+                        "code": "",
+                        "system": "UNSTRUCTURED",
+                        "display": text
+                    }
+                ]
+            else:
                 coding = self.med_mapping[f"{row['Medication Name']}|{row.get('Original Code', '')}"]
-            except BaseException as e:
-                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+                code = next(item['code'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
+                text = next(item['display'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
+
+            try:
+                patient_key = self.map_patient(patient)
+            except Exception as e:
+                self.ignore_row(row["ID"], str(e))
                 continue
 
-
-            code = next(item['code'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
-            text = next(item['display'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
+            note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
 
             payload = {
                 "noteKey": note_id,
