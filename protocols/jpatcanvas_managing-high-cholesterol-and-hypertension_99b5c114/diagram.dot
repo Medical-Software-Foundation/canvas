@@ -1,0 +1,37 @@
+digraph {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPop [label="Adults aged 18-50 years", shape=box, style=rounded, color=green, fontcolor=green];
+    SubsetPop [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green];
+    ExclusionPop [label="Exclusion Criteria", shape=box, style=rounded, color=green, fontcolor=green];
+
+    // Criterion Nodes
+    FamilyHistory [label="Family History", shape=ellipse, color=blue, fontcolor=blue, comment="A documented family history of cardiovascular disease"];
+    Diet [label="Diet", shape=ellipse, color=blue, fontcolor=blue, comment="Diet high in saturated fats and sodium"];
+    Alcohol [label="Alcohol", shape=ellipse, color=blue, fontcolor=blue, comment="Regular alcohol consumption exceeding moderate levels"];
+    Sedentary [label="Sedentary Lifestyle", shape=ellipse, color=blue, fontcolor=blue, comment="Sedentary lifestyle with minimal physical activity"];
+    Hyperlipidemia [label="Hyperlipidemia", shape=ellipse, color=blue, fontcolor=blue, comment="Current diagnosis of hyperlipidemia or hypertension already under treatment"];
+    Contraindications [label="Contraindications", shape=ellipse, color=blue, fontcolor=blue, comment="Contraindications to statin therapy or antihypertensive medications"];
+    Pregnancy [label="Pregnancy", shape=ellipse, color=blue, fontcolor=blue, comment="Pregnant or breastfeeding individuals"];
+    ComorbidConditions [label="Comorbid Conditions", shape=ellipse, color=blue, fontcolor=blue, comment="Severe comorbid conditions that may interfere with protocol adherence or outcomes"];
+
+    // Edges
+    InitialPop -> FamilyHistory [label="if", color=blue, fontcolor=blue];
+    FamilyHistory -> Diet [label="and", color=blue, fontcolor=blue];
+    Diet -> Alcohol [label="and", color=blue, fontcolor=blue];
+    Alcohol -> Sedentary [label="and", color=blue, fontcolor=blue];
+    Sedentary -> SubsetPop [label="then", color=blue, fontcolor=blue];
+
+    SubsetPop -> Hyperlipidemia [label="if", color=blue, fontcolor=blue];
+    Hyperlipidemia -> ExclusionPop [label="then", color=blue, fontcolor=blue];
+
+    SubsetPop -> Contraindications [label="if", color=blue, fontcolor=blue];
+    Contraindications -> ExclusionPop [label="then", color=blue, fontcolor=blue];
+
+    SubsetPop -> Pregnancy [label="if", color=blue, fontcolor=blue];
+    Pregnancy -> ExclusionPop [label="then", color=blue, fontcolor=blue];
+
+    SubsetPop -> ComorbidConditions [label="if", color=blue, fontcolor=blue];
+    ComorbidConditions -> ExclusionPop [label="then", color=blue, fontcolor=blue];
+}
