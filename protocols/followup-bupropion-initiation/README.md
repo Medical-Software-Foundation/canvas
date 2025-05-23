@@ -1,3 +1,5 @@
+# Follow-up Bupropion Initiation
+
 ### Target Population
 Designed for patients who are newly prescribed bupropion (Wellbutrin or Wellbutrin XL). 
 ### Recommendations
