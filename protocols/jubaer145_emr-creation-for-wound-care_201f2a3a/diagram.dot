@@ -1,0 +1,41 @@
+digraph {
+    rankdir=TB;
+
+    // Population nodes
+    InitPop [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients presenting to a healthcare facility with a wound or seeking wound care services"];
+    SubsetPop [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients with acute or chronic wounds requiring ongoing care and documentation"];
+    CompletePop [label="Protocol Completion", shape=box, style=rounded, color=green, fontcolor=green, comment="The protocol is considered complete when all required actions have been performed and documented in the patient's EMR, creating a comprehensive wound care record"];
+
+    // Criteria nodes
+    AcuteChronicWound [label="Acute/Chronic Wound", shape=ellipse, color=blue, fontcolor=blue, comment="Patient has acute or chronic wound requiring ongoing care and documentation"];
+    NotMinorWound [label="Not Minor Wound", shape=ellipse, color=blue, fontcolor=blue, comment="Patient does not have a minor wound that does not require follow-up care"];
+    ConsentGiven [label="Consent Given", shape=ellipse, color=blue, fontcolor=blue, comment="Patient does not refuse EMR creation or wound care documentation"];
+    CanConsent [label="Can Consent", shape=ellipse, color=blue, fontcolor=blue, comment="Patient is able to provide informed consent or has a legal guardian present"];
+    PatientReg [label="Patient Registration", shape=ellipse, color=blue, fontcolor=blue, comment="Verify patient identity and demographic information, obtain consent for EMR creation and wound care documentation"];
+    EMRCreation [label="EMR Creation", shape=ellipse, color=blue, fontcolor=blue, comment="Create a new EMR if one does not exist, update existing EMR if already present in the system"];
+    WoundAssess [label="Wound Assessment", shape=ellipse, color=blue, fontcolor=blue, comment="Document wound location, size, depth, characteristics, etiology, duration, surrounding skin condition, wound bed appearance, exudate, and wound-related pain"];
+    PhotoDoc [label="Photographic Documentation", shape=ellipse, color=blue, fontcolor=blue, comment="Obtain patient consent for wound photography, take high-quality digital photographs of the wound, upload and link photographs to the patient's EMR"];
+    TreatmentPlan [label="Treatment Plan", shape=ellipse, color=blue, fontcolor=blue, comment="Document current wound care regimen, record prescribed medications or topical treatments, note frequency of dressing changes and wound care procedures"];
+    FollowUp [label="Follow-up Planning", shape=ellipse, color=blue, fontcolor=blue, comment="Schedule next wound care appointment, document any referrals to specialists"];
+    PatientEd [label="Patient Education", shape=ellipse, color=blue, fontcolor=blue, comment="Provide and document wound care instructions given to the patient or caregiver, record any educational materials provided"];
+    CareCoord [label="Care Coordination", shape=ellipse, color=blue, fontcolor=blue, comment="Document communication with other healthcare providers involved in the patient's care, note any equipment or supplies ordered for home wound care"];
+    QualityAssurance [label="Quality Assurance", shape=ellipse, color=blue, fontcolor=blue, comment="Ensure all required fields in the EMR are completed, verify that the wound care documentation meets facility standards and regulatory requirements"];
+
+    // Edges
+    InitPop -> AcuteChronicWound [label="if", color=blue, fontcolor=blue];
+    AcuteChronicWound -> NotMinorWound [label="and", color=blue, fontcolor=blue];
+    NotMinorWound -> ConsentGiven [label="and", color=blue, fontcolor=blue];
+    ConsentGiven -> CanConsent [label="and", color=blue, fontcolor=blue];
+    CanConsent -> SubsetPop [label="then", color=blue, fontcolor=blue];
+
+    SubsetPop -> PatientReg [label="if", color=blue, fontcolor=blue];
+    PatientReg -> EMRCreation [label="and", color=blue, fontcolor=blue];
+    EMRCreation -> WoundAssess [label="and", color=blue, fontcolor=blue];
+    WoundAssess -> PhotoDoc [label="and", color=blue, fontcolor=blue];
+    PhotoDoc -> TreatmentPlan [label="and", color=blue, fontcolor=blue];
+    TreatmentPlan -> FollowUp [label="and", color=blue, fontcolor=blue];
+    FollowUp -> PatientEd [label="and", color=blue, fontcolor=blue];
+    PatientEd -> CareCoord [label="and", color=blue, fontcolor=blue];
+    CareCoord -> QualityAssurance [label="and", color=blue, fontcolor=blue];
+    QualityAssurance -> CompletePop [label="then", color=blue, fontcolor=blue];
+}
