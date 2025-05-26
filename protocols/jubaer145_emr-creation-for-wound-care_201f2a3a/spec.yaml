@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "EMR Creation Protocol for Comprehensive Wound Care Documentation"
+    description: "This protocol outlines the process for creating and updating Electronic Medical Records (EMRs) for patients requiring wound care. It covers patient registration, wound assessment, photographic documentation, treatment planning, follow-up, patient education, care coordination, and quality assurance measures to ensure comprehensive wound care documentation."
+    url: ""
+
