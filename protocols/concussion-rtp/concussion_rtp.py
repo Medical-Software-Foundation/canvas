@@ -99,7 +99,7 @@ class ReturnToPlayConcussion(ClinicalQualityMeasure):
                 key='PROTOCOL_DOCUMENTATION_LINK',
                 rank=2,
                 button='For Detailed CDC Guidelines',
-                href='https://www.cdc.gov/headsup/basics/return_to_sports.html',
+                href='https://www.cdc.gov/heads-up/guidelines/returning-to-sports.html',
                 title='CDC Guidelines for Concussion Return to Play Protocol'
             )
         
