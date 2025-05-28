@@ -6,11 +6,12 @@ Designed for patients diagnosed with a concussion, focusing on those who are inv
 ### Recommendations
 The protocol provides a structured return-to-play plan for athletes recovering from a concussion. 
 It includes:
-1. No activity
+1. Back to regular activities
 2. Light aerobic exercise
-3. Sport-specific exercise
-4. Non-contact training drills
+3. Moderate activity
+4. Heavy, non-contact activity
 5. Full contact practice
+6. Competition
 
 ### Importance
 Managing concussions effectively is crucial to ensure the safety and well-being of patients, especially athletes. Implementing this protocol helps clinicians ensure that patients follow a recommended and systematic approach to safely return to play, minimizing the risk of further injury.
