@@ -91,8 +91,8 @@ class ReturnToPlayConcussion(ClinicalQualityMeasure):
                 instruction=ConcussionRTPInstructions,
                 title='Initiate Return to Play Protocol',
                 narrative="""Patient to follow 6 step return to play protocol. 
-                1. Back to regular activivities, 2. Light aerobic exercise, 3. Sport specific exercise, 
-                4. Non-contact training drills, 5. Full contact practice, 6. Competition"""
+                1. Back to regular activivities, 2. Light aerobic exercise, 3. Moderate activity, 
+                4. Heavy,non-contact activity, 5. Full contact practice, 6. Competition"""
             )
               
             hyperlink_recommendation = HyperlinkRecommendation(
