@@ -1,0 +1,32 @@
+digraph {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="Individuals aged 55 years and older, diagnosed with MCI as per DSM-5 criteria, residing in community settings or assisted living facilities"];
+    SubsetConsideration [label="Subset in Consideration" shape=box style=rounded color=green fontcolor=green comment="Individuals from the initial population confirmed to have MCI through standardized cognitive assessment tools and interested in cognitive stimulation interventions"];
+
+    // Criterion Nodes
+    Age55Plus [label="Age 55+" shape=ellipse color=blue fontcolor=blue comment="Individuals aged 55 years and older"];
+    MCI_DSM5 [label="MCI DSM-5" shape=ellipse color=blue fontcolor=blue comment="Diagnosed with Mild Cognitive Impairment (MCI) as per DSM-5 criteria"];
+    CommunityResiding [label="Community Residing" shape=ellipse color=blue fontcolor=blue comment="Residing in community settings or assisted living facilities"];
+    ConfirmedMCI [label="Confirmed MCI" shape=ellipse color=blue fontcolor=blue comment="Confirmed to have mild cognitive impairment through standardized cognitive assessment tools such as MoCA or MMSE"];
+    InterestInInterventions [label="Interest in Interventions" shape=ellipse color=blue fontcolor=blue comment="Expressed interest in participating in cognitive stimulation interventions"];
+    NoDementia [label="No Dementia" shape=ellipse color=blue fontcolor=blue comment="No diagnosis of dementia or Alzheimer's disease"];
+    NoSeverePsychDisorders [label="No Severe Psych Disorders" shape=ellipse color=blue fontcolor=blue comment="No severe psychiatric disorders that may interfere with participation in cognitive interventions"];
+    NoSignificantSensoryImpairments [label="No Significant Sensory Impairments" shape=ellipse color=blue fontcolor=blue comment="No significant sensory impairments that cannot be accommodated"];
+    NotInOtherStudies [label="Not in Other Studies" shape=ellipse color=blue fontcolor=blue comment="Not currently participating in other cognitive intervention research studies"];
+
+    // Edges
+    InitialPopulation -> Age55Plus [label="if" color=blue fontcolor=blue];
+    Age55Plus -> MCI_DSM5 [label="and" color=blue fontcolor=blue];
+    MCI_DSM5 -> CommunityResiding [label="and" color=blue fontcolor=blue];
+    CommunityResiding -> SubsetConsideration [label="then" color=blue fontcolor=blue];
+
+    SubsetConsideration -> ConfirmedMCI [label="if" color=blue fontcolor=blue];
+    ConfirmedMCI -> InterestInInterventions [label="and" color=blue fontcolor=blue];
+    InterestInInterventions -> NoDementia [label="and" color=blue fontcolor=blue];
+    NoDementia -> NoSeverePsychDisorders [label="and" color=blue fontcolor=blue];
+    NoSeverePsychDisorders -> NoSignificantSensoryImpairments [label="and" color=blue fontcolor=blue];
+    NoSignificantSensoryImpairments -> NotInOtherStudies [label="and" color=blue fontcolor=blue];
+    NotInOtherStudies -> SubsetConsideration [label="then" color=blue fontcolor=blue];
+}
