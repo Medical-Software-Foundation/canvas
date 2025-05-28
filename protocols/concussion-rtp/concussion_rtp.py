@@ -90,9 +90,9 @@ class ReturnToPlayConcussion(ClinicalQualityMeasure):
                 patient=self.patient,
                 instruction=ConcussionRTPInstructions,
                 title='Initiate Return to Play Protocol',
-                narrative="""Patient to follow 5 step return to play protocol. 
-                1. No activity, 2. Light aerobic exercise, 3. Sport specific exercise, 
-                4. Non-contact training drills, 5. Full contact practice."""
+                narrative="""Patient to follow 6 step return to play protocol. 
+                1. Back to regular activivities, 2. Light aerobic exercise, 3. Sport specific exercise, 
+                4. Non-contact training drills, 5. Full contact practice, 6. Competition"""
             )
               
             hyperlink_recommendation = HyperlinkRecommendation(
