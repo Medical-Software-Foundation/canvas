@@ -125,9 +125,11 @@ class MedicationLoader(MedicationLoaderMixin):
 
 if __name__ == "__main__":
     loader = MedicationLoader(environment="phi-test-accomplish")
-    # loader.make_csv()
+    loader.make_csv()
     # loader.make_fdb_mapping()
     # loader.map()
+
     valid_rows = loader.validate(delimiter=",")
     valid_rows = loader.dedupe(valid_rows)
-    # loader.load_via_commands_api(valid_rows)
+
+    loader.load_via_commands_api(valid_rows)

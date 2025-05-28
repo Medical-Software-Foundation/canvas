@@ -92,9 +92,11 @@ class CoverageLoader(CoverageLoaderMixin):
                     else:
                         subscriber_id = ""
 
-                    coverage_start_date = ""
                     if "issuedate" in coverage:
                         coverage_start_date = arrow.get(coverage["issuedate"], "MM/DD/YYYY").date().isoformat()
+                    else:
+                        # default if coverage not provided
+                        coverage_start_date = "2025-01-01"
 
                     payor_id = ""
                     if coverage.get("insurancepackagepayerid") or coverage.get("insurancepackagepayerid"):

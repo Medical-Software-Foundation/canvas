@@ -8,8 +8,8 @@ class OntologiesDataFetcher:
     def __init__(self) -> None:
         config = configparser.ConfigParser()
         config.read("../config.ini")
-        self.ontologies_url = config["ontologies-staging"]["url"]
-        self.ontologies_pre_shared_key = config["ontologies-staging"]["pre_shared_key"]
+        self.ontologies_url = config["ontologies"]["url"]
+        self.ontologies_pre_shared_key = config["ontologies"]["pre_shared_key"]
 
     def fetch_from_api(self, page):
         return requests.get(
@@ -61,6 +61,17 @@ class OntologiesDataFetcher:
     def run(self):
         data = ontologies_data_fetcher.generate_map()
         self.write_to_file(data)
+
+    def look_up_single_code(self, code):
+        response = requests.get(
+            f"{self.ontologies_url}icd/condition/",
+            params={"icd10_code": code.strip().replace(".", "")},
+            headers={
+                "Authorization": self.ontologies_pre_shared_key,
+                "X-Trace": "NO-TRACE"
+            }
+        )
+        return response.json()
 
 
 if __name__ == "__main__":

@@ -123,12 +123,17 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 print(' Already did record')
                 continue
 
+            practitioner_key = ""
+            try:
+                practitioner_key = self.map_provider(row['Recorded Provider'])
+            except BaseException:
+                practitioner_key = ""
+
             patient = row['Patient Identifier']
             patient_key = ""
             try:
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
-                practitioner_key = self.map_provider(row['Recorded Provider'])
                 note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key)
             except BaseException as e:
                 self.ignore_row(row['ID'], e)
@@ -186,6 +191,11 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 }
 
             #print(json.dumps(payload, indent=2))
+
+            if 'note' in payload:
+                if len(payload['note'][0]['text']) > 1000:
+                    self.ignore_row(row['ID'], "ignoring temporarily because of notes character limit")
+                    continue
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
