@@ -1,11 +1,19 @@
-task_webhook_notification
-=========================
+# Task Webook Notification
 
 ## Description
 
-Listens to a task being created/updated and sends a webhook payload out to an endpoint of your choice. 
+When a task in Canvas is ceated or updated, send a webhook playload to an endpoint of your choice.
 
+The payload includes the following:
+- Task: ID, event (updated, created), title, due date
+- Patient: ID, first name, last name, date of birth, sex at birth
+- Assignee: ID, first name, last name, team (if applicable)
+- Task creator, ID, first name, last name
+
+Customize the event trigger and payload to fit your needs.
 
 ### Important Note!
 
-There are two plugin secrets to set for the webhook url site and if you have a bearer token authentication to the webhook.
+There are two plugin secrets to set:
+- `WEBHOOD_NOTIFICATION_URL`: Webhook URL
+- `AUTH_TOKEN`: If webhook requires bearer token authentication
