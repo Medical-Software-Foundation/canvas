@@ -2,6 +2,8 @@
 
 ## Description
 
+Webhooks are used to notify an application when an event occurs in another system, acting as a real-time communication channel.
+
 When a task in Canvas is ceated or updated, send a webhook playload to an endpoint of your choice.
 
 The payload includes the following:
