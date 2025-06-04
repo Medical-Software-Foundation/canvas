@@ -1,9 +1,14 @@
 from logger import log
+from http import HTTPStatus
+
 from canvas_sdk.events import EventType
+from canvas_sdk.effects import Effect
 from canvas_sdk.protocols import BaseProtocol
 from canvas_sdk.utils import Http
 from canvas_sdk.effects.banner_alert import AddBannerAlert
 from canvas_sdk.v1.data.patient import Patient, PatientContactPoint
+from canvas_sdk.handlers.simple_api import Credentials, api, SimpleAPI
+from canvas_sdk.effects.simple_api import JSONResponse, Response
 
 BRIDGE_SANDBOX = 'https://app.usebridge.xyz'
 
@@ -159,3 +164,34 @@ class BridgePatientSync(BaseProtocol):
     def sanitize_url(self, url):
         # Remove a trailing forward slash since our request paths will start with '/'
         return url[:-1] if url[-1] == '/' else url
+
+class BridgePatientSyncApi(SimpleAPI):
+    # https://<instance-name>.canvasmedical.com/plugin-io/api/bridge-patient-sync/routes/patients
+    PATH = "/routes/patients"
+
+    def authenticate(self, credentials: Credentials) -> bool:
+        return True
+
+    # https://docs.canvasmedical.com/sdk/handlers-simple-api-http/
+    @api.post("/")
+    def post(self) -> list[Response | Effect]:
+        json_body = self.request.json()
+        if not isinstance(json_body, dict):
+            return [
+                JSONResponse(
+                    content="Invalid JSON body.",
+                    status_code=HTTPStatus.BAD_REQUEST
+                ).apply()
+            ]
+
+        patient = Patient.objects.create(
+            first_name=json_body.get("firstName"),
+            last_name=json_body.get('lastName'),
+            birth_date=json_body.get('dateOfBirth'),
+        )
+
+        return [
+            JSONResponse(
+                content=str(patient),
+                status_code=HTTPStatus.CREATED).apply()
+        ]
