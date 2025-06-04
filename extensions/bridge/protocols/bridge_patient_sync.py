@@ -98,13 +98,15 @@ class BridgePatientSync(BaseProtocol):
             'firstName': canvas_patient.first_name,
             'lastName': canvas_patient.last_name,
             'dateOfBirth': canvas_patient.birth_date.isoformat(),
-            'telecom': contact_point if contact_point else None,
+            'telecom': self.serialize_contact_point(contact_point)
         }
 
         if event_type == EventType.PATIENT_CREATED:
             # Add placeholder email when creating the Bridge patient since it's required
             bridge_payload['email'] = 'patient_' + canvas_patient.id + '@canvasmedical.com'
             bridge_payload['metadata'] = self.bridge_patient_metadata
+
+        log.info(f'>>> Bridge patient payload: {bridge_payload}')
 
         base_request_url = f'{self.bridge_api_base_url}/patients/v2'
         # If we have a Bridge patient id, we know this is an update, so we'll append it to the request URL
@@ -165,6 +167,22 @@ class BridgePatientSync(BaseProtocol):
     def sanitize_url(self, url):
         # Remove a trailing forward slash since our request paths will start with '/'
         return url[:-1] if url[-1] == '/' else url
+
+    def serialize_contact_point(_self, contact_point):
+        if not contact_point:
+            return {}
+        serialized ={
+            'id': str(contact_point.id),
+            'system': contact_point.system.value if contact_point.system else None,
+            'has_consent': contact_point.has_consent,
+            'opted_out': contact_point.opted_out,
+            'value': contact_point.value,
+            'use': contact_point.use.value if contact_point.use else None,
+            'use_notes': contact_point.use_notes,
+            'rank': contact_point.rank,
+            'state': contact_point.state.value if contact_point.state else None,
+        }
+        return {k: v for k, v in serialized.items() if v is not None}
 
 class BridgePatientSyncApi(SimpleAPI):
     # https://<instance-name>.canvasmedical.com/plugin-io/api/bridge-patient-sync/routes/patients
