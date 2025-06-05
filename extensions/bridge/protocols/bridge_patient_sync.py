@@ -1,6 +1,8 @@
 from logger import log
 from http import HTTPStatus
 
+import arrow
+from canvas_sdk.effects.patient import Patient as PatientEffect
 from canvas_sdk.events import EventType
 from canvas_sdk.effects import Effect
 from canvas_sdk.protocols import BaseProtocol
@@ -185,16 +187,20 @@ class BridgePatientSync(BaseProtocol):
         return {k: v for k, v in serialized.items() if v is not None}
 
 class BridgePatientSyncApi(SimpleAPI):
-    # https://<instance-name>.canvasmedical.com/plugin-io/api/bridge-patient-sync/routes/patients
-    PATH = "/routes/patients"
+    # https://<instance-name>.canvasmedical.com/plugin-io/api/bridge/patients
 
     def authenticate(self, credentials: Credentials) -> bool:
+        api_key = self.secrets["my_canvas_api_key"]
+        log.info(f'BridgePatientSyncApi.post: authenticating with API key {api_key}')
+
         return True
 
     # https://docs.canvasmedical.com/sdk/handlers-simple-api-http/
-    @api.post("/")
+    @api.post("/patients")
     def post(self) -> list[Response | Effect]:
         json_body = self.request.json()
+        log.info(f'BridgePatientSyncApi.post: {json_body}')
+
         if not isinstance(json_body, dict):
             return [
                 JSONResponse(
@@ -203,13 +209,41 @@ class BridgePatientSyncApi(SimpleAPI):
                 ).apply()
             ]
 
-        patient = Patient.objects.create(
-            first_name=json_body.get('firstName'),
-            last_name=json_body.get('lastName'),
-            birth_date=json_body.get('dateOfBirth'),
+        patient = PatientEffect(
+            first_name=str(json_body.get('firstName')),
+            last_name=str(json_body.get('lastName')),
+            middle_name=str(json_body.get('middleName')),
+
+            birthdate=arrow.get(json_body.get('dateOfBirth')).date()
         )
 
-        return [
+        # patient = Patient(
+        #     first_name="Jane",
+        #     last_name="Doe",
+        #     middle_name="Marie",
+        #     birthdate=datetime.date(1980, 1, 15),
+        #     sex_at_birth=PersonSex.SEX_FEMALE,
+        #     nickname="Janie",
+        #     default_location_id="location-uuid",
+        #     default_provider_id="provider-uuid",
+        #     contact_points=[
+        #         PatientContactPoint(
+        #             system=ContactPointSystem.PHONE,
+        #             value="555-123-4567",
+        #             use=ContactPointUse.MOBILE,
+        #             rank=1,
+        #             has_consent=True
+        #         ),
+        #         PatientContactPoint(
+        #             system=ContactPointSystem.EMAIL,
+        #             value="jane.doe@example.com",
+        #             use=ContactPointUse.WORK,
+        #             rank=2,
+        #             has_consent=True
+        #         )
+        #     ]
+        # )
+        return [patient.create(),
             JSONResponse(
                 content=str(patient),
                 status_code=HTTPStatus.CREATED).apply()
