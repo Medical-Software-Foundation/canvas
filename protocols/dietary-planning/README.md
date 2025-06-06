@@ -1,3 +1,5 @@
+# Dietary Planning
+
 ### Target Population
 Targets patients who are currently in the "Treatment" phase of a weight loss program, specifically those with diabetes or similar conditions where dietary management is crucial. Suitable for individuals who have recent lab results for A1c levels and are actively participating in a weight loss or dietary management program.
 ### Recommendations
