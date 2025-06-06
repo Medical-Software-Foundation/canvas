@@ -1,4 +1,4 @@
-# Summary of the Hypertension Screening Protocol for Adults
+# Adult Hypertension Screening
 
 **Purpose of Protocol:**
 The purpose of this protocol, reaffirmed by the US Preventive Services Task Force (USPSTF) in 2021, is to provide guidance on screening for hypertension in adults. This comes in light of hypertension being a prevalent condition affecting approximately 50% of the adult U.S. population and serving as a major risk factor for heart failure, myocardial infarction, stroke, and chronic kidney disease.
