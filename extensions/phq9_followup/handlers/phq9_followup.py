@@ -43,7 +43,7 @@ class PHQ9Followup(BaseHandler):
             return []
 
         # Prep a new questionnaire command, selecting the PHQ-9
-        phq_9 = Questionnaire.objects.filter(code_system=PHQ_CODE_SYSTEM, code=PHQ9_CODE).first()
+        phq_9 = Questionnaire.objects.filter(can_originate_in_charting=True, code_system=PHQ_CODE_SYSTEM, code=PHQ9_CODE).first()
         new_command = QuestionnaireCommand(
             note_uuid=str(event_command.note.id),
             questionnaire_id=str(phq_9.id),
