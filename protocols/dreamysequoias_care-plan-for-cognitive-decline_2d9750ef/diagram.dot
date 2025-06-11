@@ -1,0 +1,35 @@
+digraph {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All patients within the healthcare system who have undergone cognitive assessments and have recorded responses in their medical notes."];
+    SubsetConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients identified with modifiable risk factors for cognitive decline based on structured assessments and questionnaire responses."];
+    ExclusionCriteria [label="Exclusion Criteria", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients who do not have any recorded responses in the 'Structured Assessment' or 'Questionnaire' sections of their medical notes, have non-modifiable risk factors, or are enrolled in conflicting care plans or studies."];
+
+    // Criterion Nodes
+    ModifiableRiskFactors [label="Modifiable Risk Factors", shape=ellipse, color=blue, fontcolor=blue, comment="Patients identified with modifiable risk factors for cognitive decline based on structured assessments and questionnaire responses."];
+    NoRecordedResponses [label="No Recorded Responses", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who do not have any recorded responses in the 'Structured Assessment' or 'Questionnaire' sections of their medical notes."];
+    NonModifiableRiskFactors [label="Non-Modifiable Risk Factors", shape=ellipse, color=blue, fontcolor=blue, comment="Patients with non-modifiable risk factors for cognitive decline, such as genetic predispositions or irreversible neurological conditions."];
+    ConflictingCarePlan [label="Conflicting Care Plan", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who are currently enrolled in a different cognitive care plan or research study that conflicts with the protocol."];
+
+    // Actions Required Nodes
+    AdminAction [label="Administrative Action", shape=ellipse, color=blue, fontcolor=blue, comment="Implement a user interface feature: a button at the patient level in the top menu of the electronic health record (EHR) system."];
+    DataProcessing [label="Data Processing", shape=ellipse, color=blue, fontcolor=blue, comment="Process the 'Structured Assessment' and 'Questionnaire' responses recorded in the patient's notes."];
+    DocumentGeneration [label="Document Generation", shape=ellipse, color=blue, fontcolor=blue, comment="Generate a new external document in rich text format (RTF) that is presented in an editable format in a new window or tab."];
+    CarePlanDevelopment [label="Care Plan Development", shape=ellipse, color=blue, fontcolor=blue, comment="Develop a care plan with sections for structured assessment responses, API call to 'Claude-3.5-sonnet', and placeholders for activities, lifestyle modifications, and next appointment date."];
+    ReviewApproval [label="Review and Approval", shape=ellipse, color=blue, fontcolor=blue, comment="Ensure the generated care plan is reviewed by a healthcare professional for accuracy and relevance."];
+
+    // Edges
+    InitialPopulation -> SubsetConsideration [label="if", color=blue, fontcolor=blue];
+    SubsetConsideration -> ModifiableRiskFactors [label="if", color=blue, fontcolor=blue];
+    ModifiableRiskFactors -> AdminAction [label="then", color=blue, fontcolor=blue];
+    AdminAction -> DataProcessing [label="and", color=blue, fontcolor=blue];
+    DataProcessing -> DocumentGeneration [label="and", color=blue, fontcolor=blue];
+    DocumentGeneration -> CarePlanDevelopment [label="and", color=blue, fontcolor=blue];
+    CarePlanDevelopment -> ReviewApproval [label="and", color=blue, fontcolor=blue];
+
+    InitialPopulation -> ExclusionCriteria [label="if", color=blue, fontcolor=blue];
+    ExclusionCriteria -> NoRecordedResponses [label="if", color=blue, fontcolor=blue];
+    ExclusionCriteria -> NonModifiableRiskFactors [label="if", color=blue, fontcolor=blue];
+    ExclusionCriteria -> ConflictingCarePlan [label="if", color=blue, fontcolor=blue];
+}
