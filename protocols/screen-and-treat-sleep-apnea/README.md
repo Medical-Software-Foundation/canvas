@@ -2,7 +2,7 @@
 
 ### Target Population
 
-Adults who are undergoing screening for sleep apnea, specifically those who have participated in a **Weight Loss Program Status Questionnaire** with a status indicating "Condition screening" or have completed the STOP-BANG questionnaire.
+Adults who are undergoing screening for sleep apnea, specifically those who have participated in a Weight Loss Program Status Questionnaire with a status indicating "Condition screening" or have completed the STOP-BANG questionnaire.
 
 ### Recommendations
 
