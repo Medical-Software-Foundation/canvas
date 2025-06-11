@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "dreamysequoias"
+referencePapers:
+  - title: "Protocol for Care Plans in Cognitive Decline Risk Management"
+    description: "This protocol outlines steps for generating care plans for patients with modifiable risk factors for cognitive decline. It includes criteria for patient selection, data processing, document generation, and care plan development, ensuring personalized interventions. The protocol mandates review by healthcare professionals to ensure accuracy and relevance before implementation."
+    url: ""
+
