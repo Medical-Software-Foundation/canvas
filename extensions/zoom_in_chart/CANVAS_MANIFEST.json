@@ -1,0 +1,43 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "zoom_in_chart",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "url_permissions": [
+        {
+            "url": "https://canvasmedical.zoom.us/",
+            "permissions": ["ALLOW_SAME_ORIGIN", "MICROPHONE", "SCRIPTS", "CAMERA"]
+        },
+        {
+            "url": "https://zoom.us/",
+            "permissions": ["ALLOW_SAME_ORIGIN", "MICROPHONE", "SCRIPTS", "CAMERA"]
+        },
+        {
+            "url": "https://source.zoom.us/",
+            "permissions": ["ALLOW_SAME_ORIGIN", "MICROPHONE", "SCRIPTS", "CAMERA"]
+        }
+    ],
+    "components": {
+        "protocols": [
+            {
+                "class": "zoom_in_chart.protocols.zoom_in_chart:ZoomTelehealthLaunchActionButton",
+                "description": "A protocol that launches an integrated Zoom telehealth meeting in the sidebar of a Canvas chart.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

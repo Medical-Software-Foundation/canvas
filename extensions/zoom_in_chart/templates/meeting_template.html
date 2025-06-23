@@ -1,0 +1,56 @@
+<html>
+    <head>
+        <!-- Dependencies for client view and component view -->
+        <script src="https://source.zoom.us/3.13.2/lib/vendor/react.min.js"></script>
+        <script src="https://source.zoom.us/3.13.2/lib/vendor/react-dom.min.js"></script>
+        <script src="https://source.zoom.us/3.13.2/lib/vendor/redux.min.js"></script>
+        <script src="https://source.zoom.us/3.13.2/lib/vendor/redux-thunk.min.js"></script>
+        <script src="https://source.zoom.us/3.13.2/lib/vendor/lodash.min.js"></script>
+
+        <!-- Choose between the client view or component view: -->
+
+        <!-- CDN for client view -->
+        <script src="https://source.zoom.us/zoom-meeting-3.13.2.min.js"></script>
+
+        <!-- CDN for component view -->
+        <!--script src="https://source.zoom.us/zoom-meeting-embedded-3.13.2.min.js"></script-->
+        <style type="text/css">
+
+            /* Adds a margin bottom so the zoom controls aren't covered up by the messaging app */
+            #wc-footer {
+                margin-bottom: 60px;
+            }
+        </style>
+    </head>
+
+
+    <script>
+        window.addEventListener('load', function() {
+            ZoomMtg.preLoadWasm();
+            ZoomMtg.prepareWebSDK();
+        });
+
+        ZoomMtg.init({
+            leaveUrl: "{{ meetingHasEndedUrl }}",
+            success: (success) => {
+                ZoomMtg.join({
+                sdkKey: "{{ sdkKey }}",
+                signature: "{{ signature }}",
+                meetingNumber: "{{ meetingNumber }}",
+                passWord: "{{ passWord }}",
+                userName: "{{ userName }}",
+                // zak: zakToken, // the host's ZAK token
+                success: (success) => {
+                    console.log(success)
+                },
+                error: (error) => {
+                    console.log(error)
+                }
+                })
+            },
+            error: (error) => {
+                console.log(error)
+            }
+            })
+    </script>
+</html>
