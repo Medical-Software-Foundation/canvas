@@ -1,5 +1,4 @@
-zoom_in_chart
-===================
+# Zoom in Chart
 
 ## Description
 
