@@ -40,8 +40,8 @@ class AppointmentLoader(AppointmentLoaderMixin):
         self.fumage_helper = load_fhir_settings(environment)
 
         # default needed for mapping
-        self.default_location = "9e757329-5ab1-4722-bab9-cc25002fa5c0"
-        self.default_note_type = "avon_historical_note"
+        self.default_location = "7d1e74f5-e3f4-467d-81bb-08d90d1a158a"
+        self.default_note_type = "athena_historical_note"
 
     def make_csv(self, delimiter='|'):
         """
@@ -74,17 +74,17 @@ class AppointmentLoader(AppointmentLoaderMixin):
                 reader = csv.DictReader(file, delimiter=delimiter)
                 for row in reader:
                     writer.writerow({
-                        "Unique ID": row['apptid'],
-                        "Patient Identifier": row['enterpriseid'],
+                        "Unique ID": row['Unique ID'],
+                        "Patient Identifier": row['Patient Identifier'],
                         "Appointment Type": self.default_note_type,
                         "Reason for Visit Code": "",
-                        "Reason for Visit Text": row['appttype'],
-                        "Location": row['svcdeptid'],
+                        "Reason for Visit Text": row['Appointment Type'],
+                        "Location": self.default_location,
                         "Meeting Link": "",
-                        "Start Date / Time": arrow.get(row['apptstarttime'], "MM/DD/YYYYTHH:mm").isoformat(),
-                        "End Date/Time": arrow.get(row['apptendtime'], "MM/DD/YYYYTHH:mm").isoformat(),
-                        "Duration": "",
-                        "Provider": row['appt schdlng prvdrid']
+                        "Start Date / Time": arrow.get(row['Start Date / Time'], "MM/DD/YYYYTHH:mm").isoformat(), # TODO fix these time with EST timezone
+                        "End Date/Time": arrow.get(row['End Date/Time'], "MM/DD/YYYYTHH:mm").isoformat(),
+                        "Duration": row['Duration'],
+                        "Provider": row['Provider']
                     })
 
                 print("CSV successfully made")
