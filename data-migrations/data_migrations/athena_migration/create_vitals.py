@@ -130,13 +130,43 @@ class VitalsLoader(VitalsMixin):
 
     def load(self, patient_vitals_dict):
         ids = set()
-
         reading_sources = ["ENCOUNTER", "FLOWSHEET",]
+
+        already_loaded = 0
+        not_loaded = 0
+        patient_not_mapped = 0
+        vitals_import_note_count = 0
+        # this is just to get the count
+        for patient_id, vitals_readings in patient_vitals_dict.items():
+            for src in reading_sources:
+
+                patient_readings = vitals_readings[src]
+                source_ids = patient_readings.keys()
+                for src_id in source_ids:
+                    vitals_import_note_count += 1
+                    unique_import_note_id = f"{src}~{src_id}"
+
+                    if patient_id not in self.patient_map:
+                        patient_not_mapped += 1
+                    if unique_import_note_id in self.done_records:
+                        already_loaded += 1
+                    else:
+                        not_loaded += 1
+        print(f"Loaded: {already_loaded}")
+        print(f"Not Loaded: {not_loaded}")
+        print(f"Patient not mapped: {patient_not_mapped}")
+        ####
+
+        vitals_notes_counter = 1
         for patient_id, vitals_readings in patient_vitals_dict.items():
             for src in reading_sources:
                 patient_readings = vitals_readings[src]
                 source_ids = patient_readings.keys()
                 for src_id in source_ids:
+
+                    print(f"On {vitals_notes_counter} of {vitals_import_note_count} vitals import notes")
+                    vitals_notes_counter += 1
+
                     date_taken = patient_readings[src_id]["date"]
                     unique_import_note_id = f"{src}~{src_id}"
 
@@ -148,7 +178,7 @@ class VitalsLoader(VitalsMixin):
 
                     if patient_key:
                         if unique_import_note_id in ids or unique_import_note_id in self.done_records:
-                            print(' Already did record')
+                            print(' Already did note record')
                             continue
 
                         try:
@@ -262,7 +292,7 @@ class VitalsLoader(VitalsMixin):
                             }
 
                             if unique_command_id in ids or unique_command_id in self.done_records:
-                                print(' Already did record')
+                                print(' Already did command record')
                                 continue
 
                             try:
@@ -285,6 +315,7 @@ class VitalsLoader(VitalsMixin):
                             self.error_row(f"{unique_import_note_id}|{patient_id}|{patient_key}", e)
                     else:
                         self.ignore_row(f"{src}~{src_id}", "Ignoring due to no patient map")
+
 
 
 if __name__ == "__main__":

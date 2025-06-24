@@ -25,6 +25,9 @@ class LabReportLoader(LabReportMixin):
         self.patient_map_file = 'PHI/patient_id_map.json'
         self.patient_map = fetch_from_json(self.patient_map_file)
         self.fumage_helper = load_fhir_settings(environment)
+        self.blank_pdf_file = "template_files/blank_pdf.pdf"
+        self.blank_pdf_b64_string = self.base64_encode_file(self.blank_pdf_file)
+
         super().__init__(*args, **kwargs)
 
     def get_observation_date(self, labresult):
@@ -41,6 +44,14 @@ class LabReportLoader(LabReportMixin):
             return arrow.get(date_val, "MM/DD/YYYY", tzinfo="America/New York").isoformat()
         return None
 
+    def strip_comparator(self, value):
+        comparators = [">=", "<=", ">", "<"]
+        for comparator in comparators:
+            if value.startswith(comparator):
+                return comparator, value[len(comparator):]
+        return "", value
+
+
     def create_fhir_payload(self, labresult, canvas_patient_key):
         validation_errors = []
 
@@ -55,6 +66,7 @@ class LabReportLoader(LabReportMixin):
             validation_errors.append("Missing observation date")
 
         b64_document_string = ""
+
         if labresult.get("originaldocument", {}).get("reference"):
             file_path = labresult["originaldocument"]["reference"]
             if file_path.endswith(".tiff"):
@@ -76,13 +88,10 @@ class LabReportLoader(LabReportMixin):
             # sort to get the correct page ordering
             documents.sort()
             documents = [f"{self.labresults_files_dir}{doc[1]}" for doc in documents]
-            # pages either all have file references or none have file references; there aren't any that are partial;
-            # If they are all missing, raise a validation error since we can't produce a file
-            if not any(documents):
-                validation_errors.append("No references found for file locations")
             b64_document_string = self.convert_and_base64_encode(documents, custom_name=labresult["labresultid"])
         else:
-            validation_errors.append("No file present in data")
+            b64_document_string = self.blank_pdf_b64_string
+            # validation_errors.append("No file present in data")
 
         lab_report_parameter = {
             "name": "labReport",
@@ -122,11 +131,15 @@ class LabReportLoader(LabReportMixin):
         lab_test_result_loinc = labresult.get("labresultloinc")
         lab_test_result_display = labresult.get("description")
         # If there is not sufficient information for the lab test (display, coding), then
-        # return early. The document will still be uploaded.
+        # return early. If there is a document, the document will still be attempted to be uploaded (unless it is the blank PDF fallback).
         if not all([lab_test_result_display, lab_test_result_loinc]):
-            self.ignore_row(labresult["labresultid"], f"Missing lab test LOINC and/or display for labresult ID {labresult["labresultid"]}. Will still attempt to upload the document.")
+            # We can't upload if there is not sufficient lab test data and no file.
+            if b64_document_string == self.blank_pdf_b64_string:
+                validation_errors.append("Cannot upload result because there is no lab result loinc or display and there is no file present.")
             if validation_errors:
                 api_payload = None
+            if not validation_errors:
+                self.ignore_row(labresult["labresultid"], f"Missing lab test LOINC and/or display for labresult ID {labresult["labresultid"]}. Will still attempt to upload the document.")
             return api_payload, validation_errors
 
         lab_test_part = {
@@ -170,6 +183,45 @@ class LabReportLoader(LabReportMixin):
                 self.ignore_row(labresult["labresultid"], f"Ignoring lab value with observationidentifier {observation_identifier} due to missing LOINC display. Will still attempt to upload the document.")
                 continue
 
+            lab_value_value = observation.get("value", "")
+            lab_value_units = observation.get("units", "")
+
+            if observation_status == "preliminary" and lab_value_value == "" and lab_value_units == "":
+                self.ignore_row(labresult["labresultid"], f"Ignoring lab value with observationidentifier {observation_identifier} due to preliminary data that is missing values and units. Will still attempt to upload the document.")
+                continue
+
+            value_key = "valueQuantity"
+            value_val = {
+                "value": lab_value_value,
+                "unit": lab_value_units,
+                "system": "http://unitsofmeasure.org"
+            }
+
+            if lab_value_value and not lab_value_units:
+                value_key = "valueString"
+                value_val = lab_value_value
+
+            comparator = ""
+            if value_key == "valueQuantity" and any(
+                [
+                    lab_value_value.startswith(">"),
+                    lab_value_value.startswith("<"),
+                    lab_value_value.startswith(">="),
+                    lab_value_value.startswith("<="),
+                 ]
+            ):
+                comparator, val = self.strip_comparator(lab_value_value)
+                value_val["value"] = val
+                value_val["comparator"] = comparator
+
+            # if a valueQuantity value doesn't convert to a float, make it a valueString instead
+            if value_key == "valueQuantity":
+                try:
+                    float(value_val["value"])
+                except ValueError:
+                    value_key = "valueString"
+                    value_val = f"{lab_value_value} {lab_value_units}"
+
             lab_value_part = {
                 "name": "labValue",
                 "resource": {
@@ -185,11 +237,7 @@ class LabReportLoader(LabReportMixin):
                         ]
                     },
                     "effectiveDateTime": observation_date_val,
-                    "valueQuantity": {
-                        "value": observation.get("value", ""),
-                        "unit": observation.get("units", ""),
-                        "system": "http://unitsofmeasure.org"
-                    }
+                    value_key: value_val
                 }
             }
 
@@ -245,12 +293,17 @@ class LabReportLoader(LabReportMixin):
 
         validation_errors = {}
         valid_payloads = []
+        already_seen = []
 
         for obj in data:
             patient_enterprise_id = obj["patientdetails"]["enterpriseid"]
 
             for result in obj["labresults"]:
                 labresult_id = result["labresultid"]
+
+                if labresult_id in self.done_records or labresult_id in already_seen:
+                    # skip those we've already loaded
+                    continue
 
                 canvas_patient_key = ""
                 try:
@@ -270,6 +323,7 @@ class LabReportLoader(LabReportMixin):
                         "payload": payload
                     }
                     valid_payloads.append(valid_payload_dict)
+                already_seen.append(labresult_id)
         write_to_json(self.validation_error_file, validation_errors)
         return valid_payloads
 

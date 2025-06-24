@@ -148,6 +148,16 @@ class PatientLoaderMixin:
         return validated_rows
 
 
+    def search_patients_with_system_unique_identifier(self, system, identifier):
+        """
+        Queries the API to check if a patient with a system unique identifier already
+        exists. In addition to checking in patient map, this is useful for checking if a patient
+        is already loaded (especially if a customer is loading patients as well).
+        """
+        response = self.fumage_helper.search("Patient", {"identifier": f"{system}|{identifier}"})
+        return response.json()
+
+
     def load(self, validated_rows, system_unique_identifier):
         """
             Takes the validated rows from self.validate() and
@@ -166,8 +176,8 @@ class PatientLoaderMixin:
             patient_identifier = ""
             identifiers = []
             for j in range(1, 4):
-                system = row.get(f'Identifier System {j}')
-                value = row.get(f'Identifier Value {j}')
+                system = row[f'Identifier System {j}']
+                value = row[f'Identifier Value {j}']
                 if system and value:
                     identifiers.append(
                         {

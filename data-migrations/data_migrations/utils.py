@@ -244,7 +244,7 @@ class FHIRHelper:
         """
 
         search_parameters = {
-            '_sort': 'pk',
+            '_sort': '_id',
             '_count': 100,
             '_offset': 0,
             'identifier': f'{system}|'
