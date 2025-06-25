@@ -68,7 +68,7 @@ class PatientLoaderMixin:
 
         return validate_date(value, field_name='birth date')
 
-    def validate(self, delimiter='|'):
+    def validate(self, delimiter='|', error_use_identifier=None):
         """
             Loop throw the CSV file to validate each row has the correct columns and values
             Append validated rows to a list to use to load.
@@ -123,9 +123,20 @@ class PatientLoaderMixin:
             for row in reader:
                 error = False
 
+                error_key = f"{row['First Name']} {row['Last Name']}"
+                # if we want to use a previous EMR identifier for the error key
+                if error_use_identifier:
+                    patient_identifier = ""
+                    for j in range(1, 4):
+                        system = row.get(f'Identifier System {j}')
+                        value = row.get(f'Identifier Value {j}')
+                        if system and value and system == error_use_identifier:
+                            error_key = value
+                            break
+
                 error_msg = validate_address(row)
                 if error_msg:
-                    errors[f"{row['First Name']} {row['Last Name']}"].append(error_msg)
+                    errors[error_key].append(error_msg)
                     error = True
 
                 for field, validator_func in validations.items():
@@ -133,7 +144,7 @@ class PatientLoaderMixin:
                     if valid:
                         row[field] = value
                     else:
-                        errors[f"{row['First Name']} {row['Last Name']}"].append(value)
+                        errors[error_key].append(value)
                         error = True
 
                 if not error:
@@ -158,7 +169,7 @@ class PatientLoaderMixin:
         return response.json()
 
 
-    def load(self, validated_rows, system_unique_identifier):
+    def load(self, validated_rows, system_unique_identifier, require_identifier=True):
         """
             Takes the validated rows from self.validate() and
             loops through to send them off the FHIR Create
@@ -187,6 +198,10 @@ class PatientLoaderMixin:
                     )
                     if system == system_unique_identifier:
                         patient_identifier = value
+
+            if not patient_identifier and require_identifier:
+                self.error_row(f"|{row['First Name']}|{row['Last Name']}", "No unique identifier given")
+                continue
 
             if patient_identifier and patient_identifier in patient_map:
                 print('  Skipping...patient already ingested')

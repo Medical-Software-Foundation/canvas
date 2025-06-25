@@ -201,7 +201,7 @@ class FHIRHelper:
             return self.perform_create(payload)
 
         if response.status_code != 201:
-            raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers.get('fumage-correlation-id', "")} \n {response.text}")
+            raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers.get('fumage-correlation-id', '')} \n {response.text}")
 
         return response.headers['location'].replace(f'http://fumage-{self.instance_name}.canvasmedical.com/{payload["resourceType"]}/', '').replace('/_history/1', '').replace(f'http://localhost:8888/{payload["resourceType"]}/', '')
 
@@ -216,7 +216,7 @@ class FHIRHelper:
             return self.perform_create_lab_report(payload)
 
         if response.status_code != 201:
-            raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers.get('fumage-correlation-id', "")} \n {response.text}")
+            raise Exception(f"Failed to perform {response.url}. \n Fumage Correlation ID: {response.headers.get('fumage-correlation-id', '')} \n {response.text}")
 
         response_body = response.json()
         return response_body["parameter"][0]["valueReference"]["reference"].replace("DiagnosticReport/", "")

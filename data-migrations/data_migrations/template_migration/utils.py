@@ -40,7 +40,7 @@ def validate_state_code(value, field_name):
     if not value:
         return True, value
 
-    accepted_states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
+    accepted_states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "GU", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "VI", "WA", "WV", "WI", "WY"]
     if value in accepted_states:
         return True, value
     return False, f"Invalid {field_name}: {value}"
@@ -66,6 +66,8 @@ def validate_phone_number(value, field_name):
     number = [i for i in value if i.isdigit()]
     if len(number) == 10:
         return True, "".join(number)
+    if len(number) == 11 and number[0] == '1':
+        return True, "".join(number[1:])
     return False, f"Invalid {field_name}: {value}"
 
 def validate_boolean(value, field_name):
@@ -230,7 +232,7 @@ class DocumentEncoderMixin:
             page = page.convert("RGB")
             images.append(page)
 
-        output_path = f"{self.temp_pdf_dir}/{tiff_path.split("/")[-1]}".replace(".tiff", ".pdf").replace(".tif", ".pdf")
+        output_path = f'{self.temp_pdf_dir}/{tiff_path.split("/")[-1]}'.replace(".tiff", ".pdf").replace(".tif", ".pdf")
         if len(images) == 1:
             images[0].save(output_path)
         else:
