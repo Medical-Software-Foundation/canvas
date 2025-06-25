@@ -106,7 +106,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
             Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
-
+        missing_files = []
         self.patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
@@ -131,6 +131,16 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
             file_list = json.loads(row["Document"])
             b64_document_string = ""
 
+            missing_files_for_row = []
+            for fname in file_list:
+                if not os.path.exists(f"{self.documents_files_dir}{fname}"):
+                    missing_files_for_row.append(fname)
+
+            if missing_files_for_row:
+                missing_files.extend(missing_files_for_row)
+                self.ignore_row(row['ID'], f"File(s) {", ".join(missing_files_for_row)} not found in supplied files.")
+                continue
+
             if len(file_list) == 1:
                 file_path = file_list[0]
                 if file_path.endswith(".tiff") or file_path.endswith(".tif"):
@@ -149,6 +159,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                     self.error_row(row["ID"], "Error converting document")
             elif len(file_list) > 1:
                 b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{p}" for p in file_list])
+
 
             payload = {
                 "resourceType": "DocumentReference",
@@ -230,3 +241,5 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                 ids.add(row['ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+        print("Some Files were missing:")
+        print(missing_files)
