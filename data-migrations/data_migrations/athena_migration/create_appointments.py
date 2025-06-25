@@ -27,7 +27,7 @@ class AppointmentLoader(AppointmentLoaderMixin):
     def __init__(self, environment, *args, **kwargs):
         self.patient_map_file = 'PHI/patient_id_map.json'
         self.patient_map = fetch_from_json(self.patient_map_file)
-        self.doctor_map = fetch_from_json("mappings/doctor_map.json")
+        self.doctor_map = fetch_from_json("mappings/provider_id_mapping.json")
         self.original_csv_file = "PHI/athena_appointments.csv"
         self.csv_file = 'PHI/appointments.csv'
         self.ignore_file = 'results/ignored_appointments.csv'

@@ -69,10 +69,14 @@ class CoverageLoader(CoverageLoaderMixin):
                 "Unknown": "other",
             }
 
+            already_seen = []
+
             for row in data:
                 patient_id = row.get("patientdetails", {}).get("enterpriseid", "")
                 for coverage in row["insurances"]:
                     coverage_id = coverage["insuranceid"]
+                    if coverage_id in already_seen:
+                        continue
                     insurance_id_number = coverage.get("insuranceidnumber", "")
                     relationship = relationship_map.get(coverage.get("relationshiptoinsured", ""), "")
                     if relationship != "self" and all(
@@ -115,14 +119,14 @@ class CoverageLoader(CoverageLoaderMixin):
                         "Group Number": "",
                         "Plan Name": coverage["insuranceplanname"],
                     }
-
+                    already_seen.append(coverage_id)
                     writer.writerow(row_to_write)
         print("CSV successfully made")
 
 
 if __name__ == "__main__":
     loader = CoverageLoader(environment="phi-test-accomplish")
-    loader.make_payer_mapping_file()
+    # loader.make_payer_mapping_file()
     # loader.make_csv()
-    # valid_rows = loader.validate(delimiter=",")
-    # loader.load(valid_rows, map_payor=False)
+    valid_rows = loader.validate(delimiter=",")
+    loader.load(valid_rows, map_payor=False)
