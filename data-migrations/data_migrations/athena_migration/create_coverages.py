@@ -33,7 +33,7 @@ class CoverageLoader(CoverageLoaderMixin):
         for patient_coverages in data:
             for insurance in patient_coverages.get("insurances", []):
                 payer_pair = (insurance.get("insurancepackagepayerid", ""), insurance.get("insurancepayername", ""))
-                if payer_pair not in payers: # and f"{payer_pair[0]}|{payer_pair[1]}" not in self.payor_mapping: # uncomment for new ones;
+                if payer_pair not in payers and f"{payer_pair[0]}|{payer_pair[1]}" not in self.payor_mapping: # uncomment for new ones;
                     payers.append(payer_pair)
         with open(self.payer_mapping_csv_file, "w") as fhandle:
             writer = csv.writer(fhandle, delimiter="\t")
@@ -126,7 +126,7 @@ class CoverageLoader(CoverageLoaderMixin):
 
 if __name__ == "__main__":
     loader = CoverageLoader(environment="phi-test-accomplish")
-    # loader.make_payer_mapping_file()
+    loader.make_payer_mapping_file()
     # loader.make_csv()
-    valid_rows = loader.validate(delimiter=",")
-    loader.load(valid_rows, map_payor=False)
+    #valid_rows = loader.validate(delimiter=",")
+    #loader.load(valid_rows, map_payor=False)

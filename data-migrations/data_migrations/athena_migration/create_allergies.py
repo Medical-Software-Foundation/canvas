@@ -58,6 +58,12 @@ class AllergyLoader(AllergyLoaderMixin):
                         translation_text,
                     )
 
+                    # ignore allergies we already mapped
+                    if allergy_row[1] and allergy_row[1] in self.fdb_mappings:
+                        continue
+                    elif allergy_row[0] and allergy_row[0] in self.fdb_mappings_by_name:
+                        continue
+
                     output_list.append(allergy_row)
 
         output_list = list(set(output_list))
@@ -145,7 +151,7 @@ class AllergyLoader(AllergyLoaderMixin):
 
 if __name__ == "__main__":
     loader = AllergyLoader('phi-test-accomplish')
-    # loader.create_rxnorm_mapping_file()
-    loader.make_csv()
-    valid_rows = loader.validate(delimiter=",")
-    loader.load(valid_rows)
+    loader.create_rxnorm_mapping_file()
+    # loader.make_csv()
+    # valid_rows = loader.validate(delimiter=",")
+    # loader.load(valid_rows)
