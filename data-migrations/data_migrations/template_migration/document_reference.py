@@ -241,5 +241,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                 ids.add(row['ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
-        print("Some Files were missing:")
-        print(missing_files)
+
+        if missing_files:
+            print("Some Files were missing:")
+            print(missing_files)
