@@ -1,4 +1,6 @@
-import csv, os
+import csv
+import arrow
+
 from data_migrations.utils import load_fhir_settings, fetch_from_json, fetch_complete_csv_rows
 from data_migrations.template_migration.appointment import AppointmentLoaderMixin
 
@@ -28,6 +30,8 @@ class AppointmentLoader(AppointmentLoaderMixin):
         self.patient_map_file = 'PHI/patient_id_map.json'
         self.patient_map = fetch_from_json(self.patient_map_file)
         self.doctor_map = fetch_from_json("mappings/provider_id_mapping.json")
+        self.location_map_file = "mappings/location_map.json"
+        self.location_map = fetch_from_json(self.location_map_file)
         self.original_csv_file = "PHI/athena_appointments.csv"
         self.csv_file = 'PHI/appointments.csv'
         self.ignore_file = 'results/ignored_appointments.csv'
@@ -38,19 +42,15 @@ class AppointmentLoader(AppointmentLoaderMixin):
         self.done_records = fetch_complete_csv_rows(self.done_file)
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
+        self.errored_note_state_event_file = 'results/errored_appointment_note_state_events.csv'
 
         # default needed for mapping
         self.default_location = "7d1e74f5-e3f4-467d-81bb-08d90d1a158a"
         self.default_note_type = "athena_historical_note"
 
     def make_csv(self, delimiter='|'):
-        """
-            Fetch the Patient Records from Avon API
-            and convert the JSON into a CSV with the columns that match
-            the Canvas Data Migration Template
-        """
-        headers = {
-            "Unique ID",
+        headers = [
+            "ID",
             "Patient Identifier",
             "Appointment Type",
             "Reason for Visit Code",
@@ -61,10 +61,9 @@ class AppointmentLoader(AppointmentLoaderMixin):
             "End Date/Time",
             "Duration",
             "Provider"
-        }
+        ]
 
         # apptdate,apptdate,apptstarttime,apptendtime,apptid,apptstarttime,apptendtime,patient name,enterpriseid,appt schdlng prvdrid,apptstatus,appttype,svcdeptid,,,
-
 
         with open(self.csv_file, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=headers, delimiter=delimiter)
@@ -73,16 +72,20 @@ class AppointmentLoader(AppointmentLoaderMixin):
             with open(self.original_csv_file, 'r') as file:
                 reader = csv.DictReader(file, delimiter=delimiter)
                 for row in reader:
+
+                    start_time = arrow.get(row['Start Date / Time'], "MM/DD/YYYY h:mm:ss A", tzinfo="US/Eastern").isoformat()
+                    end_time = arrow.get(row['End Date/Time'], "MM/DD/YYYY h:mm:ss A", tzinfo="US/Eastern").isoformat()
+
                     writer.writerow({
-                        "Unique ID": row['Unique ID'],
+                        "ID": row['Unique ID'],
                         "Patient Identifier": row['Patient Identifier'],
                         "Appointment Type": self.default_note_type,
                         "Reason for Visit Code": "",
                         "Reason for Visit Text": row['Appointment Type'],
-                        "Location": self.default_location,
+                        "Location": row["Location"],
                         "Meeting Link": "",
-                        "Start Date / Time": arrow.get(row['Start Date / Time'], "MM/DD/YYYYTHH:mm").isoformat(), # TODO fix these time with EST timezone
-                        "End Date/Time": arrow.get(row['End Date/Time'], "MM/DD/YYYYTHH:mm").isoformat(),
+                        "Start Date / Time": start_time,
+                        "End Date/Time": end_time,
                         "Duration": row['Duration'],
                         "Provider": row['Provider']
                     })
@@ -92,14 +95,14 @@ class AppointmentLoader(AppointmentLoaderMixin):
 if __name__ == '__main__':
     # change the customer_identifier to what is defined in your config.ini file
     loader = AppointmentLoader(environment='phi-test-accomplish')
-    delimiter = '|'
+    delimiter = ','
 
     # Make the Avon API call to their List Patients endpoint and convert the JSON return
     # to the template CSV loader
-    loader.make_csv(delimiter=delimiter)
+    # loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
     valid_rows = loader.validate(delimiter=delimiter)
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    loader.load(valid_rows, system_unique_identifier='avon', end_date_time_frame="2025-01-01")
+    loader.load(valid_rows, system_unique_identifier='athena', end_date_time_frame="2025-03-10")

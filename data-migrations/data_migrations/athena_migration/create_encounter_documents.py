@@ -51,7 +51,7 @@ class DocumentLoader(DocumentReferenceMixin):
                     if encounter_date:
                         document_date = arrow.get(encounter_date, "MM/DD/YYYY").date().isoformat()
 
-                    pages = [(p["pageordering"], p["reference"],) for p in document["pages"]]
+                    pages = [(int(p["pageordering"]), p["reference"],) for p in document["pages"]]
                     pages.sort()
                     document_ref_list = [p[1] for p in pages]
 

@@ -72,7 +72,7 @@ class LabReportLoader(LabReportMixin):
                 # This shouldn't ever happen with the current file set we have.
                 validation_errors.append("Unsupported file format for document")
         elif labresult.get("pages"):
-            documents = [(page["pageordering"], page["reference"]) for page in labresult["pages"]]
+            documents = [(int(page["pageordering"]), page["reference"]) for page in labresult["pages"]]
             # sort to get the correct page ordering
             documents.sort()
             documents = [f"{self.labresults_files_dir}{doc[1]}" for doc in documents]

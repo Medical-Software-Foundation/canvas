@@ -55,7 +55,7 @@ class DocumentLoader(DocumentReferenceMixin):
                         document_ref_list = [original_document_path]
 
                     if not original_document_path and document.get("pages"):
-                        pages = [(p["pageordering"], p["reference"],) for p in document["pages"]]
+                        pages = [(int(p["pageordering"]), p["reference"],) for p in document["pages"]]
                         pages.sort()
                         document_ref_list = [p[1] for p in pages]
 

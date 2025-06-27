@@ -3,6 +3,7 @@ import arrow
 
 from data_migrations.utils import (
     fetch_from_json,
+    fetch_from_csv,
     write_to_json,
     fetch_complete_csv_rows,
     load_fhir_settings
@@ -84,7 +85,7 @@ class LabReportLoader(LabReportMixin):
                 # This shouldn't ever happen with the current file set we have.
                 validation_errors.append("Unsupported file format for document")
         elif labresult.get("pages"):
-            documents = [(page["pageordering"], page["reference"]) for page in labresult["pages"]]
+            documents = [(int(page["pageordering"]), page["reference"]) for page in labresult["pages"]]
             # sort to get the correct page ordering
             documents.sort()
             documents = [f"{self.labresults_files_dir}{doc[1]}" for doc in documents]
@@ -328,7 +329,34 @@ class LabReportLoader(LabReportMixin):
         return valid_payloads
 
 
+    def page_order_issue_research(self):
+        done_records = fetch_from_csv(self.done_file, key="id", delimiter="|")
+        problem_file_ids = []
+        data = fetch_from_json(self.json_file)
+        for obj in data:
+            patient_enterprise_id = obj["patientdetails"]["enterpriseid"]
+
+            for labresult in obj["labresults"]:
+                labresult_id = labresult["labresultid"]
+
+                # these would have used the original document
+                if labresult.get("originaldocument", {}).get("reference"):
+                    pass
+
+                elif labresult.get("pages"):
+                    has_double_digit_pages = [(int(page["pageordering"]), page["reference"]) for page in labresult["pages"] if int(page["pageordering"]) > 9]
+                    if has_double_digit_pages and labresult_id in self.done_records:
+                        info = [labresult_id, done_records[labresult_id][0]['canvas_diagnosticreport_id']]
+                        if info not in problem_file_ids:
+                            problem_file_ids.append(info)
+        problem_file_ids.sort()
+        print(len(problem_file_ids))
+        print(len(list(set([i[0] for i in problem_file_ids]))))
+        write_to_json("problem_file_ids.json", problem_file_ids)
+
+
 if __name__ == "__main__":
     loader = LabReportLoader(environment="phi-test-accomplish")
-    valid_rows = loader.validate()
-    loader.load(valid_rows)
+    loader.page_order_issue_research()
+    # valid_rows = loader.validate()
+    # loader.load(valid_rows)

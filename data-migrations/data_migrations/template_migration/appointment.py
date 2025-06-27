@@ -150,7 +150,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
         ids = set()
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
- 
+
             if row['ID'] in ids or row['ID'] in self.done_records or row['ID'] in self.ignore_records:
                 print(' Already looked at record')
                 continue
@@ -162,15 +162,18 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
             patient = row['Patient Identifier']
             patient_key = ""
+
+            location = self.location_map.get(row['Location'])
+            if location is None:
+                location = self.default_location
+
             try:
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
                 practitioner_key = self.map_provider(row['Provider'])
-                location = self.map_location(row['Location'])
             except BaseException as e:
                 self.ignore_row(row['ID'], e)
                 continue
-
 
             payload = {
                 "resourceType": "Appointment",
