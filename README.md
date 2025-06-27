@@ -1,2 +1,3 @@
-# canvas
+# Canvas
+
 Canvas customizations and integrations
