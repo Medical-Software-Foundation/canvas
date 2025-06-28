@@ -173,6 +173,6 @@ class ConditionLoader(ConditionLoaderMixin):
 if __name__ == "__main__":
     loader = ConditionLoader(environment="phi-test-accomplish")
     # loader.create_mapping_file()
-    loader.make_csv()
-    # valid_rows = loader.validate(delimiter=",")
-    # loader.load(validated_rows=valid_rows)
+    # loader.make_csv()
+    valid_rows = loader.validate(delimiter=",")
+    loader.load(validated_rows=valid_rows)

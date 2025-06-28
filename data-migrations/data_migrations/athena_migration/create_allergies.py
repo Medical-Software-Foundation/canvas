@@ -119,6 +119,7 @@ class AllergyLoader(AllergyLoaderMixin):
 
                     fdb_code = ""
                     fdb_display = ""
+                    free_text_note = ""
 
                     if allergy.get("rxnormcode") and allergy.get("rxnormcode") in self.fdb_mappings:
                         fdb_code = self.fdb_mappings[allergy["rxnormcode"]]["code"]
@@ -126,6 +127,10 @@ class AllergyLoader(AllergyLoaderMixin):
                     elif allergy.get("allergenname") and allergy.get("allergenname") in self.fdb_mappings_by_name:
                         fdb_code = self.fdb_mappings_by_name[allergy["allergenname"]]["code"]
                         fdb_display = self.fdb_mappings_by_name[allergy["allergenname"]]["display"]
+                    else:
+                        fdb_code = "1-143" # Code for no allergy information available
+                        free_text_note = allergy.get("allergenname") or ""
+                        fdb_display = "No Allergy Information Available"
 
                     clinical_status = "active"
                     if allergy.get("deactivatedate"):
@@ -139,7 +144,7 @@ class AllergyLoader(AllergyLoaderMixin):
                         "FDB Code": fdb_code,
                         "Name": fdb_display,
                         "Onset Date": "", # there is no onset date;
-                        "Free Text Note": "",
+                        "Free Text Note": free_text_note,
                         "Reaction": reaction_text,
                         "Recorded Provider": allergy.get("lastmodifiedby", ""),
                     }
@@ -148,10 +153,40 @@ class AllergyLoader(AllergyLoaderMixin):
 
         print("CSV successfully made")
 
+    def find_missing_rows(self, delimiter=","):
+        headers = [
+            "ID",
+            "Patient Identifier",
+            "Clinical Status",
+            "Type",
+            "FDB Code",
+            "Name",
+            "Onset Date",
+            "Free Text Note",
+            "Reaction",
+            "Recorded Provider"
+        ]
+
+        with open(self.csv_file, "r") as file:
+            reader = csv.DictReader(file, delimiter=delimiter)
+
+            with open("PHI/diff_allergies.csv", "w") as new_file:
+                writer = csv.DictWriter(new_file, fieldnames=headers, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writeheader()
+
+                for row in reader:
+                    if row['ID'] in self.done_records:
+                        continue
+                    else:
+                        writer.writerow(row)
+
 
 if __name__ == "__main__":
     loader = AllergyLoader('phi-test-accomplish')
-    loader.create_rxnorm_mapping_file()
-    # loader.make_csv()
-    # valid_rows = loader.validate(delimiter=",")
-    # loader.load(valid_rows)
+    #loader.create_rxnorm_mapping_file()
+    #loader.make_csv()
+
+    #loader.find_missing_rows()
+
+    valid_rows = loader.validate(delimiter=",")
+    loader.load(valid_rows)

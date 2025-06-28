@@ -103,8 +103,10 @@ class CoverageLoader(CoverageLoaderMixin):
                         coverage_start_date = "2025-01-01"
 
                     payor_id = ""
-                    if coverage.get("insurancepackagepayerid") or coverage.get("insurancepackagepayerid"):
-                        payor_id = self.payor_mapping.get(f'{coverage.get("insurancepackagepayerid", "")}|{coverage.get("insurancepayername", "")}', "")
+                    if coverage.get("insurancepackagepayerid") or coverage.get("insurancepayername"):
+                        payor_key = f'{coverage.get("insurancepackagepayerid", "")}|{coverage.get("insurancepayername", "")}'
+                        payor_id = self.payor_mapping.get(payor_key) or f'UNABLE TO MAP {payor_key}'
+
 
                     row_to_write = {
                         "ID": coverage_id,
@@ -123,10 +125,48 @@ class CoverageLoader(CoverageLoaderMixin):
                     writer.writerow(row_to_write)
         print("CSV successfully made")
 
+    def find_missing_rows(self, delimiter=","):
+        headers = [
+            "ID",
+            "Patient Identifier",
+            "Type",
+            "Subscriber",
+            "Member ID",
+            "Relationship to Subscriber",
+            "Coverage Start Date",
+            "Payor ID",
+            "Order",
+            "Group Number",
+            "Plan Name",
+        ]
+
+        patient_map = fetch_from_json(self.patient_map_file)
+
+        with open(self.csv_file, "r") as file:
+            reader = csv.DictReader(file, delimiter=delimiter)
+
+            with open("PHI/diff_coverages.csv", "w") as new_file:
+                writer = csv.DictWriter(new_file, fieldnames=headers, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writeheader()
+
+                for row in reader:
+                    if row['ID'] in self.done_records:
+                        continue
+                    if row['Patient Identifier'] not in patient_map:
+                        print('No patient to map skipping')
+                        continue
+                    if not row['Payor ID']:
+                        continue
+                    if not row["Subscriber"]:
+                        row['Subscriber'] = 'UNABLE TO FIND SUBSCRIBER'
+                    
+                    writer.writerow(row)
+
 
 if __name__ == "__main__":
     loader = CoverageLoader(environment="phi-test-accomplish")
-    loader.make_payer_mapping_file()
-    # loader.make_csv()
-    #valid_rows = loader.validate(delimiter=",")
-    #loader.load(valid_rows, map_payor=False)
+    #loader.make_payer_mapping_file()
+    #loader.make_csv()
+    #loader.find_missing_rows()
+    valid_rows = loader.validate(delimiter=",")
+    loader.load(valid_rows, map_payor=False)

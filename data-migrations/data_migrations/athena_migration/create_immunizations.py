@@ -65,6 +65,6 @@ class ImmunizationLoader(ImmunizationMixin):
 
 if __name__ == "__main__":
     loader = ImmunizationLoader(environment="phi-test-accomplish")
-    loader.make_csv()
+    # loader.make_csv()
     valid_rows = loader.validate()
-    # loader.load(valid_rows)
+    loader.load(valid_rows)
