@@ -83,8 +83,7 @@ context_urls = [
     "https://docs.canvasmedical.com/guides/profile-additional-fields/"
 ]
 
-# Unique output filename suffix via timestamp
-output_file = f'coding_agent_context_{int(time.time())}.txt'
+output_file = f'coding_agent_context.txt'
 
 t0 = int(time.time())
 print(f'Starting at {t0}, writing to {output_file}')
@@ -95,7 +94,7 @@ failed_urls = []
 with open(output_file, 'a') as f:
     for url in context_urls:
         n += 1
-        print(f'On url {n} of {t} {url}...', end="")
+        print(f'{time.time()-t0:.2f}s: on url {n} of {t} {url}... ', end="")
         resp = requests.get(url)
         if resp.status_code != 200:
             message = f'{resp.status_code} on {url}'
@@ -109,12 +108,11 @@ with open(output_file, 'a') as f:
         markdown = html2text.html2text(inner_html)
         dense_markdown = '\n'.join([line for line in markdown.splitlines() if line.strip() != ''])
         
-        f.write(f'\n\n\n----- BEGIN PAGE {url}\n')
+        f.write(f'----- BEGIN PAGE {url}\n')
         f.write(dense_markdown)
-        f.write(f'----- END PAGE {url}')
+        f.write(f'\n----- END PAGE {url}\n\n\n')
         
-        print(f'Wrote {len(markdown.splitlines())} lines.')
-        print(f'TIME: {int(time.time())-t0} seconds have elapsed')
+        print(f'wrote {len(markdown.splitlines())} lines.')
 
     print(f"Output is located at {f.name}")
 
