@@ -87,8 +87,7 @@ context_urls = [
 output_file = f'coding_agent_context_{int(time.time())}.txt'
 
 t0 = int(time.time())
-print(f'Starting at {t0}')
-print(f'Writing to {output_file}')
+print(f'Starting at {t0}, writing to {output_file}')
 
 n = 0
 t = len(context_urls)
@@ -98,15 +97,11 @@ with open(output_file, 'a') as f:
         n += 1
         print(f'On url {n} of {t} {url}...', end="")
         resp = requests.get(url)
-        print(resp.status_code)
         if resp.status_code != 200:
             message = f'{resp.status_code} on {url}'
             print(message)
             failed_urls.append(message)
             continue
-
-        print(f'Got {len(resp.text.splitlines())} lines of HTML')
-        print('Transforming...', end="")
 
         soup = BeautifulSoup(resp.text, 'html.parser')
         content_div = soup.find('div', class_='pagelayout__centerdocs__content')
