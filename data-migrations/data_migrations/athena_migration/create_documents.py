@@ -45,7 +45,18 @@ class DocumentLoader(DocumentReferenceMixin):
             writer.writeheader()
 
             for row in data:
-                patient_id = row["patientdetails"]["fhir-patientid"].split("-")[-1]
+                patient_id = ""
+
+                if "fhir-patientid" in row["patientdetails"]:
+                    patient_id = row["patientdetails"]["fhir-patientid"].split("-")[-1]
+                    assert patient_id == row["patientdetails"]["enterpriseid"]
+                else:
+                    patient_id = row["patientdetails"]["enterpriseid"]
+
+                if not patient_id:
+                    print(row)
+                    raise ValueError("no patient ID")
+
                 for document in row["clinicaldocuments"]:
 
                     original_document_path = document.get("originaldocument", {}).get("reference", "")
