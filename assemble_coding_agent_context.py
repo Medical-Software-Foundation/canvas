@@ -91,7 +91,7 @@ print(f'Starting at {t0}, writing to {output_file}')
 n = 0
 t = len(context_urls)
 failed_urls = []
-with open(output_file, 'a') as f:
+with open(output_file, 'w') as f:
     for url in context_urls:
         n += 1
         print(f'{time.time()-t0:.2f}s: on url {n} of {t} {url}... ', end="")
