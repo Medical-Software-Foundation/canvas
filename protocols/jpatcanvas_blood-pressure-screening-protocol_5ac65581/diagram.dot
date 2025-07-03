@@ -1,0 +1,49 @@
+digraph {
+  rankdir=TB;
+
+  // Population Nodes
+  InitialPop [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="Male patients aged 18 to 39 years"];
+  SubsetPop [label="Subset Population" shape=box style=rounded color=green fontcolor=green comment="Male patients within the initial population who have not had a documented blood pressure screening in the past year"];
+  EligiblePop [label="Eligible Population" shape=box style=rounded color=green fontcolor=green comment="Eligible male patients for blood pressure screening"];
+  NormalBP [label="Normal BP" shape=box style=rounded color=green fontcolor=green comment="Blood pressure reading is normal (systolic <120 mmHg and diastolic <80 mmHg)"];
+  ElevatedBP [label="Elevated BP" shape=box style=rounded color=green fontcolor=green comment="Blood pressure reading is elevated (systolic 120-129 mmHg and diastolic <80 mmHg)"];
+  Hypertension [label="Hypertension" shape=box style=rounded color=green fontcolor=green comment="Blood pressure reading indicates hypertension (systolic ≥130 mmHg or diastolic ≥80 mmHg)"];
+
+  // Criterion Nodes
+  NoScreening [label="No Screening" shape=ellipse color=blue fontcolor=blue comment="No documented blood pressure screening in the past year"];
+  NoHypertension [label="No Hypertension" shape=ellipse color=blue fontcolor=blue comment="No documented diagnosis of hypertension"];
+  NoMeds [label="No Meds" shape=ellipse color=blue fontcolor=blue comment="Not currently on antihypertensive medication"];
+  NoSecondaryCause [label="No Secondary Cause" shape=ellipse color=blue fontcolor=blue comment="No known secondary cause of hypertension"];
+  NotHospitalized [label="Not Hospitalized" shape=ellipse color=blue fontcolor=blue comment="Not currently hospitalized or in a long-term care facility"];
+  NotTerminal [label="Not Terminal" shape=ellipse color=blue fontcolor=blue comment="No terminal illness or under palliative care"];
+  ValidatedSphyg [label="Validated Sphyg" shape=ellipse color=blue fontcolor=blue comment="Use of a validated and calibrated sphygmomanometer"];
+  RecordBP [label="Record BP" shape=ellipse color=blue fontcolor=blue comment="Record the blood pressure reading in the patient's EHR"];
+  LifestyleCounsel [label="Lifestyle Counsel" shape=ellipse color=blue fontcolor=blue comment="Provide lifestyle modification counseling"];
+  ReferEval [label="Refer Eval" shape=ellipse color=blue fontcolor=blue comment="Refer for further evaluation and management"];
+  DocumentActions [label="Document Actions" shape=ellipse color=blue fontcolor=blue comment="Document all actions taken in the EHR"];
+  Compliance [label="Compliance" shape=ellipse color=blue fontcolor=blue comment="Ensure compliance with the US Preventive Services Task Force guidelines"];
+
+  // Edges
+  InitialPop -> SubsetPop [label="if" color=blue fontcolor=blue];
+  SubsetPop -> NoScreening [label="if" color=blue fontcolor=blue];
+  NoScreening -> EligiblePop [label="then" color=blue fontcolor=blue];
+
+  EligiblePop -> NoHypertension [label="if" color=blue fontcolor=blue];
+  NoHypertension -> NoMeds [label="and" color=blue fontcolor=blue];
+  NoMeds -> NoSecondaryCause [label="and" color=blue fontcolor=blue];
+  NoSecondaryCause -> NotHospitalized [label="and" color=blue fontcolor=blue];
+  NotHospitalized -> NotTerminal [label="and" color=blue fontcolor=blue];
+  NotTerminal -> ValidatedSphyg [label="and" color=blue fontcolor=blue];
+  ValidatedSphyg -> RecordBP [label="and" color=blue fontcolor=blue];
+  RecordBP -> NormalBP [label="then" color=blue fontcolor=blue];
+  RecordBP -> ElevatedBP [label="then" color=blue fontcolor=blue];
+  RecordBP -> Hypertension [label="then" color=blue fontcolor=blue];
+
+  NormalBP -> DocumentActions [label="then" color=blue fontcolor=blue];
+  ElevatedBP -> LifestyleCounsel [label="then" color=blue fontcolor=blue];
+  LifestyleCounsel -> DocumentActions [label="then" color=blue fontcolor=blue];
+  Hypertension -> ReferEval [label="then" color=blue fontcolor=blue];
+  ReferEval -> DocumentActions [label="then" color=blue fontcolor=blue];
+
+  DocumentActions -> Compliance [label="then" color=blue fontcolor=blue];
+}
