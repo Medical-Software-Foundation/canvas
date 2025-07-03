@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Blood Pressure Screening Protocol for Young Adult Males"
+    description: "This protocol outlines the screening process for blood pressure in male patients aged 18-39. It includes criteria for initial population, exclusions, and actions required for diagnostic, follow-up, and administrative tasks. The protocol ensures accurate measurement, documentation, and compliance with guidelines, focusing on patients without recent screenings or hypertension diagnosis."
+    url: ""
+
