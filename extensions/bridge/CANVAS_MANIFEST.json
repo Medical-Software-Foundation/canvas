@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.10.1",
-    "plugin_version": "0.1.14",
+    "plugin_version": "0.2.0",
     "name": "bridge",
     "description": "Bridge integration for Canvas",
     "components": {
@@ -17,6 +17,15 @@
             {
                 "class": "bridge.protocols.bridge_patient_sync:BridgePatientSync",
                 "description": "Create or update patients in Bridge based on creation or changes to patients in Canvas",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "bridge.protocols.bridge_patient_api:BridgePatientApi",
+                "description": "Create a patient in Canvas when a user is created in Bridge",
                 "data_access": {
                     "event": "",
                     "read": [],
