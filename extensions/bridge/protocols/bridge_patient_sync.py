@@ -162,6 +162,7 @@ class BridgePatientSync(BaseProtocol):
         if bridge_patient_id is None:
             bridge_patient_id = resp.json().get("id")
 
+        external_id = None
         if event_type == EventType.PATIENT_CREATED and resp.status_code == 409:
             log.info(f'>>> Bridge patient already exists for {canvas_patient_id}')
             return []
@@ -172,7 +173,6 @@ class BridgePatientSync(BaseProtocol):
                 system=BRIDGE_SANDBOX,
                 value=str(bridge_patient_id)
             )
-            external_id.create()
 
         # If the post is unsuccessful, notify end users
         # TODO: implement workflow to remedy this,
@@ -196,7 +196,6 @@ class BridgePatientSync(BaseProtocol):
 
         # Otherwise, get the resulting patient info and build the link to Bridge
         bridge_patient_data = resp.json()
-
         sync_banner = AddBannerAlert(
             patient_id=canvas_patient.id,
             key='bridge-patient-sync',
@@ -211,7 +210,11 @@ class BridgePatientSync(BaseProtocol):
             href=f"{self.bridge_ui_base_url}/patients/{bridge_patient_data['id']}"
         )
 
-        return [sync_banner.apply()]
+        effects = []
+        if external_id is not None:
+            effects.append(external_id.create())
+        effects.append(sync_banner.apply())
+        return effects
 
     def sanitize_url(self, url):
         # Remove a trailing forward slash since our request paths will start with '/'
