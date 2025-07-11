@@ -4,7 +4,7 @@
 
 Monitor patient progress over time with the Vitals Visualizer.
 
-For paitent vitals:
+For patient vitals:
 - Open the visualizer from the Vitals action button in the patient summary
 - View patient vitals over time
 - Hover over data points to see exact values on a given date
