@@ -1,0 +1,22 @@
+digraph {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPopulation [label="Initial Population" shape=box style=rounded color=green fontcolor=green comment="All patient appointments recorded in the Canvas Electronic Medical Record (EMR) system."];
+    TelehealthAppointments [label="Telehealth Appointments" shape=box style=rounded color=green fontcolor=green comment="Appointments that are specifically categorized as 'telehealth' within the Canvas EMR system."];
+
+    // Criterion Nodes
+    NotTelehealth [label="Not Telehealth" shape=ellipse color=blue fontcolor=blue comment="Appointments that are not labeled as 'telehealth'."];
+    CanceledOrNoShow [label="Canceled or No-Show" shape=ellipse color=blue fontcolor=blue comment="Telehealth appointments that have been canceled or marked as 'no-show'."];
+    DuplicatesOrErroneous [label="Duplicates or Erroneous" shape=ellipse color=blue fontcolor=blue comment="Appointments that are duplicates or have been erroneously entered."];
+
+    // Edges
+    InitialPopulation -> NotTelehealth [label="if" color=blue fontcolor=blue];
+    NotTelehealth -> TelehealthAppointments [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> CanceledOrNoShow [label="if" color=blue fontcolor=blue];
+    CanceledOrNoShow -> TelehealthAppointments [label="then" color=blue fontcolor=blue];
+
+    InitialPopulation -> DuplicatesOrErroneous [label="if" color=blue fontcolor=blue];
+    DuplicatesOrErroneous -> TelehealthAppointments [label="then" color=blue fontcolor=blue];
+}

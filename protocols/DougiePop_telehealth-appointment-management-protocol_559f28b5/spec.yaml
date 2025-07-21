@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "unknown"
+referencePapers:
+  - title: "Telehealth Appointment Management Protocol in Canvas EMR"
+    description: "This protocol outlines the management of telehealth appointments in the Canvas EMR system, including diagnostic, administrative, and quality assurance actions. It focuses on ensuring accurate categorization, data integrity, and efficient scheduling. Exclusion criteria include non-telehealth, canceled, no-show, duplicate, or erroneous appointments. The protocol aims to enhance patient satisfaction and improve appointment management efficiency."
+    url: ""
+
