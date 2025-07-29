@@ -12,6 +12,8 @@ The protocol specifically targets children and adolescents aged 8 to 18 years wi
 - **For Children and Adolescents Aged 8 to 18**: The USPSTF recommends screening for anxiety due to the availability of accurate screening instruments and adequate evidence that treatment, particularly psychotherapy, is associated with a moderate benefit in terms of treatment response and disease remission.
 - **For Children 7 Years or Younger**: The USPSTF concludes that the current evidence is insufficient to assess the benefits and harms of screening for anxiety due to inadequate evidence on screening tools' accuracy and the benefits of treatment in this age group.
 
+The Screen for Child Anxiety Related Disorders (SCARED) questionnaire is a self-report questionnaire used to screen for childhood anxiety disorders and monitor symptoms.
+
 The document emphasizes the importance of considering various risk factors for anxiety disorders, which include genetic, personality, environmental factors, socio-economic status, and experiences of discrimination or adverse childhood events.
 
 Screening involves the use of heterogeneous instruments, some of which are designed for specific anxiety disorders. The protocol underscores that while there is no direct evidence on the harms of screening for anxiety, the potential harms of screening and psychotherapy are considered to be no greater than small.
