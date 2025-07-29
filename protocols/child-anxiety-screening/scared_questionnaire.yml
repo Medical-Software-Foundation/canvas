@@ -1,0 +1,1337 @@
+name: 'Screen for Child Anxiety Related Emotional Disorders (SCARED) Questionnaire'
+form_type: QUES
+code_system: LOINC
+code: 62715-8
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+prologue: 'Below is a list of sentences that describe how people feel. Read each phrase
+  and decide if it is
+
+  “Not True or Hardly Ever True” or “Somewhat True or Sometimes True” or “Very True
+  or Often
+
+  True” for you. Then for each sentence, fill in one circle that corresponds to the
+  response that
+
+  seems to describe you for the last 3 months. '
+questions:
+- content: When frightened, it is hard to breathe.
+  code_system: LOINC
+  code: 64952-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: "I am afraid of heights.\t"
+  code_system: LOINC
+  code: 64953-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: "I get headaches or stomach aches when I am at school.\t"
+  code_system: LOINC
+  code: 64954-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: ''
+  responses_type: ''
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I don't like to be with people I don't know.
+  code_system: LOINC
+  code: 64955-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When I see blood, I get dizzy.
+  code_system: LOINC
+  code: 64956-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I want that things are in a fixed order.
+  code_system: LOINC
+  code: 64957-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I get scared when I sleep away from home.
+  code_system: LOINC
+  code: 64958-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about others not liking me.
+  code_system: LOINC
+  code: 64907-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, I feel like passing out.
+  code_system: LOINC
+  code: 64908-7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I think that I will be contaminated with a serious disease.
+  code_system: LOINC
+  code: 64909-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am nervous.
+  code_system: LOINC
+  code: 64910-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I follow my parents wherever they go.
+  code_system: LOINC
+  code: 64911-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I have thoughts that frighten me.
+  code_system: LOINC
+  code: 64912-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: People tell me that I look nervous.
+  code_system: LOINC
+  code: 64913-7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I feel nervous with people I don't know well.
+  code_system: LOINC
+  code: 64914-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid to visit the doctor.
+  code_system: LOINC
+  code: 64915-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I don't like going to school.
+  code_system: LOINC
+  code: 64916-0
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, I feel like going crazy.
+  code_system: LOINC
+  code: 64917-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about sleeping alone.
+  code_system: LOINC
+  code: 64918-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid to visit the dentist.
+  code_system: LOINC
+  code: 64919-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about being as good as other kids.
+  code_system: LOINC
+  code: 64920-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid of an animal that is not really dangerous.
+  code_system: LOINC
+  code: 64921-0
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I get scared when there is thunder in the air.
+  code_system: LOINC
+  code: 64922-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I do things more than twice in order to check whether I did it right.
+  code_system: LOINC
+  code: 64923-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I have frightening dreams about a very aversive event I once experienced.
+  code_system: LOINC
+  code: 64924-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I want things to be clean and tidy.
+  code_system: LOINC
+  code: 64925-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, I feel that things are not real.
+  code_system: LOINC
+  code: 64926-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I feel scared when I have to fly in an airplane.
+  code_system: LOINC
+  code: 64927-7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I have nightmares about my parents.
+  code_system: LOINC
+  code: 64928-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about going to school.
+  code_system: LOINC
+  code: 64929-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I do things to get less scared of my thoughts.
+  code_system: LOINC
+  code: 64930-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, my heart beats fast.
+  code_system: LOINC
+  code: 64931-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am scared when I get an injection.
+  code_system: LOINC
+  code: 64932-7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid to get a serious disease.
+  code_system: LOINC
+  code: 64933-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I feel weak and shaky.
+  code_system: LOINC
+  code: 64934-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I have nightmares about bad things happening to me.
+  code_system: LOINC
+  code: 64935-0
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am so scared of a harmless animal that I do not dare to touch it.
+  code_system: LOINC
+  code: 64893-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about things working out for me.
+  code_system: LOINC
+  code: 64894-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I doubt whether I really did something.
+  code_system: LOINC
+  code: 64895-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, I sweat a lot.
+  code_system: LOINC
+  code: 64896-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am a worrier.
+  code_system: LOINC
+  code: 64897-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I feel scared when I watch an operation.
+  code_system: LOINC
+  code: 64898-0
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I try not to think about a very aversive event I once experienced.
+  code_system: LOINC
+  code: 64899-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I get really frightened for no reason.
+  code_system: LOINC
+  code: 64900-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid to be alone at home.
+  code_system: LOINC
+  code: 64901-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I get scared when I think back of a very aversive event I once experienced.
+  code_system: LOINC
+  code: 64902-0
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I find it hard to talk with people I don't know.
+  code_system: LOINC
+  code: 64903-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, I feel like I am choking.
+  code_system: LOINC
+  code: 64904-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: People tell me I worry too much.
+  code_system: LOINC
+  code: 64905-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I don't like being away from my family.
+  code_system: LOINC
+  code: 64906-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid of having anxiety attacks.
+  code_system: LOINC
+  code: 64936-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry that bad happens to my parents.
+  code_system: LOINC
+  code: 64937-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am shy with people I don't know well.
+  code_system: LOINC
+  code: 64938-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I fantasize about hurting other people.
+  code_system: LOINC
+  code: 64939-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about the future.
+  code_system: LOINC
+  code: 64940-0
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, I feel like throwing up.
+  code_system: LOINC
+  code: 64941-8
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about how well I do things.
+  code_system: LOINC
+  code: 64942-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am scared to go to school.
+  code_system: LOINC
+  code: 64943-4
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I worry about things that happened in the past.
+  code_system: LOINC
+  code: 64944-2
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: When frightened, I feel dizzy.
+  code_system: LOINC
+  code: 64945-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I get scared in small, closed places
+  code_system: LOINC
+  code: 65885-6
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I have thoughts that I prefer not to have.
+  code_system: LOINC
+  code: 64947-5
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid of the dark.
+  code_system: LOINC
+  code: 64948-3
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I have unbidden thoughts about a very aversive event I once experienced.
+  code_system: LOINC
+  code: 64949-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I am afraid of an animal that most children do not fear.
+  code_system: LOINC
+  code: 64950-9
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
+- content: I don't like being in a hospital.
+  code_system: LOINC
+  code: 64951-7
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: "Almost never\t"
+    code: LA13866-1
+    code_description: ''
+    value: '1'
+  - name: Sometimes
+    code: LA10082-8
+    code_description: ''
+    value: '2'
+  - name: Often
+    code: LA10044-8
+    code_description: ''
+    value: '3'
