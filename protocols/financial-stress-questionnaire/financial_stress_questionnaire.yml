@@ -1,0 +1,33 @@
+name: Financial Stress
+form_type: QUES
+code_system: INTERNAL
+code: QUES_FINACIAL_STRESS_CODE_01
+can_originate_in_charting: true
+display_results_in_social_history_section: true
+prologue: ''
+questions:
+- content: How hard is it for you to pay for the very basics like food, housing, medical
+    care, and heating?
+  code_system: LOINC
+  code: 76513-1
+  code_description: ''
+  display_result_in_social_history_section: false
+  responses_code_system: LOINC
+  responses_type: SING
+  responses:
+  - name: Very hard
+    code: LA15832-1
+    code_description: ''
+    value: ''
+  - name: Hard
+    code: LA14745-6
+    code_description: ''
+    value: ''
+  - name: Somewhat hard
+    code: LA22683-9
+    code_description: ''
+    value: ''
+  - name: Not very hard
+    code: LA22682-1
+    code_description: ''
+    value: ''
