@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "financial-stress-questionnaire",
+    "description": "The Financial Stress Questionnaire is an invaluable tool designed for a diverse patient population, encompassing individuals facing financial burdens in their daily lives",
+    "components": {
+        "protocols": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "templates/financial_stress_questionnaire.yml"
+            }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
