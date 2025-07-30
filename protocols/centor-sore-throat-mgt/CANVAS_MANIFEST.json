@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "modified-centor-criteria",
+    "description": "The Modified Centor Criteria assesses the likelihood of pharyngitis  in patients with sore throats.",
+    "components": {
+        "protocols": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "templates/modified_centor_criteria.yml"
+            }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

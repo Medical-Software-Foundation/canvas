@@ -1,0 +1,71 @@
+name: Modified Centor Criteria
+form_type: QUES
+code_system: INTERNAL
+code: centor
+active: false
+can_originate_in_charting: true
+prologue: Assess the likelihood of pharyngitis  in patients with sore throats
+questions:
+- content: "Age"
+  code_system: INTERNAL
+  code: centor_Q1
+  responses_code_system: INTERNAL
+  responses_type: SING
+  responses:
+  - name: "3-14 years"
+    code: centor_Q1_A1
+    value: "1"
+  - name: "15-44 years"
+    code: centor_Q1_A2
+    value: "0"
+  - name: "≥45 years"
+    code: centor_Q1_A3
+    value: "-1"
+- content: "Exudate or swelling on tonsils"
+  code_system: INTERNAL
+  code: centor_Q2
+  responses_code_system: INTERNAL
+  responses_type: SING
+  responses:
+  - name: "No"
+    code: centor_Q2_A1
+    value: "0"
+  - name: "Yes"
+    code: centor_Q2_A2
+    value: "1"
+- content: "Tender/swollen anterior cervical lymph nodes"
+  code_system: INTERNAL
+  code: centor_Q3
+  responses_code_system: INTERNAL
+  responses_type: SING
+  responses:
+  - name: "No"
+    code: centor_Q3_A1
+    value: "0"
+  - name: "Yes"
+    code: centor_Q3_A2
+    value: "1"
+- content: "Temp >38°C (100.4°F)"
+  code_system: INTERNAL
+  code: centor_Q4
+  responses_code_system: INTERNAL
+  responses_type: SING
+  responses:
+  - name: "No"
+    code: centor_Q4_A1
+    value: "0"
+  - name: "Yes"
+    code: centor_Q4_A2
+    value: "1"
+- content: "Cough"
+  code_system: INTERNAL
+  code: centor_Q5
+  responses_code_system: INTERNAL
+  responses_type: SING
+  responses:
+  - name: "Cough present"
+    code: centor_Q5_A1
+    value: "0"
+  - name: "Cough absent"
+    code: centor_Q5_A2
+    value: "1"
