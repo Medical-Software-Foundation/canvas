@@ -1,3 +1,5 @@
+# Financial Stress Questionnaire
+
 ## Appropriate Patient Populations
 
 The Financial Stress Questionnaire is an invaluable tool designed for a diverse patient population, encompassing individuals facing financial burdens in their daily lives. It is ideally suited for patients experiencing socioeconomic challenges that might affect their overall healthcare access and outcomes. These patient populations include, but are not limited to, low-income households, the elderly on fixed incomes, individuals with significant medical expenses, and those living in areas with high costs of living. By identifying financial stressors, healthcare providers can better understand the broader context of a patient’s social determinants of health, thereby enabling more comprehensive and effective care plans.
