@@ -10,7 +10,7 @@ from logger import log
 class PrapareQuestionnaireResult(BaseProtocol):
     """
     Return a CreateQuestionnaireResult effect in response to a committed Questionnaire Command that
-    contains questions coded for the Fall Risk Assessment questionnaire.
+    contains questions coded for the PRAPARE questionnaire.
     """
 
     RESPONDS_TO = [EventType.Name(EventType.QUESTIONNAIRE_COMMAND__POST_COMMIT)]
