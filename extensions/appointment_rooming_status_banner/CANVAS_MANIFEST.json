@@ -1,0 +1,28 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "appointment_rooming_status_banner",
+    "description": "Creates indications of the patients rooming status within the chart.",
+    "components": {
+        "protocols": [
+            {
+                "class": "appointment_rooming_status_banner.handlers.create_status_banner:CreateStatusBanner",
+                "description": "When an appointment is updated and the status is Arrived or Roomed, make a banner alert indicating as such."
+            },
+            {
+                "class": "appointment_rooming_status_banner.handlers.remove_status_banners:RemoveStatusBanners",
+                "description": "At the end of a day, remove any remaining rooming status banners."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
