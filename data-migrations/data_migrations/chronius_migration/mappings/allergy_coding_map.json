@@ -1,0 +1,5844 @@
+{
+    "(tolerated pristiq)|": [],
+    "2-hydroxyethyl methacrylate (hema)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-10561",
+            "display": "hydroxyethyl methacrylate"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1362692"
+        }
+    ],
+    "? tylenol cold & flu nighttime|": [],
+    "abilify (aripiprazole)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-57185",
+            "display": "Abilify"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "352393"
+        }
+    ],
+    "abilify|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-57185",
+            "display": "Abilify"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "352393"
+        }
+    ],
+    "abreva|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-19177",
+            "display": "Abreva"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "285039"
+        }
+    ],
+    "acetaminophen (tylenol)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-361",
+            "display": "acetaminophen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1038776"
+        }
+    ],
+    "acetaminophen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-361",
+            "display": "acetaminophen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1038776"
+        }
+    ],
+    "acidic foods|": [
+    ],
+    "acrylates|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-730",
+            "display": "Acrylic Acid and Acrylates"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1368626"
+        }
+    ],
+    "adapalene-benzoyl peroxide (topical)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-117291",
+            "display": "adapalene-benzoyl peroxide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "859393"
+        }
+    ],
+    "adderall (mixed amphetamine salts)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-55993",
+            "display": "Adderall"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "84815"
+        }
+    ],
+    "adhesive tapes|": [],
+    "adhesive tape|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3746",
+            "display": "adhesive tape"
+        }
+    ],
+    "adhesive/tape|": [],
+    "adhesives|": [],
+    "adhesive|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-781",
+            "display": "Adhesive"
+        }
+    ],
+    "ajovy|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-350016",
+            "display": "Ajovy Syringe"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2056696"
+        }
+    ],
+    "albuterol sulfate hfa inhaler|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4756",
+            "display": "albuterol sulfate"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "142153"
+        }
+    ],
+    "alcohol|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-1539",
+        "display": "ethyl alcohol"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "448"
+      }
+    ],
+    "all antidepressants|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900151",
+            "display": "Tetracyclic Antidepressants"
+        }
+    ],
+    "all antihistamines including benadryl|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-4787",
+        "display": "diphenhydramine"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "3498"
+      }
+    ],
+    "all anxiety medication|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-1461",
+        "display": "diazepam"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "3322"
+      }
+    ],
+    "all narcotics|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-268",
+                "display": "Opioids - Morphine Analogues"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "373699000",
+                "display": "Substance with morphinan structure and opioid receptor agonist mechanism of action (substance)"
+            }
+        ],
+    "almonds|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-33",
+            "display": "Almond"
+        }
+    ],
+    "almond|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-33",
+            "display": "Almond"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1305638"
+        }
+    ],
+    "aloe|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-395",
+            "display": "Aloe"
+        }
+    ],
+    "ambien|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-9128",
+            "display": "Ambien"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "131725"
+        }
+    ],
+    "amitriptyline|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5515",
+            "display": "amitriptyline"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151658"
+        }
+    ],
+    "amoxicillin/penicillin|": [],
+    "amoxicillin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1519",
+            "display": "amoxicillin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "133008"
+        }
+    ],
+    "amphetamines|": [],
+    "ancho chilis|": [],
+    "anesthesia|": [],
+    "anethole/eucalyptus oil/menthol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-13518",
+            "display": "menthol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1014606"
+        }
+    ],
+    "animal dander|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16092",
+            "display": "animal dander"
+        }
+    ],
+    "animals|": [],
+    "antibiotics (unspecified)|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-491",
+                "display": "Sulfa (Sulfonamide Antibiotics)"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "372788003",
+                "display": "Substance with sulfonamide structure and antibacterial mechanism of action (substance)"
+            }
+    ],
+    "antiseptic bandaid|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-63013",
+                "display": "antiseptic solution"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1038552"
+            }
+        ],
+    "ants and mosquitos|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16098",
+                "display": "insect venom"
+            }
+        ],
+    "ants, bees and other venom|": [],
+    "ants|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16098",
+                "display": "insect venom"
+            }
+        ],
+    "any long qt prolonging meds|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-1496",
+                "display": "tranylcypromine sulfate"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "10734"
+            }
+        ],
+    "apples|": [],
+    "apple|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-11688",
+            "display": "apple"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1424865"
+        }
+    ],
+    "aspartame|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2605",
+            "display": "aspartame"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1311524"
+        }
+    ],
+    "aspirin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1076",
+            "display": "aspirin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1001473"
+        }
+    ],
+    "ativan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6449",
+            "display": "Ativan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202479"
+        }
+    ],
+    "atorvastatin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6321",
+            "display": "atorvastatin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1297766"
+        }
+    ],
+    "augmentin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4242",
+            "display": "Augmentin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151392"
+        }
+    ],
+    "avelox|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-16836",
+            "display": "Avelox"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "261456"
+        }
+    ],
+    "avocado (unprocessed)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9620",
+            "display": "avocado"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1311611"
+        }
+    ],
+    "avocado|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9620",
+            "display": "avocado"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1311611"
+        }
+    ],
+    "azithromycin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1515",
+            "display": "azithromycin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1298839"
+        }
+    ],
+    "bacitracin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2798",
+            "display": "bacitracin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11417"
+        }
+    ],
+    "bactrim (sulfa)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5086",
+            "display": "Bactrim"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151399"
+        }
+    ],
+    "bactrim (sulfamethoxazole/trimethoprim)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5086",
+            "display": "Bactrim"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151399"
+        }
+    ],
+    "bactrim|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5086",
+            "display": "Bactrim"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151399"
+        }
+    ],
+    "bahia grass|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16509",
+            "display": "grass pollen-bahia"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "852673"
+        }
+    ],
+    "baker’s yeast|": [],
+    "bananas|": [],
+    "banana|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7877",
+            "display": "banana"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "285149"
+        }
+    ],
+    "bandage adhesive|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-263065",
+            "display": "New Skin (benzethonium)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1424283"
+        }
+    ],
+    "bed bugs|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-3105",
+                "display": "insect extracts"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1052607"
+            }
+        ],
+    "bee stings|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6698",
+            "display": "venom-honey bee"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "124427"
+        }
+    ],
+    "bee sting|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6698",
+            "display": "venom-honey bee"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "124427"
+        }
+    ],
+    "bee venom|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6698",
+            "display": "venom-honey bee"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "124427"
+        }
+    ],
+    "beef|": [],
+    "beer|": [],
+    "bees|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6698",
+            "display": "venom-honey bee"
+        }
+    ],
+    "benadryl|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5527",
+            "display": "Benadryl"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203457"
+        }
+    ],
+    "benzocaine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1366",
+            "display": "benzocaine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1009372"
+        }
+    ],
+    "benzodiazepines|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-258",
+            "display": "Benzodiazepines"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "16047007",
+            "display": "Product containing benzodiazepine (product)"
+        }
+    ],
+    "benzoyl peroxide|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1335",
+            "display": "benzoyl peroxide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1020027"
+        }
+    ],
+    "berries|": [],
+    "beta-blockers|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-298",
+            "display": "Beta-Blockers (Beta-Adrenergic Blocking Agts)"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "33252009",
+            "display": "Product containing beta adrenergic receptor antagonist (product)"
+        }
+    ],
+    "betadine scrub|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3654",
+            "display": "Betadine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202750"
+        }
+    ],
+    "biaxin (clarithromycin)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8504",
+            "display": "Biaxin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203729"
+        }
+    ],
+    "biofreeze otc with lavender|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-57133",
+            "display": "Biofreeze"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1043229"
+        }
+    ],
+    "bleach|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-845",
+            "display": "Bleach (Sodium Hypochlorite)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "9881"
+        }
+    ],
+    "blood thinners|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-2084",
+        "display": "warfarin"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "11289"
+      }
+    ],
+    "blue dye|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-202",
+            "display": "Blue Dye"
+        }
+    ],
+    "blueberries|": [],
+    "botox|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-9262",
+            "display": "Botox"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203279"
+        }
+    ],
+    "brazil nuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-14765",
+            "display": "Brazil nut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1306156"
+        }
+    ],
+    "brewer's yeast|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-51480",
+            "display": "Brewer's Yeast"
+        }
+    ],
+    "bug bite|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-3105",
+                "display": "insect extracts"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1052607"
+            }
+        ],
+    "buprenorphine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4632",
+            "display": "buprenorphine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1488635"
+        }
+    ],
+    "bupropion|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4611",
+            "display": "bupropion"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203204"
+        }
+    ],
+    "buspar|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8512",
+            "display": "BuSpar"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "154990"
+        }
+    ],
+    "buspirone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4586",
+            "display": "buspirone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1827"
+        }
+    ],
+    "caffeine containing otc meds for migraine|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-102",
+                "display": "aspirin-acetaminophen-caffeine"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1052413"
+            }
+        ],
+    "caffeine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-407",
+            "display": "caffeine"
+        }
+    ],
+    "calcium channel blockers|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-900392",
+                "display": "Calcium Channel Blocking Agents-Dihydropyridines"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "406769001",
+                "display": "Substance with dihydropyridine derivative structure and calcium channel blocker mechanism of action (substance)"
+            }
+        ],
+    "california roll|": [],
+    "can tolerate amoxicillin|": [],
+    "candida|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-915",
+                "display": "Candida Albicans"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1963"
+            }
+        ],
+    "candle|": [],
+    "cantaloupe|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16923",
+            "display": "cantaloupe"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "892517"
+        }
+    ],
+    "carba mix|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-19075",
+        "display": "zinc diethyldithiocarbamate"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "1427192"
+      }
+    ],
+    "carbamazepine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1481",
+            "display": "carbamazepine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151708"
+        }
+    ],
+    "cardizem|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5087",
+            "display": "Cardizem"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203494"
+        }
+    ],
+    "carpet beetles|": [],
+    "carrot|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9716",
+            "display": "carrot"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1428866"
+        }
+    ],
+    "casein|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-927",
+            "display": "casein"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1366917"
+        }
+    ],
+    "cat dander|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16086",
+            "display": "cat dander"
+        }
+    ],
+    "cat hair|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16086",
+            "display": "cat dander"
+        }
+    ],
+    "cats|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16086",
+            "display": "cat dander"
+        }
+    ],
+    "cat|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16086",
+            "display": "cat dander"
+        }
+    ],
+    "ceclor (cefaclor)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3660",
+            "display": "Ceclor"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203635"
+        }
+    ],
+    "ceclor|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3660",
+            "display": "Ceclor"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203635"
+        }
+    ],
+    "cedar|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16820",
+            "display": "tree pollen-elm, cedar"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1014191"
+        }
+    ],
+    "cefdinir|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5397",
+            "display": "cefdinir"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1306064"
+        }
+    ],
+    "ceftin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3716",
+            "display": "Ceftin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "215926"
+        }
+    ],
+    "cefzil (cefprozil)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8057",
+            "display": "Cefzil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "224901"
+        }
+    ],
+    "celebrex|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-15833",
+            "display": "Celebrex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "215927"
+        }
+    ],
+    "celery|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7530",
+            "display": "celery"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1309989"
+        }
+    ],
+    "celexa|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8184",
+            "display": "Celexa"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "215928"
+        }
+    ],
+    "cephalosporins|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-477",
+            "display": "Cephalosporins"
+        }
+    ],
+    "cephalosporin|": [],
+    "certain spices|": [],
+    "chalk|": [],
+    "chapstick|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-54827",
+            "display": "Chapstick"
+        }
+    ],
+    "cheeses|": [],
+    "chemical scent|": [],
+    "chemicals of cleaners|": [],
+    "cherry|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1170",
+            "display": "Cherry"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "862461"
+        }
+    ],
+    "chicken|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "1-1168",
+        "display": "Poultry"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "28230009",
+        "display": "Poultry (substance)"
+      }
+    ],
+    "chlorhexidine topical|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-3177",
+                "display": "chlorhexidine gluconate"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1012301"
+            }
+        ],
+    "chlorhexidine/chg|": [],
+    "chlorhexidine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3674",
+            "display": "chlorhexidine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006406"
+        }
+    ],
+    "chocolate|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-19561",
+            "display": "chocolate"
+        }
+    ],
+    "cigarette and cigar smoke|": [],
+    "cigarette smoke|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16104",
+            "display": "cigarette smoke"
+        }
+    ],
+    "cinnamon|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2564",
+            "display": "cinnamon"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "285245"
+        }
+    ],
+    "ciprofloxacin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2882",
+            "display": "ciprofloxacin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151517"
+        }
+    ],
+    "ciprofoxacin|": [],
+    "cipro|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1118",
+            "display": "Cipro"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203563"
+        }
+    ],
+    "citric acid|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2329",
+            "display": "citric acid"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1374802"
+        }
+    ],
+    "citrus|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-900520",
+                "display": "Citrus And Derivatives"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "102259006",
+                "display": "Citrus fruit (substance)"
+            }
+        ],
+    "clams/mollusks|": [],
+    "claritin-d|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-251430",
+            "display": "Claritin-D"
+        }
+    ],
+    "claritin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5211",
+            "display": "Claritin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203576"
+        }
+    ],
+    "clasosporium|": [],
+    "clindamycin (topical)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-925",
+            "display": "clindamycin phosphate"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1085915"
+        }
+    ],
+    "clindamycin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-54076",
+            "display": "Clindamycin"
+        }
+    ],
+    "clorox toilet bowl cleaner w/ bleach|": [],
+    "cobalt|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-618",
+            "display": "Cobalt"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1310300"
+        }
+    ],
+    "cockroach|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-19291",
+            "display": "cockroach"
+        }
+    ],
+    "cocoa/ cacao|": [],
+    "cocoa|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-10105",
+            "display": "cocoa"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1373895"
+        }
+    ],
+    "coconut oil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2576",
+            "display": "coconut oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1309239"
+        }
+    ],
+    "coconut|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16176",
+            "display": "coconut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1307562"
+        }
+    ],
+    "codeine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1550",
+            "display": "codeine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1115966"
+        }
+    ],
+    "codiene|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-2903",
+                "display": "pseudoephedrine-codeine-GG"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "218807"
+            }
+        ],
+    "codine|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-2903",
+                "display": "pseudoephedrine-codeine-GG"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "218807"
+            }
+        ],
+    "coffee|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-861",
+            "display": "Coffee"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1009451"
+        }
+    ],
+    "colloidal silver|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7343",
+            "display": "colloidal silver"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2606543"
+        }
+    ],
+    "compazine (prochlorperazine)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3622",
+            "display": "Compazine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203546"
+        }
+    ],
+    "compazine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3622",
+            "display": "Compazine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203546"
+        }
+    ],
+    "compression stockings|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-73294",
+            "display": "Compression Stockings"
+        }
+    ],
+    "conditioner|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-1915",
+                "display": "dimethicone"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1041513"
+            }
+        ],
+    "contrast dye|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "426722004",
+            "display": "Iodinated contrast media (substance)"
+        }
+    ],
+    "contrast media (iodinated)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "426722004",
+            "display": "Iodinated contrast media (substance)"
+        }
+    ],
+    "contrast solution|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-7",
+                "display": "Iodinated Contrast Media"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "426722004",
+                "display": "Iodinated contrast media (substance)"
+            }
+        ],
+    "corlanor|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-289225",
+            "display": "Corlanor"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1649486"
+        }
+    ],
+    "corn|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6695",
+            "display": "corn"
+        }
+    ],
+    "covid vaccine/flu shot|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-1264",
+                "display": "COVID-19 vaccine, mRNA, BNT162b2, LNP-S (Pfizer)"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "2468230"
+            }
+    ],
+    "covid-19|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-1264",
+                "display": "COVID-19 vaccine, mRNA, BNT162b2, LNP-S (Pfizer)"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "2468230"
+            }
+        ],
+    "cow's milk|": [],
+    "cromolyn sodium|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3422",
+            "display": "cromolyn sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151563"
+        }
+    ],
+    "cromolyn|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1235",
+            "display": "cromolyn"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "226036"
+        }
+    ],
+    "ct contrast|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "426722004",
+            "display": "Iodinated contrast media (substance)"
+        }
+    ],
+    "ct iv contrast|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        }
+    ],
+    "cucumbers|": [],
+    "cumin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1135",
+            "display": "Cumin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "901365"
+        }
+    ],
+    "cyclobenzaprine hcl|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1678",
+            "display": "cyclobenzaprine HCl"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "21949"
+        }
+    ],
+    "cyclobenzaprine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4680",
+            "display": "cyclobenzaprine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "21949"
+        }
+    ],
+    "cymbalta (duloxetine)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-77833",
+            "display": "Cymbalta"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "482574"
+        }
+    ],
+    "cymbalta|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-77833",
+            "display": "Cymbalta"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "482574"
+        }
+    ],
+    "dairy and egg white|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7551",
+            "display": "albumen (egg white)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1315115"
+        }
+    ],
+    "dairy-containing medication|": [],
+    "dairy|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7551",
+            "display": "albumen (egg white)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1315115"
+        }
+    ],
+    "delsym cough|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-381538",
+            "display": "Delsym Cough"
+        }
+    ],
+    "depakote (divalproex)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1769",
+            "display": "Depakote"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "216459"
+        }
+    ],
+    "depakote|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1769",
+            "display": "Depakote"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "216459"
+        }
+    ],
+    "dermabond|": [],
+    "detergents|": [],
+    "diamox (acetazolamide)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6508",
+            "display": "Diamox"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151619"
+        }
+    ],
+    "diary|": [],
+    "diazepam|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1461",
+            "display": "diazepam"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151618"
+        }
+    ],
+    "diclofenac (voltaren), oral|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-4197",
+                "display": "diclofenac sodium"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1043480"
+            }
+        ],
+    "diclofenac|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4409",
+            "display": "diclofenac"
+        }
+    ],
+    "difucan (fuconazole)|": [],
+    "dilaudid injection solution|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8599",
+            "display": "Dilaudid"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "224913"
+        }
+    ],
+    "dilaudid|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8599",
+            "display": "Dilaudid"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "224913"
+        }
+    ],
+    "diltiazem|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4514",
+            "display": "diltiazem"
+        }
+    ],
+    "diphenhydramine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4787",
+            "display": "diphenhydramine"
+        }
+    ],
+    "diphenylguanidine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-19073",
+            "display": "diphenylguanidine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1368170"
+        }
+    ],
+    "dissolvable stitches|": [],
+    "disulfiram|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-752",
+            "display": "disulfiram"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "3554"
+        }
+    ],
+    "dog and cat dander|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16087",
+            "display": "dog dander"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2167551"
+        }
+    ],
+    "dog hair|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16087",
+            "display": "dog dander"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2167551"
+        }
+    ],
+    "dogs|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16087",
+            "display": "dog dander"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2167551"
+        }
+    ],
+    "dog|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16087",
+            "display": "dog dander"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2167551"
+        }
+    ],
+    "doxazosin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3697",
+            "display": "doxazosin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "39173"
+        }
+    ],
+    "doxycycline|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2748",
+            "display": "doxycycline"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1545992"
+        }
+    ],
+    "duloxetine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-8705",
+            "display": "duloxetine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "72625"
+        }
+    ],
+    "dupixent|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-340834",
+                "display": "Dupixent Syringe"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1876402"
+            }
+        ],
+    "duramorph|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-9075",
+            "display": "Duramorph (PF)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203355"
+        }
+    ],
+    "dust mites|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-112707",
+            "display": "allerg xt,D.farinae-D.pteronys"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1116982"
+        }
+    ],
+    "dust mite|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-112707",
+            "display": "allerg xt,D.farinae-D.pteronys"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1116982"
+        }
+    ],
+    "dust|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3107",
+            "display": "house dust"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "852519"
+        }
+    ],
+    "dyes|": [],
+    "earrings|": [],
+    "effexor|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1816",
+            "display": "Effexor"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151692"
+        }
+    ],
+    "egg plant|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-16979",
+        "display": "eggplant"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "972601"
+      }
+    ],
+    "egg whites|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7551",
+            "display": "albumen (egg white)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1315115"
+        }
+    ],
+    "egg white|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-8413",
+            "display": "egg white"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "892616"
+        }
+    ],
+    "egg yolk|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6948",
+            "display": "egg yolk"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1315115"
+        }
+    ],
+    "egg-derived products|": [],
+    "eggplant|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16979",
+            "display": "eggplant"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "972601"
+        }
+    ],
+    "eggs or egg-derived products|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900508",
+            "display": "Egg Derived"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "102263004",
+            "display": "Eggs (edible) (substance)"
+        }
+    ],
+    "eggs|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900508",
+            "display": "Egg Derived"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "102263004",
+            "display": "Eggs (edible) (substance)"
+        }
+    ],
+    "egg|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6947",
+            "display": "egg"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1315115"
+        }
+    ],
+    "elavil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1788",
+            "display": "Elavil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "42940"
+        }
+    ],
+    "eletriptan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9521",
+            "display": "eletriptan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2198973"
+        }
+    ],
+    "eliquis|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-209725",
+            "display": "Eliquis"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1364436"
+        }
+    ],
+    "elm tree|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16820",
+            "display": "tree pollen-elm, cedar"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1014191"
+        }
+    ],
+    "emgality|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-352977",
+            "display": "Emgality Syringe"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2058873"
+        }
+    ],
+    "enbrel|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-15760",
+            "display": "Enbrel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "216891"
+        }
+    ],
+    "environment - dust|": [],
+    "environment: mold|": [],
+    "environmental - cats (extreme), certain breeds of dog saliva, pollens and others|": [],
+    "environmental - dust|": [],
+    "environmental - suspected pollen/seasonal allergies|": [],
+    "environmental allergies|": [],
+    "environmental: pollens, animals (not cats),|": [],
+    "environmental: pollen|": [],
+    "environmental|": [],
+    "epinephrine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1774",
+            "display": "epinephrine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1249590"
+        }
+    ],
+    "erythromycin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1090",
+            "display": "erythromycin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "115423"
+        }
+    ],
+    "estrogen based therapies (si)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1272",
+            "display": "estrogens, conjugated"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "253166"
+        }
+    ],
+    "estrogen skin patch|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-1272",
+                "display": "estrogens, conjugated"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "253166"
+            }
+        ],
+    "estrogen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1272",
+            "display": "estrogens, conjugated"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "253166"
+        }
+    ],
+    "ex-lax|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5434",
+            "display": "Ex-Lax"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "217011"
+        }
+    ],
+    "exercise|": [],
+    "extreme cold exposure|": [],
+    "feathers|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16093",
+            "display": "feathers"
+        }
+    ],
+    "ferheme iv|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-13180",
+            "display": "ferumoxytol"
+        }
+    ],
+    "fire ants|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16812",
+                "display": "fire ant allergenic extract"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "867341"
+            }
+        ],
+    "fish oil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-10767",
+            "display": "fish oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "4419"
+        }
+    ],
+    "fish|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900525",
+            "display": "Fish Containing Products"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "735971005",
+            "display": "Fish (substance)"
+        }
+    ],
+    "flagyl|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7327",
+            "display": "Flagyl"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202866"
+        }
+    ],
+    "flax oil|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-4145",
+                "display": "flaxseed oil"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "318224"
+            }
+        ],
+    "fleas|": [],
+    "flecainide|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4483",
+            "display": "flecainide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "42686"
+        }
+    ],
+    "flexeril|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-10647",
+            "display": "Flexeril"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "224954"
+        }
+    ],
+    "flowers|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16116",
+            "display": "flowers"
+        }
+    ],
+    "floxin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7468",
+            "display": "Floxin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202458"
+        }
+    ],
+    "flu and pneumonia vaccines|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-512",
+            "display": "Influenza Virus Vaccines"
+        }
+    ],
+    "flu vaccine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-512",
+            "display": "Influenza Virus Vaccines"
+        }
+    ],
+    "fludrocortisone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4161",
+            "display": "fludrocortisone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "165516"
+        }
+    ],
+    "fluoroquinolone family|": [],
+    "fluoroquinolones|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2882",
+            "display": "ciprofloxacin"
+        }
+    ],
+    "food - tomato|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9082",
+            "display": "tomato"
+        }
+    ],
+    "food allergies - clams/oysters|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-11754",
+                "display": "shellfish derived"
+            }
+        ],
+    "food intolerances|": [],
+    "food: dairy and eggs|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-6947",
+                "display": "egg"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1315115"
+            }
+        ],
+    "foods: none reported.|": [],
+    "foods:|": [],
+    "foods|": [],
+    "food|": [],
+    "formaldehyde|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3204",
+            "display": "formaldehyde"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "217188"
+        }
+    ],
+    "fragrance, perfume|": [],
+    "fragrances|": [],
+    "fragrance|": [],
+    "freshener|": [],
+    "gabapentin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4415",
+            "display": "gabapentin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1101333"
+        }
+    ],
+    "gadolinium dye|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900059",
+            "display": "Gadolinium-Containing Contrast Media"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "768763008",
+            "display": "Product containing gadolinium and/or gadolinium compound (product)"
+        }
+    ],
+    "gadolinium|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900059",
+            "display": "Gadolinium-Containing Contrast Media"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "768763008",
+            "display": "Product containing gadolinium and/or gadolinium compound (product)"
+        }
+    ],
+    "garlic|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1723",
+            "display": "garlic"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1309210"
+        }
+    ],
+    "gelatin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-231",
+            "display": "Gelatin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "4716"
+        }
+    ],
+    "gentamicin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1484",
+            "display": "gentamicin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1090526"
+        }
+    ],
+    "german cockroaches|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16783",
+                "display": "German cockroach allergenic extract"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "905276"
+            }
+        ],
+    "gi problems noted with many antibiotics|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-3675",
+        "display": "amoxicillin"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "723"
+      }
+    ],
+    "gluten intolerance (igg+)|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-7207",
+                "display": "gluten"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1370781"
+            }
+        ],
+    "gluten|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7207",
+            "display": "gluten"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1370781"
+        }
+    ],
+    "gold|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-2396",
+        "display": "gold sodium thiomalate"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "4981"
+      }
+    ],
+    "gout medication|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1084",
+            "display": "allopurinol"
+        }
+    ],
+    "grains|": [],
+    "grass and tree pollen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-252085",
+            "display": "grass-orch-s.vern-rye-Kblu-tim"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1550699"
+        }
+    ],
+    "grass pollen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1181",
+            "display": "Grass Pollen"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "256277009",
+            "display": "Grass pollen (substance)"
+        }
+    ],
+    "grasses|": [],
+    "grass|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1181",
+            "display": "Grass Pollen"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "256277009",
+            "display": "Grass pollen (substance)"
+        }
+    ],
+    "guam/gums|": [],
+    "guanfacine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4497",
+            "display": "guanfacine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203142"
+        }
+    ],
+    "hair dye/ppd|": [],
+    "hay|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1181",
+            "display": "Grass Pollen"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "256277009",
+            "display": "Grass pollen (substance)"
+        }
+    ],
+    "hazelnuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16073",
+            "display": "hazelnut"
+        }
+    ],
+    "hazelnut|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16073",
+            "display": "hazelnut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1307809"
+        }
+    ],
+    "heat exposure|": [],
+    "heparin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-15153",
+            "display": "heparin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "20044"
+        }
+    ],
+    "hiprex|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6572",
+            "display": "Hiprex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151856"
+        }
+    ],
+    "histamine-containing foods|": [],
+    "histamine-rich food|": [],
+    "histamine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4785",
+            "display": "histamine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "142136"
+        }
+    ],
+    "hizentra|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-119429",
+            "display": "Hizentra"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "902750"
+        }
+    ],
+    "hoisin sauce|": [],
+    "honey dew|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-16175",
+        "display": "melon"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "1363610"
+      }
+    ],
+    "hornet sting|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-87868",
+                "display": "aller ex-venom-mix vespid prot"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1856688"
+            }
+    ],
+    "hornets|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-87868",
+                "display": "aller ex-venom-mix vespid prot"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1856688"
+            }
+    ],
+    "horses|": [],
+    "hydralazine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5633",
+            "display": "hydralazine"
+        }
+    ],
+    "hydrocodone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1554",
+            "display": "hydrocodone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "142439"
+        }
+    ],
+    "hydrocolloid bandages|": [],
+    "hydrocortisone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2147",
+            "display": "hydrocortisone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "103468"
+        }
+    ],
+    "hydroxychloroquine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4906",
+            "display": "hydroxychloroquine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "153972"
+        }
+    ],
+    "hydroxyzine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1451",
+            "display": "hydroxyzine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "154987"
+        }
+    ],
+    "ibuprofen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2377",
+            "display": "ibuprofen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1101916"
+        }
+    ],
+    "imipramine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1498",
+            "display": "imipramine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "150816"
+        }
+    ],
+    "imitrex (sumatriptan)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4388",
+            "display": "Imitrex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "217713"
+        }
+    ],
+    "imitrex|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4388",
+            "display": "Imitrex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "217713"
+        }
+    ],
+    "infliximab|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7640",
+            "display": "infliximab"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "191831"
+        }
+    ],
+    "influenza vaccine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-512",
+            "display": "Influenza Virus Vaccines"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "1181000221105",
+            "display": "Vaccine product containing only Influenza virus antigen (medicinal product)"
+        }
+    ],
+    "injected steroids|": [],
+    "insect bites|": [],
+    "iodinated contrast media|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "426722004",
+            "display": "Iodinated contrast media (substance)"
+        }
+    ],
+    "iodine contrast|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        }
+    ],
+    "iodine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-369",
+            "display": "iodine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006204"
+        }
+    ],
+    "iron (oral)|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-80516",
+                "display": "ferrous fumarate-iron ps cmplx"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1008090"
+            }
+        ],
+    "iron supplement|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-80516",
+                "display": "ferrous fumarate-iron ps cmplx"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1008090"
+            }
+        ],
+    "itching with some fruits|": [],
+    "iv contrast dye|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        }
+    ],
+    "iv ct contrast|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-7",
+            "display": "Iodinated Contrast Media"
+        }
+    ],
+    "iv morphine|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-268",
+                "display": "Opioids - Morphine Analogues"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "373699000",
+                "display": "Substance with morphinan structure and opioid receptor agonist mechanism of action (substance)"
+            }
+        ],
+    "ivig|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3046",
+            "display": "immune globulin,gamma (IgG) human"
+        }
+    ],
+    "ivp dye|": [],
+    "jasmine rice with peas and carrots|": [],
+    "jello|": [],
+    "kefex (cephalexin)|": [],
+    "keflex|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6608",
+            "display": "Keflex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203167"
+        }
+    ],
+    "ketamine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3874",
+            "display": "ketamine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1050095"
+        }
+    ],
+    "ketotifen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3742",
+            "display": "ketotifen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11404"
+        }
+    ],
+    "kinesiology tape|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16770",
+            "display": "kinesiology tape"
+        }
+    ],
+    "kiwi|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9368",
+            "display": "kiwi"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1358901"
+        }
+    ],
+    "klonopin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-914",
+            "display": "Klonopin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202585"
+        }
+    ],
+    "l-theanine|": [],
+    "lactose intolerance|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-8222",
+                "display": "lactose"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1305527"
+            }
+        ],
+    "lactose|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2432",
+            "display": "lactose"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1305527"
+        }
+    ],
+    "lamictal (lamotrigine)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8084",
+            "display": "Lamictal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "196502"
+        }
+    ],
+    "lamictal|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8084",
+            "display": "Lamictal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "196502"
+        }
+    ],
+    "lanolin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1899",
+            "display": "lanolin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1012523"
+        }
+    ],
+    "latex:|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-8921",
+            "display": "latex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1314891"
+        }
+    ],
+    "latex|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-8921",
+            "display": "latex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1314891"
+        }
+    ],
+    "latuda|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-126203",
+            "display": "Latuda"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1040032"
+        }
+    ],
+    "lavender oil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2607",
+            "display": "lavender oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1307767"
+        }
+    ],
+    "lavender|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-820",
+            "display": "Lavender"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1307886"
+        }
+    ],
+    "ldn|": [],
+    "leflunomide|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7642",
+            "display": "leflunomide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "27169"
+        }
+    ],
+    "legumes|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-15127",
+            "display": "legumes"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "319829"
+        }
+    ],
+    "lemon|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-10566",
+            "display": "lemon"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1364291"
+        }
+    ],
+    "lentils|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1364",
+            "display": "Lentils"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2117970"
+        }
+    ],
+    "levaquin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-13557",
+            "display": "Levaquin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "217992"
+        }
+    ],
+    "levofloxacin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6299",
+            "display": "levofloxacin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1546009"
+        }
+    ],
+    "levoquin|": [],
+    "levothyroxine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1423",
+            "display": "levothyroxine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1001571"
+        }
+    ],
+    "lexapro oral tablet|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-56750",
+            "display": "Lexapro"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "352741"
+        }
+    ],
+    "lexapro|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-56750",
+            "display": "Lexapro"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "352741"
+        }
+    ],
+    "lidocaine/prilocaine|": [],
+    "lime|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-54",
+            "display": "Lime"
+        }
+    ],
+    "lipoic acid|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4261",
+            "display": "Lipoic Acid"
+        }
+    ],
+    "lisinopril|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-658",
+            "display": "lisinopril"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151486"
+        }
+    ],
+    "lithium supplement|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-1532",
+                "display": "lithium"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1311533"
+            }
+        ],
+    "lortadine 10mg|": [],
+    "lovenox|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1817",
+            "display": "Lovenox"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "225036"
+        }
+    ],
+    "lyrica (pregabalin)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-79880",
+            "display": "Lyrica"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "593441"
+        }
+    ],
+    "lyrica|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-79880",
+            "display": "Lyrica"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "593441"
+        }
+    ],
+    "macrobid|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-13452",
+            "display": "Macrobid"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "152001"
+        }
+    ],
+    "mango|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1131",
+            "display": "Mango"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1011404"
+        }
+    ],
+    "maple|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16782",
+                "display": "tree pollen-red maple"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "851744"
+            }
+        ],
+    "marinol (dronabinol)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8773",
+            "display": "Marinol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "224925"
+        }
+    ],
+    "med sensitivities|": [],
+    "medical adhesive|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-12039",
+            "display": "Medical Adhesive"
+        }
+    ],
+    "medrol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6240",
+            "display": "Medrol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202702"
+        }
+    ],
+    "melatonin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-5039",
+            "display": "melatonin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "6711"
+        }
+    ],
+    "melon|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16175",
+            "display": "melon"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1363610"
+        }
+    ],
+    "menstrual pad|": [],
+    "mepivacaine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-43",
+            "display": "mepivacaine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "543068"
+        }
+    ],
+    "metformin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-10573",
+            "display": "metformin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151825"
+        }
+    ],
+    "methadone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-2634",
+            "display": "methadone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "153327"
+        }
+    ],
+    "methocarbamol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1669",
+            "display": "methocarbamol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "542250"
+        }
+    ],
+    "methyl methacrylate|": [],
+    "metoclopramide|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4778",
+            "display": "metoclopramide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "267035"
+        }
+    ],
+    "metoprolol 25mg xl|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3627",
+            "display": "metoprolol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "102313"
+        }
+    ],
+    "metoprolol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3627",
+            "display": "metoprolol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "102313"
+        }
+    ],
+    "metronidazole|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1228",
+            "display": "metronidazole"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "103866"
+        }
+    ],
+    "midodrine hci|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4075",
+            "display": "midodrine HCl"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "542256"
+        }
+    ],
+    "midodrine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-13137",
+            "display": "midodrine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "542256"
+        }
+    ],
+    "milk-related compounds|": [],
+    "milk|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-8922",
+            "display": "milk"
+        }
+    ],
+    "minocycline|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7404",
+            "display": "minocycline"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151312"
+        }
+    ],
+    "minor environmental allergies|": [],
+    "miralax (peg 3350)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-16097",
+            "display": "Miralax"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "261575"
+        }
+    ],
+    "miralax|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-16097",
+            "display": "Miralax"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "261575"
+        }
+    ],
+    "mirtazapine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6054",
+            "display": "mirtazapine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2049252"
+        }
+    ],
+    "mites|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-112707",
+            "display": "allerg xt,D.farinae-D.pteronys"
+        }
+    ],
+    "mmr and dbt vaccines|": [],
+    "mmr vaccine|": [],
+    "molds|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16095",
+            "display": "mold"
+        }
+    ],
+    "mold|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16095",
+            "display": "mold"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "235618"
+        }
+    ],
+    "monelukast (singulair)|": [],
+    "monosodium glutamate (msg)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1114",
+            "display": "monosodium glutamate"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1311588"
+        }
+    ],
+    "monosodium glutamate|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1114",
+            "display": "monosodium glutamate"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1311588"
+        }
+    ],
+    "morphine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-326",
+            "display": "morphine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151999"
+        }
+    ],
+    "mosquitoes|": [],
+    "mosquitos bites|": [],
+    "motrin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4293",
+            "display": "Motrin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202488"
+        }
+    ],
+    "msg|": [],
+    "mtx|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-339068",
+            "display": "MTX"
+        }
+    ],
+    "mucinex-dm|": [],
+    "muscle relaxants|":  [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-4680",
+        "display": "cyclobenzaprine"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "21949"
+      }
+    ],
+    "muscle relaxant|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-4680",
+        "display": "cyclobenzaprine"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "21949"
+      }
+    ],
+    "mushrooms|": [],
+    "naprosyn (naproxen)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1689",
+            "display": "Naprosyn"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203012"
+        }
+    ],
+    "naprosyn|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1689",
+            "display": "Naprosyn"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203012"
+        }
+    ],
+    "naproxen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2380",
+            "display": "naproxen"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151958"
+        }
+    ],
+    "narcotic pain medication|": [],
+    "narcotics|": [],
+    "neomycin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1341",
+            "display": "neomycin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1366647"
+        }
+    ],
+    "neurontin (gabapentin)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-9280",
+            "display": "Neurontin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "196498"
+        }
+    ],
+    "new skin products or makeup|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-1915",
+                "display": "dimethicone"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1041513"
+            }
+        ],
+    "nexium|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-19200",
+            "display": "Nexium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "284799"
+        }
+    ],
+    "nickel|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6308",
+            "display": "nickel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1311629"
+        }
+    ],
+    "nitrites|": [],
+    "nitrofurantoin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2852",
+            "display": "nitrofurantoin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "221129"
+        }
+    ],
+    "nitroglycerin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-683",
+            "display": "nitroglycerin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202509"
+        }
+    ],
+    "nitrous oxide|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1387",
+            "display": "nitrous oxide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "7486"
+        }
+    ],
+    "non-steriodial anti-inflammatory drugs|": [],
+    "nonsteroidal anti inflammatory drugs|": [],
+    "nonsteroidal anti-inflammatory drugs|": [],
+    "norco|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-63",
+            "display": "Norco"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "218772"
+        }
+    ],
+    "nortriptyline|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4601",
+            "display": "nortriptyline"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203130"
+        }
+    ],
+    "norvasc|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5757",
+            "display": "Norvasc"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "58927"
+        }
+    ],
+    "nsaids|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2377",
+            "display": "ibuprofen"
+        }
+    ],
+    "nsaid|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-4197",
+                "display": "diclofenac sodium"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1043480"
+            }
+        ],
+    "nuclear medicine|": [],
+    "nuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1193",
+            "display": "Tree Nuts"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "442571000124108",
+            "display": "Tree nut (substance)"
+        }
+    ],
+    "oats|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7427",
+            "display": "oats"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "285251"
+        }
+    ],
+    "oat|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-339944",
+                "display": "allergenic extract-food-oats"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "285251"
+            }
+        ],
+    "odine based contrast|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-7",
+                "display": "Iodinated Contrast Media"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "426722004",
+                "display": "Iodinated contrast media (substance)"
+            }
+        ],
+    "omeprazole|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3476",
+            "display": "omeprazole"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151993"
+        }
+    ],
+    "omnicef (cefdinir)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5397",
+            "display": "cefdinir"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "284815"
+        }
+    ],
+    "omnicef|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8108",
+            "display": "Omnicef"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "83099"
+        }
+    ],
+    "onions|": [],
+    "onion|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-5695",
+            "display": "onion"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1370469"
+        }
+    ],
+    "opiates, esp morphine and derivatives|": [],
+    "opioids|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-268",
+                "display": "Opioids - Morphine Analogues"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "373699000",
+                "display": "Substance with morphinan structure and opioid receptor agonist mechanism of action (substance)"
+            }
+        ],
+    "oral steroids|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-360",
+            "display": "Corticosteroids (Glucocorticoids)"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "116596006",
+            "display": "Product containing glucocorticoid (product)"
+        }
+    ],
+    "orange|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-17344",
+            "display": "orange"
+        }
+    ],
+    "oseltamivir|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7918",
+            "display": "oseltamivir"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "260101"
+        }
+    ],
+    "other cardiac meds|": [],
+    "oxycodone, hydrocodone, morphine|": [],
+    "oxycodone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1558",
+            "display": "oxycodone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "159821"
+        }
+    ],
+    "oxycontin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-2761",
+            "display": "OxyContin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "218986"
+        }
+    ],
+    "p-phenylenediamine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16113",
+            "display": "p-Phenylenediamine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1362740"
+        }
+    ],
+    "palms|": [],
+    "papaya|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2424",
+            "display": "papaya"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1992412"
+        }
+    ],
+    "parabens|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-900026",
+                "display": "Anesthetics - Ester Type- Parabens"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "373477003",
+                "display": "Local anesthetic (substance)"
+            }
+        ],
+    "paroxetine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4016",
+            "display": "paroxetine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1298842"
+        }
+    ],
+    "parsley|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2415",
+            "display": "parsley"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1309236"
+        }
+    ],
+    "patchouli oil|": [],
+    "paxil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6708",
+            "display": "Paxil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "114228"
+        }
+    ],
+    "pcn|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16121",
+            "display": "penicillin"
+        }
+    ],
+    "pea protein|": [],
+    "peach|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7909",
+            "display": "peach"
+        }
+    ],
+    "peanut butter|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900548",
+            "display": "Peanut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "18235"
+        }
+    ],
+    "peanuts (including treenuts)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900548",
+            "display": "Peanut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "18235"
+        }
+    ],
+    "peanuts and tree nuts|": [],
+    "peanuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900548",
+            "display": "Peanut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "18235"
+        }
+    ],
+    "peanut|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900548",
+            "display": "Peanut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "18235"
+        }
+    ],
+    "pecans|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900548",
+            "display": "Peanut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "18235"
+        }
+    ],
+    "pecan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900548",
+            "display": "Peanut"
+        }
+    ],
+    "penicillin -|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2680",
+            "display": "penicillin G potassium"
+        }
+    ],
+    "penicillin family|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2680",
+            "display": "penicillin G potassium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1050108"
+        }
+    ],
+    "penicillins|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-476",
+            "display": "Penicillins"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "890458001",
+            "display": "Product containing penicillin (product)"
+        }
+    ],
+    "penicillin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16121",
+            "display": "penicillin"
+        }
+    ],
+    "pentasa and all 5-asa class drugs|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-3288",
+                "display": "Pentasa"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "196495"
+            }
+    ],
+    "pepperoni|": [],
+    "percocet|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6992",
+            "display": "Percocet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "42844"
+        }
+    ],
+    "perfume scents|": [],
+    "perfumes|": [],
+    "pertussis vaccine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-74",
+            "display": "Pertussis Vaccines"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "871758000",
+            "display": "Vaccine product containing only Bordetella pertussis antigen (medicinal product)"
+        }
+    ],
+    "pet dander|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16087",
+            "display": "dog dander"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2167551"
+        }
+    ],
+    "petrolatum|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-586",
+            "display": "Petrolatum"
+        }
+    ],
+    "pfizer covid-19 vaccine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-371056",
+            "display": "COVID-19 vacc,mRNA(Pfizer)(PF)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2468230"
+        }
+    ],
+    "phenergan (promethazine)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6371",
+            "display": "Phenergan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "152218"
+        }
+    ],
+    "phenergan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6371",
+            "display": "Phenergan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "152218"
+        }
+    ],
+    "phenylephrine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1825",
+            "display": "phenylephrine"
+        }
+    ],
+    "pilocarpine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1693",
+            "display": "pilocarpine"
+        }
+    ],
+    "pine nuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16066",
+            "display": "pine nut"
+        }
+    ],
+    "pineapple|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6728",
+            "display": "pineapple"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1492174"
+        }
+    ],
+    "pistachio|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16071",
+            "display": "pistachio nut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "904606"
+        }
+    ],
+    "pollen (e.g. tree, grass)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-336905",
+            "display": "allerg xt-tree poll-elm, cedar"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1014191"
+        }
+    ],
+    "pollens|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-252085",
+            "display": "grass-orch-s.vern-rye-Kblu-tim"
+        }
+    ],
+    "pollen|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-252085",
+            "display": "grass-orch-s.vern-rye-Kblu-tim"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1550699"
+        }
+    ],
+    "polyester|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-10515",
+            "display": "polyester"
+        }
+    ],
+    "polyethylene glycol (peg)|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-9227",
+                "display": "polyethylene glycol 8000"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1307312"
+            }
+        ],
+    "possible cat allergy|": [],
+    "potato|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16079",
+            "display": "potato"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "892632"
+        }
+    ],
+    "pravastatin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3606",
+            "display": "pravastatin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203144"
+        }
+    ],
+    "prawn|": [],
+    "prednisone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2164",
+            "display": "prednisone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151587"
+        }
+    ],
+    "pregabalin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-709",
+            "display": "Pregabalin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "187832"
+        }
+    ],
+    "pregablin (lyrica)|": [],
+    "pregnenolone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4993",
+            "display": "pregnenolone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "114052"
+        }
+    ],
+    "premarin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-63103",
+            "display": "Premarin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202896"
+        }
+    ],
+    "prenatal vitamins|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9188",
+            "display": "prenatal vitamins"
+        }
+    ],
+    "presurgical disinfectant|": [],
+    "prevacid|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-10725",
+            "display": "Prevacid"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "83156"
+        }
+    ],
+    "prochlorperazine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1478",
+            "display": "prochlorperazine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "152385"
+        }
+    ],
+    "promethazine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4459",
+            "display": "promethazine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "142445"
+        }
+    ],
+    "propafenone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4487",
+            "display": "propafenone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203135"
+        }
+    ],
+    "propranolol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4165",
+            "display": "propranolol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "151355"
+        }
+    ],
+    "propylene glycol binding agent|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-4062",
+                "display": "propylene glycol"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1314411"
+            }
+        ],
+    "protein powder|": [],
+    "prozac (fluoxetine)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6733",
+            "display": "Prozac"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "58827"
+        }
+    ],
+    "prozac oral tablet|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6733",
+            "display": "Prozac"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "58827"
+        }
+    ],
+    "pumpkin pie|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-8052",
+            "display": "pumpkin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "126291"
+        }
+    ],
+    "pyridium|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5508",
+            "display": "Pyridium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "8998"
+        }
+    ],
+    "quetiapine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4579",
+            "display": "quetiapine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "221153"
+        }
+    ],
+    "quinolones|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-3668",
+            "display": "Quinolones"
+        }
+    ],
+    "qulipta (atogepant)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-380837",
+            "display": "Qulipta"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2571837"
+        }
+    ],
+    "rabbits|": [],
+    "ragweed|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-767",
+            "display": "Ragweed"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "256303006",
+            "display": "Ragweed pollen (substance)"
+        }
+    ],
+    "rashes from other foods as well|": [],
+    "rats|": [],
+    "rat|": [],
+    "raw fruit|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-17733",
+            "display": "raw fruit"
+        }
+    ],
+    "raw shellfish|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900584",
+            "display": "Shellfish Containing Products"
+        }
+    ],
+    "raw soy|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900401",
+            "display": "Soy"
+        }
+    ],
+    "raw vegetables, fruit skins|": [],
+    "raw vegetables|": [],
+    "reactions to inactive ingredients of medications?|": [],
+    "red dye|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-159",
+            "display": "Red Dye"
+        }
+    ],
+    "red onions|": [],
+    "reglan (metoclopramide)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5970",
+            "display": "Reglan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "9230"
+        }
+    ],
+    "reglan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-5970",
+            "display": "Reglan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "9230"
+        }
+    ],
+    "remicade|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-15555",
+            "display": "Remicade"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "219610"
+        }
+    ],
+    "renal plus supplement|": [],
+    "rice|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-34",
+            "display": "Rice"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1367117"
+        }
+    ],
+    "ricotta cheese|": [],
+    "risperdone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4392",
+            "display": "risperidone"
+        }
+    ],
+    "rizatriptan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7571",
+            "display": "rizatriptan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "237082"
+        }
+    ],
+    "roaches|": [],
+    "robitussin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-117591",
+            "display": "Robitussin"
+        }
+    ],
+    "rocephin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6748",
+            "display": "Rocephin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "9449"
+        }
+    ],
+    "roofing agents/tar|": [],
+    "salicylic acid|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-18",
+            "display": "salicylic acid"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1014622"
+        }
+    ],
+    "saphris (asenapine)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-118520",
+            "display": "Saphris"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "859976"
+        }
+    ],
+    "scented detergents|": [],
+    "scopolamine patches|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-3458",
+                "display": "scopolamine"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1085787"
+            }
+        ],
+    "scopolamine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3458",
+            "display": "scopolamine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1085787"
+        }
+    ],
+    "scrambled/poached eggs|": [],
+    "seafood|": [],
+    "seasonal allergens|": [],
+    "seasonal allergies|": [],
+    "seasonal|": [],
+    "seaweed|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-648",
+            "display": "Marine Algaes (Seaweed)"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1370783"
+        }
+    ],
+    "selective serotonin reuptake inhibitors|": [],
+    "semaglutide|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-17424",
+            "display": "semaglutide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1991302"
+        }
+    ],
+    "sensitive to most meds especially w/depression meds|": [],
+    "seroquel|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4605",
+            "display": "Seroquel"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "83553"
+        }
+    ],
+    "serotonin-norepinephrine reuptake inhibitors|": [],
+    "serotonin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3368",
+            "display": "serotonin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1311214"
+        }
+    ],
+    "sertraline (zoloft)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4615",
+            "display": "sertraline"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "155137"
+        }
+    ],
+    "sesame|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1179",
+            "display": "Sesame"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1358860"
+        }
+    ],
+    "shellfish (crustacean)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900584",
+            "display": "Shellfish Containing Products"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "735029006",
+            "display": "Shellfish (substance)"
+        }
+    ],
+    "shellfish (shell only)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900584",
+            "display": "Shellfish Containing Products"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "735029006",
+            "display": "Shellfish (substance)"
+        }
+    ],
+    "shellfish|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900584",
+            "display": "Shellfish Containing Products"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "735029006",
+            "display": "Shellfish (substance)"
+        }
+    ],
+    "shellfsh|": [],
+    "shorter-haired dogs|": [],
+    "shrimp|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16189",
+            "display": "shrimp"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "892592"
+        }
+    ],
+    "silicone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-638",
+            "display": "Silicone"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "13652007",
+            "display": "Silicone (substance)"
+        }
+    ],
+    "singulair (montelukast)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6256",
+            "display": "Singulair"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "153889"
+        }
+    ],
+    "skelaxin (metaxalone)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7565",
+            "display": "Skelaxin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "204315"
+        }
+    ],
+    "skelaxin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7565",
+            "display": "Skelaxin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "204315"
+        }
+    ],
+    "skin adhesive (external)|": [],
+    "skin adhesive|": [],
+    "smoke|": [],
+    "snri|": [],
+    "soaps|": [],
+    "soil molds|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-8724",
+        "display": "Aspergillus fumigatus allergenic extract"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "466192"
+      }
+    ],
+    "solumedrol|": [],
+    "soma|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-11376",
+            "display": "Soma"
+        }
+    ],
+    "some nuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1193",
+            "display": "Tree Nuts"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "442571000124108",
+            "display": "Tree nut (substance)"
+        }
+    ],
+    "soybean|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7894",
+            "display": "soybean"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "287515"
+        }
+    ],
+    "soy|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-900401",
+            "display": "Soy"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "256355007",
+            "display": "Glycine max (substance)"
+        }
+    ],
+    "spiders|": [],
+    "spinach|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-11893",
+            "display": "spinach"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2099276"
+        }
+    ],
+    "spring pollen|": [],
+    "squash|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1350",
+            "display": "Squash"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "975509"
+        }
+    ],
+    "ssris, snris, antipsychotics, and stimulants|": [],
+    "ssri|": [],
+    "stainless steel|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-19742",
+            "display": "stainless steel"
+        }
+    ],
+    "stargazer lilies|": [],
+    "statin|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-6321",
+                "display": "atorvastatin"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1297766"
+            }
+        ],
+    "steroid tabs|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-360",
+                "display": "Corticosteroids (Glucocorticoids)"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "116596006",
+                "display": "Product containing glucocorticoid (product)"
+            }
+        ],
+    "steroids|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-360",
+            "display": "Corticosteroids (Glucocorticoids)"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "116596006",
+            "display": "Product containing glucocorticoid (product)"
+        }
+    ],
+    "sting venom|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "2-87868",
+                "display": "aller ex-venom-mix vespid prot"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1856688"
+            }
+    ],
+    "strattera|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-57253",
+            "display": "Strattera"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "358330"
+        }
+    ],
+    "strawberries|": [],
+    "strawberry|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-87",
+            "display": "Strawberry"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "892484"
+        }
+    ],
+    "stress-induced|": [],
+    "succinylcholine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-5590",
+            "display": "succinylcholine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "10154"
+        }
+    ],
+    "sucraid|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-8157",
+            "display": "Sucraid"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "220065"
+        }
+    ],
+    "sucralose|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-866",
+            "display": "Sucralose"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1439115"
+        }
+    ],
+    "sudafed|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6340",
+            "display": "Sudafed"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "203302"
+        }
+    ],
+    "sugar substitutes|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-2605",
+        "display": "aspartame"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "1311524"
+      }
+    ],
+    "sugar|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2598",
+            "display": "sucrose"
+        }
+    ],
+    "sulfa allergy, sulfasalazine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfa antibiotics|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfa based medications|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfa drugs|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfa drug|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfa medications|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfa-based medicines|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfamethoxazole/trimethoprim|": [],
+    "sulfasalazine:|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2832",
+            "display": "sulfasalazine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "226374"
+        }
+    ],
+    "sulfasalazine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2832",
+            "display": "sulfasalazine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "226374"
+        }
+    ],
+    "sulfa|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2821",
+            "display": "sulfacetamide sodium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1006715"
+        }
+    ],
+    "sulfite-containing foods|": [],
+    "sulfonamides|": [],
+    "sumatriptan (tolerated brand)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-256",
+            "display": "sumatriptan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1484923"
+        }
+    ],
+    "sumatriptan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-256",
+            "display": "sumatriptan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "37418"
+        }
+    ],
+    "sunflower oil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-5486",
+            "display": "sunflower oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2637413"
+        }
+    ],
+    "sunflower pollen and seeds|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16174",
+                "display": "sunflower seed"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "852509"
+            }
+        ],
+    "sunflower seed|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16174",
+            "display": "sunflower seed"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1309391"
+        }
+    ],
+    "surgical glue|": [],
+    "surgical steel|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-6308",
+        "display": "nickel"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "1311629"
+      }
+    ],
+    "sushi|": [],
+    "suspicion for cats|": [],
+    "swedish meatballs|": [],
+    "synthetic fibers|": [],
+    "synthetic/chemical scents|": [],
+    "tagamet|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6771",
+            "display": "Tagamet"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "152402"
+        }
+    ],
+    "tanafed|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-14982",
+            "display": "Tanafed"
+        }
+    ],
+    "tape|": [],
+    "tb solution|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-3087",
+            "display": "tuberculin, purified protein derivative"
+        }
+    ],
+    "tea tree oil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7767",
+            "display": "tea tree oil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "69627"
+        }
+    ],
+    "temperature fluctuation|": [],
+    "tequila|": [],
+    "tetracycline|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4822",
+            "display": "tetracycline"
+        }
+    ],
+    "timothy grass|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-756",
+                "display": "Grass Pollen-Timothy, Standard"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "851994"
+            }
+        ],
+    "tizanidine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-1018",
+            "display": "tizanidine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "57258"
+        }
+    ],
+    "tomatoes|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9082",
+            "display": "tomato"
+        }
+    ],
+    "tomato|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-9082",
+            "display": "tomato"
+        }
+    ],
+    "toothpaste|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-17276",
+            "display": "toothpaste"
+        }
+    ],
+    "topamax (topiramate)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-13558",
+            "display": "Topamax"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "220343"
+        }
+    ],
+    "topamax|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-13558",
+            "display": "Topamax"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "220343"
+        }
+    ],
+    "topical nsaid (pennsaid)|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-2391",
+        "display": "diclofenac sodium"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "203214"
+      }
+    ],
+    "topiramate|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-5453",
+            "display": "topiramate"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "38404"
+        }
+    ],
+    "toradol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-6196",
+            "display": "Toradol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "57309"
+        }
+    ],
+    "tramadol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4180",
+            "display": "tramadol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "10689"
+        }
+    ],
+    "trazodone|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4610",
+            "display": "trazodone"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "10737"
+        }
+    ],
+    "tree nuts (hazelnut is highest risk)|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-1193",
+                "display": "Tree Nuts"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "442571000124108",
+                "display": "Tree nut (substance)"
+            }
+        ],
+    "tree nuts/peanuts|": [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-1193",
+                "display": "Tree Nuts"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "442571000124108",
+                "display": "Tree nut (substance)"
+            }
+        ],
+    "tree nuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1193",
+            "display": "Tree Nuts"
+        },
+        {
+            "system": "http://snomed.info/sct",
+            "code": "442571000124108",
+            "display": "Tree nut (substance)"
+        }
+    ],
+    "tree pollen (pine especially)|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16820",
+                "display": "tree pollen-elm, cedar"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1014191"
+            }
+        ],
+    "tree pollen|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-16820",
+                "display": "tree pollen-elm, cedar"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1014191"
+            }
+        ],
+    "trees|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16820",
+            "display": "tree pollen-elm, cedar"
+        }
+    ],
+    "tress|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16820",
+            "display": "tree pollen-elm, cedar"
+        }
+    ],
+    "triamterene|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2315",
+            "display": "triamterene"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "10763"
+        }
+    ],
+    "tripans|": [],
+    "triptans|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "1-900038",
+                "display": "Triptans-5-HT1 Antimigraine Agents"
+            },
+            {
+                "system": "http://snomed.info/sct",
+                "code": "363560004",
+                "display": "Product containing serotonin 5-hydroxytryptamine-1 receptor agonist (product)"
+            }
+    ],
+    "tropicamide|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-1726",
+            "display": "tropicamide"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "352840"
+        }
+    ],
+    "tums|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-9025",
+            "display": "Tums"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "220508"
+        }
+    ],
+    "ubrelvy|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-362478",
+            "display": "Ubrelvy"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2268222"
+        }
+    ],
+    "valacyclovir|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-5049",
+            "display": "valacyclovir"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "236081"
+        }
+    ],
+    "valium|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7157",
+            "display": "Valium"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202472"
+        }
+    ],
+    "valtrex -|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-13216",
+            "display": "Valtrex"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "152490"
+        }
+    ],
+    "vancomycin (eye drops)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4866",
+            "display": "vancomycin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11124"
+        }
+    ],
+    "vancomycin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-933",
+            "display": "vancomycin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "66955"
+        }
+    ],
+    "various foods, cleaning supplies and fragrances|": [],
+    "various medications|": [],
+    "various psychotropic medications, including ssris and wellbutrin|": [],
+    "vasotec iv|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-3296",
+            "display": "Vasotec"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "224921"
+        }
+    ],
+    "venlafaxine|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4428",
+            "display": "venlafaxine"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2605948"
+        }
+    ],
+    "venofer iron infusion|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-18822",
+            "display": "Venofer"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "136209"
+        }
+    ],
+    "venofer|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-18822",
+            "display": "Venofer"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "136209"
+        }
+    ],
+    "venom|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1356",
+            "display": "Hymenoptera Venom"
+        }
+    ],
+    "verapamil (ccb)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-709",
+            "display": "verapamil HCl"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11170"
+        }
+    ],
+    "verapamil|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-4515",
+            "display": "verapamil"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11170"
+        }
+    ],
+    "versed (midazolam)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7166",
+            "display": "Versed"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11177"
+        }
+    ],
+    "versed|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-7166",
+            "display": "Versed"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11177"
+        }
+    ],
+    "vitamin d (oral)|": [
+      {
+        "system": "http://www.fdbhealth.com/",
+        "code": "6-1014",
+        "display": "cholecalciferol (vitamin D3)"
+      },
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "2418"
+      }
+    ],
+    "w/igg+ gluten|": [],
+    "walnuts|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16065",
+            "display": "walnut"
+        }
+    ],
+    "walnut|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-16065",
+            "display": "walnut"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "314470"
+        }
+    ],
+    "warfarin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-2084",
+            "display": "warfarin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11289"
+        }
+    ],
+    "wasp sting|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7665",
+            "display": "venom-wasp"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11291"
+        }
+    ],
+    "wasps|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7665",
+            "display": "venom-wasp"
+        }
+    ],
+    "wasp|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-7665",
+            "display": "venom-wasp"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11291"
+        }
+    ],
+    "watermelon|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-1004",
+            "display": "Watermelon"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "260014"
+        }
+    ],
+    "weeds|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-308125",
+            "display": "allergenic ext-mixed ragweed"
+        }
+    ],
+    "wellbutrin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-12696",
+            "display": "Wellbutrin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "42568"
+        }
+    ],
+    "wheat dextrin|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-11545",
+            "display": "wheat dextrin"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "637366"
+        }
+    ],
+    "wheat germs|": 
+        [
+            {
+                "system": "http://www.fdbhealth.com/",
+                "code": "6-1023",
+                "display": "wheat germ oil"
+            },
+            {
+                "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+                "code": "1716046"
+            }
+    ],
+    "wheat|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-13412",
+            "display": "wheat"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1441652"
+        }
+    ],
+    "wound dressing adhesive|": [],
+    "xanax|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-9259",
+            "display": "Xanax"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "202363"
+        }
+    ],
+    "xylitol|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-864",
+            "display": "Xylitol"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "11377"
+        }
+    ],
+    "xywav|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-368499",
+            "display": "Xywav"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "2393800"
+        }
+    ],
+    "xyzal|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-114633",
+            "display": "Xyzal"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "398335"
+        }
+    ],
+    "yeast|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "1-83",
+            "display": "Yeast"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "1963"
+        }
+    ],
+    "yellow jackets|": [],
+    "zafirlukast|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "6-6206",
+            "display": "zafirlukast"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "114970"
+        }
+    ],
+    "zantac|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4020",
+            "display": "Zantac"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "152523"
+        }
+    ],
+    "zofran (ondansetron)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-30",
+            "display": "Zofran"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "66981"
+        }
+    ],
+    "zofran|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-30",
+            "display": "Zofran"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "66981"
+        }
+    ],
+    "zolmitriptan|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-4300",
+            "display": "zolmitriptan"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "135775"
+        }
+    ],
+    "zoloft|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-35",
+            "display": "Zoloft"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "82728"
+        }
+    ],
+    "zyvox (linezolid)|": [
+        {
+            "system": "http://www.fdbhealth.com/",
+            "code": "2-17141",
+            "display": "Zyvox"
+        },
+        {
+            "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+            "code": "261710"
+        }
+    ]
+}

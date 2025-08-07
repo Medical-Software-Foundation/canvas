@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 from decouple import Config, RepositoryIni
 from collections import defaultdict
 
+
 def fetch_complete_csv_rows(filename, key='id', delimiter='|'):
     """
         Return a distinct set of all the unique identifiers of a csv.
@@ -95,6 +96,7 @@ def reverse_mapping(json_file):
     # Reverses a mapping file by swapping the key/value positions.
     data_dict = fetch_from_json(json_file)
     return {val: key for key, val in data_dict.items()}
+
 
 
 def load_fhir_settings(environment):

@@ -12,10 +12,12 @@ from data_migrations.template_migration.utils import (
     validate_boolean,
     validate_email,
     validate_timezone,
-    validate_address
+    validate_address,
+    FileWriterMixin
 )
 
-class PatientLoaderMixin:
+
+class PatientLoaderMixin(FileWriterMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
@@ -187,6 +189,8 @@ class PatientLoaderMixin:
             patient_identifier = ""
             identifiers = []
             for j in range(1, 4):
+                if f'Identifier System {j}' not in row:
+                    break
                 system = row[f'Identifier System {j}']
                 value = row[f'Identifier Value {j}']
                 if system and value:

@@ -1,0 +1,1572 @@
+{
+    "368009":
+    [
+        "I35.9",
+        "Nonrheumatic aortic valve disorder, unspecified"
+    ],
+    "1201005":
+    [
+        "I10",
+        "Essential (primary) hypertension"
+    ],
+    "3424008":
+    [
+        "R000",
+        "Tachycardia, unspecified"
+    ],
+    "3723001":
+    [
+        "M1990",
+        "Unspecified osteoarthritis, unspecified site"
+    ],
+    "8517006":
+    [
+        "Z87891",
+        "Personal history of nicotine dependence"
+    ],
+    "9014002":
+    [
+        "L409",
+        "Psoriasis, unspecified"
+    ],
+    "10743008":
+    [
+        "K589",
+        "Irritable bowel syndrome, unspecified"
+    ],
+    "11381005":
+    [
+        "L708",
+        "Other acne"
+    ],
+    "11687002":
+    [
+        "O24.419",
+        "Gestational diabetes mellitus in pregnancy, unspecified control"
+    ],
+    "13644009":
+    [
+        "E7800",
+        "Pure hypercholesterolemia, unspecified"
+    ],
+    "13645005":
+    [
+        "J449",
+        "Chronic obstructive pulmonary disease, unspecified"
+    ],
+    "13746004":
+    [
+        "F319",
+        "Bipolar disorder, unspecified"
+    ],
+    "14094001":
+    [
+        "O21.0",
+        "Mild hyperemesis gravidarum"
+    ],
+    "14760008":
+    [
+        "K5900",
+        "Constipation, unspecified"
+    ],
+    "15167005":
+    [
+        "F10.10",
+        "Alcohol abuse, uncomplicated"
+    ],
+    "15188001":
+    [
+        "H91.90",
+        "Unspecified hearing loss, unspecified ear"
+    ],
+    "18818009":
+    [
+        "F33.1",
+        "Major depressive disorder, recurrent, moderate"
+    ],
+    "21522001":
+    [
+        "R109",
+        "Unspecified abdominal pain"
+    ],
+    "21897009":
+    [
+        "F411",
+        "Generalized anxiety disorder"
+    ],
+    "21983002":
+    [
+        "E06.3",
+        "Autoimmune thyroiditis"
+    ],
+    "23056005":
+    [
+        "M5430",
+        "Sciatica, unspecified side"
+    ],
+    "24184005":
+    [
+        "R03.0",
+        "Elevated blood-pressure reading, without diagnosis of hypertension"
+    ],
+    "24700007":
+    [
+        "G35",
+        "Multiple sclerosis"
+    ],
+    "24825006":
+    [
+        "G47.35",
+        "Congenital central alveolar hypoventilation syndrome"
+    ],
+    "25998009":
+    [
+        "E87.2",
+        "Acidosis"
+    ],
+    "27059002":
+    [
+        "E89.0",
+        "Postprocedural hypothyroidism"
+    ],
+    "28293008":
+    [
+        "D66",
+        "Hereditary factor VIII deficiency"
+    ],
+    "31387002":
+    [
+        "J45.990",
+        "Exercise induced bronchospasm"
+    ],
+    "32914008":
+    [
+        "G2581",
+        "Restless legs syndrome"
+    ],
+    "34486009":
+    [
+        "E05.90",
+        "Thyrotoxicosis, unspecified without thyrotoxic crisis or storm"
+    ],
+    "34713006":
+    [
+        "E559",
+        "Vitamin D deficiency, unspecified"
+    ],
+    "35240004":
+    [
+        "E611",
+        "Iron deficiency"
+    ],
+    "35253001":
+    [
+        "F900",
+        "Attention-deficit hyperactivity disorder, predominantly inattentive type"
+    ],
+    "35489007":
+    [
+        "F32.9",
+        "Major depressive disorder, single episode, unspecified"
+    ],
+    "35919005":
+    [
+        "F84.0",
+        "Autistic disorder"
+    ],
+    "36348003":
+    [
+        "E210",
+        "Primary hyperparathyroidism"
+    ],
+    "37796009":
+    [
+        "G43.909",
+        "Migraine, unspecified, not intractable, without status migrainosus"
+    ],
+    "38341003":
+    [
+        "I10",
+        "Essential (primary) hypertension"
+    ],
+    "40108008":
+    [
+        "D569",
+        "Thalassemia, unspecified"
+    ],
+    "40930008":
+    [
+        "E039",
+        "Hypothyroidism, unspecified"
+    ],
+    "42059000":
+    [
+        "H33.009",
+        "Retinal detachment, unspecified"
+    ],
+    "42265009":
+    [
+        "L501",
+        "Idiopathic urticaria"
+    ],
+    "42343007":
+    [
+        "I50.9",
+        "Heart failure, unspecified"
+    ],
+    "43116000":
+    [
+        "L30.9",
+        "Dermatitis, unspecified"
+    ],
+    "44054006":
+    [
+        "E11.9",
+        "Type 2 diabetes mellitus without complications"
+    ],
+    "44169009":
+    [
+        "R43.0",
+        "Anosmia"
+    ],
+    "44186003":
+    [
+        "G47.9",
+        "Sleep disorder, unspecified"
+    ],
+    "46152009":
+    [
+        "H04.123",
+        "Dry eye syndrome of bilateral lacrimal glands"
+    ],
+    "46635009":
+    [
+        "E10.9",
+        "Type 1 diabetes mellitus without complications"
+    ],
+    "47505003":
+    [
+        "F4310",
+        ""
+    ],
+    "48606007":
+    [
+        "Z91.120",
+        "Patient's intentional underdosing of medication regimen due to financial hardship"
+    ],
+    "48694002":
+    [
+        "F419",
+        "Anxiety disorder, unspecified"
+    ],
+    "49436004":
+    [
+        "I4891",
+        "Unspecified atrial fibrillation"
+    ],
+    "49727002":
+    [
+        "R059",
+        "Cough, unspecified"
+    ],
+    "52702003":
+    [
+        "R53.82",
+        "Chronic fatigue, unspecified"
+    ],
+    "53741008":
+    [
+        "I25.10",
+        "Atherosclerotic heart disease of native coronary artery without angina pectoris"
+    ],
+    "55464009":
+    [
+        "M329",
+        "Systemic lupus erythematosus, unspecified"
+    ],
+    "55822004":
+    [
+        "E785",
+        "Hyperlipidemia, unspecified"
+    ],
+    "55827005":
+    [
+        "I51.7",
+        "Cardiomegaly"
+    ],
+    "56727007":
+    [
+        "L80",
+        "Vitiligo"
+    ],
+    "56882008":
+    [
+        "F5000",
+        "Anorexia nervosa, unspecified"
+    ],
+    "57676002":
+    [
+        "M2550",
+        "Pain in unspecified joint"
+    ],
+    "59282003":
+    [
+        "I26.99",
+        "Other pulmonary embolism without acute cor pulmonale"
+    ],
+    "59393003":
+    [
+        "L732",
+        "Hidradenitis suppurativa"
+    ],
+    "59621000":
+    [
+        "I10",
+        "Essential (primary) hypertension"
+    ],
+    "61582004":
+    [
+        "J309",
+        "Allergic rhinitis, unspecified"
+    ],
+    "62315008":
+    [
+        "R197",
+        "Diarrhea, unspecified"
+    ],
+    "63137003":
+    [
+        "K29.40",
+        "Chronic gastritis without bleeding"
+    ],
+    "63440008":
+    [
+        "B07.0",
+        "Plantar wart"
+    ],
+    "63532004":
+    [
+        "K57.30",
+        "Diverticulosis of large intestine without perforation or abscess"
+    ],
+    "64117007":
+    [
+        "D51.9",
+        "Vitamin B12 deficiency anemia, unspecified"
+    ],
+    "64766004":
+    [
+        "K51.90",
+        "Ulcerative colitis, unspecified, without complications"
+    ],
+    "64859006":
+    [
+        "M81.0",
+        "Age-related osteoporosis without current pathological fracture"
+    ],
+    "68256003":
+    [
+        "R73.09",
+        "Other abnormal glucose"
+    ],
+    "69896004":
+    [
+        "M069",
+        "Rheumatoid arthritis, unspecified"
+    ],
+    "70142008":
+    [
+        "Q2110",
+        "Atrial septal defect, unspecified"
+    ],
+    "70995007":
+    [
+        "I2720",
+        "Pulmonary hypertension, unspecified"
+    ],
+    "72000004":
+    [
+        "E509",
+        "Vitamin A deficiency, unspecified"
+    ],
+    "72366004":
+    [
+        "F509",
+        "Eating disorder, unspecified"
+    ],
+    "72863001":
+    [
+        "R0683",
+        "Snoring"
+    ],
+    "73211009":
+    [
+        "E14.9",
+        "Unspecified diabetes mellitus without complications"
+    ],
+    "73430006":
+    [
+        "G4730",
+        "Sleep apnea, unspecified"
+    ],
+    "75694006":
+    [
+        "K85.9",
+        "Acute pancreatitis, unspecified"
+    ],
+    "76107001":
+    [
+        "M4800",
+        "Spinal stenosis, site unspecified"
+    ],
+    "76498008":
+    [
+        "N95.1",
+        "Menopausal and female climacteric states"
+    ],
+    "77176002":
+    [
+        "Z72.0",
+        "Tobacco use, current"
+    ],
+    "77547008":
+    [
+        "M51.36",
+        "Other intervertebral disc degeneration, lumbar region"
+    ],
+    "78275009":
+    [
+        "G4733",
+        "Obstructive sleep apnea (adult) (pediatric)"
+    ],
+    "78616008":
+    [
+        "W55.89XA",
+        "Other contact with other mammals, initial encounter"
+    ],
+    "78623009":
+    [
+        "N71.9",
+        "Inflammatory disease of uterus, unspecified"
+    ],
+    "80182007":
+    [
+        "N92.6",
+        "Irregular menstrual cycle"
+    ],
+    "80515008":
+    [
+        "R16.0",
+        "Hepatomegaly, not elsewhere classified"
+    ],
+    "82598004":
+    [
+        "E03.8",
+        "Other specified hypothyroidism"
+    ],
+    "83901003":
+    [
+        "M3500",
+        "Sjogren syndrome, unspecified"
+    ],
+    "84089009":
+    [
+        "K44.9",
+        "Diaphragmatic hernia without obstruction or gangrene"
+    ],
+    "84229001":
+    [
+        "R5383",
+        "Other fatigue"
+    ],
+    "85020001":
+    [
+        "E7201",
+        "Cystinuria"
+    ],
+    "87433001":
+    [
+        "J43.9",
+        "Emphysema, unspecified"
+    ],
+    "87522002":
+    [
+        "D509",
+        "Iron deficiency anemia, unspecified"
+    ],
+    "87604009":
+    [
+        "0DB64ZZ",
+        "Excision of stomach, percutaneous endoscopic approach"
+    ],
+    "89627008":
+    [
+        "E87.1",
+        "Hypo-osmolality and hyponatremia"
+    ],
+    "90560007":
+    [
+        "M109",
+        "Gout, unspecified"
+    ],
+    "92818009":
+    [
+        "C92.10",
+        "Chronic myeloid leukemia, BCR/ABL-positive, not in remission"
+    ],
+    "95570007":
+    [
+        "N200",
+        "Calculus of kidney"
+    ],
+    "95644001":
+    [
+        "M32.19",
+        "Other organ or system involvement in systemic lupus erythematosus"
+    ],
+    "102572006":
+    [
+        "R60.0",
+        "Localized edema"
+    ],
+    "102587001":
+    [
+        "R07.9",
+        "Chest pain, unspecified"
+    ],
+    "105969002":
+    [
+        "M35.9",
+        "Systemic involvement of connective tissue, unspecified"
+    ],
+    "110483000":
+    [
+        "Z720",
+        "Tobacco use"
+    ],
+    "123785006":
+    [
+        "D80.3",
+        "Selective deficiency of immunoglobulin G [IgG] subclasses"
+    ],
+    "127295002":
+    [
+        "S06.9X9A",
+        "Unspecified intracranial injury with loss of consciousness of unspecified duration, initial encounter"
+    ],
+    "128045006":
+    [
+        "L0390",
+        "Cellulitis, unspecified"
+    ],
+    "128053003":
+    [
+        "I82.409",
+        "Acute embolism and thrombosis of unspecified deep veins of unspecified lower extremity"
+    ],
+    "128105004":
+    [
+        "D6800",
+        "Von Willebrand disease, unspecified"
+    ],
+    "128196005":
+    [
+        "M5416",
+        "Radiculopathy, lumbar region"
+    ],
+    "128609009":
+    [
+        "I67.1",
+        "Cerebral aneurysm, nonruptured"
+    ],
+    "131078003":
+    [
+        "E29.1",
+        "Testicular hypofunction"
+    ],
+    "131113002":
+    [
+        "E67.3",
+        "Hypervitaminosis D"
+    ],
+    "134407002":
+    [
+        "M54.5",
+        "Low back pain"
+    ],
+    "156370009":
+    [
+        "L40.50",
+        "Psoriatic arthritis, unspecified"
+    ],
+    "161414005":
+    [
+        "Z8611",
+        "Personal history of tuberculosis"
+    ],
+    "161451004":
+    [
+        "Z87.39",
+        "Personal history of other diseases of the musculoskeletal system and connective tissue"
+    ],
+    "161453001":
+    [
+        "Z86.39",
+        "Personal history of other endocrine, nutritional and metabolic disease"
+    ],
+    "161466001":
+    [
+        "Z86.59",
+        "Personal history of other mental and behavioral disorders"
+    ],
+    "161501007":
+    [
+        "Z86.79",
+        "Personal history of other diseases of the circulatory system"
+    ],
+    "161512007":
+    [
+        "Z86.718",
+        "Personal history of other venous thrombosis and embolism"
+    ],
+    "161712005":
+    [
+        "N95.1",
+        "Menopausal and female climacteric states"
+    ],
+    "161833006":
+    [
+        "R635",
+        "Abnormal weight gain"
+    ],
+    "162290004":
+    [
+        "H04.123",
+        "Dry eye syndrome of bilateral lacrimal glands"
+    ],
+    "162864005":
+    [
+        "Z68.30",
+        "Body mass index (BMI) 30.0-30.9, adult"
+    ],
+    "165850001":
+    [
+        "R76.0",
+        "Raised antibody titer"
+    ],
+    "166449002":
+    [
+        "E28.319",
+        "Other ovarian failure"
+    ],
+    "166603001":
+    [
+        "R94.5",
+        "Abnormal results of liver function studies"
+    ],
+    "166690008":
+    [
+        "E87.6",
+        "Hypokalemia"
+    ],
+    "173747005":
+    [
+        "0D160ZA",
+        "Bypass of stomach to jejunum, open approach"
+    ],
+    "190634004":
+    [
+        "D51.9",
+        "Vitamin B12 deficiency anemia, unspecified"
+    ],
+    "191736004":
+    [
+        "F429",
+        "Obsessive-compulsive disorder, unspecified"
+    ],
+    "192080009":
+    [
+        "F33.9",
+        "Major depressive disorder, recurrent, unspecified"
+    ],
+    "193039006":
+    [
+        "G43.419",
+        "Hemiplegic migraine, intractable, without status migrainosus"
+    ],
+    "193462001":
+    [
+        "G4700",
+        "Insomnia, unspecified"
+    ],
+    "194978002":
+    [
+        "I34.0",
+        "Nonrheumatic mitral (valve) insufficiency"
+    ],
+    "195295006":
+    [
+        "I73.00",
+        "Raynaud's syndrome without gangrene"
+    ],
+    "195967001":
+    [
+        "J45.909",
+        "Unspecified asthma, uncomplicated"
+    ],
+    "197315008":
+    [
+        "K76.0",
+        "Fatty (change of) liver, not elsewhere classified"
+    ],
+    "197321007":
+    [
+        "K76.0",
+        "Fatty (change of) liver, not elsewhere classified"
+    ],
+    "197480006":
+    [
+        "F419",
+        "Anxiety disorder, unspecified"
+    ],
+    "197927001":
+    [
+        "N39.0",
+        "Urinary tract infection, site not specified"
+    ],
+    "200936003":
+    [
+        "M32.9",
+        "Systemic lupus erythematosus, unspecified"
+    ],
+    "201819000":
+    [
+        "M15.9",
+        "Polyosteoarthritis, unspecified"
+    ],
+    "202882003":
+    [
+        "M72.2",
+        "Plantar fascial fibromatosis"
+    ],
+    "203082005":
+    [
+        "M797",
+        "Fibromyalgia"
+    ],
+    "224994002":
+    [
+        "R63.5",
+        "Abnormal weight gain"
+    ],
+    "225587003":
+    [
+        "K21.9",
+        "Gastro-esophageal reflux disease without esophagitis"
+    ],
+    "230430000":
+    [
+        "G40.309",
+        "Generalized idiopathic epilepsy and epileptic syndromes, not intractable, without status epilepticus"
+    ],
+    "230690007":
+    [
+        "I63.9",
+        "Cerebral infarction, unspecified"
+    ],
+    "231504006":
+    [
+        "F41.2",
+        "Mixed anxiety and depressive disorder"
+    ],
+    "233604007":
+    [
+        "J18.9",
+        "Pneumonia, unspecified organism"
+    ],
+    "234050002":
+    [
+        "I87.2",
+        "Venous insufficiency (chronic) (peripheral)"
+    ],
+    "234097001":
+    [
+        "I890",
+        "Lymphedema, not elsewhere classified"
+    ],
+    "234102003":
+    [
+        "E88.81",
+        "Lipoedema"
+    ],
+    "234340006":
+    [
+        "D50.9",
+        "Iron deficiency anemia, unspecified"
+    ],
+    "235595009":
+    [
+        "K219",
+        "Gastro-esophageal reflux disease without esophagitis"
+    ],
+    "235597001":
+    [
+        "K22.711",
+        "Barrett's esophagus with dysplasia"
+    ],
+    "235675006":
+    [
+        "K3184",
+        "Gastroparesis"
+    ],
+    "236069009":
+    [
+        "K59.00",
+        "Constipation, unspecified"
+    ],
+    "236071009":
+    [
+        "K59.1",
+        "Functional diarrhea"
+    ],
+    "237055002":
+    [
+        "E282",
+        "Polycystic ovarian syndrome"
+    ],
+    "237495005":
+    [
+        "E04.1",
+        "Nontoxic single thyroid nodule"
+    ],
+    "237520009":
+    [
+        "E06.3",
+        "Autoimmune thyroiditis"
+    ],
+    "237602007":
+    [
+        "E88810",
+        "Metabolic syndrome"
+    ],
+    "237751000":
+    [
+        "E25.0",
+        "Congenital adrenogenital disorders associated with enzyme deficiency"
+    ],
+    "238076009":
+    [
+        "E78.0",
+        "Pure hypercholesterolemia"
+    ],
+    "238131007":
+    [
+        "E663",
+        "Overweight"
+    ],
+    "238136002":
+    [
+        "E66.01",
+        "Morbid (severe) obesity due to excess calories"
+    ],
+    "239720000":
+    [
+        "S83.20XA",
+        "Unspecified tear of meniscus, current injury, unspecified knee, initial encounter"
+    ],
+    "239872002":
+    [
+        "M169",
+        "Osteoarthritis of hip, unspecified"
+    ],
+    "239873007":
+    [
+        "M179",
+        "Osteoarthritis of knee, unspecified"
+    ],
+    "239918008":
+    [
+        "M35.9",
+        "Systemic involvement of connective tissue, unspecified"
+    ],
+    "247803002":
+    [
+        "F33.8",
+        "Other recurrent depressive disorders"
+    ],
+    "248311001":
+    [
+        "E66.09",
+        "Other obesity due to excess calories"
+    ],
+    "254837009":
+    [
+        "C50.919",
+        "Malignant neoplasm of unspecified site of unspecified female breast"
+    ],
+    "254880000":
+    [
+        "D25.2",
+        "Submucous leiomyoma of uterus"
+    ],
+    "255029007":
+    [
+        "C73",
+        "Malignant neoplasm of thyroid gland"
+    ],
+    "266435005":
+    [
+        "K219",
+        "Gastro-esophageal reflux disease without esophagitis"
+    ],
+    "266480006":
+    [
+        "K91.2",
+        "Postsurgical malabsorption, not elsewhere classified"
+    ],
+    "266607004":
+    [
+        "N959",
+        "Unspecified menopausal and perimenopausal disorder"
+    ],
+    "266987004":
+    [
+        "Z859",
+        "Personal history of malignant neoplasm, unspecified"
+    ],
+    "266996004":
+    [
+        "Z86.718",
+        "Personal history of other venous thrombosis and embolism"
+    ],
+    "267038008":
+    [
+        "R609",
+        "Edema, unspecified"
+    ],
+    "267432004":
+    [
+        "E7800",
+        "Pure hypercholesterolemia, unspecified"
+    ],
+    "267434003":
+    [
+        "E782",
+        "Mixed hyperlipidemia"
+    ],
+    "267517008":
+    [
+        "D513",
+        "Other dietary vitamin B12 deficiency anemia"
+    ],
+    "267718000":
+    [
+        "H35.31",
+        "Nonexudative age-related macular degeneration"
+    ],
+    "268054009":
+    [
+        "M15.9",
+        "Polyosteoarthritis, unspecified"
+    ],
+    "271737000":
+    [
+        "D649",
+        "Anemia, unspecified"
+    ],
+    "276545006":
+    [
+        "P2842",
+        "Obstructive apnea of newborn"
+    ],
+    "278860009":
+    [
+        "M54.5",
+        "Low back pain"
+    ],
+    "279039007":
+    [
+        "M5450",
+        "Low back pain, unspecified"
+    ],
+    "279049005":
+    [
+        "G89.28",
+        "Other chronic postprocedural pain"
+    ],
+    "280992001":
+    [
+        "K57.20",
+        "Diverticulitis of large intestine with perforation and abscess without bleeding"
+    ],
+    "302866003":
+    [
+        "E162",
+        "Hypoglycemia, unspecified"
+    ],
+    "302870006":
+    [
+        "E78.1",
+        "Pure hyperglyceridemia"
+    ],
+    "302914006":
+    [
+        "K22.70",
+        "Barrett's esophagus without dysplasia"
+    ],
+    "307091009":
+    [
+        "D68.51",
+        "Activated protein C resistance"
+    ],
+    "307496006":
+    [
+        "K57.92",
+        "Diverticulitis of intestine, part unspecified, without perforation or abscess without bleeding"
+    ],
+    "310495003":
+    [
+        "F32.0",
+        "Major depressive disorder, single episode, mild"
+    ],
+    "312399001":
+    [
+        "R94.6",
+        "Abnormal results of thyroid function studies"
+    ],
+    "312442005":
+    [
+        "Z86.79",
+        "Personal history of other diseases of the circulatory system"
+    ],
+    "312894000":
+    [
+        "M85.80",
+        "Other specified disorders of bone density and structure, unspecified site"
+    ],
+    "313436004":
+    [
+        "E119",
+        "Type 2 diabetes mellitus without complications"
+    ],
+    "353295004":
+    [
+        "E05.00",
+        "Thyrotoxicosis with diffuse goiter without thyrotoxic crisis or storm"
+    ],
+    "363346000":
+    [
+        "C80.1",
+        "Malignant (primary) neoplasm, unspecified"
+    ],
+    "363406005":
+    [
+        "C189",
+        "Malignant neoplasm of colon, unspecified"
+    ],
+    "363478007":
+    [
+        "C73",
+        "Malignant neoplasm of thyroid gland"
+    ],
+    "365616005":
+    [
+        "R71.8",
+        "Other abnormality of red blood cells"
+    ],
+    "370992007":
+    [
+        "E78.5",
+        "Hyperlipidemia, unspecified"
+    ],
+    "371036001":
+    [
+        "N95.3",
+        "Postmenopausal atrophic vaginitis"
+    ],
+    "371073003":
+    [
+        "G90A",
+        "Postural orthostatic tachycardia syndrome [POTS]"
+    ],
+    "371596008":
+    [
+        "F31.9",
+        "Bipolar disorder, unspecified"
+    ],
+    "371622005":
+    [
+        "R030",
+        "Elevated blood-pressure reading, without diagnosis of hypertension"
+    ],
+    "371822007":
+    [
+        "Z95.5",
+        "Presence of coronary angioplasty implant and graft"
+    ],
+    "386033004":
+    [
+        "G62.9",
+        "Polyneuropathy, unspecified"
+    ],
+    "386807006":
+    [
+        "R41.3",
+        "Other amnesia"
+    ],
+    "389094009":
+    [
+        "N97.9",
+        "Female infertility, unspecified"
+    ],
+    "390951007":
+    [
+        "R73.01",
+        "Impaired fasting glucose"
+    ],
+    "396275006":
+    [
+        "M19.90",
+        "Unspecified osteoarthritis, unspecified site"
+    ],
+    "396331005":
+    [
+        "K900",
+        "Celiac disease"
+    ],
+    "397540003":
+    [
+        "H54.7",
+        "Unspecified visual loss"
+    ],
+    "397825006":
+    [
+        "K25.9",
+        "Gastric ulcer, unspecified as acute or chronic, without hemorrhage or perforation"
+    ],
+    "398050005":
+    [
+        "K57.30",
+        "Diverticulosis of large intestine without perforation or abscess without bleeding"
+    ],
+    "398726004":
+    [
+        "J99.0",
+        "Rheumatoid lung disease"
+    ],
+    "398909004":
+    [
+        "L719",
+        "Rosacea, unspecified"
+    ],
+    "399957001":
+    [
+        "I73.9",
+        "Peripheral vascular disease, unspecified"
+    ],
+    "406506008":
+    [
+        "F909",
+        "Attention-deficit hyperactivity disorder, unspecified type"
+    ],
+    "408512008":
+    [
+        "Z6841",
+        "Body mass index [BMI] 40.0-44.9, adult"
+    ],
+    "414396006":
+    [
+        "K43.9",
+        "Ventral hernia without obstruction or gangrene"
+    ],
+    "414916001":
+    [
+        "E669",
+        "Obesity, unspecified"
+    ],
+    "415082004":
+    [
+        "Z85118",
+        "Personal history of other malignant neoplasm of bronchus and lung"
+    ],
+    "419219000":
+    [
+        "T88.7XXA",
+        "Unspecified adverse effect of drug or medicament, initial encounter"
+    ],
+    "420054005":
+    [
+        "K70.30",
+        "Alcoholic cirrhosis of liver without ascites"
+    ],
+    "422587007":
+    [
+        "R110",
+        "Nausea"
+    ],
+    "425582007":
+    [
+        "I4711",
+        "Inappropriate sinus tachycardia, so stated"
+    ],
+    "425963007":
+    [
+        "I71.01",
+        "Dissection of ascending aorta"
+    ],
+    "427679007":
+    [
+        "J45.20",
+        "Mild intermittent asthma, uncomplicated"
+    ],
+    "427970008":
+    [
+        "E05.90",
+        "Thyrotoxicosis, unspecified without thyrotoxic crisis or storm"
+    ],
+    "428882003":
+    [
+        "Z90.49",
+        "Acquired absence of other parts of digestive tract"
+    ],
+    "429040005":
+    [
+        "K63.9",
+        "Disease of intestine, unspecified"
+    ],
+    "429050006":
+    [
+        "Z85828",
+        "Personal history of other malignant neoplasm of skin"
+    ],
+    "429087003":
+    [
+        "Z853",
+        "Personal history of malignant neoplasm of breast"
+    ],
+    "429740004":
+    [
+        "Z803",
+        "Family history of malignant neoplasm of breast"
+    ],
+    "430166008":
+    [
+        "Q27.30",
+        "Other congenital malformations of peripheral vascular system"
+    ],
+    "430715008":
+    [
+        "Z98.84",
+        "Bariatric surgery status"
+    ],
+    "431856006":
+    [
+        "N182",
+        "Chronic kidney disease, stage 2 (mild)"
+    ],
+    "439960005":
+    [
+        "F50819",
+        "Binge eating disorder, unspecified"
+    ],
+    "443254009":
+    [
+        "I50.21",
+        "Acute systolic (congestive) heart failure"
+    ],
+    "443502000":
+    [
+        "I25.10",
+        "Atherosclerotic heart disease of native coronary artery without angina pectoris"
+    ],
+    "443694000":
+    [
+        "E11.65",
+        "Type 2 diabetes mellitus with hyperglycemia"
+    ],
+    "444316004":
+    [
+        "J302",
+        "Other seasonal allergic rhinitis"
+    ],
+    "444463001":
+    [
+        "Z96.652",
+        "Presence of left artificial knee joint"
+    ],
+    "444613000":
+    [
+        "F909",
+        "Attention-deficit hyperactivity disorder, unspecified type"
+    ],
+    "445512009":
+    [
+        "I25.10",
+        "Atherosclerotic heart disease of native coronary artery without angina pectoris"
+    ],
+    "446221000":
+    [
+        "I50.3",
+        "Diastolic (congestive) heart failure"
+    ],
+    "472971004":
+    [
+        "Z8632",
+        "Personal history of gestational diabetes"
+    ],
+    "473442002":
+    [
+        "Z87.39",
+        "Personal history of other diseases of the musculoskeletal system and connective tissue"
+    ],
+    "608848006":
+    [
+        "Z98.84",
+        "Bariatric surgery status"
+    ],
+    "698065002":
+    [
+        "K21.9",
+        "Gastro-esophageal reflux disease without esophagitis"
+    ],
+    "698247007":
+    [
+        "I499",
+        "Cardiac arrhythmia, unspecified"
+    ],
+    "700219009":
+    [
+        "G96.0",
+        "Cerebrospinal fluid leak"
+    ],
+    "700378005":
+    [
+        "N1831",
+        "Chronic kidney disease, stage 3a"
+    ],
+    "700409000":
+    [
+        "G35",
+        "Multiple sclerosis"
+    ],
+    "707724006":
+    [
+        "R74.8",
+        "Abnormal levels of other serum enzymes"
+    ],
+    "709044004":
+    [
+        "N189",
+        "Chronic kidney disease, unspecified"
+    ],
+    "713703005":
+    [
+        "E11.43",
+        "Type 2 diabetes mellitus with diabetic autonomic (poly)neuropathy"
+    ],
+    "714628002":
+    [
+        "R7303",
+        "Prediabetes"
+    ],
+    "717934004":
+    [
+        "E55.9",
+        "Vitamin D deficiency, unspecified"
+    ],
+    "733460004":
+    [
+        "F12.90",
+        "Cannabis use, unspecified, uncomplicated"
+    ],
+    "733657002":
+    [
+        "K57.30",
+        "Diverticulosis of large intestine without perforation or abscess without bleeding"
+    ],
+    "763325000":
+    [
+        "E88819",
+        "Insulin resistance, unspecified"
+    ],
+    "786457000":
+    [
+        "N3281",
+        "Overactive bladder"
+    ],
+    "819948005":
+    [
+        "E66813",
+        "Obesity, class 3"
+    ],
+    "1003722009":
+    [
+        "M25569",
+        "Pain in unspecified knee"
+    ],
+    "1119306006":
+    [
+        "M3581",
+        "Multisystem inflammatory syndrome"
+    ],
+    "1144974009":
+    [
+        "M33.22",
+        "Polymyositis with myopathy in diseases classified elsewhere"
+    ],
+    "1162387003":
+    [
+        "F50.81",
+        "Binge eating disorder"
+    ],
+    "1231824009":
+    [
+        "K76.0",
+        "Fatty (change of) liver, not elsewhere classified"
+    ],
+    "1340181009":
+    [
+        "0DB64Z3",
+        "Excision of duodenum, percutaneous endoscopic approach, diagnostic"
+    ],
+    "34281000175105":
+    [
+        "Z99.89",
+        "Dependence on other enabling machines and devices"
+    ],
+    "51881000119109":
+    [
+        "M25.579",
+        "Pain in unspecified ankle and joints of unspecified foot"
+    ],
+    "83911000119104":
+    [
+        "E66.01",
+        "Morbid (severe) obesity due to excess calories"
+    ],
+    "85921000119107":
+    [
+        "Z87.11",
+        "Personal history of diseases of the digestive system"
+    ],
+    "118361000119100":
+    [
+        "Z87.19",
+        "Personal history of other diseases of the digestive system"
+    ],
+    "137871000119109":
+    [
+        "Z86.79",
+        "Personal history of other diseases of the circulatory system"
+    ],
+    "137961000119105":
+    [
+        "Z87.440",
+        "Personal history of urinary calculi"
+    ],
+    "160931000119108":
+    [
+        "R74.01",
+        "Elevated aspartate transaminase [AST]"
+    ],
+    "161541000119104":
+    [
+        "N95.1",
+        "Menopausal and female climacteric states"
+    ],
+    "176271000119108":
+    [
+        "R74.8",
+        "Abnormal levels of other serum enzymes"
+    ],
+    "291931000119102":
+    [
+        "G57.01",
+        "Lesion of right sciatic nerve"
+    ],
+    "323301000119109":
+    [
+        "M1712",
+        "Unilateral primary osteoarthritis, left knee"
+    ],
+    "323321000119100":
+    [
+        "M1711",
+        "Unilateral primary osteoarthritis, right knee"
+    ],
+    "329281000119107":
+    [
+        "Z98.84",
+        "Bariatric surgery status"
+    ],
+    "347601000119108":
+    [
+        "H26.13",
+        "Combined forms of senile cataract, bilateral"
+    ],
+    "431441000124105":
+    [
+        "Z98.2",
+        "Presence of cerebrospinal fluid drainage device"
+    ],
+    "443371000124107":
+    [
+        "E66811",
+        "Obesity, class 1"
+    ],
+    "443381000124105":
+    [
+        "E66812",
+        "Obesity, class 2"
+    ],
+    "446151000124109":
+    [
+        "Z87.890",
+        "Personal history of sex reassignment"
+    ],
+    "448701000124105":
+    [
+        "M51.16",
+        "Intervertebral disc disorders with radiculopathy, lumbar region"
+    ],
+    "468241000124105":
+    [
+        "M25561",
+        "Pain in right knee"
+    ],
+    "681221000119108":
+    [
+        "Z86.19",
+        "Personal history of other infectious and parasitic diseases"
+    ],
+    "1.66979E+16":
+    [
+        "D89.49",
+        "Other mast cell disorders"
+    ],
+    "1074871000119108":
+    [
+        "M17.0",
+        "Bilateral primary osteoarthritis of knee"
+    ],
+    "1091291000119103":
+    [
+        "H66.91",
+        "Otitis media, unspecified, right ear"
+    ],
+    "11853641000119102":
+    [
+        "S98.911A",
+        "Complete traumatic amputation of right foot, initial encounter"
+    ],
+    "29200001000004107":
+    [
+        "Z87.42",
+        "Personal history of diseases of the female genital tract"
+    ],
+    "46557031000119105":
+    [
+        "I82.432",
+        "Acute embolism and thrombosis of left peroneal vein"
+    ]
+}

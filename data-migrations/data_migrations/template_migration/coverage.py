@@ -112,22 +112,30 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
             return payor_id
         return payor
 
-    def find_subscriber(self, first_name: str, last_name: str, dob: str):
+    def find_subscriber(self, first_name: str | None = None, last_name: str | None = None, dob: str | None = None, name: str | None = None):
         # Performs a Fumage search to find a patient based on first_name, last_name and dob;
         # Will return the patient ID from the source API by doing a reverse mapping from the Canvas
         # patient key.
         print("Looking up subscriber")
+        search_params = {}
+        if first_name:
+            search_params["given"] = first_name
+        if last_name:
+            search_params["family"] = last_name
+        if dob:
+            search_params["birthDate"] = dob
+        if name:
+            search_params["name"] = name
         patient_search_response = self.fumage_helper.search(
             "Patient",
-            {
-                "given": first_name,
-                "family": last_name,
-                "birthDate": dob
-            }
+            search_params
         )
         response_data = patient_search_response.json()
         if response_data['total'] == 1:
-            return self.reverse_patient_map.get(response_data['entry'][0]['resource']['id'])
+            resource_id = response_data['entry'][0]['resource']['id']
+            if hasattr(self, "reverse_patient_map"):
+                return self.reverse_patient_map.get(resource_id)
+            return resource_id
 
     def load(self, validated_rows, **kwargs):
         """
@@ -155,7 +163,12 @@ class CoverageLoaderMixin(MappingMixin, FileWriterMixin):
             try:
                 # try mapping required Canvas identifiers
                 patient_key = self.map_patient(patient)
-                subscriber_key = self.map_patient(row['Subscriber'])
+
+                if not kwargs.get('skip_subscriber_mapping'):
+                    subscriber_key = self.map_patient(row['Subscriber'])
+                else:
+                    subscriber_key = row['Subscriber']
+
                 if kwargs.get("map_payor") is False:
                     payer_id = row['Payor ID']
                 else:

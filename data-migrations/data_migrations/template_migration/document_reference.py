@@ -34,6 +34,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                 "Category",
                 "Document",
                 "Description",
+                "Comment",
                 "Provider",
             }
         )
@@ -119,6 +120,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                 print(' Already did record')
                 continue
 
+
             patient = row['Patient Identifier']
             patient_key = ""
             try:
@@ -133,41 +135,24 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
 
             missing_files_for_row = []
             for fname in file_list:
+                print(f"{self.documents_files_dir}{fname}")
                 if not os.path.exists(f"{self.documents_files_dir}{fname}"):
                     missing_files_for_row.append(fname)
 
             if missing_files_for_row:
                 missing_files.extend(missing_files_for_row)
-                self.ignore_row(row['ID'], f"File(s) {", ".join(missing_files_for_row)} not found in supplied files.")
+                self.ignore_row(row['ID'], f"File(s) {', '.join(missing_files_for_row)} not found in supplied files.")
                 continue
 
-            if len(file_list) == 1:
-                file_path = file_list[0]
-                if file_path.endswith(".tiff") or file_path.endswith(".tif"):
-                    pdf_output = self.tiff_to_pdf(f"{self.documents_files_dir}{file_path}")
-                    b64_document_string = self.base64_encode_file(pdf_output)
-                    # clean up the file
-                    os.remove(pdf_output)
-                elif file_path.endswith(".pdf"):
-                    b64_document_string = self.base64_encode_file(f"{self.documents_files_dir}{file_path}")
-                elif file_path.endswith(".png"):
-                    b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{file_path}"])
-                elif file_path.endswith(".jpeg") or file_path.endswith(".jpg"):
-                    b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{file_path}"])
-                else:
+            b64_document_string = self.get_b64_document_string(file_list)
+            if not b64_document_string:
                 # This shouldn't ever happen with the current file set we have.
-                    self.error_row(row["ID"], "Error converting document")
-            elif len(file_list) > 1:
-                b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{p}" for p in file_list])
-
+                self.error_row(row["ID"], "Error converting document")
+                continue
 
             payload = {
                 "resourceType": "DocumentReference",
                 "extension": [
-                    {
-                        "url": "http://schemas.canvasmedical.com/fhir/document-reference-comment",
-                        "valueString": row['Description']
-                    },
                     {
                         "url": "http://schemas.canvasmedical.com/fhir/document-reference-clinical-date",
                         "valueDate": row['Clinical Date']
@@ -200,6 +185,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                         }
                     ]
                 },
+                "description": row['Description'],
                 "category": [
                     {
                         "coding": [
@@ -233,7 +219,14 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                     }
                 ]
 
-            #print(json.dumps(payload, indent=2))
+            if row['Comment']:
+                payload['extension'].append({
+                    "url": "http://schemas.canvasmedical.com/fhir/document-reference-comment",
+                    "valueString": row['Comment']
+                })
+
+            # print(json.dumps(payload, indent=2))
+            # return
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
@@ -241,6 +234,7 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
                 ids.add(row['ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
+
 
         if missing_files:
             print("Some Files were missing:")

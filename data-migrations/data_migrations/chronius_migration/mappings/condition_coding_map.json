@@ -1,0 +1,3228 @@
+{
+    "ABCC6 pathologic variant carrier|Z148": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z148",
+        "display": "Genetic carrier of other disease"
+    },
+    "Abdominal pain|R104": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R109",
+        "display": "Unspecified abdominal pain"
+    },
+    "Abnormal auditory preception|H932": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H93299",
+        "display": "Other abnormal auditory perceptions, unspecified ear"
+    },
+    "Abnormal Lumbosacral Transition|Q763": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q763",
+        "display": "Congenital scoliosis due to congenital bony malformation"
+    },
+    "Abnormal PAP|R85619": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R85619",
+        "display": "Unspecified abnormal cytological findings in specimens from anus"
+    },
+    "Abnormal Urinalysis|R8299": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R8299",
+        "display": "Other abnormal findings in urine"
+    },
+    "Absence Seizures|G40A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G40A09",
+        "display": "Absence epileptic syndrome, not intractable, without status epilepticus"
+    },
+    "Acid reflux|K21": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K219",
+        "display": "Gastro-esophageal reflux disease without esophagitis"
+    },
+    "Acne|L70": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L709",
+        "display": "Acne, unspecified"
+    },
+    "adverse reactions to nonsteroidal anti-inflammatory drugs|T887": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T887XXS",
+        "display": "Unspecified adverse effect of drug or medicament, sequela"
+    },
+    "Agoraphobia.|F400": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4000",
+        "display": "Agoraphobia, unspecified"
+    },
+    "Albinism|E703": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E7030",
+        "display": "Albinism, unspecified"
+    },
+    "Allergic rhinitis|J30": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J3081",
+        "display": "Allergic rhinitis due to animal (cat) (dog) hair and dander"
+    },
+    "Allergic rhinitis|J304": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J3081",
+        "display": "Allergic rhinitis due to animal (cat) (dog) hair and dander"
+    },
+    "allergies|T7840": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T7840XS",
+        "display": "Allergy, unspecified, sequela"
+    },
+    "Allergy-induced asthma|J450": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J45998",
+        "display": "Other asthma"
+    },
+    "Alpha 1 Antitrypsin Deficiency|E8801": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E8801",
+        "display": "Alpha-1-antitrypsin deficiency"
+    },
+    "Anal Fistula|K603": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K603",
+        "display": "Anal fistula"
+    },
+    "Anemia|D64": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D649",
+        "display": "Anemia, unspecified"
+    },
+    "Ankle Instability Bilateral|M2537": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25373",
+        "display": "Other instability, unspecified ankle"
+    },
+    "Ankylosing Spondylitis|M45": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M459",
+        "display": "Ankylosing spondylitis of unspecified sites in spine"
+    },
+    "Ankylosing Spondylitis|M4509": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M459",
+        "display": "Ankylosing spondylitis of unspecified sites in spine"
+    },
+    "anorexia|R630": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R630",
+        "display": "Anorexia"
+    },
+    "Anorexia|R630": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R630",
+        "display": "Anorexia"
+    },
+    "Anterior Process Fracture Right Foot|S92021": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S92021S",
+        "display": "Displaced fracture of anterior process of right calcaneus, sequela"
+    },
+    "anxiety|F41": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F419",
+        "display": "Anxiety disorder, unspecified"
+    },
+    "Arnold Chiari Malformation|Q070": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q0700",
+        "display": "Arnold-Chiari syndrome without spina bifida or hydrocephalus"
+    },
+    "Arteriovenous Fistula Candidacy|Z992": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z992",
+        "display": "Dependence on renal dialysis"
+    },
+    "Arthritis|M139": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M1990",
+        "display": "Unspecified osteoarthritis, unspecified site"
+    },
+    "Asthma, moderate persistent|J454": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J4540",
+        "display": "Moderate persistent asthma, uncomplicated"
+    },
+    "Asthma.|J459": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J45909",
+        "display": "Unspecified asthma, uncomplicated"
+    },
+    "Asthmatic Bronchitis|J4590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J45909",
+        "display": "Unspecified asthma, uncomplicated"
+    },
+    "Astigmatism.|H5220": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H52209",
+        "display": "Unspecified astigmatism, unspecified eye"
+    },
+    "Astigmatism|H522": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H52209",
+        "display": "Unspecified astigmatism, unspecified eye"
+    },
+    "Ataxia|R270": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R270",
+        "display": "Ataxia, unspecified"
+    },
+    "Atelectasis|J9811": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J9811",
+        "display": "Atelectasis"
+    },
+    "Atherosclerosis|I70": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7090",
+        "display": "Unspecified atherosclerosis"
+    },
+    "Atlantoaxial Instability|M532X1": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X1",
+        "display": "Spinal instabilities, occipito-atlanto-axial region"
+    },
+    "Atlantoaxial instability|M532X1": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X1",
+        "display": "Spinal instabilities, occipito-atlanto-axial region"
+    },
+    "Attention-Deficit Hyperactivity Disorder|F90": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F909",
+        "display": "Attention-deficit hyperactivity disorder, unspecified type"
+    },
+    "Attention-Deficit Hyperactivity Disorder|F908": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F908",
+        "display": "Attention-deficit hyperactivity disorder, other type"
+    },
+    "Attention-Deficit/Hyperactivity Disorder|F90": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F908",
+        "display": "Attention-deficit hyperactivity disorder, other type"
+    },
+    "Atypical partial absence seizures|G40A0": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G40A09",
+        "display": "Absence epileptic syndrome, not intractable, without status epilepticus"
+    },
+    "Autism Spectrum Disorder|Z13850": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z13850",
+        "display": "Encounter for screening for traumatic brain injury"
+    },
+    "Babesiosis|B600": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B600",
+        "display": "Babesiosis"
+    },
+    "Bartonellosis|A44": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A449",
+        "display": "Bartonellosis, unspecified"
+    },
+    "Basal cell ca of the face|C4431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "C44310",
+        "display": "Basal cell carcinoma of skin of unspecified parts of face"
+    },
+    "Basilar Compression|G450": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G450",
+        "display": "Vertebro-basilar artery syndrome"
+    },
+    "Benign Breast Mass|D24": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D249",
+        "display": "Benign neoplasm of unspecified breast"
+    },
+    "Benign essential hypertension|I100": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I10",
+        "display": "Essential (primary) hypertension"
+    },
+    "Benign Paroxysmal Positional Vertigo|H811": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H8110",
+        "display": "Benign paroxysmal vertigo, unspecified ear"
+    },
+    "Bertolotti’s Syndrome Right L5 Transverse Sacralization.|Q764": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q7649",
+        "display": "Other congenital malformations of spine, not associated with scoliosis"
+    },
+    "Bilateral Carotid Artery Dissection|I7771": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7771",
+        "display": "Dissection of carotid artery"
+    },
+    "Bilateral hip dysplasia|Q6510": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q651",
+        "display": "Congenital dislocation of hip, bilateral"
+    },
+    "Bilateral Hip Impingement|M2485": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M24859",
+        "display": "Other specific joint derangements of unspecified hip, not elsewhere classified"
+    },
+    "Bilateral Temporomandibular Joint Disorder, unspecified|M26603": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26603",
+        "display": "Bilateral temporomandibular joint disorder, unspecified"
+    },
+    "Bile acid malabsorption|K908B": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K9089",
+        "display": "Other intestinal malabsorption"
+    },
+    "Binge Eating Disorder|F508": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F5081",
+        "display": "Binge eating disorder"
+    },
+    "Binocular vision dysfunction|H533": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H5330",
+        "display": "Unspecified disorder of binocular vision"
+    },
+    "Binocular Vision Dysfunction|H539": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H539",
+        "display": "Unspecified visual disturbance"
+    },
+    "Bipolar disorder|F31": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F319",
+        "display": "Bipolar disorder, unspecified"
+    },
+    "Bipolar Personality Disorder|F31": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F319",
+        "display": "Bipolar disorder, unspecified"
+    },
+    "Bone Spurs|M2570": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2570",
+        "display": "Osteophyte, unspecified joint"
+    },
+    "Bowel Obstruction|K5660": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K56609",
+        "display": "Unspecified intestinal obstruction, unspecified as to partial versus complete obstruction"
+    },
+    "Brainstem Injury|S06380A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S06380A",
+        "display": "Contusion, laceration, and hemorrhage of brainstem without loss of consciousness, initial encounter"
+    },
+    "Breast cancer|C50": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "C50919",
+        "display": "Malignant neoplasm of unspecified site of unspecified female breast"
+    },
+    "Breast Implant Illness|T8549": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T8549XA",
+        "display": "Other mechanical complication of breast prosthesis and implant, initial encounter"
+    },
+    "Breast implant Illness|t8549XA": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T8549XA",
+        "display": "Other mechanical complication of breast prosthesis and implant, initial encounter"
+    },
+    "Broken tailbone|S322": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S322XXS",
+        "display": "Fracture of coccyx, sequela"
+    },
+    "Bruising at incision sites|L763": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L7632",
+        "display": "Postprocedural hematoma of skin and subcutaneous tissue following other procedure"
+    },
+    "Bruxism|G4763": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4763",
+        "display": "Sleep related bruxism"
+    },
+    "Budged disc|M511": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M519",
+        "display": "Unspecified thoracic, thoracolumbar and lumbosacral intervertebral disc disorder"
+    },
+    "Burning mouth syndrome|K146": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K146",
+        "display": "Glossodynia"
+    },
+    "Bursitis|M7060": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M7060",
+        "display": "Trochanteric bursitis, unspecified hip"
+    },
+    "C1-C2 instability|S1312": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S13120S",
+        "display": "Subluxation of C1/C2 cervical vertebrae, sequela"
+    },
+    "Calcified Lung Nodules|R918": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R918",
+        "display": "Other nonspecific abnormal finding of lung field"
+    },
+    "Calcium deficiency|K909": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K909",
+        "display": "Intestinal malabsorption, unspecified"
+    },
+    "Campylobacter Sepsis|A419": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A419",
+        "display": "Sepsis, unspecified organism"
+    },
+    "Carotid artery dissection|I7771": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7771",
+        "display": "Dissection of carotid artery"
+    },
+    "CD4 T Lymphocyte Deficiency|D72810": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D72810",
+        "display": "Lymphocytopenia"
+    },
+    "Celiac Disease.|K9004": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K900",
+        "display": "Celiac disease"
+    },
+    "Celiac Disease|K9004": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K900",
+        "display": "Celiac disease"
+    },
+    "Cellulitis|N610": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N610",
+        "display": "Mastitis without abscess"
+    },
+    "Cervical and Lumbar Herniations|M5020": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5020",
+        "display": "Other cervical disc displacement, unspecified cervical region"
+    },
+    "Cervical degenerative spondylosis|M4302": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4302",
+        "display": "Spondylolysis, cervical region"
+    },
+    "Cervical disc herniation at C3-C4|M5020": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5020",
+        "display": "Other cervical disc displacement, unspecified cervical region"
+    },
+    "Cervical Instability|M532X1": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X1",
+        "display": "Spinal instabilities, occipito-atlanto-axial region"
+    },
+    "Cervical Lymphadenopathy|R590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R590",
+        "display": "Localized enlarged lymph nodes"
+    },
+    "Cervical lymphadenopathy|R590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R590",
+        "display": "Localized enlarged lymph nodes"
+    },
+    "Cervical polyp|N841": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N841",
+        "display": "Polyp of cervix uteri"
+    },
+    "Chiari 1 Malformation|Q070": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q0700",
+        "display": "Arnold-Chiari syndrome without spina bifida or hydrocephalus"
+    },
+    "Chiari Malformation Type 1|Q070": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q0700",
+        "display": "Arnold-Chiari syndrome without spina bifida or hydrocephalus"
+    },
+    "Chiari Malformation|Q070": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q0700",
+        "display": "Arnold-Chiari syndrome without spina bifida or hydrocephalus"
+    },
+    "Chiari malformation|Q070": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q0700",
+        "display": "Arnold-Chiari syndrome without spina bifida or hydrocephalus"
+    },
+    "Chilblains|T691": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T691XXS",
+        "display": "Chilblains, sequela"
+    },
+    "Cholelithiasis|K80": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K8020",
+        "display": "Calculus of gallbladder without cholecystitis without obstruction"
+    },
+    "Cholesteatoma|H7190": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H7190",
+        "display": "Unspecified cholesteatoma, unspecified ear"
+    },
+    "Choroidal Nevus|D313": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D3130",
+        "display": "Benign neoplasm of unspecified choroid"
+    },
+    "Chronic Air Hunger|R064": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R064",
+        "display": "Hyperventilation"
+    },
+    "Chronic dry eye|H0412": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H04129",
+        "display": "Dry eye syndrome of unspecified lacrimal gland"
+    },
+    "chronic dry eye|H0412": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H04129",
+        "display": "Dry eye syndrome of unspecified lacrimal gland"
+    },
+    "Chronic Epstein-Barr Virus Infection|B279": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B2710",
+        "display": "Cytomegaloviral mononucleosis without complications"
+    },
+    "Chronic Gastritis|K295": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K2950",
+        "display": "Unspecified chronic gastritis without bleeding"
+    },
+    "Chronic GI with prior Helicobacter Pylori|K295": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K2950",
+        "display": "Unspecified chronic gastritis without bleeding"
+    },
+    "Chronic Headache|G44229": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G44229",
+        "display": "Chronic tension-type headache, not intractable"
+    },
+    "Chronic Inflammation|R659": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R6510",
+        "display": "Systemic inflammatory response syndrome (SIRS) of non-infectious origin without acute organ dysfunction"
+    },
+    "Chronic inflammatory response syndrome|R65": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R6510",
+        "display": "Systemic inflammatory response syndrome (SIRS) of non-infectious origin without acute organ dysfunction"
+    },
+    "Chronic joint pain|M255": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2550",
+        "display": "Pain in unspecified joint"
+    },
+    "Chronic migraines|G437": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43709",
+        "display": "Chronic migraine without aura, not intractable, without status migrainosus"
+    },
+    "Chronic Migraine|G439": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43709",
+        "display": "Chronic migraine without aura, not intractable, without status migrainosus"
+    },
+    "Chronic mononucleosis infection|B278": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B2780",
+        "display": "Other infectious mononucleosis without complication"
+    },
+    "chronic multifactorial pain|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Chronic Multifocal Osteomyelitis|M8627": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M8630",
+        "display": "Chronic multifocal osteomyelitis, unspecified site"
+    },
+    "Chronic Nerve Pain|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Chronic pain syndrome|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G894",
+        "display": "Chronic pain syndrome"
+    },
+    "Chronic Pain Syndrome|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G894",
+        "display": "Chronic pain syndrome"
+    },
+    "Chronic Pain with Elevated Inflammation Markers|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Chronic pain|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Chronic Pain|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "chronic pain|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Chronic pain|R522": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Chronic Regional Pain Syndrome|G905": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G9059",
+        "display": "Complex regional pain syndrome I of other specified site"
+    },
+    "Chronic Shoulder Pain|M2551": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25519",
+        "display": "Pain in unspecified shoulder"
+    },
+    "Chronic sinusitis|J32": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J328",
+        "display": "Other chronic sinusitis"
+    },
+    "Chronic Subluxations|M244": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2440",
+        "display": "Recurrent dislocation, unspecified joint"
+    },
+    "Chronic tension headaches|G4422": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G44229",
+        "display": "Chronic tension-type headache, not intractable"
+    },
+    "Chronic urinary retention|N319": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N319",
+        "display": "Neuromuscular dysfunction of bladder, unspecified"
+    },
+    "Chronic Vestibulopathy|H818": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H818X9",
+        "display": "Other disorders of vestibular function, unspecified ear"
+    },
+    "Chronic Widespread ain|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Classical migraines|G431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43109",
+        "display": "Migraine with aura, not intractable, without status migrainosus"
+    },
+    "Clostridium difficile colitis|A047": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A0472",
+        "display": "Enterocolitis due to Clostridium difficile, not specified as recurrent"
+    },
+    "Cluster Headaches|G440": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G44019",
+        "display": "Episodic cluster headache, not intractable"
+    },
+    "Coccyx fracture|S322": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S322XXS",
+        "display": "Fracture of coccyx, sequela"
+    },
+    "cognitive difficulties|R4184": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R4189",
+        "display": "Other symptoms and signs involving cognitive functions and awareness"
+    },
+    "COL4A1 Gene mutation|I678": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I67858",
+        "display": "Other hereditary cerebrovascular disease"
+    },
+    "Complex Arnold Chiari malformation|Q070": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q0700",
+        "display": "Arnold-Chiari syndrome without spina bifida or hydrocephalus"
+    },
+    "Complex migraine w/ aura|G431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43109",
+        "display": "Migraine with aura, not intractable, without status migrainosus"
+    },
+    "Complex Post-Traumatic Stress Disorder|F431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4310",
+        "display": "Post-traumatic stress disorder, unspecified"
+    },
+    "Compulsive Overeating|F508": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F50819",
+        "display": "Binge eating disorder, unspecified"
+    },
+    "Concussion|S060": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S060X0S",
+        "display": "Concussion without loss of consciousness, sequela"
+    },
+    "Confusion|R410": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R410",
+        "display": "Disorientation, unspecified"
+    },
+    "congenital ptosis|Q100": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q100",
+        "display": "Congenital ptosis"
+    },
+    "Congestive heart failure with reduced ejection fraction|I502": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I5022",
+        "display": "Chronic systolic (congestive) heart failure"
+    },
+    "Constipation|K590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K5900",
+        "display": "Constipation, unspecified"
+    },
+    "Coronary artery disease|I25": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I2510",
+        "display": "Atherosclerotic heart disease of native coronary artery without angina pectoris"
+    },
+    "Coronary Artery Disease|I251": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I2510",
+        "display": "Atherosclerotic heart disease of native coronary artery without angina pectoris"
+    },
+    "Cotton-wool spot in right eye|H34833": {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "H3581",
+            "display": "Retinal edema"
+        },
+        
+    "Cranial Cervical Instability CCI|M532X1": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X1",
+        "display": "Spinal instabilities, occipito-atlanto-axial region"
+    },
+    "Cranial Cervical Instability|M532X1": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X1",
+        "display": "Spinal instabilities, occipito-atlanto-axial region"
+    },
+    "Craniocervical Instability|M432": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X2",
+        "display": "Spinal instabilities, cervical region"
+    },
+    "craniocervical Instability|M4329": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X2",
+        "display": "Spinal instabilities, cervical region"
+    },
+    "Craniocervical instability|M532x2": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X2",
+        "display": "Spinal instabilities, cervical region"
+    },
+    "Crohn's disease|K50": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K5090",
+        "display": "Crohn's disease, unspecified, without complications"
+    },
+    "Crohn's disease|K509": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K5090",
+        "display": "Crohn's disease, unspecified, without complications"
+    },
+    "Crystal arthropathy|M119": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M119",
+        "display": "Crystal arthropathy, unspecified"
+    },
+    "Cubital Tunnel syndrome|G562": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G5620",
+        "display": "Lesion of ulnar nerve, unspecified upper limb"
+    },
+    "Cubital tunnel syndrome|G5620": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G5620",
+        "display": "Lesion of ulnar nerve, unspecified upper limb"
+    },
+    "Cubital Tunnel Syndrome|G575": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G5750",
+        "display": "Tarsal tunnel syndrome, unspecified lower limb"
+    },
+    "Cyclic Vomiting Syndrome|G43A0": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43A0",
+        "display": "Cyclical vomiting, not intractable"
+    },
+    "cyclic vomiting|G43A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43A0",
+        "display": "Cyclical vomiting, in migraine, not intractable"
+    },
+    "Cyst of both ovaries|N8320": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N83209",
+        "display": "Unspecified ovarian cyst, unspecified side"
+    },
+    "Cyst of the kidney|N281": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N281",
+        "display": "Cyst of kidney, acquired"
+    },
+    "Cystocele|N811": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N8110",
+        "display": "Cystocele, unspecified"
+    },
+    "Dairy Allergy and Other Food Sensitivities|Z9101": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z91011",
+        "display": "Allergy to milk products"
+    },
+    "Decreased Appetite|R630": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R630",
+        "display": "Anorexia"
+    },
+    "Decreased appetite|R630": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R630",
+        "display": "Anorexia"
+    },
+    "Deep Vein Thrombosis|I824": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I82409",
+        "display": "Acute embolism and thrombosis of unspecified deep veins of unspecified lower extremity"
+    },
+    "Deep Vein Thrombosis|I8240": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I82409",
+        "display": "Acute embolism and thrombosis of unspecified deep veins of unspecified lower extremity"
+    },
+    "Degenerative disc disease of cervical, thoracic and lumbar discs|M513": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5030",
+        "display": "Other cervical disc degeneration, unspecified cervical region"
+    },
+    "Dental Crowding|K074": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2631",
+        "display": "Crowding of fully erupted teeth"
+    },
+    "Dental Problems|K00": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K089",
+        "display": "Disorder of teeth and supporting structures, unspecified"
+    },
+    "Dental problem|K088": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K089",
+        "display": "Disorder of teeth and supporting structures, unspecified"
+    },
+    "Dependent Personality Disorder|F607": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F607",
+        "display": "Dependent personality disorder"
+    },
+    "Depression|F32": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F32A",
+        "display": "Depression, unspecified"
+    },
+    "depression|F32": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F32A",
+        "display": "Depression, unspecified"
+    },
+    "Depression|F33": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F32A",
+        "display": "Depression, unspecified"
+    },
+    "Depression|F399": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F32A",
+        "display": "Depression, unspecified"
+    },
+    "depression|FF32A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F32A",
+        "display": "Depression, unspecified"
+    },
+    "Diabetes|E14": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E119",
+        "display": "Type 2 diabetes mellitus without complications"
+    },
+    "Dietary Intolerances|K904": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z91018",
+        "display": "Allergy to other foods"
+    },
+    "Diplopia|H532": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H532",
+        "display": "Diplopia"
+    },
+    "Disc disease|M512": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M519",
+        "display": "Unspecified thoracic, thoracolumbar and lumbosacral intervertebral disc disorder"
+    },
+    "Dizziness and giddiness|R421": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R42",
+        "display": "Dizziness and giddiness"
+    },
+    "Duodenitis|K298": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K2980",
+        "display": "Duodenitis without bleeding"
+    },
+    "Duputryens contracture|M720": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M720",
+        "display": "Palmar fascial fibromatosis [Dupuytren]"
+    },
+    "Dupuytren's Contracture|M720": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M720",
+        "display": "Palmar fascial fibromatosis [Dupuytren]"
+    },
+    "dysautonomia|G90": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G909",
+        "display": "Disorder of the autonomic nervous system, unspecified"
+    },
+    "Dysautonomia|G90": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G909",
+        "display": "Disorder of the autonomic nervous system, unspecified"
+    },
+    "Dyspareunia|N941": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N9410",
+        "display": "Unspecified dyspareunia"
+    },
+    "Dysphagia|R131": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R1310",
+        "display": "Dysphagia, unspecified"
+    },
+    "Dyspnea|R060": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R0600",
+        "display": "Dyspnea, unspecified"
+    },
+    "Dystonia|G24": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G249",
+        "display": "Dystonia, unspecified"
+    },
+    "Eagle Syndrome|M8588": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M8588",
+        "display": "Other specified disorders of bone density and structure, other site"
+    },
+    "Early menopause|E2831": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E28310",
+        "display": "Symptomatic premature menopause"
+    },
+    "Ectopic pregnancy|O009": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O0090",
+        "display": "Unspecified ectopic pregnancy without intrauterine pregnancy"
+    },
+    "Eczema|l20": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L309",
+        "display": "Dermatitis, unspecified"
+    },
+    "Eczema|L200": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L200",
+        "display": "Besnier's prurigo"
+    },
+    "Elavated inflammatory markers Elevated Erythrocyte Sedimentation Rate|R700": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R700",
+        "display": "Elevated erythrocyte sedimentation rate"
+    },
+    "Elevated Body Mass Index|Z684": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E669",
+        "display": "Obesity, unspecified"
+    },
+    "Elevated Ferritin|R7989]": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R7989",
+        "display": "Other specified abnormal findings of blood chemistry"
+    },
+    "Elevated inflammatory markers|R700": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R700",
+        "display": "Elevated erythrocyte sedimentation rate"
+    },
+    "Elevated platelet count|D7583": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D75839",
+        "display": "Thrombocytosis, unspecified"
+    },
+    "Encounter for care and examination of lactating mother|Z391": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z391",
+        "display": "Encounter for care and examination of lactating mother"
+    },
+    "endometriosis|N80": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N809",
+        "display": "Endometriosis, unspecified"
+    },
+    "endometriosis|Z0382": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N8000",
+        "display": "Endometriosis of the uterus, unspecified"
+    },
+    "Enlarged Lymph nodes in neck|R590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R590",
+        "display": "Localized enlarged lymph nodes"
+    },
+    "Episodic right hip subluxation|S73001": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S73001S",
+        "display": "Unspecified subluxation of right hip, sequela"
+    },
+    "Epistaxis|R040": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R040",
+        "display": "Epistaxis"
+    },
+    "Epstein-Barr virus infection|B270": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B2700",
+        "display": "Gammaherpesviral mononucleosis without complication"
+    },
+    "Erosive Gastritis|k2960": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K2960",
+        "display": "Other gastritis without bleeding"
+    },
+    "Esophageal scarring with stricture|K222": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K222",
+        "display": "Esophageal obstruction"
+    },
+    "esophagitis|K2090": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K2090",
+        "display": "Esophagitis, unspecified without bleeding"
+    },
+    "Eustachian Tube Dysfunction.|H699": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H6990",
+        "display": "Unspecified Eustachian tube disorder, unspecified ear"
+    },
+    "Eustachian Tube Dysfunction|H69": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H6990",
+        "display": "Unspecified Eustachian tube disorder, unspecified ear"
+    },
+    "Eustachian Tube Dysfunction|H699": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H6990",
+        "display": "Unspecified Eustachian tube disorder, unspecified ear"
+    },
+    "Eye examination|Z010": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z0100",
+        "display": "Encounter for examination of eyes and vision without abnormal findings"
+    },
+    "Facial migraine|G433": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43909",
+        "display": "Migraine, unspecified, not intractable, without status migrainosus"
+    },
+    "Failure to Thrive|R627": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R627",
+        "display": "Adult failure to thrive"
+    },
+    "Femoroacetabular impingement|M25851": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25851",
+        "display": "Other specified joint disorders, right hip"
+    },
+    "Fibroadenoma of the breast|D249": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D249",
+        "display": "Benign neoplasm of unspecified breast"
+    },
+    "Fibrocystic breast disease|N601": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N6019",
+        "display": "Diffuse cystic mastopathy of unspecified breast"
+    },
+    "Fibromyalgia|Fibromyalgia": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M797",
+        "display": "Fibromyalgia"
+    },
+    "Fibromyalgia|m357": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M357",
+        "display": "Hypermobility syndrome"
+    },
+    "Finger swelling|L0301": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L03019",
+        "display": "Cellulitis of unspecified finger"
+    },
+    "Flat feet|M214": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2140",
+        "display": "Flat foot [pes planus] (acquired), unspecified foot"
+    },
+    "Folate Deficiency|D52": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D529",
+        "display": "Folate deficiency anemia, unspecified"
+    },
+    "Food allergies|Z9101": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z91018",
+        "display": "Allergy to other foods"
+    },
+    "Food Allergies|Z9101": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z91018",
+        "display": "Allergy to other foods"
+    },
+    "food and environmental allergies|Z91028": {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "T781XXS",
+            "display": "Other adverse food reactions, not elsewhere classified, sequela"
+        },
+    "Food sensitivities|K904": {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "T781XXS",
+            "display": "Other adverse food reactions, not elsewhere classified, sequela"
+        },
+    "food sensitivities|Z9101": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z91018",
+        "display": "Allergy to other foods"
+    },
+    "Frequent falls|R296": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R296",
+        "display": "Repeated falls"
+    },
+    "frequent subluxations|M244": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2440",
+        "display": "Recurrent dislocation, unspecified joint"
+    },
+    "gallbladder removal|Z905": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z905",
+        "display": "Acquired absence of kidney"
+    },
+    "Gallstones|K80": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K8020",
+        "display": "Calculus of gallbladder without cholecystitis without obstruction"
+    },
+    "Ganglion Cyst, Left Thumb|M64442": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M67442",
+        "display": "Ganglion, left hand"
+    },
+    "Gastritis|K295": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K2970",
+        "display": "Gastritis, unspecified, without bleeding"
+    },
+    "Gastritis|K297": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K2970",
+        "display": "Gastritis, unspecified, without bleeding"
+    },
+    "Gastro-esophageal reflux disease|K21": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K219",
+        "display": "Gastro-esophageal reflux disease without esophagitis"
+    },
+    "Gastro-esophageal reflux|K21": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K219",
+        "display": "Gastro-esophageal reflux disease without esophagitis"
+    },
+    "Gastro-oesophageal reflux disease|K21": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K219",
+        "display": "Gastro-esophageal reflux disease without esophagitis"
+    },
+    "Gastroesophageal Reflux Disease|K21": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K219",
+        "display": "Gastro-esophageal reflux disease without esophagitis"
+    },
+    "Gastrointestinal Evaluation For New Defecatory Dysfunction|Z1381": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R194",
+        "display": "Change in bowel habit"
+    },
+    "Gaucher disease|E7522": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E7522",
+        "display": "Gaucher disease"
+    },
+    "Generalized Anxiety Disorder|G411": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F411",
+        "display": "Generalized anxiety disorder"
+    },
+    "Generalized chronic pain|G892": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8929",
+        "display": "Other chronic pain"
+    },
+    "Genetic/Connective Tissue Evaluation|Z137": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M359",
+        "display": "Systemic involvement of connective tissue, unspecified"
+    },
+    "Genital Herpes simplex virus|A600": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A6000",
+        "display": "Herpesviral infection of urogenital system, unspecified"
+    },
+    "Gestational diabetes|O2441": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O24419",
+        "display": "Gestational diabetes mellitus in pregnancy, unspecified control"
+    },
+    "GI Surveillance/ Symptoms|R199": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K929",
+        "display": "Disease of digestive system, unspecified"
+    },
+    "Gingivitis|K050": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K0500",
+        "display": "Acute gingivitis, plaque induced"
+    },
+    "Glaucoma|H400": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H409",
+        "display": "Unspecified glaucoma"
+    },
+    "Gluteus Medius Tendinosis of Right Hip|M7601": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M7601",
+        "display": "Gluteal tendinitis, right hip"
+    },
+    "Gout arthropathy|M10": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M109",
+        "display": "Gout, unspecified"
+    },
+    "Gout|M10": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M109",
+        "display": "Gout, unspecified"
+    },
+    "Hair loss|L65": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L659",
+        "display": "Nonscarring hair loss, unspecified"
+    },
+    "Hallux rigidus|M202": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2020",
+        "display": "Hallux rigidus, unspecified foot"
+    },
+    "Hallux valgus|M201": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2010",
+        "display": "Hallux valgus (acquired), unspecified foot"
+    },
+    "Hand arthralgias|M2554": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25549",
+        "display": "Pain in joints of unspecified hand"
+    },
+    "Hand stiffness|M2564": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25649",
+        "display": "Stiffness of unspecified hand, not elsewhere classified"
+    },
+    "Headache|G4452": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4452",
+        "display": "New daily persistent headache (NDPH)"
+    },
+    "Heart Rate changes|R0099": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R009",
+        "display": "Unspecified abnormalities of heart beat"
+    },
+    "Heat fatigue, transient, initial encounter|T676XXA": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T676XXA",
+        "display": "Heat fatigue, transient, initial encounter"
+    },
+    "hemangioma of intracranial structures|D1802": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D1802",
+        "display": "Hemangioma of intracranial structures"
+    },
+    "Hemiplegic Migraines|G434": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43409",
+        "display": "Hemiplegic migraine, not intractable, without status migrainosus"
+    },
+    "Hemorrhagic Ovarian Cyst|N830": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N8300",
+        "display": "Follicular cyst of ovary, unspecified side"
+    },
+    "Hepatitis C|B192": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B1920",
+        "display": "Unspecified viral hepatitis C without hepatic coma"
+    },
+    "Herniated disc|M5127": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5127",
+        "display": "Other intervertebral disc displacement, lumbosacral region"
+    },
+    "Herpes Simplex Virus 2|A600": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A6000",
+        "display": "Herpesviral infection of urogenital system, unspecified"
+    },
+    "Herpes Simplex Virus type 1|B00": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B009",
+        "display": "Herpesviral infection, unspecified"
+    },
+    "Hiatal hernia|K40": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K449",
+        "display": "Diaphragmatic hernia without obstruction or gangrene"
+    },
+    "Hiatal Hernia|K40": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K449",
+        "display": "Diaphragmatic hernia without obstruction or gangrene"
+    },
+    "Hiatal hernia|K44": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K449",
+        "display": "Diaphragmatic hernia without obstruction or gangrene"
+    },
+    "Hiatal Hernia|K45": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K449",
+        "display": "Diaphragmatic hernia without obstruction or gangrene"
+    },
+    "High cholesterol|E78": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E785",
+        "display": "Hyperlipidemia, unspecified"
+    },
+    "High homocysteine|E7211": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E7211",
+        "display": "Homocystinuria"
+    },
+    "High-frequency hearing loss|H919": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H9190",
+        "display": "Unspecified hearing loss, unspecified ear"
+    },
+    "Hip bursitis|M707": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M7070",
+        "display": "Other bursitis of hip, unspecified hip"
+    },
+    "Hip Bursitis|M7070": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M7070",
+        "display": "Other bursitis of hip, unspecified hip"
+    },
+    "Hip dysplasia|Q659": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q659",
+        "display": "Congenital deformity of hip, unspecified"
+    },
+    "Hirsutism|L680": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L680",
+        "display": "Hirsutism"
+    },
+    "Histamine sensitivity|T781": {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "T781XXS",
+            "display": "Other adverse food reactions, not elsewhere classified, sequela"
+        },
+    "History of  Indolent Tuberculosis|Z8615": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z8615",
+        "display": "Personal history of latent tuberculosis infection"
+    },
+    "History of Carpal Tunnel Syndrome|G560": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G5600",
+        "display": "Carpal tunnel syndrome, unspecified upper limb"
+    },
+    "History of joint dislocations|Z87828": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z87828",
+        "display": "Personal history of other (healed) physical injury and trauma"
+    },
+    "History of low cortisol levels|E2710": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E2740",
+        "display": "Unspecified adrenocortical insufficiency"
+    },
+    "History of Mumps|B26": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z8619",
+        "display": "Personal history of other infectious and parasitic diseases"
+    },
+    "History of Pancreatitis|K859": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z8719",
+        "display": "Personal history of other diseases of the digestive system"
+    },
+    "History of pathologic fracture of right tibia|M84461A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M84461A",
+        "display": "Pathological fracture, right tibia, initial encounter for fracture"
+    },
+    "History of postpartum hemorrhage|O72": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z8759",
+        "display": "Personal history of other complications of pregnancy, childbirth and the puerperium"
+    },
+    "History of Sepsis|A419": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A419",
+        "display": "Sepsis, unspecified organism"
+    },
+    "History of spinal issues|G959": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G959",
+        "display": "Disease of spinal cord, unspecified"
+    },
+    "Hives|L50": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L509",
+        "display": "Urticaria, unspecified"
+    },
+    "Human Leukocyte Antigen B27 positive|M45": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R768",
+        "display": "Other specified abnormal immunological findings in serum"
+    },
+    "Hydrocele|N433": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N433",
+        "display": "Hydrocele, unspecified"
+    },
+    "Hyper-IgE syndrome|D824": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D824",
+        "display": "Hyperimmunoglobulin E [IgE] syndrome"
+    },
+    "Hypercholesterolemia|E780": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E7800",
+        "display": "Pure hypercholesterolemia, unspecified"
+    },
+    "Hyperhidrosis|L745": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L74519",
+        "display": "Primary focal hyperhidrosis, unspecified"
+    },
+    "Hyperinsulinemia|E1610": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E161",
+        "display": "Other hypoglycemia"
+    },
+    "Hyperlipidemia|E78": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E785",
+        "display": "Hyperlipidemia, unspecified"
+    },
+    "Hypermobility, unspecified joint|M2579": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M357",
+        "display": "Hypermobility syndrome"
+    },
+    "Hyperplasia|N850": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R899",
+        "display": "Unspecified abnormal finding in specimens from other organs, systems and tissues"
+    },
+    "Hypersomnia|G471": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4710",
+        "display": "Hypersomnia, unspecified"
+    },
+    "hypersomnia|G471": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4710",
+        "display": "Hypersomnia, unspecified"
+    },
+    "Hyperthyroidism|E05": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E0590",
+        "display": "Thyrotoxicosis, unspecified without thyrotoxic crisis or storm"
+    },
+    "Hypertrophic Cardiomyopathy|i422": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I422",
+        "display": "Other hypertrophic cardiomyopathy"
+    },
+    "Hypertrophic scarring|L919": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L919",
+        "display": "Hypertrophic disorder of the skin, unspecified"
+    },
+    "Hypophosphatemia|E8330": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E8330",
+        "display": "Disorder of phosphorus metabolism, unspecified"
+    },
+    "hypopigmentation on face|L819": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L819",
+        "display": "Disorder of pigmentation, unspecified"
+    },
+    "Hypothyroidism|E03": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E039",
+        "display": "Hypothyroidism, unspecified"
+    },
+    "Iliac Artery Dissection|I77729": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7772",
+        "display": "Dissection of iliac artery"
+    },
+    "Influenza A|J101": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J101",
+        "display": "Influenza due to other identified influenza virus with other respiratory manifestations"
+    },
+    "Insomnia|G470": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4700",
+        "display": "Insomnia, unspecified"
+    },
+    "Insulin-Dependent Diabetes Mellitus|E10": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z794",
+        "display": "Long term (current) use of insulin"
+    },
+    "Intermittent Constipation|K590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K5900",
+        "display": "Constipation, unspecified"
+    },
+    "intermittent sciatica|M543": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5430",
+        "display": "Sciatica, unspecified side"
+    },
+    "Interstitial Cystitis|N301": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N3010",
+        "display": "Interstitial cystitis (chronic) without hematuria"
+    },
+    "Interstitial cystitis|N301": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N3010",
+        "display": "Interstitial cystitis (chronic) without hematuria"
+    },
+    "Interstitial Pulmonary Fibrosis|J8410": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J8410",
+        "display": "Pulmonary fibrosis, unspecified"
+    },
+    "Intestinal malabsorption|K909": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K909",
+        "display": "Intestinal malabsorption, unspecified"
+    },
+    "Intolerance to various psychotropic medications|T438X5A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T438X5A",
+        "display": "Adverse effect of other psychotropic drugs, initial encounter"
+    },
+    "Irritable Bowel Syndrome|K58": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K589",
+        "display": "Irritable bowel syndrome, unspecified"
+    },
+    "J-Tube Site Pain / Granulation|K9429": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K9429",
+        "display": "Other complications of gastrostomy"
+    },
+    "Joint derangement|M249": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M249",
+        "display": "Joint derangement, unspecified"
+    },
+    "Joint Hypermobility|M35": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M357",
+        "display": "Hypermobility syndrome"
+    },
+    "Joint instability|M253": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2530",
+        "display": "Other instability, unspecified joint"
+    },
+    "Joint pain and swelling|M255": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2550",
+        "display": "Pain in unspecified joint"
+    },
+    "Joint pain|M255": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2550",
+        "display": "Pain in unspecified joint"
+    },
+    "joint pain|M255": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2550",
+        "display": "Pain in unspecified joint"
+    },
+    "Juvenile Idiopathic Arthritis|M089": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M0890",
+        "display": "Juvenile arthritis, unspecified, unspecified site"
+    },
+    "Juvenile idiopathic arthritis|M089": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M0890",
+        "display": "Juvenile arthritis, unspecified, unspecified site"
+    },
+    "Juvenile Rheumatoid Arthritis|M080": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M0800",
+        "display": "Unspecified juvenile rheumatoid arthritis of unspecified site"
+    },
+    "Kidney Cyst|N281": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N281",
+        "display": "Cyst of kidney, acquired"
+    },
+    "Knee Osteoarthritis|M17": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M179",
+        "display": "Osteoarthritis of knee, unspecified"
+    },
+    "Knee pain|M2556": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25569",
+        "display": "Pain in unspecified knee"
+    },
+    "L1 lumbar L2 lumbar vertebra fractures|S3201": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S32019S",
+        "display": "Unspecified fracture of first lumbar vertebra, sequela"
+    },
+    "Lactose Intolerance|E73": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E739",
+        "display": "Lactose intolerance, unspecified"
+    },
+    "Lacunar Pontine Cerebrovascular Accident|I6831": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I63531",
+        "display": "Cerebral infarction due to unspecified occlusion or stenosis of right posterior cerebral artery"
+    },
+    "Latent Tuberculosis|Z227": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z227",
+        "display": "Latent tuberculosis"
+    },
+    "Laxity Joints|M242": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2420",
+        "display": "Disorder of ligament, unspecified site"
+    },
+    "Leaky gut syndrome|K909": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K909",
+        "display": "Intestinal malabsorption, unspecified"
+    },
+    "Left arm fracture|S5290XA": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S5290XA",
+        "display": "Unspecified fracture of unspecified forearm, initial encounter for closed fracture"
+    },
+    "Left common carotid artery stenosis|I6522": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I6522",
+        "display": "Occlusion and stenosis of left carotid artery"
+    },
+    "lesion of the ulnar nerve, left upper limb|G5622": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G5622",
+        "display": "Lesion of ulnar nerve, left upper limb"
+    },
+    "Leukopenia|D72818": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D72818",
+        "display": "Other decreased white blood cell count"
+    },
+    "Ligament laxity|M242": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2420",
+        "display": "Disorder of ligament, unspecified site"
+    },
+    "Lipedema lipomatosis|E8828": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E882",
+        "display": "Lipomatosis, not elsewhere classified"
+    },
+    "Lipedema|E78": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E882",
+        "display": "Lipomatosis, not elsewhere classified"
+    },
+    "listeriosis|A32": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A329",
+        "display": "Listeriosis, unspecified"
+    },
+    "Lobular Carcinoma in Situ|D050": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D0500",
+        "display": "Lobular carcinoma in situ of unspecified breast"
+    },
+    "Loss of Appetite|F5089": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F5089",
+        "display": "Other specified eating disorder"
+    },
+    "Low appetite|R630": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R630",
+        "display": "Anorexia"
+    },
+    "Low Appetite|R630": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R630",
+        "display": "Anorexia"
+    },
+    "Low back cyst|M7138": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M7138",
+        "display": "Other bursal cyst, other site"
+    },
+    "Lyme Disease|A692": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A6920",
+        "display": "Lyme disease, unspecified"
+    },
+    "Lyme disease|A692": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A6920",
+        "display": "Lyme disease, unspecified"
+    },
+    "Lymphadenopathy|R59": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R599",
+        "display": "Enlarged lymph nodes, unspecified"
+    },
+    "Lymphadenopathy|R599": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R599",
+        "display": "Enlarged lymph nodes, unspecified"
+    },
+    "Macrocytic anemia|D6411": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D531",
+        "display": "Other megaloblastic anemias, not elsewhere classified"
+    },
+    "Major Depressive Disorder|F32": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F329",
+        "display": "Major depressive disorder, single episode, unspecified"
+    },
+    "Malabsorption|K909": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K909",
+        "display": "Intestinal malabsorption, unspecified"
+    },
+    "Malaise|R53": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R5381",
+        "display": "Other malaise"
+    },
+    "malignancy risk|Z150": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z1509",
+        "display": "Genetic susceptibility to other malignant neoplasm"
+    },
+    "Malrotated kidneys|Q632": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q632",
+        "display": "Ectopic kidney"
+    },
+    "Marfan Syndrome|Q8740": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q8740",
+        "display": "Marfan's syndrome, unspecified"
+    },
+    "Markedley elevated rheumtoid Factor|R7610": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R760",
+        "display": "Raised antibody titer"
+    },
+    "Mastocytosis evaluation|D4702": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D4702",
+        "display": "Systemic mastocytosis"
+    },
+    "Meningitis|G039": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G039",
+        "display": "Meningitis, unspecified"
+    },
+    "Menstrual Issues|N92": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N926",
+        "display": "Irregular menstruation, unspecified"
+    },
+    "Menstrual-related anemia|D500": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D500",
+        "display": "Iron deficiency anemia secondary to blood loss (chronic)"
+    },
+    "Metabolic myopathy|G713": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G713",
+        "display": "Mitochondrial myopathy, not elsewhere classified"
+    },
+    "Methylenetetrahydrofolate Reductase Deficiency Mutation specifics unknown|E7211": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E7211",
+        "display": "Homocystinuria"
+    },
+    "Methylenetetrahydrofolate Reductase Mutation|E721": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z8481",
+        "display": "Family history of carrier of genetic disease"
+    },
+    "Mid-Systolic Click|R0120": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R011",
+        "display": "Cardiac murmur, unspecified"
+    },
+    "Migraine Headaches w/o aura|G430": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Migraine Headache|G43": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Migraine Headache|G439": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Migraine with aura|G431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43109",
+        "display": "Migraine with aura, not intractable, without status migrainosus"
+    },
+    "Migraine with aura|G43119": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43119",
+        "display": "Migraine with aura, intractable, without status migrainosus"
+    },
+    "Migraines with aura|G431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43109",
+        "display": "Migraine with aura, not intractable, without status migrainosus"
+    },
+    "Migraines without aura|G430": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Migraines.|G439": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "migraines|G43": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "migraines|G439": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Migraine|G43": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Migraine|G439": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Mild aortic stenosis|I350": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I350",
+        "display": "Nonrheumatic aortic (valve) stenosis"
+    },
+    "Mild Asthma|J452": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J4520",
+        "display": "Mild intermittent asthma, uncomplicated"
+    },
+    "Mild Persistent Asthma|J453": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J4520",
+        "display": "Mild intermittent asthma, uncomplicated"
+    },
+    "Mild Thoracic Scoliosis|M413": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4182",
+        "display": "Other forms of scoliosis, cervical region"
+    },
+    "Mild thrombocytosis & slightly high hematocrit|R711": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R710",
+        "display": "Precipitous drop in hematocrit"
+    },
+    "Miserable Malalignment Syndrome|Q749": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q749",
+        "display": "Unspecified congenital malformation of limb(s)"
+    },
+    "Mobility Issues|Z740": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z7409",
+        "display": "Other reduced mobility"
+    },
+    "Mood fluctuations|F348": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R4586",
+        "display": "Emotional lability"
+    },
+    "Morton's Neuroma|G5760": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G5760",
+        "display": "Lesion of plantar nerve, unspecified lower limb"
+    },
+    "MTHFR Gene|E721": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z8481",
+        "display": "Family history of carrier of genetic disease"
+    },
+    "Multiple Bone Spurs|M2570": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2570",
+        "display": "Osteophyte, unspecified joint"
+    },
+    "Multiple fractures|T029": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T148XXS",
+        "display": "Other injury of unspecified body region, sequela"
+    },
+    "Multiple Musculoskeletal injuries|T07": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T07XXXS",
+        "display": "Unspecified multiple injuries, sequela"
+    },
+    "Multiple sclerosis|G359": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G35",
+        "display": "Multiple sclerosis"
+    },
+    "Multiple Sclerosis|G359": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G35",
+        "display": "Multiple sclerosis"
+    },
+    "Multple Uterine Fibroids|D25": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D259",
+        "display": "Leiomyoma of uterus, unspecified"
+    },
+    "Munchausen by proxy|F681": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F6810",
+        "display": "Factitious disorder, unspecified"
+    },
+    "Muscle Spasms|M6283": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M62838",
+        "display": "Other muscle spasm"
+    },
+    "Musculoskeletal Pain|R2991": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R2991",
+        "display": "Unspecified symptoms and signs involving the musculoskeletal system"
+    },
+    "Myasthenia Gravis|G700": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G7000",
+        "display": "Myasthenia gravis without (acute) exacerbation"
+    },
+    "Myasthenia Gravis|G709": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G709",
+        "display": "Myoneural disorder, unspecified"
+    },
+    "Myopia|H521": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H5210",
+        "display": "Myopia, unspecified eye"
+    },
+    "Nail changes|L60": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L609",
+        "display": "Nail disorder, unspecified"
+    },
+    "Narcolepsy|G4741": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G47419",
+        "display": "Narcolepsy without cataplexy"
+    },
+    "nausea and vomiting|R11": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R112",
+        "display": "Nausea with vomiting, unspecified"
+    },
+    "Nausea|R11": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R110",
+        "display": "Nausea"
+    },
+    "Near sighted|H521": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H5210",
+        "display": "Myopia, unspecified eye"
+    },
+    "Neurogenic bladder|N319": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N319",
+        "display": "Neuromuscular dysfunction of bladder, unspecified"
+    },
+    "Neurogenic Bladder|N319": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N319",
+        "display": "Neuromuscular dysfunction of bladder, unspecified"
+    },
+    "Neuromuscular concerns|G709": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G709",
+        "display": "Myoneural disorder, unspecified"
+    },
+    "Neuropathy|G60": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G608",
+        "display": "Other hereditary and idiopathic neuropathies"
+    },
+    "Nipple Discharge|N6452": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N6452",
+        "display": "Nipple discharge"
+    },
+    "Nodule on liver|K769": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K769",
+        "display": "Liver disease, unspecified"
+    },
+    "Numerous vascular dissections|I7779": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7779",
+        "display": "Dissection of other specified artery"
+    },
+    "Nystagmus.|H55": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H5500",
+        "display": "Unspecified nystagmus"
+    },
+    "Nystagmus|H550": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H5500",
+        "display": "Unspecified nystagmus"
+    },
+    "Obesity|E66": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E669",
+        "display": "Obesity, unspecified"
+    },
+    "Obsessive Compulsive Disorder|F42": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F429",
+        "display": "Obsessive-compulsive disorder, unspecified"
+    },
+    "Ophthalmic Migraine|G431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Orthostatic Intolerance|G90": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G909",
+        "display": "Disorder of the autonomic nervous system, unspecified"
+    },
+    "Osteoarthritis|M199": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M1990",
+        "display": "Unspecified osteoarthritis, unspecified site"
+    },
+    "Osteomyelitis|M86": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M869",
+        "display": "Osteomyelitis, unspecified"
+    },
+    "Osteopenia|M858": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M8580",
+        "display": "Other specified disorders of bone density and structure, unspecified site"
+    },
+    "Osteoporosis|M819": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M818",
+        "display": "Other osteoporosis without current pathological fracture"
+    },
+    "Other Obsessive-Compulsive Disorder|F428": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F428",
+        "display": "Other obsessive-compulsive disorder"
+    },
+    "Other peripheral vertigo, unspecified|H8139": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H81399",
+        "display": "Other peripheral vertigo, unspecified ear"
+    },
+    "Ovarian cysts|N8320": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N83209",
+        "display": "Unspecified ovarian cyst, unspecified side"
+    },
+    "Ovarian Cyst |N8320": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N83209",
+        "display": "Unspecified ovarian cyst, unspecified side"
+    },
+    "Ovarian Cyst|N8320": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N83209",
+        "display": "Unspecified ovarian cyst, unspecified side"
+    },
+    "Pain in R hand|M79641": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M79641",
+        "display": "Pain in right hand"
+    },
+    "Pain, unspecified|R529": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R52",
+        "display": "Pain, unspecified"
+    },
+    "Pain|M255": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2550",
+        "display": "Pain in unspecified joint"
+    },
+    "Papilledema|H471": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H4710",
+        "display": "Unspecified papilledema"
+    },
+    "Parasomnia|G475": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4750",
+        "display": "Parasomnia, unspecified"
+    },
+    "Parvovirus B19|B343": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B343",
+        "display": "Parvovirus infection, unspecified"
+    },
+    "Parvovirus|B343": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B343",
+        "display": "Parvovirus infection, unspecified"
+    },
+    "Patella femoral syndrome|M222x9": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M222X9",
+        "display": "Patellofemoral disorders, unspecified knee"
+    },
+    "Patellar maltracking disorder|M222X": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M222X9",
+        "display": "Patellofemoral disorders, unspecified knee"
+    },
+    "Patellofemoral Pain Syndrome|M222": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M222X9",
+        "display": "Patellofemoral disorders, unspecified knee"
+    },
+    "Pelvic Floor Disorder|N812": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N812",
+        "display": "Incomplete uterovaginal prolapse"
+    },
+    "Pelvic floor dysfunction|N818": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N8189",
+        "display": "Other female genital prolapse"
+    },
+    "Pelvic Floor Dysfunction|O3490": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O3490",
+        "display": "Maternal care for abnormality of pelvic organ, unspecified, unspecified trimester"
+    },
+    "Pelvic instability|M2535": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X8",
+        "display": "Spinal instabilities, sacral and sacrococcygeal region"
+    },
+    "Pelvic torsion|N8353": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N8353",
+        "display": "Torsion of ovary, ovarian pedicle and fallopian tube"
+    },
+    "Peptic Ulcer Disease|K27": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K279",
+        "display": "Peptic ulcer, site unspecified, unspecified as acute or chronic, without hemorrhage or perforation"
+    },
+    "Perineal numbness|R200": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R200",
+        "display": "Anesthesia of skin"
+    },
+    "Peripheral Neuropathy|G9009": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G9009",
+        "display": "Other idiopathic peripheral autonomic neuropathy"
+    },
+    "Persistent Fever|R508": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R509",
+        "display": "Fever, unspecified"
+    },
+    "Personal history of psychological trauma, not elsewhere classified|Z914": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z9149",
+        "display": "Other personal history of psychological trauma, not elsewhere classified"
+    },
+    "piezogenic papules on heels|L988": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L988",
+        "display": "Other specified disorders of the skin and subcutaneous tissue"
+    },
+    "Pilonidal Cyst|L059": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L0591",
+        "display": "Pilonidal cyst without abscess"
+    },
+    "Pituitary Issue|E23": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E237",
+        "display": "Disorder of pituitary gland, unspecified"
+    },
+    "pneumonitis|J69": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J698",
+        "display": "Pneumonitis due to inhalation of other solids and liquids"
+    },
+    "Polycystic ovarian syndrome|E2820": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E282",
+        "display": "Polycystic ovarian syndrome"
+    },
+    "Positive Antinuclear Antibody|R7610": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R760",
+        "display": "Raised antibody titer"
+    },
+    "Post Traumatic Stress Disorder|F431": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4310",
+        "display": "Post-traumatic stress disorder, unspecified"
+    },
+    "Post-surgical recovery|Z4881": [],
+    "Postprandial presyncope|R5591": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R55",
+        "display": "Syncope and collapse"
+    },
+    "Pre-eclampsia|O14": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O1400",
+        "display": "Mild to moderate pre-eclampsia, unspecified trimester"
+    },
+    "Pre-eclampsia|O140": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O1400",
+        "display": "Mild to moderate pre-eclampsia, unspecified trimester"
+    },
+    "Pre-Syncope|R559": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R55",
+        "display": "Syncope and collapse"
+    },
+    "Precarinal  lymphadenopathy|R590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R590",
+        "display": "Localized enlarged lymph nodes"
+    },
+    "Precocious puberty|E301": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E301",
+        "display": "Precocious puberty"
+    },
+    "Pregnancy cholestasis|O2664": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O26649",
+        "display": "Intrahepatic cholestasis of pregnancy, unspecified trimester"
+    },
+    "Pregnancy oligohydramnios|O4110": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O4100X0",
+        "display": "Oligohydramnios, unspecified trimester, not applicable or unspecified"
+    },
+    "Premature labor|O600": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "O6000",
+        "display": "Preterm labor without delivery, unspecified trimester"
+    },
+    "Preventive and General Health Maintenance|Z0000": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z0000",
+        "display": "Encounter for general adult medical examination without abnormal findings"
+    },
+    "Primary ovarian insufficiency|E283": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E28310",
+        "display": "Symptomatic premature menopause"
+    },
+    "Psoriasis|L40": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L409",
+        "display": "Psoriasis, unspecified"
+    },
+    "Puffiness|R22": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R229",
+        "display": "Localized swelling, mass and lump, unspecified"
+    },
+    "Pulmonary Embolism|I26": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I2699",
+        "display": "Other pulmonary embolism without acute cor pulmonale"
+    },
+    "Pulmonary Nodules|R918": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R918",
+        "display": "Other nonspecific abnormal finding of lung field"
+    },
+    "pulsatile tinnitus|H93A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H93A9",
+        "display": "Pulsatile tinnitus, unspecified ear"
+    },
+    "Radiculopathy secondary to generative disc disease|M501x": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5410",
+        "display": "Radiculopathy, site unspecified"
+    },
+    "Rapid eye movement sleep disorder|G4752": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4752",
+        "display": "REM sleep behavior disorder"
+    },
+    "Raynaud's disease|I730": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7300",
+        "display": "Raynaud's syndrome without gangrene"
+    },
+    "Raynaud's Syndrome.|I730": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7300",
+        "display": "Raynaud's syndrome without gangrene"
+    },
+    "Raynaud's Syndrome|I730": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7300",
+        "display": "Raynaud's syndrome without gangrene"
+    },
+    "Raynauds|I730": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7300",
+        "display": "Raynaud's syndrome without gangrene"
+    },
+    "Raynaud’s Phenomenon|I730": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7300",
+        "display": "Raynaud's syndrome without gangrene"
+    },
+    "Raynaud’s syndrome|I730": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7300",
+        "display": "Raynaud's syndrome without gangrene"
+    },
+    "Raynaud’s|I730": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7300",
+        "display": "Raynaud's syndrome without gangrene"
+    },
+    "Reactive hypoglycemia post bariatric surgery|E1620": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E162",
+        "display": "Hypoglycemia, unspecified"
+    },
+    "Recurrent corneal erosion|H1883": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H18839",
+        "display": "Recurrent erosion of cornea, unspecified eye"
+    },
+    "Recurrent Dislocation of a Joint|M244": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M2440",
+        "display": "Recurrent dislocation, unspecified joint"
+    },
+    "Recurrent Fractures|T029": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z8781",
+        "display": "Personal history of (healed) traumatic fracture"
+    },
+    "Recurrent Otitis Media|H66004": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H66004",
+        "display": "Acute suppurative otitis media without spontaneous rupture of ear drum, recurrent, right ear"
+    },
+    "Recurrent Otitis Media|H669": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H6690",
+        "display": "Otitis media, unspecified, unspecified ear"
+    },
+    "Recurrent ovarian cysts|N8320": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N83209",
+        "display": "Unspecified ovarian cyst, unspecified side"
+    },
+    "Recurrent Subluxations of Right Hip|M24451": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M24451",
+        "display": "Recurrent dislocation, right hip"
+    },
+    "recurrent throat infections|J0391": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J0391",
+        "display": "Acute recurrent tonsillitis, unspecified"
+    },
+    "Recurrent tonsillitis|J0391": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J0391",
+        "display": "Acute recurrent tonsillitis, unspecified"
+    },
+    "Recurrent vomiting|R1110": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R1110",
+        "display": "Vomiting, unspecified"
+    },
+    "Respiratory syncytial virus|B974": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B974",
+        "display": "Respiratory syncytial virus as the cause of diseases classified elsewhere"
+    },
+    "Retroaortic left renal vein|Q272": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q272",
+        "display": "Other congenital malformations of renal artery"
+    },
+    "Retrolisthesis|M4316": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4316",
+        "display": "Spondylolisthesis, lumbar region"
+    },
+    "Retrolisthesis|M4319": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4319",
+        "display": "Spondylolisthesis, multiple sites in spine"
+    },
+    "Reverse cervical curvature|M5080": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5080",
+        "display": "Other cervical disc disorders, unspecified cervical region"
+    },
+    "Rheumatoid Arthritis|M052": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M0609",
+        "display": "Rheumatoid arthritis without rheumatoid factor, multiple sites"
+    },
+    "Rheumatoid Arthritis|M080": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M0609",
+        "display": "Rheumatoid arthritis without rheumatoid factor, multiple sites"
+    },
+    "Right ear deafness|H9041": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H9041",
+        "display": "Sensorineural hearing loss, unilateral, right ear, with unrestricted hearing on the contralateral side"
+    },
+    "Right foot fracture|S92901": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S92901S",
+        "display": "Unspecified fracture of right foot, sequela"
+    },
+    "Right great toe fracture|S924": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S92404S",
+        "display": "Nondisplaced unspecified fracture of right great toe, sequela"
+    },
+    "Right hand fracture|S6291XA": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S6291XA",
+        "display": "Unspecified fracture of right wrist and hand, initial encounter for closed fracture"
+    },
+    "Right Knee Meniscus Tear|S83206": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S83206S",
+        "display": "Unspecified tear of unspecified meniscus, current injury, right knee, sequela"
+    },
+    "Right Knee Nerve Damage|G5741": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G5741",
+        "display": "Lesion of medial popliteal nerve, right lower limb"
+    },
+    "Right-Sided Persistent Cluster Headache|G4402": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G44029",
+        "display": "Chronic cluster headache, not intractable"
+    },
+    "Rotator cuff tear|M7510": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M75100",
+        "display": "Unspecified rotator cuff tear or rupture of unspecified shoulder, not specified as traumatic"
+    },
+    "Sacroiliac Joint Dysfunction|M249": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M249",
+        "display": "Joint derangement, unspecified"
+    },
+    "sciatica|M543": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M5430",
+        "display": "Sciatica, unspecified side"
+    },
+    "Seborrheic Dermatitis|L210": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L210",
+        "display": "Seborrhea capitis"
+    },
+    "Seborrheic keratosis|L82": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L820",
+        "display": "Inflamed seborrheic keratosis"
+    },
+    "Segmental and somatic dysfunction|M990": 
+        {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "M9902",
+            "display": "Segmental and somatic dysfunction of thoracic region"
+        },
+        
+    "Seizures|G40": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4089",
+        "display": "Other seizures"
+    },
+    "Sensitivity to medications/substances|Z88": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z889",
+        "display": "Allergy status to unspecified drugs, medicaments and biological substances"
+    },
+    "Sensory Processing Disorder|n/a": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F88",
+        "display": "Other disorders of psychological development"
+    },
+    "sepsis from port|A419": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A419",
+        "display": "Sepsis, unspecified organism"
+    },
+    "Seronegative Myasthenia Gravis|G700": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G7000",
+        "display": "Myasthenia gravis without (acute) exacerbation"
+    },
+    "Seronegative Rheumatoid Arthritis|M060": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M0600",
+        "display": "Rheumatoid arthritis without rheumatoid factor, unspecified site"
+    },
+    "Seropositive infammatory polyarthritis|M0590": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M130",
+        "display": "Polyarthritis, unspecified"
+    },
+    "Severe allergic reactions|T782": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z9109",
+        "display": "Other allergy status, other than to drugs and biological substances"
+    },
+    "Severe Food Allergies|T780": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z9109",
+        "display": "Other allergy status, other than to drugs and biological substances"
+    },
+    "Severe hearing loss Right ear|H9041": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H9041",
+        "display": "Sensorineural hearing loss, unilateral, right ear, with unrestricted hearing on the contralateral side"
+    },
+    "Severe Post-Operative Abdominal Pain|G8918": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G8918",
+        "display": "Other acute postprocedural pain"
+    },
+    "Severe scoliosis|M4180": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4180",
+        "display": "Other forms of scoliosis, site unspecified"
+    },
+    "Severe Sleep Disturbances|G47": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4750",
+        "display": "Parasomnia, unspecified"
+    },
+    "Shingles|B02": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B029",
+        "display": "Zoster without complications"
+    },
+    "Shingles|B023": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B029",
+        "display": "Zoster without complications"
+    },
+    "shoulder instability|M2531": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25319",
+        "display": "Other instability, unspecified shoulder"
+    },
+    "shoulder pain|M2551": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25519",
+        "display": "Pain in unspecified shoulder"
+    },
+    "Sicca Syndrome|M350": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3500",
+        "display": "Sicca syndrome, unspecified"
+    },
+    "Sicca|H1622": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3500",
+        "display": "Sicca syndrome, unspecified"
+    },
+    "sinusitis|J019": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "J0190",
+        "display": "Acute sinusitis, unspecified"
+    },
+    "Sjogren's syndrome|M350": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3500",
+        "display": "Sicca syndrome, unspecified"
+    },
+    "Sjogren's|M35": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3500",
+        "display": "Sicca syndrome, unspecified"
+    },
+    "Sjogren|M350": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3500",
+        "display": "Sicca syndrome, unspecified"
+    },
+    "Sjogren’s Syndrome|M350": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3500",
+        "display": "Sicca syndrome, unspecified"
+    },
+    "Sjogren’s|M350": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3500",
+        "display": "Sicca syndrome, unspecified"
+    },
+    "skin cancer|C43": 
+        {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "C4490",
+            "display": "Unspecified malignant neoplasm of skin, unspecified"
+        },
+        
+    "Skin Cancer|C449": {
+            "system": "http://hl7.org/fhir/sid/icd-10-cm",
+            "code": "C4490",
+            "display": "Unspecified malignant neoplasm of skin, unspecified"
+        },
+    "Skin Discoloration|L83": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L83",
+        "display": "Acanthosis nigricans"
+    },
+    "Skin pustules|L131": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L131",
+        "display": "Subcorneal pustular dermatitis"
+    },
+    "Skull fracture|S02": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S020XXS",
+        "display": "Fracture of vault of skull, sequela"
+    },
+    "Sleep apnea|G473": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4730",
+        "display": "Sleep apnea, unspecified"
+    },
+    "sleep challenges|Z7282": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G479",
+        "display": "Sleep disorder, unspecified"
+    },
+    "sleep disorder|G47": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G479",
+        "display": "Sleep disorder, unspecified"
+    },
+    "sleep disturbances|G47": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G479",
+        "display": "Sleep disorder, unspecified"
+    },
+    "Sleep disturbances|Z7282": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G479",
+        "display": "Sleep disorder, unspecified"
+    },
+    "Sleep Pattern Disturbance|G4723": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4723",
+        "display": "Circadian rhythm sleep disorder, irregular sleep wake type"
+    },
+    "Sleep related bruxism|G4763": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G4763",
+        "display": "Sleep related bruxism"
+    },
+    "Slipping Rib Syndrome|Q772": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q772",
+        "display": "Short rib syndrome"
+    },
+    "Small Hiatal Hernia|K44": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K449",
+        "display": "Diaphragmatic hernia without obstruction or gangrene"
+    },
+    "Small Intestine Bacterial Overgrowth|K63821": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K638219",
+        "display": "Small intestinal bacterial overgrowth, unspecified"
+    },
+    "Social Anxiety Disorder|F4010": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4010",
+        "display": "Social phobia, unspecified"
+    },
+    "Social anxiety|F401": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4010",
+        "display": "Social phobia, unspecified"
+    },
+    "Social Anxiety|F401": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4010",
+        "display": "Social phobia, unspecified"
+    },
+    "Social phobia|F401": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4010",
+        "display": "Social phobia, unspecified"
+    },
+    "Social Phobia|F4010": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F4010",
+        "display": "Social phobia, unspecified"
+    },
+    "Specific Antibody Deficiency|D809": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D809",
+        "display": "Immunodeficiency with predominantly antibody defects, unspecified"
+    },
+    "Spinal instability|M532": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M532X9",
+        "display": "Spinal instabilities, site unspecified"
+    },
+    "Spinal meningitis|M4636": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4636",
+        "display": "Infection of intervertebral disc (pyogenic), lumbar region"
+    },
+    "Spinal stenosis|M4806": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M48061",
+        "display": "Spinal stenosis, lumbar region without neurogenic claudication"
+    },
+    "Spondylolisthesis|M4310": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4310",
+        "display": "Spondylolisthesis, site unspecified"
+    },
+    "Spondylolisthesis|M4316": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M4316",
+        "display": "Spondylolisthesis, lumbar region"
+    },
+    "Sprained left wrist|S63502A": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S63502A",
+        "display": "Unspecified sprain of left wrist, initial encounter"
+    },
+    "Squamous Cell Carcinoma|C44": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "C4492",
+        "display": "Squamous cell carcinoma of skin, unspecified"
+    },
+    "Stage 2 Liver Disease.|K7402": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K7402",
+        "display": "Hepatic fibrosis, advanced fibrosis"
+    },
+    "Stress Incontinence|N293": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N393",
+        "display": "Stress incontinence (female) (male)"
+    },
+    "Surgical Knee Hardware – Right Knee|Z96651": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Z96651",
+        "display": "Presence of right artificial knee joint"
+    },
+    "Swelling|R22": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R229",
+        "display": "Localized swelling, mass and lump, unspecified"
+    },
+    "Swollen Lymph Nodes:|R59": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R599",
+        "display": "Enlarged lymph nodes, unspecified"
+    },
+    "Synovial Cyst Dens|M713": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M7130",
+        "display": "Other bursal cyst, unspecified site"
+    },
+    "Syphilis|A539": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "A539",
+        "display": "Syphilis, unspecified"
+    },
+    "Systemic Lupus Erythematosus|M32": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M3210",
+        "display": "Systemic lupus erythematosus, organ or system involvement unspecified"
+    },
+    "Tempomandibular joint Disorder|M2660": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Disorder|M266": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Joint  Disorder|M2660": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Joint Crepitus and Discomfort|M2662": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Joint Disorder TMJ|M2660": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Joint Disorders|M266": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Joint Dysfunction TMJ|K076": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Joint Syndrome|K076": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Temporomandibular Joint Syndrome|M2660": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Tempromandibular Joint Disorder|M2660": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "tendinosis|M678": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M779",
+        "display": "Enthesopathy, unspecified"
+    },
+    "Tension headaches|G442": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G44209",
+        "display": "Tension-type headache, unspecified, not intractable"
+    },
+    "Tethered Cord Syndrome|G9589": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G9589",
+        "display": "Other specified diseases of spinal cord"
+    },
+    "Thyroid cysts|E0401": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E041",
+        "display": "Nontoxic single thyroid nodule"
+    },
+    "Tibialis Posterior Tendinopathy|M7682": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M76829",
+        "display": "Posterior tibial tendinitis, unspecified leg"
+    },
+    "Tinea Versicolor|B360": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "B360",
+        "display": "Pityriasis versicolor"
+    },
+    "Tinnitus, chronic|H931": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H9319",
+        "display": "Tinnitus, unspecified ear"
+    },
+    "TMJ Dysfunction|K076": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M26609",
+        "display": "Unspecified temporomandibular joint disorder, unspecified side"
+    },
+    "Tobacco dependence|F172": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "F17200",
+        "display": "Nicotine dependence, unspecified, uncomplicated"
+    },
+    "Torn Rotator Cuffs|M7510": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M75100",
+        "display": "Unspecified rotator cuff tear or rupture of unspecified shoulder, not specified as traumatic"
+    },
+    "Transient Thyroiditis|E06": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E069",
+        "display": "Thyroiditis, unspecified"
+    },
+    "Trigeminal Neuropathy|G50": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G500",
+        "display": "Trigeminal neuralgia"
+    },
+    "Type 1 Diabetes Mellitus|E10": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E109",
+        "display": "Type 1 diabetes mellitus without complications"
+    },
+    "Type 2 diabetes mellitus|E11": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E119",
+        "display": "Type 2 diabetes mellitus without complications"
+    },
+    "Ulcerative Colitis|K51": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K5190",
+        "display": "Ulcerative colitis, unspecified, without complications"
+    },
+    "Underweight|R636": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R636",
+        "display": "Underweight"
+    },
+    "Unintentional weight loss|W634": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R634",
+        "display": "Abnormal weight loss"
+    },
+    "Upper cervical subluxation|S1310": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "S13100S",
+        "display": "Subluxation of unspecified cervical vertebrae, sequela"
+    },
+    "Urinary incontinence|T83722": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "T83722A",
+        "display": "Exposure of implanted urethral mesh into urethra, initial encounter"
+    },
+    "urine with red blood cells|R31": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R319",
+        "display": "Hematuria, unspecified"
+    },
+    "Urticaria|L50": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L508",
+        "display": "Other urticaria"
+    },
+    "Uterine Fibroids|D25": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D259",
+        "display": "Leiomyoma of uterus, unspecified"
+    },
+    "Uterine fibroid|D25": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D259",
+        "display": "Leiomyoma of uterus, unspecified"
+    },
+    "Uterine prolapse|N812": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N812",
+        "display": "Incomplete uterovaginal prolapse"
+    },
+    "Uticaria|L50": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "L508",
+        "display": "Other urticaria"
+    },
+    "Uveitis|H3089": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H30899",
+        "display": "Other chorioretinal inflammations, unspecified eye"
+    },
+    "Vagal nerve dysfunction|G522": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G522",
+        "display": "Disorders of vagus nerve"
+    },
+    "Varicose veins|I839": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I8390",
+        "display": "Asymptomatic varicose veins of unspecified lower extremity"
+    },
+    "Ventricular Septal Defect|Q210": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Q210",
+        "display": "Ventricular septal defect"
+    },
+    "Vertebral Artery Dissection|I77721": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7774",
+        "display": "Dissection of vertebral artery"
+    },
+    "Vertebral Artery Dissection|I7774": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "I7774",
+        "display": "Dissection of vertebral artery"
+    },
+    "Vertebral subluxation complex|M991": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M9911",
+        "display": "Subluxation complex (vertebral) of cervical region"
+    },
+    "Vesicoureteral Reflux|N137": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N1370",
+        "display": "Vesicoureteral-reflux, unspecified"
+    },
+    "Vestibular Concerns|H81": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H8193",
+        "display": "Unspecified disorder of vestibular function, bilateral"
+    },
+    "Vestibular dysfunction|H819": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H8193",
+        "display": "Unspecified disorder of vestibular function, bilateral"
+    },
+    "Vestibular Etiology|H81": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H8193",
+        "display": "Unspecified disorder of vestibular function, bilateral"
+    },
+    "Vestibular Migraines|G43D": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43009",
+        "display": "Migraine without aura, not intractable, without status migrainosus"
+    },
+    "Vestibular Migraine|G43809": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "G43809",
+        "display": "Other migraine, not intractable, without status migrainosus"
+    },
+    "Vestibular Neuroma|D333": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D333",
+        "display": "Benign neoplasm of cranial nerves"
+    },
+    "Vision changes|H53": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H539",
+        "display": "Unspecified visual disturbance"
+    },
+    "vision changes|H539": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H539",
+        "display": "Unspecified visual disturbance"
+    },
+    "Vision changes|H539": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H539",
+        "display": "Unspecified visual disturbance"
+    },
+    "Vision issues|H53": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H53009",
+        "display": "Unspecified amblyopia, unspecified eye"
+    },
+    "Visual Disturbance|H539": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H539",
+        "display": "Unspecified visual disturbance"
+    },
+    "Vitamin B12 deficiency|D51": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "D519",
+        "display": "Vitamin B12 deficiency anemia, unspecified"
+    },
+    "Vitamin D deficiency|E55": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "E559",
+        "display": "Vitamin D deficiency, unspecified"
+    },
+    "Vitreous Detachment: Right eye|H43881": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "H43811",
+        "display": "Vitreous degeneration, right eye"
+    },
+    "Vomiting|R11": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R1110",
+        "display": "Vomiting, unspecified"
+    },
+    "Vulvodynia|N9481": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "N94819",
+        "display": "Vulvodynia, unspecified"
+    },
+    "Waxing|Y93E": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "Y93E8",
+        "display": "Activity, other personal hygiene"
+    },
+    "Weakness|R531": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "R531",
+        "display": "Weakness"
+    },
+    "Wet lung at birth|P221": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "P221",
+        "display": "Transient tachypnea of newborn"
+    },
+    "Winged scapula|M2180": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M25819",
+        "display": "Other specified joint disorders, unspecified shoulder"
+    },
+    "Wrist tendinitis, L|M65841": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "M65842",
+        "display": "Other synovitis and tenosynovitis, left hand"
+    },
+    "Zenker's Diverticulum|K225": {
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "code": "K225",
+        "display": "Diverticulum of esophagus, acquired"
+    }
+}

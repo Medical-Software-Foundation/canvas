@@ -33,7 +33,7 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
         if icd10_code in self.icd10_map:
             return False, self.icd10_map[icd10_code]
 
-        return True, f"Display lookup for ICD-10 Code {icd10_code} not found."
+        return True, f"Display lookup for ICD-10 {row['Name']}|{icd10_code} not found."
 
     def validate(self, delimiter='|'):
         """
@@ -56,7 +56,8 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "Onset Date",
                     "Free text notes",
                     "Resolved Date",
-                    "Recorded Provider"
+                    "Recorded Provider",
+                    "Name"
                 }
             )
 
@@ -194,7 +195,7 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
             if 'note' in payload:
                 if len(payload['note'][0]['text']) > 1000:
-                    self.ignore_row(row['ID'], "ignoring temporarily because of notes character limit")
+                    self.ignore_row(row['ID'], f"ignoring temporarily because of notes character limit {len(payload['note'][0]['text'])} > 1000")
                     continue
 
             try:

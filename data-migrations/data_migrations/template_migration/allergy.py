@@ -141,7 +141,9 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "Onset Date",
                     "Free Text Note",
                     "Reaction",
-                    "Recorded Provider"
+                    "Recorded Provider",
+                    "Severity",
+                    "Original Name",
                 }
             )
 
@@ -153,6 +155,7 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 "FDB Code": [validate_required],
                 "Name": [validate_required],
                 "Onset Date": [validate_date],
+                "Severity": [(validate_enum, {'possible_options': ['mild', 'moderate', 'severe']})]
             }
 
             for row in reader:
@@ -254,7 +257,7 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                             {
                                 "system": "http://www.fdbhealth.com/",
                                 "code": fdb,
-                                "display": row["Name"]
+                                "display": row["Name"] if fdb != '1-143' else "No Allergy Information Available"
                             }
                         ]
                     },
@@ -262,6 +265,7 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                         "reference": f"Patient/{patient_key}"
                     },
                     "note": (
+                        ([{"text": row['Original Name']}] if row['Original Name'] else []) +
                         ([{"text": row['Reaction']}] if row['Reaction'] else []) +
                         ([{"text": f"Notes: {row['Free Text Note']}"}] if row['Free Text Note'] else [])
                     )
@@ -273,6 +277,27 @@ class AllergyLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     payload['recorder'] = {
                         "reference": f"Practitioner/{practitioner_key}"
                     }
+                if severity := row.get('Severity'):
+                    payload["reaction"] = [
+                        {
+                            "manifestation": [
+                                {
+                                    "coding": [
+                                        {
+                                            "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                                            "code": "unknown",
+                                            "display": "Unknown"
+                                        }
+                                    ],
+                                    "text": "Unknown"
+                                }
+                            ],
+                            "severity": severity
+                        }
+                    ]
+
+                # print(json.dumps(payload, indent=2))
+                # return
 
                 try:
                     canvas_id = self.fumage_helper.perform_create(payload)

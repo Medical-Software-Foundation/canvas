@@ -1,0 +1,25 @@
+allergenname,rxnormcode,rxnormdescription,translation_codings
+Nitrofuran Analogues,,Medicinal product containing nitrofuran derivative and acting as antibacterial agent (product),"IHTSDO SNOMED-CT; Medicinal product containing nitrofuran derivative and acting as antibacterial agent (product); 713382001
+VA NDF-RT; Nitrofurans; N0000007658"
+Poultry,,Poultry (substance),"IHTSDO SNOMED-CT; Poultry (substance); 28230009
+VA NDF-RT; Poultry Proteins; N0000185018"
+Pollen-Hayfever,,,
+Barbiturates,,Product containing barbiturate (product),"IHTSDO SNOMED-CT; Product containing barbiturate (product); 60978003
+VA NDF-RT; Barbiturates; N0000008016"
+ropinirole,72302,ropinirole,NLM RxNorm; ropinirole; 72302
+Flomax,190283,Flomax,NLM RxNorm; Flomax; 190283
+Paxlovid,,,
+Midrin,,,NLM RxNorm; Midrin; 30006
+sulfur,,,NLM RxNorm; sulfur; 10223
+codeine,2670,codeine,NLM RxNorm; codeine; 2670
+Anaphylaxis Bee Sting,,,
+Novocain,,,"NLM RxNorm; Novocaine; 7539
+NLM RxNorm; procaine hydrochloride; 106558"
+Darvocet-N,,,
+Robitussin,,,"NLM RxNorm; Robitussin; 219702
+NLM RxNorm; guaifenesin; 5032"
+Hayfever,,,
+Tree Pollen,,,
+Effexor,,,NLM RxNorm; Effexor; 151692
+Inderal LA,151890,Inderal,NLM RxNorm; Inderal; 151890
+BuSpar,154990,Buspar,NLM RxNorm; Buspar; 154990

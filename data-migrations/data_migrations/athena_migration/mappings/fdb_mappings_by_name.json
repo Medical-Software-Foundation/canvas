@@ -1,0 +1,572 @@
+{
+    "Solanum- Nightshade Vegetables":
+    {
+        "code": "1-1285",
+        "display": "Solanum- Nightshade Vegetables"
+    },
+    "fish derived":
+    {
+        "code": "6-9278",
+        "display": "fish derived"
+    },
+    "ragweed pollen":
+    {
+        "code": "6-16082",
+        "display": "ragweed pollen"
+    },
+    "weed pollen":
+    {
+        "code": "6-16083",
+        "display": "weed pollen"
+    },
+    "Dairy Aid":
+    {
+        "code": "2-73408",
+        "display": "Dairy Aid"
+    },
+    "tomato":
+    {
+        "code": "6-9082",
+        "display": "tomato"
+    },
+    "Toradol":
+    {
+        "code": "2-6196",
+        "display": "Toradol"
+    },
+    "perfume":
+    {
+        "code": "6-16110",
+        "display": "perfume"
+    },
+    "Tetanus Vaccines and Toxoid":
+    {
+        "code": "1-519",
+        "display": "Tetanus Vaccines and Toxoid"
+    },
+    "pollen extracts":
+    {
+        "code": "6-3102",
+        "display": "pollen extracts"
+    },
+    "adhesive":
+    {
+        "code": "2-56128",
+        "display": "adhesive"
+    },
+    "Dairy":
+    {
+        "code": "1-900546",
+        "display": "Milk Containing Products (Dairy)"
+    },
+    "Seasonale (91)":
+    {
+        "code": "2-115769",
+        "display": "Seasonale (91)"
+    },
+    "pork derived (porcine)":
+    {
+        "code": "6-9277",
+        "display": "pork derived (porcine)"
+    },
+    "Septra":
+    {
+        "code": "2-5097",
+        "display": "Septra"
+    },
+    "Omnicef":
+    {
+        "code": "2-8108",
+        "display": "Omnicef"
+    },
+    "Statins-HMG-CoA Reductase Inhibitors":
+    {
+        "code": "1-900095",
+        "display": "Statins-HMG-CoA Reductase Inhibitors"
+    },
+    "avocado":
+    {
+        "code": "6-9620",
+        "display": "avocado"
+    },
+    "bee venom protein (honey bee)":
+    {
+        "code": "6-8295",
+        "display": "bee venom protein (honey bee)"
+    },
+    "Tylox":
+    {
+        "code": "2-14033",
+        "display": "Tylox"
+    },
+    "Opioids - Morphine Analogues":
+    {
+        "code": "1-268",
+        "display": "Opioids - Morphine Analogues"
+    },
+    "Penicillins":
+    {
+        "code": "1-476",
+        "display": "Penicillins"
+    },
+    "No Known Allergies":
+    {
+        "code": "1-900388",
+        "display": "NKA (No Known Allergies)"
+    },
+    "flowers":
+    {
+        "code": "6-16116",
+        "display": "flowers"
+    },
+    "insect venom":
+    {
+        "code": "6-16098",
+        "display": "insect venom"
+    },
+    "animal dander":
+    {
+        "code": "6-16092",
+        "display": "animal dander"
+    },
+    "asparagus":
+    {
+        "code": "1-1062",
+        "display": "Asparagus"
+    },
+    "Histamine H2 Inhibitors":
+    {
+        "code": "1-582",
+        "display": "Histamine H2 Inhibitors"
+    },
+    "penicillin":
+    {
+        "code": "1-476",
+        "display": "Penicillins"
+    },
+    "Mercaptobenzothiazole Derivatives (Mercapto Mix)":
+    {
+        "code": "1-1293",
+        "display": "Mercaptobenzothiazole Derivatives (Mercapto Mix)"
+    },
+    "yellow jacket venom":
+    {
+        "code": "2-7413",
+        "display": "yellow jacket venom"
+    },
+    "PPD black rubber mix":
+    {
+        "code": "6-16112",
+        "display": "PPD black rubber mix"
+    },
+    "Flexeril":
+    {
+        "code": "2-10647",
+        "display": "Flexeril"
+    },
+    "Darvon":
+    {
+        "code": "2-11594",
+        "display": "Darvon"
+    },
+    "red dye":
+    {
+        "code": "6-10141",
+        "display": "red dye"
+    },
+    "corn":
+    {
+        "code": "1-900531",
+        "display": "Corn Containing Products"
+    },
+    "Merthiolate (benzalkonium)":
+    {
+        "code": "2-274546",
+        "display": "Merthiolate (benzalkonium)"
+    },
+    "Levaquin":
+    {
+        "code": "2-13557",
+        "display": "Levaquin"
+    },
+    "Biaxin":
+    {
+        "code": "2-8504",
+        "display": "Biaxin"
+    },
+    "Amoxil":
+    {
+        "code": "2-3650",
+        "display": "Amoxil"
+    },
+    "Tree Nuts":
+    {
+        "code": "1-1193",
+        "display": "Tree Nuts"
+    },
+    "Breztri Aerosphere":
+    {
+        "code": "2-368581",
+        "display": "Breztri Aerosphere"
+    },
+    "COVID-19 vaccine, mRNA, cx-024414, LNP-S (Moderna)":
+    {
+        "code": "6-18547",
+        "display": "COVID-19 vaccine, mRNA, cx-024414, LNP-S (Moderna)"
+    },
+    "Profenal":
+    {
+        "code": "2-10406",
+        "display": "Profenal"
+    },
+    "Sulfamethoxazole-TMP DS":
+    {
+        "code": "2-3364",
+        "display": "sulfamethoxazole-trimethoprim"
+    },
+    "Triphasil (28)":
+    {
+        "code": "2-46435",
+        "display": "Triphasil (28)"
+    },
+    "adhesive tape":
+    {
+        "code": "2-3746",
+        "display": "adhesive tape"
+    },
+    "Wellbutrin":
+    {
+        "code": "2-12696",
+        "display": "Wellbutrin"
+    },
+    "house dust":
+    {
+        "code": "2-56325",
+        "display": "house dust"
+    },
+    "NSAIDS (Non-Steroidal Anti-Inflammatory Drug)":
+    {
+        "code": "1-439",
+        "display": "NSAIDS (Non-Steroidal Anti-Inflammatory Drug)"
+    },
+    "Sulfa (Sulfonamide Antibiotics)":
+    {
+        "code": "1-491",
+        "display": "Sulfa (Sulfonamide Antibiotics)"
+    },
+    "Lorabid":
+    {
+        "code": "2-6626",
+        "display": "Lorabid"
+    },
+    "peas":
+    {
+        "code": "6-15124",
+        "display": "peas"
+    },
+    "Red Dye":
+    {
+        "code": "1-159",
+        "display": "Red Dye"
+    },
+    "cigarette smoke":
+    {
+        "code": "6-16104",
+        "display": "cigarette smoke"
+    },
+    "house dust mite":
+    {
+        "code": "6-16094",
+        "display": "house dust mite"
+    },
+    "Cefzil":
+    {
+        "code": "2-8057",
+        "display": "Cefzil"
+    },
+    "Zosyn":
+    {
+        "code": "2-15225",
+        "display": "Zosyn"
+    },
+    "chocolate":
+    {
+        "code": "6-19561",
+        "display": "chocolate"
+    },
+    "Shellfish Containing Products":
+    {
+        "code": "1-900584",
+        "display": "Shellfish Containing Products"
+    },
+    "Iodinated Contrast Media":
+    {
+        "code": "1-7",
+        "display": "Iodinated Contrast Media"
+    },
+    "Monistat 1 (tioconazole)":
+    {
+        "code": "2-15611",
+        "display": "Monistat 1 (tioconazole)"
+    },
+    "Gadolinium-Containing Contrast Media":
+    {
+        "code": "1-900059",
+        "display": "Gadolinium-Containing Contrast Media"
+    },
+    "Procardia":
+    {
+        "code": "2-10307",
+        "display": "Procardia"
+    },
+    "Vicodin":
+    {
+        "code": "2-3413",
+        "display": "Vicodin"
+    },
+    "Influenza Virus Vaccines":
+    {
+        "code": "1-512",
+        "display": "Influenza Virus Vaccines"
+    },
+    "peach":
+    {
+        "code": "6-7909",
+        "display": "peach"
+    },
+    "fire ant":
+    {
+        "code": "6-16099",
+        "display": "fire ant"
+    },
+    "Pediazole":
+    {
+        "code": "2-4769",
+        "display": "Pediazole"
+    },
+    "Surgical Dressing":
+    {
+        "code": "2-225146",
+        "display": "Surgical Dressing"
+    },
+    "Easprin":
+    {
+        "code": "2-4624",
+        "display": "Easprin"
+    },
+    "soy":
+    {
+        "code": "1-900401",
+        "display": "Soy"
+    },
+    "tree nut":
+    {
+        "code": "6-12753",
+        "display": "tree nut"
+    },
+    "Micropore Paper Surgical Tape":
+    {
+        "code": "2-74195",
+        "display": "Micropore Paper Surgical Tape"
+    },
+    "Ceclor":
+    {
+        "code": "2-3660",
+        "display": "Ceclor"
+    },
+    "cat dander":
+    {
+        "code": "6-16086",
+        "display": "cat dander"
+    },
+    "Neosporin (neo-bac-polym)":
+    {
+        "code": "2-3691",
+        "display": "Neosporin (neo-bac-polym)"
+    },
+    "Cephalosporins":
+    {
+        "code": "1-477",
+        "display": "Cephalosporins"
+    },
+    "chicken derived":
+    {
+        "code": "6-11021",
+        "display": "chicken derived"
+    },
+    "12 Hour Decongestant":
+    {
+        "code": "2-47222",
+        "display": "12 Hour Decongestant"
+    },
+    "yellow dye":
+    {
+        "code": "6-10143",
+        "display": "yellow dye"
+    },
+    "ACE Inhibitors":
+    {
+        "code": "1-147",
+        "display": "ACE Inhibitors"
+    },
+    "COVID-19 (SARS-CoV-2) vaccine, vero cell":
+    {
+        "code": "6-18644",
+        "display": "COVID-19 (SARS-CoV-2) vaccine, vero cell"
+    },
+    "grass pollen":
+    {
+        "code": "1-1181",
+        "display": "Grass Pollen"
+    },
+    "Keflex":
+    {
+        "code": "2-6608",
+        "display": "Keflex"
+    },
+    "Zithromax Z-Pak":
+    {
+        "code": "2-19266",
+        "display": "Zithromax Z-Pak"
+    },
+    "shellfish derived":
+    {
+        "code": "6-11754",
+        "display": "shellfish derived"
+    },
+    "tree and shrub pollen":
+    {
+        "code": "6-16085",
+        "display": "tree and shrub pollen"
+    },
+    "monosodium glutamate":
+    {
+        "code": "2-142386",
+        "display": "monosodium glutamate (bulk)"
+    },
+    "Beta-Blockers (Beta-Adrenergic Blocking Agts)":
+    {
+        "code": "1-298",
+        "display": "Beta-Blockers (Beta-Adrenergic Blocking Agts)"
+    },
+    "Citrus And Derivatives":
+    {
+        "code": "1-900520",
+        "display": "Citrus And Derivatives"
+    },
+    "Egg Derived":
+    {
+        "code": "1-900508",
+        "display": "Egg Derived"
+    },
+    "Lortab":
+    {
+        "code": "2-7006",
+        "display": "Lortab"
+    },
+    "nut - unspecified":
+    {
+        "code": "6-16171",
+        "display": "nut - unspecified"
+    },
+    "Plenvu":
+    {
+        "code": "2-348476",
+        "display": "Plenvu"
+    },
+    "barbiturates":
+    {
+        "code": "1-256",
+        "display": "Barbiturates"
+    },
+    "darvocet-n":
+    {
+        "code": "2-249985",
+        "display": "Darvocet-N"
+    },
+    "effexor":
+    {
+        "code": "2-1816",
+        "display": "Effexor"
+    },
+    "lime":
+    {
+        "code": "1-54",
+        "display": "Lime"
+    },
+    "nitrofuran analogues":
+    {
+        "code": "1-494",
+        "display": "Nitrofuran Analogues"
+    },
+    "novocain":
+    {
+        "code": "2-3879",
+        "display": "Novocain"
+    },
+    "paxlovid":
+    {
+        "code": "2-384097",
+        "display": "Paxlovid"
+    },
+    "poultry":
+    {
+        "code": "1-1168",
+        "display": "Poultry"
+    },
+    "robitussin":
+    {
+        "code": "2-117591",
+        "display": "Robitussin"
+    },
+    "barbiturates":
+        {
+            "code": "1-256",
+            "display": "Barbiturates"
+        },
+    "darvocet-n":
+        {
+            "code": "2-249985",
+            "display": "Darvocet-N"
+        },
+    "effexor":
+        {
+            "code": "2-1816",
+            "display": "Effexor"
+        },
+    "midrin":
+        {
+            "code": "2-6368",
+            "display": "Midrin"
+        },
+    "nitrofuran analogues":
+        {
+            "code": "1-494",
+            "display": "Nitrofuran Analogues"
+        },
+    "novocain":
+        {
+            "code": "2-3879",
+            "display": "Novocain"
+        },
+    "paxlovid":
+        {
+            "code": "2-384097",
+            "display": "Paxlovid"
+        },
+    "poultry":
+        {
+            "code": "1-1168",
+            "display": "Poultry"
+        },
+    "robitussin":
+        {
+            "code": "2-117591",
+            "display": "Robitussin"
+        },
+    "sulfur":
+        {
+            "code": "2-1345",
+            "display": "sulfur"
+        }
+}

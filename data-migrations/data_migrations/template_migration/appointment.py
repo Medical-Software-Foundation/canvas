@@ -2,7 +2,7 @@ import re, pytz, arrow, csv, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from data_migrations.template_migration.utils import validate_header, validate_required, validate_datetime, MappingMixin, FileWriterMixin
+from data_migrations.template_migration.utils import validate_enum, validate_header, validate_required, validate_datetime, MappingMixin, FileWriterMixin
 from data_migrations.template_migration.note import NoteMixin
 
 
@@ -32,7 +32,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
         if duration := row['Duration']:
             try:
-                return True, arrow.get(row['Start Date / Time']).shift(minutes=duration).isoformat()
+                return True, arrow.get(row['Start Date / Time']).shift(minutes=int(duration)).isoformat()
             except:
                 pass
 
@@ -55,6 +55,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "ID",
                     "Patient Identifier",
                     "Appointment Type",
+                    "Appointment Type System",
                     "Reason for Visit Code",
                     "Reason for Visit Text",
                     "Location",
@@ -62,32 +63,35 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "Start Date / Time",
                     "End Date/Time",
                     "Duration",
-                    "Provider"
+                    "Provider",
+                    "Status"
                 }
             )
 
             validations = {
-                "Patient Identifier": validate_required,
-                "Location": validate_required,
-                "Provider": validate_required,
-                "Start Date / Time": validate_datetime,
+                "Patient Identifier": [validate_required],
+                "Location": [validate_required],
+                "Provider": [validate_required],
+                "Start Date / Time": [validate_datetime],
+                "Status": [(validate_enum, {'possible_options': ['booked', 'fulfilled']})],
             }
 
             for row in reader:
                 error = False
                 key = f"{row['ID']} {row['Patient Identifier']}"
 
-                for field, validator_func in validations.items():
-                    kwargs = {}
-                    if isinstance(validator_func, tuple):
-                        validator_func, kwargs = validator_func
+                for field, validator_funcs in validations.items():
+                    for validator_func in validator_funcs:
+                        kwargs = {}
+                        if isinstance(validator_func, tuple):
+                            validator_func, kwargs = validator_func
 
-                    valid, value = validator_func(row[field].strip(), field, **kwargs)
-                    if valid:
-                        row[field] = value
-                    else:
-                        errors[key].append(value)
-                        error = True
+                        valid, value = validator_func(row[field].strip(), field, **kwargs)
+                        if valid:
+                            row[field] = value
+                        else:
+                            errors[key].append(value)
+                            error = True
 
                 valid, field_or_error_msg = self.validate_end_time(row)
                 if not valid:
@@ -117,6 +121,8 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
         if hasattr(self, "rfv_map"):
             rfv = self.rfv_map.get(str(rfv_code))
+        else:
+            rfv = f'INTERNAL|{rfv_code}'
 
         if rfv_code:
             system, code = rfv.split('|')
@@ -163,7 +169,10 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
             patient = row['Patient Identifier']
             patient_key = ""
 
-            location = self.location_map.get(row['Location'])
+            location = row['Location']
+            if hasattr(self, "location_map"):
+                location = self.location_map.get(row['Location'])
+
             if location is None:
                 location = self.default_location
 
@@ -183,11 +192,11 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                         "value": row['ID'],
                     }
                 ],
-                "status": "fulfilled",
+                "status": row.get('Status') or "fulfilled",
                 "appointmentType": {
                     "coding": [{
-                            "system": "INTERNAL",
-                            "code": f"{system_unique_identifier}_historical_note",
+                            "system": row.get('Appointment Type System') or "INTERNAL",
+                            "code": row['Appointment Type'] or f"{system_unique_identifier}_historical_note",
                     }]
                 },
                 "reasonCode":[self.map_rfv(row)],
@@ -240,7 +249,8 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     }
                 ]
 
-            #print(json.dumps(payload, indent=2))
+            # print(json.dumps(payload, indent=2))
+            # return
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
@@ -257,3 +267,5 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     self.fumage_helper.check_in_and_lock_appointment(canvas_id)
                 except BaseException as e:
                     self.error_row(f"{row['ID']}|{patient}|{patient_key}", e, file=self.errored_note_state_event_file)
+
+            # return

@@ -1,6 +1,6 @@
 import arrow, base64, pytz, os, re, uuid
 from PIL import Image, ImageSequence
-
+import pdfkit
 
 def validate_date(value, field_name):
     if not value:
@@ -8,7 +8,7 @@ def validate_date(value, field_name):
     try:
         return True, arrow.get(value).format("YYYY-MM-DD")
     except:
-        for format in ["MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYYY", "M.DD.YYYY", "MMMM DD, YYYY", "MMM DD, YYYY", "MMMM D, YYYY", "MMM D, YYYY", "MMMM Do, YYYY", "MMM Do, YYYY"]:
+        for format in ["MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYYY", "M.DD.YYYY", "MMMM DD, YYYY", "MMM DD, YYYY", "MMMM D, YYYY", "MMM D, YYYY", "MMMM Do, YYYY", "MMM Do, YYYY", "M/D/YY", "MM/DD/YY"]:
             try:
                 return True, arrow.get(value, format).format("YYYY-MM-DD")
             except:
@@ -200,6 +200,10 @@ class MappingMixin:
 class FileWriterMixin:
 
     def ignore_row(self, _id, ignore_reason):
+        if not os.path.isfile(self.ignore_file):
+            with open(self.ignore_file, 'w') as f:
+                f.write('id|ignored_reason\n')
+
         ignore_reason = str(ignore_reason).replace('\n', '')
         with open(self.ignore_file, 'a') as file:
             print(f' Ignoring row due to "{ignore_reason}')
@@ -207,12 +211,20 @@ class FileWriterMixin:
 
     def error_row(self, data, error, file=None):
         """If anything fails, output to file to go back and fix"""
+        if not os.path.isfile(self.error_file):
+            with open(self.error_file, 'w') as f:
+                f.write('id|patient_id|patient_key|error_message\n')
+
         error = str(error).replace('\n', '')
         with open(file or self.error_file, 'a') as file:
             print(f' Errored row outputing error message to file...{error}')
             file.write(f"{data}|{error}\n")
 
     def done_row(self, data, file=None):
+        if not os.path.isfile(self.done_file):
+            with open(self.done_file, 'w') as f:
+                f.write('id|patient_id|patient_key|canvas_externally_exposable_id\n')
+
         with open(file or self.done_file, 'a') as done:
             print(' Complete')
             done.write(f"{data}\n")
@@ -251,3 +263,37 @@ class DocumentEncoderMixin:
         # clean up the temp file
         os.remove(output_path)
         return base64_encoded_string
+
+    def convert_html_to_pdf(self, input_file):
+        input_path = str(input_file)  # Make sure it's a string path
+        output_path = input_path.replace(".html", ".pdf")
+
+        config = pdfkit.configuration(wkhtmltopdf="/usr/local/bin/wkhtmltopdf")  # adjust as needed
+        pdfkit.from_file(input_path, output_path, configuration=config)
+
+        return output_path
+
+    def get_b64_document_string(self, file_list):
+        b64_document_string = None
+        if len(file_list) == 1:
+            file_path = file_list[0]
+            input_file = f"{self.documents_files_dir}{file_path}"
+            if file_path.endswith(".tiff") or file_path.endswith(".tif"):
+                pdf_output = self.tiff_to_pdf(input_file)
+                b64_document_string = self.base64_encode_file(pdf_output)
+                # clean up the file
+                os.remove(pdf_output)
+            elif file_path.lower().endswith(".pdf"):
+                b64_document_string = self.base64_encode_file(input_file)
+            elif file_path.endswith(".png"):
+                b64_document_string = self.convert_and_base64_encode([input_file])
+            elif file_path.endswith(".jpeg") or file_path.endswith(".jpg"):
+                b64_document_string = self.convert_and_base64_encode([input_file])
+            elif file_path.endswith('.html'):
+                pdf_file = self.convert_html_to_pdf(input_file)
+                b64_document_string = self.base64_encode_file(pdf_file)
+        elif len(file_list) > 1:
+            b64_document_string = self.convert_and_base64_encode([f"{self.documents_files_dir}{p}" for p in file_list])
+
+
+        return b64_document_string

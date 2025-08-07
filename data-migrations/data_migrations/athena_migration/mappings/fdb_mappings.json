@@ -1,0 +1,1252 @@
+{
+    "161":
+    {
+        "code": "2-361",
+        "display": "acetaminophen"
+    },
+    "435":
+    {
+        "code": "2-1255",
+        "display": "albuterol"
+    },
+    "519":
+    {
+        "code": "2-8190",
+        "display": "allopurinol"
+    },
+    "703":
+    {
+        "code": "2-4420",
+        "display": "amiodarone"
+    },
+    "723":
+    {
+        "code": "2-1519",
+        "display": "amoxicillin"
+    },
+    "733":
+    {
+        "code": "2-8071",
+        "display": "ampicillin"
+    },
+    "1191":
+    {
+        "code": "2-1076",
+        "display": "aspirin"
+    },
+    "1422":
+    {
+        "code": "2-11608",
+        "display": "benzphetamine"
+    },
+    "1827":
+    {
+        "code": "2-8382",
+        "display": "buspirone"
+    },
+    "1886":
+    {
+        "code": "6-600",
+        "display": "caffeine"
+    },
+    "2176":
+    {
+        "code": "2-470",
+        "display": "cefaclor"
+    },
+    "2180":
+    {
+        "code": "2-8094",
+        "display": "cefazolin"
+    },
+    "2193":
+    {
+        "code": "2-6749",
+        "display": "ceftriaxone"
+    },
+    "2231":
+    {
+        "code": "2-8095",
+        "display": "cephalexin"
+    },
+    "2358":
+    {
+        "code": "6-3674",
+        "display": "chlorhexidine"
+    },
+    "2551":
+    {
+        "code": "2-7428",
+        "display": "ciprofloxacin"
+    },
+    "2582":
+    {
+        "code": "2-54076",
+        "display": "Clindamycin"
+    },
+    "2878":
+    {
+        "code": "2-4095",
+        "display": "cortisone"
+    },
+    "3355":
+    {
+        "code": "2-409538",
+        "display": "Aleve (diclofenac)"
+    },
+    "3498":
+    {
+        "code": "6-4787",
+        "display": "diphenhydramine"
+    },
+    "3640":
+    {
+        "code": "6-2748",
+        "display": "doxycycline"
+    },
+    "3648":
+    {
+        "code": "2-1582",
+        "display": "droperidol"
+    },
+    "4053":
+    {
+        "code": "6-2755",
+        "display": "erythromycin base"
+    },
+    "4450":
+    {
+        "code": "2-3726",
+        "display": "fluconazole"
+    },
+    "4885":
+    {
+        "code": "2-4058",
+        "display": "glutamine"
+    },
+    "5021":
+    {
+        "code": "2-45832",
+        "display": "Griseofulvin"
+    },
+    "5032":
+    {
+        "code": "2-3306",
+        "display": "guaifenesin"
+    },
+    "5489":
+    {
+        "code": "6-1554",
+        "display": "hydrocodone"
+    },
+    "5640":
+    {
+        "code": "2-5042",
+        "display": "ibuprofen"
+    },
+    "5933":
+    {
+        "code": "6-3150",
+        "display": "iodine"
+    },
+    "5992":
+    {
+        "code": "6-832",
+        "display": "iron dextran complex"
+    },
+    "6085":
+    {
+        "code": "1-900414",
+        "display": "Juniper"
+    },
+    "6185":
+    {
+        "code": "2-6934",
+        "display": "labetalol"
+    },
+    "6211":
+    {
+        "code": "2-8222",
+        "display": "lactose"
+    },
+    "6387":
+    {
+        "code": "2-8122",
+        "display": "lidocaine"
+    },
+    "6398":
+    {
+        "code": "2-5488",
+        "display": "lincomycin"
+    },
+    "6582":
+    {
+        "code": "2-3890",
+        "display": "magnesium oxide"
+    },
+    "6754":
+    {
+        "code": "2-3988",
+        "display": "meperidine"
+    },
+    "6809":
+    {
+        "code": "2-10573",
+        "display": "metformin"
+    },
+    "6835":
+    {
+        "code": "2-6969",
+        "display": "methimazole"
+    },
+    "6851":
+    {
+        "code": "2-4168",
+        "display": "methotrexate"
+    },
+    "6918":
+    {
+        "code": "6-3627",
+        "display": "metoprolol"
+    },
+    "6922":
+    {
+        "code": "2-1228",
+        "display": "metronidazole"
+    },
+    "6980":
+    {
+        "code": "2-7404",
+        "display": "minocycline"
+    },
+    "7052":
+    {
+        "code": "2-326",
+        "display": "morphine"
+    },
+    "7243":
+    {
+        "code": "2-7107",
+        "display": "naltrexone"
+    },
+    "7258":
+    {
+        "code": "2-5048",
+        "display": "naproxen"
+    },
+    "7393":
+    {
+        "code": "2-3692",
+        "display": "niacin"
+    },
+    "7597":
+    {
+        "code": "2-1254",
+        "display": "nystatin"
+    },
+    "7804":
+    {
+        "code": "2-1019",
+        "display": "oxycodone"
+    },
+    "7980":
+    {
+        "code": "6-4977",
+        "display": "penicillin G"
+    },
+    "7984":
+    {
+        "code": "6-2684",
+        "display": "penicillin V"
+    },
+    "8183":
+    {
+        "code": "2-4083",
+        "display": "phenytoin"
+    },
+    "8640":
+    {
+        "code": "2-5817",
+        "display": "prednisone"
+    },
+    "8785":
+    {
+        "code": "2-8236",
+        "display": "propoxyphene"
+    },
+    "9230":
+    {
+        "code": "2-5970",
+        "display": "Reglan"
+    },
+    "9384":
+    {
+        "code": "2-1726",
+        "display": "rifampin"
+    },
+    "10180":
+    {
+        "code": "2-4085",
+        "display": "sulfamethoxazole"
+    },
+    "10395":
+    {
+        "code": "2-4822",
+        "display": "tetracycline"
+    },
+    "10438":
+    {
+        "code": "2-3544",
+        "display": "theophylline"
+    },
+    "10627":
+    {
+        "code": "2-193905",
+        "display": "tobramycin"
+    },
+    "10689":
+    {
+        "code": "2-4302",
+        "display": "tramadol"
+    },
+    "10737":
+    {
+        "code": "2-7918",
+        "display": "trazodone"
+    },
+    "11124":
+    {
+        "code": "2-933",
+        "display": "vancomycin"
+    },
+    "11291":
+    {
+        "code": "6-7665",
+        "display": "venom-wasp"
+    },
+    "18631":
+    {
+        "code": "2-1515",
+        "display": "azithromycin"
+    },
+    "19552":
+    {
+        "code": "2-4977",
+        "display": "cefprozil"
+    },
+    "21212":
+    {
+        "code": "2-4908",
+        "display": "clarithromycin"
+    },
+    "22584":
+    {
+        "code": "2-5953",
+        "display": "Depo-Medrol"
+    },
+    "24605":
+    {
+        "code": "2-213",
+        "display": "etodolac"
+    },
+    "25033":
+    {
+        "code": "2-3724",
+        "display": "cefixime"
+    },
+    "25037":
+    {
+        "code": "2-5397",
+        "display": "cefdinir"
+    },
+    "25480":
+    {
+        "code": "1-900166",
+        "display": "Gabapentin"
+    },
+    "28439":
+    {
+        "code": "2-4478",
+        "display": "lamotrigine"
+    },
+    "28728":
+    {
+        "code": "1-54",
+        "display": "Lime"
+    },
+    "29046":
+    {
+        "code": "2-6620",
+        "display": "lisinopril"
+    },
+    "31555":
+    {
+        "code": "2-115506",
+        "display": "nebivolol"
+    },
+    "35208":
+    {
+        "code": "2-6039",
+        "display": "quinapril"
+    },
+    "37801":
+    {
+        "code": "2-264425",
+        "display": "terbinafine"
+    },
+    "38404":
+    {
+        "code": "2-13560",
+        "display": "topiramate"
+    },
+    "40790":
+    {
+        "code": "2-16596",
+        "display": "pantoprazole"
+    },
+    "41126":
+    {
+        "code": "6-4952",
+        "display": "fluticasone"
+    },
+    "41493":
+    {
+        "code": "2-905",
+        "display": "meloxicam"
+    },
+    "42347":
+    {
+        "code": "6-4611",
+        "display": "bupropion"
+    },
+    "42372":
+    {
+        "code": "2-5973",
+        "display": "mupirocin"
+    },
+    "42844":
+    {
+        "code": "2-6992",
+        "display": "Percocet"
+    },
+    "57258":
+    {
+        "code": "2-1018",
+        "display": "tizanidine"
+    },
+    "71515":
+    {
+        "code": "2-1794",
+        "display": "Minipress"
+    },
+    "83367":
+    {
+        "code": "2-835",
+        "display": "atorvastatin"
+    },
+    "83553":
+    {
+        "code": "2-4605",
+        "display": "Seroquel"
+    },
+    "88014":
+    {
+        "code": "2-8027",
+        "display": "rizatriptan"
+    },
+    "90176":
+    {
+        "code": "2-4294",
+        "display": "iron"
+    },
+    "131725":
+    {
+        "code": "2-9128",
+        "display": "Ambien"
+    },
+    "136209":
+    {
+        "code": "2-18822",
+        "display": "Venofer"
+    },
+    "139462":
+    {
+        "code": "2-16831",
+        "display": "moxifloxacin"
+    },
+    "151392":
+    {
+        "code": "2-4242",
+        "display": "Augmentin"
+    },
+    "151399":
+    {
+        "code": "2-5086",
+        "display": "Bactrim"
+    },
+    "152001":
+    {
+        "code": "2-13452",
+        "display": "Macrobid"
+    },
+    "152056":
+    {
+        "code": "2-6651",
+        "display": "Minocin"
+    },
+    "152061":
+    {
+        "code": "2-19089",
+        "display": "Mirena"
+    },
+    "152218":
+    {
+        "code": "2-6371",
+        "display": "Phenergan"
+    },
+    "152699":
+    {
+        "code": "2-17116",
+        "display": "Mobic"
+    },
+    "153010":
+    {
+        "code": "2-5938",
+        "display": "Advil"
+    },
+    "153767":
+    {
+        "code": "2-18531",
+        "display": "Malarone"
+    },
+    "196458":
+    {
+        "code": "2-1802",
+        "display": "Pepcid"
+    },
+    "196474":
+    {
+        "code": "2-1313",
+        "display": "Zithromax"
+    },
+    "196499":
+    {
+        "code": "2-3292",
+        "display": "Suprax"
+    },
+    "196502":
+    {
+        "code": "2-8084",
+        "display": "Lamictal"
+    },
+    "202472":
+    {
+        "code": "2-7157",
+        "display": "Valium"
+    },
+    "202479":
+    {
+        "code": "2-6449",
+        "display": "Ativan"
+    },
+    "202488":
+    {
+        "code": "2-4293",
+        "display": "Motrin"
+    },
+    "202559":
+    {
+        "code": "2-1359",
+        "display": "Imuran"
+    },
+    "202609":
+    {
+        "code": "2-1090",
+        "display": "erythromycin"
+    },
+    "202866":
+    {
+        "code": "2-7327",
+        "display": "Flagyl"
+    },
+    "202975":
+    {
+        "code": "2-9046",
+        "display": "Vibramycin"
+    },
+    "203012":
+    {
+        "code": "2-1689",
+        "display": "Naprosyn"
+    },
+    "203029":
+    {
+        "code": "2-1490",
+        "display": "Tegretol"
+    },
+    "203302":
+    {
+        "code": "2-6340",
+        "display": "Sudafed"
+    },
+    "203354":
+    {
+        "code": "2-1495",
+        "display": "MS Contin"
+    },
+    "203365":
+    {
+        "code": "2-8718",
+        "display": "Indocin"
+    },
+    "203494":
+    {
+        "code": "2-5087",
+        "display": "Cardizem"
+    },
+    "203546":
+    {
+        "code": "2-3622",
+        "display": "Compazine"
+    },
+    "203563":
+    {
+        "code": "2-1118",
+        "display": "Cipro"
+    },
+    "203856":
+    {
+        "code": "2-5930",
+        "display": "Solu-Medrol"
+    },
+    "204362":
+    {
+        "code": "2-11376",
+        "display": "Soma"
+    },
+    "215101":
+    {
+        "code": "2-1092",
+        "display": "Aleve"
+    },
+    "215927":
+    {
+        "code": "2-15833",
+        "display": "Celebrex"
+    },
+    "215928":
+    {
+        "code": "2-8184",
+        "display": "Celexa"
+    },
+    "217020":
+    {
+        "code": "2-110766",
+        "display": "Excedrin Extra Strength"
+    },
+    "217713":
+    {
+        "code": "2-4388",
+        "display": "Imitrex"
+    },
+    "220224":
+    {
+        "code": "2-10317",
+        "display": "Tessalon Perles"
+    },
+    "220343":
+    {
+        "code": "2-13558",
+        "display": "Topamax"
+    },
+    "224892":
+    {
+        "code": "2-6571",
+        "display": "Hibiclens"
+    },
+    "224913":
+    {
+        "code": "2-8599",
+        "display": "Dilaudid"
+    },
+    "235618":
+    {
+        "code": "6-16095",
+        "display": "mold"
+    },
+    "235940":
+    {
+        "code": "6-4303",
+        "display": "artichoke"
+    },
+    "260101":
+    {
+        "code": "2-16725",
+        "display": "oseltamivir"
+    },
+    "261547":
+    {
+        "code": "2-16999",
+        "display": "Keppra"
+    },
+    "261551":
+    {
+        "code": "2-19471",
+        "display": "Lantus U-100 Insulin"
+    },
+    "265647":
+    {
+        "code": "6-2585",
+        "display": "garlic"
+    },
+    "282381":
+    {
+        "code": "2-3853",
+        "display": "Demerol"
+    },
+    "285064":
+    {
+        "code": "2-19239",
+        "display": "Geodon"
+    },
+    "285149":
+    {
+        "code": "6-7877",
+        "display": "banana"
+    },
+    "307387":
+    {
+        "code": "6-6935",
+        "display": "plum"
+    },
+    "314470":
+    {
+        "code": "6-16065",
+        "display": "walnut"
+    },
+    "318340":
+    {
+        "code": "2-7256",
+        "display": "aloe vera"
+    },
+    "324026":
+    {
+        "code": "2-12932",
+        "display": "Allegra"
+    },
+    "352741":
+    {
+        "code": "2-56750",
+        "display": "Lexapro"
+    },
+    "352990":
+    {
+        "code": "2-57343",
+        "display": "Suboxone"
+    },
+    "353484":
+    {
+        "code": "2-57316",
+        "display": "Humira"
+    },
+    "358330":
+    {
+        "code": "2-57253",
+        "display": "Strattera"
+    },
+    "482574":
+    {
+        "code": "2-77833",
+        "display": "Cymbalta"
+    },
+    "593441":
+    {
+        "code": "2-79880",
+        "display": "Lyrica"
+    },
+    "636230":
+    {
+        "code": "2-110290",
+        "display": "Chantix"
+    },
+    "711043":
+    {
+        "code": "2-113966",
+        "display": "Vyvanse"
+    },
+    "797752":
+    {
+        "code": "6-3025",
+        "display": "hepatitis B virus vaccine"
+    },
+    "834236":
+    {
+        "code": "2-117495",
+        "display": "Uloric"
+    },
+    "852519":
+    {
+        "code": "2-56325",
+        "display": "house dust"
+    },
+    "891633":
+    {
+        "code": "6-16073",
+        "display": "hazelnut"
+    },
+    "891658":
+    {
+        "code": "6-568",
+        "display": "peanut"
+    },
+    "892484":
+    {
+        "code": "6-9637",
+        "display": "strawberry"
+    },
+    "892547":
+    {
+        "code": "1-900531",
+        "display": "Corn Containing Products"
+    },
+    "892599":
+    {
+        "code": "6-9283",
+        "display": "beef derived (bovine)"
+    },
+    "892620":
+    {
+        "code": "6-6948",
+        "display": "egg yolk"
+    },
+    "892665":
+    {
+        "code": "6-8922",
+        "display": "milk"
+    },
+    "899448":
+    {
+        "code": "6-16930",
+        "display": "lettuce"
+    },
+    "972601":
+    {
+        "code": "6-16979",
+        "display": "eggplant"
+    },
+    "1040032":
+    {
+        "code": "2-126203",
+        "display": "Latuda"
+    },
+    "1116636":
+    {
+        "code": "2-138505",
+        "display": "Brilinta"
+    },
+    "1310300":
+    {
+        "code": "6-4707",
+        "display": "cobalt"
+    },
+    "1311629":
+    {
+        "code": "1-692",
+        "display": "Nickel"
+    },
+    "1311817":
+    {
+        "code": "6-16188",
+        "display": "mushroom"
+    },
+    "1314891":
+    {
+        "code": "1-900526",
+        "display": "Latex, Natural Rubber"
+    },
+    "1315115":
+    {
+        "code": "6-6947",
+        "display": "egg"
+    },
+    "1358845":
+    {
+        "code": "6-16111",
+        "display": "mercaptobenzothiazole"
+    },
+    "1367119":
+    {
+        "code": "6-10209",
+        "display": "methylchloroisothiazolinone"
+    },
+    "1367125":
+    {
+        "code": "6-10012",
+        "display": "pear"
+    },
+    "1370469":
+    {
+        "code": "6-5695",
+        "display": "onion"
+    },
+    "1370769":
+    {
+        "code": "6-9170",
+        "display": "raspberry"
+    },
+    "1370781":
+    {
+        "code": "6-7207",
+        "display": "gluten"
+    },
+    "1372248":
+    {
+        "code": "1-23",
+        "display": "Coconut"
+    },
+    "1424865":
+    {
+        "code": "1-900408",
+        "display": "Apple"
+    },
+    "1426332":
+    {
+        "code": "1-1131",
+        "display": "Mango"
+    },
+    "1427085":
+    {
+        "code": "6-16062",
+        "display": "pepper (genus Capsicum)"
+    },
+    "1436240":
+    {
+        "code": "2-235265",
+        "display": "Trokendi XR"
+    },
+    "1441652":
+    {
+        "code": "6-13412",
+        "display": "wheat"
+    },
+    "1492174":
+    {
+        "code": "1-90",
+        "display": "Pineapple"
+    },
+    "1551469":
+    {
+        "code": "2-267225",
+        "display": "Contrave"
+    },
+    "1661172":
+    {
+        "code": "2-241645",
+        "display": "1-Day"
+    },
+    "1872038":
+    {
+        "code": "6-16066",
+        "display": "pine nut"
+    },
+    "1876402":
+    {
+        "code": "2-367617",
+        "display": "Dupixent Pen"
+    },
+    "1991307":
+    {
+        "code": "2-343021",
+        "display": "Ozempic"
+    },
+    "2099276":
+    {
+        "code": "6-11893",
+        "display": "spinach"
+    },
+    "2167551":
+    {
+        "code": "6-16087",
+        "display": "dog dander"
+    },
+    "2532362":
+    {
+        "code": "2-376496",
+        "display": "Kimyrsa"
+    },
+    "2553502":
+    {
+        "code": "2-377037",
+        "display": "Wegovy"
+    },
+    "2669702":
+    {
+        "code": "2-411458",
+        "display": "Zepbound"
+    },
+    "17767":
+    {
+        "code": "6-3672",
+        "display": "amlodipine"
+    },
+    "1292":
+    {
+        "code": "6-1677",
+        "display": "baclofen"
+    },
+    "203457":
+    {
+        "code": "2-5527",
+        "display": "Benadryl"
+    },
+    "1011049":
+    {
+        "code": "6-16924",
+        "display": "chickpea"
+    },
+    "325527":
+    {
+        "code": "6-3217",
+        "display": "coriander"
+    },
+    "216221":
+    {
+        "code": "2-1620",
+        "display": "Coreg"
+    },
+    "320864":
+    {
+        "code": "2-63386",
+        "display": "Crestor"
+    },
+    "1364436":
+    {
+        "code": "2-209725",
+        "display": "Eliquis"
+    },
+    "3992":
+    {
+        "code": "6-1774",
+        "display": "epinephrine"
+    },
+    "645943":
+    {
+        "code": "2-926",
+        "display": "Erythrocin"
+    },
+    "4337":
+    {
+        "code": "6-3571",
+        "display": "fentanyl"
+    },
+    "1596450":
+    {
+        "code": "6-4898",
+        "display": "gentamicin"
+    },
+    "5487":
+    {
+        "code": "6-2294",
+        "display": "hydrochlorothiazide"
+    },
+    "28031":
+    {
+        "code": "6-3915",
+        "display": "itraconazole"
+    },
+    "203167":
+    {
+        "code": "2-6608",
+        "display": "Keflex"
+    },
+    "6711":
+    {
+        "code": "6-5039",
+        "display": "melatonin"
+    },
+    "7454":
+    {
+        "code": "6-2852",
+        "display": "nitrofurantoin"
+    },
+    "7646":
+    {
+        "code": "6-3476",
+        "display": "omeprazole"
+    },
+    "7975":
+    {
+        "code": "6-1088",
+        "display": "penicillamine"
+    },
+    "8120":
+    {
+        "code": "6-4869",
+        "display": "phenazopyridine"
+    },
+    "227199":
+    {
+        "code": "2-8884",
+        "display": "Pitocin"
+    },
+    "8611":
+    {
+        "code": "6-3153",
+        "display": "povidone-iodine"
+    },
+    "8745":
+    {
+        "code": "6-4459",
+        "display": "promethazine"
+    },
+    "228271":
+    {
+        "code": "2-26283",
+        "display": "Rebif (with albumin)"
+    },
+    "261680":
+    {
+        "code": "2-16935",
+        "display": "Trileptal"
+    },
+    "220606":
+    {
+        "code": "2-10567",
+        "display": "Ultram"
+    },
+    "11289":
+    {
+        "code": "6-2084",
+        "display": "warfarin"
+    },
+    "66981":
+    {
+        "code": "2-30",
+        "display": "Zofran"
+    },
+    "82728":
+    {
+        "code": "2-35",
+        "display": "Zoloft"
+    },
+    "892526":
+    {
+        "code": "6-16068",
+        "display": "cashew nut"
+    },
+    "2837":
+    {
+        "code": "6-853",
+        "display": "copper"
+    },
+    "202813":
+    {
+        "code": "2-3720",
+        "display": "Diflucan"
+    },
+    "321988":
+    {
+        "code": "6-9709",
+        "display": "escitalopram"
+    },
+    "25138":
+    {
+        "code": "6-4884",
+        "display": "fluorescein"
+    },
+    "3423":
+    {
+        "code": "6-4622",
+        "display": "hydromorphone"
+    },
+    "5966":
+    {
+        "code": "6-672",
+        "display": "iopamidol"
+    },
+    "1545659":
+    {
+        "code": "2-263785",
+        "display": "Jardiance"
+    },
+    "1358901":
+    {
+        "code": "6-9368",
+        "display": "kiwi"
+    },
+    "52175":
+    {
+        "code": "6-4991",
+        "display": "losartan"
+    },
+    "225036":
+    {
+        "code": "2-1817",
+        "display": "Lovenox"
+    },
+    "26225":
+    {
+        "code": "6-4807",
+        "display": "ondansetron"
+    },
+    "33738":
+    {
+        "code": "6-7823",
+        "display": "pioglitazone"
+    },
+    "261624":
+    {
+        "code": "2-17087",
+        "display": "Protonix"
+    },
+    "9143":
+    {
+        "code": "6-4444",
+        "display": "ranitidine"
+    },
+    "892592":
+    {
+        "code": "6-16189",
+        "display": "shrimp"
+    },
+    "261657":
+    {
+        "code": "2-16728",
+        "display": "Tamiflu"
+    },
+    "10763":
+    {
+        "code": "6-2315",
+        "display": "triamterene"
+    },
+    "10829":
+    {
+        "code": "6-2873",
+        "display": "trimethoprim"
+    },
+    "220586":
+    {
+        "code": "2-3138",
+        "display": "Tylenol-Codeine #3"
+    },
+    "2670":
+    {
+        "code": "6-1550",
+        "display": "codeine"
+    },
+    "190283":
+    {
+        "code": "2-4078",
+        "display": "Flomax"
+    },
+    "72302":
+    {
+        "code": "6-6273",
+        "display": "ropinirole"
+    },
+    "154990":
+    {
+        "code": "2-8512",
+        "display": "BuSpar"
+    }
+}

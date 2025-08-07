@@ -280,7 +280,7 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                     }
                 ]
             else:
-                coding = self.med_mapping[f"{row['Medication Name']}|{row.get('Original Code', '')}"]
+                coding = self.med_mapping[f"{row['Medication Name']}|{row.get('Original Code', '')}".lower()]
                 code = next(item['code'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
                 text = next(item['display'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
 
