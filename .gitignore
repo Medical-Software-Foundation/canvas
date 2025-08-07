@@ -163,7 +163,7 @@ cython_debug/
 
 .DS_Store
 
-# Data Migations
+# Data Migrations
 # Ignore any PHI or secrets
 data-migrations/data_migrations/config.ini
 data-migrations/data_migrations/avon_migration/PHI
@@ -172,3 +172,5 @@ data-migrations/data_migrations/drchrono_migration/PHI
 data-migrations/data_migrations/athena_migration/PHI
 data-migrations/data_migrations/athena_migration/results/PHI
 data-migrations/data_migrations/elation_migration/PHI
+data-migrations/data_migrations/charm_migration/PHI
+data-migrations/data_migrations/charm_migration/results/PHI
