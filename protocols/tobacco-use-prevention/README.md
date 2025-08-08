@@ -1,7 +1,7 @@
 # Primary Care Interventions for Prevention and Cessation of Tobacco Use in Children and Adolescents
 
 ## Purpose of the Protocol
-To update the 2013 recommendation by reviewing the evidence on primary care interventions aimed at preventing and ceasing tobacco use among children and adolescents.
+Tobacco use is the leading cause of preventable death in the US. An estimated annual 480,000 deaths are attributable to tobacco use in adults, including secondhand smoke.1 It is estimated that every day about 1600 youth aged 12 to 17 years smoke their first cigarette and that about 5.6 million adolescents alive today will die prematurely of a smoking-related illness.
 
 ## Target Population
 - School-aged children and adolescents (age < 18 years).
