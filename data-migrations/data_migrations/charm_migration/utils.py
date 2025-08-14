@@ -36,6 +36,7 @@ class CharmAPIAuth:
         self.charm_client_secret = config("charm_client_secret", cast=str)
         self.charm_api_key = config("charm_api_key", cast=str)
         self.charm_patient_api_refresh_token = config("charm_patient_api_refresh_token", cast=str)
+        self.charm_fhir_api_refresh_token = config("charm_fhir_api_refresh_token", cast=str)
 
         self.scopes = scopes
         self.base_auth_url = "https://accounts.charmtracker.com"
@@ -174,3 +175,128 @@ class CharmPatientAPI(APIMethodMixin):
                 has_next_page = False
 
         return patient_list
+
+    def fetch_allergies(self, patient_ids):
+        allergy_list = []
+        allergy_endpoint = "/api/ehr/v1/patients/{patient_id}/allergies"
+
+        for patient_id in patient_ids:
+            has_next_page = True
+            page = 1
+            print(f"Fetching allergies for patient ID {patient_id}")
+
+            while has_next_page is True:
+                params = {
+                    "page": page,
+                    "sort_order": "A",
+                    "per_page": 100
+                }
+                allergy_response = self.get(allergy_endpoint.format(patient_id=patient_id), params=params)
+                allergy_json = allergy_response.json()
+                allergy_list.extend(allergy_json['allergies'])
+                if allergy_json['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+        return allergy_list
+
+
+class CharmFHIRAPI(APIMethodMixin):
+    FHIR_API_SCOPES = [
+        "system/AllergyIntolerance.read",
+        "system/Appointment.read",
+        "system/CarePlan.read",
+        "system/CareTeam.read",
+        "system/Condition.read",
+        "system/Device.read",
+        "system/DiagnosticReport.read",
+        "system/DocumentReference.read",
+        "system/Encounter.read",
+        "system/FamilyMemberHistory.read",
+        "system/Goal.read",
+        "system/Immunization.read",
+        "system/Location.read",
+        "system/MedicationAdministration.read",
+        "system/MedicationRequest.read",
+        "system/Observation.read",
+        "system/Organization.read",
+        "system/Patient.read",
+        "system/Practitioner.read",
+        "system/Procedure.read",
+        "system/Provenance.read",
+        "system/QuestionnaireResponse.read",
+        "system/RelatedPerson.read",
+        "user/AllergyIntolerance.read",
+        "user/Appointment.read",
+        "user/CarePlan.read",
+        "user/CareTeam.read",
+        "user/Condition.read",
+        "user/Device.read",
+        "user/DiagnosticReport.read",
+        "user/DocumentReference.read",
+        "user/Encounter.read",
+        "user/FamilyMemberHistory.read",
+        "user/Goal.read",
+        "user/Immunization.read",
+        "user/Location.read",
+        "user/MedicationAdministration.read",
+        "user/MedicationRequest.read",
+        "user/Observation.read",
+        "user/Organization.read",
+        "user/Patient.read",
+        "user/Practitioner.read",
+        "user/Procedure.read",
+        "user/Provenance.read",
+        "user/QuestionnaireResponse.read",
+        "user/RelatedPerson.read",
+        "user/Medication.read",
+        "offline_access"
+    ]
+
+    def __init__(self, environment):
+        self.base_fhir_api_url = "https://ehr2.charmtracker.com/api/ehr/v2/fhir"
+        self.auth = CharmAPIAuth(scopes=self.FHIR_API_SCOPES, environment=environment)
+        self.refresh_access_token()
+
+    def refresh_access_token(self):
+        self.auth.access_token = self.auth.get_access_token_with_refresh_token(self.auth.charm_fhir_api_refresh_token)
+
+    def response_has_next_page(self, response_json):
+        return any([r.get("relation") == "next" for r in response_json.get("link", [])])
+
+    def get(self, uri, params=None):
+        # TODO - make this shared in the APIMethodMixin
+        # The auth times out quickly, so let's refresh the token if we don't get a 200 on the first try
+        for number_try in range(2):
+            response = self.get_request(f"{self.base_fhir_api_url}{uri}", params=params)
+            if response.status_code == 200:
+                return response
+            elif number_try == 0:
+                print("Refreshing the access_token")
+                self.refresh_access_token()
+            else:
+                raise APIException(f"Status {response.status_code}: {str(response.content)}")
+
+    def fetch_allergies(self):
+        allergy_list = []
+        has_next_page = True
+        page = 1
+
+        while has_next_page is True:
+            params = {
+                "clinical-status": "active",
+                "page": str(page)
+            }
+            print(f"Fetching allergies page {page}")
+            allergy_response = self.get(
+                f"/AllergyIntolerance",
+                params=params
+            )
+            response_data = allergy_response.json()
+            allergy_list.extend(response_data["entry"])
+
+            if not self.response_has_next_page(response_data):
+                has_next_page = False
+            else:
+                page += 1
+        return allergy_list
