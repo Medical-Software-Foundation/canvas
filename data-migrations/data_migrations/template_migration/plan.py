@@ -80,7 +80,7 @@ class PlanLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
 
         return validated_rows
 
-    def load_via_commands_api(self, validated_rows):
+    def load_via_commands_api(self, validated_rows, perform_nsce=True):
         """
             Takes the validated rows from self.validate() and 
             loops through to send them off the Commands Create
@@ -107,7 +107,8 @@ class PlanLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
                 patient_key = self.map_patient(patient)
                 practitioner_key = self.map_provider(row.get('Provider'))
                 if note_id := row.get("Note ID"):
-                    self.perform_note_state_change(note_id, 'ULK')
+                    if perform_nsce:
+                        self.perform_note_state_change(note_id, 'ULK')
                 else:
                     note_id = self.create_note(patient_key, **{
                         "note_type_name": row['Note Type Name'],
@@ -131,7 +132,8 @@ class PlanLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
             try:
                 canvas_id = self.create_command(payload)
                 self.commit_command(canvas_id)
-                self.perform_note_state_change(note_id)
+                if perform_nsce:
+                    self.perform_note_state_change(note_id)
                 self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
                 ids.add(row['ID'])
             except BaseException as e:

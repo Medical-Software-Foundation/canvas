@@ -15,6 +15,34 @@ from data_migrations.utils import write_to_json
 
 class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
 
+    self.relationship_code_to_display_map = {
+        "72705000": "Mother",
+        "66839005": "Father",
+        "394859001": "Maternal grandmother",
+        "27733009": "Sister",
+        "70924004": "Brother",
+        "394856008": "Paternal grandfather",
+        "394857004": "Maternal grandfather",
+        "394858009": "Paternal grandmother",
+        "442051000124109": "Maternal aunt",
+        "66089001": "Daughter",
+        "65616008": "Son",
+        "442041000124107": "Paternal uncle",
+        "442031000124102": "Maternal uncle",
+        "442061000124106": "Paternal aunt",
+        "125679009": "Blood relative",
+        "270002": "Female first cousin",
+        "78652007": "Great grandmother",
+        "394862003": "Great aunt",
+        "11993008": "Male first cousin",
+        "45929001": "Half-brother",
+        "719769001": "Maternal great grandmother",
+        "50261002": "Great grandfather",
+        "34581001": "Niece",
+        "83559000": "Nephew",
+        "2272004": "Half-sister"
+    }
+
     def validate(self, delimiter="|"):
         validated_rows = []
         errors = defaultdict(list)
@@ -35,7 +63,7 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
             validations = {
                 "id": [validate_required],
                 "patient": [validate_required],
-                "relative_coding": [(validate_enum, {"possible_options": self.relationship_coding_map.keys()})]
+                "relative_coding": [(validate_enum, {"possible_options": self.relationship_code_to_display_map.keys()})]
             }
 
             for row in reader:
@@ -138,12 +166,12 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
                 "values": {
                     "note": comment,
                     "relative": {
-                        "text": self.relationship_coding_map[row["relative_coding"]],
+                        "text": self.relationship_code_to_display_map[row["relative_coding"]],
                         "extra": {
                             "coding": {
                                 "code": row["relative_coding"],
                                 "system": "http://snomed.info/sct",
-                                "display": self.relationship_coding_map[row["relative_coding"]],
+                                "display": self.relationship_code_to_display_map[row["relative_coding"]],
                             }
                         },
                         "value": row["relative_coding"]

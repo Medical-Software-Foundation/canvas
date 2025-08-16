@@ -1,4 +1,4 @@
-import csv, json, requests
+import csv, json, requests, os, re
 from urllib.parse import urlencode
 from decouple import Config, RepositoryIni
 from collections import defaultdict
@@ -10,6 +10,9 @@ def fetch_complete_csv_rows(filename, key='id', delimiter='|'):
         Used to know what records have already been processed to avoid
         duplicating records
     """
+    if not os.path.isfile(filename):
+        return []
+
     with open(filename, 'r') as file:
         reader = csv.DictReader(file, delimiter=delimiter)
         return {row[key] for row in reader}
@@ -97,6 +100,18 @@ def reverse_mapping(json_file):
     data_dict = fetch_from_json(json_file)
     return {val: key for key, val in data_dict.items()}
 
+
+def strip_html(html):
+
+    # Replace <br>, <br/>, <br /> with newline
+    html = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+
+    html = html.replace("&nbsp;", " ")
+
+    # Remove all other HTML tags
+    html = re.sub(r"<[^>]+>", "", html)
+
+    return html.strip()
 
 
 def load_fhir_settings(environment):

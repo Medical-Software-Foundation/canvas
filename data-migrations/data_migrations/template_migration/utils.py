@@ -8,7 +8,7 @@ def validate_date(value, field_name):
     try:
         return True, arrow.get(value).format("YYYY-MM-DD")
     except:
-        for format in ["MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYYY", "M.DD.YYYY", "MMMM DD, YYYY", "MMM DD, YYYY", "MMMM D, YYYY", "MMM D, YYYY", "MMMM Do, YYYY", "MMM Do, YYYY", "M/D/YY", "MM/DD/YY"]:
+        for format in ["YYYY-M-DD", "YYYY-M-D", "YYYY/MM/DD", "YYYY/M/DD", "YYYY/M/D", "MM/DD/YYYY", "M/D/YYYY", "M/DD/YYYY", "MM-DD-YYYY", "M-D-YYYY", "M-DD-YYYY", "MM.DD.YYYY", "M.D.YYYY", "M.DD.YYYY", "MMMM DD, YYYY", "MMM DD, YYYY", "MMMM D, YYYY", "MMM D, YYYY", "MMMM Do, YYYY", "MMM Do, YYYY", "M/D/YY", "MM/DD/YY"]:
             try:
                 return True, arrow.get(value, format).format("YYYY-MM-DD")
             except:
@@ -40,7 +40,7 @@ def validate_state_code(value, field_name):
     if not value:
         return True, value
 
-    accepted_states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "GU", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "VI", "WA", "WV", "WI", "WY"]
+    accepted_states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "GU", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "VI", "WA", "WV", "WI", "WY", "AE", "AP",  "AA"]
     if value in accepted_states:
         return True, value
     return False, f"Invalid {field_name}: {value}"

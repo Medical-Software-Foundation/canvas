@@ -82,7 +82,7 @@ class PatientLoader(PatientLoaderMixin):
 
 if __name__ == '__main__':
     # change the customer_identifier to what is defined in your config.ini file
-    loader = PatientLoader(environment='phi-collaborative-test')
+    loader = PatientLoader(environment='hellowisp')
     delimiter = ','
 
     # Convert customer file to the template CSV loader
@@ -92,4 +92,4 @@ if __name__ == '__main__':
     valid_rows = loader.validate(delimiter=delimiter, error_use_identifier='SWA patient ID')
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    # loader.load(valid_rows, system_unique_identifier='SWA patient ID)
+    loader.load(valid_rows, system_unique_identifier='SWA patient ID')
