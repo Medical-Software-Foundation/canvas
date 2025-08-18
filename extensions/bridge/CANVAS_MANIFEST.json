@@ -4,10 +4,28 @@
     "name": "bridge",
     "description": "Bridge integration for Canvas",
     "components": {
+        "applications": [
+            {
+                "class": "bridge.portal_experience.applications.my_application:MyApplication",
+                "name": "Bridge Eligibility Check",
+                "description": "Tool to establish the eligibility for a patient.",
+                "scope": "portal_menu_item",
+                "icon": "portal_experience/assets/icon.png"
+            }
+        ],
         "protocols": [
             {
                 "class": "bridge.protocols.bridge_patient_sync:BridgePatientSync",
                 "description": "Create or update patients in Bridge based on creation or changes to patients in Canvas",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "bridge.portal_experience.routes.my_web_app:MyWebApp",
+                "description": "Serves the bridge eligibility checking tool",
                 "data_access": {
                     "event": "",
                     "read": [],
