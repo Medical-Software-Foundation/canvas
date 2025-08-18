@@ -1,0 +1,32 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "coding_lookup",
+    "description": "API to be able to query for command specific codings",
+    "components": {
+        "protocols": [
+            {
+                "class": "coding_lookup.protocols.allergies_api:AllergiesAPI",
+                "description": "Allergy API endpoint to search for allergy codings by text or rxnorm code"
+            },
+            {
+                "class": "coding_lookup.protocols.medications_api:MedicationsAPI",
+                "description": "Medication API endpoint to search for medication codings by text and/or rxnorm code"
+            },
+            {
+                "class": "coding_lookup.protocols.conditions_api:ConditionsAPI",
+                "description": "Condition API endpoint to search for condition codings by text and/or ICD-10 code"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["simpleapi-api-key"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

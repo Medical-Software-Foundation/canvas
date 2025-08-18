@@ -1,0 +1,14 @@
+{
+    "uncategorizedclinicaldocument": {
+        "code": "47039-3",
+        "type": "uncategorizedclinicaldocument"
+    },
+    "patientadministrativedocument": {
+        "code": "51851-4",
+        "type": "patientadministrativedocument"
+    },
+    "externalmedicalrecords": {
+        "code": "11503-0",
+        "type": "uncategorizedclinicaldocument"
+    }
+}

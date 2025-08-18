@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "data-migrations"
+version = "0.1.0"
+description = ""
+authors = ["Reba Magier <reba.magier@canvasmedical.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.32.3"
+python-decouple = "^3.8"
+pytz = "^2024.2"
+arrow = "^1.3.0"
+path = "^17.0.0"
+pillow = "^11.1.0"
+pdfkit = "^1.0.0"
+weasyprint = "^66.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,12 @@
+{
+    "vendor_rfv_code_1": {
+        "code": "vendor_rfv_code_1",
+        "display": "Vendor RFV Code 1",
+        "system": "INTERNAL"
+    },
+    "vendor_rfv_code_2": {
+        "code": "vendor_rfv_code_2",
+        "display": "Vendor RFV Code 2",
+        "system": "INTERNAL"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "office_visit": {
+        "code": "308335008",
+        "display": "Office visit",
+        "system": "http://snomed.info/sct"
+    },
+    "telehealth_visit": {
+        "code": "448337001",
+        "display": "Telehealth",
+        "system": "http://snomed.info/sct"
+    },
+    "historical": {
+        "code": "vendor_historical_note",
+        "display": "Vendor Historical Note",
+        "system": "INTERNAL"
+    }
+}
