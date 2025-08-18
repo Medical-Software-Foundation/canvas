@@ -103,13 +103,13 @@ data-migrations/
 
 ---
 
-## �� PHI Considerations {#phi-considerations}
+## � PHI Considerations 
 
 The `PHI/` submodule exists to house any logic related to **Protected Health Information**. Use this module when handling sensitive data transformations. Keep them out of version control and handle per your security policies.
 
 ---
 
-## ⚙️ Setup {#setup}
+## ⚙️ Setup 
 
 This project uses [Poetry](https://python-poetry.org/) for dependency management.
 
@@ -133,7 +133,7 @@ poetry install
 
 ---
 
-## 🔌 Plugin Setup {#plugin-setup}
+## 🔌 Plugin Setup 
 
 If you want to take advantage of any plugins in the `plugin` folder, you will need to follow setup instructions to use the Canvas CLI here: [Canvas CLI Documentation](https://docs.canvasmedical.com/sdk/canvas_cli/)
 
@@ -141,7 +141,7 @@ If you want to take advantage of any plugins in the `plugin` folder, you will ne
 
 ---
 
-## ⚙️ Configuration {#configuration}
+## ⚙️ Configuration 
 
 Scripts load credentials and settings from `config.ini` at the root of this folder. Fill in values per environment.
 
@@ -176,7 +176,7 @@ Examples of settings to configure:
 
 ---
 
-## 🔄 Common Workflow {#common-workflow}
+## 🔄 Common Workflow 
 
 Most vendor scripts follow a **three-step pattern** controlled in the script's `__main__` section:
 
@@ -218,7 +218,7 @@ This step:
 
 ---
 
-## 🚀 **Getting Started** {#getting-started}
+## 🚀 **Getting Started** 
 
 ### 📋 **Quick Start Checklist**
 
@@ -265,7 +265,7 @@ python data_migrations/your_vendor_migration/create_conditions.py
 
 ---
 
-## 📺 Console Output During Migration {#console-output-during-migration}
+## 📺 Console Output During Migration 
 
 When running migration scripts, you'll see real-time progress updates in the console. Here's what to expect based on the actual template migration files:
 
@@ -347,7 +347,7 @@ Complete
 
 ---
 
-## 📊 Result CSV Files {#result-csv-files}
+## 📊 Result CSV Files 
 
 Each migration generates comprehensive result files for **audit trails** and **progress tracking**:
 
@@ -380,7 +380,7 @@ Each migration generates comprehensive result files for **audit trails** and **p
 
 ---
 
-## ✅ Common Validation Patterns {#common-validation-patterns}
+## ✅ Common Validation Patterns 
 
 The migration system enforces strict validation to ensure data quality and Canvas compatibility:
 
@@ -424,13 +424,13 @@ Certain fields are restricted to a list of choices that can be ingested. For exa
 
 ---
 
-## 📊 Data Type Specific Details {#data-type-specific-details}
+## 📊 Data Type Specific Details 
 
 All our data types are ingested using **publicly available APIs**. For more information on the details of our APIs, see [Canvas API Documentation](https://docs.canvasmedical.com/api/).
 
 ---
 
-## 👤 **Patient Migration** (`create_patients.py`) {#patient-migration}
+## 👤 **Patient Migration** (`create_patients.py`) 
 
 Patients are the **first thing** that should be loaded. When loading patients from one EMR to Canvas, we require the EMR's unique identifier to be passed. This allows us to ensure we aren't loading duplicate records and can properly link the rest of the patient's data.
 
@@ -496,7 +496,7 @@ We keep track of each patient's historical data migration note in the `mappings/
 
 ---
 
-## 🚫 **Allergy Migration** (`create_allergies.py`) {#allergy-migration}
+## 🚫 **Allergy Migration** (`create_allergies.py`) 
 
 Allergies keep track of specific patient allergy intolerance records. These are commands inserted into a data migration note. These are loaded via **FHIR Allergy Intolerance**: [Canvas Allergy API](https://docs.canvasmedical.com/api/allergyintolerance/)
 
@@ -542,7 +542,7 @@ However, it is not always easy to map allergies to specific codings, so there ar
 
 ---
 
-## 🩺 **Condition Migration** (`create_conditions.py`) {#condition-migration}
+## 🩺 **Condition Migration** (`create_conditions.py`) 
 
 Conditions keep track of specific patient problems/conditions that are both active or resolved. These are commands inserted into a data migration note. **Active conditions** will be Diagnose commands, while **resolved conditions** will be Past Medical History commands. These are loaded via **FHIR Condition**: [Canvas Condition API](https://docs.canvasmedical.com/api/condition/)
 
@@ -579,7 +579,7 @@ We require all conditions to have an **ICD-10 coding**. We have helper functions
 
 ---
 
-## 💊 **Medication Migration** (`create_medications.py`) {#medication-migration}
+## 💊 **Medication Migration** (`create_medications.py`) 
 
 Medications are commands inserted into a data migration note. These are loaded via **FHIR Medication Statement**: [Canvas Medication API](https://docs.canvasmedical.com/api/medicationstatement/)
 
@@ -617,7 +617,7 @@ Canvas medications are coded to use an **FDB code** so that proper drug interact
 
 ---
 
-## 💉 **Immunization Migration** (`create_immunizations.py`) {#immunization-migration}
+## 💉 **Immunization Migration** (`create_immunizations.py`) 
 
 Immunizations are commands inserted into a data migration note. These are loaded via **FHIR Immunization**: [Canvas Immunization API](https://docs.canvasmedical.com/api/immunization/)
 
@@ -649,7 +649,7 @@ Canvas supports both **coded immunizations** (with CVX codes) and **unstructured
 
 ---
 
-## 👨‍👩‍👧‍👦 **Family History Migration** (`create_family_history.py`) {#family-history-migration}
+## 👨‍👩‍👧‍👦 **Family History Migration** (`create_family_history.py`) 
 
 Family history is loaded via **FHIR Family Member History**: [Canvas Family Member History API](https://docs.canvasmedical.com/api/familymemberhistory/)
 
@@ -703,7 +703,7 @@ We can ingest these commands as either unstructured data or SNOMED diagnosis cod
 | **Great Grandfather** | `50261002` | Great grandfather |
 ---
 
-## 📅 **Appointment Migration** (`create_appointments.py`) {#appointment-migration}
+## 📅 **Appointment Migration** (`create_appointments.py`) 
 
 Appointments are loaded via **FHIR Appointment**: [Canvas Appointment API](https://docs.canvasmedical.com/api/appointment/)
 
@@ -751,7 +751,7 @@ For future appointments, we recommend loading this closer to go live date to mak
 
 ---
 
-## 🏥 **Coverage Migration** (`create_coverages.py`) {#coverage-migration}
+## 🏥 **Coverage Migration** (`create_coverages.py`) 
 
 Coverages are ingested with the **FHIR Coverage**: [Canvas Coverage API](https://docs.canvasmedical.com/api/coverage/)
 
@@ -790,7 +790,7 @@ Coverages appear in the **Patient's Profile Page**. If the patient's subscriber 
 
 ---
 
-## 📄 **Document Migration** (`create_documents.py`) {#document-migration}
+## 📄 **Document Migration** (`create_documents.py`) 
 
 Documents are loaded via **FHIR Document Reference**: [Canvas Document API](https://docs.canvasmedical.com/api/documentreference/). You can ingest both Administrative and Clinical Documents for a patient. You will need to map the document you are trying to ingest to the correct documents types.
 
@@ -840,7 +840,7 @@ We will try to convert images and HTML to PDF for FHIR Document Reference ingest
 
 ---
 
-## 🧪 **Lab Report Migration** (`create_lab_reports.py`) {#lab-report-migration}
+## 🧪 **Lab Report Migration** (`create_lab_reports.py`) 
 
 Lab reports are loaded via **FHIR DiagnosticReport**: [Canvas Lab Report API](https://docs.canvasmedical.com/api/labreport/)
 
@@ -880,7 +880,7 @@ These will show up in the **Lab Report Panel section** of the patient RHS of the
 
 ---
 
-## ❤️ **Vitals Migration** (`create_vitals.py`) {#vitals-migration}
+## ❤️ **Vitals Migration** (`create_vitals.py`) 
 
 Vital commands are typically inserted into the patient's timeline in to Vital Data Import notes according the the `created_at` timestamp so you can see a patient's vitals over time easily.
 
@@ -930,7 +930,7 @@ Vital commands are typically inserted into the patient's timeline in to Vital Da
 - **Data Validation**: Ignores records where all vital values are null/empty
 ---
 
-## 💬 **Message Migration** (`create_messages.py`) {#message-migration}
+## 💬 **Message Migration** (`create_messages.py`) 
 
 If you want to load historical messages between a patient and practitioner, you can use the **FHIR Communication**: [Canvas Communication API](https://docs.canvasmedical.com/api/communication/) to ingest historical messages.
 
@@ -956,7 +956,7 @@ These will show up in the **Patient's timeline** as message notes. If you will b
 
 ---
 
-## ✅ **Consent Migration** (`create_consents.py`) {#consent-migration}
+## ✅ **Consent Migration** (`create_consents.py`) 
 
 If Consents are configured in your instance and you want to migrate over if the patient consent was rejected or active, you can use the **FHIR Consent**: [Canvas Consent API](https://docs.canvasmedical.com/api/consent/) endpoint to ingest these records.
 
@@ -982,7 +982,7 @@ Consents appear on the **Patient's Profile page**.
 
 ---
 
-## 📝 **HPI Migration** (`create_hpi.py`) {#hpi-migration}
+## 📝 **HPI Migration** (`create_hpi.py`) 
 
 HPI commands capture a narrative field and can be dropped in any note as an HPI command. If you pass the Note ID parameter, it will drop the command in that note. If no Note ID is provided, it will create a new note on the patient's timeline using the DOS, provider, location, and note type name fields.
 
@@ -1018,7 +1018,7 @@ Used to know which note to insert the HPI command into.
 
 ---
 
-## 📋 **Questionnaire Response Migration** (`create_questionnaire_response.py`) {#questionnaire-response-migration}
+## 📋 **Questionnaire Response Migration** (`create_questionnaire_response.py`) 
 
 When mapping data between EMRs, sometimes a different EMR concept is not captured well in Canvas. We typically try to save these things to a **questionnaire response**. Any data that is question or answer can be saved here. You will need to set up the Questionnaires you want to use with your Implementation Leader.
 
@@ -1057,7 +1057,7 @@ Note fields are used to know which note to insert the HPI command into.
 
 ---
 
-## 🗂️ **Mapping** {#mapping}
+## 🗂️ **Mapping** 
 
 ### 🔍 **Specific Coding Mapping**
 
@@ -1379,7 +1379,7 @@ Mapping files are located in the `mappings/` directory and define how source val
 
 ---
 
-## 🔌 **Plugins** {#plugins}
+## 🔌 **Plugins** 
 
 There are some **Canvas SDK Plugins** in the `plugins` folder that are there to help with additional Data Migration needs.
 
@@ -1410,7 +1410,7 @@ The **Coding Lookup Plugin** provides standardized medical coding lookup service
 
 ---
 
-## 💡 **Best Practices** {#best-practices}
+## 💡 **Best Practices** 
 
 Follow these guidelines to ensure successful data migrations:
 
