@@ -1,0 +1,28 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_metadata_management",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_metadata_management.protocols.metadata_api:MetadataAPI",
+                "description": "A protocol that allows for an API request to be able to set Patient Metadata"
+            },
+            {
+                "class": "patient_metadata_management.protocols.patient_metadata_fields:PatientMetadataFields",
+                "description": "A protocol that configures patient metadata fields for the patient's profile page"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["simpleapi-api-key"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

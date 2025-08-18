@@ -1,0 +1,92 @@
+{
+    "C55":
+    [
+        "429637009",
+        "Malignant neoplasm of uterus"
+    ],
+    "C67.0":
+    [
+        "430542006",
+        "Malignant neoplasm of urinary bladder"
+    ],
+    "E03.8":
+    [
+        "300934004",
+        "Hypothyroidism"
+    ],
+    "E11.9":
+    [
+        "430679000",
+        "Diabetes mellitus type 2"
+    ],
+    "E27.2":
+    [
+        "699057005",
+        "Addison disease"
+    ],
+    "E66.09":
+    [
+        "160311006",
+        "Obesity"
+    ],
+    "F10.10":
+    [
+        "266890009",
+        "Alcoholism"
+    ],
+    "F32.A":
+    [
+        "160329001",
+        "Depression"
+    ],
+    "G30.0":
+    [
+        "394877006",
+        "Alzheimer's disease"
+    ],
+    "G30.9":
+    [
+        "394877006",
+        "Alzheimer's disease"
+    ],
+    "G35":
+    [
+        "160337009",
+        "Multiple sclerosis"
+    ],
+    "I10":
+    [
+        "160357008",
+        "Hypertension"
+    ],
+    "I49.8":
+    [
+        "698248002",
+        "Cardiac arrhythmia"
+    ],
+    "M15.0":
+    [
+        "160414002",
+        "Osteoarthritis"
+    ],
+    "M32.9":
+    [
+        "3170001000004104",
+        "Systemic lupus erythematosus"
+    ],
+    "Z82.3":
+    [
+        "275104002",
+        "Stroke"
+    ],
+    "Z82.62":
+    [
+        "160313009",
+        "Osteoporosis"
+    ],
+    "Z83.3":
+    [
+        "160303001",
+        "Diabetes mellitus"
+    ]
+}
