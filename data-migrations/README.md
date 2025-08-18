@@ -11,44 +11,44 @@ This module contains tools for migrating Electronic Health Record (EHR) data fro
 ## 📑 **Table of Contents**
 
 ### 📚 **Core Concepts**
-- [What This README Documents](#-what-this-readme-documents)
-- [Highlights](#-highlights)
-- [Project Structure](#-project-structure)
-- [PHI Considerations](#-phi-considerations)
-- [Common Workflow](#-common-workflow)
+- [What This README Documents](#what-this-readme-documents)
+- [Highlights](#highlights)
+- [Project Structure](#project-structure)
+- [PHI Considerations](#phi-considerations)
+- [Common Workflow](#common-workflow)
 
 ### 🚀 **Getting Started**
-- [Setup](#-setup)
-- [Plugin Setup](#-plugin-setup)
-- [Configuration](#-configuration)
-- [Getting Started](#-getting-started)
+- [Setup](#setup)
+- [Plugin Setup](#plugin-setup)
+- [Configuration](#configuration)
+- [Getting Started](#getting-started)
 
 ### 📊 **Data Migration Types**
-- [Data Type Specific Details](#-data-type-specific-details)
-- [Patient Migration](#-patient-migration)
-- [Command Type Migrations](#-command-type-migrations)
-- [Allergy Migration](#-allergy-migration)
-- [Condition Migration](#-condition-migration)
-- [Medication Migration](#-medication-migration)
-- [Immunization Migration](#-immunization-migration)
-- [Family History Migration](#-family-history-migration)
-- [Appointment Migration](#-appointment-migration)
-- [Coverage Migration](#-coverage-migration)
-- [Document Migration](#-document-migration)
-- [Lab Report Migration](#-lab-report-migration)
-- [Vitals Migration](#-vitals-migration)
-- [Message Migration](#-message-migration)
-- [Consent Migration](#-consent-migration)
-- [HPI Migration](#-hpi-migration)
-- [Questionnaire Response Migration](#-questionnaire-response-migration)
+- [Data Type Specific Details](#data-type-specific-details)
+- [Patient Migration](#patient-migration-create_patientspy)
+- [Command Type Migrations](#command-type-migrations)
+- [Allergy Migration](#allergy-migration-create_allergiespy)
+- [Condition Migration](#condition-migration-create_conditionspy)
+- [Medication Migration](#medication-migration-create_medicationspy)
+- [Immunization Migration](#immunization-migration-create_immunizationspy)
+- [Family History Migration](#family-history-migration-create_family_historypy)
+- [Appointment Migration](#appointment-migration-create_appointmentspy)
+- [Coverage Migration](#coverage-migration-create_coveragespy)
+- [Document Migration](#document-migration-create_documentspy)
+- [Lab Report Migration](#lab-report-migration-create_lab_reportspy)
+- [Vitals Migration](#vitals-migration-create_vitalspy)
+- [Message Migration](#message-migration-create_messagespy)
+- [Consent Migration](#consent-migration-create_consentspy)
+- [HPI Migration](#hpi-migration-create_hpipy)
+- [Questionnaire Response Migration](#questionnaire-response-migration-create_questionnaire_responsepy)
 
 ### 🛠️ **Technical Details**
-- [Console Output During Migration](#-console-output-during-migration)
-- [Result CSV Files](#-result-csv-files)
-- [Common Validation Patterns](#-common-validation-patterns)
-- [Mapping](#-mapping)
-- [Plugins](#-plugins)
-- [Best Practices](#-best-practices)
+- [Console Output During Migration](#console-output-during-migration)
+- [Result CSV Files](#result-csv-files)
+- [Common Validation Patterns](#common-validation-patterns)
+- [Mapping](#mapping)
+- [Plugins](#plugins)
+- [Best Practices](#best-practices)
 
 ---
 
@@ -103,13 +103,13 @@ data-migrations/
 
 ---
 
-## �� PHI Considerations {#phi-considerations}
+## 🔐 PHI Considerations
 
 The `PHI/` submodule exists to house any logic related to **Protected Health Information**. Use this module when handling sensitive data transformations. Keep them out of version control and handle per your security policies.
 
 ---
 
-## ⚙️ Setup {#setup}
+## ⚙️ Setup
 
 This project uses [Poetry](https://python-poetry.org/) for dependency management.
 
@@ -133,7 +133,7 @@ poetry install
 
 ---
 
-## 🔌 Plugin Setup {#plugin-setup}
+## 🔌 Plugin Setup
 
 If you want to take advantage of any plugins in the `plugin` folder, you will need to follow setup instructions to use the Canvas CLI here: [Canvas CLI Documentation](https://docs.canvasmedical.com/sdk/canvas_cli/)
 
@@ -141,7 +141,7 @@ If you want to take advantage of any plugins in the `plugin` folder, you will ne
 
 ---
 
-## ⚙️ Configuration {#configuration}
+## ⚙️ Configuration
 
 Scripts load credentials and settings from `config.ini` at the root of this folder. Fill in values per environment.
 
@@ -176,7 +176,7 @@ Examples of settings to configure:
 
 ---
 
-## 🔄 Common Workflow {#common-workflow}
+## 🔄 Common Workflow
 
 Most vendor scripts follow a **three-step pattern** controlled in the script's `__main__` section:
 
@@ -218,7 +218,7 @@ This step:
 
 ---
 
-## 🚀 **Getting Started** {#getting-started}
+## 🚀 **Getting Started**
 
 ### 📋 **Quick Start Checklist**
 
@@ -265,7 +265,7 @@ python data_migrations/your_vendor_migration/create_conditions.py
 
 ---
 
-## 📺 Console Output During Migration {#console-output-during-migration}
+## 📺 Console Output During Migration
 
 When running migration scripts, you'll see real-time progress updates in the console. Here's what to expect based on the actual template migration files:
 
@@ -347,7 +347,7 @@ Complete
 
 ---
 
-## 📊 Result CSV Files {#result-csv-files}
+## 📊 Result CSV Files
 
 Each migration generates comprehensive result files for **audit trails** and **progress tracking**:
 
@@ -380,7 +380,7 @@ Each migration generates comprehensive result files for **audit trails** and **p
 
 ---
 
-## ✅ Common Validation Patterns {#common-validation-patterns}
+## ✅ Common Validation Patterns
 
 The migration system enforces strict validation to ensure data quality and Canvas compatibility:
 
@@ -424,13 +424,13 @@ Certain fields are restricted to a list of choices that can be ingested. For exa
 
 ---
 
-## 📊 Data Type Specific Details {#data-type-specific-details}
+## 📊 Data Type Specific Details
 
 All our data types are ingested using **publicly available APIs**. For more information on the details of our APIs, see [Canvas API Documentation](https://docs.canvasmedical.com/api/).
 
 ---
 
-## 👤 **Patient Migration** (`create_patients.py`) {#patient-migration}
+## 👤 **Patient Migration** (`create_patients.py`)
 
 Patients are the **first thing** that should be loaded. When loading patients from one EMR to Canvas, we require the EMR's unique identifier to be passed. This allows us to ensure we aren't loading duplicate records and can properly link the rest of the patient's data.
 
@@ -496,7 +496,7 @@ We keep track of each patient's historical data migration note in the `mappings/
 
 ---
 
-## 🚫 **Allergy Migration** (`create_allergies.py`) {#allergy-migration}
+## 🚫 **Allergy Migration** (`create_allergies.py`)
 
 Allergies keep track of specific patient allergy intolerance records. These are commands inserted into a data migration note. These are loaded via **FHIR Allergy Intolerance**: [Canvas Allergy API](https://docs.canvasmedical.com/api/allergyintolerance/)
 
@@ -542,7 +542,7 @@ However, it is not always easy to map allergies to specific codings, so there ar
 
 ---
 
-## 🩺 **Condition Migration** (`create_conditions.py`) {#condition-migration}
+## 🩺 **Condition Migration** (`create_conditions.py`)
 
 Conditions keep track of specific patient problems/conditions that are both active or resolved. These are commands inserted into a data migration note. **Active conditions** will be Diagnose commands, while **resolved conditions** will be Past Medical History commands. These are loaded via **FHIR Condition**: [Canvas Condition API](https://docs.canvasmedical.com/api/condition/)
 
@@ -579,7 +579,7 @@ We require all conditions to have an **ICD-10 coding**. We have helper functions
 
 ---
 
-## 💊 **Medication Migration** (`create_medications.py`) {#medication-migration}
+## 💊 **Medication Migration** (`create_medications.py`)
 
 Medications are commands inserted into a data migration note. These are loaded via **FHIR Medication Statement**: [Canvas Medication API](https://docs.canvasmedical.com/api/medicationstatement/)
 
@@ -617,7 +617,7 @@ Canvas medications are coded to use an **FDB code** so that proper drug interact
 
 ---
 
-## 💉 **Immunization Migration** (`create_immunizations.py`) {#immunization-migration}
+## 💉 **Immunization Migration** (`create_immunizations.py`)
 
 Immunizations are commands inserted into a data migration note. These are loaded via **FHIR Immunization**: [Canvas Immunization API](https://docs.canvasmedical.com/api/immunization/)
 
@@ -649,7 +649,7 @@ Canvas supports both **coded immunizations** (with CVX codes) and **unstructured
 
 ---
 
-## 👨‍👩‍👧‍👦 **Family History Migration** (`create_family_history.py`) {#family-history-migration}
+## 👨‍👩‍👧‍👦 **Family History Migration** (`create_family_history.py`)
 
 Family history is loaded via **FHIR Family Member History**: [Canvas Family Member History API](https://docs.canvasmedical.com/api/familymemberhistory/)
 
@@ -703,7 +703,7 @@ We can ingest these commands as either unstructured data or SNOMED diagnosis cod
 | **Great Grandfather** | `50261002` | Great grandfather |
 ---
 
-## 📅 **Appointment Migration** (`create_appointments.py`) {#appointment-migration}
+## 📅 **Appointment Migration** (`create_appointments.py`)
 
 Appointments are loaded via **FHIR Appointment**: [Canvas Appointment API](https://docs.canvasmedical.com/api/appointment/)
 
@@ -751,7 +751,7 @@ For future appointments, we recommend loading this closer to go live date to mak
 
 ---
 
-## 🏥 **Coverage Migration** (`create_coverages.py`) {#coverage-migration}
+## 🏥 **Coverage Migration** (`create_coverages.py`)
 
 Coverages are ingested with the **FHIR Coverage**: [Canvas Coverage API](https://docs.canvasmedical.com/api/coverage/)
 
@@ -790,7 +790,7 @@ Coverages appear in the **Patient's Profile Page**. If the patient's subscriber 
 
 ---
 
-## 📄 **Document Migration** (`create_documents.py`) {#document-migration}
+## 📄 **Document Migration** (`create_documents.py`)
 
 Documents are loaded via **FHIR Document Reference**: [Canvas Document API](https://docs.canvasmedical.com/api/documentreference/). You can ingest both Administrative and Clinical Documents for a patient. You will need to map the document you are trying to ingest to the correct documents types.
 
@@ -840,7 +840,7 @@ We will try to convert images and HTML to PDF for FHIR Document Reference ingest
 
 ---
 
-## 🧪 **Lab Report Migration** (`create_lab_reports.py`) {#lab-report-migration}
+## 🧪 **Lab Report Migration** (`create_lab_reports.py`)
 
 Lab reports are loaded via **FHIR DiagnosticReport**: [Canvas Lab Report API](https://docs.canvasmedical.com/api/labreport/)
 
@@ -880,7 +880,7 @@ These will show up in the **Lab Report Panel section** of the patient RHS of the
 
 ---
 
-## ❤️ **Vitals Migration** (`create_vitals.py`) {#vitals-migration}
+## ❤️ **Vitals Migration** (`create_vitals.py`)
 
 Vital commands are typically inserted into the patient's timeline in to Vital Data Import notes according the the `created_at` timestamp so you can see a patient's vitals over time easily.
 
@@ -930,7 +930,7 @@ Vital commands are typically inserted into the patient's timeline in to Vital Da
 - **Data Validation**: Ignores records where all vital values are null/empty
 ---
 
-## 💬 **Message Migration** (`create_messages.py`) {#message-migration}
+## 💬 **Message Migration** (`create_messages.py`)
 
 If you want to load historical messages between a patient and practitioner, you can use the **FHIR Communication**: [Canvas Communication API](https://docs.canvasmedical.com/api/communication/) to ingest historical messages.
 
@@ -956,7 +956,7 @@ These will show up in the **Patient's timeline** as message notes. If you will b
 
 ---
 
-## ✅ **Consent Migration** (`create_consents.py`) {#consent-migration}
+## ✅ **Consent Migration** (`create_consents.py`)
 
 If Consents are configured in your instance and you want to migrate over if the patient consent was rejected or active, you can use the **FHIR Consent**: [Canvas Consent API](https://docs.canvasmedical.com/api/consent/) endpoint to ingest these records.
 
@@ -982,7 +982,7 @@ Consents appear on the **Patient's Profile page**.
 
 ---
 
-## 📝 **HPI Migration** (`create_hpi.py`) {#hpi-migration}
+## 📝 **HPI Migration** (`create_hpi.py`)
 
 HPI commands capture a narrative field and can be dropped in any note as an HPI command. If you pass the Note ID parameter, it will drop the command in that note. If no Note ID is provided, it will create a new note on the patient's timeline using the DOS, provider, location, and note type name fields.
 
@@ -1018,7 +1018,7 @@ Used to know which note to insert the HPI command into.
 
 ---
 
-## 📋 **Questionnaire Response Migration** (`create_questionnaire_response.py`) {#questionnaire-response-migration}
+## 📋 **Questionnaire Response Migration** (`create_questionnaire_response.py`)
 
 When mapping data between EMRs, sometimes a different EMR concept is not captured well in Canvas. We typically try to save these things to a **questionnaire response**. Any data that is question or answer can be saved here. You will need to set up the Questionnaires you want to use with your Implementation Leader.
 
@@ -1057,7 +1057,7 @@ Note fields are used to know which note to insert the HPI command into.
 
 ---
 
-## 🗂️ **Mapping** {#mapping}
+## 🗂️ **Mapping**
 
 ### 🔍 **Specific Coding Mapping**
 
@@ -1150,302 +1150,4 @@ Once your mappings are populated, the main create scripts:
 
 | Script | Purpose | Creates/Updates |
 |--------|---------|-----------------|
-| **`create_allergy_map.py`** | Map allergy concepts to FDB codes | `allergy_coding_map.json` |
-| **`create_medication_map.py`** | Map medication concepts to FDB codes or unstructured | `medication_coding_map.json` |
-| **`create_condition_map.py`** | Map condition concepts to ICD-10 codes | `condition_coding_map.json` |
-
-> 💡 **Pro Tip**: Run these mapping scripts **before** your main data migration to ensure all concepts are properly mapped. This prevents data loss and improves migration quality.
-
-##### **5. Step-by-Step Mapping Process**
-
-Each mapping script follows this exact workflow, but with different method names:
-
-**For Allergies (`create_allergies.py`):**
-```python
-# 1. Create the allergy map from unique concepts in your data source
-loader.create_allergy_map()
-
-# 2. Use the map function to search and map concepts to template format
-loader.map()
-
-# 3. Review and manually decide on unmapped items
-loader.review()
-```
-
-**For Medications (`create_medications.py`):**
-```python
-# 1. Create the medication map from unique concepts in your data source
-loader.create_medication_map()
-
-# 2. Use the map function to search and map concepts to template format
-loader.map()
-
-# 3. Review and manually decide on unmapped items
-loader.review()
-```
-
-**For Conditions (`create_conditions.py`):**
-```python
-# 1. Create the condition map from unique concepts in your data source
-loader.create_condition_map()
-
-# 2. Use the map function to search and map concepts to template format
-loader.map()
-
-# 3. Review and manually decide on unmapped items
-loader.review()
-```
-
-**What Each Step Does:**
-- **`create_*_map()`**: Extracts unique concepts from your vendor data and initializes the appropriate mapping file
-- **`map()`**: Searches for each concept using the Coding Lookup Plugin APIs and attempts automatic mapping
-- **`review()`**: Interactive session for manually reviewing and mapping concepts that couldn't be automatically resolved
-
-> 🔍 **Note**: Each create script inherits from its respective Review class (`AllergyReview`, `MedicationReview`, `ConditionReview`), so you have access to all the interactive mapping tools during the review phase.
-
-#### 🚀 **Key Features**
-
-##### **Smart Search Strategies**
-- **Allergies**: Text search with concept type categorization
-- **Medications**: Combined RxNorm code + text search, fallback to individual searches
-- **Conditions**: ICD-10 code search with text fallback
-
-##### **Interactive Mapping Options**
-- **Single mapping**: Map one concept to one result
-- **Multiple mapping**: Map one concept to multiple results for user choice
-- **Skip mapping**: Remove concepts that don't need mapping
-- **Special options**: Generic allergies, unstructured medications
-
-##### **Automatic Code Detection**
-- **RxNorm codes**: Automatically detected from search terms
-- **ICD-10 codes**: Automatically detected from search terms
-- **Text search**: Fallback when codes aren't available
-
-#### 📖 **How to Use Individually from Create Scripts**
-
-##### **1. Initialize the Review Tool**
-```python
-from data_migrations.template_migration.mapping_review import AllergyReview
-
-# For allergies
-reviewer = AllergyReview(
-    environment="your_environment",
-    path_to_mapping_file="mappings/allergy_coding_map.json"
-)
-
-# For medications
-from data_migrations.template_migration.mapping_review import MedicationReview
-reviewer = MedicationReview(
-    environment="your_environment", 
-    path_to_mapping_file="mappings/medication_coding_map.json"
-)
-
-# For conditions
-from data_migrations.template_migration.mapping_review import ConditionReview
-reviewer = ConditionReview(
-    environment="your_environment",
-    path_to_mapping_file="mappings/condition_coding_map.json"
-)
-```
-> 🔍 **Note**: The environment is where you loaded the Coding Lookup Plugin
-
-##### **2. Run Mapping Searches**
-```python
-# To search for concepts already in the JSON file 
-reviewer.map()
-
-# Or map a passed it list of concepts
-reviewer.map(ls=["concept_name|code"])
-```
-
-##### **2. Review Mappings Interactively**
-```python
-# Interactive review - shows each unmapped concept
-reviewer.review()
-```
-
-### 👁️‍🗨️ **What You'll See During Review**
-
-#### **Single Concept Mapping**
-```
-Looking at row 1/5
-
-Escitalopram Oxalate Oral Tablet 10 MG|
-
-1) escitalopram 10 mg tablet
-2) escitalopram 5 mg tablet
-3) escitalopram 20 mg tablet
-4) escitalopram 5 mg/5 mL oral solution
-5) Lexapro 5 mg tablet
-6) Lexapro 10 mg tablet
-7) Lexapro 20 mg tablet
-
-What do you want to map "Escitalopram Oxalate Oral Tablet 10 MG|" to?
-Pick a number, "0" to not map into Canvas, "-1" for unstructured, "m" for multiple, or type to search: 1
-```
-
-#### **Multiple Mapping Option ("m")**
-```
-Looking at row 1/5
-
-"Watermelon, Avocado, Banana"|
-
-⚠️  No options found for this term
-
-What do you want to map "Watermelon, Avocado, Banana" to?
-Pick a number, "0" to not map into Canvas, "-1" for generic, "m" for multiple, or type to search: m
-
-You are choosing to map "Watermelon, Avocado, Banana" as multiple different records
-
-Type a term to search for, "done" when finished, or "abort" to skip: watermelon
-
-🔍 Searching with parameters: {'text': 'watermelon'}
-
-1) watermelon
-2) watermelon seed
-
-Pick a number to map to or "0" to ignore all options: 1
-✅ Added: watermelon
-
-Type a term to search for, "done" when finished, or "abort" to skip: avocado
-
-🔍 Searching with parameters: {'text': 'avocado'}
-
-1) avocado
-2) avocado oil
-
-Pick a number to map to or "0" to ignore all options: 1
-✅ Added: avocado
-
-Type a term to search for, "done" when finished, or "abort" to skip: banana
-
-🔍 Searching with parameters: {'text': 'banana'}
-
-1) banana
-2) banana extract
-
-Pick a number to map to or "0" to ignore all options: 1
-✅ Added: banana
-
-Type a term to search for, "done" when finished, or "abort" to skip: done
-
-✅ Successfully mapped 'Watermelon, Avocado, Banana' to 3 items
-```
-
-##### **4. Available Commands**
-- **Type a search term**: Supply a new search term if you don't like the options and want to find a better one.
-- **Pick a number**: Selects from available options shown
-- **"0"**: Skips this concept (removes from mapping). We do not want this to even get into Canvas
-- **"m"**: Maps to multiple results. The concept shown actually represents multiple records. For example, if your vendor's EMR stores allergies as free text, you may see `Watermelon, Avacado, Bannana` and want to map each individual allergy to it's unique coding. 
-- **"-1"**: 
-    - Uses generic for allergies. This allows for the allergy to be ingested and the allergy text show in the free text command field so that it still can show in the Patient Summary section. 
-    - Use unstructured for medications. This allows the medication to appear in the Patient Summary so we don't lose historical records. However, extra work will need to happen if you need to ever prescribe or refill this medication for the patient.
-
-#### 🔄 **Workflow Example**
-
-1. **Start Review**: `reviewer.review()`
-2. **See unmapped concept**: `"Penicillin allergy|"`
-3. **Search for options**: Type `penicillin` and press Enter
-4. **Review results**: Choose from available options
-5. **Continue**: Move to next unmapped concept
-6. **Save automatically**: Mappings are saved after each decision
-
-#### 💡 **Pro Tips**
-
-- **Use the Coding Lookup Plugin**: The review tools automatically use the plugin APIs for accurate code searches
-- **Handle multiple mappings**: When one concept could map to several options, use the "m" option
-- **Generic fallbacks**: For allergies and medications that can't be precisely mapped, use generic/unstructured options
-- **Batch processing**: Use `reviewer.map()` for programmatic mapping of known concepts
-- **Configuration**: Set up your `config.ini` with proper API keys and URLs. Ensure the plugins are loaded into the instance.
-
-### 🗂️ **Mapping Files**
-
-Mapping files are located in the `mappings/` directory and define how source values from your vendor EMR map to Canvas concepts.
-
-#### 📋 **Essential Mapping Files**
-
-| File | Purpose | 📊 Content |
-|------|---------|------------|
-| `icd10_mappings.csv` | Maps ICD-10 codes to Canvas conditions | 🩺 Diagnosis codes |
-| `snomed_to_icd10_map.json` | Translates SNOMED concepts to ICD-10 | 🔄 Code translations |
-| `medication_coding_map.json` | Drug code normalizations | 💊 Medication codes |
-| `allergy_coding_map.json` | Allergy code mappings | 🚫 Allergy codes |
-| `doctor_map.json` | Provider entity linkage | 👨‍⚕️ Doctor mappings |
-| `provider_id_mapping.json` | Provider ID translations | 🆔 Provider IDs |
-| `location_map.json` | Location entity linkage | 🏥 Location mappings |
-| `payor_map.json` | Insurance payor mappings | 🏦 Insurance mappings |
-
-> 💡 **Pro Tip**: Update these files when new source systems or codes are introduced to maintain data quality and consistency.
-
----
-
-## 🔌 **Plugins** {#plugins}
-
-There are some **Canvas SDK Plugins** in the `plugins` folder that are there to help with additional Data Migration needs.
-
-### 👤 **Patient Metadata Management**
-
-The Canvas SDK allows you to customize your own **Patient Metadata key-value pairs**. We created a plugin to get you started in viewing/setting your patient's metadata. 
-
-**Features:**
-- 🔍 **View existing metadata** for any patient
-- ✏️ **Set custom metadata** fields and values
-- 📊 **Bulk metadata operations** for multiple patients
-- 🔄 **Metadata synchronization** across patient records
-
-**Documentation**: See [Canvas Profile Additional Fields Guide](https://docs.canvasmedical.com/guides/profile-additional-fields/) for a guide on what this plugin uses. There is additional information for this plugin in the README file of the plugin.
-
-**📁 For More Information**: See `data_migrations/plugins/patient_metadata_management/README.md` for detailed setup instructions, API usage examples, and troubleshooting guides.
-
-### 🔍 **Coding Lookup Plugin**
-
-The **Coding Lookup Plugin** provides standardized medical coding lookup services for Canvas. It offers APIs to search and retrieve medical codes from various coding systems.
-
-**Available APIs:**
-- 🚫 **Allergy Search**: Search by text description OR RxNorm code (mutually exclusive)
-- 💊 **Medication Search**: Search by text description AND/OR RxNorm code (flexible combination)
-- 🩺 **Condition Search**: Search by text description OR ICD-10 code (mutually exclusive)
-
-**📁 For More Information**: See `data_migrations/plugins/coding_lookup/README.md` for comprehensive API documentation, example requests/responses, coding system details, and integration examples.
-
----
-
-## 💡 **Best Practices** {#best-practices}
-
-Follow these guidelines to ensure successful data migrations:
-
-### 🎯 **Data Quality & Validation**
-
-| Practice | Description | 🎯 Benefit |
-|----------|-------------|-------------|
-| **Validate First** | Validate data before migration to reduce errors | Fewer failed records |
-| **Test Small** | Test with small datasets before full migration | Identify issues early |
-| **Review Errors** | Review error logs to identify data quality issues | Continuous improvement |
-| **Update Mappings** | Keep mapping files up-to-date with vendor changes | Maintain accuracy |
-
-### 🗂️ **File Management**
-
-| Practice | Description | 🎯 Benefit |
-|----------|-------------|-------------|
-| **Consistent Paths** | Use consistent file paths for documents and mappings | Avoid path errors |
-| **Version Control** | Keep mapping files in version control (excluding PHI) | Track changes |
-| **Backup Data** | Backup original vendor data before transformation | Data safety |
-| **Document Changes** | Update field requirements when vendor data changes | Maintain documentation |
-
-### 🔄 **Migration Process**
-
-| Practice | Description | 🎯 Benefit |
-|----------|-------------|-------------|
-| **Start with Patients** | Always migrate patients first | Establish foundation |
-| **Validate Each Step** | Run validation after each data type | Catch issues early |
-| **Monitor Progress** | Watch console output and result files | Track success |
-| **Handle Errors Gracefully** | Don't stop on individual record failures | Complete migration |
-
-### 📊 **Quality Assurance**
-
-| Practice | Description | 🎯 Benefit |
-|----------|-------------|-------------|
-| **Audit Results** | Review done/error/ignored files | Verify completeness |
-| **Test Integration** | Verify data appears correctly in Canvas | Ensure usability |
-| **Document Decisions** | Record mapping decisions and business rules | Future reference |
-| **Plan Rollback** | Have a plan to undo changes if needed | Risk mitigation |
+| **`create_allergy_map.py`** | Map allergy concepts to FDB codes | `allergy_coding_map.json`
