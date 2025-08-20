@@ -200,6 +200,110 @@ class CharmPatientAPI(APIMethodMixin):
                     has_next_page = False
         return allergy_list
 
+    def fetch_medications(self, patient_ids):
+        medication_list = []
+        medication_endpoint = "/api/ehr/v1/patients/{patient_id}/medications"
+
+        for patient_id in patient_ids:
+            has_next_page = True
+            page = 1
+            print(f"Fetching medications for patient ID {patient_id}")
+
+            while has_next_page is True:
+                params = {
+                    "page": page,
+                    "sort_order": "A",
+                    "per_page": 100
+                }
+                medication_response = self.get(medication_endpoint.format(patient_id=patient_id), params=params)
+                medication_json = medication_response.json()
+                medication_list.extend(medication_json['medications'])
+                if medication_json['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+        return medication_list
+
+    def fetch_supplements(self, patient_ids):
+        supplement_list = []
+        supplement_endpoint = "/api/ehr/v1/patients/{patient_id}/supplements"
+
+        for patient_id in patient_ids:
+            has_next_page = True
+            page = 1
+            print(f"Fetching supplements for patient ID {patient_id}")
+
+            while has_next_page is True:
+                params = {
+                    "page": page,
+                    "sort_order": "A",
+                    "per_page": 100
+                }
+                supplement_response = self.get(supplement_endpoint.format(patient_id=patient_id), params=params)
+                supplement_json = supplement_response.json()
+                supplement_list.extend(supplement_json['supplements'])
+                if supplement_json['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+        return supplement_list
+
+    def fetch_diagnoses(self, patient_ids):
+        diagnoses_list = []
+        diagnoses_endpoint = "/api/ehr/v1/patients/{patient_id}/diagnoses"
+
+        for patient_id in patient_ids:
+            diagnoses_response = self.get(diagnoses_endpoint.format(patient_id=patient_id))
+            diagnoses_json = diagnoses_response.json()
+            # we need to add the patient ID as a key because it is not in each record
+            # there is also no pagination for this endpoint, it gives all the diagnoses per patient
+            diagnoses_list.append({"patient_id": patient_id, "diagnoses": diagnoses_json['patient_diagnoses']})
+        return diagnoses_list
+
+    def fetch_questionnaires(self, patient_ids):
+        questionnaire_endpoint = "/api/ehr/v1/patients/{patient_id}/questionnaires"
+        questionnaire_map_endpoint = "/api/ehr/v1/questionnaire/answer/{ques_map_id}"
+        for patient_id in patient_ids:
+            response = self.get(questionnaire_endpoint.format(patient_id=patient_id))
+            for question_map in response.json()["patient_questionnaires"]:
+                question_map_response = self.get(questionnaire_map_endpoint.format(ques_map_id=question_map["ques_map_id"]))
+                # only testing at the moment.
+                # TODO - continue here;
+
+    def fetch_vaccines(self, patient_ids):
+        vaccine_endpoint = "/api/ehr/v1/patients/{patient_id}/vaccines"
+        vaccine_read_endpoint = "/api/ehr/v1/patients/{patient_id}/vaccines/{patient_vaccine_id}"
+        vaccine_list = []
+        for patient_id in patient_ids:
+            has_next_page = True
+            while has_next_page is True:
+                print(f"Fetching vaccines for patient id {patient_id}")
+                vaccine_response = self.get(vaccine_endpoint.format(patient_id=patient_id))
+                vaccine_json = vaccine_response.json()
+                if vaccine_json['vaccines']:
+                    for vaccine in vaccine_json['vaccines']:
+                        vaccine_list_obj = vaccine
+                        # there is more info that we need with a read
+                        vaccine_detail = self.get(vaccine_read_endpoint.format(patient_id=patient_id, patient_vaccine_id=vaccine["patient_vaccine_map_id"]))
+                        vaccine_list_obj["detail"] = vaccine_detail
+                        vaccine_list.append(vaccine_list_obj)
+                if vaccine_json['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+        return vaccine_list
+
+    def fetch_vitals(self, patient_ids):
+        vitals = []
+        vitals_endpoint = "/api/ehr/v1/patients/{patient_id}/vitals"
+        for patient_id in patient_ids:
+            vitals_response = self.get(vitals_endpoint.format(patient_id=patient_id))
+            vitals_json = vitals_response.json()
+            if vitals_json["vital_entries"]:
+                vitals_dict = {"patient_id": patient_id, "vitals": vitals_response.json()["vital_entries"]}
+                vitals.append(vitals_dict)
+        return vitals
+
 
 class CharmFHIRAPI(APIMethodMixin):
     FHIR_API_SCOPES = [
@@ -300,3 +404,37 @@ class CharmFHIRAPI(APIMethodMixin):
             else:
                 page += 1
         return allergy_list
+
+
+    def fetch_medication_requests(self):
+        medication_list = []
+        has_next_page = True
+        page = 1
+
+        while has_next_page is True:
+            params = {"page": str(page)}
+            print(f"Fetching MedicationRequest page {page}")
+            medication_response = self.get(
+                f"/MedicationRequest",
+                params=params
+            )
+            response_data = medication_response.json()
+            medication_list.extend(response_data["entry"])
+
+            if not self.response_has_next_page(response_data):
+                has_next_page = False
+            else:
+                page += 1
+        return medication_list
+
+    def fetch_medication_entries(self, medication_ids):
+        # Fetches the actual drug info - not patient specific
+        # https://www.charmhealth.com/resources/fhir/index.html#get-medication
+        medication_list = []
+        for medication_id in medication_ids:
+            print(f"Fetching Medication ID {medication_id}")
+            medication = self.get(f"/Medication/{medication_id}")
+            response_data = medication.json()
+            medication_list.append(response_data)
+        return medication_list
+
