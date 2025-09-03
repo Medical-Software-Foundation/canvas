@@ -1,0 +1,35 @@
+digraph {
+    rankdir=TB;
+
+    // Population Nodes
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="All registered patients within the healthcare facility's EHR system."];
+    SubsetInConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients with at least one appointment scheduled within the last 12 months."];
+    FinalPopulation [label="Final Population", shape=box, style=rounded, color=green, fontcolor=green, comment="Patients meeting all criteria for appointment record retrieval."];
+
+    // Criterion Nodes
+    AppointmentLast12Months [label="Appointment Last 12 Months", shape=ellipse, color=blue, fontcolor=blue, comment="Patients with at least one appointment scheduled within the last 12 months."];
+    NotOptedOut [label="Not Opted Out", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have not opted out of data sharing or have unrestricted access to their appointment records."];
+    NotDeceased [label="Not Deceased", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who are not deceased and whose records are active in the EHR system."];
+    NotCanceled [label="Not Canceled", shape=ellipse, color=blue, fontcolor=blue, comment="Patients whose appointments were not canceled without rescheduling within the 12-month period."];
+    NotNoShow [label="Not No-Show", shape=ellipse, color=blue, fontcolor=blue, comment="Patients whose appointments are not marked as 'no-show' without follow-up or rescheduling."];
+
+    // Actions Nodes
+    Diagnostic [label="Diagnostic", shape=ellipse, color=blue, fontcolor=blue, comment="Verify the integrity and completeness of the appointment data."];
+    Administrative [label="Administrative", shape=ellipse, color=blue, fontcolor=blue, comment="Generate a comprehensive report of all appointments for the subset of patients."];
+    Therapeutic [label="Therapeutic", shape=ellipse, color=blue, fontcolor=blue, comment="Ensure follow-up actions from past appointments are documented and communicated."];
+    DataManagement [label="Data Management", shape=ellipse, color=blue, fontcolor=blue, comment="Update the EHR system to reflect changes in appointment status."];
+
+    // Edges
+    InitialPopulation -> AppointmentLast12Months [label="if", color=blue, fontcolor=blue];
+    AppointmentLast12Months -> NotOptedOut [label="and", color=blue, fontcolor=blue];
+    NotOptedOut -> NotDeceased [label="and", color=blue, fontcolor=blue];
+    NotDeceased -> NotCanceled [label="and", color=blue, fontcolor=blue];
+    NotCanceled -> NotNoShow [label="and", color=blue, fontcolor=blue];
+    NotNoShow -> SubsetInConsideration [label="then", color=blue, fontcolor=blue];
+
+    SubsetInConsideration -> Diagnostic [label="if", color=blue, fontcolor=blue];
+    Diagnostic -> Administrative [label="and", color=blue, fontcolor=blue];
+    Administrative -> Therapeutic [label="and", color=blue, fontcolor=blue];
+    Therapeutic -> DataManagement [label="and", color=blue, fontcolor=blue];
+    DataManagement -> FinalPopulation [label="then", color=blue, fontcolor=blue];
+}
