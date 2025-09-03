@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "DougiePop"
+referencePapers:
+  - title: "Patient Appointment Records Retrieval Protocol"
+    description: "This protocol outlines the process for retrieving and managing patient appointment records from the EHR system. It focuses on patients with appointments in the last 12 months, excluding those with privacy restrictions, cancellations, or no-shows. Actions include verifying data integrity, generating reports, documenting follow-ups, and updating appointment statuses to ensure accurate healthcare delivery and planning."
+    url: ""
+
