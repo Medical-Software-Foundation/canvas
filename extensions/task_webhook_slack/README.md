@@ -10,11 +10,11 @@ When a task in Canvas is created or updated, send a webhook playload to an endpo
 
 The Canvas payload includes the following:
 
-Task: ID, event (updated, created), title, due date
-Patient: ID, first name, last name, date of birth, sex at birth
-Assignee: ID, first name, last name, team (if applicable)
-Task creator, ID, first name, last name
-Customize the event trigger and payload to fit your needs.
+- Task: ID, event (updated, created), title, due date
+- Patient: ID, first name, last name, date of birth, sex at birth
+- Assignee: ID, first name, last name, team (if applicable)
+- Task creator, ID, first name, last name
+- Customize the event trigger and payload to fit your needs.
 
 ## Example
 An example implemenation integrates Canvas task management with Slack notifications. When a task in Canvas is created or updated, it automatically sends a formatted message to a Slack channel via webhook, keeping your team informed in real-time.
