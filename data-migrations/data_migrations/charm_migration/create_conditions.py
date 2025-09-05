@@ -30,7 +30,10 @@ class ConditionLoader(ConditionLoaderMixin):
 
     def make_patient_api_json(self):
         charm_patient_api = CharmPatientAPI(environment=self.environment)
-        patient_ids = list(self.patient_map.keys())
+
+        patient_file_contents = fetch_from_json("PHI/patients.json")
+        patient_ids = [p["patient_id"] for p in patient_file_contents]
+
         condition_list = charm_patient_api.fetch_diagnoses(patient_ids=patient_ids)
         write_to_json(self.patient_api_json_file, condition_list)
 

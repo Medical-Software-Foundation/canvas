@@ -128,6 +128,12 @@ def load_fhir_settings(environment):
     fumage = FHIRHelper({'INSTANCE_NAME': environment, 'CLIENT_ID': client_id, 'CLIENT_SECRET': client_secret})
     return fumage
 
+def load_simple_api_key(environment) -> str:
+    ini = RepositoryIni('../config.ini')
+    ini.SECTION = environment
+    config = Config(ini)
+    return config("simpleapi-api-key", cast=str)
+
 class FHIRHelper:
     """
     Helper class to take care of all the FHIR auth and calls

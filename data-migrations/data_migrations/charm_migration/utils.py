@@ -253,6 +253,7 @@ class CharmPatientAPI(APIMethodMixin):
         diagnoses_endpoint = "/api/ehr/v1/patients/{patient_id}/diagnoses"
 
         for patient_id in patient_ids:
+            print(f"Fetching diagnoses for patient ID {patient_id}")
             diagnoses_response = self.get(diagnoses_endpoint.format(patient_id=patient_id))
             diagnoses_json = diagnoses_response.json()
             # we need to add the patient ID as a key because it is not in each record
@@ -303,6 +304,22 @@ class CharmPatientAPI(APIMethodMixin):
                 vitals_dict = {"patient_id": patient_id, "vitals": vitals_response.json()["vital_entries"]}
                 vitals.append(vitals_dict)
         return vitals
+
+    def fetch_messages(self, patient_ids):
+        messages_endpoint = "/api/ehr/v1/messages/patient/{patient_id}"
+        for patient_id in patient_ids:
+            for direction in ["sent", "received"]:
+                message_response = self.get(
+                    messages_endpoint.format(patient_id=patient_id),
+                    params={"section": direction}
+                )
+
+    def fetch_quicknotes(self, patient_ids):
+        quicknotes_endpoint = "/api/ehr/v1/patients/{patient_id}/quicknotes"
+        for patient_id in patient_ids:
+            quicknotes_response = self.get(
+                quicknotes_endpoint.format(patient_id=patient_id),
+            )
 
 
 class CharmFHIRAPI(APIMethodMixin):
@@ -437,4 +454,3 @@ class CharmFHIRAPI(APIMethodMixin):
             response_data = medication.json()
             medication_list.append(response_data)
         return medication_list
-
