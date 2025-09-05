@@ -1,21 +1,36 @@
 # Task Webhook Slack Integration
 
-![Slack Logo](https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png)
+<img width="546" height="140" alt="image" src="https://github.com/user-attachments/assets/d1d195ea-87e5-4584-90b2-1d90a64b8b7b" />
+
 
 ## Description
+Make integrations more efficient with webhooks. Webhooks are used to notify an application when an event occurs in another system, acting as a real-time communication channel and "push" information as soon as an event happens.
 
-This extension integrates Canvas task management with Slack notifications. When a task in Canvas is created or updated, it automatically sends a formatted message to a Slack channel via webhook, keeping your team informed in real-time.
+When a task in Canvas is created or updated, send a webhook playload to an endpoint of your choice.
 
-## How It Works
+The Canvas payload includes the following:
+
+Task: ID, event (updated, created), title, due date
+Patient: ID, first name, last name, date of birth, sex at birth
+Assignee: ID, first name, last name, team (if applicable)
+Task creator, ID, first name, last name
+Customize the event trigger and payload to fit your needs.
+
+## Example
+An example implemenation integrates Canvas task management with Slack notifications. When a task in Canvas is created or updated, it automatically sends a formatted message to a Slack channel via webhook, keeping your team informed in real-time.
+
+
+### How It Works
 
 When a task event occurs in Canvas, this extension:
 1. Captures the task details and associated patient/assignee information
 2. Formats the data into a Slack-friendly payload
 3. Sends the notification to your configured Slack webhook URL
 
-## Slack Setup
+### Slack Setup
 
-### 1. Create a Slack App and Webhook
+#### 1. Create a Slack App and Webhook
+Reference: https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app
 2. Choose "From scratch" and give it a name like "Canvas Task Notifications"
@@ -25,14 +40,14 @@ When a task event occurs in Canvas, this extension:
 6. Choose the channel where you want task notifications
 7. Copy the webhook URL (it will look like: `https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX`)
 
-### 2. Configure Canvas Extension
+#### 2. Configure Canvas Extension
 
 Set these plugin secrets in your Canvas environment:
 
 - `WEBHOOK_NOTIFICATION_URL`: Your Slack webhook URL
 - `AUTH_TOKEN`: Leave empty (Slack webhooks don't require bearer tokens)
 
-## Payload Structure
+### Payload Structure
 
 The webhook sends the following data to Slack:
 
@@ -65,17 +80,17 @@ The webhook sends the following data to Slack:
 }
 ```
 
-## Example Slack Message
+### Example Slack Message
 
 When a task is created, you'll see a message like:
 
-> **📋 New Task Created**
-> 
-> **Title:** Follow up with patient
-> **Due:** January 15, 2024 at 10:00 AM
-> **Patient:** John Doe (DOB: 05/15/1980, Male)
-> **Created by:** Dr. Jane Smith
-> **Assigned to:** Nurse Johnson
+**📋 New Task Created**
+
+- **Title:** Follow up with patient
+- **Due:** January 15, 2024 at 10:00 AM
+- **Patient:** John Doe (DOB: 05/15/1980, Male)
+- **Created by:** Dr. Jane Smith
+- **Assigned to:** Nurse Johnson
 
 ## Customization
 
