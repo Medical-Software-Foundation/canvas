@@ -1,0 +1,55 @@
+{
+  "sdk_version": "0.1.4",
+  "plugin_version": "0.0.1",
+  "name": "order_tracking",
+  "description": "Edit the description in CANVAS_MANIFEST.json",
+  "url_permissions": [],
+  "components": {
+    "applications": [
+      {
+        "class": "order_tracking.applications.order_tracking_app:OrderTrackingApplication",
+        "name": "Order Tracking",
+        "description": "An Application that does xyz...",
+        "scope": "global",
+        "icon": "assets/medical-clipboard-icon-64x64.png"
+      },
+        {
+        "class": "order_tracking.applications.patient_order_tracking_app:PatientOrderTrackingApplication",
+        "name": "Patient Order Tracking",
+        "description": "An Application that does xyz...",
+        "scope": "patient_specific",
+        "icon": "assets/medical-clipboard-icon-64x64.png"
+      }
+    ],
+    "protocols": [
+      {
+        "class": "order_tracking.applications.order_tracking_app:OrderTrackingApi",
+        "description": "Provides api for the application",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      },
+      {
+        "class": "order_tracking.applications.order_tracking_app:StaffFilterAPI",
+        "description": "Provides api for the filters functionality",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      }
+    ],
+    "commands": [],
+    "content": [],
+    "effects": [],
+    "views": []
+  },
+  "secrets": ["ENABLE_TASK_COMMENTS"],
+  "tags": {},
+  "references": [],
+  "license": "",
+  "diagram": false,
+  "readme": "./README.md"
+}

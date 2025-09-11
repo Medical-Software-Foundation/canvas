@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outstanding Orders</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+  <link href="/plugin-io/api/order_tracking/main.css" rel="stylesheet">
+  <script src="/plugin-io/api/order_tracking/main.js?v=1.0.0" type="text/javascript" ></script>
+</head>
+<body>
+  <div class="card">
+    <div class="card-title">Outstanding Orders</div>
+
+    <!-- Filter Toggle Button -->
+    <div class="filter-toggle" id="filter-toggle">
+      <span>Filters</span>
+      <div>
+        <div class="filter-badge hidden" id="filter-badge">0</div>
+        <span class="expand-chevron">⌄</span>
+      </div>
+    </div>
+
+    <!-- Collapsible Filters Container -->
+    <div class="filters-container" id="filters-container">
+      <div class="filters">
+        <div class="filter-group">
+          <label class="filter-label">Ordering Provider</label>
+          <div class="filter-dropdown" id="provider-dropdown" data-values="">
+            <div class="selected-value">
+              <span class="placeholder-text">All Providers</span>
+            </div>
+            <div class="dropdown-options" id="provider-options">
+              <div class="dropdown-option" data-value="">
+                <input type="checkbox" id="provider-all" checked>
+                <label for="provider-all">All Providers</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Location</label>
+          <div class="filter-dropdown single-select" id="location-dropdown" data-value="">
+            <div class="selected-value">
+              <span class="placeholder-text">All Locations</span>
+            </div>
+            <div class="dropdown-options" id="location-options">
+              <div class="dropdown-option" data-value="">All Locations</div>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Type</label>
+          <div class="filter-dropdown" id="type-dropdown" data-values="">
+            <div class="selected-value">
+              <span class="placeholder-text">All Types</span>
+            </div>
+            <div class="dropdown-options" id="type-options">
+              <div class="dropdown-option" data-value="">
+                <input type="checkbox" id="type-all" checked>
+                <label for="type-all">All Types</label>
+              </div>
+              <div class="dropdown-option" data-value="Lab">
+                <input type="checkbox" id="type-lab">
+                <label for="type-lab">Lab</label>
+              </div>
+              <div class="dropdown-option" data-value="Imaging">
+                <input type="checkbox" id="type-imaging">
+                <label for="type-imaging">Imaging</label>
+              </div>
+              <div class="dropdown-option" data-value="Referral">
+                <input type="checkbox" id="type-referral">
+                <label for="type-referral">Referral</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Status</label>
+          <div class="filter-dropdown" id="status-dropdown" data-values="">
+            <div class="selected-value">
+              <span class="placeholder-text">All Statuses</span>
+            </div>
+            <div class="dropdown-options" id="status-options">
+              <div class="dropdown-option" data-value="">
+                <input type="checkbox" id="status-all" checked>
+                <label for="status-all">All Statuses</label>
+              </div>
+              <div class="dropdown-option" data-value="uncommitted">
+                <input type="checkbox" id="status-uncommitted">
+                <label for="status-uncommitted">Uncommitted</label>
+              </div>
+              <div class="dropdown-option" data-value="open/sent">
+                <input type="checkbox" id="status-open">
+                <label for="status-open">Open/Sent</label>
+              </div>
+              <div class="dropdown-option" data-value="delegated">
+                <input type="checkbox" id="status-delegated">
+                <label for="status-delegated">Delegated</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Patient Name</label>
+          <input type="text" id="patient-name-filter" class="filter-input" placeholder="Search by patient name...">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Patient DOB</label>
+          <input type="date" id="patient-dob-filter" class="filter-input">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Sent To</label>
+          <input type="text" id="sent-to-filter" class="filter-input" placeholder="Search by sent to...">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Order Date</label>
+          <div class="date-range-container">
+            <input type="date" id="date-from-filter" class="filter-input" placeholder="From">
+            <span class="date-range-separator">to</span>
+            <input type="date" id="date-to-filter" class="filter-input" placeholder="To">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="saved-filters-section">
+      <div class="saved-filters-container" id="saved-filters-container">
+        <span class="no-saved-filters">No saved presets yet</span>
+      </div>
+      <button class="clear-filters-btn" id="clear-filters-btn">
+        <span>Clear Filters</span>
+      </button>
+      <button class="save-current-btn" id="save-current-btn">
+        <span>Save Preset</span>
+      </button>
+    </div>
+
+    <!-- Save Filter Modal -->
+    <div class="modal-overlay" id="save-filter-modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">Save Filter Preset</div>
+        <input type="text" id="filter-name-input" class="modal-input" placeholder="Enter a name for this filter set..." maxlength="50">
+        <div class="modal-actions">
+          <button class="modal-btn modal-btn-secondary" id="cancel-save-btn">Cancel</button>
+          <button class="modal-btn modal-btn-primary" id="confirm-save-btn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion" id="orders-accordion">
+      <div class="section-header">Loading orders...</div>
+    </div>
+
+    <div class="info-bar" id="info-bar">
+      Loading...
+    </div>
+  </div>
+  <script>
+    const PATIENT_CHART_APPLICATION = btoa("{{patientChartApplication}}")
+    const ENABLE_TASK_COMMENTS = "{{enableTaskComments}}" === "true"
+  </script>
+
+</body>
+</html>
