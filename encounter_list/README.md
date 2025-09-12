@@ -1,7 +1,5 @@
 # Encounter List Plugin
 
-![Encounter List Plugin](assets/logo.png)
-
 ## Overview
 
 The Encounter List plugin provides a comprehensive worklist view of open encounters. It displays all encounters that are currently in progress (NEW or UNLOCKED state), allowing healthcare providers to efficiently monitor and manage their active patient encounters with advanced filtering and navigation capabilities.
