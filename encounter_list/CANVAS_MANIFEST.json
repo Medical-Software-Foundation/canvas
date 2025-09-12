@@ -1,0 +1,39 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "encounter_list",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "encounter_list.applications.my_application:MyApplication",
+                "name": "Encounter List",
+                "description": "An Application that does xyz...",
+                "scope": "global",
+                "icon": "assets/logo.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "encounter_list.applications.my_application:EncounterListApi",
+                "description": "Provides api for the application",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Worklist Orders</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2185d0;
+            --primary-hover: #1e40af;
+            --secondary: #64748b;
+            --muted: #f3f4f6;
+            --red-50: #fef2f2;
+            --red-100: #fee2e2;
+            --red-700: #b91c1c;
+            --red-800: #991b1b;
+            --gray-100: #f5f5f5;
+            --gray-700: #374151;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            background-color: #fafbfc;
+            min-height: 100vh;
+            line-height: 1.5;
+            color: #2c3e50;
+        }
+
+        .header {
+            padding: 16px 24px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin: 24px;
+            background-color: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .filters {
+            padding: 16px 24px;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: row;
+            gap: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .filter-group.date-range {
+            flex: 1.5;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-dropdown {
+            background-color: white;
+            border: 1px solid #e1e8ed;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #2c3e50;
+            cursor: pointer;
+            position: relative;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            user-select: none;
+            min-height: 44px;
+        }
+
+        .filter-dropdown.open {
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+        }
+
+        .filter-dropdown .selected-value {
+            padding-right: 24px;
+            min-height: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .selected-tag {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            line-height: 1.2;
+        }
+
+        .selected-tag .remove-tag {
+            cursor: pointer;
+            font-weight: bold;
+            color: #1976d2;
+            font-size: 14px;
+            line-height: 1;
+            margin-left: 2px;
+        }
+
+        .selected-tag .remove-tag:hover {
+            color: #1565c0;
+        }
+
+        .placeholder-text {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        .filter-dropdown::after {
+            content: '⌄';
+            color: #7f8c8d;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .filter-dropdown.open::after {
+            transform: translateY(-50%) rotate(180deg);
+        }
+
+        .filter-dropdown:hover {
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+        }
+
+        .filter-input {
+            background-color: white;
+            border: 1px solid #e1e8ed;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #2c3e50;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            height: 44px;
+            width: 100%;
+        }
+
+        .filter-input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+        }
+
+        .date-range-container {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .date-range-container .filter-input {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .date-range-separator {
+            color: #7f8c8d;
+            font-size: 12px;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+
+        .dropdown-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e1e8ed;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .dropdown-options.show {
+            display: block;
+        }
+
+        .dropdown-option {
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #2c3e50;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+            border-bottom: 1px solid #f8f9fa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dropdown-option input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+            transform: scale(0.9);
+        }
+
+        .dropdown-option label {
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .dropdown-option:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-option:hover {
+            background-color: #f8f9fa;
+        }
+
+        .dropdown-option.selected {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            font-weight: 500;
+        }
+
+        .content {
+            padding: 24px;
+        }
+
+        .order-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px 24px;
+            border-left: 4px solid #3498db;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+            position: relative;
+            transition: box-shadow 0.2s ease;
+            margin-bottom: 6px;
+        }
+
+        .order-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .order-card.urgent {
+            border-left-color: #e74c3c;
+            background-color: #fef2f2;
+        }
+
+        .order-card:hover {
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .order-title {
+            font-size: 18px;
+            font-weight: 500;
+            color: #3498db;
+            margin-bottom: 4px;
+        }
+
+        .order-subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .status-section {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid;
+        }
+
+        /* Status badge colors matching main worklist */
+        .status-badge.uncommitted {
+            border-color: #d1d5db;
+            background-color: #fff;
+            color: #374151;
+        }
+
+        .status-badge.open {
+            background-color: #d1fae5;
+            color: #0369a1;
+            border-color: #d1fae5;
+        }
+
+        .status-badge.delegated {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border-color: #e0f2fe;
+        }
+
+        .status-badge.closed {
+            background-color: #d1fae5;
+            color: #065f46;
+            border-color: #d1fae5;
+        }
+
+        /* Default fallback for unknown statuses */
+        .status-badge:not(.uncommitted):not(.open):not(.sent):not(.delegated):not(.closed) {
+            border-color: #d1d5db;
+            background-color: #fff;
+            color: #374151;
+        }
+
+        .urgent-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #e74c3c;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .urgent-badge::before {
+            content: '⚠';
+            font-size: 14px;
+        }
+
+        .order-details {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 8px;
+            font-size: 14px;
+            align-items: baseline;
+        }
+
+        .detail-label {
+            color: #7f8c8d;
+            font-weight: 500;
+            min-width: 80px;
+            font-size: 13px;
+        }
+
+        .detail-value {
+            color: #2c3e50;
+            font-weight: 400;
+        }
+
+        .section-header {
+            font-size: 16px;
+            font-weight: 500;
+            color: #2c3e50;
+            margin: 20px 0 12px 0;
+            padding: 8px 0;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .section-header.urgent {
+            color: #e74c3c;
+            border-bottom-color: #e74c3c;
+        }
+
+        .section-header:first-child {
+            margin-top: 0;
+        }
+
+        .info-bar {
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            color: var(--gray-700);
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding: 0.75rem 0;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .pagination button {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--primary);
+            background-color: white;
+            color: var(--primary);
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #d1d5db;
+            color: #6b7280;
+        }
+
+        .pagination-info {
+            font-size: 0.875rem;
+            color: var(--gray-700);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .error {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            color: #991b1b;
+            margin-top: 1rem;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .filters {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .filter-group {
+                min-width: auto;
+            }
+
+            .date-range-container {
+                flex-direction: row;
+                gap: 8px;
+            }
+
+            .date-range-separator {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="filters">
+        <div class="filter-group">
+            <label class="filter-label">Status</label>
+            <div class="filter-dropdown" id="status-dropdown" data-values="uncommitted,open/sent,delegated">
+                <div class="selected-value">
+                    <span class="selected-tag">Uncommitted <span class="remove-tag" data-value="uncommitted">&times;</span></span>
+                    <span class="selected-tag">Open/Sent <span class="remove-tag" data-value="open/sent">&times;</span></span>
+                    <span class="selected-tag">Delegated <span class="remove-tag" data-value="delegated">&times;</span></span>
+                </div>
+                <div class="dropdown-options">
+                    <div class="dropdown-option" data-value="">
+                        <input type="checkbox" id="status-all">
+                        <label for="status-all">All Statuses</label>
+                    </div>
+                    <div class="dropdown-option" data-value="uncommitted">
+                        <input type="checkbox" id="status-uncommitted" checked>
+                        <label for="status-uncommitted">Uncommitted</label>
+                    </div>
+                    <div class="dropdown-option" data-value="open/sent">
+                        <input type="checkbox" id="status-open" checked>
+                        <label for="status-open">Open/Sent</label>
+                    </div>
+                    <div class="dropdown-option" data-value="delegated">
+                        <input type="checkbox" id="status-delegated" checked>
+                        <label for="status-delegated">Delegated</label>
+                    </div>
+                    <div class="dropdown-option" data-value="closed">
+                        <input type="checkbox" id="status-closed">
+                        <label for="status-closed">Closed</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Type</label>
+            <div class="filter-dropdown" id="type-dropdown" data-value="">
+                <div class="selected-value">All Types</div>
+                <div class="dropdown-options">
+                    <div class="dropdown-option selected" data-value="">All Types</div>
+                    <div class="dropdown-option" data-value="Lab">Lab</div>
+                    <div class="dropdown-option" data-value="Imaging">Imaging</div>
+                    <div class="dropdown-option" data-value="Referral">Referral</div>
+                </div>
+            </div>
+        </div>
+        <div class="filter-group date-range">
+            <label class="filter-label">Order Date Range</label>
+            <div class="date-range-container">
+                <input type="date" id="date-from-filter" class="filter-input" placeholder="From">
+                <span class="date-range-separator">to</span>
+                <input type="date" id="date-to-filter" class="filter-input" placeholder="To">
+            </div>
+        </div>
+    </div>
+
+    <div class="content">
+        <div id="orders-container">
+            <div class="loading">Loading orders...</div>
+        </div>
+
+        <div class="info-bar" id="info-bar">
+            Loading...
+        </div>
+
+        <div class="pagination" id="pagination-container" style="display: none;">
+            <div class="pagination-info" id="pagination-info"></div>
+            <div class="pagination-controls">
+                <button id="prev-page">Previous</button>
+                <span id="page-numbers"></span>
+                <button id="next-page">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allOrders = [];
+        let currentPage = 1;
+        let paginationData = null;
+
+        // Configuration - using placeholder endpoint based on your structure
+        const API_BASE_URL = '/plugin-io/api/order_tracking/orders';
+        const PATIENT_ID = '{{patientId}}'
+        const PATIENT_CHART_APPLICATION = btoa("{{patientChartApplication}}")
+
+        async function fetchOrders(statuses = null, orderType = null, dateFrom = null, dateTo = null, page = 1) {
+            try {
+                currentPage = page;
+
+                // Build query parameters
+                const params = new URLSearchParams();
+                params.append('patient_id', PATIENT_ID);
+                if (statuses && statuses.length > 0) {
+                    params.append('status', statuses.join(','));
+                }
+                if (orderType) {
+                    params.append('types', orderType);
+                }
+                if (dateFrom) {
+                    params.append('date_from', dateFrom);
+                }
+                if (dateTo) {
+                    params.append('date_to', dateTo);
+                }
+                params.append('page', page);
+                params.append('page_size', 20);
+
+                const url = `${API_BASE_URL}?${params.toString()}`;
+                console.log('Fetching from:', url); // For debugging
+
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                paginationData = data.pagination;
+
+                // Transform the data to match our expected format
+                allOrders = transformOrderData(data);
+                populateOrdersTable();
+                updatePaginationControls();
+
+            } catch (error) {
+                console.error('Error fetching orders:', error);
+                document.getElementById('orders-container').innerHTML =
+                    `<div class="error">Error loading orders: ${error.message}</div>`;
+                document.getElementById('info-bar').textContent = 'Error loading orders';
+            }
+        }
+
+        function transformOrderData(data) {
+            return (data.orders || []).map(order => ({
+                id: order.id,
+                type: order.type,
+                orderName: order.order,
+                patientId: order.patient_id,
+                patientName: order.patient_name,
+                dob: order.dob,
+                orderingProvider: order.ordering_provider?.preferred_name,
+                orderingProviderId: order.ordering_provider?.id,
+                sentTo: order.sent_to,
+                orderedDate: formatDate(order.ordered_date),
+                priority: order.priority,
+                status: order.status,
+                permalink: order.permalink,
+                noteTitle: order.note.title,
+                notePermalink: order.note.permalink,
+            }));
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            try {
+                return new Date(dateString).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+            } catch {
+                return dateString;
+            }
+        }
+
+        function populateOrdersTable() {
+            const container = document.getElementById('orders-container');
+            const infoBar = document.getElementById('info-bar');
+
+            if (allOrders.length === 0) {
+                container.innerHTML = '<div class="loading">No orders found</div>';
+                infoBar.textContent = 'No orders available';
+                return;
+            }
+
+            const urgentOrders = allOrders.filter(order => order.priority.toLowerCase() === 'urgent');
+            const routineOrders = allOrders.filter(order => order.priority.toLowerCase() === 'routine');
+
+            let html = '';
+
+            if (urgentOrders.length > 0) {
+                html += `<div class="section-header urgent">⚠ Urgent Orders (${urgentOrders.length})</div>`;
+                urgentOrders.forEach(order => {
+                    html += createOrderCard(order, true);
+                });
+            }
+
+            if (routineOrders.length > 0) {
+                html += `<div class="section-header">⏱ Routine Orders (${routineOrders.length})</div>`;
+                routineOrders.forEach(order => {
+                    html += createOrderCard(order, false);
+                });
+            }
+
+            container.innerHTML = html;
+
+            if (paginationData) {
+                const start = (paginationData.current_page - 1) * paginationData.page_size + 1;
+                const end = Math.min(start + allOrders.length - 1, paginationData.total_count);
+                infoBar.textContent = `Showing ${start}-${end} of ${paginationData.total_count} orders (${urgentOrders.length} urgent, ${routineOrders.length} routine)`;
+            } else {
+                infoBar.textContent = `Showing ${allOrders.length} orders (${urgentOrders.length} urgent, ${routineOrders.length} routine)`;
+            }
+        }
+
+        function createOrderCard(order, isUrgent) {
+            const urgentClass = isUrgent ? 'urgent' : '';
+            const urgentBadge = isUrgent ? '<div class="urgent-badge">Urgent</div>' : '';
+            const statusClass = order.status === 'open/sent' ? 'open': (order.status ? order.status.toLowerCase() : '');
+
+            return `
+                <div class="order-card ${urgentClass}">
+                    <div class="order-header">
+                        <div>
+                            <a href='/patient/${PATIENT_ID}/#${order.permalink}&application=${PATIENT_CHART_APPLICATION}' target="_blank" style="color: var(--primary); cursor: pointer; text-decoration: none;">${order.orderName || ''}</a>
+                            <div class="order-subtitle">${order.type || ''} • ${order.orderingProvider || ''}</div>
+                        </div>
+                        <div class="status-section">
+                            <div class="status-badge ${statusClass}">${order.status}</div>
+                            ${urgentBadge}
+                        </div>
+                    </div>
+
+                    <div class="order-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Encounter:</span>
+                            <span class="detail-value"> <a href='/patient/${PATIENT_ID}/#${order.notePermalink}&application=${PATIENT_CHART_APPLICATION}' target="_blank " style="color: var(--primary); cursor: pointer; text-decoration: none;">${order.noteTitle}</a></span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Ordered by:</span>
+                            <span class="detail-value">${order.orderingProvider || ''}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Sent to:</span>
+                            <span class="detail-value">${order.sentTo || ''}</span>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Ordered:</span>
+                            <span class="detail-value">${order.orderedDate || ''}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updatePaginationControls() {
+            if (!paginationData || paginationData.total_pages <= 1) {
+                document.getElementById('pagination-container').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('pagination-container').style.display = 'flex';
+
+            // Update pagination info
+            document.getElementById('pagination-info').textContent = `Page ${paginationData.current_page} of ${paginationData.total_pages}`;
+
+            // Update prev/next buttons
+            document.getElementById('prev-page').disabled = !paginationData.has_previous;
+            document.getElementById('next-page').disabled = !paginationData.has_next;
+
+            // Update page numbers
+            const pageNumbers = document.getElementById('page-numbers');
+            pageNumbers.innerHTML = '';
+
+            const startPage = Math.max(1, paginationData.current_page - 2);
+            const endPage = Math.min(paginationData.total_pages, paginationData.current_page + 2);
+
+            for (let i = startPage; i <= endPage; i++) {
+                const button = document.createElement('button');
+                button.textContent = i;
+                button.onclick = () => goToPage(i);
+                if (i === paginationData.current_page) {
+                    button.style.backgroundColor = 'var(--primary)';
+                    button.style.color = 'white';
+                }
+                pageNumbers.appendChild(button);
+            }
+        }
+
+        function goToPage(page) {
+            const statusDropdown = document.getElementById('status-dropdown');
+            const typeDropdown = document.getElementById('type-dropdown');
+            const dateFromInput = document.getElementById('date-from-filter');
+            const dateToInput = document.getElementById('date-to-filter');
+
+            const selectedStatuses = statusDropdown.getAttribute('data-values').split(',').filter(v => v);
+            const selectedType = typeDropdown.getAttribute('data-value');
+            const dateFrom = dateFromInput.value;
+            const dateTo = dateToInput.value;
+
+            fetchOrders(selectedStatuses, selectedType, dateFrom, dateTo, page);
+        }
+
+        function handleFilterChange() {
+            const statusDropdown = document.getElementById('status-dropdown');
+            const typeDropdown = document.getElementById('type-dropdown');
+            const dateFromInput = document.getElementById('date-from-filter');
+            const dateToInput = document.getElementById('date-to-filter');
+
+            const selectedStatuses = statusDropdown.getAttribute('data-values').split(',').filter(v => v);
+            const selectedType = typeDropdown.getAttribute('data-value');
+            const dateFrom = dateFromInput.value;
+            const dateTo = dateToInput.value;
+
+            fetchOrders(selectedStatuses, selectedType, dateFrom, dateTo, 1);
+        }
+
+        function initializeDateFilters() {
+            const dateFromInput = document.getElementById('date-from-filter');
+            const dateToInput = document.getElementById('date-to-filter');
+
+            // Add event listeners for date changes
+            dateFromInput.addEventListener('change', handleFilterChange);
+            dateToInput.addEventListener('change', handleFilterChange);
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize date filters first
+            initializeDateFilters();
+
+            // Initialize multiselect status dropdown
+            initializeStatusDropdown();
+
+            // Custom dropdown functionality for type dropdown (single select)
+            const typeDropdown = document.getElementById('type-dropdown');
+            initializeSingleSelectDropdown(typeDropdown);
+
+            // Close dropdowns when clicking outside
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.filter-dropdown').forEach(dropdown => {
+                    dropdown.classList.remove('open');
+                    dropdown.querySelector('.dropdown-options').classList.remove('show');
+                });
+            });
+
+            // Initial load with current filter values
+            handleFilterChange();
+        });
+
+        function initializeStatusDropdown() {
+            const dropdown = document.getElementById('status-dropdown');
+            const selectedValue = dropdown.querySelector('.selected-value');
+            const options = dropdown.querySelector('.dropdown-options');
+            const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]');
+            const allCheckbox = dropdown.querySelector('#status-all');
+
+            // Toggle dropdown
+            selectedValue.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                // Close other dropdowns
+                document.querySelectorAll('.filter-dropdown').forEach(otherDropdown => {
+                    if (otherDropdown !== dropdown) {
+                        otherDropdown.classList.remove('open');
+                        otherDropdown.querySelector('.dropdown-options').classList.remove('show');
+                    }
+                });
+
+                // Toggle current dropdown
+                dropdown.classList.toggle('open');
+                options.classList.toggle('show');
+            });
+
+            // Handle checkbox changes
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    e.stopPropagation();
+
+                    if (checkbox === allCheckbox) {
+                        // If "All" is checked, uncheck all others
+                        if (checkbox.checked) {
+                            checkboxes.forEach(cb => {
+                                if (cb !== allCheckbox) cb.checked = false;
+                            });
+                        }
+                    } else {
+                        // If any specific option is checked, uncheck "All"
+                        if (checkbox.checked && allCheckbox) {
+                            allCheckbox.checked = false;
+                        }
+
+                        // If no specific options are checked, check "All"
+                        const specificCheckboxes = Array.from(checkboxes).filter(cb => cb !== allCheckbox);
+                        const anyChecked = specificCheckboxes.some(cb => cb.checked);
+                        if (!anyChecked && allCheckbox) {
+                            allCheckbox.checked = true;
+                        }
+                    }
+
+                    updateStatusDisplay();
+                    handleFilterChange();
+                });
+            });
+
+            // Setup remove tag functionality
+            setupRemoveTagListeners();
+        }
+
+        function updateStatusDisplay() {
+            const dropdown = document.getElementById('status-dropdown');
+            const selectedValue = dropdown.querySelector('.selected-value');
+            const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]');
+            const allCheckbox = dropdown.querySelector('#status-all');
+
+            // Get selected values (excluding "All")
+            const selectedValues = [];
+            const selectedLabels = [];
+
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked && checkbox !== allCheckbox) {
+                    const label = dropdown.querySelector(`label[for="${checkbox.id}"]`);
+                    if (label) {
+                        selectedValues.push(checkbox.closest('.dropdown-option').getAttribute('data-value'));
+                        selectedLabels.push(label.textContent);
+                    }
+                }
+            });
+
+            // Update data-values attribute
+            dropdown.setAttribute('data-values', selectedValues.join(','));
+
+            // Update display
+            selectedValue.innerHTML = '';
+
+            if (selectedLabels.length === 0 || (allCheckbox && allCheckbox.checked)) {
+                // Show placeholder
+                selectedValue.innerHTML = '<span class="placeholder-text">All Statuses</span>';
+            } else {
+                // Show selected tags
+                selectedLabels.forEach((label, index) => {
+                    const tag = document.createElement('span');
+                    tag.className = 'selected-tag';
+                    tag.innerHTML = `
+                        ${label}
+                        <span class="remove-tag" data-value="${selectedValues[index]}">&times;</span>
+                    `;
+                    selectedValue.appendChild(tag);
+                });
+
+                // Re-setup remove tag listeners
+                setupRemoveTagListeners();
+            }
+        }
+
+        function setupRemoveTagListeners() {
+            const dropdown = document.getElementById('status-dropdown');
+            const removeTags = dropdown.querySelectorAll('.remove-tag');
+
+            removeTags.forEach(removeBtn => {
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const valueToRemove = removeBtn.getAttribute('data-value');
+                    const checkbox = dropdown.querySelector(`.dropdown-option[data-value="${valueToRemove}"] input[type="checkbox"]`);
+
+                    if (checkbox) {
+                        checkbox.checked = false;
+                        updateStatusDisplay();
+                        handleFilterChange();
+                    }
+                });
+            });
+        }
+
+        function initializeSingleSelectDropdown(dropdown) {
+            const selectedValue = dropdown.querySelector('.selected-value');
+            const options = dropdown.querySelector('.dropdown-options');
+            const optionItems = dropdown.querySelectorAll('.dropdown-option');
+
+            // Toggle dropdown
+            selectedValue.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                // Close other dropdowns
+                document.querySelectorAll('.filter-dropdown').forEach(otherDropdown => {
+                    if (otherDropdown !== dropdown) {
+                        otherDropdown.classList.remove('open');
+                        otherDropdown.querySelector('.dropdown-options').classList.remove('show');
+                    }
+                });
+
+                // Toggle current dropdown
+                dropdown.classList.toggle('open');
+                options.classList.toggle('show');
+            });
+
+            // Handle option selection
+            optionItems.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    e.stopPropagation();
+
+                    // Update selected state
+                    optionItems.forEach(opt => opt.classList.remove('selected'));
+                    option.classList.add('selected');
+
+                    // Update selected value text
+                    selectedValue.textContent = option.textContent;
+
+                    // Update dropdown data-value
+                    const newValue = option.getAttribute('data-value');
+                    dropdown.setAttribute('data-value', newValue);
+
+                    // Close dropdown
+                    dropdown.classList.remove('open');
+                    options.classList.remove('show');
+
+                    // Trigger filter change
+                    handleFilterChange();
+                });
+            });
+        }
+
+        document.getElementById('prev-page').addEventListener('click', function() {
+            if (paginationData && paginationData.has_previous) {
+                goToPage(paginationData.current_page - 1);
+            }
+        });
+
+        document.getElementById('next-page').addEventListener('click', function() {
+            if (paginationData && paginationData.has_next) {
+                goToPage(paginationData.current_page + 1);
+            }
+        });
+    </script>
+</body>
+</html>
