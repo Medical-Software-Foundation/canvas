@@ -6,6 +6,8 @@ The Order Tracking plugin provides comprehensive tracking and management of outs
 
 Orders are removed from the dashboard when a result has been linked. **There is currently no way to manually mark an order as resolved or choose to ignore an outstanding order**
 
+![Order Tracking Plugin](assets/order-tracking.png)
+
 ## Features
 
 - **Multi-Order Type Support**: Tracks lab orders, imaging orders, and referrals
