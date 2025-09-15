@@ -183,9 +183,4 @@ Monitor plugin functionality through Canvas logs:
 canvas logs encounter_list
 ```
 
-## Version Compatibility
-
-- Canvas SDK: 0.1.4+
-- Python: 3.8+
-- Canvas Instance: Compatible with current Canvas Medical platforms
 
