@@ -1,11 +1,4 @@
 # 🏥 Coding Lookup Plugin
-
-> **Standardized medical coding lookup services for Canvas**
-
-[![Canvas SDK](https://img.shields.io/badge/Canvas-SDK-blue.svg)](https://canvasmedical.com)
-[![Python](https://img.shields.io/badge/Python-3.8+-green.svg)](https://python.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 ---
 
 ## 📋 Description
