@@ -8,15 +8,15 @@ The Encounter List plugin provides a comprehensive worklist view of open encount
 
 ## Features
 
-- **Open Encounter Tracking**: Displays all encounters in NEW or UNLOCKED states
+- **Open Encounter Tracking**: Displays all encounters in open states (excludes things in a Locked, Deleted, Discharged, Scheduling, Booked, Reverted, Cancelled, Confirmed state)
 - **Advanced Filtering**: Filter by provider (owner), location, and billable status
-- **Multi-Provider Selection**: Select multiple providers to view their encounters
+- **Multi Selection**: Select multiple providers and locations to view their encounters
 - **Command Status Tracking**: Shows uncommitted commands and delegated orders for each encounter
 - **Claim Queue Monitoring**: Displays current claim processing status
-- **Pagination**: Handles large datasets with 25 encounters per page
+- **Pagination**: Handles large datasets with 25 or 50 encounters per page
 - **Direct Navigation**: Click-through links to patient charts and encounter notes
 - **Responsive Design**: Works on desktop and mobile devices
-- **Real-time Data**: Fresh data loaded from Canvas on each view
+- **Real-time Data**: Fresh data loaded from Canvas after each apply
 
 ## How to Access
 
@@ -53,6 +53,10 @@ The plugin provides one access point:
 ### Encounter States
 - **NEW**: Newly created encounters that haven't been started
 - **UNLOCKED**: Encounters that are currently being worked on but not yet finalized
+- **PUSHED**: Encounters that have just had charges pushed but are not yet finalized
+- **UNDELETED**: Encounters that were restored on the timeline
+- **CONVERTED**: Encounter note that have been checked-in
+- **NOSHOW**: Appointments that have been marked as no-show that have not yet been finalized
 
 ## Filtering Capabilities
 
@@ -62,9 +66,10 @@ The plugin provides one access point:
    - Multi-select dropdown of active providers
    - Defaults to showing the logged-in user's encounters
    - Can select multiple providers to view combined workload
+   - Option to view all providers
 
 2. **Location**: 
-   - Single-select dropdown of practice locations
+   - Multi-select dropdown of practice locations
    - Shows only locations that have open encounters
    - Option to view all locations
 
@@ -146,9 +151,10 @@ The plugin provides several internal API endpoints:
 
 ### Database Integration
 - Integrates with Canvas ORM models: `Note`, `Command`, `Staff`, `Patient`
-- Filters notes by state: `NoteStates.NEW` and `NoteStates.UNLOCKED`
+- Filters notes by state
 - Excludes message and letter categories: `NoteTypeCategories.MESSAGE`, `NoteTypeCategories.LETTER`
 - Uses Django annotations for efficient command counting
+- Uses django order by for sorting columns
 
 ### Frontend Technology
 - Vanilla JavaScript (no external frameworks)
