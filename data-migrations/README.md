@@ -40,6 +40,7 @@ This module contains tools for migrating Electronic Health Record (EHR) data fro
 - [Message Migration](#message-migration)
 - [Consent Migration](#consent-migration)
 - [HPI Migration](#hpi-migration)
+- [Visual Exam Finding Migration](#visual-exam-finding-migration)
 - [Questionnaire Response Migration](#questionnaire-response-migration)
 
 ### 🛠️ **Technical Details**
@@ -1015,6 +1016,60 @@ Used to know which note to insert the HPI command into.
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 | `Provider mapping` | Provider must exist in `doctor_map.json` | Provider lookup |
 | `Location mapping` | Must be a Canvas Practice Location ID | Location validation |
+
+---
+
+## 👁️ **Visual Exam Finding Migration** (`create_visual_exam_findings.py`) 
+
+Visual exam findings capture visual examination images and associated documentation for patients. These are loaded via **FHIR Media**: [Canvas Media API](https://docs.canvasmedical.com/api/media/)
+
+Visual exam findings are stored as Media resources that are linked to a patient's historical data migration note. These images appear in the patient's medical record and can include examination photos, diagnostic images, or other visual documentation from the source EMR (jpeg).
+
+### ✅ **Required Fields**
+
+| Field | Description | 🔍 Validation |
+|-------|-------------|---------------|
+| `ID` | Unique identifier for the visual exam finding record | Non-empty string |
+| `Patient Identifier` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
+| `Image` | Path to the image file | File must exist at specified path |
+
+### 🔧 **Optional Fields**
+
+| Field | Description | 📊 Example |
+|-------|-------------|------------|
+| `Title` | Title/description of the visual exam finding | "Fundoscopic examination", "Skin lesion photo" |
+| `Comment` | Additional notes about the visual exam finding | "Taken during routine eye exam" |
+| `Note ID` | Associated note identifier if note already exists. Will be the data migration note by default | Canvas note ID |
+
+### 📋 **Data Format Requirements**
+
+| Field Type | Requirements | ✅ Accepted Values |
+|------------|--------------|-------------------|
+| `Image` | Must point to existing image file | Valid image file in images directory |
+| `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
+
+### 📁 **Supported Image Formats**
+
+| Format | Support | Notes |
+|--------|---------|-------|
+| **JPEG** | ✅ Full support | Native format, recommended |
+| **PNG** | ✅ Full support | Supported with transparency |
+| **HEIC** | ✅ Supported | High Efficiency Image Container format |
+
+### 💡 **How It Works**
+
+- **Historical Data Migration Notes**: Images are linked to the patient's historical data migration note
+- **Base64 Encoding**: Images are automatically converted to base64 for FHIR ingestion
+- **File Validation**: Script validates that image files exist before attempting upload
+- **Content Type Detection**: Automatically sets appropriate MIME type for images
+- **Note Integration**: Creates or uses existing historical data migration notes for organization
+
+### ⚠️ **Important Considerations**
+
+- **File Paths**: Ensure image files are accessible in the specified images directory
+- **File Size**: Large images may impact upload performance
+- **Medical Context**: Include meaningful titles and comments for clinical context
+- **Privacy**: Ensure proper handling of sensitive visual medical data
 
 ---
 
