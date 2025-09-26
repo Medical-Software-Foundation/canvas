@@ -359,6 +359,7 @@
             display: flex;
             align-items: center;
             gap: 6px;
+            user-select: none; /* Prevent text selection when clicking */
         }
 
         .dropdown-option:last-child {
@@ -379,6 +380,7 @@
             margin: 0;
             cursor: pointer;
             transform: scale(0.9);
+            pointer-events: none; /* Prevent direct checkbox clicks, let row handle it */
         }
 
         /* Responsive design */
@@ -1074,12 +1076,16 @@
                 const option = e.target.closest('.dropdown-option');
                 if (!option) return;
                 
-                const input = option.querySelector('input');
+                const input = option.querySelector('input[type="checkbox"]');
+                if (!input) return;
+                
                 const value = option.getAttribute('data-value');
+                
+                // Toggle the checkbox (entire row is clickable)
+                input.checked = !input.checked;
                 
                 if (value === '') {
                     // "All" option
-                    input.checked = !input.checked;
                     if (input.checked) {
                         currentFilters[filterKey] = [];
                         // Uncheck all other options
@@ -1087,18 +1093,18 @@
                     }
                 } else {
                     // Individual option
-                    input.checked = !input.checked;
-                    
                     if (input.checked) {
                         // Uncheck "All"
-                        document.getElementById(`${filterKey}-all`).checked = false;
+                        const allCheckbox = document.getElementById(`${filterKey}-all`);
+                        if (allCheckbox) allCheckbox.checked = false;
                         if (!currentFilters[filterKey].includes(value)) {
                             currentFilters[filterKey].push(value);
                         }
                     } else {
                         currentFilters[filterKey] = currentFilters[filterKey].filter(item => item !== value);
                         if (currentFilters[filterKey].length === 0) {
-                            document.getElementById(`${filterKey}-all`).checked = true;
+                            const allCheckbox = document.getElementById(`${filterKey}-all`);
+                            if (allCheckbox) allCheckbox.checked = true;
                         }
                     }
                 }
@@ -1210,7 +1216,7 @@
 
             // Clear All button
             clearFiltersButton.addEventListener('click', () => {
-                // Reset all filters
+                // Reset all filters first
                 currentFilters.provider_ids = [];
                 currentFilters.location_ids = [];
                 currentFilters.billable_only = false;
@@ -1218,25 +1224,49 @@
                 // Reset UI elements
                 billableFilter.checked = false;
                 
-                // Reset provider dropdown
+                // Reset provider dropdown checkboxes
                 const providerOptions = document.getElementById('provider-options');
-                const providerCheckboxes = providerOptions.querySelectorAll('input[type="checkbox"]');
-                providerCheckboxes.forEach(checkbox => {
-                    checkbox.checked = false;
-                });
-                document.getElementById('provider-ids-all').checked = true;
+                if (providerOptions) {
+                    const providerCheckboxes = providerOptions.querySelectorAll('input[type="checkbox"]');
+                    providerCheckboxes.forEach(checkbox => {
+                        if (checkbox.id === 'provider_ids-all') {
+                            checkbox.checked = true;
+                        } else {
+                            checkbox.checked = false;
+                        }
+                    });
+                }
                 
-                // Reset location dropdown
+                // Reset location dropdown checkboxes
                 const locationOptions = document.getElementById('location-options');
-                const locationCheckboxes = locationOptions.querySelectorAll('input[type="checkbox"]');
-                locationCheckboxes.forEach(checkbox => {
-                    checkbox.checked = false;
-                });
-                document.getElementById('location-ids-all').checked = true;
+                if (locationOptions) {
+                    const locationCheckboxes = locationOptions.querySelectorAll('input[type="checkbox"]');
+                    locationCheckboxes.forEach(checkbox => {
+                        if (checkbox.id === 'location_ids-all') {
+                            checkbox.checked = true;
+                        } else {
+                            checkbox.checked = false;
+                        }
+                    });
+                }
                 
-                // Update displays
-                updateDropdownDisplay('providerFilter', 'provider_ids');
-                updateDropdownDisplay('locationFilter', 'location_ids');
+                // Force update the dropdown displays
+                const providerDropdown = document.getElementById('providerFilter');
+                const locationDropdown = document.getElementById('locationFilter');
+                
+                if (providerDropdown) {
+                    const providerSelectedValue = providerDropdown.querySelector('.selected-value');
+                    if (providerSelectedValue) {
+                        providerSelectedValue.innerHTML = '<span class="placeholder-text">All Owners</span>';
+                    }
+                }
+                
+                if (locationDropdown) {
+                    const locationSelectedValue = locationDropdown.querySelector('.selected-value');
+                    if (locationSelectedValue) {
+                        locationSelectedValue.innerHTML = '<span class="placeholder-text">All Locations</span>';
+                    }
+                }
                 
                 // Apply cleared filters
                 applyFilters();
