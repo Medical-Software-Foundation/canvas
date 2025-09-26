@@ -14,7 +14,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f5f5f5;
-            padding: 20px;
+            padding: 20px 20px 40px 20px;
         }
 
         .worklist-container {
@@ -324,6 +324,27 @@
             display: none;
         }
 
+        .dropdown-search {
+            padding: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.375rem 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .search-input:focus {
+            border-color: #1d4ed8;
+            box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+        }
+
         .dropdown-options.show {
             display: block;
         }
@@ -338,6 +359,7 @@
             display: flex;
             align-items: center;
             gap: 6px;
+            user-select: none; /* Prevent text selection when clicking */
         }
 
         .dropdown-option:last-child {
@@ -358,6 +380,7 @@
             margin: 0;
             cursor: pointer;
             transform: scale(0.9);
+            pointer-events: none; /* Prevent direct checkbox clicks, let row handle it */
         }
 
         /* Responsive design */
@@ -385,6 +408,211 @@
                 order: 1;
             }
         }
+
+        /* Filter buttons styling */
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .refresh-btn {
+            padding: 8px 16px;
+            background-color: #E5E5E5;
+            color: #595959;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background-color: #C0C0C0;
+            color: #595959;
+        }
+
+        .clear-filters-btn {
+            padding: 8px 16px;
+            background-color: #E5E5E5;
+            color: #595959;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .clear-filters-btn:hover {
+            background-color: #C0C0C0;
+            color: #595959;
+        }
+
+        .apply-filters-btn {
+            padding: 8px 16px;
+            background-color: #2384D0;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .apply-filters-btn:hover {
+            background-color: #1D6FAF;
+        }
+
+        /* Loading Spinner Animation */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .spinner-circle {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1d4ed8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .spinner-text {
+            margin-top: 12px;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Filters section styling */
+        .filters-section {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            background-color: #f8f9fa;
+        }
+
+        .filters-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .filters-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filter-field.wide {
+            min-width: 200px;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .filter-select {
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .filter-checkbox {
+            transform: scale(1.2);
+        }
+
+        /* Pagination styling */
+        .pagination-container {
+            padding: 16px 20px 32px 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .page-size-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .page-size-label {
+            font-size: 14px;
+            color: #555;
+        }
+
+        .page-size-select {
+            padding: 6px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            background-color: white;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .pagination-buttons {
+            display: flex;
+            align-items: center;
+        }
+
+        .pagination-btn {
+            padding: 8px 12px;
+            margin: 0 4px;
+            border: 1px solid #d0d0d0;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .pagination-btn:hover {
+            background-color: #f8f9fa;
+        }
+
+        .page-numbers {
+            margin: 0 16px;
+        }
+
+        /* Error message styling */
+        .error-row {
+            text-align: center;
+            color: #dc2626;
+            padding: 2rem;
+        }
     </style>
 </head>
 <body>
@@ -394,33 +622,65 @@
             <span class="encounter-count" id="encounterCount">Loading encounters...</span>
         </div>
         
-        <div class="filters-section" style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background-color: #f8f9fa;">
-            <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <label style="font-size: 12px; font-weight: 500; color: #555;">Owner</label>
-                    <div class="filter-dropdown" id="providerFilter" data-values="">
-                        <div class="selected-value">
-                            <span class="placeholder-text">All Owners</span>
-                        </div>
-                        <div class="dropdown-options" id="provider-options">
-                            <div class="dropdown-option" data-value="">
-                                <input type="checkbox" id="provider-all" checked>
-                                <label for="provider-all">All Owners</label>
+        <div class="filters-section">
+            <div class="filters-container">
+                <div class="filters-group">
+                    <div class="filter-field">
+                        <label class="filter-label">Owner</label>
+                        <div class="filter-dropdown" id="providerFilter" data-values="">
+                            <div class="selected-value">
+                                <span class="placeholder-text">All Owners</span>
+                            </div>
+                            <div class="dropdown-options" id="provider-options">
+                                <div class="dropdown-search">
+                                    <input type="text" id="provider-search" placeholder="Search owners..." class="search-input">
+                                </div>
+                                <div class="dropdown-option" data-value="">
+                                    <input type="checkbox" id="provider-all" checked>
+                                    <label for="provider-all">All Owners</label>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="filter-field wide">
+                        <label class="filter-label">Location</label>
+                        <div class="filter-dropdown" id="locationFilter" data-values="">
+                            <div class="selected-value">
+                                <span class="placeholder-text">All Locations</span>
+                            </div>
+                            <div class="dropdown-options" id="location-options">
+                                <div class="dropdown-search">
+                                    <input type="text" id="location-search" placeholder="Search locations..." class="search-input">
+                                </div>
+                                <div class="dropdown-option" data-value="">
+                                    <input type="checkbox" id="location-all" checked>
+                                    <label for="location-all">All Locations</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="filter-field">
+                        <label class="filter-label">Billable Only</label>
+                        <input type="checkbox" id="billableFilter" class="filter-checkbox">
+                    </div>
                 </div>
                 
-                <div style="display: flex; flex-direction: column; gap: 4px; min-width: 200px;">
-                    <label style="font-size: 12px; font-weight: 500; color: #555;">Location</label>
-                    <select id="locationFilter" style="padding: 8px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 14px;">
-                        <option value="">All Locations</option>
-                    </select>
-                </div>
-                
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <label style="font-size: 12px; font-weight: 500; color: #555;">Billable Only</label>
-                    <input type="checkbox" id="billableFilter" style="transform: scale(1.2);">
+                <!-- Refresh, Clear and Apply buttons -->
+                <div class="filter-buttons">
+                    <button id="refreshButton" class="refresh-btn">
+                        <svg width="16" height="13" viewBox="0 0 16 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" clip-rule="evenodd" d="M13.7349 5.55071L15.1929 7.00412C15.3015 7.1124 15.3635 7.26695 15.3635 7.40609C15.3635 7.54522 15.3015 7.69988 15.1929 7.80806C14.9757 8.02451 14.6035 8.02451 14.3863 7.80806L13.8591 7.2824C13.5489 10.2355 11.0362 12.5548 7.99611 12.5548C5.90202 12.5548 3.94775 11.4261 2.87753 9.61709C2.72238 9.33883 2.81553 8.99868 3.09467 8.82858C3.3738 8.67392 3.71503 8.76678 3.88568 9.04503C4.73878 10.5138 6.30529 11.4106 7.99597 11.4106C10.3691 11.4106 12.3389 9.66346 12.6957 7.39065L12.2768 7.80814C12.0597 8.0246 11.6874 8.0246 11.4703 7.80814C11.2531 7.59169 11.2531 7.22058 11.4703 7.00412L12.9283 5.55071C13.1454 5.33425 13.5177 5.33425 13.7349 5.55071ZM7.996 0.772949C10.1054 0.772949 12.0598 1.90161 13.1145 3.72609C13.161 3.81885 13.192 3.9116 13.192 4.00434C13.192 4.20538 13.0834 4.39088 12.8973 4.49917C12.6181 4.66936 12.2614 4.5765 12.1062 4.29824C11.2688 2.82952 9.68668 1.91721 7.996 1.91721C5.62289 1.91721 3.65305 3.66439 3.29631 5.9372L3.71512 5.51971C3.93226 5.30325 4.30455 5.30325 4.5217 5.51971C4.63032 5.62799 4.69232 5.78254 4.69232 5.92168C4.69232 6.06081 4.63032 6.21548 4.5217 6.32365L3.06368 7.77706C2.84654 7.99351 2.47425 7.99351 2.2571 7.77706L0.799087 6.32365C0.581945 6.1072 0.581945 5.73609 0.799087 5.51963C1.01623 5.30317 1.38851 5.30317 1.60566 5.51963L2.11751 6.02985C2.42769 3.07671 4.94043 0.772949 7.996 0.772949Z" fill="#595959"/>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                    <button id="clearFilters" class="clear-filters-btn">
+                        Clear All
+                    </button>
+                    <button id="applyFilters" class="apply-filters-btn">
+                        Apply Filters
+                    </button>
                 </div>
             </div>
         </div>
@@ -443,12 +703,27 @@
             </tbody>
         </table>
         
-        <div class="pagination-container" id="paginationContainer" style="padding: 16px 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="loading-spinner">
+            <div class="spinner-circle"></div>
+            <div class="spinner-text">Loading encounters...</div>
+        </div>
+        
+        <div class="pagination-container" id="paginationContainer">
             <div class="pagination-info" id="paginationInfo"></div>
             <div class="pagination-controls">
-                <button id="prevButton" class="pagination-btn" style="padding: 8px 12px; margin: 0 4px; border: 1px solid #d0d0d0; background: white; border-radius: 4px; cursor: pointer;">Previous</button>
-                <span id="pageNumbers" style="margin: 0 16px;"></span>
-                <button id="nextButton" class="pagination-btn" style="padding: 8px 12px; margin: 0 4px; border: 1px solid #d0d0d0; background: white; border-radius: 4px; cursor: pointer;">Next</button>
+                <div class="page-size-container">
+                    <label for="pageSizeSelect" class="page-size-label">Records per page:</label>
+                    <select id="pageSizeSelect" class="page-size-select">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div class="pagination-buttons">
+                    <button id="prevButton" class="pagination-btn">Previous</button>
+                    <span id="pageNumbers" class="page-numbers"></span>
+                    <button id="nextButton" class="pagination-btn">Next</button>
+                </div>
             </div>
         </div>
     </div>
@@ -464,7 +739,7 @@
         let locations = [];
         let currentFilters = {
             provider_ids: [],
-            location_id: null,
+            location_ids: [],
             billable_only: false
         };
         let sortConfig = { key: null, direction: 'asc' };
@@ -481,7 +756,15 @@
         async function fetchEncounters(filters = {}, page = 1) {
             try {
                 const params = new URLSearchParams();
-                const combinedFilters = {...currentFilters, ...filters, page, page_size: 25};
+                const pageSize = parseInt(document.getElementById('pageSizeSelect')?.value || '25');
+                const combinedFilters = {...currentFilters, ...filters, page, page_size: pageSize};
+                
+                // Add sorting parameters
+                if (sortConfig.key) {
+                    combinedFilters.sort_by = sortConfig.key;
+                    combinedFilters.sort_direction = sortConfig.direction;
+                }
+                
                 Object.entries(combinedFilters).forEach(([key, value]) => {
                     if (key === 'provider_ids' && Array.isArray(value)) {
                         // Handle array of provider IDs as comma-separated string
@@ -491,6 +774,17 @@
                                 params.append(key, providerIdsString);
                             }
                         }
+                    } else if (key === 'location_ids' && Array.isArray(value)) {
+                        // Handle array of location IDs as comma-separated string
+                        if (value.length > 0) {
+                            const locationIdsString = value.filter(id => id !== null && id !== undefined && id !== '').join(',');
+                            if (locationIdsString) {
+                                params.append(key, locationIdsString);
+                            }
+                        }
+                    } else if (key === 'billable_only') {
+                        // Always include billable_only parameter, even if false
+                        params.append(key, value.toString());
                     } else if (value !== null && value !== undefined && value !== '') {
                         params.append(key, value);
                     }
@@ -533,6 +827,7 @@
                 return { encounters: [], pagination: { current_page: 1, total_pages: 1, total_count: 0, page_size: 25, has_previous: false, has_next: false } };
             }
         }
+
 
         async function fetchProviders() {
             try {
@@ -627,7 +922,7 @@
         }
 
         // Sorting functionality
-        function sortEncounters(columnIndex) {
+        async function sortEncounters(columnIndex) {
             const columns = ['patientName', 'provider', 'location', 'noteTitle', 'dos', 'billable', 'uncommittedCommands', 'delegatedOrders', 'claimQueue'];
             const key = columns[columnIndex];
 
@@ -638,22 +933,17 @@
                 sortConfig.direction = 'asc';
             }
 
-            encounterData.sort((a, b) => {
-                let aVal = a[key];
-                let bVal = b[key];
-
-                // Handle different data types
-                if (typeof aVal === 'string') {
-                    aVal = aVal.toLowerCase();
-                    bVal = bVal.toLowerCase();
-                }
-
-                if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-
+            // Reset to first page when sorting
+            paginationData.current_page = 1;
+            
+            // Fetch data with new sorting
+            await fetchEncounters({}, 1);
+            
+            // Render the table with new data
             renderTable();
+            updateEncounterCount();
+            updatePaginationControls();
+            updateSortIndicators();
         }
 
         function setupSortingListeners() {
@@ -664,156 +954,357 @@
                     sortEncounters(index);
                 });
             });
+            updateSortIndicators();
+        }
+
+        function updateSortIndicators() {
+            const headers = document.querySelectorAll('.worklist-table th');
+            const columns = ['patientName', 'provider', 'location', 'noteTitle', 'dos', 'billable', 'uncommittedCommands', 'delegatedOrders', 'claimQueue'];
+            
+            headers.forEach((header, index) => {
+                const column = columns[index];
+                const isActive = sortConfig.key === column;
+                const direction = sortConfig.direction;
+                
+                // Remove existing indicators
+                header.innerHTML = header.innerHTML.replace(/ ↑| ↓/g, '');
+                
+                if (isActive) {
+                    const indicator = direction === 'asc' ? ' ↑' : ' ↓';
+                    header.innerHTML += indicator;
+                }
+            });
         }
 
         // Helper functions for filtering and UI updates
-        function populateProviderDropdown() {
-            const providerDropdown = document.getElementById('providerFilter');
-            const providerOptions = document.getElementById('provider-options');
+        function closeAllDropdowns() {
+            const openDropdowns = document.querySelectorAll('.filter-dropdown.open');
+            openDropdowns.forEach(dropdown => {
+                dropdown.classList.remove('open');
+                const options = dropdown.querySelector('.dropdown-options');
+                if (options) {
+                    options.classList.remove('show');
+                }
+            });
+        }
+
+        function populateDropdown(dropdownId, dataArray, filterKey, displayKey) {
+            const dropdownOptions = document.getElementById(dropdownId);
             
-            // Clear existing options except "All Owners"
-            const allOption = providerOptions.querySelector('[data-value=""]');
-            providerOptions.innerHTML = '';
-            providerOptions.appendChild(allOption);
+            // Clear existing options and add search input
+            dropdownOptions.innerHTML = `
+                <div class="dropdown-search">
+                    <input type="text" id="${filterKey}-search" placeholder="Search ${displayKey.toLowerCase()}..." class="search-input">
+                </div>
+            `;
             
-            // Add provider options
-            providers.forEach(provider => {
-                const isSelected = provider.id === loggedInStaffId;
+            // Ensure data is an array
+            if (!Array.isArray(dataArray)) {
+                dataArray = [];
+            }
+            
+            // Add "All" option
+            const allOption = document.createElement('div');
+            allOption.className = 'dropdown-option';
+            allOption.setAttribute('data-value', '');
+            // Only check "All" if no items are currently selected
+            const isAllSelected = currentFilters[filterKey].length === 0;
+            allOption.innerHTML = `
+                <input type="checkbox" id="${filterKey}-all" ${isAllSelected ? 'checked' : ''}>
+                <label for="${filterKey}-all">All ${displayKey}</label>
+            `;
+            dropdownOptions.appendChild(allOption);
+            
+            // Add data options
+            dataArray.forEach(item => {
+                const isSelected = currentFilters[filterKey].includes(item.id || item);
                 const option = document.createElement('div');
                 option.className = 'dropdown-option';
-                option.setAttribute('data-value', provider.id);
+                option.setAttribute('data-value', item.id || item);
                 option.innerHTML = `
-                    <input type="checkbox" id="provider-${provider.id}" ${isSelected ? 'checked' : ''}>
-                    <label for="provider-${provider.id}">${provider.name}</label>
+                    <input type="checkbox" id="${filterKey}-${(item.id || item).replace(/[^a-zA-Z0-9]/g, '')}" value="${item.id || item}" ${isSelected ? 'checked' : ''}>
+                    <label for="${filterKey}-${(item.id || item).replace(/[^a-zA-Z0-9]/g, '')}">${item.name || item}</label>
                 `;
-                providerOptions.appendChild(option);
-
-                if (isSelected) {
-                    currentFilters.provider_ids = [provider.id];
-                }
+                dropdownOptions.appendChild(option);
             });
             
-            updateProviderDisplay();
+            // Setup search functionality
+            setupSearchFunctionality(filterKey, dropdownOptions);
         }
 
-        function populateLocationDropdown() {
-            const locationSelect = document.getElementById('locationFilter');
-            
-            // Clear existing options except the first one
-            locationSelect.innerHTML = '<option value="">All Locations</option>';
-            
-            // Add location options
-            locations.forEach(location => {
-                const option = document.createElement('option');
-                option.value = location.id;
-                option.textContent = location.name;
-                locationSelect.appendChild(option);
-            });
-        }
-
-        function updateProviderDisplay() {
-            const providerDropdown = document.getElementById('providerFilter');
-            const selectedValue = providerDropdown.querySelector('.selected-value');
-            const selectedProviders = currentFilters.provider_ids;
-            
-            if (selectedProviders.length === 0) {
-                selectedValue.innerHTML = '<span class="placeholder-text">All Owners</span>';
-            } else {
-                const tags = selectedProviders.map(providerId => {
-                    const provider = providers.find(p => p.id === providerId);
-                    return `<span class="selected-tag">${provider ? provider.name : providerId}<span class="remove-tag" data-provider-id="${providerId}">×</span></span>`;
-                }).join('');
-                selectedValue.innerHTML = tags;
+        function setupSearchFunctionality(filterKey, dropdownOptions) {
+            const searchInput = document.getElementById(`${filterKey}-search`);
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const options = dropdownOptions.querySelectorAll('.dropdown-option');
+                    
+                    options.forEach(option => {
+                        const label = option.querySelector('label');
+                        const text = label ? label.textContent.toLowerCase() : option.textContent.toLowerCase();
+                        
+                        if (text.includes(searchTerm)) {
+                            option.style.display = 'block';
+                        } else {
+                            option.style.display = 'none';
+                        }
+                    });
+                });
             }
         }
-        
-        function setupProviderDropdown() {
-            const providerDropdown = document.getElementById('providerFilter');
-            const providerOptions = document.getElementById('provider-options');
+
+        function setupDropdown(dropdownId, optionsId, filterKey) {
+            const dropdown = document.getElementById(dropdownId);
+            const options = document.getElementById(optionsId);
             
-            // Toggle dropdown
-            providerDropdown.addEventListener('click', (e) => {
-                if (e.target.classList.contains('remove-tag')) {
-                    // Remove tag
-                    const providerId = e.target.getAttribute('data-provider-id');
-                    currentFilters.provider_ids = currentFilters.provider_ids.filter(id => id !== providerId);
-                    updateProviderDisplay();
-                    applyFilters();
-                    return;
+            // Toggle dropdown - only when clicking the dropdown header, not options
+            dropdown.addEventListener('click', (e) => {
+                // Only toggle if clicking on the dropdown header, not on options
+                if (!e.target.closest('.dropdown-option')) {
+                    // Close all other dropdowns first
+                    closeAllDropdowns();
+                    
+                    // Toggle current dropdown
+                    dropdown.classList.toggle('open');
+                    options.classList.toggle('show');
                 }
-                
-                providerDropdown.classList.toggle('open');
-                providerOptions.classList.toggle('show');
             });
             
-            // Handle option selection
-            providerOptions.addEventListener('click', (e) => {
+            // Handle option selection using event delegation
+            options.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent click from bubbling up to dropdown
                 const option = e.target.closest('.dropdown-option');
                 if (!option) return;
                 
-                const checkbox = option.querySelector('input[type="checkbox"]');
+                const input = option.querySelector('input[type="checkbox"]');
+                if (!input) return;
+                
                 const value = option.getAttribute('data-value');
                 
+                // Toggle the checkbox (entire row is clickable)
+                input.checked = !input.checked;
+                
                 if (value === '') {
-                    // "All Owners" option
-                    if (checkbox.checked) {
-                        currentFilters.provider_ids = [];
+                    // "All" option
+                    if (input.checked) {
+                        currentFilters[filterKey] = [];
                         // Uncheck all other options
-                        providerOptions.querySelectorAll('input[type="checkbox"]:not([id="provider-all"])').forEach(cb => cb.checked = false);
+                        options.querySelectorAll(`input[type="checkbox"]:not([id="${filterKey}-all"])`).forEach(cb => cb.checked = false);
                     }
                 } else {
-                    // Individual provider option
-                    checkbox.checked = !checkbox.checked;
-                    
-                    if (checkbox.checked) {
-                        // Uncheck "All Owners"
-                        document.getElementById('provider-all').checked = false;
-                        if (!currentFilters.provider_ids.includes(value)) {
-                            currentFilters.provider_ids.push(value);
+                    // Individual option
+                    if (input.checked) {
+                        // Uncheck "All"
+                        const allCheckbox = document.getElementById(`${filterKey}-all`);
+                        if (allCheckbox) allCheckbox.checked = false;
+                        if (!currentFilters[filterKey].includes(value)) {
+                            currentFilters[filterKey].push(value);
                         }
                     } else {
-                        currentFilters.provider_ids = currentFilters.provider_ids.filter(id => id !== value);
-                        if (currentFilters.provider_ids.length === 0) {
-                            document.getElementById('provider-all').checked = true;
+                        currentFilters[filterKey] = currentFilters[filterKey].filter(item => item !== value);
+                        if (currentFilters[filterKey].length === 0) {
+                            const allCheckbox = document.getElementById(`${filterKey}-all`);
+                            if (allCheckbox) allCheckbox.checked = true;
                         }
                     }
                 }
                 
-                updateProviderDisplay();
-                applyFilters();
-            });
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', (e) => {
-                if (!providerDropdown.contains(e.target)) {
-                    providerDropdown.classList.remove('open');
-                    providerOptions.classList.remove('show');
-                }
+                // Update the display to show selected options
+                updateDropdownDisplay(dropdownId, filterKey);
             });
         }
 
+        function updateDropdownDisplay(dropdownId, filterKey) {
+            const dropdown = document.getElementById(dropdownId);
+            const selectedValue = dropdown.querySelector('.selected-value');
+            const selectedItems = currentFilters[filterKey];
+            
+            if (selectedItems.length === 0) {
+                // Use friendly display names for placeholder text
+                let displayName = 'All';
+                if (filterKey === 'provider_ids') {
+                    displayName = 'All Owners';
+                } else if (filterKey === 'location_ids') {
+                    displayName = 'All Locations';
+                }
+                selectedValue.innerHTML = `<span class="placeholder-text">${displayName}</span>`;
+            } else {
+                const tags = selectedItems.map(itemId => {
+                    // Find the item name from the data arrays
+                    let itemName = itemId;
+                    if (filterKey === 'provider_ids') {
+                        const provider = providers.find(p => p.id === itemId);
+                        itemName = provider ? provider.name : itemId;
+                    } else if (filterKey === 'location_ids') {
+                        const location = locations.find(l => l.id === itemId);
+                        itemName = location ? location.name : itemId;
+                    }
+                    return `<span class="selected-tag">${itemName}<span class="remove-tag" data-${filterKey}-id="${itemId}">×</span></span>`;
+                }).join('');
+                selectedValue.innerHTML = tags;
+                
+                // Add event listeners for remove tags
+                selectedValue.querySelectorAll('.remove-tag').forEach(removeBtn => {
+                    removeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const itemToRemove = e.target.getAttribute(`data-${filterKey}-id`);
+                        currentFilters[filterKey] = currentFilters[filterKey].filter(item => item !== itemToRemove);
+                        
+                        // Update checkbox state
+                        const checkbox = document.getElementById(`${filterKey}-${itemToRemove.replace(/[^a-zA-Z0-9]/g, '')}`);
+                        if (checkbox) {
+                            checkbox.checked = false;
+                        }
+                        
+                        // If no items selected, check "All"
+                        if (currentFilters[filterKey].length === 0) {
+                            document.getElementById(`${filterKey}-all`).checked = true;
+                        }
+                        
+                        updateDropdownDisplay(dropdownId, filterKey);
+                    });
+                });
+            }
+        }
+
+        function populateProviderDropdown() {
+            // Set initial selection if logged in staff is found BEFORE populating dropdown
+            if (loggedInStaffId) {
+                const loggedInProvider = providers.find(p => p.id === loggedInStaffId);
+                if (loggedInProvider) {
+                    currentFilters.provider_ids = [loggedInStaffId];
+                }
+            }
+            
+            // Use shared function to populate dropdown (now with correct filter state)
+            populateDropdown('provider-options', providers, 'provider_ids', 'Owners');
+            
+            // Update display to show the selected user
+            updateDropdownDisplay('providerFilter', 'provider_ids');
+        }
+
+        function populateLocationDropdown() {
+            // Use shared function to populate dropdown
+            populateDropdown('location-options', locations, 'location_ids', 'Locations');
+        }
+
+        
+        function setupProviderDropdown() {
+            // Use shared function to setup dropdown
+            setupDropdown('providerFilter', 'provider-options', 'provider_ids');
+        }
+
+        function setupLocationDropdown() {
+            // Use shared function to setup dropdown
+            setupDropdown('locationFilter', 'location-options', 'location_ids');
+        }
+
         function setupFilterEventListeners() {
-            const locationFilter = document.getElementById('locationFilter');
             const billableFilter = document.getElementById('billableFilter');
+            const clearFiltersButton = document.getElementById('clearFilters');
+            const applyFiltersButton = document.getElementById('applyFilters');
+            const refreshButton = document.getElementById('refreshButton');
 
             setupProviderDropdown();
-
-            // Location filter change
-            locationFilter.addEventListener('change', () => {
-                currentFilters.location_id = locationFilter.value || null;
-                applyFilters();
-            });
+            setupLocationDropdown();
 
             // Billable filter change
             billableFilter.addEventListener('change', () => {
                 currentFilters.billable_only = billableFilter.checked;
+                // Don't auto-refresh, wait for action button
+            });
+
+            // Clear All button
+            clearFiltersButton.addEventListener('click', () => {
+                // Reset all filters first
+                currentFilters.provider_ids = [];
+                currentFilters.location_ids = [];
+                currentFilters.billable_only = false;
+                
+                // Reset UI elements
+                billableFilter.checked = false;
+                
+                // Reset provider dropdown checkboxes
+                const providerOptions = document.getElementById('provider-options');
+                if (providerOptions) {
+                    const providerCheckboxes = providerOptions.querySelectorAll('input[type="checkbox"]');
+                    providerCheckboxes.forEach(checkbox => {
+                        if (checkbox.id === 'provider_ids-all') {
+                            checkbox.checked = true;
+                        } else {
+                            checkbox.checked = false;
+                        }
+                    });
+                }
+                
+                // Reset location dropdown checkboxes
+                const locationOptions = document.getElementById('location-options');
+                if (locationOptions) {
+                    const locationCheckboxes = locationOptions.querySelectorAll('input[type="checkbox"]');
+                    locationCheckboxes.forEach(checkbox => {
+                        if (checkbox.id === 'location_ids-all') {
+                            checkbox.checked = true;
+                        } else {
+                            checkbox.checked = false;
+                        }
+                    });
+                }
+                
+                // Force update the dropdown displays
+                const providerDropdown = document.getElementById('providerFilter');
+                const locationDropdown = document.getElementById('locationFilter');
+                
+                if (providerDropdown) {
+                    const providerSelectedValue = providerDropdown.querySelector('.selected-value');
+                    if (providerSelectedValue) {
+                        providerSelectedValue.innerHTML = '<span class="placeholder-text">All Owners</span>';
+                    }
+                }
+                
+                if (locationDropdown) {
+                    const locationSelectedValue = locationDropdown.querySelector('.selected-value');
+                    if (locationSelectedValue) {
+                        locationSelectedValue.innerHTML = '<span class="placeholder-text">All Locations</span>';
+                    }
+                }
+                
+                // Apply cleared filters
                 applyFilters();
+            });
+
+            // Apply Filters button
+            applyFiltersButton.addEventListener('click', () => {
+                applyFilters();
+            });
+
+            // Refresh button
+            refreshButton.addEventListener('click', async () => {
+                try {
+                    // Show loading state
+                    showLoadingSpinner();
+                    document.getElementById('encounterCount').textContent = 'Loading encounters...';
+                    
+                    // Refresh data with current filters and sorting
+                    await fetchEncounters(currentFilters, paginationData.current_page);
+                    
+                    // Re-render the table
+                    renderTable();
+                    updateEncounterCount();
+                    updatePaginationControls();
+                    updateSortIndicators();
+                    hideLoadingSpinner();
+                } catch (error) {
+                    console.error('Error refreshing encounters:', error);
+                    document.getElementById('encounterCount').textContent = 'Error loading encounters';
+                    hideLoadingSpinner();
+                }
             });
         }
 
         async function applyFilters() {
             try {
                 // Show loading state
+                showLoadingSpinner();
                 document.getElementById('encounterCount').textContent = 'Loading encounters...';
                 
                 // Reset to page 1 when applying filters
@@ -823,9 +1314,12 @@
                 renderTable();
                 updateEncounterCount();
                 updatePaginationControls();
+                updateSortIndicators();
+                hideLoadingSpinner();
             } catch (error) {
                 console.error('Error applying filters:', error);
                 document.getElementById('encounterCount').textContent = 'Error loading encounters';
+                hideLoadingSpinner();
             }
         }
 
@@ -866,21 +1360,26 @@
 
             try {
                 // Show loading state
+                showLoadingSpinner();
                 document.getElementById('encounterCount').textContent = 'Loading encounters...';
                 
                 await fetchEncounters(currentFilters, page);
                 renderTable();
                 updateEncounterCount();
                 updatePaginationControls();
+                updateSortIndicators();
+                hideLoadingSpinner();
             } catch (error) {
                 console.error('Error loading page:', error);
                 document.getElementById('encounterCount').textContent = 'Error loading encounters';
+                hideLoadingSpinner();
             }
         }
 
         function setupPaginationEventListeners() {
             const prevButton = document.getElementById('prevButton');
             const nextButton = document.getElementById('nextButton');
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
 
             prevButton.addEventListener('click', () => {
                 if (paginationData.has_previous) {
@@ -893,6 +1392,33 @@
                     goToPage(paginationData.current_page + 1);
                 }
             });
+
+            // Page size change handler
+            pageSizeSelect.addEventListener('change', async () => {
+                paginationData.current_page = 1; // Reset to first page when changing page size
+                await fetchEncounters(1);
+                renderTable();
+                updateEncounterCount();
+                updatePaginationControls();
+                updateSortIndicators();
+            });
+        }
+
+        // Loading spinner helper functions
+        function showLoadingSpinner() {
+            const spinner = document.getElementById('loadingSpinner');
+            const tableBody = document.getElementById('worklistBody');
+            if (spinner && tableBody) {
+                spinner.style.display = 'block';
+                tableBody.innerHTML = ''; // Clear table content
+            }
+        }
+
+        function hideLoadingSpinner() {
+            const spinner = document.getElementById('loadingSpinner');
+            if (spinner) {
+                spinner.style.display = 'none';
+            }
         }
 
         // Initialize the worklist
@@ -908,6 +1434,16 @@
                 populateProviderDropdown();
                 populateLocationDropdown();
 
+                // Initialize page size dropdown
+                const pageSizeSelect = document.getElementById('pageSizeSelect');
+                if (pageSizeSelect) {
+                    pageSizeSelect.value = '25'; // Default to 25 records per page
+                }
+
+                // Show loading spinner for initial load
+                showLoadingSpinner();
+                document.getElementById('encounterCount').textContent = 'Loading encounters...';
+                
                 await fetchEncounters();
                 
                 // Setup filter event listeners
@@ -923,6 +1459,8 @@
                 renderTable();
                 updateEncounterCount();
                 updatePaginationControls();
+                updateSortIndicators();
+                hideLoadingSpinner();
                 
                 // Setup refresh functionality
                 window.refreshEncounters = async () => {
@@ -930,14 +1468,27 @@
                     renderTable();
                     updateEncounterCount();
                     updatePaginationControls();
+                    updateSortIndicators();
                 };
+
+                // Global click listener to close dropdowns when clicking outside
+                document.addEventListener('click', (e) => {
+                    // Check if the click was on a dropdown or its children
+                    const clickedDropdown = e.target.closest('.filter-dropdown');
+                    const isDropdownClick = clickedDropdown !== null;
+                    
+                    if (!isDropdownClick) {
+                        closeAllDropdowns();
+                    }
+                });
 
             } catch (error) {
                 console.error('Error initializing encounter worklist:', error);
                 // Show error state in the UI
                 document.getElementById('worklistBody').innerHTML = 
-                    '<tr><td colspan="9" style="text-align: center; color: #dc2626; padding: 2rem;">Error loading encounters. Please refresh the page.</td></tr>';
+                    '<tr><td colspan="9" class="error-row">Error loading encounters. Please refresh the page.</td></tr>';
                 document.getElementById('encounterCount').textContent = 'Error loading data';
+                hideLoadingSpinner();
             }
         });
     </script>
