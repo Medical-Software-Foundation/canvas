@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "abstractive_health",
+    "description": "Retrieves medical records, generates trusted AI summaries, and answers complex clinical questions.",
+    "url_permissions": [
+        {
+            "url": "https://app.abstractive.ai",
+            "permissions": ["ALLOW_SAME_ORIGIN"]
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "abstractive_health.applications.my_application:MyApplication",
+                "name": "Abstractive Health",
+                "description": "Retrieves medical records, generates trusted AI summaries, and answers complex clinical questions.",
+                "scope": "patient_specific",
+                "icon": "assets/abstractive-logo.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
