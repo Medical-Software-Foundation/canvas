@@ -6,6 +6,7 @@ from data_migrations.template_migration.note import NoteMixin
 from data_migrations.template_migration.utils import (
     validate_header,
     validate_required,
+    validate_datetime,
     FileWriterMixin,
     MappingMixin
 )
@@ -19,6 +20,7 @@ class VitalsMixin(NoteMixin, CommandMixin, MappingMixin, FileWriterMixin):
             pounds, pounds_decimal = weight_val.split(".")
             return pounds, str(int(float(pounds_decimal) * 16))
         return weight_val, None
+
 
     def validate(self, delimiter=","):
         validated_rows = []
@@ -48,7 +50,7 @@ class VitalsMixin(NoteMixin, CommandMixin, MappingMixin, FileWriterMixin):
             validations = {
                 "id": [validate_required],
                 "patient": [validate_required],
-                'created_at': [validate_required]
+                'created_at': [validate_required, validate_datetime]
             }
 
             for row in reader:

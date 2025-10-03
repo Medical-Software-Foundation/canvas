@@ -200,7 +200,7 @@ class ConditionLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
-                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
+                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}|{row['ICD-10 Code']}")
                 ids.add(row['ID'])
             except BaseException as e:
                 self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)

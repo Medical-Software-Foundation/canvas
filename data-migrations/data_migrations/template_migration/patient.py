@@ -296,6 +296,14 @@ class PatientLoaderMixin(FileWriterMixin):
                 }] if row['Address Line 1'] else []),
             }
 
+            # get around FHIR postalCode validation error for an empty string
+            # if payload["address"] and not payload["address"][0]["postalCode"]:
+            #     del payload["address"][0]["postalCode"]
+
+            # # get around FHIR city validation error for an empty string
+            # if payload["address"] and not payload["address"][0]["city"]:
+            #     del payload["address"][0]["city"]
+
             if identifiers:
                 payload['identifier'] = identifiers
 

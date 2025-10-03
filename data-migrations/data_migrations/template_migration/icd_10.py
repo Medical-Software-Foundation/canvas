@@ -8,8 +8,8 @@ class OntologiesDataFetcher:
     def __init__(self) -> None:
         config = configparser.ConfigParser()
         config.read("../config.ini")
-        self.ontologies_url = config["ontologies"]["url"]
-        self.ontologies_pre_shared_key = config["ontologies"]["pre_shared_key"]
+        self.ontologies_url = config["ontologies-staging"]["url"]
+        self.ontologies_pre_shared_key = config["ontologies-staging"]["pre_shared_key"]
 
     def fetch_from_api(self, page):
         return requests.get(
@@ -66,6 +66,17 @@ class OntologiesDataFetcher:
         response = requests.get(
             f"{self.ontologies_url}icd/condition/",
             params={"icd10_code": code.strip().replace(".", "")},
+            headers={
+                "Authorization": self.ontologies_pre_shared_key,
+                "X-Trace": "NO-TRACE"
+            }
+        )
+        return response.json()
+
+    def search_snomed(self, snomed_code):
+        response = requests.get(
+            f"{self.ontologies_url}snomed/complete-concept/",
+            params={"concept_id": snomed_code},
             headers={
                 "Authorization": self.ontologies_pre_shared_key,
                 "X-Trace": "NO-TRACE"

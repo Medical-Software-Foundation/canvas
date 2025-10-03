@@ -88,6 +88,18 @@ class PatientLoader(PatientLoaderMixin, FileWriterMixin):
         self.fumage_helper = load_fhir_settings(environment)
         self.simple_api_key = load_simple_api_key(environment)
 
+        self.corrected_us_patients_file = "mappings/corrected_us_patients.json"
+        self.corrected_us_patients = fetch_from_json(self.corrected_us_patients_file)
+
+        self.corrected_intl_patients_file = "mappings/corrected_intl_patients.json"
+        self.corrected_intl_patients_map = fetch_from_json(self.corrected_intl_patients_file)
+
+        self.patient_do_not_migrate_file = "mappings/patient_do_not_migrate_list.json"
+        self.patient_do_not_migrate_list = fetch_from_json(self.patient_do_not_migrate_file)
+
+        self.migrate_as_is_file = "mappings/migrate_as_is.json"
+        self.migrate_as_is = fetch_from_json(self.migrate_as_is_file)
+
         self.patient_identifier_value = "Charm ID"
         super().__init__()
 
@@ -203,15 +215,81 @@ class PatientLoader(PatientLoaderMixin, FileWriterMixin):
                     "Identifier Value 3": "",
                     "Metadata": json.dumps(metadata)
                 }
-                writer.writerow(row_to_write)
 
+                if row["patient_id"] in self.patient_do_not_migrate_list:
+                    print("Ignoring because on do not migrate list")
+                    continue
+
+                if row["patient_id"] in self.corrected_us_patients:
+                    corrections = self.corrected_us_patients[row["patient_id"]]
+                    row_to_write["Address Line 1"] = corrections["Address Line 1"]
+                    row_to_write["Address Line 2"] = corrections["Address Line 2"]
+                    row_to_write["City"] = corrections["City"]
+                    row_to_write["State"] = corrections["State"]
+                    row_to_write["Postal Code"] = corrections["Postal Code"]
+                    row_to_write["Mobile Phone Number"] = corrections["Mobile Phone Number"]
+                    row_to_write["Home Phone Number"] = corrections["Home Phone Number"]
+                    print(f"updated corrections for patient id {row["patient_id"]}")
+
+                if row["patient_id"] in self.corrected_intl_patients_map:
+                    intl_corrections = self.corrected_intl_patients_map[row["patient_id"]]
+                    row_to_write["Country"] = intl_corrections["Country"].lower()
+                    row_to_write["Address Line 1"] = intl_corrections["Address Line 1"]
+                    row_to_write["Address Line 2"] = intl_corrections["Address Line 2"]
+                    row_to_write["City"] = intl_corrections["City"]
+                    row_to_write["State"] = "ZZ"
+                    row_to_write["Postal Code"] = intl_corrections["Postal Code"]
+
+                    mobile_valid, mobile_number = validate_phone_number(row_to_write["Mobile Phone Number"], "Mobile Phone Number")
+                    home_valid, home_number = validate_phone_number(row_to_write["Home Phone Number"], "Home Phone Number")
+
+                    intl_metadata = []
+                    if not mobile_valid:
+                        intl_metadata.append(
+                            {
+                                "key": "international_mobile_number",
+                                "value": row_to_write["Mobile Phone Number"]
+                            }
+                        )
+                        row_to_write["Mobile Phone Number"] = ""
+
+                    if not home_valid:
+                        intl_metadata.append(
+                            {
+                                "key": "international_home_phone_number",
+                                "value": row_to_write["Home Phone Number"]
+                            }
+                        )
+                        row_to_write["Home Phone Number"] = ""
+                    row_to_write["Metadata"] = json.dumps(intl_metadata)
+
+                if row["patient_id"] in self.migrate_as_is:
+                    as_is_corrections = self.migrate_as_is[row["patient_id"]]
+                    row_to_write["Country"] = as_is_corrections["Country"].lower()
+                    row_to_write["Address Line 1"] = as_is_corrections["Address Line 1"]
+                    row_to_write["Address Line 2"] = as_is_corrections["Address Line 2"]
+                    row_to_write["City"] = as_is_corrections["City"]
+                    row_to_write["State"] = as_is_corrections["State"]
+                    row_to_write["Postal Code"] = as_is_corrections["Postal Code"]
+                    row_to_write["Mobile Phone Number"] = as_is_corrections["Mobile Phone Number"]
+
+                writer.writerow(row_to_write)
         print(f"Successfully wrote to {self.csv_file}")
+
+    def check_import_counts(self):
+        data = fetch_from_json(self.json_file)
+        patient_map = fetch_from_json(self.patient_map_file)
+        for patient_record in data:
+            patient_id = patient_record["patient_id"]
+            if patient_id not in patient_map and patient_id not in self.patient_do_not_migrate_list:
+                print(patient_id)
 
 
 if __name__ == "__main__":
-    patient_loader = PatientLoader("phi-ways2well-test")
-    # patient_loader.make_json()
+    patient_loader = PatientLoader("ways2well")
+
     # patient_loader.make_csv()
-    valid_rows = patient_loader.validate(delimiter=",")
+    # valid_rows = patient_loader.validate(delimiter=",")
 
     # patient_loader.load(valid_rows, system_unique_identifier=patient_loader.patient_identifier_value)
+    patient_loader.check_import_counts()
