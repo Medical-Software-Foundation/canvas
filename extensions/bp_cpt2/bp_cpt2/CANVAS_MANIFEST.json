@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.67.0",
-    "plugin_version": "0.1.4",
+    "plugin_version": "0.1.5",
     "name": "bp_cpt2",
     "description": "Automatically adds appropriate CPT/HCPCS billing codes based on blood pressure measurements from vitals or note state changes",
     "components": {
@@ -24,5 +24,5 @@
     "references": [],
     "license": "",
     "diagram": false,
-    "readme": "./README.md"
+    "readme": "../README.md"
 }
