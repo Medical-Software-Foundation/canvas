@@ -3,7 +3,8 @@
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+import pytest
 
 from canvas_sdk.events import EventType
 from canvas_sdk.test_utils.factories import PatientFactory
@@ -34,6 +35,7 @@ def test_controlled_blood_pressure() -> None:
         id=uuid.uuid4(),
         patient=patient,
         note=note,
+        schema_key="vitals",
         data={},
         anchor_object_dbid=note.dbid
     )
@@ -224,6 +226,7 @@ def test_no_duplicates_added() -> None:
         id=uuid.uuid4(),
         patient=patient,
         note=note,
+        schema_key="vitals",
         data={},
         anchor_object_dbid=note.dbid
     )
@@ -317,6 +320,7 @@ def test_uncontrolled_blood_pressure() -> None:
         id=uuid.uuid4(),
         patient=patient,
         note=note,
+        schema_key="vitals",
         data={},
         anchor_object_dbid=note.dbid
     )
@@ -392,6 +396,7 @@ def test_borderline_high_blood_pressure() -> None:
         id=uuid.uuid4(),
         patient=patient,
         note=note,
+        schema_key="vitals",
         data={},
         anchor_object_dbid=note.dbid
     )
@@ -444,3 +449,143 @@ def test_borderline_high_blood_pressure() -> None:
     # - G8783 (BP controlled < 140/90)
     # - G8752 (Most recent BP < 140/90)
     assert len(effects) == 4, f"Expected 4 billing codes for borderline BP, got {len(effects)}"
+
+
+def test_invalid_bp_format() -> None:
+    """
+    Test that BloodPressureVitalsHandler handles invalid BP format gracefully
+    and adds G8950 code (BP not documented).
+    """
+    # Create test patient
+    patient = PatientFactory.create()
+
+    # Create a note
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create a vitals command
+    command = Command.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        note=note,
+        schema_key="vitals",
+        data={},
+        anchor_object_dbid=note.dbid
+    )
+
+    # Create BP observation with invalid format (has slash but non-numeric values)
+    Observation.objects.create(
+        patient=patient,
+        note_id=note.dbid,
+        category='vital-signs',
+        name='blood_pressure',
+        value='abc/xyz',
+        units='mmHg',
+        committer_id=1,
+        deleted=False,
+        effective_datetime=datetime.now(timezone.utc)
+    )
+
+    # Create an assessment for the note
+    Assessment.objects.create(
+        id=uuid.uuid4(),
+        note=note,
+        patient_id=patient.dbid,
+        originator_id=1,
+        deleted=False
+    )
+
+    # Create mock event with proper structure
+    mock_event = Mock()
+    mock_event.type = EventType.VITALS_COMMAND__POST_COMMIT
+    mock_target = Mock()
+    mock_target.id = str(command.id)
+    mock_event.target = mock_target
+    mock_event.context = {}
+
+    # Create handler instance
+    handler = BloodPressureVitalsHandler(
+        event=mock_event,
+        secrets={}
+    )
+
+    # Execute compute
+    effects = handler.compute()
+
+    # Should add G8950 code (BP not documented) since parsing failed
+    assert len(effects) == 1, f"Expected 1 billing code (G8950) for invalid BP format, got {len(effects)}"
+
+
+def test_no_bp_codes_raises_exception() -> None:
+    """
+    Test that BloodPressureVitalsHandler raises ValueError when
+    determine_bp_codes returns an empty list (defensive check).
+    """
+    # Create test patient
+    patient = PatientFactory.create()
+
+    # Create a note
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create a vitals command
+    command = Command.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        note=note,
+        schema_key="vitals",
+        data={},
+        anchor_object_dbid=note.dbid
+    )
+
+    # Create BP observation
+    Observation.objects.create(
+        patient=patient,
+        note_id=note.dbid,
+        category='vital-signs',
+        name='blood_pressure',
+        value='120/75',
+        units='mmHg',
+        committer_id=1,
+        deleted=False,
+        effective_datetime=datetime.now(timezone.utc)
+    )
+
+    # Create an assessment for the note
+    Assessment.objects.create(
+        id=uuid.uuid4(),
+        note=note,
+        patient_id=patient.dbid,
+        originator_id=1,
+        deleted=False
+    )
+
+    # Create mock event with proper structure
+    mock_event = Mock()
+    mock_event.type = EventType.VITALS_COMMAND__POST_COMMIT
+    mock_target = Mock()
+    mock_target.id = str(command.id)
+    mock_event.target = mock_target
+    mock_event.context = {}
+
+    # Create handler instance
+    handler = BloodPressureVitalsHandler(
+        event=mock_event,
+        secrets={}
+    )
+
+    # Mock determine_bp_codes to return empty list
+    with patch.object(handler, 'determine_bp_codes', return_value=[]):
+        # Verify that ValueError is raised
+        with pytest.raises(ValueError, match=f"No BP codes determined for patient {patient.id}"):
+            handler.compute()
