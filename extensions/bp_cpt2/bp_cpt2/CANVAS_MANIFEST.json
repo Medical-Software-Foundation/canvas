@@ -1,0 +1,28 @@
+{
+    "sdk_version": "0.67.0",
+    "plugin_version": "0.1.4",
+    "name": "bp_cpt2",
+    "description": "Automatically adds appropriate CPT/HCPCS billing codes based on blood pressure measurements from vitals or note state changes",
+    "components": {
+        "protocols": [
+            {
+                "class": "bp_cpt2.handlers.bp_vitals_handler:BloodPressureVitalsHandler",
+                "description": "Handles blood pressure measurements from vitals commands and returns appropriate CPT/HCPCS billing codes (3074F-3080F, G8783-G8784, G8950, G8951, G8752)"
+            },
+            {
+                "class": "bp_cpt2.handlers.bp_note_state_handler:BloodPressureNoteStateHandler",
+                "description": "Reserved for future implementation of treatment plan codes (G8753-G8755)"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
