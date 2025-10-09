@@ -4,9 +4,10 @@ from data_migrations.utils import (
 )
 
 from data_migrations.charm_migration.utils import CharmPatientAPI
+from data_migrations.template_migration.message import MessageLoaderMixin
 
 
-class MessageLoader:
+class MessageLoader(MessageLoaderMixin):
     def __init__(self, environment) -> None:
         self.json_file = "PHI/messages.json"
         self.csv_file = "PHI/messages.csv"
@@ -18,10 +19,25 @@ class MessageLoader:
         patient_file_contents = fetch_from_json("PHI/patients.json")
         patient_ids = [p["patient_id"] for p in patient_file_contents]
         charm_patient_api = CharmPatientAPI(environment=self.environment)
-        messages = charm_patient_api.fetch_messages(patient_ids=patient_ids)
-        write_to_json(self.json_file, messages)
+        charm_patient_api.fetch_messages(patient_ids=patient_ids, file_path=self.json_file)
+
+    def make_csv(self):
+        headers = [
+            "ID",
+            "Timestamp",
+            "Recipient",
+            "Sender",
+            "Text",
+            "Thread ID"
+        ]
+
+        data = fetch_from_json(self.json_file)
+        with open(self.csv_file, "w") as fhandle:
+            pass
+
+
 
 
 if __name__ == "__main__":
-    loader = MessageLoader(environment='phi-ways2well-test')
+    loader = MessageLoader(environment='ways2well')
     loader.make_json()

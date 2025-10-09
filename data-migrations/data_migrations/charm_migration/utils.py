@@ -145,6 +145,7 @@ class CharmPatientAPI(APIMethodMixin):
             response = self.get_request(f"{self.base_patient_api_url}{uri}", params=params)
             if response.status_code == 200:
                 return response
+
             elif number_try == 0:
                 print("Refreshing the access_token")
                 self.refresh_access_token()
@@ -391,15 +392,48 @@ class CharmPatientAPI(APIMethodMixin):
             expanded_results[group_id] = lab_data
         return expanded_results
 
-
-    def fetch_messages(self, patient_ids):
+    def fetch_messages(self, patient_ids, file_path):
+        patient_messages = fetch_from_json(file_path)
         messages_endpoint = "/api/ehr/v1/messages/patient/{patient_id}"
+        message_details_endpoint = "/api/ehr/v1/messages/{message_id}"
+        patient_count = 0
         for patient_id in patient_ids:
+            patient_count += 1
+            if patient_id in patient_messages:
+                continue
+            patient_cnt_msg = f"{patient_count} of {len(patient_ids)} patients"
+            print(f"Fetching messages for patient id {patient_id} - {patient_cnt_msg}")
             for direction in ["sent", "received"]:
-                message_response = self.get(
-                    messages_endpoint.format(patient_id=patient_id),
-                    params={"section": direction}
-                )
+                messages = []
+                page = 1
+                has_next_page = True
+                print(f"Fetching details for {direction} messages")
+                while has_next_page is True:
+                    message_response = self.get(
+                        messages_endpoint.format(patient_id=patient_id),
+                        params={"section": direction, "sort_order": "A", "page": page}
+                    )
+                    response_data = message_response.json()
+                    for msg in response_data["messages"]:
+                        print(f"Fetching details for {direction} message ID {msg["message_id"]}: {patient_cnt_msg} - patient id {patient_id}")
+                        msg_details = self.get(
+                            message_details_endpoint.format(message_id=msg["message_id"])
+                        )
+                        msg_details_data = msg_details.json()
+                        msg["message_details"] = msg_details_data
+                        messages.append(msg)
+                    if response_data["page_context"]["has_more_page"] == "true":
+                        page += 1
+                    else:
+                        has_next_page = False
+                if patient_id not in patient_messages:
+                    patient_messages[patient_id] = {direction: messages}
+                else:
+                    patient_messages[patient_id][direction] = messages
+            if patient_count % 100 == 0:
+                print("Writing to file")
+                write_to_json(file_path, patient_messages)
+        write_to_json(file_path, patient_messages)
 
     def fetch_quicknotes(self, patient_ids):
         quicknotes = {}
@@ -462,6 +496,11 @@ class CharmPatientAPI(APIMethodMixin):
             if patient_count % 500 == 0:
                 write_to_json(json_file, documents)
         write_to_json(json_file, documents)
+
+    def fetch_file(self, patient_id, file_id):
+        print(f"Fetching file id {file_id}")
+        document_response = self.get(f"/api/ehr/v1/patients/{patient_id}/documents/{file_id}/file")
+        return document_response.content
 
     def read_encounter(self, encounter_id):
         encounter_endpoint = "/api/ehr/v1/encounters/{encounter_id}"
