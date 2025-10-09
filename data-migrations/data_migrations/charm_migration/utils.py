@@ -145,6 +145,7 @@ class CharmPatientAPI(APIMethodMixin):
             response = self.get_request(f"{self.base_patient_api_url}{uri}", params=params)
             if response.status_code == 200:
                 return response
+
             elif number_try == 0:
                 print("Refreshing the access_token")
                 self.refresh_access_token()
@@ -199,6 +200,313 @@ class CharmPatientAPI(APIMethodMixin):
                 else:
                     has_next_page = False
         return allergy_list
+
+    def fetch_medications(self, patient_ids):
+        medication_list = []
+        medication_endpoint = "/api/ehr/v1/patients/{patient_id}/medications"
+
+        for patient_id in patient_ids:
+            has_next_page = True
+            page = 1
+            print(f"Fetching medications for patient ID {patient_id}")
+
+            while has_next_page is True:
+                params = {
+                    "page": page,
+                    "sort_order": "A",
+                    "per_page": 100
+                }
+                medication_response = self.get(medication_endpoint.format(patient_id=patient_id), params=params)
+                medication_json = medication_response.json()
+                medication_list.extend(medication_json['medications'])
+                if medication_json['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+        return medication_list
+
+    def fetch_supplements(self, patient_ids):
+        supplement_list = []
+        supplement_endpoint = "/api/ehr/v1/patients/{patient_id}/supplements"
+
+        for patient_id in patient_ids:
+            has_next_page = True
+            page = 1
+            print(f"Fetching supplements for patient ID {patient_id}")
+
+            while has_next_page is True:
+                params = {
+                    "page": page,
+                    "sort_order": "A",
+                    "per_page": 100
+                }
+                supplement_response = self.get(supplement_endpoint.format(patient_id=patient_id), params=params)
+                supplement_json = supplement_response.json()
+                supplement_list.extend(supplement_json['supplements'])
+                if supplement_json['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+        return supplement_list
+
+    def fetch_diagnoses(self, patient_ids):
+        diagnoses_list = []
+        diagnoses_endpoint = "/api/ehr/v1/patients/{patient_id}/diagnoses"
+
+        for patient_id in patient_ids:
+            print(f"Fetching diagnoses for patient ID {patient_id}")
+            diagnoses_response = self.get(diagnoses_endpoint.format(patient_id=patient_id))
+            diagnoses_json = diagnoses_response.json()
+            # we need to add the patient ID as a key because it is not in each record
+            # there is also no pagination for this endpoint, it gives all the diagnoses per patient
+            diagnoses_list.append({"patient_id": patient_id, "diagnoses": diagnoses_json['patient_diagnoses']})
+        return diagnoses_list
+
+    def fetch_questionnaire_answers(self, patient_ids, file_path):
+        patient_questionnaires = fetch_from_json(file_path)
+        questionnaire_endpoint = "/api/ehr/v1/patients/{patient_id}/questionnaires"
+        questionnaire_map_endpoint = "/api/ehr/v1/questionnaire/answer/{ques_map_id}"
+        patient_count = 0
+        for patient_id in patient_ids:
+            patient_count += 1
+            if patient_id in patient_questionnaires or patient_id == "337879000202123319" or patient_id == "337879000238405343": # this one seems to give a 500
+                # already written to file
+                continue
+            print(f"Fetching questionnaires for patient ID {patient_id} - {patient_count} of {len(patient_ids)}")
+            has_next_page = True
+            page = 1
+            patient_questionnaire_list = []
+            while has_next_page is True:
+                params = {"page": str(page)}
+                response = self.get(questionnaire_endpoint.format(patient_id=patient_id), params=params)
+                response_data = response.json()
+                for question_map in response_data["patient_questionnaires"]:
+                    question_map_response = self.get(questionnaire_map_endpoint.format(ques_map_id=question_map["ques_map_id"]))
+                    question_map_data = question_map_response.json()
+                    question_map["questionnaire_with_answers"] = question_map_data["questionnaire_with_answers"]
+                    patient_questionnaire_list.append(question_map)
+                if response_data['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+            patient_questionnaires[patient_id] = patient_questionnaire_list
+            if patient_count % 100 == 0:
+                write_to_json(file_path, patient_questionnaires)
+        write_to_json(file_path, patient_questionnaires)
+
+
+    def fetch_questionnaires(self):
+        questionnaire_data = []
+        questionnaire_endpoint = "/api/ehr/v1/questionnaires"
+        has_next_page = True
+        page = 1
+        while has_next_page is True:
+            params = {"page": str(page)}
+            response = self.get(questionnaire_endpoint, params=params)
+            response_data = response.json()
+            questionnaire_data.extend(response_data["questionnaires"])
+            if response_data['page_context']['has_more_page'] == 'true':
+                page = page + 1
+            else:
+                has_next_page = False
+        return questionnaire_data
+
+    def fetch_questionnaire_questions(self, questionnaire_ids):
+        questionnaire_questions = {}
+        questionnaire_endpoint = "/api/ehr/v1/questionnaire/{questionnaire_id}"
+        for q_id in questionnaire_ids:
+            print(f"Fetching questionnaire questions for questionnaire id {q_id}")
+            response = self.get(questionnaire_endpoint.format(questionnaire_id=q_id))
+            response_data = response.json()
+            questionnaire_questions[q_id] = response_data["data"]
+        return questionnaire_questions
+
+    def fetch_vaccines(self, patient_ids):
+        vaccine_endpoint = "/api/ehr/v1/patients/{patient_id}/vaccines"
+        vaccine_read_endpoint = "/api/ehr/v1/patients/{patient_id}/vaccines/{patient_vaccine_id}"
+        vaccine_list = []
+        for patient_id in patient_ids:
+            has_next_page = True
+            while has_next_page is True:
+                print(f"Fetching vaccines for patient id {patient_id}")
+                vaccine_response = self.get(vaccine_endpoint.format(patient_id=patient_id))
+                vaccine_json = vaccine_response.json()
+                if vaccine_json['vaccines']:
+                    for vaccine in vaccine_json['vaccines']:
+                        vaccine_list_obj = vaccine
+                        # there is more info that we need with a read
+                        vaccine_detail = self.get(vaccine_read_endpoint.format(patient_id=patient_id, patient_vaccine_id=vaccine["patient_vaccine_map_id"]))
+                        vaccine_list_obj["detail"] = vaccine_detail
+                        vaccine_list.append(vaccine_list_obj)
+                if vaccine_json['page_context']['has_more_page'] == 'true':
+                    page = page + 1
+                else:
+                    has_next_page = False
+        return vaccine_list
+
+    def fetch_vitals(self, patient_ids):
+        vitals = []
+        vitals_endpoint = "/api/ehr/v1/patients/{patient_id}/vitals"
+        for patient_id in patient_ids:
+            print(f"Fetching vitals for patient {patient_id}")
+            vitals_response = self.get(vitals_endpoint.format(patient_id=patient_id))
+            vitals_json = vitals_response.json()
+            if vitals_json["vital_entries"]:
+                vitals_dict = {"patient_id": patient_id, "vitals": vitals_response.json()["vital_entries"]}
+                vitals.append(vitals_dict)
+        return vitals
+
+    def fetch_lab_results(self):
+        lab_results = []
+        labs_endpoint = "/api/ehr/v1/labs/results"
+        has_next_page = True
+        start_index = 1
+        no_of_records = 50 # looks like the max
+
+        while has_next_page is True:
+            params = {"sort_by": "DATE", "is_ascending": True, "start_index": start_index, "no_of_records": no_of_records}
+            print(f"Fetching lab results start index {start_index}")
+            lab_response = self.get(labs_endpoint, params=params)
+            labs_json = lab_response.json()
+            lab_results.extend(labs_json["lab_results"])
+            if labs_json["page_context"]["has_more_page"] == True:
+                start_index += no_of_records
+            else:
+                has_next_page = False
+        return lab_results
+
+    def fetch_lab_file(self, pdf_url):
+        print(f"Retrieving lab result file {pdf_url}")
+        return self.get(pdf_url)
+
+    def fetch_expanded_lab_results(self, group_ids):
+        # Returns a dict with group ID->expanded result
+        expanded_results = {}
+        lab_result_url = "/api/ehr/v1/labs/results/{group_id}"
+        for group_id in group_ids:
+            print(f"Fetching expanded lab result with group ID {group_id}")
+            response = self.get(
+                lab_result_url.format(group_id=group_id)
+            )
+            lab_data = response.json()
+            expanded_results[group_id] = lab_data
+        return expanded_results
+
+    def fetch_messages(self, patient_ids, file_path):
+        patient_messages = fetch_from_json(file_path)
+        messages_endpoint = "/api/ehr/v1/messages/patient/{patient_id}"
+        message_details_endpoint = "/api/ehr/v1/messages/{message_id}"
+        patient_count = 0
+        for patient_id in patient_ids:
+            patient_count += 1
+            if patient_id in patient_messages:
+                continue
+            patient_cnt_msg = f"{patient_count} of {len(patient_ids)} patients"
+            print(f"Fetching messages for patient id {patient_id} - {patient_cnt_msg}")
+            for direction in ["sent", "received"]:
+                messages = []
+                page = 1
+                has_next_page = True
+                print(f"Fetching details for {direction} messages")
+                while has_next_page is True:
+                    message_response = self.get(
+                        messages_endpoint.format(patient_id=patient_id),
+                        params={"section": direction, "sort_order": "A", "page": page}
+                    )
+                    response_data = message_response.json()
+                    for msg in response_data["messages"]:
+                        print(f"Fetching details for {direction} message ID {msg["message_id"]}: {patient_cnt_msg} - patient id {patient_id}")
+                        msg_details = self.get(
+                            message_details_endpoint.format(message_id=msg["message_id"])
+                        )
+                        msg_details_data = msg_details.json()
+                        msg["message_details"] = msg_details_data
+                        messages.append(msg)
+                    if response_data["page_context"]["has_more_page"] == "true":
+                        page += 1
+                    else:
+                        has_next_page = False
+                if patient_id not in patient_messages:
+                    patient_messages[patient_id] = {direction: messages}
+                else:
+                    patient_messages[patient_id][direction] = messages
+            if patient_count % 100 == 0:
+                print("Writing to file")
+                write_to_json(file_path, patient_messages)
+        write_to_json(file_path, patient_messages)
+
+    def fetch_quicknotes(self, patient_ids):
+        quicknotes = {}
+        quicknotes_endpoint = "/api/ehr/v1/patients/{patient_id}/quicknotes"
+        patient_len = len(patient_ids)
+        patient_num = 1
+        for patient_id in patient_ids:
+            patient_quicknotes = []
+            print(f"Fetching quicknotes for patient id {patient_id} - {patient_num} of {patient_len}")
+            page = 1
+            has_next_page = True
+            while has_next_page is True:
+                params = {"page": page, "per_page": 50}
+                quicknotes_response = self.get(
+                    quicknotes_endpoint.format(patient_id=patient_id),
+                    params=params
+                )
+                quicknotes_data = quicknotes_response.json()
+                patient_quicknotes.extend(quicknotes_data["quick_notes"])
+                if quicknotes_data["page_context"]["has_more_page"] == "true":
+                    page += 1
+                else:
+                    has_next_page = False
+            if patient_quicknotes:
+                quicknotes[patient_id] = patient_quicknotes
+            patient_num += 1
+        return quicknotes
+
+    def fetch_documents(self, patient_ids, json_file, files_dir):
+        documents = fetch_from_json(json_file)
+        documents_endpoint = "/api/ehr/v1/patients/{patient_id}/documents"
+        patient_count = 0
+        for patient_id in patient_ids:
+            patient_count += 1
+            if patient_id in documents:
+                continue
+            print(f"Fetching documents for patient id {patient_id} - {patient_count} of {len(patient_ids)}")
+            patient_documents = []
+            has_next_page = True
+            page = 1
+            while has_next_page is True:
+                params = {"page": page}
+                response = self.get(documents_endpoint.format(patient_id=patient_id), params=params)
+                document_data = response.json()
+                patient_documents.extend(document_data["documents"])
+
+                if document_data["page_context"]["has_more_page"] == "true":
+                    page += 1
+                else:
+                    has_next_page = False
+            documents[patient_id] = patient_documents
+
+            # don't download all the documents to disk;
+            # just fetch them during each import and then delete;
+            # file_id = doc_info["file_id"]
+            # print(f"Fetching file id {file_id}")
+            # document_response = self.get(f"/api/ehr/v1/patients/{patient_id}/documents/{file_id}/file")
+            # with open(f"{files_dir}{file_id}.pdf", "wb") as fhandle:
+            #    fhandle.write(document_response.content)
+            if patient_count % 500 == 0:
+                write_to_json(json_file, documents)
+        write_to_json(json_file, documents)
+
+    def fetch_file(self, patient_id, file_id):
+        print(f"Fetching file id {file_id}")
+        document_response = self.get(f"/api/ehr/v1/patients/{patient_id}/documents/{file_id}/file")
+        return document_response.content
+
+    def read_encounter(self, encounter_id):
+        encounter_endpoint = "/api/ehr/v1/encounters/{encounter_id}"
+        return self.get(
+            encounter_endpoint.format(encounter_id=encounter_id)
+        )
 
 
 class CharmFHIRAPI(APIMethodMixin):
@@ -262,7 +570,10 @@ class CharmFHIRAPI(APIMethodMixin):
         self.auth.access_token = self.auth.get_access_token_with_refresh_token(self.auth.charm_fhir_api_refresh_token)
 
     def response_has_next_page(self, response_json):
-        return any([r.get("relation") == "next" for r in response_json.get("link", [])])
+        next_links = [bool(r.get("relation") == "next" and r.get("url")) for r in response_json.get("link", [])]
+        print(response_json.get("link", []))
+        print(next_links)
+        return any(next_links)
 
     def get(self, uri, params=None):
         # TODO - make this shared in the APIMethodMixin
@@ -271,6 +582,8 @@ class CharmFHIRAPI(APIMethodMixin):
             response = self.get_request(f"{self.base_fhir_api_url}{uri}", params=params)
             if response.status_code == 200:
                 return response
+            elif response.status_code == 404:
+                raise APIException(f"Status {response.status_code}: {str(response.content)}")
             elif number_try == 0:
                 print("Refreshing the access_token")
                 self.refresh_access_token()
@@ -300,3 +613,72 @@ class CharmFHIRAPI(APIMethodMixin):
             else:
                 page += 1
         return allergy_list
+
+
+    def fetch_medication_requests(self):
+        medication_list = []
+        has_next_page = True
+        page = 1
+
+        while has_next_page is True:
+            params = {"page": str(page)}
+            print(f"Fetching MedicationRequest page {page}")
+            medication_response = self.get(
+                f"/MedicationRequest",
+                params=params
+            )
+            response_data = medication_response.json()
+            medication_list.extend(response_data["entry"])
+
+            if not self.response_has_next_page(response_data):
+                has_next_page = False
+            else:
+                page += 1
+        return medication_list
+
+    def fetch_medication_entries(self, medication_ids):
+        # Fetches the actual drug info - not patient specific
+        # https://www.charmhealth.com/resources/fhir/index.html#get-medication
+        medication_list = []
+        for medication_id in medication_ids:
+            print(f"Fetching Medication ID {medication_id}")
+            medication = self.get(f"/Medication/{medication_id}")
+            response_data = medication.json()
+            medication_list.append(response_data)
+        return medication_list
+
+    def fetch_diagnostic_lab_reports(self):
+        diagnostic_report_list = []
+        has_next_page = True
+        page = 1
+        while has_next_page is True:
+            params = {"page": str(page), "category": "LAB"}
+            print(f"Fetching Diagnostic Reports page {page}")
+            response = self.get("/DiagnosticReport", params=params)
+            response_data = response.json()
+
+            diagnostic_report_list.extend(response_data["entry"])
+
+            if not self.response_has_next_page(response_data):
+                has_next_page = False
+            else:
+                page += 1
+        return diagnostic_report_list
+
+    def get_practitioners(self):
+        practitioner_list = []
+        has_next_page = True
+        page = 1
+        while has_next_page is True:
+            params = {"page": str(page)}
+            print(f"Fetching Practitioners page {page}")
+            response = self.get("/Practitioner", params=params)
+            response_data = response.json()
+
+            practitioner_list.extend(response_data["entry"])
+
+            if not self.response_has_next_page(response_data):
+                has_next_page = False
+            else:
+                page += 1
+        return practitioner_list

@@ -1,5 +1,6 @@
 import csv, json
 from collections import defaultdict
+import requests
 
 from data_migrations.utils import fetch_from_json, write_to_json
 from data_migrations.template_migration.utils import (
@@ -104,6 +105,7 @@ class PatientLoaderMixin(FileWriterMixin):
                     "Timezone",
                     "Clinical Note",
                     "Administrative Note",
+                    "Metadata",
                 }
             )
 
@@ -142,6 +144,9 @@ class PatientLoaderMixin(FileWriterMixin):
                     error = True
 
                 for field, validator_func in validations.items():
+                    if field == "Postal Code" and (row["Country"] and row["Country"].lower() != "us"):
+                        # relax validation for non-US addresses
+                        continue
                     valid, value = validator_func(row[field].strip(), field)
                     if valid:
                         row[field] = value
@@ -160,7 +165,6 @@ class PatientLoaderMixin(FileWriterMixin):
 
         return validated_rows
 
-
     def search_patients_with_system_unique_identifier(self, system, identifier):
         """
         Queries the API to check if a patient with a system unique identifier already
@@ -170,6 +174,13 @@ class PatientLoaderMixin(FileWriterMixin):
         response = self.fumage_helper.search("Patient", {"identifier": f"{system}|{identifier}"})
         return response.json()
 
+    def load_patient_metadata(self, patient_key, metadata):
+        patient_metadata = {"patient": patient_key, "metadata": metadata}
+        return requests.post(
+            f"https://{self.environment}.canvasmedical.com/plugin-io/api/patient_metadata_management/bulk_upsert",
+            json=patient_metadata,
+            headers={"Authorization": self.simple_api_key}
+        )
 
     def load(self, validated_rows, system_unique_identifier, require_identifier=True):
         """
@@ -179,7 +190,6 @@ class PatientLoaderMixin(FileWriterMixin):
             Outputs to CSV to keep track of records
             If any  error, the error message will output to the errored file
         """
-
         patient_map = fetch_from_json(self.patient_map_file)
 
         total_count = len(validated_rows)
@@ -286,6 +296,14 @@ class PatientLoaderMixin(FileWriterMixin):
                 }] if row['Address Line 1'] else []),
             }
 
+            # get around FHIR postalCode validation error for an empty string
+            # if payload["address"] and not payload["address"][0]["postalCode"]:
+            #     del payload["address"][0]["postalCode"]
+
+            # # get around FHIR city validation error for an empty string
+            # if payload["address"] and not payload["address"][0]["city"]:
+            #     del payload["address"][0]["city"]
+
             if identifiers:
                 payload['identifier'] = identifiers
 
@@ -298,5 +316,13 @@ class PatientLoaderMixin(FileWriterMixin):
                 if patient_identifier:
                     patient_map[patient_identifier] = patient_key
                     write_to_json(self.patient_map_file, patient_map)
+                    patient_metadata = json.loads(row["Metadata"])
+                    if patient_metadata:
+                        print(f"Uploading metadata for patient {patient_key}")
+                        metadata_response = self.load_patient_metadata(patient_key, patient_metadata)
+                        if metadata_response.status_code != 202:
+                            print("Failed metadata upload - please investigate")
+                            print(metadata_response)
+                            return
             except Exception as e:
                 self.error_row(f"{patient_identifier}|{row['First Name']}|{row['Last Name']}", e)

@@ -1,9 +1,11 @@
-import csv
+import csv, json
 
 from data_migrations.template_migration.patient import PatientLoaderMixin
-from data_migrations.utils import fetch_from_json, load_fhir_settings, write_to_json
+from data_migrations.utils import fetch_from_json, load_fhir_settings, load_simple_api_key, write_to_json
 from data_migrations.charm_migration.utils import CharmPatientAPI
 from data_migrations.template_migration.utils import FileWriterMixin
+
+from data_migrations.template_migration.utils import validate_phone_number
 
 
 STATE_CODE_MAP = {
@@ -65,7 +67,14 @@ STATE_CODE_MAP = {
     "Washington": "WA",
     "West Virginia": "WV",
     "Wisconsin": "WI",
-    "Wyoming": "WY"
+    "Wyoming": "WY",
+    # AE covers the following: https://help.nfc.usda.gov/publications/CLER-CARRIER/37612.htm
+    "Armed Forces Europe": "AE",
+    "Armed Forces Canada": "AE",
+    "Armed Forces Middle East": "AE",
+    "Armed Forces Pacific": "AP",
+    "Armed Forces Americas": "AA",
+    "Washington, D.C.": "DC",
 }
 
 class PatientLoader(PatientLoaderMixin, FileWriterMixin):
@@ -77,6 +86,19 @@ class PatientLoader(PatientLoaderMixin, FileWriterMixin):
         self.error_file = 'results/PHI/errored_patients.csv'
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
+        self.simple_api_key = load_simple_api_key(environment)
+
+        self.corrected_us_patients_file = "mappings/corrected_us_patients.json"
+        self.corrected_us_patients = fetch_from_json(self.corrected_us_patients_file)
+
+        self.corrected_intl_patients_file = "mappings/corrected_intl_patients.json"
+        self.corrected_intl_patients_map = fetch_from_json(self.corrected_intl_patients_file)
+
+        self.patient_do_not_migrate_file = "mappings/patient_do_not_migrate_list.json"
+        self.patient_do_not_migrate_list = fetch_from_json(self.patient_do_not_migrate_file)
+
+        self.migrate_as_is_file = "mappings/migrate_as_is.json"
+        self.migrate_as_is = fetch_from_json(self.migrate_as_is_file)
 
         self.patient_identifier_value = "Charm ID"
         super().__init__()
@@ -113,7 +135,8 @@ class PatientLoader(PatientLoaderMixin, FileWriterMixin):
             "Identifier System 2",
             "Identifier Value 2",
             "Identifier System 3",
-            "Identifier Value 3"
+            "Identifier Value 3",
+            "Metadata",
         ]
 
         data = fetch_from_json(self.json_file)
@@ -132,12 +155,36 @@ class PatientLoader(PatientLoaderMixin, FileWriterMixin):
 
             for row in data:
                 state = row["state"]
-                if row["state"] != "" and state not in state_abbreviations:
-                    state = STATE_CODE_MAP.get(state)
-                    if not state:
-                        # TODO - what do to with non-US addresses?
-                        print("Skipping because of non-US address")
-                        continue
+                # some states are full names and some are two digit codes
+                if row["state"] != "" and state.upper() not in state_abbreviations:
+                    state = STATE_CODE_MAP.get(state.title(), "ZZ") # default to international if not a US state
+
+                metadata = []
+                mobile_number = row["mobile"]
+                home_number = row["home_phone"]
+
+                # For international phone numbers, put them in metadata if they don't validate
+                if row["country"] and row["country"].lower() != "us":
+                    mobile_valid, mobile_number = validate_phone_number(row["mobile"], "mobile")
+                    home_valid, home_number = validate_phone_number(row["home_phone"], "home_phone")
+
+                    if not mobile_valid:
+                        mobile_number = ""
+                        metadata.append(
+                            {
+                                "key": "international_mobile_number",
+                                "value": row["mobile"]
+                            }
+                        )
+
+                    if not home_valid:
+                        home_number = ""
+                        metadata.append(
+                            {
+                                "key": "international_home_phone_number",
+                                "value": row["home_phone"]
+                            }
+                        )
 
                 row_to_write = {
                     "First Name": row["first_name"],
@@ -152,9 +199,9 @@ class PatientLoader(PatientLoaderMixin, FileWriterMixin):
                     "State": state,
                     "Postal Code": row["postal_code"],
                     "Country": row["country"],
-                    "Mobile Phone Number": row["mobile"],
+                    "Mobile Phone Number": mobile_number,
                     "Mobile Text Consent": True if row["text_notification"] == "true" else "",
-                    "Home Phone Number": row["home_phone"],
+                    "Home Phone Number": home_number,
                     "Email": row["email"],
                     "Email Consent": True if row["email_notification"] == "true" else "",
                     "Timezone": "",
@@ -165,16 +212,84 @@ class PatientLoader(PatientLoaderMixin, FileWriterMixin):
                     "Identifier System 2": "",
                     "Identifier Value 2": "",
                     "Identifier System 3": "",
-                    "Identifier Value 3": ""
+                    "Identifier Value 3": "",
+                    "Metadata": json.dumps(metadata)
                 }
-                writer.writerow(row_to_write)
 
+                if row["patient_id"] in self.patient_do_not_migrate_list:
+                    print("Ignoring because on do not migrate list")
+                    continue
+
+                if row["patient_id"] in self.corrected_us_patients:
+                    corrections = self.corrected_us_patients[row["patient_id"]]
+                    row_to_write["Address Line 1"] = corrections["Address Line 1"]
+                    row_to_write["Address Line 2"] = corrections["Address Line 2"]
+                    row_to_write["City"] = corrections["City"]
+                    row_to_write["State"] = corrections["State"]
+                    row_to_write["Postal Code"] = corrections["Postal Code"]
+                    row_to_write["Mobile Phone Number"] = corrections["Mobile Phone Number"]
+                    row_to_write["Home Phone Number"] = corrections["Home Phone Number"]
+                    print(f"updated corrections for patient id {row["patient_id"]}")
+
+                if row["patient_id"] in self.corrected_intl_patients_map:
+                    intl_corrections = self.corrected_intl_patients_map[row["patient_id"]]
+                    row_to_write["Country"] = intl_corrections["Country"].lower()
+                    row_to_write["Address Line 1"] = intl_corrections["Address Line 1"]
+                    row_to_write["Address Line 2"] = intl_corrections["Address Line 2"]
+                    row_to_write["City"] = intl_corrections["City"]
+                    row_to_write["State"] = "ZZ"
+                    row_to_write["Postal Code"] = intl_corrections["Postal Code"]
+
+                    mobile_valid, mobile_number = validate_phone_number(row_to_write["Mobile Phone Number"], "Mobile Phone Number")
+                    home_valid, home_number = validate_phone_number(row_to_write["Home Phone Number"], "Home Phone Number")
+
+                    intl_metadata = []
+                    if not mobile_valid:
+                        intl_metadata.append(
+                            {
+                                "key": "international_mobile_number",
+                                "value": row_to_write["Mobile Phone Number"]
+                            }
+                        )
+                        row_to_write["Mobile Phone Number"] = ""
+
+                    if not home_valid:
+                        intl_metadata.append(
+                            {
+                                "key": "international_home_phone_number",
+                                "value": row_to_write["Home Phone Number"]
+                            }
+                        )
+                        row_to_write["Home Phone Number"] = ""
+                    row_to_write["Metadata"] = json.dumps(intl_metadata)
+
+                if row["patient_id"] in self.migrate_as_is:
+                    as_is_corrections = self.migrate_as_is[row["patient_id"]]
+                    row_to_write["Country"] = as_is_corrections["Country"].lower()
+                    row_to_write["Address Line 1"] = as_is_corrections["Address Line 1"]
+                    row_to_write["Address Line 2"] = as_is_corrections["Address Line 2"]
+                    row_to_write["City"] = as_is_corrections["City"]
+                    row_to_write["State"] = as_is_corrections["State"]
+                    row_to_write["Postal Code"] = as_is_corrections["Postal Code"]
+                    row_to_write["Mobile Phone Number"] = as_is_corrections["Mobile Phone Number"]
+
+                writer.writerow(row_to_write)
         print(f"Successfully wrote to {self.csv_file}")
+
+    def check_import_counts(self):
+        data = fetch_from_json(self.json_file)
+        patient_map = fetch_from_json(self.patient_map_file)
+        for patient_record in data:
+            patient_id = patient_record["patient_id"]
+            if patient_id not in patient_map and patient_id not in self.patient_do_not_migrate_list:
+                print(patient_id)
 
 
 if __name__ == "__main__":
-    patient_loader = PatientLoader("phi-ways2well-test")
-    # patient_loader.make_json()
+    patient_loader = PatientLoader("ways2well")
+
     # patient_loader.make_csv()
-    valid_rows = patient_loader.validate(delimiter=",")
-    patient_loader.load(valid_rows, system_unique_identifier=patient_loader.patient_identifier_value)
+    # valid_rows = patient_loader.validate(delimiter=",")
+
+    # patient_loader.load(valid_rows, system_unique_identifier=patient_loader.patient_identifier_value)
+    patient_loader.check_import_counts()
