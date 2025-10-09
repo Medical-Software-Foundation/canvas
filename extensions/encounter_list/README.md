@@ -24,7 +24,7 @@ The Encounter List plugin provides a comprehensive worklist view of open encount
 
 Install the plugin using the Canvas CLI:
 ```bash
-canvas plugin install encounter_list
+canvas install encounter_list
 ```
 
 ### User Interface Access
@@ -186,7 +186,7 @@ The interface adapts to different screen sizes:
 
 Monitor plugin functionality through Canvas logs:
 ```bash
-canvas logs encounter_list
+canvas logs 
 ```
 
 
