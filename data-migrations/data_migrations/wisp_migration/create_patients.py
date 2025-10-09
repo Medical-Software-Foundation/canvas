@@ -21,12 +21,13 @@ class PatientLoader(PatientLoaderMixin):
 
     def __init__(self, environment, *args, **kwargs):
         self.patient_map_file = 'PHI/patient_id_map.json'
-        self.original_csv_file = 'PHI/customer_patients.csv'
+        self.original_csv_file = 'PHI/patient_diff.csv'
         self.csv_file = "PHI/patients.csv"
         self.validation_error_file = 'results/PHI/errored_patient_validation.json'
         self.error_file = 'results/PHI/errored_patients.csv'
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
+        self.patient_map = fetch_from_json(self.patient_map_file)
 
     def make_csv(self, delimiter='|'):
         """
@@ -72,6 +73,9 @@ class PatientLoader(PatientLoaderMixin):
             with open(self.original_csv_file, 'r') as file:
                 reader = csv.DictReader(file, delimiter=delimiter)
                 for row in reader:
+                    # if row['Identifier Value 1'] in self.patient_map:
+                    #     continue
+
                     writer.writerow({
                         **row,
                         "Home Phone Number": ""
@@ -79,17 +83,44 @@ class PatientLoader(PatientLoaderMixin):
 
             print("CSV successfully made")
 
+    def make_csv_diff(self, file1, file2):
+
+        KEY = "Identifier Value 1"
+        headers = []
+
+        file1_map = {}
+        with open(file1, 'r') as file1_reader:
+            reader = csv.DictReader(file1_reader)
+            headers = reader.fieldnames
+            file1_map = {row[KEY]: row for row in reader}
+
+
+        with open("PHI/patient_diff.csv", 'w') as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+
+            with open(file2, 'r') as file2_reader:
+                reader = csv.DictReader(file2_reader)
+                for row in reader:
+                    if found_record := file1_map.get(row[KEY]):
+                        if found_record != row:
+                            writer.writerow(row)
+
+
 
 if __name__ == '__main__':
     # change the customer_identifier to what is defined in your config.ini file
     loader = PatientLoader(environment='hellowisp')
     delimiter = ','
 
+    # Make diff file
+    # loader.make_csv_diff(file1='PHI/patients_july_10.csv', file2='PHI/patients_sep_9_2025.csv')
+
     # Convert customer file to the template CSV loader
-    #loader.make_csv(delimiter=delimiter)
+    loader.make_csv(delimiter=delimiter)
 
     # Validate the CSV values with the Canvas template data migration rules
-    valid_rows = loader.validate(delimiter=delimiter, error_use_identifier='SWA patient ID')
+    # valid_rows = loader.validate(delimiter=delimiter, error_use_identifier='SWA patient ID')
 
     # If you are ready to load the rows that have passed validation to your Canvas instance
-    loader.load(valid_rows, system_unique_identifier='SWA patient ID')
+    #loader.load(valid_rows, system_unique_identifier='SWA patient ID')

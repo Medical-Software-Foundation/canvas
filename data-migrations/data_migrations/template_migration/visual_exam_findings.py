@@ -1,29 +1,29 @@
-import re, pytz, arrow, csv, json
+import re, csv, os, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from data_migrations.template_migration.utils import validate_header, validate_required, validate_date, validate_enum, MappingMixin
-
+from data_migrations.template_migration.note import NoteMixin
 from data_migrations.template_migration.utils import (
     validate_header,
     validate_required,
     MappingMixin,
-    FileWriterMixin
+    FileWriterMixin,
+    DocumentEncoderMixin
 )
-from data_migrations.template_migration.note import NoteMixin
-from data_migrations.template_migration.commands import CommandMixin
 
 
-class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
+class VisualExamFindingsMixin(MappingMixin, NoteMixin, FileWriterMixin, DocumentEncoderMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
         Trying to convert or confirm the formats are what we expect:
 
         Required Formats/Values (Case Insensitive):
+            ID: Unique identifier for the record
             Patient Identifier: Canvas key, unique identifier defined on the demographics page
-            Status: Active, Resolved
-    """
+            Title: Title of the visual exam findings
+            Image: Path to the image file
+        """
 
     def validate(self, delimiter='|'):
         """
@@ -41,19 +41,16 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 accepted_headers = {
                     "ID",
                     "Patient Identifier",
-                    "Status",
-                    "RxNorm/FDB Code",
-                    "SIG",
-                    "Medication Name",
-                    "Original Code"
+                    "Title",
+                    "Image",
+                    "Comment"
                 }
             )
 
             validations = {
                 "ID": [validate_required],
                 "Patient Identifier": [validate_required],
-                "RxNorm/FDB Code": [validate_required],
-                "Status": [validate_required, (validate_enum, {"possible_options": ['active', 'stopped']})]
+                "Image": [validate_required]
             }
 
             for row in reader:
@@ -115,112 +112,44 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 self.ignore_row(row['ID'], e)
                 continue
 
+            file = f'{self.images_dir}{row["Image"]}'
+
+            if not os.path.exists(file):
+                self.ignore_row(row['ID'], f"File(s) {file} not found in supplied files.")
+                continue
+
+            image_data = self.base64_encode_file(file)
+            if not image_data:
+                # This shouldn't ever happen with the current file set we have.
+                self.error_row(row["ID"], "Error converting document")
+                continue
+
             payload = {
-                "resourceType": "MedicationStatement",
+                "resourceType": "Media",
                 "extension": [
                     {
                         "url": "http://schemas.canvasmedical.com/fhir/extensions/note-id",
                         "valueId": note_id,
                     }
                 ],
-                "status": row['Status'],
+                "status": "completed",
                 "subject": {
                     "reference": f"Patient/{patient_key}"
                 },
-                "dosage": ([
-                    {
-                        "text": row['SIG']
-                    }
-                ] if row['SIG'] else [])
+                "content": {
+                    "contentType": "image/jpeg",
+                    "data": image_data,
+                    "title": row["Title"]
+                }
             }
 
-            # add the right coding depending on if it unstructured or FDB
-            if row["RxNorm/FDB Code"] == 'unstructured':
-                payload["medicationCodeableConcept"] =  {"coding": [
-                    {
-                        "system": "unstructured",
-                        "code": "N/A",
-                        "display": row['Medication Name']
-                    }
-                ]}
-            else:
-                payload["medicationReference"] = {
-                    "reference": f'Medication/fdb-{row["RxNorm/FDB Code"]}',
-                }
+            if notes := row['Comment']:
+                payload['note'] = [{"text": notes}]
 
-            #print(json.dumps(payload, indent=2))
+            # print(json.dumps(payload, indent=2))
 
             try:
                 canvas_id = self.fumage_helper.perform_create(payload)
-                self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
-                ids.add(row['ID'])
-            except BaseException as e:
-                self.error_row(f"{row['ID']}|{patient}|{patient_key}", e)
-
-    def load_via_commands_api(self, validated_rows, note_kwargs={}):
-        """
-            Takes the validated rows from self.validate() and
-            loops through to send them off the FHIR Create
-
-            Outputs to CSV to keep track of records
-            If any  error, the error message will output to the errored file
-        """
-        self.patient_map = fetch_from_json(self.patient_map_file)
-
-        total_count = len(validated_rows)
-        print(f'      Found {len(validated_rows)} records')
-        ids = set()
-        for i, row in enumerate(validated_rows):
-            print(f'Ingesting ({i+1}/{total_count})')
-
-            if row['ID'] in ids or row['ID'] in self.done_records:
-                print(' Already did record')
-                continue
-
-            patient = row['Patient Identifier']
-            patient_key = ""
-
-            if row["RxNorm/FDB Code"] == "unstructured":
-                text = row["Medication Name"]
-                code = row["Medication Name"]
-                coding = [
-                    {
-                        "code": "",
-                        "system": "UNSTRUCTURED",
-                        "display": text
-                    }
-                ]
-            else:
-                coding = self.med_mapping[f"{row['Medication Name']}|{row.get('Original Code', '')}".lower()]
-                code = next(item['code'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
-                text = next(item['display'] for item in coding if item["system"] == 'http://www.fdbhealth.com/')
-
-            try:
-                patient_key = self.map_patient(patient)
-            except Exception as e:
-                self.ignore_row(row["ID"], str(e))
-                continue
-
-            note_id = row.get("Note ID") or self.get_or_create_historical_data_input_note(patient_key, **note_kwargs)
-
-            payload = {
-                "noteKey": note_id,
-                "schemaKey": "medicationStatement",
-                "values": {
-                    "sig": row['SIG'],
-                    "medication": {
-                        "text": text,
-                        "value": code,
-                        "extra": {
-                            "coding": coding
-                        }
-                    }
-                }
-            }
-
-            try:
-                canvas_id = self.create_command(payload)
-                self.commit_command(canvas_id)
                 self.done_row(f"{row['ID']}|{patient}|{patient_key}|{canvas_id}")
                 ids.add(row['ID'])
             except BaseException as e:

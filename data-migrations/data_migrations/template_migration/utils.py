@@ -87,7 +87,7 @@ def validate_boolean(value, field_name):
         "Y": True,
         "N": False,
         "YES": True,
-        "FALSE": False
+        "NO": False
     }
     try:
         return True, mapping[value.upper()]
