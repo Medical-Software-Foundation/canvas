@@ -114,3 +114,6 @@ uv run canvas install bp_cpt2 --host plugin-testing --secret OPENAI_API_KEY="You
 ```
 
 **Important**: The OpenAI API key **must** be associated with a U.S. region project. API keys from other regions will not work with this plugin. You can verify your project's region in your OpenAI account settings.
+
+## Simple Example Note with Claim Coding
+<img width="600" height="714" alt="image" src="https://github.com/user-attachments/assets/4e072ef8-5d80-41f2-8b7d-91c5cf3ab822" />
