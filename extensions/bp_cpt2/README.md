@@ -1,8 +1,8 @@
-# Blood Pressure CPT Billing Plugin
+# Blood Pressure CPT-II and HCPCS Claim Coding Agent
 
 ## Overview
 
-This plugin automatically adds appropriate CPT and HCPCS billing codes based on blood pressure measurements recorded in Canvas. It responds to two types of events: when vitals are committed and when notes are locked.
+This AI agent automatically adds appropriate CPT and HCPCS billing codes based on blood pressure measurements recorded in Canvas. It responds to two types of events: when vitals are committed and when notes are locked.
 
 ## Functionality
 
@@ -27,6 +27,11 @@ The plugin determines which codes to add based on blood pressure values:
 - G8951: BP not documented, documented reason
 - G8752: Most recent BP < 140/90 mm Hg
 
+#### Treatment Plan Codes (Uncontrolled BP)
+- G8753: Most recent BP >= 140/90 and treatment plan documented
+- G8754: Most recent BP >= 140/90 and no treatment plan, reason not given
+- G8755: Most recent BP >= 140/90 and no treatment plan, documented reason
+
 ### Event Handlers
 
 #### BloodPressureVitalsHandler
@@ -41,11 +46,38 @@ When BP is not documented, the handler checks vitals command data (the `note` fi
 
 #### BloodPressureNoteStateHandler
 
-This handler is registered for note state change events but is currently not implemented. It is reserved for future implementation of treatment plan codes (G8753-G8755) which require analyzing note content for treatment plan documentation.
+Triggers when notes are locked or charges are pushed. Analyzes clinical documentation using AI to determine if blood pressure treatment plans are documented for patients with uncontrolled hypertension.
 
-**Event**: `NOTE_STATE_CHANGE_EVENT_CREATED` (only processes when state is 'LKD')
+**Event**: `NOTE_STATE_CHANGE_EVENT_UPDATED` (only processes when state is 'LKD' or 'PSH')
 
-All BP measurement codes (3074F-3080F, G8783, G8784, G8950, G8951, G8752) are currently handled by the BloodPressureVitalsHandler when vitals are committed.
+The handler uses OpenAI's GPT-4 model to analyze:
+- All commands documented in the note
+- Active medications for the patient
+
+For notes with uncontrolled BP (>= 140/90 mm Hg), the AI determines whether a treatment plan is documented and adds the appropriate treatment code:
+- **G8753**: Treatment plan is documented (new medications, lifestyle modifications, follow-up plans, etc.)
+- **G8754**: No treatment plan documented, no reason given
+- **G8755**: No treatment plan documented, but reason is documented (e.g., "patient declined", "awaiting specialist")
+
+The handler checks for existing billing line items before adding new ones to prevent duplicates.
+
+## Configuration
+
+### Required Secrets
+
+The plugin requires the following secret to be configured in Canvas:
+
+- **OPENAI_API_KEY**: Your OpenAI API key for GPT-4 access. This is used by the note state handler to analyze treatment plan documentation.
+
+The secret is declared in the `CANVAS_MANIFEST.json` file:
+
+```json
+"secrets": [
+    "OPENAI_API_KEY"
+]
+```
+
+To configure the secret value, add it to your Canvas instance's secrets configuration. The plugin will access it via `self.secrets.get('OPENAI_API_KEY')` in the note state handler.
 
 ## Limitations
 
@@ -53,18 +85,15 @@ All BP measurement codes (3074F-3080F, G8783, G8784, G8950, G8951, G8752) are cu
 Billing line items added by this plugin will not be automatically removed if the vitals command is entered in error. Manual removal of billing codes is required if incorrect vitals data is corrected or deleted.
 
 ### Diagnosis Pointers
-The billing codes added by this plugin do not include diagnosis pointers. Diagnosis pointer assignment could be implemented in the note state handler by analyzing documented diagnoses in the note.
+The billing codes added by this plugin do not include diagnosis pointers. Diagnosis pointer assignment could be implemented by analyzing documented diagnoses in the note.
 
-### Codes Not Handled
-The following CPT/HCPCS codes are not returned by this plugin:
+### Treatment Plan Analysis
+The treatment plan analysis (G8753-G8755) relies on AI interpretation of clinical documentation. The accuracy depends on:
+- Clear documentation of treatment plans in commands and medications
+- Proper recording of clinical decisions and rationale
+- The quality of the LLM's analysis
 
-- **G8753** (Most recent BP >= 140/90 and treatment plan documented): This plugin does not analyze whether a treatment plan has been documented in the note. It only evaluates BP values and control status.
-
-- **G8754** (Most recent BP >= 140/90 and no treatment plan, reason not given): This plugin does not track treatment plan documentation or reasons for its absence.
-
-- **G8755** (Most recent BP >= 140/90 and no treatment plan, documented reason): This plugin does not track treatment plan documentation or reasons for its absence.
-
-To support these codes, the plugin would need to parse note content for treatment plans and documented reasons, which is outside the current scope.
+If the OpenAI API key is not configured, the handler will default to adding G8754 (no treatment plan, reason not given) for uncontrolled BP.
 
 ## Running Tests
 
@@ -75,3 +104,13 @@ uv run pytest tests/
 # Run tests with coverage report
 uv run pytest tests/ --cov=.
 ```
+
+## Installation
+
+To install this plugin to a Canvas instance:
+
+```bash
+uv run canvas install bp_cpt2 --host plugin-testing --secret OPENAI_API_KEY="Your OpenAI API Key"
+```
+
+**Important**: The OpenAI API key **must** be associated with a U.S. region project. API keys from other regions will not work with this plugin. You can verify your project's region in your OpenAI account settings.
