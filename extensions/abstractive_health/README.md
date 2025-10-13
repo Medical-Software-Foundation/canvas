@@ -2,7 +2,7 @@
 The Abstractive Health Extension enables your organization to gain deep patient intelligence for your clinicians. You are able to access a patient's complete medical record from the national health information exchanges, see automated AI summaries from those documents, and get quick answers to any clinical questions on the patient chart with streamlined research.
 
 ## About Abstractive
-An Abstractive account is required to access the platform. The application flow will prompt you to create one to register for a free trial, after which plans start at $99/month. Learn more at [https://app.abstractive.ai](https://app.abstractive.ai).
+An Abstractive account is required to access the platform. The application flow will prompt you to create one to register for a free trial, after which plans start at $99/month.
 
 ## Installation
 To install the extension and populate the application in your Canvas instance, run the following CLI command:
