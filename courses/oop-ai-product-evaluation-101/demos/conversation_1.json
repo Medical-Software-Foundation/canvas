@@ -1,0 +1,42 @@
+[
+  {
+    "speaker": "patient",
+    "content": "Hi doctor, I've been feeling really tired lately and I'm worried about it. Also, I got my bill from last month and I don't know how I'm going to pay it."
+  },
+  {
+    "speaker": "clinician",
+    "content": "Fatigue. How long?"
+  },
+  {
+    "speaker": "patient",
+    "content": "About three weeks now. I just can't seem to get through the day without feeling exhausted. And about the bill—"
+  },
+  {
+    "speaker": "clinician",
+    "content": "Three weeks. Any other symptoms? Weight changes? Appetite?"
+  },
+  {
+    "speaker": "patient",
+    "content": "No weight changes really. My appetite is normal. But I'm just so tired all the time. I can barely make it through work. And I really need to talk about these medical bills because—"
+  },
+  {
+    "speaker": "clinician",
+    "content": "Understood. We'll run a CBC, TSH, and metabolic panel. Could be thyroid, anemia, or something else. Lab orders going in now."
+  },
+  {
+    "speaker": "patient",
+    "content": "Okay, thank you. But how much is that going to cost? I still haven't paid last month's bill and I'm already behind."
+  },
+  {
+    "speaker": "clinician",
+    "content": "Financial concerns are valid. I'm referring you to our financial assistance office. They handle payment plans and charity care applications. Give them a call today. Number's on your discharge papers."
+  },
+  {
+    "speaker": "patient",
+    "content": "Oh, I didn't know there was help available. Thank you. When should I get the lab work done?"
+  },
+  {
+    "speaker": "clinician",
+    "content": "Within 48 hours. Results in three days. We'll call you. If it's urgent, we'll bring you back in. Financial assistance: extension 4120. Lab's downstairs. Any questions?"
+  }
+]
