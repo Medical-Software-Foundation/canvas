@@ -1,16 +1,35 @@
-# OOP AI Product Evaluation 101
+# Out-of-Pocket Health AI Product Evaluation 101
 
-A course on evaluating AI products using object-oriented programming principles.
+A course on evaluating AI products, created in partnership with Out-of-Pocket Health (OOP).
 
 ## Overview
 
-This course teaches how to build and test LLM wrappers for different AI providers using OOP best practices.
+This course teaches how to build and test LLM wrappers for different AI providers using object-oriented programming best practices.
 
-## Modules
+## Course Structure
+
+### Core Modules
 
 - `llm_openai.py` - OpenAI GPT wrapper
 - `llm_google.py` - Google Gemini wrapper
 - `llm_anthropic.py` - Anthropic Claude wrapper
+
+### Intake Agent Application
+
+The `intake_agent/` directory contains a complete medical intake web application used for demonstrations and evaluation exercises:
+
+- **Split-screen interface** - Real-time chat with AI agent alongside structured medical record
+- **AI-powered data extraction** - Automatically extracts demographics, conditions, medications, allergies, and goals from natural conversation
+- **Configurable agent** - Customize personality (professional to meme_lord), verbosity, and model
+- **Automated evaluation system** - Playwright-based patient simulator for testing extraction accuracy
+
+See `intake_agent/README.md` for setup and usage instructions.
+
+The intake agent demonstrates real-world AI product evaluation concepts including:
+- Black-box testing with decoupled evaluation agents
+- Precision/recall metrics for information extraction
+- Nondeterminism detection in conversational AI
+- Ground truth comparison and validation
 
 ## Installation
 
