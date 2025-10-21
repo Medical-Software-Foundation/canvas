@@ -37,7 +37,6 @@ class MessageLoaderMixin(MappingMixin, FileWriterMixin):
                     "Recipient",
                     "Sender",
                     "Text",
-                    "Thread ID"
                 }
             )
 

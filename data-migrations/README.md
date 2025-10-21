@@ -594,7 +594,7 @@ Canvas medications are coded to use an **FDB code** so that proper drug interact
 | `Patient Identifier` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
 | `Rxnorm/FDB Code` | Tells whether the medication should be ingested unstructured or with a coding.  | Must be unstructured or map to an FDB Code |
 | `Name` | Medication name/description | Non-empty string |
-| `Clinical Status` | Medication status | `'active'`, `'inactive'`, `'completed'` |
+| `Clinical Status` | Medication status | `'active'`, `'stopped'` |
 
 
 ### 🔧 **Optional Fields**
@@ -605,13 +605,17 @@ Canvas medications are coded to use an **FDB code** so that proper drug interact
 | `Free Text Note` | Additional notes about the medication | "Take with food" |
 | `Recorded Provider` | Provider who prescribed the medication | Must exist in `doctor_map.json` |
 | `Original Code` | Vendor's original medication code | Preserve vendor-specific coding that helps with mapping |
+| `Start Datetime` | Timestamp medication was started in format (YYYY-MM-DDTHH:MM:SSZ) | `2025-10-16T19:43:35.652766+00:00`
+| `End Datetime` | Timestamp medication was stopped if applicable in format (YYYY-MM-DDTHH:MM:SSZ) | `2025-10-16T19:43:35.652766+00:00`
+
 
 ### 📋 **Data Format Requirements**
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
 | `Clinical Status` | Must be valid status (enum validation) | `'active'`, `'inactive'`, `'completed'` |
-| `Onset Date` | Should be in date format (YYYY-MM-DD) | `'2020-01-15'` |
+| `Start Datetime` | Should be in datetime format (YYYY-MM-DDTHH:MM:SSZ) | `2025-10-16T19:43:35.652766+00:00` |
+| `End Datetime` | Should be in datetime format (YYYY-MM-DDTHH:MM:SSZ) | `2025-10-16T19:43:35.652766+00:00` |
 | `Rxnorm / FDB Code` | Must be able to map to a valid First DataBank code for Canvas ingestion | `'2-12345'`, `'2-67890'` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 | `Provider mapping` | If Recorded Provider provided it must exist in `doctor_map.json` | Provider lookup |
@@ -638,6 +642,7 @@ Canvas supports both **coded immunizations** (with CVX codes) and **unstructured
 | Field | Description | 📊 Example |
 |-------|-------------|------------|
 | `CVX Code` | Vaccine Administered code for structured coding | `'140'`, `'207'`, `'110'` |
+| `CPT Code` | Vaccine Administered code for structured coding | `90649` |
 | `Comment` | Additional notes about the immunization | "Administered in left deltoid" |
 
 ### 📋 **Data Format Requirements**
@@ -646,6 +651,7 @@ Canvas supports both **coded immunizations** (with CVX codes) and **unstructured
 |------------|--------------|-------------------|
 | `Date Performed` | Must be valid date format (YYYY-MM-DD) | `'2024-01-15'` |
 | `CVX Code` | Optional - if provided, must be valid CVX code | `'140'`, `'207'`, `'110'`, `'03'`, `'08'` |
+| `CPT Code` | (Optional) CPT code for the vaccine, used for procedural coding and billing | `90649`, `90732` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 
 ---
@@ -660,48 +666,73 @@ We can ingest these commands as either unstructured data or SNOMED diagnosis cod
 
 | Field | Description | 🔍 Validation |
 |-------|-------------|---------------|
-| `id` | Unique identifier for the family history record | Non-empty string |
-| `patient` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
-| `relative_coding` | SNOMED CT code for family relationship | Must be valid SNOMED CT code from relationship map |
+| `ID` | Unique identifier for the family history record | Non-empty string |
+| `Patient Identifier` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
+| `Relative Coding` | SNOMED CT code for family relationship | Must be valid SNOMED CT code from relationship map |
 
 ### 🔧 **Optional Fields**
 
 | Field | Description | 📊 Example |
 |-------|-------------|------------|
-| `comment` | Additional notes about the family history | "Father had heart attack at age 50" |
-| `icd_code` | ICD-10 code for the condition | "I21.9", "E11.9" |
-| `diagnosis_description` | Human-readable condition description | "Acute myocardial infarction", "Type 2 diabetes" |
+| `Comment` | Additional notes about the family history | "Father had heart attack at age 50" |
+| `ICD10/SNOMED Code` | SNOMED or ICD-10 code for the condition | "395089003" "I21.9", "E11.9" |
+| `Diagnosis Name` | Human-readable condition description | "Acute myocardial infarction", "Type 2 diabetes" |
 
-> **⚠️ Important**: At least one of `icd_code` OR `diagnosis_description` must be provided. If both are missing, the record will be ignored during migration.
+> **⚠️ Important**: At least one of `ICD10/SNOMED Code` OR `Diagnosis Name` must be provided. If both are missing, the record will be ignored during migration.
 
 ### 📋 **Data Format Requirements**
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
-| `relative_coding` | Must be valid SNOMED CT code for family relationships | `'72705000'`, `'66839005'`, `'27733009'`, etc |
-| `icd_code` | Should be valid ICD-10 code (dots are automatically removed) | `'I21.9'`, `'E11.9'` |
+| `Relative Coding` | Must be valid SNOMED CT code for family relationships | `'72705000'`, `'66839005'`, `'27733009'`, etc |
+| `ICD10/SNOMED Code` | Should be valid SNOMED or ICD-10 code (dots are automatically removed) | `'I21.9'`, `'E11.9'` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 
-### 👨‍👩‍👧‍👦 **Some Common Family Relationship Codes**
+### 👨‍👩‍👧‍👦 **Relationship Codes**
 
-| Relationship | SNOMED CT Code | Description |
-|--------------|----------------|-------------|
-| **Mother** | `72705000` | Mother |
-| **Father** | `66839005` | Father |
-| **Sister** | `27733009` | Sister |
-| **Brother** | `70924004` | Brother |
-| **Daughter** | `66089001` | Daughter |
-| **Son** | `65616008` | Son |
-| **Maternal Grandmother** | `394859001` | Maternal grandmother |
-| **Paternal Grandfather** | `394856008` | Paternal grandfather |
-| **Maternal Grandfather** | `394857004` | Maternal grandfather |
-| **Paternal Grandmother** | `394858009` | Paternal grandmother |
-| **Maternal Aunt** | `442051000124109` | Maternal aunt |
-| **Paternal Uncle** | `442041000124107` | Paternal uncle |
-| **Maternal Uncle** | `442031000124102` | Maternal uncle |
-| **Paternal Aunt** | `442061000124106` | Paternal aunt |
-| **Great Grandmother** | `78652007` | Great grandmother |
-| **Great Grandfather** | `50261002` | Great grandfather |
+| Relationship | SNOMED CT Code |
+|--------------|----------------|
+| Adopted | 85683001 |
+| Blood relative | 125679009 |
+| Brother | 70924004 |
+| Daughter | 66089001 |
+| Father | 66839005 |
+| Female first cousin | 270002 |
+| Female second cousin | 21506002 |
+| Fraternal twin brother | 81467001 |
+| Fraternal twin sister | 29644004 |
+| Great aunt | 394862003 |
+| Great grandfather | 50261002 |
+| Great grandmother | 78652007 |
+| Great great grandfather | 80386000 |
+| Great great grandmother | 2368000 |
+| Great uncle | 394861005 |
+| Half-brother | 45929001 |
+| Half-sister | 2272004 |
+| Identical twin brother | 78194006 |
+| Identical twin sister | 50058005 |
+| Male first cousin | 11993008 |
+| Male second cousin | 11434005 |
+| Maternal aunt | 442051000124109 |
+| Maternal grandfather | 394857004 |
+| Maternal grandmother | 394859001 |
+| Maternal great grandfather | 719771001 |
+| Maternal great grandmother | 719769001 |
+| Maternal uncle | 442031000124102 |
+| Mother | 72705000 |
+| Nephew | 83559000 |
+| Niece | 34581001 |
+| Paternal aunt | 442061000124106 |
+| Paternal grandfather | 394856008 |
+| Paternal grandmother | 394858009 |
+| Paternal great grandfather | 719770000 |
+| Paternal great grandmother | 719768009 |
+| Paternal uncle | 442041000124107 |
+| Sister | 27733009 |
+| Son | 65616008 |
+| Stepfather | 30578000 |
+
+
 ---
 
 ## 📅 **Appointment Migration** (`create_appointments.py`) 
@@ -724,8 +755,8 @@ For future appointments, we recommend loading this closer to go live date to mak
 | `Patient Identifier` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
 | `Location` | Appointment location (must map to existing location) | Must be valid Canvas location ID |
 | `Provider` | Provider for the appointment (must map to existing provider) | Must exist in `doctor_map.json` |
-| `Start Date / Time` | Appointment start time (YYYY-MM-DDTHH:MM:SS format) | Valid datetime format |
-| `End Date/Time` | Appointment end time | Valid datetime format |
+| `Start Datetime` | Appointment start time (YYYY-MM-DDTHH:MM:SSZ format) | Valid datetime format |
+| `End Datetime` | Appointment end time (YYYY-MM-DDTHH:MM:SSZ format) | Valid datetime format |
 | `Appointment Type` | Type of appointment | Must be a Canvas Note Type |
 | `Appointment Type System` | System for appointment type coding | Valid coding system |
 
@@ -742,7 +773,8 @@ For future appointments, we recommend loading this closer to go live date to mak
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
-| `Start Date / Time` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SS) | `'2024-01-15T09:00:00'` |
+| `Start Datetime` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SSZ) | `'2024-01-15T09:00:00-00:00'` |
+| `End Datetime` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SSZ) | `'2024-01-15T09:00:00-00:00'` |
 | `Status` | Must be exactly 'booked' or 'fulfilled' | `'booked'`, `'fulfilled'` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 | `Location mapping` | Location must be a valid Canvas Practice Location ID | Location lookup |
@@ -823,7 +855,7 @@ We will try to convert images and HTML to PDF for FHIR Document Reference ingest
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
 | `Clinical Date` | Should be valid date format (YYYY-MM-DD) | `'2024-01-15'` |
-| `Docuemnt` | Must point to existing file | Valid file in file dir |
+| `Docuemnt` | Must point to existing file that can be converted to base64  | Valid file in file dir |
 | `Category` | Document category | `patientadministrativedocument` or `uncategorizedclinicaldocument` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 | `Provider mapping` | If Author provided it must exist in `doctor_map.json` | Provider lookup |
@@ -847,6 +879,8 @@ Lab reports are loaded via **FHIR DiagnosticReport**: [Canvas Lab Report API](ht
 
 These will show up in the **Lab Report Panel section** of the patient RHS of the chart. Canvas can only ingest PDFs, so the template_migration code has helper functions to convert image files to PDF.
 
+If you want to ingest discrete values and not just a PDF, follow documentation in the API link.
+
 ### ✅ **Required Fields**
 
 | Field | Description | 🔍 Validation |
@@ -868,7 +902,7 @@ These will show up in the **Lab Report Panel section** of the patient RHS of the
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
 | `Lab Date` | Must be valid date format (YYYY-MM-DD) | `'2024-01-15'` |
-| `Document` | Must be valid JSON array of file paths | `["lab_report_1.pdf"]` |
+| `Document` | Must be valid JSON array of file paths that exist that can be converted to base64 | `["lab_report_1.pdf"]` |
 | `Lab LOINC Code` | If provided, should be valid LOINC code | `'58410-2'`, `'24323-8'` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 
@@ -891,7 +925,7 @@ Vital commands are typically inserted into the patient's timeline in to Vital Da
 |-------|-------------|---------------|
 | `id` | Unique identifier for the vital sign record | Non-empty string |
 | `patient` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
-| `created_at` | Date/time when vital was recorded (YYYY-MM-DDTHH:MM:SS format) | Valid datetime format |
+| `created_at` | Date/time when vital was recorded (YYYY-MM-DDTHH:MM:SSZ format) | Valid datetime format |
 
 ### 🔧 **Optional Fields**
 
@@ -912,7 +946,7 @@ Vital commands are typically inserted into the patient's timeline in to Vital Da
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
-| `created_at` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SS) | `'2024-01-15T09:00:00'` |
+| `created_at` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SSZ) | `'2024-01-15T09:00:00'` |
 | `height` | Numeric value (inches) | `'68'`, `'72.5'` |
 | `weight_lbs` | Numeric value (pounds, decimal for ounces) | `'150'`, `'175.3'` (3 = 3/16 lbs) |
 | `blood_pressure_systole`, `blood_pressure_diastole` | Integer values | `'120'`, `'80'` |
@@ -942,7 +976,7 @@ These will show up in the **Patient's timeline** as message notes. If you will b
 | Field | Description | 🔍 Validation |
 |-------|-------------|---------------|
 | `ID` | Unique identifier for the message record | Non-empty string |
-| `Timestamp` | When the message was sent (YYYY-MM-DDTHH:MM:SS format) | Valid datetime format |
+| `Timestamp` | When the message was sent (YYYY-MM-DDTHH:MM:SSZ format) | Valid datetime format |
 | `Recipient` | Message recipient (either staff or patient) | Valid recipient identifier |
 | `Sender` | Message sender (either staff or patient) | Valid sender identifier |
 | `Text` | Message content | Non-empty string |
@@ -951,7 +985,8 @@ These will show up in the **Patient's timeline** as message notes. If you will b
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
-| `Timestamp` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SS) | `'2024-01-15T14:30:00'` |
+| `Timestamp` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SSZ) | `'2024-01-15T14:30:00+00:00'` |
+| `Sender` and `Recipient` | Must be prefixed with the type of person | `Patient/a55ce8faf8d94c2182e9c5c0391262b5` or `Practitioner/a55ce8faf8d94c2182e9c5c0391262b5`
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 | `Provider mapping` | Provider must exist in `doctor_map.json` | Provider lookup |
 
@@ -971,14 +1006,21 @@ Consents appear on the **Patient's Profile page**.
 | `Patient Identifier` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
 | `Status` | Consent status (active/rejected) | Must be 'active' or 'rejected' |
 | `Code` | Consent code (must be configured in the Canvas Settings) | Must be valid consent code |
-| `Date` | Date of consent (YYYY-MM-DD format) | Valid date format |
+| `Start Date` | Date of consent (YYYY-MM-DD format) | Valid date format |
+
+### 🔧 **Optional Fields**
+| Field | Description | 🔍 Validation |
+|-------|-------------|---------------|
+| `End Date` | Date of consent expires (YYYY-MM-DD format) | Valid date format |
+| `Document` | PDF document encoded | Needs to point to a PDF file in a specific path | 
 
 ### 📋 **Data Format Requirements**
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
 | `Status` | Must be exactly 'active' or 'rejected' | `'active'`, `'rejected'` |
-| `Date` | Must be valid date format (YYYY-MM-DD) | `'2024-01-15'` |
+| `Document` | Must be a file path to a file that exist that can be converted to base64 | "file1.pdf" |
+| `Start Date`, `End Date` | Must be valid date format (YYYY-MM-DD) | `'2024-01-15'` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 
 ---
@@ -1012,7 +1054,7 @@ Used to know which note to insert the HPI command into.
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
-| `DOS` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SS) | `'2024-01-15T09:00:00'` |
+| `DOS` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SSZ) | `'2024-01-15T09:00:00'` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 | `Provider mapping` | Provider must exist in `doctor_map.json` | Provider lookup |
 | `Location mapping` | Must be a Canvas Practice Location ID | Location validation |
@@ -1085,7 +1127,7 @@ If you pass the Note ID parameter, it will drop the command in that note. If no 
 |-------|-------------|---------------|
 | `ID` | Unique identifier for the questionnaire response record | Non-empty string |
 | `Patient Identifier` | Patient identifier (must map to existing patient) | Must exist in `patient_id_map.json` |
-| `DOS` | Date of service (YYYY-MM-DDTHH:MM:SS format) | Valid datetime format |
+| `DOS` | Date of service (YYYY-MM-DDTHH:MM:SSZ format) | Valid datetime format |
 | `Questionnaire ID` | Identifier for the questionnaire | Must be valid questionnaire ID |
 
 ### 🔧 **Optional Fields**
@@ -1105,7 +1147,7 @@ Note fields are used to know which note to insert the HPI command into.
 
 | Field Type | Requirements | ✅ Accepted Values |
 |------------|--------------|-------------------|
-| `DOS` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SS) | `'2024-01-15T09:00:00'` |
+| `DOS` | Must be valid datetime format (YYYY-MM-DDTHH:MM:SSZ) | `'2024-01-15T09:00:00+00:00'` |
 | `Patient mapping` | Patient Identifier must exist in `patient_id_map.json` | Reference validation |
 | `Provider mapping` | Provider must exist in `doctor_map.json` | Provider lookup |
 | `Location mapping` | Must be a Canvas Practice Location ID | Location validation |

@@ -23,16 +23,16 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
 
     def validate_end_time(self, row):
         """ Confirm there is an end date set for the appointment,
-        It is confirmed that Start Date / Time is already there.
+        It is confirmed that Start Datetime is already there.
         Need to ensure duration or End Date Time is there
         """
 
-        if end_date := row['End Date/Time']:
-            return validate_datetime(end_date, 'End Date/Time')
+        if end_date := row['End Datetime']:
+            return validate_datetime(end_date, 'End Datetime')
 
         if duration := row['Duration']:
             try:
-                return True, arrow.get(row['Start Date / Time']).shift(minutes=int(duration)).isoformat()
+                return True, arrow.get(row['Start Datetime']).shift(minutes=int(duration)).isoformat()
             except:
                 pass
 
@@ -60,8 +60,8 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     "Reason for Visit Text",
                     "Location",
                     "Meeting Link",
-                    "Start Date / Time",
-                    "End Date/Time",
+                    "Start Datetime",
+                    "End Datetime",
                     "Duration",
                     "Provider",
                     "Status"
@@ -72,7 +72,8 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 "Patient Identifier": [validate_required],
                 "Location": [validate_required],
                 "Provider": [validate_required],
-                "Start Date / Time": [validate_datetime],
+                "Start Datetime": [validate_datetime],
+                "End Datetime": [validate_datetime],
                 "Status": [(validate_enum, {'possible_options': ['booked', 'fulfilled']})],
             }
 
@@ -98,7 +99,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     errors[key].append(field_or_error_msg)
                     error = True
                 else:
-                    row['End Date/Time'] = field_or_error_msg
+                    row['End Datetime'] = field_or_error_msg
 
                 if not error:
                     validated_rows.append(row)
@@ -161,7 +162,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                 print(' Already looked at record')
                 continue
 
-            start_time = arrow.get(row["Start Date / Time"])
+            start_time = arrow.get(row["Start Datetime"])
             if end_date_time_frame and start_time > end_date_time_frame:
                 self.ignore_row(row['ID'], f"Ignoring due to start time of {start_time.isoformat()}")
                 continue
@@ -206,7 +207,7 @@ class AppointmentLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin):
                     }
                 ],
                 "start": start_time.isoformat(),
-                "end": arrow.get(row["End Date/Time"]).isoformat(),
+                "end": arrow.get(row["End Datetime"]).isoformat(),
                 "participant":[
                     {
                         "actor": {"reference": f"Patient/{patient_key}"},

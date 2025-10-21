@@ -2,7 +2,7 @@ import re, pytz, arrow, csv, json
 from collections import defaultdict
 
 from data_migrations.utils import fetch_from_json, write_to_json
-from data_migrations.template_migration.utils import validate_header, validate_required, validate_date, validate_enum, MappingMixin
+from data_migrations.template_migration.utils import validate_header, validate_required, validate_datetime, validate_enum, MappingMixin
 
 from data_migrations.template_migration.utils import (
     validate_header,
@@ -44,13 +44,17 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                     "RxNorm/FDB Code",
                     "SIG",
                     "Medication Name",
-                    "Original Code"
+                    "Original Code",
+                    "Start Datetime",
+                    "End Datetime"
                 }
             )
 
             validations = {
                 "ID": [validate_required],
                 "Patient Identifier": [validate_required],
+                "Start Datetime": [validate_datetime],
+                "End Datetime": [validate_datetime],
                 "Status": [validate_required, (validate_enum, {"possible_options": ['active', 'stopped']})]
             }
 
@@ -145,6 +149,18 @@ class MedicationLoaderMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMix
                 payload["medicationReference"] = {
                     "reference": f'Medication/fdb-{row["RxNorm/FDB Code"]}',
                 }
+
+            add_effective_period = False
+            effective_period = {}   
+            if row["Start Date"]:
+                effective_period["start"] = row["Start Datetime"]
+                add_effective_period = True
+            if row["End Date"]:
+                effective_period["end"] = row["End Datetime"]
+                add_effective_period = True
+
+            if add_effective_period:
+                payload["effectivePeriod"] = effective_period
 
             #print(json.dumps(payload, indent=2))
 

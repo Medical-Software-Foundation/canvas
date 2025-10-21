@@ -46,13 +46,12 @@ class FamilyHistoryLoader(FamilyHistoryLoaderMixin):
         """Fetch and transform family history data"""
 
         headers = {
-            "id",
-            "patient",
-            "relative_coding",
-            "comment",
-            "icd_code",
-            "provider",
-            "diagnosis_description"
+            "ID",
+            "Patient Identifier",
+            "Relative Coding",
+            "Comment",
+            "ICD10/SNOMED Code",
+            "Diagnosis Name"
         }
 
         with open(self.csv_file, 'w') as f:
@@ -88,12 +87,12 @@ class FamilyHistoryLoader(FamilyHistoryLoaderMixin):
                 relative_coding = self.relationship_coding_map[family_history.get("relative", "")]
 
                 writer.writerow({
-                    "id": family_history.get("id", ""),
-                    "patient": family_history.get("patient", ""),
-                    "relative_coding": relative_coding,
-                    "comment": family_history.get("comment", ""),
-                    "icd_code": family_history.get("icd_code", ""),
-                    "diagnosis_description": family_history.get("diagnosis_description", "")
+                    "ID": family_history.get("id", ""),
+                    "Patient Identifier": family_history.get("patient", ""),
+                    "Relative Coding": relative_coding,
+                    "Comment": family_history.get("comment", ""),
+                    "ICD10/SNOMED Code": family_history.get("code", ""),
+                    "Diagnosis Name": family_history.get("diagnosis_description", "")
                 })
 
         print("CSV successfully made")

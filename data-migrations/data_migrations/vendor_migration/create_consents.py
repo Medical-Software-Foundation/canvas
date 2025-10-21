@@ -29,6 +29,7 @@ class ConsentLoader(ConsentLoaderMixin):
 
         self.done_records = fetch_complete_csv_rows(self.done_file)
         self.patient_map = fetch_from_json(self.patient_map_file)
+        self.documents_dir = "PHI/consent_documents"
 
         super().__init__(*args, **kwargs)
 
@@ -40,7 +41,9 @@ class ConsentLoader(ConsentLoaderMixin):
             "Patient Identifier",
             "Status",
             "Code",
-            "Date"
+            "Start Date",
+            "End Date",
+            "Document"
         }
 
         with open(self.csv_file, 'w') as f:
@@ -77,7 +80,9 @@ class ConsentLoader(ConsentLoaderMixin):
                     "Patient Identifier": consent.get("patient_identifier", ""),
                     "Status": consent.get("status", ""),
                     "Code": consent.get("code", ""),
-                    "Date": consent.get("date", "")
+                    "Start Date": consent.get("start_date", ""),
+                    "End Date": consent.get("end_date", ""),
+                    "Document": consent.get("path_to_document", ""),
                 })
 
         print("CSV successfully made")
