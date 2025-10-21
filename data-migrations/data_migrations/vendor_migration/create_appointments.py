@@ -53,8 +53,8 @@ class AppointmentLoader(AppointmentLoaderMixin):
             "Reason for Visit Text",
             "Location",
             "Meeting Link",
-            "Start Date / Time",
-            "End Date/Time",
+            "Start Datetime",
+            "End Datetime",
             "Duration",
             "Provider",
             "Status"
@@ -106,8 +106,8 @@ class AppointmentLoader(AppointmentLoaderMixin):
                     "Reason for Visit Text": appointment.get("reason_for_visit_text", ""),
                     "Location": appointment.get("location", ""),
                     "Meeting Link": appointment.get("meeting_link", ""),
-                    "Start Date / Time": appointment.get("start_date_time", ""),
-                    "End Date/Time": appointment.get("end_date_time", ""),
+                    "Start Datetime": appointment.get("start_date_time", ""),
+                    "End Datetime": appointment.get("end_date_time", ""),
                     "Duration": appointment.get("duration", ""),
                     "Provider": appointment.get("provider", ""),
                     "Status": appointment.get("status", "")

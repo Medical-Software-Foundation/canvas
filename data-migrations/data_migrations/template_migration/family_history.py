@@ -16,31 +16,45 @@ from data_migrations.utils import write_to_json
 class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin):
 
     self.relationship_code_to_display_map = {
-        "72705000": "Mother",
-        "66839005": "Father",
-        "394859001": "Maternal grandmother",
-        "27733009": "Sister",
-        "70924004": "Brother",
-        "394856008": "Paternal grandfather",
-        "394857004": "Maternal grandfather",
-        "394858009": "Paternal grandmother",
-        "442051000124109": "Maternal aunt",
-        "66089001": "Daughter",
-        "65616008": "Son",
-        "442041000124107": "Paternal uncle",
-        "442031000124102": "Maternal uncle",
-        "442061000124106": "Paternal aunt",
-        "125679009": "Blood relative",
-        "270002": "Female first cousin",
-        "78652007": "Great grandmother",
-        "394862003": "Great aunt",
-        "11993008": "Male first cousin",
-        "45929001": "Half-brother",
-        "719769001": "Maternal great grandmother",
-        "50261002": "Great grandfather",
-        "34581001": "Niece",
-        "83559000": "Nephew",
-        "2272004": "Half-sister"
+         "270002": 'Female first cousin',
+         "2272004": 'Half-sister',
+         "2368000": 'Great great grandmother',
+         "11434005": 'Male second cousin',
+         "11993008": 'Male first cousin',
+         "21506002": 'Female second cousin',
+         "27733009": 'Sister',
+         "29644004": 'Fraternal twin sister',
+         "30578000": 'Stepfather',
+         "34581001": 'Niece',
+         "45929001": 'Half-brother',
+         "50058005": 'Identical twin sister',
+         "50261002": 'Great grandfather',
+         "65616008": 'Son',
+         "66089001": 'Daughter',
+         "66839005": 'Father',
+         "70924004": 'Brother',
+         "72705000": 'Mother',
+         "78194006": 'Identical twin brother',
+         "78652007": 'Great grandmother',
+         "80386000": 'Great great grandfather',
+         "81467001": 'Fraternal twin brother',
+         "83559000": 'Nephew',
+         "85683001": 'Adopted',
+         "125679009": 'Blood relative',
+         "394856008": 'Paternal grandfather',
+         "394857004": 'Maternal grandfather',
+         "394858009": 'Paternal grandmother',
+         "394859001": 'Maternal grandmother',
+         "394861005": 'Great uncle',
+         "394862003": 'Great aunt',
+         "719768009": 'Paternal great grandmother',
+         "719769001": 'Maternal great grandmother',
+         "719770000": 'Paternal great grandfather',
+         "719771001": 'Maternal great grandfather',
+         "442031000124102": 'Maternal uncle',
+         "442041000124107": 'Paternal uncle',
+         "442051000124109": 'Maternal aunt',
+         "442061000124106": 'Paternal aunt',
     }
 
     def validate(self, delimiter="|"):
@@ -51,23 +65,24 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
 
             validate_header(reader.fieldnames,
                 accepted_headers = {
-                    "patient",
-                    "relative_coding",
-                    "comment",
-                    "icd_code",
-                    "diagnosis_description",
+                    "ID",
+                    "Patient Identifier",
+                    "Relative Coding",
+                    "Comment",
+                    "ICD10/SNOMED Code",
+                    "Diagnosis Name",
                 }
             )
 
             validations = {
-                "id": [validate_required],
-                "patient": [validate_required],
-                "relative_coding": [(validate_enum, {"possible_options": self.relationship_code_to_display_map.keys()})]
+                "ID": [validate_required],
+                "Patient": [validate_required],
+                "Relative Coding": [(validate_enum, {"possible_options": self.relationship_code_to_display_map.keys()})]
             }
 
             for row in reader:
                 error = False
-                key = f"{row['id']} {row['patient']}"
+                key = f"{row['ID']} {row['Patient Identifier']}"
 
                 for field, validator_funcs in validations.items():
                     for validator_func in validator_funcs:
@@ -103,20 +118,20 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
         for i, row in enumerate(validated_rows):
             print(f'Ingesting ({i+1}/{total_count})')
 
-            if row['id'] in ids or row['id'] in self.done_records:
+            if row['ID'] in ids or row['ID'] in self.done_records:
                 print(' Already did record')
                 continue
 
             try:
-                canvas_patient_key = self.map_patient(row["patient"])
+                canvas_patient_key = self.map_patient(row["Patient Identifier"])
             except Exception as e:
-                self.ignore_row(row["id"], str(e))
+                self.ignore_row(row["ID"], str(e))
                 continue
 
             historical_note = self.get_or_create_historical_data_input_note(canvas_patient_key)
 
-            comment = row["comment"]
-            snomed_code_and_description = self.icd10_to_snomed_mapping.get(row['icd_code'])
+            comment = row["Comment"]
+            snomed_code_and_description = self.icd10_to_snomed_mapping.get(row['ICD10/SNOMED Code'])
             if snomed_code_and_description:
                 family_history_dict = {
                     "text": snomed_code_and_description[1],
@@ -132,17 +147,17 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
                     "value": snomed_code_and_description[0]
                 }
             else:
-                if not row["diagnosis_description"] and not row["icd_code"]:
+                if not row["Diagnosis Name"] and not row["ICD10/SNOMED Code"]:
                     self.ignore_row(row['id'], "Ignoring due to no diagnosis code or description.")
                     continue
 
-                diagnosis_description = row["diagnosis_description"]
+                diagnosis_description = row["Diagnosis Name"]
                 if not diagnosis_description:
-                    diagnosis_description = self.icd10_map[row["icd_code"].replace(".", "")]
+                    diagnosis_description = self.icd10_map[row["ICD10/SNOMED Code"].replace(".", "")]
                     if comment:
-                        comment = f'{row["icd_code"]}\n{comment}'
+                        comment = f'{row["ICD10/SNOMED Code"]}\n{comment}'
                     else:
-                        comment = f'{row["icd_code"]}'
+                        comment = f'{row["ICD10/SNOMED Code"]}'
 
                 family_history_dict = {
                     "text": diagnosis_description,
@@ -165,15 +180,15 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
                 "values": {
                     "note": comment,
                     "relative": {
-                        "text": self.relationship_code_to_display_map[row["relative_coding"]],
+                        "text": self.relationship_code_to_display_map[row["Relative Coding"]],
                         "extra": {
                             "coding": {
-                                "code": row["relative_coding"],
+                                "code": row["Relative Coding"],
                                 "system": "http://snomed.info/sct",
-                                "display": self.relationship_code_to_display_map[row["relative_coding"]],
+                                "display": self.relationship_code_to_display_map[row["Relative Coding"]],
                             }
                         },
-                        "value": row["relative_coding"]
+                        "value": row["Relative Coding"]
                     },
                     "family_history": family_history_dict
                 }
@@ -182,7 +197,7 @@ class FamilyHistoryMixin(MappingMixin, NoteMixin, FileWriterMixin, CommandMixin)
             try:
                 canvas_id = self.create_command(payload)
                 self.commit_command(canvas_id)
-                self.done_row(f"{row['id']}|{row['patient']}|{canvas_patient_key}|{canvas_id}")
-                ids.add(row['id'])
+                self.done_row(f"{row['ID']}|{row['Patient Identifier']}|{canvas_patient_key}|{canvas_id}")
+                ids.add(row['ID'])
             except BaseException as e:
-                self.error_row(f"{row['id']}|{row['patient']}|{canvas_patient_key}", e)
+                self.error_row(f"{row['ID']}|{row['Patient Identifier']}|{canvas_patient_key}", e)

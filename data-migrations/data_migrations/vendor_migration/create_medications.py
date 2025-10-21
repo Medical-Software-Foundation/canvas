@@ -1,4 +1,4 @@
-import csv
+import csv, arrow
 from data_migrations.utils import fetch_from_json, fetch_complete_csv_rows, load_fhir_settings
 from data_migrations.template_migration.medication import MedicationLoaderMixin
 from data_migrations.template_migration.mapping_review import MedicationReview
@@ -93,7 +93,9 @@ class MedicationLoader(MedicationLoaderMixin, MedicationReview):
             "RxNorm/FDB Code",
             "SIG",
             "Medication Name",
-            "Original Code"
+            "Original Code",
+            "Start Date",
+            "End Date"
         }
 
         # TODO: Customize this mapping for your vendor's data format
@@ -144,7 +146,11 @@ class MedicationLoader(MedicationLoaderMixin, MedicationReview):
                     "RxNorm/FDB Code": code,
                     "SIG": medication.get("sig", ""),
                     "Medication Name": display,
-                    "Original Code": medication.get("original_code", "")
+                    "Original Code": medication.get("original_code", ""),
+
+                    # TODO: Convert the start and end dates to the Canvas date format
+                    "Start Datetime": arrow.get(medication.get("start_datetime", "")).isoformat(),
+                    "End Datetime": arrow.get(medication.get("end_datetime", "")).isoformat()
                 })
 
         print("CSV successfully made")

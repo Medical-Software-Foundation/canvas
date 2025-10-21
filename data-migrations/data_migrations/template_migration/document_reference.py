@@ -22,6 +22,33 @@ class DocumentReferenceMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin
         error, then you can ingest as a JSON file where the keys match the CSV headers
     """
 
+    self.document_type_map = {
+        "53243-2": "patientadministrativedocument", # (Advance Beneficiary Notice) 
+        "42348-3": "patientadministrativedocument", # (Advance Directive / Living Will)
+        "91983-7": "uncategorizedclinicaldocument", # (Care Management)
+        "53245-7": "patientadministrativedocument", # (CDL (Commercial Driver License))
+        "96335-5": "uncategorizedclinicaldocument", # (Emergency Department Report)
+        "11503-0": "uncategorizedclinicaldocument", # (External Medical Records)
+        "75503-3": "uncategorizedclinicaldocument", # (Home Care Report)
+        "34105-7": "uncategorizedclinicaldocument", # (Hospital Discharge Summary) 
+        "47039-3": "uncategorizedclinicaldocument", # (Hospital History & Physical)
+        "64290-0": "patientadministrativedocument", # (Insurance Card) 
+        "52034-6": "patientadministrativedocument", # (Insurer Prior Authorization)
+        "34113-1": "uncategorizedclinicaldocument", # (Nursing Home)
+        "11504-8": "uncategorizedclinicaldocument", # (Operative Report)
+        "80570-5": "patientadministrativedocument", # (Patient Agreement)
+        "64285-0": "uncategorizedclinicaldocument", # (Patient Clinical Intake Form)
+        "51848-0": "uncategorizedclinicaldocument", # (Physical Exams) 
+        "46209-3": "patientadministrativedocument", # (POLST (Provider Order for Life Sustaining-Treatment)
+        "64298-3": "patientadministrativedocument", # (Power of Attorney)
+        "57833-6": "uncategorizedclinicaldocument", # (Prescription Refill Request)
+        "34823-5": "uncategorizedclinicaldocument", # (Rehabilitation Report)
+        "101904-1": "patientadministrativedocument", # (Release of Information Request)
+        "34109-9": "uncategorizedclinicaldocument", # (Uncategorized Clinical Document)
+        "51851-4": "patientadministrativedocument", # (Uncategorized Administrative Document)
+        "52070-0": "patientadministrativedocument", # (Worker's Compensation Documents)
+    }
+
     def validate_rows(self, headers, rows):
         validated_rows = []
         errors = defaultdict(list)

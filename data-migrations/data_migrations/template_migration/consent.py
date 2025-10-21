@@ -8,11 +8,12 @@ from data_migrations.template_migration.utils import (
     validate_date,
     validate_enum,
     MappingMixin,
-    FileWriterMixin
+    FileWriterMixin,
+    DocumentEncoderMixin
 )
 
 
-class ConsentLoaderMixin(MappingMixin, FileWriterMixin):
+class ConsentLoaderMixin(MappingMixin, FileWriterMixin, DocumentEncoderMixin):
     """
         Canvas has outlined a CSV template for ideal data migration that this Mixin will follow.
         It will confirm the headers it expects as outlined in the template and validate each column.
@@ -37,7 +38,9 @@ class ConsentLoaderMixin(MappingMixin, FileWriterMixin):
                     "Patient Identifier",
                     "Status",
                     "Code",
-                    "Date"
+                    "Start Date",
+                    "End Date",
+                    "Document"
                 }
             )
 
@@ -46,7 +49,9 @@ class ConsentLoaderMixin(MappingMixin, FileWriterMixin):
                 "Patient Identifier": [validate_required],
                 "Status": [validate_required, (validate_enum, {"possible_options": ['active', 'rejected']})],
                 "Code": [validate_required],
-                "Date": [validate_date],
+                "Start Date": [validate_required, validate_date],
+                "End Date": [validate_date]
+
             }
 
             for row in reader:
@@ -126,10 +131,30 @@ class ConsentLoaderMixin(MappingMixin, FileWriterMixin):
                 },
                 "provision": {
                     "period": {
-                        "start": row['Date']
+                        "start": row['Start Date']
                     }
                 }
             }
+
+            if row['End Date']:
+                payload['provision']['period']['end'] = row['End Date']
+
+            file = f'{self.documents_dir}{row["Document"]}'
+            if row["Document"] and not os.path.exists(file):
+                self.ignore_row(row['ID'], f"File(s) {file} not found in supplied files.")
+                continue
+
+            if row["Document"]:
+                file_data = self.base64_encode_file(file)
+                if not file_data:
+                    # This shouldn't ever happen with the current file set we have.
+                    self.error_row(row["ID"], "Error converting document")
+                    continue
+                row['sourceAttachment'] = {
+                    "contentType": "application/pdf",
+                    "data": file_data
+                    "title": row['Document']
+                }
 
             # print(json.dumps(payload, indent=2))
 
