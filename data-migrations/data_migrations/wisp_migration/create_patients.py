@@ -27,9 +27,9 @@ class PatientLoader(PatientLoaderMixin):
         self.error_file = 'results/PHI/errored_patients.csv'
         self.environment = environment
         self.fumage_helper = load_fhir_settings(environment)
-        self.patient_map = fetch_from_json(self.patient_map_file)
+        # self.patient_map = fetch_from_json(self.patient_map_file)
 
-    def make_csv(self, delimiter='|'):
+    def make_csv(self, delimiter='|', csv_file=None, output_file=None):
         """
             Fetch the Patient Records from Avon API
             and convert the JSON into a CSV with the columns that match
@@ -66,11 +66,11 @@ class PatientLoader(PatientLoaderMixin):
             "Identifier Value 2"
         }
 
-        with open(self.csv_file, 'w') as f:
+        with open(output_file or self.csv_file, 'w') as f:
             writer = csv.DictWriter(f, fieldnames=headers, delimiter=delimiter)
             writer.writeheader()
 
-            with open(self.original_csv_file, 'r') as file:
+            with open(csv_file or self.original_csv_file, 'r') as file:
                 reader = csv.DictReader(file, delimiter=delimiter)
                 for row in reader:
                     # if row['Identifier Value 1'] in self.patient_map:
@@ -83,28 +83,41 @@ class PatientLoader(PatientLoaderMixin):
 
             print("CSV successfully made")
 
-    def make_csv_diff(self, file1, file2):
+    def make_csv_diff(self, original_files, latest_file):
 
         KEY = "Identifier Value 1"
         headers = []
 
-        file1_map = {}
-        with open(file1, 'r') as file1_reader:
-            reader = csv.DictReader(file1_reader)
-            headers = reader.fieldnames
-            file1_map = {row[KEY]: row for row in reader}
-
-
-        with open("PHI/patient_diff.csv", 'w') as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-
-            with open(file2, 'r') as file2_reader:
-                reader = csv.DictReader(file2_reader)
+        original_file_map = {}
+        for file in original_files:
+            with open(file, 'r') as file1_reader:
+                reader = csv.DictReader(file1_reader)
+                headers = reader.fieldnames
                 for row in reader:
-                    if found_record := file1_map.get(row[KEY]):
-                        if found_record != row:
-                            writer.writerow(row)
+                    key = row[KEY]
+
+                    if key in original_file_map:
+                        if original_file_map[key] == row:
+                            continue
+                        original_file_map[key] = row
+                    else:
+                        original_file_map[key] = row
+
+        with open("PHI/patients_diff.csv", 'w') as f_diff:
+            with open("PHI/patients_new.csv", 'w') as f_new:
+                diff_writer = csv.DictWriter(f_diff, fieldnames=headers)
+                diff_writer.writeheader()
+                new_writer = csv.DictWriter(f_new, fieldnames=headers)
+                new_writer.writeheader()
+
+                with open(latest_file, 'r') as file2_reader:
+                    reader = csv.DictReader(file2_reader)
+                    for row in reader:
+                        if found_record := original_file_map.get(row[KEY]):
+                            if found_record != row:
+                                diff_writer.writerow(row)
+                        else:
+                            new_writer.writerow(row)
 
 
 
@@ -114,10 +127,10 @@ if __name__ == '__main__':
     delimiter = ','
 
     # Make diff file
-    # loader.make_csv_diff(file1='PHI/patients_july_10.csv', file2='PHI/patients_sep_9_2025.csv')
+    #loader.make_csv_diff(original_files=['PHI/patients_july.csv', 'PHI/patients_sep.csv'], latest_file='PHI/patients_oct.csv')
 
     # Convert customer file to the template CSV loader
-    loader.make_csv(delimiter=delimiter)
+    loader.make_csv(delimiter=delimiter, csv_file="PHI/customer_patients_new_oct.csv", output_file="PHI/patients_new_oct.csv")
 
     # Validate the CSV values with the Canvas template data migration rules
     # valid_rows = loader.validate(delimiter=delimiter, error_use_identifier='SWA patient ID')

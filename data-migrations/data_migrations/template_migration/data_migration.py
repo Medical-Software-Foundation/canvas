@@ -169,11 +169,15 @@ class Command(BaseCommand):
         """Log progress for chunk processing"""
         self.log(f"\t{chunk_display} - {operation} ({current}/{total})")
 
-    def log_chunk_success(self, chunk_display, item_id, success_message):
+    def log_chunk_success(self, chunk_display, item_id, success_message, action='created'):
         """Log successful processing of an item and increment counter"""
         # Increment done counter (thread-safe)
-        with self.done_count_lock:
-            self.done_count += 1
+        if action == 'created':
+            with self.done_count_lock:
+                self.done_count += 1
+        else:
+            with self.update_count_lock:
+                self.update_count += 1
 
         self.log(f"\t\tSuccessful: {item_id} {success_message}")
 
@@ -269,7 +273,7 @@ class Command(BaseCommand):
     def error_row(self, data, error):
         """Thread-safe method to log error rows"""
         with self.error_lock:
-        filename = f"error_{self.data_type}.csv"
+            filename = f"error_{self.data_type}.csv"
             reason_clean = str(error).replace("\n", "")
             new_line = f"{data}|{error}"
 
@@ -294,7 +298,7 @@ class Command(BaseCommand):
     def done_row(self, data):
         """Thread-safe method to log completed rows"""
         with self.done_lock:
-        filename = f"done_{self.s3_file.replace('.json', '.csv')}"
+            filename = f"done_{self.s3_file.replace('.json', '.csv')}"
             new_line = f"{data}"
 
             # Check if file exists to determine if we need headers
@@ -743,7 +747,7 @@ class Command(BaseCommand):
                 else:
                     # In normal mode, skip existing patients
                     self.already_done_row(row["Identifier Value 1"], f"patient from {source} as {patient_key}/{patient_id}")
-                continue
+                    continue
 
             patient_data = {
                 "first_name": row["First Name"],
@@ -857,6 +861,7 @@ class Command(BaseCommand):
                 chunk_display,
                 row["Identifier Value 1"],
                 f"{action} as https://{settings.CUSTOMER_IDENTIFIER}.canvasmedical.com/patient/{display_key}",
+                action
             )
 
     def handle(self, data_type, *args: Any, **options: Any) -> None:
@@ -901,18 +906,21 @@ class Command(BaseCommand):
         self.error_lock = Lock()
         self.ignore_lock = Lock()
         self.done_lock = Lock()
+        self.update_lock = Lock()
 
         # Initialize thread locks for counter operations
         self.error_count_lock = Lock()
         self.ignore_count_lock = Lock()
         self.done_count_lock = Lock()
         self.already_done_count_lock = Lock()
+        self.update_count_lock = Lock()
 
         # Initialize counters for tracking processed records
         self.error_count = 0
         self.ignore_count = 0
         self.done_count = 0
         self.already_done_count = 0
+        self.update_count = 0
 
         # Initialize error message tracking
         self.error_messages = {}  # {error_msg: [list of IDs]}
@@ -947,8 +955,9 @@ class Command(BaseCommand):
             self.log(f"\t❌ Errors encountered: {self.error_count} records", "error")
             self.log(f"\t⚠️  Ignored records: {self.ignore_count} records", "ignore")
             self.log(f"\t⏭️  Already processed: {self.already_done_count} records")
+            self.log(f"\t🔄  Updated records: {self.update_count} records")
             self.log(
-                f"\t📈 Total processed: {self.done_count + self.error_count + self.ignore_count + self.already_done_count} records"
+                f"\t📈 Total processed: {self.done_count + self.error_count + self.ignore_count + self.already_done_count + self.update_count} records"
             )
 
             # Ask user if they want to see detailed breakdowns
@@ -978,5 +987,5 @@ class Command(BaseCommand):
         thread_storage.unset("no_protocol_computations")
 
 
-# cmd = Command()
-# cmd.handle("patients", s3_file="patients_diff.csv", chunk_size=1000, max_workers=5, update=True)
+cmd = Command()
+cmd.handle("patients", s3_file="patients_diff_oct_update.csv", chunk_size=1000, max_workers=5, update=True)
