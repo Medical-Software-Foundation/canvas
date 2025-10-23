@@ -1,5 +1,15 @@
+#!/usr/bin/env uv run
+
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "bs4",
+#     "html2text",
+#     "requests",
+# ]
+# ///
+
 import html2text
-import os
 import requests
 import time
 
@@ -80,42 +90,44 @@ context_urls = [
     "https://docs.canvasmedical.com/guides/tailoring-the-chart-to-the-patient/",
     "https://docs.canvasmedical.com/guides/growth-charts/",
     "https://docs.canvasmedical.com/guides/your-first-application/",
-    "https://docs.canvasmedical.com/guides/profile-additional-fields/"
+    "https://docs.canvasmedical.com/guides/profile-additional-fields/",
 ]
 
-output_file = f'coding_agent_context.txt'
+output_file = "coding_agent_context.txt"
 
 t0 = int(time.time())
-print(f'Starting at {t0}, writing to {output_file}')
+print(f"Starting at {t0}, writing to {output_file}")
 
 n = 0
 t = len(context_urls)
 failed_urls = []
-with open(output_file, 'w') as f:
+with open(output_file, "w") as f:
     for url in context_urls:
         n += 1
-        print(f'{time.time()-t0:.2f}s: on url {n} of {t} {url}... ', end="")
+        print(f"{time.time() - t0:.2f}s: on url {n} of {t} {url}... ", end="")
         resp = requests.get(url)
         if resp.status_code != 200:
-            message = f'{resp.status_code} on {url}'
+            message = f"{resp.status_code} on {url}"
             print(message)
             failed_urls.append(message)
             continue
 
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        content_div = soup.find('div', class_='pagelayout__centerdocs__content')
-        inner_html = content_div.decode_contents() if content_div else ''
+        soup = BeautifulSoup(resp.text, "html.parser")
+        content_div = soup.find("div", class_="pagelayout__centerdocs__content")
+        inner_html = content_div.decode_contents() if content_div else ""
         markdown = html2text.html2text(inner_html)
-        dense_markdown = '\n'.join([line for line in markdown.splitlines() if line.strip() != ''])
-        
-        f.write(f'----- BEGIN PAGE {url}\n')
+        dense_markdown = "\n".join(
+            [line for line in markdown.splitlines() if line.strip() != ""]
+        )
+
+        f.write(f"----- BEGIN PAGE {url}\n")
         f.write(dense_markdown)
-        f.write(f'\n----- END PAGE {url}\n\n\n')
-        
-        print(f'wrote {len(markdown.splitlines())} lines.')
+        f.write(f"\n----- END PAGE {url}\n\n\n")
+
+        print(f"wrote {len(markdown.splitlines())} lines.")
 
     print(f"Output is located at {f.name}")
 
 if failed_urls:
-    print('You need to update these urls in your list:')
-    print('\n'.join(failed_urls))
+    print("You need to update these urls in your list:")
+    print("\n".join(failed_urls))
