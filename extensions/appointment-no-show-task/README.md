@@ -2,7 +2,7 @@
 
 ## Description
 
-This plugin automatically creates a task for the admin team when a provider marks an appointment as "no show". The task reminds the admin team to reach out to the patient and reschedule the appointment.
+This plugin automatically creates a task when a user marks an appointment as "no show". The task reminds the team to reach out to the patient and reschedule the appointment.
 
 ## How It Works
 
@@ -10,14 +10,9 @@ This plugin automatically creates a task for the admin team when a provider mark
 2. The plugin automatically creates a task with:
    - Title: "Reschedule no-show appointment for [Patient Name]"
    - Assignment: Team specified in plugin secrets
-   - Labels: "no-show", "reschedule"
+   - Labels: Labels specified in plugin secrets
    - Patient context: Linked to the patient who no-showed
 
-## Installation
-
-1. Copy this plugin directory to your Canvas plugins folder
-2. Configure the plugin secrets (see Configuration section below)
-3. Install the plugin through the Canvas admin interface
 
 ## Configuration
 
@@ -76,10 +71,6 @@ For further customization beyond what secrets provide, you can modify the protoc
   )
   ```
 
-## Requirements
-
-- Canvas SDK version 0.1.4 or higher
-- Python 3.11+
 
 ## Important Note
 
