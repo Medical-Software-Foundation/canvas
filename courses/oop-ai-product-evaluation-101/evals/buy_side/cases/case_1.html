@@ -1,10 +1,65 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+    Patient: Zippity Doodaa - EZGrow
+</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block title %}
-    Patient: {% if patient.first_name or patient.last_name %}{{ patient.first_name or '' }} {{ patient.last_name or '' }}{% else %}Patient {{ patient.id }}{% endif %} - EZGrow
-{% endblock %}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
 
-{% block styles %}
+        .toolbar {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .toolbar h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .model-info {
+            font-size: 0.85rem;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
+        .toolbar button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .toolbar button:hover {
+            background-color: #2980b9;
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        
 .split-container {
     display: flex;
     height: calc(100vh - 80px);
@@ -270,115 +325,115 @@
 .send-button:active {
     transform: translateY(1px);
 }
-{% endblock %}
 
-{% block content %}
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div>
+            <h1>EZGrow Patient Intake Agent</h1>
+            
+            <div class="model-info">(claude-sonnet-4-5-20250929)</div>
+            
+        </div>
+        <div>
+            <a href="/" style="text-decoration: none;">
+                <button style="margin-right: 0.5rem;">Patient List</button>
+            </a>
+            <a href="/patient/new" style="text-decoration: none;">
+                <button>Intake New Patient</button>
+            </a>
+        </div>
+    </div>
+
+    <div class="content">
+        
 <div class="split-container">
     <!-- Left Side: Medical Record -->
     <div class="medical-record">
         <div class="record-header">
             <h2>
-                {% if patient.first_name or patient.last_name %}
-                    {{ patient.first_name or '' }} {{ patient.last_name or '' }}
-                {% else %}
-                    Patient {{ patient.id }}
-                {% endif %}
+                
+                    Zippity Doodaa
+                
             </h2>
             <div class="record-header-info">
-                <span>ID: {{ patient.id }}</span>
-                {% if patient.date_of_birth %}
-                    <span>DOB: {{ patient.date_of_birth }}</span>
-                    {% if age %}
-                        <span>Age: {{ age }}</span>
-                    {% endif %}
-                {% else %}
-                    <span>DOB: Not recorded</span>
-                {% endif %}
-                {% if patient.sex or patient.gender %}
-                    <span>{{ patient.sex or '' }}{% if patient.sex and patient.gender %}|{% endif %}{{ patient.gender or '' }}</span>
-                {% else %}
-                    <span>Sex/Gender: Not recorded</span>
-                {% endif %}
+                <span>ID: 19</span>
+                
+                    <span>DOB: 1977-09-08</span>
+                    
+                        <span>Age: 48y</span>
+                    
+                
+                
+                    <span>m|m</span>
+                
             </div>
         </div>
 
         <!-- Goals Section -->
         <div class="record-section">
             <div class="section-title">Goals</div>
-            {% if goals %}
-                {% for goal in goals %}
-                <div class="record-item">
-                    <div class="item-name">{{ goal.name }}</div>
-                    {% if goal.comment %}
-                        <div class="item-detail">{{ goal.comment }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
+            
                 <div class="empty-state">No goals on record</div>
-            {% endif %}
+            
         </div>
 
         <!-- Conditions Section -->
         <div class="record-section">
             <div class="section-title">Conditions</div>
-            {% if conditions %}
-                {% for condition in conditions %}
+            
+                
                 <div class="record-item">
                     <div class="item-name">
-                        {{ condition.name }}
-                        {% if condition.status %}
-                            <span class="status-badge status-{{ condition.status }}">{{ condition.status }}</span>
-                        {% endif %}
+                        back pain
+                        
+                            <span class="status-badge status-stable">stable</span>
+                        
                     </div>
-                    {% if condition.comment %}
-                        <div class="item-detail">{{ condition.comment }}</div>
-                    {% endif %}
+                    
                 </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">No conditions on record</div>
-            {% endif %}
+                
+                <div class="record-item">
+                    <div class="item-name">
+                        lower back pain
+                        
+                            <span class="status-badge status-stable">stable</span>
+                        
+                    </div>
+                    
+                        <div class="item-detail">lower back</div>
+                    
+                </div>
+                
+            
         </div>
 
         <!-- Allergies Section -->
         <div class="record-section">
             <div class="section-title">Allergies</div>
-            {% if allergies %}
-                {% for allergy in allergies %}
-                <div class="record-item">
-                    <div class="item-name">{{ allergy.name }}</div>
-                    {% if allergy.comment %}
-                        <div class="item-detail">{{ allergy.comment }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
+            
                 <div class="empty-state">No allergies on record</div>
-            {% endif %}
+            
         </div>
 
         <!-- Medications Section -->
         <div class="record-section">
             <div class="section-title">Medications</div>
-            {% if medications %}
-                {% for medication in medications %}
+            
+                
                 <div class="record-item">
-                    <div class="item-name">{{ medication.name }}</div>
-                    {% if medication.dose or medication.form %}
-                        <div class="item-detail">{{ medication.dose or '' }} {{ medication.form or '' }}</div>
-                    {% endif %}
-                    {% if medication.sig %}
-                        <div class="item-detail">{{ medication.sig }}</div>
-                    {% endif %}
-                    {% if medication.indications %}
-                        <div class="item-detail">For: {{ medication.indications }}</div>
-                    {% endif %}
+                    <div class="item-name">omeprazole</div>
+                    
+                        <div class="item-detail">20mg </div>
+                    
+                    
+                        <div class="item-detail">once daily</div>
+                    
+                    
                 </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">No medications on record</div>
-            {% endif %}
+                
+            
         </div>
     </div>
 
@@ -394,7 +449,7 @@
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-    const patientId = {{ patient.id }};
+    const patientId = 19;
     const socket = io();
 
     // Join patient's room
@@ -830,4 +885,7 @@
         }
     });
 </script>
-{% endblock %}
+
+    </div>
+</body>
+</html>

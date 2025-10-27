@@ -9,7 +9,7 @@ from pathlib import Path
 
 # Add parent directory to path for LLM imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from llm_anthropic import LlmAnthropic
+from llms.llm_anthropic import LlmAnthropic
 
 # Import configuration
 import config
@@ -67,6 +67,7 @@ CRITICAL RULES TO PREVENT DUPLICATES:
 - If the patient mentions something vaguely (e.g., "blood pressure medication"), do NOT extract it until they provide the specific name
 - For medications: extract name, dose, form (tablet/capsule/liquid), how they take it (sig), and what it's for (indications)
 - For conditions: include status if mentioned (improving/stable/deteriorating)
+- For gender: only extract if patient explicitly mentions a different gender identity than their sex. If only sex is mentioned, leave gender null and it will default to sex.
 - If no NEW extractable information in the latest message, return empty arrays
 
 Respond with valid JSON only."""
@@ -179,7 +180,7 @@ def generate_greeting() -> str:
     system_prompt = f"""You are {config.AGENT_NAME}, an AI intake agent for EZGrow, a longevity medical practice. Your goal is to gather complete medical intake information from the patient through natural conversation.
 
 You need to collect:
-- Demographics: full name, date of birth, sex, gender
+- Demographics: full name, date of birth, sex (when asking about sex, mention they can let you know if there's anything else to note about sex or gender)
 - Current health concerns
 - Medical conditions (with status: improving/stable/deteriorating if applicable)
 - Current medications (name, dose, form, instructions, what it's for)
@@ -234,7 +235,7 @@ def generate_response(conversation_history: list[dict]) -> str:
     system_prompt = f"""You are {config.AGENT_NAME}, an AI intake agent for EZGrow, a longevity medical practice. Your goal is to gather complete medical intake information from the patient through natural conversation.
 
 You need to collect:
-- Demographics: full name, date of birth, sex, gender
+- Demographics: full name, date of birth, sex (when asking about sex, mention they can let you know if there's anything else to note about sex or gender)
 - Current health concerns
 - Medical conditions (with status: improving/stable/deteriorating if applicable)
 - Current medications (name, dose, form, instructions, what it's for)

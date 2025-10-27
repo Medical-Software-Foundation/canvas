@@ -119,6 +119,18 @@ def update_patient(patient_id: int, **kwargs):
     if not updates:
         return
 
+    # If sex is updated but gender is not provided, default gender to sex
+    if 'sex' in updates and 'gender' not in kwargs:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT gender FROM patient WHERE id = ?", (patient_id,))
+        current = cursor.fetchone()
+        conn.close()
+
+        # Only set gender to sex if gender is currently null
+        if current and not current['gender']:
+            updates['gender'] = updates['sex']
+
     set_clause = ", ".join([f"{field} = ?" for field in updates.keys()])
     values = list(updates.values()) + [patient_id]
 

@@ -6,7 +6,7 @@ Configuration settings for the EZGrow Patient Intake Agent.
 MODEL = 'claude-sonnet-4-5-20250929'
 
 # Agent identity
-AGENT_NAME = 'Mr. Krishnan'
+AGENT_NAME = 'thinkboi'
 
 # Verbosity definitions (used internally)
 VERBOSITY = 1
@@ -19,7 +19,7 @@ VERBOSITY_MAP = {
 }
 
 # Personality definitions (used internally)
-PERSONALITY = 'professional'
+PERSONALITY = 'meme_lord'
 PERSONALITIES = {
     'professional': {
         'description': 'Formal, clinical, and businesslike',

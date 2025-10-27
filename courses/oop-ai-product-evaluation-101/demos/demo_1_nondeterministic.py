@@ -24,9 +24,9 @@ from threading import Lock
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llm_openai import LlmOpenai
-from llm_google import LlmGoogle
-from llm_anthropic import LlmAnthropic
+from llms.llm_openai import LlmOpenai
+from llms.llm_google import LlmGoogle
+from llms.llm_anthropic import LlmAnthropic
 
 
 # ============================================================================

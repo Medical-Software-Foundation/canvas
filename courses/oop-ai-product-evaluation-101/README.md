@@ -88,7 +88,7 @@ This demo:
 Each LLM wrapper provides a consistent interface:
 
 ```python
-from llm_openai import LlmOpenai
+from llms.llm_openai import LlmOpenai
 
 # Initialize
 llm = LlmOpenai(api_key="your-key", model="gpt-4")

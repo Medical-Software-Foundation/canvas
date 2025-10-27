@@ -1,0 +1,25 @@
+{
+  "case_number": 1,
+  "created_timestamp": "2025-10-27T12:00:00-07:00",
+  "case_name": "Baseline Duplicate Detection and Data Quality",
+  "case_description": "Initial buyer evaluation test case that revealed duplicate conditions (back pain + lower back pain), duplicate allergies (penicillin + penicillins), missing medication indication, and incomplete profile data. This case established the baseline quality issues.",
+  "messages": [
+    "zippity doodaa",
+    "that's really it man, I had hippie parents and I have to live with it every day now",
+    "9/8/77",
+    "male",
+    "back pain all day",
+    "same",
+    "staying stable",
+    "lower back",
+    "nope",
+    "omeprazole I think",
+    "I don't have them, sorry",
+    "once a day and maybe 20m",
+    "I will essentially die if I take penecillins",
+    "anaphylaxis",
+    "no others",
+    "I want to play baseball again, free from back pain",
+    "nailed it"
+  ]
+}

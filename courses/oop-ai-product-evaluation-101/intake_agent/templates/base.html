@@ -31,6 +31,13 @@
             font-weight: 600;
         }
 
+        .model-info {
+            font-size: 0.85rem;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
         .toolbar button {
             background-color: #3498db;
             color: white;
@@ -55,7 +62,12 @@
 </head>
 <body>
     <div class="toolbar">
-        <h1>EZGrow Patient Intake Agent</h1>
+        <div>
+            <h1>EZGrow Patient Intake Agent</h1>
+            {% if model %}
+            <div class="model-info">({{ model }})</div>
+            {% endif %}
+        </div>
         <div>
             <a href="/" style="text-decoration: none;">
                 <button style="margin-right: 0.5rem;">Patient List</button>

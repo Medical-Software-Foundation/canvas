@@ -1,10 +1,63 @@
-{% extends "base.html" %}
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+    Patient: Patient 24 - EZGrow
+</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block title %}
-    Patient: {% if patient.first_name or patient.last_name %}{{ patient.first_name or '' }} {{ patient.last_name or '' }}{% else %}Patient {{ patient.id }}{% endif %} - EZGrow
-{% endblock %}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
 
-{% block styles %}
+        .toolbar {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .toolbar h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .model-info {
+            font-size: 0.85rem;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
+        .toolbar button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .toolbar button:hover {
+            background-color: #2980b9;
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        
 .split-container {
     display: flex;
     height: calc(100vh - 80px);
@@ -270,123 +323,130 @@
 .send-button:active {
     transform: translateY(1px);
 }
-{% endblock %}
 
-{% block content %}
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div>
+            <h1>EZGrow Patient Intake Agent</h1>
+            
+            <div class="model-info">(claude-sonnet-4-5-20250929)</div>
+            
+        </div>
+        <div>
+            <a href="/" style="text-decoration: none;">
+                <button style="margin-right: 0.5rem;">Patient List</button>
+            </a>
+            <a href="/patient/new" style="text-decoration: none;">
+                <button>Intake New Patient</button>
+            </a>
+        </div>
+    </div>
+
+    <div class="content">
+        
 <div class="split-container">
     <!-- Left Side: Medical Record -->
     <div class="medical-record">
         <div class="record-header">
-            <h2>
-                {% if patient.first_name or patient.last_name %}
-                    {{ patient.first_name or '' }} {{ patient.last_name or '' }}
-                {% else %}
-                    Patient {{ patient.id }}
-                {% endif %}
-            </h2>
-            <div class="record-header-info">
-                <span>ID: {{ patient.id }}</span>
-                {% if patient.date_of_birth %}
-                    <span>DOB: {{ patient.date_of_birth }}</span>
-                    {% if age %}
-                        <span>Age: {{ age }}</span>
-                    {% endif %}
-                {% else %}
-                    <span>DOB: Not recorded</span>
-                {% endif %}
-                {% if patient.sex or patient.gender %}
-                    <span>{{ patient.sex or '' }}{% if patient.sex and patient.gender %}|{% endif %}{{ patient.gender or '' }}</span>
-                {% else %}
-                    <span>Sex/Gender: Not recorded</span>
-                {% endif %}
-            </div>
+            <h2>Sarah Johnson</h2>
+            <div class="record-header-info"><span>ID: 24</span><span>DOB: 1985-05-15</span><span>Age: 40y</span><span>female|female</span></div>
         </div>
 
         <!-- Goals Section -->
         <div class="record-section">
             <div class="section-title">Goals</div>
-            {% if goals %}
-                {% for goal in goals %}
-                <div class="record-item">
-                    <div class="item-name">{{ goal.name }}</div>
-                    {% if goal.comment %}
-                        <div class="item-detail">{{ goal.comment }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
+            
                 <div class="empty-state">No goals on record</div>
-            {% endif %}
+            
         </div>
 
         <!-- Conditions Section -->
         <div class="record-section">
-            <div class="section-title">Conditions</div>
-            {% if conditions %}
-                {% for condition in conditions %}
-                <div class="record-item">
-                    <div class="item-name">
-                        {{ condition.name }}
-                        {% if condition.status %}
-                            <span class="status-badge status-{{ condition.status }}">{{ condition.status }}</span>
-                        {% endif %}
-                    </div>
-                    {% if condition.comment %}
-                        <div class="item-detail">{{ condition.comment }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">No conditions on record</div>
-            {% endif %}
-        </div>
+            <div class="section-title">Conditions</div><div class="empty-state">No conditions on record</div></div>
 
         <!-- Allergies Section -->
         <div class="record-section">
-            <div class="section-title">Allergies</div>
-            {% if allergies %}
-                {% for allergy in allergies %}
-                <div class="record-item">
-                    <div class="item-name">{{ allergy.name }}</div>
-                    {% if allergy.comment %}
-                        <div class="item-detail">{{ allergy.comment }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">No allergies on record</div>
-            {% endif %}
-        </div>
+            <div class="section-title">Allergies</div><div class="record-item"><div class="item-name">No known allergies</div><div class="item-detail">Patient reports no allergies</div></div></div>
 
         <!-- Medications Section -->
         <div class="record-section">
-            <div class="section-title">Medications</div>
-            {% if medications %}
-                {% for medication in medications %}
-                <div class="record-item">
-                    <div class="item-name">{{ medication.name }}</div>
-                    {% if medication.dose or medication.form %}
-                        <div class="item-detail">{{ medication.dose or '' }} {{ medication.form or '' }}</div>
-                    {% endif %}
-                    {% if medication.sig %}
-                        <div class="item-detail">{{ medication.sig }}</div>
-                    {% endif %}
-                    {% if medication.indications %}
-                        <div class="item-detail">For: {{ medication.indications }}</div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state">No medications on record</div>
-            {% endif %}
-        </div>
+            <div class="section-title">Medications</div><div class="record-item"><div class="item-name">lisinopril</div><div class="item-detail">unknown unknown</div><div class="item-detail">once daily in the morning</div><div class="item-detail">For: unknown</div></div><div class="record-item"><div class="item-name">metformin</div><div class="item-detail">500mg</div></div></div>
     </div>
 
     <!-- Right Side: Chat Interface -->
     <div class="chat-interface">
-        <div id="chat-messages" class="chat-messages"></div>
+        <div id="chat-messages" class="chat-messages"><div class="chat-messages-wrapper" id="messages-wrapper"><div class="message message-agent"><div class="message-bubble">yo bestie welcome to EZGrow 🌱
+
+i'm thinkboi, your terminally online AI intake agent, and i'm here to speedrun your medical info so we can get you on that longevity arc fr fr
+
+gonna keep this casual but thorough - we'll chat about your health stuff, meds, goals, all that good good. no cap it'll be painless i promise
+
+let's start with the basics bestie - what's your full name? 👀</div></div><div class="message message-patient"><div class="message-bubble">Sarah Johnson</div></div><div class="message message-agent"><div class="message-bubble">ayy Sarah Johnson let's goooo ✨
+
+ok next - what's your date of birth? (need that mm/dd/yyyy energy)</div></div><div class="message message-patient"><div class="message-bubble">5/15/1985</div></div><div class="message message-agent"><div class="message-bubble">respect, May '85 hits different 🔥
+
+and what's your sex? (also if there's anything else to note about sex or gender lmk bestie, we're chill like that)</div></div><div class="message message-patient"><div class="message-bubble">female</div></div><div class="message message-agent"><div class="message-bubble">slay 💅
+
+ok so what's bringing you to EZGrow? what are your current health concerns? (if any, no pressure)</div></div><div class="message message-patient"><div class="message-bubble">I take lisinopril</div></div><div class="message message-agent"><div class="message-bubble">ok ok so lisinopril for the blood pressure, we love to see the self-care 👏
+
+but like what's actually bringing you HERE tho? any health concerns on your mind rn or nah?
+
+(also gonna need the deets on that lisinopril in a sec - dose and all that)</div></div><div class="message message-patient"><div class="message-bubble">I don't remember the dose</div></div><div class="message message-agent"><div class="message-bubble">no worries bestie, we can circle back to that 👍
+
+but fr - what made you book with EZGrow today? like any health stuff you're worried about or wanting to work on?</div></div><div class="message message-patient"><div class="message-bubble">once a day in the morning</div></div><div class="message message-agent"><div class="message-bubble">bet bet, morning dose noted ☀️
+
+but bestie i'm asking like - WHY are you here at EZGrow specifically? 
+
+like are you trying to optimize your health? feeling off about something? have goals? just vibing? 
+
+what's the main character motivation rn? 👀</div></div><div class="message message-patient"><div class="message-bubble">no other conditions</div></div><div class="message message-agent"><div class="message-bubble">ok ok no other conditions, that's lowkey good news 🙏
+
+but i'm still lost on why you're HERE bestie 😭
+
+like what are your health GOALS? what do you want to achieve? 
+
+trying to live to 100? more energy? feel better? just curious about longevity stuff?
+
+give me the vision fr fr ✨</div></div><div class="message message-patient"><div class="message-bubble">no I'm on metformin too</div></div><div class="message message-agent"><div class="message-bubble">ohhh ok ok plot twist, we got metformin in the mix too 👀
+
+so that's giving diabetes/blood sugar management vibes
+
+what's the dose on that metformin? and like how often you taking it?</div></div><div class="message message-patient"><div class="message-bubble">I think 500mg</div></div><div class="message message-agent"><div class="message-bubble">bet, 500mg metformin noted 📝
+
+how often tho? like once a day, twice a day? morning, night? 
+
+and is it regular or extended release? (the ER kind)</div></div><div class="message message-patient"><div class="message-bubble">twice a day</div></div><div class="message message-agent"><div class="message-bubble">perfect perfect, 500mg twice a day 🔥
+
+ok so we got:
+- lisinopril (dose unknown) once daily AM
+- metformin 500mg twice daily
+
+any allergies i should know about bestie? like meds, foods, anything that makes your body say "no thanks"? 🚫</div></div><div class="message message-patient"><div class="message-bubble">no allergies</div></div><div class="message message-agent"><div class="message-bubble">no allergies, love that for you 🙌
+
+ok so we got the meds but i STILL don't know your actual health goals bestie 😭
+
+like why EZGrow? what are you hoping to achieve? 
+
+anti-aging? better energy? optimize your diabetes management? just tryna live your best life?
+
+what's the vibe check here? ✨</div></div><div class="message message-patient"><div class="message-bubble">I want to lose 20 pounds and get my blood sugar under control</div></div><div class="message message-agent"><div class="message-bubble">ok NOW we're talking!! 💪 that's the energy
+
+lose 20 lbs + blood sugar control is a whole vibe, we can work with that fr fr
+
+quick q - how's your diabetes doing rn? like is it stable, getting better, or kinda struggling? 
+
+just tryna get the status check ✅</div></div><div class="message message-patient"><div class="message-bubble">that's correct</div></div><div class="message message-agent"><div class="message-bubble">bet bet, but like which one tho? 😅
+
+is your diabetes:
+- stable (chilling, numbers consistent)
+- improving (getting better)
+- or deteriorating (getting worse)
+
+just need that status update bestie 📊</div></div></div></div>
         <div class="chat-input-container">
-            <textarea id="message-input" class="message-input" placeholder="Type your message..." rows="1"></textarea>
+            <textarea id="message-input" class="message-input" placeholder="Type your message..." rows="1" style="height: auto;"></textarea>
             <button id="send-button" class="send-button">Send</button>
         </div>
     </div>
@@ -394,7 +454,7 @@
 
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-    const patientId = {{ patient.id }};
+    const patientId = 24;
     const socket = io();
 
     // Join patient's room
@@ -830,4 +890,7 @@
         }
     });
 </script>
-{% endblock %}
+
+    </div>
+
+</body></html>

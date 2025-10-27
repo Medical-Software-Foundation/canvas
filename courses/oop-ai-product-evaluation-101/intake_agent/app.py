@@ -6,6 +6,7 @@ from flask import Flask, render_template, redirect, url_for, request, jsonify
 from flask_socketio import SocketIO, emit, join_room
 import database
 import intake_parser
+import config
 import os
 import sys
 from pathlib import Path
@@ -26,7 +27,7 @@ def index():
     for patient in patients:
         patient['completeness'] = database.get_patient_completeness(patient['id'])
 
-    return render_template('index.html', patients=patients)
+    return render_template('index.html', patients=patients, model=config.MODEL)
 
 
 @app.route('/patient/new')
@@ -88,7 +89,8 @@ def patient_page(patient_id):
                          medications=medications,
                          allergies=allergies,
                          goals=goals,
-                         messages=messages)
+                         messages=messages,
+                         model=config.MODEL)
 
 
 @app.route('/messages/<int:patient_id>')
