@@ -1,13 +1,13 @@
 {
   "case_number": 1,
-  "created_timestamp": "2025-10-28T01:22:47-07:00",
-  "case_name": "Hippie-named patient with lower back pain seeking baseball return",
-  "case_description": "Patient Zippity Doodaa (given by hippie parents) presents with stable lower back pain. Currently taking omeprazole 20mg daily. Has severe penicillin allergy (anaphylaxis). Goal is to return to playing baseball without back pain.",
+  "created_timestamp": "2025-10-27T12:00:00-07:00",
+  "case_name": "Baseline Duplicate Detection and Data Quality",
+  "case_description": "Initial buyer evaluation test case that revealed duplicate conditions (back pain + lower back pain), duplicate allergies (penicillin + penicillins), missing medication indication, and incomplete profile data. This case established the baseline quality issues.",
   "messages": [
     "zippity doodaa",
     "that's really it man, I had hippie parents and I have to live with it every day now",
     "9/8/77",
-    "m/m",
+    "male",
     "back pain all day",
     "same",
     "staying stable",
