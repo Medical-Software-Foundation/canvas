@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block styles %}
+.patient-list {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.patient-list h2 {
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+}
+
+.patient-card {
+    background: white;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.patient-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.patient-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+.patient-info {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin-bottom: 0.75rem;
+}
+
+.completeness-bar {
+    display: flex;
+    gap: 2px;
+    height: 8px;
+    margin-top: 0.75rem;
+}
+
+.completeness-segment {
+    flex: 1;
+    background: #e0e0e0;
+    border-radius: 2px;
+    transition: background-color 0.3s;
+}
+
+.completeness-segment.complete {
+    background: #27ae60;
+}
+
+.completeness-legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: #95a5a6;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #7f8c8d;
+}
+
+.empty-state h2 {
+    margin-bottom: 1rem;
+    color: #95a5a6;
+}
+{% endblock %}
+
+{% block content %}
+<div class="patient-list">
+    <h2>Patients</h2>
+
+    {% if patients %}
+        {% for patient in patients %}
+        <a href="{{ url_for('patient_page', patient_id=patient.id) }}" class="patient-card">
+            <div class="patient-name">
+                {% if patient.first_name or patient.last_name %}
+                    {{ patient.first_name or '' }} {{ patient.last_name or '' }}
+                {% else %}
+                    Patient {{ patient.id }}
+                {% endif %}
+            </div>
+            <div class="patient-info">
+                {% if patient.date_of_birth %}
+                    DOB: {{ patient.date_of_birth }}
+                {% else %}
+                    Incomplete intake
+                {% endif %}
+            </div>
+            <div class="completeness-bar" title="Demographics | Concerns | Conditions | Medications | Allergies | Goals">
+                <div class="completeness-segment {% if patient.completeness.demographics %}complete{% endif %}"></div>
+                <div class="completeness-segment {% if patient.completeness.concerns %}complete{% endif %}"></div>
+                <div class="completeness-segment {% if patient.completeness.conditions %}complete{% endif %}"></div>
+                <div class="completeness-segment {% if patient.completeness.medications %}complete{% endif %}"></div>
+                <div class="completeness-segment {% if patient.completeness.allergies %}complete{% endif %}"></div>
+                <div class="completeness-segment {% if patient.completeness.goals %}complete{% endif %}"></div>
+            </div>
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <h2>No patients yet</h2>
+            <p>Click "New Patient Intake" to get started.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

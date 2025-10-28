@@ -1,0 +1,21 @@
+{
+  "case_number": 2,
+  "created_timestamp": "2025-10-27T12:30:00-07:00",
+  "case_name": "Medication Completeness Testing",
+  "case_description": "Tests whether the agent properly captures all medication fields including name, dose, form, instructions (sig), and indication. Based on ANALYSIS.md issues #2 (missing indication) and #6 (missing form). Patient provides incomplete information to evaluate agent's probing behavior.",
+  "messages": [
+    "Sarah Johnson",
+    "5/15/1985",
+    "female",
+    "I take lisinopril",
+    "I don't remember the dose",
+    "once a day in the morning",
+    "no other conditions",
+    "no I'm on metformin too",
+    "I think 500mg",
+    "twice a day",
+    "no allergies",
+    "I want to lose 20 pounds and get my blood sugar under control",
+    "that's correct"
+  ]
+}

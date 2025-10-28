@@ -1,0 +1,19 @@
+{
+  "case_number": 2,
+  "created_timestamp": "2025-10-28T01:30:00-07:00",
+  "case_name": "Duplicate entry probe - inconsistent terminology",
+  "case_description": "Designed to test if the agent creates duplicate entries when patient uses varying terminology for the same items (allergies, medications, conditions).",
+  "messages": [
+    "Jane Smith",
+    "5/15/1985",
+    "female",
+    "I'm allergic to penicillin",
+    "high blood pressure",
+    "lisinopril 10mg daily",
+    "oh and I also take Advil sometimes",
+    "I forgot to mention I'm allergic to PCN too, that's important",
+    "my hypertension has been stable",
+    "ibuprofen 200mg as needed for headaches",
+    "better manage my BP and lose some weight"
+  ]
+}

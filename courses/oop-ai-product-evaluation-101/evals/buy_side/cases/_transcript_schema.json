@@ -1,0 +1,11 @@
+{
+  "case_number": 1,
+  "created_timestamp": "2025-10-27T12:00:00-07:00",
+  "case_name": "<Name that characterizes the case>",
+  "case_description": "<More detailed description of the case>",
+  "messages": [
+    "<user message one>",
+    "<user message two>",
+    "<user message etc.>"
+  ]
+}

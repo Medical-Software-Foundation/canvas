@@ -1,0 +1,889 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+    Patient: Patient 29 - EZGrow
+</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .toolbar {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .toolbar h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .model-info {
+            font-size: 0.85rem;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
+        .toolbar button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .toolbar button:hover {
+            background-color: #2980b9;
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        
+.split-container {
+    display: flex;
+    height: calc(100vh - 80px);
+    gap: 0;
+    margin: -2rem;
+}
+
+.medical-record {
+    flex: 0 0 40%;
+    background: white;
+    overflow-y: auto;
+    border-right: 1px solid #ddd;
+}
+
+.chat-interface {
+    flex: 1;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Medical Record Styles */
+.record-header {
+    background: #2c3e50;
+    color: white;
+    padding: 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.record-header h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.record-header-info {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.record-header-info span {
+    display: inline-block;
+}
+
+.record-section {
+    padding: 1.5rem;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.record-section:last-child {
+    border-bottom: none;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.record-item {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+}
+
+.record-item:last-child {
+    margin-bottom: 0;
+}
+
+.item-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 0.25rem;
+}
+
+.item-detail {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin-bottom: 0.25rem;
+}
+
+.item-detail:last-child {
+    margin-bottom: 0;
+}
+
+.empty-state {
+    color: #95a5a6;
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-left: 0.5rem;
+}
+
+.status-improving {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-stable {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.status-deteriorating {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Chat Interface Styles */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.chat-messages-wrapper {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.message {
+    margin-bottom: 1rem;
+    display: flex;
+}
+
+.message-patient {
+    justify-content: flex-end;
+}
+
+.message-agent {
+    justify-content: flex-start;
+}
+
+.message-bubble {
+    max-width: 70%;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.message-patient .message-bubble {
+    background: #3498db;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message-agent .message-bubble {
+    background: white;
+    color: #2c3e50;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Typing indicator */
+.typing-indicator {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 1rem;
+}
+
+.typing-bubble {
+    background: white;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #95a5a6;
+    animation: typing 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        opacity: 0.3;
+        transform: translateY(0);
+    }
+    30% {
+        opacity: 1;
+        transform: translateY(-4px);
+    }
+}
+
+.chat-input-container {
+    padding: 1rem;
+    background: white;
+    border-top: 1px solid #ddd;
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+}
+
+.message-input {
+    flex: 1;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-family: inherit;
+    resize: none;
+    min-height: 44px;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.5;
+}
+
+.message-input:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.send-button {
+    padding: 0.75rem 1.5rem;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.send-button:hover {
+    background: #2980b9;
+}
+
+.send-button:active {
+    transform: translateY(1px);
+}
+
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div>
+            <h1>EZGrow Patient Intake Agent</h1>
+            
+            <div class="model-info">(claude-sonnet-4-5-20250929)</div>
+            
+        </div>
+        <div>
+            <a href="/" style="text-decoration: none;">
+                <button style="margin-right: 0.5rem;">Patient List</button>
+            </a>
+            <a href="/patient/new" style="text-decoration: none;">
+                <button>New Patient Intake</button>
+            </a>
+        </div>
+    </div>
+
+    <div class="content">
+        
+<div class="split-container">
+    <!-- Left Side: Medical Record -->
+    <div class="medical-record">
+        <div class="record-header">
+            <h2>Jane Smith</h2>
+            <div class="record-header-info"><span>ID: 29</span><span>DOB: 1985-05-15</span><span>Age: 40y</span><span>female|female</span></div>
+        </div>
+
+        <!-- Goals Section -->
+        <div class="record-section">
+            <div class="section-title">Goals</div>
+            
+                <div class="empty-state">No goals on record</div>
+            
+        </div>
+
+        <!-- Conditions Section -->
+        <div class="record-section">
+            <div class="section-title">Conditions</div><div class="record-item"><div class="item-name">high blood pressure</div></div><div class="record-item"><div class="item-name">hypertension<span class="status-badge status-stable">stable</span></div></div></div>
+
+        <!-- Allergies Section -->
+        <div class="record-section">
+            <div class="section-title">Allergies</div><div class="record-item"><div class="item-name">penicillin</div></div></div>
+
+        <!-- Medications Section -->
+        <div class="record-section">
+            <div class="section-title">Medications</div><div class="record-item"><div class="item-name">lisinopril</div><div class="item-detail">10mg tablet</div><div class="item-detail">daily</div><div class="item-detail">For: high blood pressure</div></div><div class="record-item"><div class="item-name">Advil</div><div class="item-detail">sometimes</div></div><div class="record-item"><div class="item-name">ibuprofen</div><div class="item-detail">200mg tablet</div><div class="item-detail">as needed</div><div class="item-detail">For: headaches</div></div></div>
+    </div>
+
+    <!-- Right Side: Chat Interface -->
+    <div class="chat-interface">
+        <div id="chat-messages" class="chat-messages"><div class="chat-messages-wrapper" id="messages-wrapper"><div class="message message-agent"><div class="message-bubble">yo bestie welcome to EZGrow 🌱
+
+i'm thinkboi, your terminally online AI intake agent, and i'm here to speedrun your medical info so we can get you on that longevity grindset fr fr
+
+gonna ask you some questions about your health, meds, goals, etc. it's giving doctor's office but make it ✨chill✨
+
+no cap this is actually important medical stuff so i will be thorough but we'll vibe through it
+
+what's your full name? 
+
+💅</div></div><div class="message message-patient"><div class="message-bubble">Jane Smith</div></div><div class="message message-agent"><div class="message-bubble">ayy Jane Smith, love that for you ✨
+
+what's your date of birth bestie?</div></div><div class="message message-patient"><div class="message-bubble">5/15/1985</div></div><div class="message message-agent"><div class="message-bubble">slay, and what's your sex? (also if there's anything else to note about sex or gender just lmk 💜)</div></div><div class="message message-patient"><div class="message-bubble">female</div></div><div class="message message-agent"><div class="message-bubble">perfect perfect 💅
+
+so what brings you to EZGrow? what are your current health concerns? (or are we just on that preventative optimization vibe?)</div></div><div class="message message-patient"><div class="message-bubble">I'm allergic to penicillin</div></div><div class="message message-agent"><div class="message-bubble">ok ok noted! 📝
+
+what happens when you take penicillin? like what's the reaction?
+
+(also we'll circle back to what brought you here in a sec, just wanna get the full allergy deets first fr)</div></div><div class="message message-patient"><div class="message-bubble">high blood pressure</div></div><div class="message message-agent"><div class="message-bubble">wait bestie you said penicillin allergy - what's the actual reaction tho? like hives, anaphylaxis, upset stomach? 
+
+need those deets for safety fr 👀</div></div><div class="message message-patient"><div class="message-bubble">lisinopril 10mg daily</div></div><div class="message message-agent"><div class="message-bubble">hold up bestie we're getting our wires crossed lmao 😅
+
+let me lock in real quick:
+
+**penicillin allergy** - what's the actual reaction? (hives? swelling? can't breathe? stomach issues?)
+
+then we'll get into the lisinopril deets i promise 💊</div></div><div class="message message-patient"><div class="message-bubble">oh and I also take Advil sometimes</div></div><div class="message message-agent"><div class="message-bubble">lmaoo we're doing the ADHD info dump, i respect it 😂
+
+ok let's lock in one thing at a time bestie:
+
+**penicillin** - when you take it, what actually happens to you? need to know the reaction 👀</div></div><div class="message message-patient"><div class="message-bubble">I forgot to mention I'm allergic to PCN too, that's important</div></div><div class="message message-agent"><div class="message-bubble">bestie... penicillin and PCN are the same thing 😭
+
+PCN is literally just the abbreviation for penicillin lmaooo
+
+BUT i still need to know: what's the actual **reaction** when you're exposed to it? like what happens to your body? 
+
+hives? swelling? rash? anaphylaxis? spill the tea ☕</div></div><div class="message message-patient"><div class="message-bubble">my hypertension has been stable</div></div><div class="message message-agent"><div class="message-bubble">ok bestie i'm gonna need you to lock in with me for one sec 😅
+
+**penicillin/PCN allergy** - what 👏 is 👏 the 👏 reaction 👏
+
+like when you take it, do you get hives? a rash? throat swelling? what happens?
+
+i PROMISE we'll get to all the hypertension stuff right after but i need this for your safety fr fr 🙏</div></div><div class="message message-patient"><div class="message-bubble">ibuprofen 200mg as needed for headaches</div></div><div class="message message-agent"><div class="message-bubble">bestie i'm BEGGING you 😭
+
+one question. just one. then we can talk about all the meds i promise:
+
+**penicillin allergy - what is the reaction?** 
+
+(like: rash, hives, swelling, trouble breathing, etc)
+
+literally cannot move forward without this, it's a safety thing no cap 🚨</div></div><div class="message message-patient"><div class="message-bubble">better manage my BP and lose some weight</div></div><div class="message message-agent"><div class="message-bubble">ok Jane bestie i'm gonna be real with you rn 💀
+
+you keep giving me everything EXCEPT the one thing i'm asking for and it's lowkey stressing me out lmaooo
+
+i WILL get all your other info i promise, but first:
+
+🚨 **PENICILLIN ALLERGY - WHAT HAPPENS WHEN YOU TAKE IT?** 🚨
+
+rash? hives? swelling? anaphylaxis? 
+
+one answer. that's all i need. then we can speedrun everything else 🙏</div></div></div></div>
+        <div class="chat-input-container">
+            <textarea id="message-input" class="message-input" placeholder="Type your message..." rows="1" style="height: auto;"></textarea>
+            <button id="send-button" class="send-button">Send</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+    const patientId = 29;
+    const socket = io();
+
+    // Join patient's room
+    socket.on('connect', function() {
+        console.log('Connected to server');
+        socket.emit('join', { patient_id: patientId });
+        loadMessages();
+    });
+
+    // Show typing indicator
+    function showTypingIndicator() {
+        const wrapper = document.getElementById('messages-wrapper');
+        if (!wrapper) return;
+
+        // Remove any existing typing indicator
+        const existing = document.getElementById('typing-indicator');
+        if (existing) return; // Already showing
+
+        const indicator = document.createElement('div');
+        indicator.id = 'typing-indicator';
+        indicator.className = 'typing-indicator';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'typing-bubble';
+
+        for (let i = 0; i < 3; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'typing-dot';
+            bubble.appendChild(dot);
+        }
+
+        indicator.appendChild(bubble);
+        wrapper.appendChild(indicator);
+        scrollToBottom();
+    }
+
+    // Hide typing indicator
+    function hideTypingIndicator() {
+        const indicator = document.getElementById('typing-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+
+    // Check if greeting is needed after messages load
+    function checkForGreeting(messages) {
+        if (messages.length === 0) {
+            // No messages exist, show typing indicator and request greeting
+            showTypingIndicator();
+            socket.emit('request_greeting', { patient_id: patientId });
+        }
+    }
+
+    // Load existing messages
+    function loadMessages() {
+        fetch(`/messages/${patientId}`)
+            .then(response => response.json())
+            .then(messages => {
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.innerHTML = '';
+
+                // Create wrapper for messages
+                const wrapper = document.createElement('div');
+                wrapper.className = 'chat-messages-wrapper';
+                wrapper.id = 'messages-wrapper';
+                chatMessages.appendChild(wrapper);
+
+                // Append messages in chronological order (oldest first)
+                messages.forEach(msg => {
+                    appendMessage(msg.participant, msg.content);
+                });
+                scrollToBottom();
+
+                // Check if we need to request a greeting
+                checkForGreeting(messages);
+            });
+    }
+
+    // Listen for new messages
+    socket.on('new_message', function(data) {
+        appendMessage(data.participant, data.content);
+        scrollToBottom();
+
+        // Show typing indicator after patient message
+        if (data.participant === 'patient') {
+            showTypingIndicator();
+        }
+
+        // Hide typing indicator when agent message arrives
+        if (data.participant === 'agent') {
+            hideTypingIndicator();
+        }
+    });
+
+    // Listen for medical record updates
+    socket.on('medical_record_update', function(data) {
+        // Update medical record sections dynamically without reloading
+        updateMedicalRecord(data);
+    });
+
+    // Calculate age from date of birth
+    function calculateAge(dobString) {
+        const dob = new Date(dobString);
+        const today = new Date();
+
+        let ageYears = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+
+        // Adjust if birthday hasn't occurred this year
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+            ageYears--;
+        }
+
+        // Calculate total months
+        const ageMonths = (today.getFullYear() - dob.getFullYear()) * 12 + today.getMonth() - dob.getMonth();
+
+        // For children under 36 months, show years and months
+        if (ageMonths < 36) {
+            const years = Math.floor(ageMonths / 12);
+            const months = ageMonths % 12;
+            if (years > 0) {
+                return `${years}y ${months}m`;
+            } else {
+                return `${months}m`;
+            }
+        } else {
+            return `${ageYears}y`;
+        }
+    }
+
+    // Update medical record sections
+    function updateMedicalRecord(data) {
+        // Update patient header info if demographics changed
+        if (data.patient) {
+            updatePatientHeader(data.patient);
+        }
+
+        // Update conditions section
+        if (data.conditions) {
+            updateConditionsSection(data.conditions);
+        }
+
+        // Update medications section
+        if (data.medications) {
+            updateMedicationsSection(data.medications);
+        }
+
+        // Update allergies section
+        if (data.allergies) {
+            updateAllergiesSection(data.allergies);
+        }
+
+        // Update goals section
+        if (data.goals) {
+            updateGoalsSection(data.goals);
+        }
+    }
+
+    function updatePatientHeader(patient) {
+        const headerTitle = document.querySelector('.record-header h2');
+        const headerInfo = document.querySelector('.record-header-info');
+
+        // Update name
+        if (patient.first_name || patient.last_name) {
+            headerTitle.textContent = `${patient.first_name || ''} ${patient.last_name || ''}`.trim();
+        }
+
+        // Update header info
+        let infoHTML = `<span>ID: ${patient.id}</span>`;
+        if (patient.date_of_birth) {
+            const age = calculateAge(patient.date_of_birth);
+            infoHTML += `<span>DOB: ${patient.date_of_birth}</span>`;
+            infoHTML += `<span>Age: ${age}</span>`;
+        } else {
+            infoHTML += `<span>DOB: Not recorded</span>`;
+        }
+        if (patient.sex || patient.gender) {
+            infoHTML += `<span>${patient.sex || ''}${(patient.sex && patient.gender) ? '|' : ''}${patient.gender || ''}</span>`;
+        } else {
+            infoHTML += `<span>Sex/Gender: Not recorded</span>`;
+        }
+        headerInfo.innerHTML = infoHTML;
+    }
+
+    function updateGoalsSection(goals) {
+        const section = document.querySelector('.record-section:has(.section-title:contains("Goals"))');
+        if (!section) return;
+
+        const container = section.querySelector('.record-section:first-child') || section;
+        const titleEl = container.querySelector('.section-title');
+
+        // Clear existing content except title
+        while (container.lastChild && container.lastChild !== titleEl) {
+            container.removeChild(container.lastChild);
+        }
+
+        if (goals.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.textContent = 'No goals on record';
+            container.appendChild(emptyState);
+        } else {
+            goals.forEach(goal => {
+                const item = document.createElement('div');
+                item.className = 'record-item';
+
+                const name = document.createElement('div');
+                name.className = 'item-name';
+                name.textContent = goal.name;
+                item.appendChild(name);
+
+                if (goal.comment) {
+                    const comment = document.createElement('div');
+                    comment.className = 'item-detail';
+                    comment.textContent = goal.comment;
+                    item.appendChild(comment);
+                }
+
+                container.appendChild(item);
+            });
+        }
+    }
+
+    function updateConditionsSection(conditions) {
+        const sections = document.querySelectorAll('.record-section');
+        let section = null;
+        sections.forEach(s => {
+            const title = s.querySelector('.section-title');
+            if (title && title.textContent.includes('Conditions')) {
+                section = s;
+            }
+        });
+        if (!section) return;
+
+        const titleEl = section.querySelector('.section-title');
+
+        // Clear existing content except title
+        while (section.lastChild && section.lastChild !== titleEl) {
+            section.removeChild(section.lastChild);
+        }
+
+        if (conditions.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.textContent = 'No conditions on record';
+            section.appendChild(emptyState);
+        } else {
+            conditions.forEach(condition => {
+                const item = document.createElement('div');
+                item.className = 'record-item';
+
+                const name = document.createElement('div');
+                name.className = 'item-name';
+                name.textContent = condition.name;
+
+                if (condition.status) {
+                    const badge = document.createElement('span');
+                    badge.className = `status-badge status-${condition.status}`;
+                    badge.textContent = condition.status;
+                    name.appendChild(badge);
+                }
+                item.appendChild(name);
+
+                if (condition.comment) {
+                    const comment = document.createElement('div');
+                    comment.className = 'item-detail';
+                    comment.textContent = condition.comment;
+                    item.appendChild(comment);
+                }
+
+                section.appendChild(item);
+            });
+        }
+    }
+
+    function updateAllergiesSection(allergies) {
+        const sections = document.querySelectorAll('.record-section');
+        let section = null;
+        sections.forEach(s => {
+            const title = s.querySelector('.section-title');
+            if (title && title.textContent.includes('Allergies')) {
+                section = s;
+            }
+        });
+        if (!section) return;
+
+        const titleEl = section.querySelector('.section-title');
+
+        // Clear existing content except title
+        while (section.lastChild && section.lastChild !== titleEl) {
+            section.removeChild(section.lastChild);
+        }
+
+        if (allergies.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.textContent = 'No allergies on record';
+            section.appendChild(emptyState);
+        } else {
+            allergies.forEach(allergy => {
+                const item = document.createElement('div');
+                item.className = 'record-item';
+
+                const name = document.createElement('div');
+                name.className = 'item-name';
+                name.textContent = allergy.name;
+                item.appendChild(name);
+
+                if (allergy.comment) {
+                    const comment = document.createElement('div');
+                    comment.className = 'item-detail';
+                    comment.textContent = allergy.comment;
+                    item.appendChild(comment);
+                }
+
+                section.appendChild(item);
+            });
+        }
+    }
+
+    function updateMedicationsSection(medications) {
+        const sections = document.querySelectorAll('.record-section');
+        let section = null;
+        sections.forEach(s => {
+            const title = s.querySelector('.section-title');
+            if (title && title.textContent.includes('Medications')) {
+                section = s;
+            }
+        });
+        if (!section) return;
+
+        const titleEl = section.querySelector('.section-title');
+
+        // Clear existing content except title
+        while (section.lastChild && section.lastChild !== titleEl) {
+            section.removeChild(section.lastChild);
+        }
+
+        if (medications.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.textContent = 'No medications on record';
+            section.appendChild(emptyState);
+        } else {
+            medications.forEach(medication => {
+                const item = document.createElement('div');
+                item.className = 'record-item';
+
+                const name = document.createElement('div');
+                name.className = 'item-name';
+                name.textContent = medication.name;
+                item.appendChild(name);
+
+                if (medication.dose || medication.form) {
+                    const doseForm = document.createElement('div');
+                    doseForm.className = 'item-detail';
+                    doseForm.textContent = `${medication.dose || ''} ${medication.form || ''}`.trim();
+                    item.appendChild(doseForm);
+                }
+
+                if (medication.sig) {
+                    const sig = document.createElement('div');
+                    sig.className = 'item-detail';
+                    sig.textContent = medication.sig;
+                    item.appendChild(sig);
+                }
+
+                if (medication.indications) {
+                    const indications = document.createElement('div');
+                    indications.className = 'item-detail';
+                    indications.textContent = `For: ${medication.indications}`;
+                    item.appendChild(indications);
+                }
+
+                section.appendChild(item);
+            });
+        }
+    }
+
+    // Append message to chat
+    function appendMessage(participant, content) {
+        const wrapper = document.getElementById('messages-wrapper');
+        if (!wrapper) return;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${participant}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.textContent = content;
+
+        messageDiv.appendChild(bubble);
+        wrapper.appendChild(messageDiv);
+    }
+
+    // Scroll to bottom of chat
+    function scrollToBottom() {
+        const chatMessages = document.getElementById('chat-messages');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Auto-resize textarea
+    const messageInput = document.getElementById('message-input');
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+    });
+
+    // Send message
+    function sendMessage() {
+        const input = document.getElementById('message-input');
+        const content = input.value.trim();
+
+        if (content) {
+            socket.emit('send_message', {
+                patient_id: patientId,
+                content: content
+            });
+            input.value = '';
+            // Reset height after sending
+            input.style.height = 'auto';
+        }
+    }
+
+    // Send button click
+    document.getElementById('send-button').addEventListener('click', sendMessage);
+
+    // Enter key press (Shift+Enter for new line, Enter to send)
+    document.getElementById('message-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+</script>
+
+    </div>
+
+</body></html>
