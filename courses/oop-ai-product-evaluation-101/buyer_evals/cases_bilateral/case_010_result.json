@@ -1,0 +1,204 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Good morning, Sara. My legal name is Alex Rivera, though I should mention upfront that I use they/them pronouns. Is that something you can note in my file?"
+    },
+    {
+      "role": "agent",
+      "content": "Yes, absolutely. I have noted that you use they/them pronouns, Alex Rivera.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "June 19th, 1998."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you. And what is your sex assigned at birth? Please let me know if there is anything else to note regarding sex or gender for your medical record."
+    },
+    {
+      "role": "patient",
+      "content": "I was assigned female at birth. I identify as non-binary, and I'm currently on hormone therapy - testosterone and spironolactone - so that's definitely relevant for my medical record."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for that information. I have noted sex assigned at birth as female, non-binary identity, and that you are on testosterone and spironolactone for hormone therapy.\n\nFor the testosterone - what is the dose, form, and frequency?"
+    },
+    {
+      "role": "patient",
+      "content": "It's testosterone cypionate, 50mg intramuscular injection every two weeks."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you. And for the spironolactone - what is the dose and frequency?"
+    },
+    {
+      "role": "patient",
+      "content": "100mg twice daily."
+    },
+    {
+      "role": "agent",
+      "content": "Noted. 100mg spironolactone twice daily.\n\nWhat are your current health concerns or reasons for seeking care at EZGrow?"
+    },
+    {
+      "role": "patient",
+      "content": "I'm mainly looking to continue my gender-affirming hormone therapy and monitor how that's going. I'd also like to discuss possibly increasing my testosterone dose if that's safe. And I need ongoing management for my depression and anxiety - I'm on sertraline for that, which has been helping, but I still have some struggles with motivation."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. I have noted those concerns: continuation and monitoring of hormone therapy, potential testosterone dose adjustment, and ongoing management of depression and anxiety.\n\nWhat is the dose and frequency of your sertraline?"
+    },
+    {
+      "role": "patient",
+      "content": "100mg once daily."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you. Sertraline 100mg once daily noted.\n\nDo you have any diagnosed medical conditions beyond the depression and anxiety you mentioned?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, I've been diagnosed with social anxiety disorder specifically, moderate depression that's been improving, and gender dysphoria."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you. I have noted social anxiety disorder, moderate depression (improving), and gender dysphoria.\n\nAre there any other medical conditions - past or present?"
+    },
+    {
+      "role": "patient",
+      "content": "No, those are the main ones."
+    },
+    {
+      "role": "agent",
+      "content": "Do you have any medication, food, or environmental allergies?"
+    },
+    {
+      "role": "patient",
+      "content": "No known drug allergies or other allergies."
+    },
+    {
+      "role": "agent",
+      "content": "Noted. No known allergies.\n\nWhat are your primary health goals you would like to achieve with our practice?"
+    },
+    {
+      "role": "patient",
+      "content": "My main goals are to continue my hormone therapy and track my progress with that. I also want to keep working on my depression and anxiety - the medication has helped but I'd like to build more confidence in social situations. And eventually I want to get top surgery, so I'll need documentation and referrals for that when the time comes."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you. I have noted your health goals: continue and monitor hormone therapy progress, ongoing management of depression and anxiety with focus on social confidence, and future top surgery documentation and referrals.\n\nLet me confirm the complete information I have collected:\n\n**Demographics:** Alex Rivera, DOB June 19, 1998, sex assigned at birth female, non-binary identity, they/them pronouns\n\n**Current Medications:**\n- Testosterone cypionate 50mg intramuscular injection every 2 weeks (hormone therapy)\n- Spironolactone 100mg twice daily (hormone therapy)\n- Sertraline 100mg once daily (depression/anxiety)\n\n**Medical Conditions:**\n- Social anxiety disorder\n- Moderate depression (improving)\n- Gender dysphoria\n\n**Allergies:** None known\n\n**Health Concerns:** Continue hormone therapy, monitor progress, discuss possible testosterone dose increase, ongoing depression/anxiety management\n\n**Health Goals:** Continue and monitor hormone therapy, improve social confidence, obtain top surgery documentation and referrals\n\nIs this information complete and accurate?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, that's all correct. I should also mention that I do have some anxiety about medical appointments in general, and I'm concerned about the cost of ongoing care and eventually surgery. But otherwise, yes, you've got everything."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for confirming. I have noted your anxiety regarding medical appointments.\n\nRegarding cost concerns - our financial coordinator will discuss payment options, insurance coverage, and surgical financing during your appointment.\n\nYour intake is now complete. A provider will review this information before your visit.\n\nIs there anything else medically relevant I should document before we conclude?"
+    },
+    {
+      "role": "patient",
+      "content": "No, I think that covers everything. Thank you, Sara."
+    },
+    {
+      "role": "agent",
+      "content": "You're welcome, Alex. Your intake is complete. \n\nWe will see you at your appointment. Have a good day."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Alex Rivera",
+      "dob": "1998-06-19",
+      "age": "27y",
+      "sex": "yfemale",
+      "gender": "non"
+    },
+    "conditions": [
+      {
+        "status": "improving",
+        "name": "depression",
+        "details": [
+          "On sertraline which has been helping, but still has some struggles with motivation"
+        ]
+      },
+      {
+        "status": "improving",
+        "name": "anxiety",
+        "details": [
+          "On sertraline which has been helping"
+        ]
+      },
+      {
+        "name": "social anxiety disorder"
+      },
+      {
+        "status": "improving",
+        "name": "moderate depression"
+      },
+      {
+        "name": "gender dysphoria"
+      }
+    ],
+    "medications": [
+      {
+        "name": "testosterone",
+        "details": [
+          "For: hormone therapy"
+        ],
+        "indication": "hormone therapy"
+      },
+      {
+        "name": "spironolactone",
+        "details": [
+          "100mg tablet",
+          "twice daily",
+          "For: hormone therapy"
+        ],
+        "dose_form": "100mg tablet",
+        "sig": "twice daily",
+        "indication": "hormone therapy"
+      },
+      {
+        "name": "testosterone cypionate",
+        "details": [
+          "50mg injection",
+          "intramuscular every two weeks",
+          "For: hormone therapy"
+        ],
+        "dose_form": "50mg injection",
+        "indication": "hormone therapy"
+      },
+      {
+        "name": "sertraline",
+        "details": [
+          "100mg tablet",
+          "once daily",
+          "For: depression and anxiety"
+        ],
+        "dose_form": "100mg tablet",
+        "sig": "once daily",
+        "indication": "depression and anxiety"
+      }
+    ],
+    "allergies": [
+      {
+        "name": "No known drug allergies",
+        "details": [
+          "No known drug, food, or environmental allergies"
+        ]
+      }
+    ],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "010",
+    "case_timestamp": "2025-01-16T18:00:00Z",
+    "run_timestamp": "2025-10-29T13:24:53.596727",
+    "total_turns": 14,
+    "patient_name": "Alex Rivera"
+  }
+}

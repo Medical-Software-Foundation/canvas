@@ -1,0 +1,28 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Dorothy Chen'",
+    "Date of birth correctly identified: 1952-07-08",
+    "Key condition detected: diabetes",
+    "Key condition detected: hypertension",
+    "Key condition detected: arthritis",
+    "Total conditions documented: 6",
+    "Key medication detected: metformin",
+    "Key medication detected: lisinopril",
+    "Key medication detected: statin",
+    "Medication indications documented for 4 medications",
+    "Penicillin allergy correctly documented",
+    "Total conversational turns: 22",
+    "Appropriate conversation length for thorough data gathering",
+    "Agent provided confirmation summary of collected information"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Female', got 'yFemale'"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Continue managing chronic conditions effectively. Wants to travel to visit grandchildren without hea..."
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Harold Washington'",
+    "Date of birth correctly identified: 1943-05-14",
+    "Total conversational turns: 4"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Male', got 'yMale'"
+    },
+    {
+      "severity": "critical",
+      "issue": "Key condition from case file not detected: heart failure"
+    },
+    {
+      "severity": "critical",
+      "issue": "No conditions detected despite case file listing conditions"
+    },
+    {
+      "severity": "high",
+      "issue": "Key medication from case file not detected: warfarin"
+    },
+    {
+      "severity": "moderate",
+      "issue": "Patient stated no known allergies but this was not clearly documented"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Keep heart stable and avoid hospitalizations. Wants to maintain independence and continue living alo..."
+    },
+    {
+      "severity": "high",
+      "issue": "Very short conversation (4 turns) may indicate incomplete data gathering"
+    }
+  ]
+}

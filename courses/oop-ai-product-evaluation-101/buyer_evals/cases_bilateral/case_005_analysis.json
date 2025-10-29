@@ -1,0 +1,28 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Tyler Brooks'",
+    "Date of birth correctly identified: 2008-09-10",
+    "Key condition detected: allergies",
+    "Key condition detected: adhd",
+    "Total conditions documented: 4",
+    "Key medication detected: adderall",
+    "Medication indications documented for 3 medications",
+    "Total conversational turns: 20",
+    "Appropriate conversation length for thorough data gathering",
+    "Agent provided confirmation summary of collected information"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Male', got 'yMale'"
+    },
+    {
+      "severity": "moderate",
+      "issue": "Patient stated no known allergies but this was not clearly documented"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Wants to get acne under control before senior year photos. Needs ADHD medication refill and check-in..."
+    }
+  ]
+}

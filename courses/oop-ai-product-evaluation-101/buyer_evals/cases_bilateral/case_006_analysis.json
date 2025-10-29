@@ -1,0 +1,33 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Linda Patterson'",
+    "Date of birth correctly identified: 1976-02-28",
+    "Key condition detected: anxiety",
+    "Key condition detected: hypothyroid",
+    "Total conditions documented: 3",
+    "Key medication detected: levothyroxine",
+    "Medication indications documented for 4 medications",
+    "Latex allergy correctly documented",
+    "Total conversational turns: 18",
+    "Appropriate conversation length for thorough data gathering",
+    "Agent provided confirmation summary of collected information"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Female', got 'yfemale'"
+    },
+    {
+      "severity": "moderate",
+      "issue": "Gender identity incorrect. Expected 'Female', got 'female'"
+    },
+    {
+      "severity": "high",
+      "issue": "Key medication from case file not detected: antidepressant"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Wants relief from hot flashes and night sweats that are disrupting sleep and work. Interested in dis..."
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Kevin Tran'",
+    "Date of birth correctly identified: 1991-08-30",
+    "Key condition detected: asthma",
+    "Total conditions documented: 2",
+    "Key medication detected: albuterol",
+    "Medication indications documented for 2 medications",
+    "Allergies correctly documented as 'No known drug allergies'",
+    "Total conversational turns: 13",
+    "Appropriate conversation length for thorough data gathering",
+    "Agent provided confirmation summary of collected information"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Male', got 'yMale'"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Needs medical clearance to return to competitive soccer league. Wants to confirm knee is fully heale..."
+    }
+  ]
+}

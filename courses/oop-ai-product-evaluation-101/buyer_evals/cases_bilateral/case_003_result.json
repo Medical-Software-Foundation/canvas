@@ -54,47 +54,47 @@
     },
     {
       "role": "patient",
-      "content": "Well, I'm overweight, if that's what you're asking. And the doctor mentioned something about prediabetic neuropathy with the tingling in my feet."
+      "content": "Well, I'm overweight, if that counts. And the doctor mentioned something about prediabetic neuropathy with the tingling in my feet."
     },
     {
       "role": "agent",
-      "content": "Thank you for that information.\n\nBesides the overweight status and the prediabetic neuropathy, do you have any other diagnosed medical conditions? For example, high blood pressure, high cholesterol, heart disease, or anything else?"
+      "content": "Thank you for that information.\n\nBesides the overweight status and the prediabetic neuropathy, do you have any other medical conditions? For example, high blood pressure, high cholesterol, heart disease, or anything else?"
     },
     {
       "role": "patient",
-      "content": "No, nothing else that's been diagnosed. Just the diabetes and weight issue."
+      "content": "No, nothing else that I know of. Just those things."
     },
     {
       "role": "agent",
-      "content": "Thank you.\n\nWhat medications are you currently taking? Please include the name, dose, and frequency for each."
+      "content": "Thank you.\n\nWhat medications are you currently taking for your diabetes or any other condition?"
     },
     {
       "role": "patient",
-      "content": "I'm on Metformin, 500 milligrams twice a day. And I take a multivitamin daily."
+      "content": "They prescribed me Metformin, 500 milligrams twice a day. And I take a multivitamin."
     },
     {
       "role": "agent",
-      "content": "Thank you.\n\nIs the Metformin in tablet form?"
+      "content": "Thank you.\n\nIs the Metformin in tablet form, and are you taking it with meals?"
     },
     {
       "role": "patient",
-      "content": "Yes, tablets."
+      "content": "Yeah, it's tablets. I'm supposed to take it with meals, but honestly I don't always remember to take it regularly."
     },
     {
       "role": "agent",
-      "content": "Are you taking any other medications, supplements, or over-the-counter products besides the Metformin and multivitamin?"
+      "content": "Understood. I will note Metformin 500 mg tablets twice daily with meals.\n\nWhat brand or type of multivitamin are you taking, and what is the dose?"
     },
     {
       "role": "patient",
-      "content": "No, that's it."
+      "content": "Just a generic daily multivitamin, one a day. Nothing fancy."
     },
     {
       "role": "agent",
-      "content": "Do you have any allergies to medications, foods, or other substances?"
+      "content": "Thank you.\n\nDo you have any medication allergies or allergies to any other substances?"
     },
     {
       "role": "patient",
-      "content": "No, no known allergies."
+      "content": "No, no allergies that I know of."
     },
     {
       "role": "agent",
@@ -102,11 +102,11 @@
     },
     {
       "role": "patient",
-      "content": "Like I said, I really want to avoid insulin. I'd like to manage this diabetes through diet and exercise if that's possible. And losing weight would be good, though that's been tough for me."
+      "content": "Like I said, I really want to avoid insulin. I'd like to manage this through diet and exercise if that's possible. And losing weight would be good, but it's been tough."
     },
     {
       "role": "agent",
-      "content": "Thank you, Mr. Martinez.\n\nLet me confirm the information I have collected:\n\n**Demographics:** Robert Martinez, November 22, 1969, male\n\n**Health Concerns:** Type 2 diabetes diagnosed a few months ago, tingling in feet\n\n**Medical Conditions:** \n- Type 2 diabetes (not improving adequately)\n- Overweight\n- Prediabetic neuropathy\n\n**Medications:** \n- Metformin 500mg tablet, twice daily for diabetes\n- Multivitamin, once daily\n\n**Allergies:** None\n\n**Health Goals:** Manage diabetes without insulin through diet and exercise, achieve weight loss\n\nIs this information correct?"
+      "content": "Thank you, Mr. Martinez.\n\nLet me confirm the information I have collected:\n\n**Demographics:** Robert Martinez, November 22, 1969, male\n\n**Health Concerns:** Type 2 diabetes with inadequate control, tingling in feet\n\n**Medical Conditions:** \n- Type 2 diabetes (not improving adequately)\n- Overweight\n- Prediabetic neuropathy\n\n**Medications:** \n- Metformin 500 mg tablets, twice daily with meals, for diabetes\n- Generic multivitamin, one daily\n\n**Allergies:** None\n\n**Health Goals:** Avoid insulin, manage diabetes through diet and exercise, lose weight\n\nIs this information correct?"
     },
     {
       "role": "patient",
@@ -122,7 +122,7 @@
     },
     {
       "role": "agent",
-      "content": "You're welcome, Mr. Martinez.\n\nYour intake is complete. A provider will be with you shortly.\n\nHave a good day."
+      "content": "You're welcome, Mr. Martinez.\n\nYour intake is complete. A provider will be with you shortly to discuss your care plan.\n\nHave a good day."
     }
   ],
   "structured_data_detected": {
@@ -154,12 +154,15 @@
         ]
       },
       {
-        "name": "Overweight"
+        "name": "Obesity",
+        "details": [
+          "Patient reports being overweight"
+        ]
       },
       {
         "name": "Prediabetic neuropathy",
         "details": [
-          "Tingling in feet"
+          "Tingling in feet, mentioned by doctor"
         ]
       }
     ],
@@ -168,35 +171,31 @@
         "name": "Metformin",
         "details": [
           "500 mg tablet",
-          "twice daily",
-          "For: Type 2 diabetes"
+          "twice a day",
+          "For: diabetes"
         ],
         "dose_form": "500 mg tablet",
-        "sig": "twice daily",
-        "indication": "Type 2 diabetes"
+        "sig": "twice a day",
+        "indication": "diabetes"
       },
       {
-        "name": "Multivitamin",
+        "name": "multivitamin",
         "details": [
-          "daily"
+          "one daily tablet",
+          "once daily",
+          "For: general supplementation"
         ],
-        "sig": "daily"
+        "sig": "once daily",
+        "indication": "general supplementation"
       }
     ],
-    "allergies": [
-      {
-        "name": "No known allergies",
-        "details": [
-          "Patient reports no known allergies to medications, foods, or other substances"
-        ]
-      }
-    ],
+    "allergies": [],
     "goals": []
   },
   "metadata": {
     "case_number": "003",
     "case_timestamp": "2025-01-16T10:30:00Z",
-    "run_timestamp": "2025-10-29T02:56:48.725797",
+    "run_timestamp": "2025-10-29T10:23:11.161693",
     "total_turns": 16,
     "patient_name": "Robert Martinez"
   }

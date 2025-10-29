@@ -1,107 +1,160 @@
-# Out-of-Pocket Health AI Product Evaluation 101
+# OOP AI Product Evaluation 101
 
-A course on evaluating AI products, created in partnership with Out-of-Pocket Health (OOP).
+A hands-on course for evaluating AI products from both builder and buyer perspectives.
 
-## Overview
+## Project Overview
 
-This course teaches how to build and test LLM wrappers for different AI providers using object-oriented programming best practices.
+This project has two main parts:
 
-## Course Structure
+### 1. **Builder Perspective** → `intake_agent/`
+The **EZGrow** AI medical intake agent - the product we're evaluating. This is a Flask web application that uses an LLM to conduct patient intake interviews and extract structured medical data.
 
-### Core Modules
+### 2. **Buyer Perspective** → `buyer_evals/`
+Black-box evaluation tools that test the intake agent from an external perspective. These simulate real patients having conversations with the agent and analyze the quality of extracted data.
 
-- `llm_openai.py` - OpenAI GPT wrapper
-- `llm_google.py` - Google Gemini wrapper
-- `llm_anthropic.py` - Anthropic Claude wrapper
+---
 
-### Intake Agent Application
+## Quickstart
 
-The `intake_agent/` directory contains a complete medical intake web application used for demonstrations and evaluation exercises:
+### Prerequisites
+- Python 3.10+
+- [uv](https://docs.astral.sh/uv/) package manager
+- Anthropic API key
 
-- **Split-screen interface** - Real-time chat with AI agent alongside structured medical record
-- **AI-powered data extraction** - Automatically extracts demographics, conditions, medications, allergies, and goals from natural conversation
-- **Configurable agent** - Customize personality (professional to meme_lord), verbosity, and model
-- **Automated evaluation system** - Playwright-based patient simulator for testing extraction accuracy
+### Part 1: Setup the Product
 
-See `intake_agent/README.md` for setup and usage instructions.
-
-The intake agent demonstrates real-world AI product evaluation concepts including:
-- Black-box testing with decoupled evaluation agents
-- Precision/recall metrics for information extraction
-- Nondeterminism detection in conversational AI
-- Ground truth comparison and validation
-
-## Installation
-
+**1. Install dependencies:**
 ```bash
-# Install dependencies using uv
 uv sync
 ```
 
-## Running Tests
+**2. Set environment variables:**
 
+Create an environment file or export directly:
 ```bash
-# Run all tests
-uv run pytest tests/
+# Option A: Export directly
+export ANTHROPIC_API_KEY="your-api-key-here"
 
-# Run specific test file
-uv run pytest tests/test_llm_openai.py
-
-# Run with verbose output
-uv run pytest tests/ -v
-
-# Run with coverage report
-uv run pytest tests/ --cov=.
-
-# Generate HTML coverage report
-uv run pytest tests/ --cov=. --cov-report=html
-# Open htmlcov/index.html in your browser
+# Option B: Use the provided script (edit it first with your key)
+# Edit env/set_env_vars.sh to add your API key
+source env/set_env_vars.sh
 ```
 
-## Running Demos
+**Required environment variable:**
+- `ANTHROPIC_API_KEY` - Your Anthropic API key for Claude
 
-The `demos/` directory contains example scripts demonstrating LLM evaluation techniques.
-
-### Demo 1: Nondeterministic Outputs
-
-Tests variability in LLM outputs across vendors and models for the same medical prompt.
-
+**3. Initialize the database:**
 ```bash
-# Set up API keys first
-# Edit env/set_env_vars.sh with your keys, then:
-
-source env/set_env_vars.sh && uv run python demos/demo_1_nondeterministic.py
+cd intake_agent
+python app.py
 ```
 
-This demo:
-- Tests 9 models across OpenAI, Google, and Anthropic
-- Runs each model 3 times to detect nondeterminism (27 total requests)
-- Uses 6 parallel workers for faster execution
-- Shows real-time progress with start/completion logging
-- Displays results in an ASCII table showing unique medications at each rank
-- Compares medication recommendations for hypertension (preserves order)
-- Detects nondeterminism both within models (across runs) and across different models
-- Provides detailed statistics and summary
+The app will automatically create `intake_agent.db` on first run.
 
-## Usage
+**4. Verify it's working:**
 
-Each LLM wrapper provides a consistent interface:
+Open your browser and go to: **http://localhost:5000**
 
-```python
-from llms.llm_openai import LlmOpenai
+You should see the EZGrow intake interface with:
+- Left side: Chat interface
+- Right side: Structured medical record
 
-# Initialize
-llm = LlmOpenai(api_key="your-key", model="gpt-4")
+**5. Do a manual test intake:**
 
-# Simple chat
-result = llm.chat(
-    system_prompt="You are a helpful assistant.",
-    user_prompt="Hello!"
-)
-
-# Chat with JSON response
-result = llm.chat_with_json(
-    system_prompt="Return JSON only.",
-    user_prompt="Give me a list of 3 colors."
-)
+Click "Start New Patient" and try a conversation:
 ```
+You: "Hi, my name is John Smith"
+Agent: "Thank you, Mr. Smith. What is your date of birth?"
+You: "January 15, 1985"
+... (continue the conversation)
+```
+
+Watch as the agent extracts structured data and displays it in real-time on the right panel.
+
+---
+
+### Part 2: Run Buyer Evaluations
+
+Now that the product is running, test it from the buyer perspective.
+
+**1. Keep the intake agent running** (from Part 1)
+
+**2. In a new terminal, run a test case:**
+```bash
+# Run case 001 (Marcus - young male with anxiety)
+python buyer_evals/case_runner_bilateral.py 001
+```
+
+This will:
+- Launch a browser window (you can watch the conversation)
+- Simulate a patient with the personality and characteristics from `case_001.json`
+- Use an LLM to generate realistic responses to the agent's questions
+- Save the conversation and extracted data to `case_001_result.json`
+
+**3. Review the results:**
+```bash
+# View the conversation and extracted data
+cat buyer_evals/cases_bilateral/case_001_result.json
+
+# View the analysis comparing expected vs actual data
+cat buyer_evals/cases_bilateral/case_001_analysis.json
+```
+
+---
+
+## What's Next?
+
+### For Builders
+- Explore `intake_agent/` to see how the product works
+- Modify the agent's behavior in `intake_agent/config.py`
+- Review `intake_agent/README.md` for detailed documentation
+
+### For Buyers
+- Create new test cases in `buyer_evals/cases_bilateral/`
+- Review analysis results to identify patterns in agent performance
+- Compare results across different case types (elderly, complex conditions, etc.)
+- See `buyer_evals/README.md` for detailed evaluation workflows
+
+---
+
+## Project Structure
+
+```
+.
+├── intake_agent/          # The EZGrow product (builder perspective)
+│   ├── app.py            # Flask application
+│   ├── agent.py          # Core agent logic
+│   ├── config.py         # Configuration
+│   └── templates/        # Web interface
+│
+├── buyer_evals/          # Evaluation tools (buyer perspective)
+│   ├── case_runner_bilateral.py    # LLM-driven test runner
+│   ├── case_runner_unilateral.py   # Pre-scripted test runner
+│   ├── analyze_all_cases.py        # Batch analysis tool
+│   ├── cases_bilateral/            # LLM-driven test cases
+│   └── cases_unilateral/           # Pre-scripted test cases
+│
+└── llms/                 # LLM wrapper classes
+    └── llm_anthropic.py  # Anthropic Claude wrapper
+```
+
+---
+
+## Troubleshooting
+
+**Problem:** `ModuleNotFoundError` when running scripts
+- **Solution:** Make sure you ran `uv sync` to install dependencies
+
+**Problem:** "Cannot connect to database"
+- **Solution:** Run `python intake_agent/app.py` once to initialize the database
+
+**Problem:** Agent not responding
+- **Solution:** Check that `ANTHROPIC_API_KEY` is set correctly
+
+**Problem:** Browser automation fails
+- **Solution:** Install Playwright browsers: `playwright install chromium`
+
+**Problem:** "No such file or directory" when running bash scripts
+- **Solution:** Make sure you're running from the project root directory
+
+---

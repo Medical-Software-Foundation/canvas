@@ -9,12 +9,12 @@ simulate a real patient responding naturally to the agent's questions.
 
 Usage:
     1. Start the intake agent Flask app manually: python intake_agent/app.py
-    2. Run this script: python evals/buy_side/case_runner_bilateral.py <case_number>
-    3. Find the output in: evals/buy_side/cases_bilateral/case_{n}_result.json
+    2. Run this script: python buyer_evals/case_runner_bilateral.py <case_number>
+    3. Find the output in: buyer_evals/cases_bilateral/case_{n}_result.json
 
 Examples:
-    python evals/buy_side/case_runner_bilateral.py 1
-    python evals/buy_side/case_runner_bilateral.py 2
+    python buyer_evals/case_runner_bilateral.py 1
+    python buyer_evals/case_runner_bilateral.py 2
 """
 
 import sys
@@ -27,7 +27,7 @@ import time
 from datetime import datetime
 
 # Add parent directory to path to import llms module
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from llms.llm_anthropic import LlmAnthropic
 
 # Configuration

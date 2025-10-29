@@ -1,0 +1,27 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Robert Martinez'",
+    "Date of birth correctly identified: 1969-11-22",
+    "Key condition detected: diabetes",
+    "Total conditions documented: 5",
+    "Key medication detected: metformin",
+    "Medication indications documented for 2 medications",
+    "Total conversational turns: 16",
+    "Appropriate conversation length for thorough data gathering",
+    "Agent provided confirmation summary of collected information"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Male', got 'yMale'"
+    },
+    {
+      "severity": "moderate",
+      "issue": "Patient stated no known allergies but this was not clearly documented"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Avoid having to take insulin. Wants to manage diabetes through diet and exercise if possible. Would ..."
+    }
+  ]
+}

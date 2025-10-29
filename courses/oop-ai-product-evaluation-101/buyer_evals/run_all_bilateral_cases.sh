@@ -104,7 +104,7 @@ for case_file in "$CASES_DIR"/case_*.json; do
     echo "----------------------------------------"
 
     # Run the bilateral case runner
-    if uv run python evals/buy_side/case_runner_bilateral.py "$case_number"; then
+    if uv run python buyer_evals/case_runner_bilateral.py "$case_number"; then
         cases_completed=$((cases_completed + 1))
         echo ""
         echo "✅ Case $case_number: Completed successfully"
