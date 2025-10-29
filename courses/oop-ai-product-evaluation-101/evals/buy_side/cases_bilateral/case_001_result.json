@@ -1,0 +1,228 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Good morning, Sara. Yes, it's Marcus Johnson."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Johnson.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "March 22nd, 2001."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is your sex assigned at birth? Please let me know if there is anything else to note regarding sex or gender."
+    },
+    {
+      "role": "patient",
+      "content": "Male, and that's still how I identify, so nothing else to note there."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Johnson.\n\nWhat brings you to EZGrow today? What are your current health concerns?"
+    },
+    {
+      "role": "patient",
+      "content": "Well, I've been dealing with some anxiety issues that have gotten worse over the past six months or so. I'm hoping to maybe talk to someone about it, like a therapist or counselor."
+    },
+    {
+      "role": "agent",
+      "content": "I understand. Anxiety can certainly impact overall wellbeing.\n\nHave you been diagnosed with an anxiety disorder, or is this something you're experiencing without a formal diagnosis?"
+    },
+    {
+      "role": "patient",
+      "content": "I was diagnosed with anxiety a while back, but honestly it's been pretty manageable until recently. It's just gotten a lot worse lately with work stress and everything."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for clarifying.\n\nWould you describe your anxiety as stable, improving, or deteriorating currently?"
+    },
+    {
+      "role": "patient",
+      "content": "Definitely deteriorating. Like I said, it's been getting worse over the last six months."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nAre you currently taking any medications for your anxiety or any other conditions?"
+    },
+    {
+      "role": "patient",
+      "content": "No, not for the anxiety. I have an albuterol inhaler for asthma that I use when I need it, and I take Claritin during allergy season, but nothing for the anxiety right now."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nFor the albuterol inhaler - what is the dose, and how often do you typically use it?"
+    },
+    {
+      "role": "patient",
+      "content": "I'm not sure of the exact dose, but I only use it as needed. It's pretty infrequent, maybe a few times a month when my asthma acts up."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nCan you check the inhaler label for the dose? It should list the mcg or mg strength per puff."
+    },
+    {
+      "role": "patient",
+      "content": "I don't have it with me right now, sorry. I can get that information to you later if you need it."
+    },
+    {
+      "role": "agent",
+      "content": "That's fine. We can note it as albuterol inhaler, dose to be confirmed, used as needed for asthma.\n\nFor the Claritin - what dose do you take and how often during allergy season?"
+    },
+    {
+      "role": "patient",
+      "content": "It's 10 milligrams, and I take it daily during allergy season."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nDo you have any known allergies to medications, foods, or other substances?"
+    },
+    {
+      "role": "patient",
+      "content": "No, no known drug allergies or anything like that."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nBesides the anxiety and asthma, do you have any other medical conditions I should document?"
+    },
+    {
+      "role": "patient",
+      "content": "Just seasonal allergies, which is why I take the Claritin."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nWhat are your primary health goals in seeking care at EZGrow?"
+    },
+    {
+      "role": "patient",
+      "content": "I really want to get my anxiety under control so I can function better. I used to play guitar at coffee shop gigs, and I'd like to be able to do that again without panicking. And just manage the stress from work better overall."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Johnson.\n\nLet me confirm the information I've collected:\n\n**Demographics:** Marcus Johnson, DOB March 22, 2001, Male\n\n**Health Concerns:** Worsening anxiety over past 6 months\n\n**Medical Conditions:** \n- Anxiety disorder (deteriorating)\n- Asthma (stable)\n- Seasonal allergies (stable)\n\n**Medications:**\n- Albuterol inhaler, dose TBC, as needed for asthma\n- Claritin 10mg, daily during allergy season\n\n**Allergies:** None\n\n**Health Goals:** Control anxiety to resume performing guitar at coffee shops and better manage work stress\n\nIs this information accurate and complete?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, that all sounds right. I guess I should also mention that I've been having trouble sleeping and I get occasional panic attacks, especially at work when things get stressful."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for that additional information. That's important to note.\n\nHow frequently are you experiencing these panic attacks?"
+    },
+    {
+      "role": "patient",
+      "content": "Maybe once or twice a week when work gets really stressful. They don't happen every day, but it's been often enough that it's really affecting me."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for clarifying.\n\nAnd regarding the sleep difficulties - how long has this been occurring, and how many nights per week are you experiencing trouble sleeping?"
+    },
+    {
+      "role": "patient",
+      "content": "It's been going on for about the same time as the anxiety got worse, so around six months. I'd say it's probably four or five nights a week that I have trouble falling asleep or staying asleep."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nLet me update your record:\n\n**Demographics:** Marcus Johnson, DOB March 22, 2001, Male\n\n**Health Concerns:** Worsening anxiety over past 6 months, panic attacks 1-2x/week (especially at work), insomnia 4-5 nights/week for 6 months\n\n**Medical Conditions:** \n- Anxiety disorder (deteriorating)\n- Asthma (stable)\n- Seasonal allergies (stable)\n\n**Medications:**\n- Albuterol inhaler, dose TBC, as needed for asthma\n- Claritin 10mg, daily during allergy season\n\n**Allergies:** None\n\n**Health Goals:** Control anxiety to resume performing guitar at coffee shops and better manage work stress\n\nIs this now accurate and complete?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, that's all correct."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Johnson. Your intake is now complete.\n\nA provider will review your information and contact you to schedule an appointment. Please have your albuterol inhaler dose available when you come in for your visit.\n\nIs there anything else you'd like to add to your intake today?"
+    },
+    {
+      "role": "patient",
+      "content": "No, I think that covers everything. Thank you, Sara."
+    },
+    {
+      "role": "agent",
+      "content": "You're welcome, Mr. Johnson.\n\nWe will be in touch soon to schedule your appointment. Have a good day."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Marcus Johnson",
+      "dob": "2001-03-22Age:",
+      "age": "24yMale|Male",
+      "sex": "24yMale",
+      "gender": "Male"
+    },
+    "conditions": [
+      {
+        "status": "deteriorating",
+        "name": "Anxiety",
+        "details": [
+          "Gotten worse over the past six months"
+        ]
+      },
+      {
+        "name": "asthma",
+        "details": [
+          "uses albuterol inhaler as needed"
+        ]
+      },
+      {
+        "name": "seasonal allergies"
+      },
+      {
+        "name": "insomnia",
+        "details": [
+          "trouble sleeping"
+        ]
+      },
+      {
+        "name": "panic attacks",
+        "details": [
+          "occasional panic attacks, especially at work when things get stressful"
+        ]
+      }
+    ],
+    "medications": [
+      {
+        "name": "albuterol",
+        "details": [
+          "inhaler",
+          "as needed",
+          "For: asthma"
+        ],
+        "indication": "asthma"
+      },
+      {
+        "name": "Claritin",
+        "details": [
+          "10 mg tablet",
+          "during allergy season",
+          "For: allergies"
+        ],
+        "dose_form": "10 mg tablet",
+        "indication": "allergies"
+      }
+    ],
+    "allergies": [
+      {
+        "name": "No known drug allergies",
+        "details": [
+          "Patient reports no known drug allergies or other allergies"
+        ]
+      }
+    ],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "001",
+    "case_timestamp": "2025-01-15T14:30:00Z",
+    "run_timestamp": "2025-10-29T02:28:30.831833",
+    "total_turns": 19,
+    "patient_name": "Marcus Johnson"
+  }
+}

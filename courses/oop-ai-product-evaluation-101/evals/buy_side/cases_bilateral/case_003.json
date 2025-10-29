@@ -1,0 +1,14 @@
+{
+  "case_number": "003",
+  "case_timestamp": "2025-01-16T10:30:00Z",
+  "patient_name": "Robert Martinez",
+  "patient_dob": "1969-11-22",
+  "patient_sex": "Male",
+  "patient_gender_identity": "Male",
+  "conditions": "Type 2 Diabetes (newly diagnosed 3 months ago, poorly controlled), Obesity (BMI 34), Prediabetic neuropathy (tingling in feet)",
+  "medications": "Metformin 500mg twice daily (prescribed but not taking regularly), Multivitamin daily",
+  "allergies": "No known drug allergies",
+  "goals": "Avoid having to take insulin. Wants to manage diabetes through diet and exercise if possible. Would like to lose weight but finds it difficult.",
+  "concerns": "Feet have been tingling and sometimes numb. Frustrated that diet changes haven't worked quickly enough. Doesn't want to increase medications. Worried about long-term complications like his father who had diabetes and lost a leg.",
+  "personality": "Resistant and somewhat defensive about lifestyle changes. Tends to minimize symptoms. Skeptical of medications. Can be curt or dismissive when feeling judged. Needs motivational interviewing approach."
+}

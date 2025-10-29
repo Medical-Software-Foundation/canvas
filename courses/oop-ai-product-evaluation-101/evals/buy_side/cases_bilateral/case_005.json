@@ -1,0 +1,14 @@
+{
+  "case_number": "005",
+  "case_timestamp": "2025-01-16T13:00:00Z",
+  "patient_name": "Tyler Brooks",
+  "patient_dob": "2008-09-10",
+  "patient_sex": "Male",
+  "patient_gender_identity": "Male",
+  "conditions": "ADHD (diagnosed age 9), Moderate acne, Seasonal allergies",
+  "medications": "Adderall XR 20mg once daily in the morning for ADHD, Zyrtec 10mg daily for allergies, Benzoyl peroxide wash for acne (topical)",
+  "allergies": "No known drug allergies",
+  "goals": "Wants to get acne under control before senior year photos. Needs ADHD medication refill and check-in since dose was recently increased.",
+  "concerns": "Acne has gotten worse in the past six months and over-the-counter treatments aren't helping. Sometimes has trouble sleeping since ADHD medication dose went up. Worried about acne scarring.",
+  "personality": "Shy, monosyllabic, and typical teenager - gives short answers unless prompted. Slightly embarrassed to discuss acne. More engaged when asked about specific interests. Accompanied by parent who may try to answer for him."
+}

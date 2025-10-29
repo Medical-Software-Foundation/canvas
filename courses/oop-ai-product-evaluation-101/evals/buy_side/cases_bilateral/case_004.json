@@ -1,0 +1,14 @@
+{
+  "case_number": "004",
+  "case_timestamp": "2025-01-16T11:45:00Z",
+  "patient_name": "Jessica Taylor",
+  "patient_dob": "2002-04-15",
+  "patient_sex": "Female",
+  "patient_gender_identity": "Female",
+  "conditions": "Generally healthy, occasional migraines (2-3 times per month)",
+  "medications": "Birth control pill (Ortho Tri-Cyclen) daily, Ibuprofen 400mg as needed for migraines",
+  "allergies": "Sulfa drugs (causes hives)",
+  "goals": "Wants to switch to a different birth control method, possibly an IUD. Needs a referral for that procedure. Also wants to discuss better migraine management options.",
+  "concerns": "Current birth control pills sometimes cause nausea. Migraines seem to be getting more frequent, especially around menstrual cycle. Concerned about whether migraines are related to birth control.",
+  "personality": "Direct, matter-of-fact, and efficient communicator. Knows what she wants and asks for it clearly. Not overly chatty but polite. Values her time and appreciates when healthcare is straightforward."
+}

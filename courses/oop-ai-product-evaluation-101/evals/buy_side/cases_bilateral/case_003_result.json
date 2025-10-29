@@ -1,0 +1,203 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Good morning, Sara. It's Robert Martinez."
+    },
+    {
+      "role": "agent",
+      "content": "Good morning, Mr. Martinez.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "November 22nd, 1969."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Martinez.\n\nWhat is your sex assigned at birth? Please let me know if there is anything else to note regarding sex or gender."
+    },
+    {
+      "role": "patient",
+      "content": "Male. And no, nothing else to note."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat brings you to EZGrow today? What are your current health concerns?"
+    },
+    {
+      "role": "patient",
+      "content": "Well, I was diagnosed with diabetes a few months back. My feet have been tingling lately, which is annoying. I'm mainly here because I want to get this under control without having to go on insulin."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. I will help gather the information needed for your care.\n\nIs your diabetes Type 1 or Type 2?"
+    },
+    {
+      "role": "patient",
+      "content": "Type 2."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nIs your Type 2 diabetes currently improving, stable, or deteriorating?"
+    },
+    {
+      "role": "patient",
+      "content": "I guess it's not really improving as fast as I'd like. The numbers aren't great, but I'm working on it."
+    },
+    {
+      "role": "agent",
+      "content": "I will note it as not improving adequately.\n\nDo you have any other medical conditions besides Type 2 diabetes?"
+    },
+    {
+      "role": "patient",
+      "content": "Well, I'm overweight, if that's what you're asking. And the doctor mentioned something about prediabetic neuropathy with the tingling in my feet."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for that information.\n\nBesides the overweight status and the prediabetic neuropathy, do you have any other diagnosed medical conditions? For example, high blood pressure, high cholesterol, heart disease, or anything else?"
+    },
+    {
+      "role": "patient",
+      "content": "No, nothing else that's been diagnosed. Just the diabetes and weight issue."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat medications are you currently taking? Please include the name, dose, and frequency for each."
+    },
+    {
+      "role": "patient",
+      "content": "I'm on Metformin, 500 milligrams twice a day. And I take a multivitamin daily."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nIs the Metformin in tablet form?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, tablets."
+    },
+    {
+      "role": "agent",
+      "content": "Are you taking any other medications, supplements, or over-the-counter products besides the Metformin and multivitamin?"
+    },
+    {
+      "role": "patient",
+      "content": "No, that's it."
+    },
+    {
+      "role": "agent",
+      "content": "Do you have any allergies to medications, foods, or other substances?"
+    },
+    {
+      "role": "patient",
+      "content": "No, no known allergies."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat are your primary health goals? What would you like to achieve through your care at EZGrow?"
+    },
+    {
+      "role": "patient",
+      "content": "Like I said, I really want to avoid insulin. I'd like to manage this diabetes through diet and exercise if that's possible. And losing weight would be good, though that's been tough for me."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Martinez.\n\nLet me confirm the information I have collected:\n\n**Demographics:** Robert Martinez, November 22, 1969, male\n\n**Health Concerns:** Type 2 diabetes diagnosed a few months ago, tingling in feet\n\n**Medical Conditions:** \n- Type 2 diabetes (not improving adequately)\n- Overweight\n- Prediabetic neuropathy\n\n**Medications:** \n- Metformin 500mg tablet, twice daily for diabetes\n- Multivitamin, once daily\n\n**Allergies:** None\n\n**Health Goals:** Manage diabetes without insulin through diet and exercise, achieve weight loss\n\nIs this information correct?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, that's all correct."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for confirming, Mr. Martinez.\n\nYour intake is now complete. A provider will review this information and see you shortly.\n\nIs there anything else you would like to add before we conclude?"
+    },
+    {
+      "role": "patient",
+      "content": "No, I think that covers it. Thank you."
+    },
+    {
+      "role": "agent",
+      "content": "You're welcome, Mr. Martinez.\n\nYour intake is complete. A provider will be with you shortly.\n\nHave a good day."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Robert Martinez",
+      "dob": "1969-11-22",
+      "age": "55y",
+      "sex": "yMale",
+      "gender": "Male"
+    },
+    "conditions": [
+      {
+        "name": "diabetes",
+        "details": [
+          "Diagnosed a few months ago. Experiencing tingling in feet."
+        ]
+      },
+      {
+        "name": "peripheral neuropathy",
+        "details": [
+          "Tingling in feet"
+        ]
+      },
+      {
+        "status": "stable",
+        "name": "Type 2 Diabetes",
+        "details": [
+          "Numbers aren't great, patient working on it, not improving as fast as desired"
+        ]
+      },
+      {
+        "name": "Overweight"
+      },
+      {
+        "name": "Prediabetic neuropathy",
+        "details": [
+          "Tingling in feet"
+        ]
+      }
+    ],
+    "medications": [
+      {
+        "name": "Metformin",
+        "details": [
+          "500 mg tablet",
+          "twice daily",
+          "For: Type 2 diabetes"
+        ],
+        "dose_form": "500 mg tablet",
+        "sig": "twice daily",
+        "indication": "Type 2 diabetes"
+      },
+      {
+        "name": "Multivitamin",
+        "details": [
+          "daily"
+        ],
+        "sig": "daily"
+      }
+    ],
+    "allergies": [
+      {
+        "name": "No known allergies",
+        "details": [
+          "Patient reports no known allergies to medications, foods, or other substances"
+        ]
+      }
+    ],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "003",
+    "case_timestamp": "2025-01-16T10:30:00Z",
+    "run_timestamp": "2025-10-29T02:56:48.725797",
+    "total_turns": 16,
+    "patient_name": "Robert Martinez"
+  }
+}
