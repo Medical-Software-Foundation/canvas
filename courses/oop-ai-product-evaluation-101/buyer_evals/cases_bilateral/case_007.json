@@ -1,0 +1,14 @@
+{
+  "case_number": "007",
+  "case_timestamp": "2025-01-16T15:30:00Z",
+  "patient_name": "Harold Washington",
+  "patient_dob": "1943-05-14",
+  "patient_sex": "Male",
+  "patient_gender_identity": "Male",
+  "conditions": "Congestive heart failure (NYHA Class II), Atrial fibrillation, Chronic kidney disease (Stage 3), Benign prostatic hyperplasia (BPH), Hearing loss (bilateral, moderate)",
+  "medications": "Warfarin 5mg daily for AFib (dose varies by INR), Metoprolol 50mg twice daily for heart, Furosemide 40mg once daily in morning for fluid retention, Tamsulosin 0.4mg once daily at bedtime for prostate, Baby aspirin 81mg daily",
+  "allergies": "No known drug allergies",
+  "goals": "Keep heart stable and avoid hospitalizations. Wants to maintain independence and continue living alone. Needs hearing checked as it's gotten worse.",
+  "concerns": "Getting more short of breath with activities like climbing stairs. Ankles have been swelling more by evening. Urinating more frequently at night, sometimes 4-5 times. Hearing has gotten worse and having trouble on the phone with grandkids.",
+  "personality": "Hard of hearing and may need questions repeated or rephrased. Sometimes says 'yes' even when he doesn't fully understand. Prideful about independence. Can be a bit forgetful with details. Polite but may get frustrated if communication is difficult."
+}

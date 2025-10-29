@@ -8,12 +8,12 @@ or database access required.
 
 Usage:
     1. Start the intake agent Flask app manually: python intake_agent/app.py
-    2. Run this script: python evals/buy_side/run_case.py <case_number>
-    3. Find the output in: evals/buy_side/cases/case_{n}_{timestamp}.html
+    2. Run this script: python buyer_evals/case_runner_unilateral.py <case_number>
+    3. Find the output in: buyer_evals/cases_unilateral/case_{n}_{timestamp}.html
 
 Examples:
-    python evals/buy_side/run_case.py 1
-    python evals/buy_side/run_case.py 2
+    python buyer_evals/case_runner_unilateral.py 1
+    python buyer_evals/case_runner_unilateral.py 2
 """
 
 import sys
@@ -521,8 +521,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python evals/buy_side/run_case.py 1    # Run case 1
-  python evals/buy_side/run_case.py 2    # Run case 2
+  python buyer_evals/case_runner_unilateral.py 1    # Run case 1
+  python buyer_evals/case_runner_unilateral.py 2    # Run case 2
         """
     )
     parser.add_argument(
@@ -541,13 +541,13 @@ Examples:
 
     # Construct file paths
     script_dir = Path(__file__).parent
-    cases_dir = script_dir / "cases"
+    cases_dir = script_dir / "cases_unilateral"
     transcript_file = cases_dir / f"case_{case_num}_transcript.json"
 
     # Check that transcript file exists
     if not transcript_file.exists():
         print(f"❌ Error: Transcript file not found: {transcript_file}")
-        print(f"   Please create: cases/case_{case_num}_transcript.json")
+        print(f"   Please create: cases_unilateral/case_{case_num}_transcript.json")
         print()
         print("Available cases:")
         for transcript in sorted(cases_dir.glob("case_*_transcript.json")):

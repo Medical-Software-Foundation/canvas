@@ -1,0 +1,187 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Good morning, Sara. Yes, my name is Patricia O'Brien."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Ms. O'Brien.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "December 3rd, 1970."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is your sex assigned at birth? Please let me know if there is anything else to note regarding sex or gender."
+    },
+    {
+      "role": "patient",
+      "content": "Female, and that's still how I identify."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat brings you to EZGrow today? What are your current health concerns?"
+    },
+    {
+      "role": "patient",
+      "content": "Well, I'm a breast cancer survivor - I finished treatment about two years ago - and I'm doing okay, but I'm still dealing with a lot of fatigue that just won't go away. I also have lymphedema in my right arm from the surgery, and I'm hoping to get some help managing these ongoing issues so I can get back to feeling more like myself again."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for sharing that. I'm glad to hear you completed treatment.\n\nRegarding the breast cancer - what is the current status? Would you characterize it as stable, improving, or are you experiencing any recurrence?"
+    },
+    {
+      "role": "patient",
+      "content": "As far as I know, it's stable - no recurrence. I'm on Tamoxifen to help prevent it from coming back, and I have regular surveillance appointments. But I have to admit, I do get anxious about every little symptom, wondering if it could be something more serious."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. That anxiety is very common for survivors.\n\nTo clarify your medical conditions: breast cancer - stable, in remission on Tamoxifen. Lymphedema in right arm - is that stable, improving, or worsening?"
+    },
+    {
+      "role": "patient",
+      "content": "It's mostly stable, but it does get worse when I'm active or when it's hot outside. I try to manage it, but the swelling can be frustrating, especially because I'm trying to get back to doing more normal activities."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for that detail.\n\nDo you have any other medical conditions - past or present - that I should document?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, I have hypothyroidism, which developed from the cancer treatment. And I deal with chronic fatigue - that's really been the biggest challenge since finishing treatment."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nFor the hypothyroidism - is that currently stable on treatment, or are you still adjusting?"
+    },
+    {
+      "role": "patient",
+      "content": "It seems to be stable on medication. I take Levothyroxine daily and my levels have been okay at my last check, but honestly, it's hard to tell how much the thyroid issue contributes to the fatigue versus everything else."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. That can be difficult to distinguish.\n\nLet me document your medications. You mentioned Tamoxifen and Levothyroxine. \n\nFor the Tamoxifen - what is the dose, and how do you take it?"
+    },
+    {
+      "role": "patient",
+      "content": "It's 20 milligrams, and I take it once a day."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nFor the Levothyroxine - what is the dose, and when do you take it?"
+    },
+    {
+      "role": "patient",
+      "content": "It's 75 micrograms, once daily. I take it in the morning on an empty stomach."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nAre you taking any other medications, including over-the-counter medications, vitamins, or supplements?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, I take a Vitamin B12 supplement once a week. That's it besides the prescriptions."
+    },
+    {
+      "role": "agent",
+      "content": "What is the dose of the Vitamin B12, and what form is it - tablet, sublingual, injection?"
+    },
+    {
+      "role": "patient",
+      "content": "It's a tablet, 1000 micrograms I believe. My doctor recommended it to help with the fatigue."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Patricia O'Brien",
+      "dob": "1970-12-03",
+      "age": "54y",
+      "sex": "yFemale",
+      "gender": "Female"
+    },
+    "conditions": [
+      {
+        "status": "stable",
+        "name": "Breast cancer",
+        "details": [
+          "Survivor, finished treatment about two years ago"
+        ]
+      },
+      {
+        "status": "stable",
+        "name": "Fatigue",
+        "details": [
+          "Ongoing fatigue that won't go away"
+        ]
+      },
+      {
+        "status": "stable",
+        "name": "Lymphedema",
+        "details": [
+          "Right arm, from surgery"
+        ]
+      },
+      {
+        "status": "stable",
+        "name": "hypothyroidism",
+        "details": [
+          "developed from cancer treatment"
+        ]
+      },
+      {
+        "name": "chronic fatigue",
+        "details": [
+          "biggest challenge since finishing treatment"
+        ]
+      }
+    ],
+    "medications": [
+      {
+        "name": "Tamoxifen",
+        "details": [
+          "20 mg tablet",
+          "once daily",
+          "For: breast cancer recurrence prevention"
+        ],
+        "dose_form": "20 mg tablet",
+        "sig": "once daily",
+        "indication": "breast cancer recurrence prevention"
+      },
+      {
+        "name": "Levothyroxine",
+        "details": [
+          "75 micrograms tablet",
+          "daily",
+          "For: hypothyroidism"
+        ],
+        "sig": "daily",
+        "indication": "hypothyroidism"
+      },
+      {
+        "name": "Vitamin B12",
+        "details": [
+          "not specified not specified",
+          "once weekly",
+          "For: supplement"
+        ],
+        "sig": "once weekly",
+        "indication": "supplement"
+      }
+    ],
+    "allergies": [],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "009",
+    "case_timestamp": "2025-01-16T17:30:00Z",
+    "run_timestamp": "2025-10-29T03:13:27.859616",
+    "total_turns": 12,
+    "patient_name": "Patricia O'Brien"
+  }
+}

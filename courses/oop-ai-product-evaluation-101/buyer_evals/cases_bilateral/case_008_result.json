@@ -1,0 +1,166 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Good morning Sara. It's Kevin Tran, first name Kevin, last name Tran. Let's get this moving - I need to get cleared for soccer and the season starts in three weeks."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Kevin Tran.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "August 30th, 1991."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is your sex assigned at birth? Please let me know if there's anything else to note about sex or gender."
+    },
+    {
+      "role": "patient",
+      "content": "Male, and that's my gender identity too. Nothing else to note there."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is your current health concern or reason for today's visit?"
+    },
+    {
+      "role": "patient",
+      "content": "I need medical clearance to get back to competitive soccer. I had ACL reconstruction on my right knee about six months ago, and I need to make sure I'm fully healed and ready for high-impact sports before the season starts."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. ACL reconstruction, right knee, six months post-operative.\n\nDo you have any current medical conditions, including the status of your knee recovery?"
+    },
+    {
+      "role": "patient",
+      "content": "The knee recovery is going well, pretty much back to normal. I also have mild asthma, but it's just exercise-induced, nothing major. I manage it with an inhaler before workouts."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is the name and dose of your asthma inhaler?"
+    },
+    {
+      "role": "patient",
+      "content": "Albuterol inhaler. I just use it as needed before exercise or games."
+    },
+    {
+      "role": "agent",
+      "content": "What is the dose of your albuterol inhaler? It should be listed on the device, typically in micrograms."
+    },
+    {
+      "role": "patient",
+      "content": "I don't have it on me right now, so I'm not sure of the exact dose. It's just the standard albuterol rescue inhaler my doctor prescribed a while back."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. We can note it as albuterol inhaler, dose to be confirmed.\n\nAre you taking any other medications, including anything for your knee recovery or pain management?"
+    },
+    {
+      "role": "patient",
+      "content": "I have Naproxen 500mg that I take as needed for knee pain, but honestly I rarely use it anymore. And I take a daily multivitamin, that's it."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nDo you have any allergies to medications, foods, or other substances?"
+    },
+    {
+      "role": "patient",
+      "content": "No, no known drug allergies or anything like that."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat are your health goals beyond obtaining clearance for competitive soccer?"
+    },
+    {
+      "role": "patient",
+      "content": "Really just want to confirm the knee is fully healed and get some guidance on injury prevention so I don't end up tearing it again. I need to stay on the field this season."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nLet me confirm the information I have collected:\n\n**Demographics:**\n- Name: Kevin Tran\n- Date of birth: August 30, 1991\n- Sex: Male\n\n**Current health concern:**\n- Medical clearance for competitive soccer, status post ACL reconstruction right knee, 6 months ago\n\n**Medical conditions:**\n- Right knee ACL reconstruction (recovering well, nearly back to normal)\n- Exercise-induced asthma (mild, stable)\n\n**Medications:**\n- Albuterol inhaler, dose to be confirmed, as needed before exercise\n- Naproxen 500mg, as needed for knee pain (rarely used)\n- Daily multivitamin\n\n**Allergies:**\n- No known drug allergies\n\n**Health goals:**\n- Confirm complete knee healing\n- Obtain injury prevention guidance\n\nIs this information accurate and complete?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, that's all accurate. Can we get me scheduled with a doctor soon? Like I said, I've got three weeks before the season starts and I need that clearance."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for confirming, Kevin.\n\nYour intake is now complete. Our scheduling team will contact you within 24 hours to arrange your appointment. Given your timeline, please mention the urgency when they call.\n\nIs there anything else you need to add to your medical information today?"
+    },
+    {
+      "role": "patient",
+      "content": "No, that covers it. Just make sure they know about the three-week timeline. Thanks Sara."
+    },
+    {
+      "role": "agent",
+      "content": "Noted. I will flag your file as time-sensitive due to the three-week deadline for soccer season clearance.\n\nThank you for completing your intake, Kevin. You will hear from our scheduling team within 24 hours.\n\nHave a good day."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Kevin Tran",
+      "dob": "1991-08-30",
+      "age": "34y",
+      "sex": "yMale",
+      "gender": "Male"
+    },
+    "conditions": [
+      {
+        "status": "improving",
+        "name": "ACL reconstruction, right knee",
+        "details": [
+          "Surgery performed approximately six months ago"
+        ]
+      },
+      {
+        "status": "stable",
+        "name": "Exercise-induced asthma",
+        "details": [
+          "Mild, managed with inhaler before workouts"
+        ]
+      }
+    ],
+    "medications": [
+      {
+        "name": "Albuterol inhaler",
+        "details": [
+          "not specified inhaler",
+          "as needed before exercise or games",
+          "For: exercise-induced asthma"
+        ],
+        "indication": "exercise-induced asthma"
+      },
+      {
+        "name": "Naproxen",
+        "details": [
+          "500mg tablet",
+          "as needed",
+          "For: knee pain"
+        ],
+        "dose_form": "500mg tablet",
+        "indication": "knee pain"
+      }
+    ],
+    "allergies": [
+      {
+        "name": "No known drug allergies",
+        "details": [
+          "Patient reports no known drug allergies or other allergies"
+        ]
+      }
+    ],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "008",
+    "case_timestamp": "2025-01-16T16:45:00Z",
+    "run_timestamp": "2025-10-29T03:10:13.684038",
+    "total_turns": 13,
+    "patient_name": "Kevin Tran"
+  }
+}

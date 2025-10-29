@@ -1,0 +1,28 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Patricia O'Brien'",
+    "Date of birth correctly identified: 1970-12-03",
+    "Key condition detected: cancer",
+    "Key condition detected: hypothyroid",
+    "Total conditions documented: 5",
+    "Key medication detected: levothyroxine",
+    "Key medication detected: tamoxifen",
+    "Medication indications documented for 3 medications",
+    "Total conversational turns: 12",
+    "Appropriate conversation length for thorough data gathering"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Female', got 'yFemale'"
+    },
+    {
+      "severity": "critical",
+      "issue": "Codeine allergy from case file not detected"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Continue cancer surveillance and stay cancer-free. Manage lymphedema to prevent progression. Improve..."
+    }
+  ]
+}

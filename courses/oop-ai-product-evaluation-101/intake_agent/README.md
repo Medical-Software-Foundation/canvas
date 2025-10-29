@@ -18,32 +18,6 @@ uv run python app.py
 
 Open http://localhost:5000 in your browser.
 
-## Evaluation
-
-To run automated evaluation with simulated patients:
-
-```bash
-# First time only: install Playwright browsers
-uv run playwright install chromium
-
-# Run evaluation with visible browser
-uv run python run_evaluation.py
-
-# Run in headless mode
-uv run python run_evaluation.py --headless
-
-# Test specific persona
-uv run python run_evaluation.py --persona complex_chronic
-
-# Test all personas
-uv run python run_evaluation.py --persona all --headless
-
-# List available personas
-uv run python run_evaluation.py --list
-```
-
-See `EVALUATION.md` for detailed documentation on the evaluation system.
-
 ## Configuration
 
 Edit `config.py` to customize:

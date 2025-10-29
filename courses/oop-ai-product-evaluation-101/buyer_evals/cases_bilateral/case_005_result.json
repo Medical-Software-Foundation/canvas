@@ -1,0 +1,244 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Tyler Brooks."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Brooks.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "September 10th, 2008."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is your sex assigned at birth? Please let me know if there is anything else to note regarding sex or gender."
+    },
+    {
+      "role": "patient",
+      "content": "Male. And no, that's it."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat brings you to EZGrow today? What are your current health concerns?"
+    },
+    {
+      "role": "patient",
+      "content": "Um, I need a refill on my ADHD medication. And my acne has been getting pretty bad."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. ADHD medication refill and worsening acne.\n\nWhat is the name and dose of your ADHD medication?"
+    },
+    {
+      "role": "patient",
+      "content": "Adderall XR, 20 milligrams. I take it in the morning."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is that medication prescribed for - ADHD specifically, or another indication?"
+    },
+    {
+      "role": "patient",
+      "content": "ADHD. I was diagnosed when I was like 9."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nDo you have any other medical conditions besides ADHD?"
+    },
+    {
+      "role": "patient",
+      "content": "I have seasonal allergies. And I guess the acne, but I don't know if that counts as a condition."
+    },
+    {
+      "role": "agent",
+      "content": "Noted. Seasonal allergies and acne.\n\nIs your ADHD currently stable, improving, or deteriorating?"
+    },
+    {
+      "role": "patient",
+      "content": "It's okay, I guess. They just increased my dose recently, so I'm still adjusting to that."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. Stable with recent dose adjustment.\n\nAre your seasonal allergies stable, improving, or deteriorating?"
+    },
+    {
+      "role": "patient",
+      "content": "They're fine. Pretty stable."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nAre you currently taking any medications for your acne or seasonal allergies?"
+    },
+    {
+      "role": "patient",
+      "content": "Yeah, I take Zyrtec for allergies, 10 milligrams daily. And I use benzoyl peroxide wash for the acne, but it's not really working."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. Zyrtec 10mg daily for allergies, and benzoyl peroxide wash for acne.\n\nIs the Zyrtec a tablet or liquid form?"
+    },
+    {
+      "role": "patient",
+      "content": "Tablet."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nDo you take any other medications, vitamins, or supplements?"
+    },
+    {
+      "role": "patient",
+      "content": "No, that's it."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nDo you have any allergies to medications, foods, or environmental substances?"
+    },
+    {
+      "role": "patient",
+      "content": "No, no drug allergies. Just the seasonal allergies I already mentioned."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nWhat are your specific seasonal allergens, and what reactions do you experience?"
+    },
+    {
+      "role": "patient",
+      "content": "Um, mostly pollen and stuff in the spring. I get sneezing, runny nose, itchy eyes. The Zyrtec helps though."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat are your health goals? What would you like to achieve through your care at EZGrow?"
+    },
+    {
+      "role": "patient",
+      "content": "I really need to get my acne under control before senior year photos. And just make sure the ADHD medication is working okay since they increased it."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. Clear acne before senior year photos and optimize ADHD medication management.\n\nLet me confirm your information:\n\n**Demographics:** Tyler Brooks, DOB 09/10/2008, male\n\n**Health Concerns:** ADHD medication refill, worsening acne\n\n**Medical Conditions:** \n- ADHD (stable, recent dose increase)\n- Seasonal allergies (stable)\n- Acne\n\n**Medications:**\n- Adderall XR 20mg, taken once daily in the morning for ADHD\n- Zyrtec 10mg tablet, taken once daily for seasonal allergies\n- Benzoyl peroxide wash for acne (ineffective)\n\n**Allergies:** Seasonal - pollen in spring causing sneezing, runny nose, itchy eyes\n\n**Health Goals:** Clear acne before senior year photos, optimize ADHD medication\n\nIs this information accurate and complete?"
+    },
+    {
+      "role": "patient",
+      "content": "Yeah, that's right. Oh, but I've also been having some trouble sleeping since they increased my Adderall dose."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for mentioning that.\n\nIs the sleep difficulty a new concern since the dose increase, or has it worsened? And how would you describe it - trouble falling asleep, staying asleep, or both?"
+    },
+    {
+      "role": "patient",
+      "content": "It's new since the dose went up. Mostly just trouble falling asleep at night."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. Difficulty initiating sleep since Adderall dose increase.\n\nLet me update your information:\n\n**Demographics:** Tyler Brooks, DOB 09/10/2008, male\n\n**Health Concerns:** ADHD medication refill, worsening acne, new-onset insomnia since medication increase\n\n**Medical Conditions:** \n- ADHD (stable, recent dose increase)\n- Seasonal allergies (stable)\n- Acne\n- Insomnia (new onset)\n\n**Medications:**\n- Adderall XR 20mg, taken once daily in the morning for ADHD\n- Zyrtec 10mg tablet, taken once daily for seasonal allergies\n- Benzoyl peroxide wash for acne (ineffective)\n\n**Allergies:** Seasonal - pollen in spring causing sneezing, runny nose, itchy eyes\n\n**Health Goals:** Clear acne before senior year photos, optimize ADHD medication, address sleep difficulty\n\nIs this now accurate and complete?"
+    },
+    {
+      "role": "patient",
+      "content": "Yeah, that's everything."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Brooks. Your intake is now complete.\n\nA provider will review your information and address your medication refill, acne treatment, and sleep concerns during your appointment.\n\nIs there anything else you would like to add before we conclude?"
+    },
+    {
+      "role": "patient",
+      "content": "No, I think that's it. Thanks."
+    },
+    {
+      "role": "agent",
+      "content": "You're welcome, Mr. Brooks. \n\nYour intake is complete. We will see you at your appointment.\n\nHave a good day."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Tyler Brooks",
+      "dob": "2008-09-10",
+      "age": "17y",
+      "sex": "yMale",
+      "gender": "Male"
+    },
+    "conditions": [
+      {
+        "status": "stable",
+        "name": "ADHD",
+        "details": [
+          "Needs medication refill"
+        ]
+      },
+      {
+        "status": "deteriorating",
+        "name": "Acne",
+        "details": [
+          "Getting pretty bad"
+        ]
+      },
+      {
+        "status": "stable",
+        "name": "seasonal allergies"
+      },
+      {
+        "name": "Insomnia",
+        "details": [
+          "Trouble sleeping since Adderall dose increase"
+        ]
+      }
+    ],
+    "medications": [
+      {
+        "name": "Adderall XR",
+        "details": [
+          "20 mg capsule",
+          "take in the morning",
+          "For: ADHD"
+        ],
+        "dose_form": "20 mg capsule",
+        "sig": "take in the morning",
+        "indication": "ADHD"
+      },
+      {
+        "name": "Zyrtec",
+        "details": [
+          "10 mg tablet",
+          "daily",
+          "For: seasonal allergies"
+        ],
+        "dose_form": "10 mg tablet",
+        "sig": "daily",
+        "indication": "seasonal allergies"
+      },
+      {
+        "name": "benzoyl peroxide wash",
+        "details": [
+          "topical wash",
+          "as directed",
+          "For: acne"
+        ],
+        "indication": "acne"
+      }
+    ],
+    "allergies": [
+      {
+        "name": "pollen",
+        "details": [
+          "Spring seasonal allergen. Causes sneezing, runny nose, itchy eyes. Controlled with Zyrtec."
+        ]
+      }
+    ],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "005",
+    "case_timestamp": "2025-01-16T13:00:00Z",
+    "run_timestamp": "2025-10-29T03:02:41.684994",
+    "total_turns": 20,
+    "patient_name": "Tyler Brooks"
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Good morning, Sara. My name is Jessica Taylor."
+    },
+    {
+      "role": "agent",
+      "content": "Good morning, Ms. Taylor.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "April 15th, 2002."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat is your sex assigned at birth? Please let me know if there is anything else to note regarding sex or gender."
+    },
+    {
+      "role": "patient",
+      "content": "Female, and that's also my gender identity. Nothing else to note there."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat brings you to EZGrow today? What are your current health concerns?"
+    },
+    {
+      "role": "patient",
+      "content": "I'm looking to switch my birth control method, possibly to an IUD, so I'll need a referral for that. I'm also having migraines that seem to be getting more frequent, and I think they might be related to my current birth control."
+    },
+    {
+      "role": "agent",
+      "content": "Understood. I will note both concerns.\n\nRegarding the migraines: How frequently are they occurring, and when did you first notice the increase in frequency?"
+    },
+    {
+      "role": "patient",
+      "content": "They're happening about 2 to 3 times a month now, and I've noticed they seem worse around my menstrual cycle. The frequency has picked up over the past few months."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for that detail.\n\nDo you have any diagnosed medical conditions, such as migraine disorder, or any other ongoing health conditions?"
+    },
+    {
+      "role": "patient",
+      "content": "No formal diagnoses. I'm generally healthy otherwise, just these occasional migraines."
+    },
+    {
+      "role": "agent",
+      "content": "Understood.\n\nWhat is the name and dose of your current birth control medication?"
+    },
+    {
+      "role": "patient",
+      "content": "Ortho Tri-Cyclen, and I take it daily. I'm not sure of the exact dose off the top of my head."
+    },
+    {
+      "role": "agent",
+      "content": "That is acceptable. I will note Ortho Tri-Cyclen, taken daily.\n\nAre you taking any other medications, supplements, or vitamins regularly?"
+    },
+    {
+      "role": "patient",
+      "content": "Just Ibuprofen 400mg as needed when I get the migraines. No regular supplements or vitamins."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nDo you have any allergies to medications, foods, or other substances?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, I'm allergic to sulfa drugs. They cause hives."
+    },
+    {
+      "role": "agent",
+      "content": "Noted. Sulfa drug allergy with hives as the reaction.\n\nWhat are your primary health goals? What would you like to achieve through your care at EZGrow?"
+    },
+    {
+      "role": "patient",
+      "content": "I want to switch to a different birth control method that doesn't cause nausea like the pills do, preferably an IUD. And I'd like to find better options for managing these migraines, especially if they're connected to my birth control."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you for sharing that.\n\nLet me confirm the information I have collected:\n\n**Demographics:**\n- Name: Jessica Taylor\n- Date of birth: April 15, 2002\n- Sex: Female\n\n**Health Concerns:**\n- Migraines, occurring 2-3 times monthly, worsening around menstrual cycle, increased frequency over past few months\n- Nausea from current birth control\n- Seeking IUD referral and birth control method change\n\n**Medical Conditions:**\n- None diagnosed\n\n**Medications:**\n- Ortho Tri-Cyclen, daily (birth control)\n- Ibuprofen 400mg, as needed for migraines\n\n**Allergies:**\n- Sulfa drugs - causes hives\n\n**Health Goals:**\n- Switch to IUD or alternative birth control without nausea side effects\n- Better migraine management\n\nIs this information accurate and complete?"
+    },
+    {
+      "role": "patient",
+      "content": "Yes, that's all correct."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Ms. Taylor. Your intake information is now complete.\n\nA provider will review your information and be in touch regarding your birth control options, IUD referral, and migraine management.\n\nIs there anything else you would like to add before we conclude?"
+    },
+    {
+      "role": "patient",
+      "content": "No, that covers everything. Thank you."
+    },
+    {
+      "role": "agent",
+      "content": "You are welcome, Ms. Taylor.\n\nYour intake is complete. Have a good day."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Jessica Taylor",
+      "dob": "2002-04-15",
+      "age": "23y",
+      "sex": "yFemale",
+      "gender": "Female"
+    },
+    "conditions": [
+      {
+        "status": "deteriorating",
+        "name": "migraines",
+        "details": [
+          "Getting more frequent, patient thinks they might be related to current birth control"
+        ]
+      }
+    ],
+    "medications": [
+      {
+        "name": "Ortho Tri-Cyclen",
+        "details": [
+          "unknown tablet",
+          "daily",
+          "For: birth control"
+        ],
+        "sig": "daily",
+        "indication": "birth control"
+      },
+      {
+        "name": "Ibuprofen",
+        "details": [
+          "400mg tablet",
+          "as needed",
+          "For: migraines"
+        ],
+        "dose_form": "400mg tablet",
+        "indication": "migraines"
+      }
+    ],
+    "allergies": [
+      {
+        "name": "sulfa drugs",
+        "details": [
+          "cause hives"
+        ]
+      }
+    ],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "004",
+    "case_timestamp": "2025-01-16T11:45:00Z",
+    "run_timestamp": "2025-10-29T02:59:05.098962",
+    "total_turns": 13,
+    "patient_name": "Jessica Taylor"
+  }
+}

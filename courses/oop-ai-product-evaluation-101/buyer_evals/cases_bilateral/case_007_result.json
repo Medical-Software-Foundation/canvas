@@ -1,0 +1,56 @@
+{
+  "conversation": [
+    {
+      "role": "agent",
+      "content": "Good morning. I am Sara, your AI intake agent at EZGrow Longevity Medical Practice.\n\nI will be collecting your medical information today, including demographics, health concerns, medical history, medications, allergies, and health goals. This typically takes 10-15 minutes.\n\nMay I have your full legal name to begin?"
+    },
+    {
+      "role": "patient",
+      "content": "Good morning, Sara. Yes, my name is Harold Washington."
+    },
+    {
+      "role": "agent",
+      "content": "Good morning, Mr. Washington.\n\nWhat is your date of birth?"
+    },
+    {
+      "role": "patient",
+      "content": "May 14th, 1943."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you, Mr. Washington.\n\nWhat is your sex assigned at birth? Please let me know if there is anything else to note regarding sex or gender."
+    },
+    {
+      "role": "patient",
+      "content": "Male. That's it, nothing else to note."
+    },
+    {
+      "role": "agent",
+      "content": "Thank you.\n\nWhat brings you to EZGrow today? What are your current health concerns?"
+    },
+    {
+      "role": "patient",
+      "content": "Well, I've been getting more short of breath lately, especially when I'm going up the stairs. And my ankles have been swelling up more by the evening time."
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "Harold Washington",
+      "dob": "1943-05-14",
+      "age": "82y",
+      "sex": "yMale",
+      "gender": "Male"
+    },
+    "conditions": [],
+    "medications": [],
+    "allergies": [],
+    "goals": []
+  },
+  "metadata": {
+    "case_number": "007",
+    "case_timestamp": "2025-01-16T15:30:00Z",
+    "run_timestamp": "2025-10-29T03:07:56.101606",
+    "total_turns": 4,
+    "patient_name": "Harold Washington"
+  }
+}

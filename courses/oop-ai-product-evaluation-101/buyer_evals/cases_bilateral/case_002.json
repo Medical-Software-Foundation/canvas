@@ -1,0 +1,14 @@
+{
+  "case_number": "002",
+  "case_timestamp": "2025-01-16T09:15:00Z",
+  "patient_name": "Dorothy Chen",
+  "patient_dob": "1952-07-08",
+  "patient_sex": "Female",
+  "patient_gender_identity": "Female",
+  "conditions": "Type 2 Diabetes (well-controlled on medication), Hypertension (controlled), Osteoarthritis (knees, moderate severity), Hyperlipidemia",
+  "medications": "Metformin 1000mg twice daily for diabetes, Lisinopril 10mg once daily for blood pressure, Atorvastatin 20mg once daily at bedtime for cholesterol, Tylenol as needed for joint pain",
+  "allergies": "Penicillin (causes rash)",
+  "goals": "Continue managing chronic conditions effectively. Wants to travel to visit grandchildren without health complications. Interested in physical therapy or other options to reduce knee pain and maintain mobility.",
+  "concerns": "Knee pain has been getting worse over the past year, making it harder to walk and do daily activities. Worried about needing knee replacement surgery. Also concerned about maintaining good diabetes control while traveling.",
+  "personality": "Organized, proactive, and detail-oriented. Keeps meticulous health records. Asks clarifying questions and likes to understand the reasoning behind medical recommendations. Cooperative and engaged in her care."
+}

@@ -1,0 +1,27 @@
+{
+  "positive": [
+    "Patient name correctly extracted: 'Marcus Johnson'",
+    "Date of birth correctly identified: 2001-03-22",
+    "Key condition detected: anxiety",
+    "Key condition detected: asthma",
+    "Key condition detected: allergies",
+    "Total conditions documented: 5",
+    "Key medication detected: albuterol",
+    "Key medication detected: claritin",
+    "Medication indications documented for 2 medications",
+    "Allergies correctly documented as 'No known drug allergies'",
+    "Total conversational turns: 19",
+    "Appropriate conversation length for thorough data gathering",
+    "Agent provided confirmation summary of collected information"
+  ],
+  "negative": [
+    {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Male', got '24yMale'"
+    },
+    {
+      "severity": "critical",
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Seeking therapy or counseling for anxiety and stress management. Wants to be able to play guitar at ..."
+    }
+  ]
+}

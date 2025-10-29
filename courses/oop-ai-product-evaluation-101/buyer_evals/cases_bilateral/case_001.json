@@ -1,0 +1,14 @@
+{
+  "case_number": "001",
+  "case_timestamp": "2025-01-15T14:30:00Z",
+  "patient_name": "Marcus Johnson",
+  "patient_dob": "2001-03-22",
+  "patient_sex": "Male",
+  "patient_gender_identity": "Male",
+  "conditions": "Asthma (mild, intermittent), Seasonal allergies, Anxiety",
+  "medications": "Albuterol inhaler (as needed), Claritin 10mg (daily during allergy season)",
+  "allergies": "No known drug allergies",
+  "goals": "Seeking therapy or counseling for anxiety and stress management. Wants to be able to play guitar at coffee shop gigs again without panicking. Interested in exploring treatment options for managing work-related stress and occasional panic symptoms.",
+  "concerns": "Experiencing increased anxiety over the past 6 months, difficulty sleeping, occasional panic attacks during stressful situations at work. Worried about starting medication but open to discussing all options.",
+  "personality": "A little embarrassed and hesitant when discussing mental health concerns. Takes time to open up but is cooperative once comfortable."
+}

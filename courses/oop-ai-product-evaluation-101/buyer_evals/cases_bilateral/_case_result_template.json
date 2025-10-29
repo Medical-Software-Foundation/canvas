@@ -1,0 +1,52 @@
+{
+  "conversation": [
+    {
+      "role": "agent|patient",
+      "content": "Message text"
+    }
+  ],
+  "structured_data_detected": {
+    "patient": {
+      "name": "",
+      "dob": "",
+      "age": "",
+      "sex": "",
+      "gender": ""
+    },
+    "conditions": [
+      {
+        "name": "",
+        "status": "",
+        "details": []
+      }
+    ],
+    "medications": [
+      {
+        "name": "",
+        "dose_form": "",
+        "sig": "",
+        "indication": "",
+        "details": []
+      }
+    ],
+    "allergies": [
+      {
+        "name": "",
+        "details": []
+      }
+    ],
+    "goals": [
+      {
+        "name": "",
+        "details": []
+      }
+    ]
+  },
+  "metadata": {
+    "case_number": "",
+    "case_timestamp": "",
+    "run_timestamp": "",
+    "total_turns": 0,
+    "patient_name": ""
+  }
+}

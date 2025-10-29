@@ -1,0 +1,14 @@
+{
+  "case_number": "008",
+  "case_timestamp": "2025-01-16T16:45:00Z",
+  "patient_name": "Kevin Tran",
+  "patient_dob": "1991-08-30",
+  "patient_sex": "Male",
+  "patient_gender_identity": "Male",
+  "conditions": "History of right ACL reconstruction (6 months ago, recovering well), Mild asthma (exercise-induced)",
+  "medications": "Albuterol inhaler as needed before exercise for asthma, Naproxen 500mg as needed for knee pain (rarely used now), Multivitamin daily",
+  "allergies": "No known drug allergies",
+  "goals": "Needs medical clearance to return to competitive soccer league. Wants to confirm knee is fully healed and ready for high-impact sports. Would like guidance on injury prevention.",
+  "concerns": "Knee feels good most of the time but occasionally has minor aching after long runs. Worried about re-injury. Wants to make sure he's cleared to play before season starts in 3 weeks.",
+  "personality": "Athletic, impatient, and goal-oriented. Gets straight to the point. May downplay symptoms to get clearance faster. Focused on performance and competition. Appreciates efficiency and clear timelines."
+}
