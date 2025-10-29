@@ -1,6 +1,10 @@
-# OOP AI Product Evaluation 101
+# AI Product Evaluation 101
 
 A hands-on course for evaluating AI products from both builder and buyer perspectives.
+
+Produced by [Out-of-Pocket Health](https://www.outofpocket.health/courses/ai-product-evaluation-101)
+
+Sponsored by [Canvas Medical](https://www.canvasmedical.com)
 
 ## Project Overview
 
