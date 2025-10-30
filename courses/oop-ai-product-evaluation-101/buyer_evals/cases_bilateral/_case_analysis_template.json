@@ -1,0 +1,26 @@
+{
+  "positive": [
+    "Positive observation 1 (e.g., 'Patient name correctly extracted: John Doe')",
+    "Positive observation 2 (e.g., 'Key condition detected: diabetes')",
+    "Positive observation 3 (e.g., 'Total conversational turns: 15')",
+    "Add as many positive observations as relevant..."
+  ],
+  "negative": [
+    {
+      "severity": "critical",
+      "issue": "Description of critical issue (e.g., 'Goals completely missing from structured data despite being discussed in case')"
+    },
+    {
+      "severity": "high",
+      "issue": "Description of high severity issue (e.g., 'Sex incorrect. Expected Male, got yMale')"
+    },
+    {
+      "severity": "moderate",
+      "issue": "Description of moderate issue (e.g., 'Gender identity truncated. Expected Non-binary, got non')"
+    },
+    {
+      "severity": "low",
+      "issue": "Description of low severity issue (e.g., 'Minor formatting inconsistency in medication list')"
+    }
+  ]
+}
