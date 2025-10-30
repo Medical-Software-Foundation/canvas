@@ -2,6 +2,12 @@
 """
 Analyze all bilateral case results by comparing input cases with detected structured data.
 Generates case_{n}_analysis.json files for each case with results.
+
+Output follows schema defined in cases_bilateral/_case_analysis_template.json:
+- positive: array of strings (positive observations)
+- negative: array of objects with severity and issue fields
+  - severity: "critical" | "high" | "moderate" | "low"
+  - issue: string describing the problem
 """
 
 import json
@@ -19,6 +25,39 @@ def save_json(data: Dict, file_path: Path):
     """Save data to JSON file."""
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def validate_analysis_schema(analysis: Dict, template_path: Path) -> bool:
+    """Validate that analysis matches the template schema."""
+    try:
+        template = load_json(template_path)
+
+        # Check required keys
+        if 'positive' not in analysis or 'negative' not in analysis:
+            return False
+
+        # Validate positive is list of strings
+        if not isinstance(analysis['positive'], list):
+            return False
+        if not all(isinstance(item, str) for item in analysis['positive']):
+            return False
+
+        # Validate negative is list of objects with severity and issue
+        if not isinstance(analysis['negative'], list):
+            return False
+        for item in analysis['negative']:
+            if not isinstance(item, dict):
+                return False
+            if 'severity' not in item or 'issue' not in item:
+                return False
+            if item['severity'] not in ['critical', 'high', 'moderate', 'low']:
+                return False
+            if not isinstance(item['issue'], str):
+                return False
+
+        return True
+    except Exception:
+        return False
 
 
 def analyze_demographics(case: Dict, result: Dict) -> tuple[List[str], List[Dict]]:
@@ -310,8 +349,18 @@ def analyze_conversation(case: Dict, result: Dict) -> tuple[List[str], List[Dict
 
 
 def analyze_case(case_number: str, cases_dir: Path) -> Dict:
-    """Analyze a single case."""
+    """
+    Analyze a single case.
 
+    Returns a dictionary matching _case_analysis_template.json schema:
+    {
+        "positive": [list of string observations],
+        "negative": [
+            {"severity": "critical|high|moderate|low", "issue": "description"},
+            ...
+        ]
+    }
+    """
     case_file = cases_dir / f"case_{case_number}.json"
     result_file = cases_dir / f"case_{case_number}_result.json"
 
@@ -348,6 +397,7 @@ def analyze_case(case_number: str, cases_dir: Path) -> Dict:
     all_positive.extend(pos)
     all_negative.extend(neg)
 
+    # Return structure matching template schema
     return {
         "positive": all_positive,
         "negative": all_negative
@@ -358,12 +408,20 @@ def main():
     """Main function to analyze all cases."""
     script_dir = Path(__file__).parent
     cases_dir = script_dir / "cases_bilateral"
+    template_path = cases_dir / "_case_analysis_template.json"
+
+    # Verify template exists
+    if not template_path.exists():
+        print(f"❌ Error: Template file not found at {template_path}")
+        return
 
     # Find all result files
     result_files = sorted(cases_dir.glob("case_*_result.json"))
 
     print("=" * 70)
     print("  Bilateral Cases Analysis")
+    print("=" * 70)
+    print(f"  Using schema: {template_path.name}")
     print("=" * 70)
     print()
 
@@ -379,6 +437,10 @@ def main():
 
         try:
             analysis = analyze_case(case_number, cases_dir)
+
+            # Validate schema
+            if not validate_analysis_schema(analysis, template_path):
+                print(f"  ⚠️  Warning: Analysis does not match template schema")
 
             # Save analysis
             analysis_file = cases_dir / f"case_{case_number}_analysis.json"

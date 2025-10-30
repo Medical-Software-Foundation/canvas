@@ -1,54 +1,33 @@
 {
   "positive": [
-    "Agent proactively asked about and acknowledged patient's pronouns (they/them) at the start of conversation",
-    "Agent used correct pronouns consistently throughout the conversation, creating an affirming environment",
-    "Patient name correctly captured: 'Alex Rivera'",
-    "Date of birth correctly captured: 1998-06-19",
-    "Age correctly calculated: 27y",
-    "All three expected medications successfully documented with complete details",
-    "Testosterone cypionate fully specified: 50mg intramuscular injection every 2 weeks for hormone therapy",
-    "Spironolactone fully specified: 100mg twice daily for hormone therapy, including T-blocker context",
-    "Sertraline fully specified: 100mg once daily for depression and anxiety",
-    "All medication indications correctly linked to their purposes",
-    "All three mental health diagnoses documented: social anxiety disorder, depression (improving), gender dysphoria",
-    "Gender dysphoria appropriately documented as a medical condition",
+    "Patient name correctly extracted: 'Alex Rivera'",
+    "Date of birth correctly identified: 1998-06-19",
+    "Key condition detected: anxiety",
+    "Key condition detected: depression",
+    "Total conditions documented: 5",
+    "Key medication detected: testosterone",
+    "Medication indications documented for 4 medications",
     "Allergies correctly documented as 'No known drug allergies'",
-    "Agent provided comprehensive confirmation summary before concluding",
-    "Appropriate conversation length (14 turns) for complex medical/gender-affirming care needs",
-    "Patient felt comfortable enough to share additional concerns about appointment anxiety and cost despite initially guarded personality",
-    "Agent demonstrated cultural competence by asking about sex assigned at birth and gender identity separately",
-    "Agent acknowledged and addressed patient's cost concerns appropriately",
-    "Patient's guarded personality was successfully navigated - conversation shows gradual opening up",
-    "Natural conversational flow despite complex medical and identity topics"
+    "Total conversational turns: 14",
+    "Appropriate conversation length for thorough data gathering",
+    "Agent provided confirmation summary of collected information"
   ],
   "negative": [
     {
+      "severity": "high",
+      "issue": "Sex incorrect. Expected 'Female', got 'yfemale'"
+    },
+    {
+      "severity": "moderate",
+      "issue": "Gender identity incorrect. Expected 'Non-binary (they/them pronouns)', got 'non'"
+    },
+    {
+      "severity": "high",
+      "issue": "Key medication from case file not detected: antidepressant"
+    },
+    {
       "severity": "critical",
-      "issue": "Goals completely missing from structured data despite extensive discussion. Patient explicitly stated goals: continue hormone therapy, monitor progress, possibly increase testosterone dose, improve social confidence, and obtain top surgery documentation/referrals. None of these were captured in the goals array."
-    },
-    {
-      "severity": "high",
-      "issue": "Sex field shows 'yfemale' instead of 'Female' - appears to be a parsing error concatenating age with sex value"
-    },
-    {
-      "severity": "high",
-      "issue": "Gender field shows 'non' instead of full identity. Expected 'Non-binary' or the full description from case file: 'Non-binary (they/them pronouns)'. The truncation loses important identity information."
-    },
-    {
-      "severity": "moderate",
-      "issue": "Duplicate condition entries: 'depression (improving)' and 'moderate depression (improving)' are listed as separate conditions when they represent the same diagnosis"
-    },
-    {
-      "severity": "moderate",
-      "issue": "Anxiety listed as separate condition alongside social anxiety disorder. The case file specified 'Social anxiety disorder' as the primary diagnosis, with general anxiety being part of that condition, not a separate diagnosis."
-    },
-    {
-      "severity": "low",
-      "issue": "Testosterone appears twice in medications list: once as generic 'testosterone' (incomplete, missing dose/form) and once as 'testosterone cypionate' (complete). The generic entry should be removed as it's redundant and incomplete."
-    },
-    {
-      "severity": "low",
-      "issue": "Generic 'testosterone' entry lacks critical details (dose: 50mg, form: cypionate, route: intramuscular, frequency: every 2 weeks) that are present in the complete 'testosterone cypionate' entry"
+      "issue": "Goals completely missing from structured data despite being discussed in case. Expected goals related to: Continue gender-affirming hormone therapy and monitor progress. Address ongoing depression and anxie..."
     }
   ]
 }
