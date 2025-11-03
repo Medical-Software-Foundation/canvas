@@ -4921,7 +4921,7 @@ PROVIDER| Provider
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-task
 # Task
-Last updated: 24 Jan 2025
+Last updated: 28 Oct 2025
 ##  Introduction #
 A `Task` represents a to-do item to be addressed. Tasks can be assigned to
 individual staff members and can also have associated comments and labels.
@@ -4970,6 +4970,7 @@ due_event| EventType
 status| TaskStatus  
 comments| TaskComment[]  
 labels| TaskLabel[]  
+metadata| TaskMetadata[]  
 ###  TaskComment #
 Field Name| Type  
 ---|---  
@@ -4992,6 +4993,21 @@ task_association| [Origin](/sdk/data-enumeration-types/#origin)
 name| String  
 active| Boolean  
 modules| TaskLabelModule  
+###  TaskMetadata #
+Field Name| Type  
+---|---  
+id| UUID  
+dbid| Integer  
+task| Task  
+key| String  
+value| String  
+    from canvas_sdk.v1.data.task import Task
+    from logger import log
+    task_id = "7895e1db-f8de-4660-a0a3-9e5b43a475c6"
+    task = Task.objects.get(id=task_id)
+    task_metadata = task.metadata.all()
+    for metadata in task_metadata:
+       log.info(f"Task metadata: {metadata.key}, {metadata.value}") # external_system_id - EXT-12345
 ##  Enumeration types #
 ###  TaskType #
 Value| Label  
@@ -5322,7 +5338,8 @@ commonly used for decision support intervention. ](/sdk/effect-protocol-
 cards/)[ QuestionnairesInteract with questionnaires and interviews.
 ](/sdk/effect-questionnaires/)[ Send Contact VerificationEffect to send a
 verification message to a patient contact. ](/sdk/effect-send-contact-
-verification/)[ TasksCreate or update tasks. ](/sdk/effect-tasks/)[
+verification/)[ TasksCreate or update tasks. ](/sdk/effect-tasks/)[ Task
+MetadataInteract with Task metadata. ](/sdk/effect-task-metadata/)[
 CommandsThe building blocks of many end-user workflows in Canvas, including
 nearly all clinical workflows for documentation. ](/sdk/commands/)
 ##  Effect Types #
@@ -6882,7 +6899,7 @@ The effect performs validation before execution to ensure data integrity:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-notes/
 # Note Effects
-Last updated: 8 Oct 2025
+Last updated: 30 Oct 2025
 #  Note Effects #
 The Canvas SDK provides effects to facilitate creating, updating, and managing
 **visit notes** , **appointments** , and **schedule events**. Below youâll
@@ -6946,7 +6963,76 @@ Attribute| Type| Description| Required| Updatable
             note_effect.title = "Updated Consultation Notes"
             note_effect.datetime_of_service = datetime.datetime.now()
             return [note_effect.update()]
-* * *
+###  Fax Note #
+Sends an existing note via fax to a specified recipient. This effect allows
+you to transmit patient notes to external healthcare providers or facilities.
+####  Attributes #
+Attribute| Type| Description| Required  
+---|---|---|---  
+`note_id`| `UUID` or `str`| Identifier of the note to fax| Yes  
+`recipient_name`| `str`| Name of the fax recipient| Yes  
+`recipient_fax_number`| `str`| Fax number of the recipient. Should include the
+country code| Yes  
+`include_coversheet`| `bool`| Whether to include a coversheet with the fax| No  
+`subject`| `str` or `None`| Subject line for the coversheet (required if
+coversheet used)| No  
+`comment`| `str` or `None`| Additional comments for coversheet (required if
+coversheet used)| No  
+`location_id`| `UUID` or `str` or `None`| Practice location ID (required if
+coversheet used)| No  
+####  Implementation Details #
+  * Validates that the note exists in the system
+  * If `include_coversheet` is `True`, the following fields become required:
+    * `subject`: The subject line for the coversheet
+    * `comment`: Additional comments to include on the coversheet
+    * `location_id`: The practice location identifier (must exist in the system)
+  * Validates that the practice location exists if provided
+####  Example Usage #
+    from canvas_sdk.effects.fax.note import FaxNoteEffect
+    from canvas_sdk.handlers.base import BaseHandler
+    class Protocol(BaseHandler):
+        def compute(self):
+            # Basic fax without coversheet
+            fax_effect = FaxNoteEffect(
+                note_id="existing-note-uuid",
+                recipient_name="Dr. Jane Smith",
+                recipient_fax_number="15551234567"
+            )
+            return [fax_effect.apply()]
+####  Example with Coversheet #
+    from canvas_sdk.effects.fax.note import FaxNoteEffect
+    from canvas_sdk.handlers.base import BaseHandler
+    class Protocol(BaseHandler):
+        def compute(self):
+            # Fax with coversheet
+            fax_effect = FaxNoteEffect(
+                note_id="existing-note-uuid",
+                recipient_name="Dr. Jane Smith",
+                recipient_fax_number="15551234567",
+                include_coversheet=True,
+                subject="Patient Referral - Follow-up Care",
+                comment="Please review attached consultation notes for continuing care.",
+                location_id="practice-location-uuid"
+            )
+            return [fax_effect.apply()]
+###  Push Charges #
+Pushes the charges from the Note to its associated Claim in the Revenue
+module. Has the exact same effect as clicking on the `Push charges` button in
+the Note footer.
+####  Attributes #
+Attribute| Type| Description| Required  
+---|---|---|---  
+`instance_id`| `UUID` or `str`| Identifier of the note to update| Yes  
+**Note** : `instance_id` must be a valid, existing Note, and its
+NoteTypeVersion must have `is_billable` = True.
+####  Example Usage #
+    import datetime
+    from canvas_sdk.effects.note.note import Note
+    from canvas_sdk.handlers.base import BaseHandler
+    class Protocol(BaseHandler):
+        def compute(self):
+            note_effect = Note(instance_id="existing-note-uuid")
+            return [note_effect.push_charges()]
 ##  ScheduleEvent Effect #
 The `ScheduleEvent` effect enables creating, updating, and deleting schedule
 events for providers, with optional patient association.
@@ -7261,7 +7347,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 16 Oct 2025
+Last updated: 29 Oct 2025
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -8703,6 +8789,22 @@ Target object| Context object
     "search_term": str
     "results": list[dict]  
 ADJUST_PRESCRIPTION__SUPERVISING_PROVIDER__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "results": list[dict]  
+ADJUST_PRESCRIPTION__PRESCRIBER__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "results": list[dict]  
+ADJUST_PRESCRIPTION__PRESCRIBER__PRE_SEARCH  
 ---  
 Target object| Context object  
     "id": command_uuid
@@ -13551,6 +13653,22 @@ Target object| Context object
 |
     "search_term": str
     "results": list[dict]  
+PRESCRIBE__PRESCRIBER__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "results": list[dict]  
+PRESCRIBE__PRESCRIBER__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "results": list[dict]  
 ####  Questionnaire Command #
 QUESTIONNAIRE_COMMAND__POST_COMMIT  
 ---  
@@ -14577,6 +14695,22 @@ Target object| Context object
     "search_term": str
     "results": list[dict]  
 REFILL__SUPERVISING_PROVIDER__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "results": list[dict]  
+REFILL__PRESCRIBER__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "results": list[dict]  
+REFILL__PRESCRIBER__PRE_SEARCH  
 ---  
 Target object| Context object  
     "id": command_uuid
