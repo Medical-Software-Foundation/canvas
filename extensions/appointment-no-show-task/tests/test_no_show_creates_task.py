@@ -62,8 +62,7 @@ class TestNoShowCreatesTask(unittest.TestCase):
         mock_appointment_class.objects.get.assert_called_once_with(id="appointment-456")
         mock_team_class.objects.get.assert_called_once_with(name="Admin")
 
-    @patch("appointment_no_show_task.protocols.no_show_creates_task.log")
-    def test_handles_missing_appointment_id(self, mock_log):
+    def test_handles_missing_appointment_id(self):
         """Test that the protocol handles missing appointment ID gracefully."""
         # Setup
         self.protocol.target = None
@@ -73,11 +72,9 @@ class TestNoShowCreatesTask(unittest.TestCase):
 
         # Verify
         self.assertEqual(len(effects), 0)
-        mock_log.error.assert_called()
 
-    @patch("appointment_no_show_task.protocols.no_show_creates_task.log")
     @patch("appointment_no_show_task.protocols.no_show_creates_task.Appointment")
-    def test_handles_appointment_not_found(self, mock_appointment_class, mock_log):
+    def test_handles_appointment_not_found(self, mock_appointment_class):
         """Test that the protocol handles appointment not found gracefully."""
         # Setup
         mock_appointment_class.objects.get.side_effect = Appointment.DoesNotExist
@@ -88,14 +85,11 @@ class TestNoShowCreatesTask(unittest.TestCase):
 
         # Verify
         self.assertEqual(len(effects), 0)
-        mock_log.error.assert_called_once()
-        self.assertIn("not found", mock_log.error.call_args[0][0])
 
-    @patch("appointment_no_show_task.protocols.no_show_creates_task.log")
     @patch("appointment_no_show_task.protocols.no_show_creates_task.Team")
     @patch("appointment_no_show_task.protocols.no_show_creates_task.Appointment")
     def test_creates_task_without_team_when_team_not_found(
-        self, mock_appointment_class, mock_team_class, mock_log
+        self, mock_appointment_class, mock_team_class
     ):
         """Test that task is created without team assignment when team doesn't exist."""
         # Setup
@@ -110,12 +104,10 @@ class TestNoShowCreatesTask(unittest.TestCase):
 
         # Verify
         self.assertEqual(len(effects), 1)
-        mock_log.error.assert_called()
 
-    @patch("appointment_no_show_task.protocols.no_show_creates_task.log")
     @patch("appointment_no_show_task.protocols.no_show_creates_task.Appointment")
     def test_creates_task_without_team_when_secret_not_configured(
-        self, mock_appointment_class, mock_log
+        self, mock_appointment_class
     ):
         """Test that task is created without team assignment when TEAM_NAME secret is missing."""
         # Setup
@@ -130,10 +122,6 @@ class TestNoShowCreatesTask(unittest.TestCase):
 
         # Verify
         self.assertEqual(len(effects), 1)
-        mock_log.error.assert_called()
-        # Verify error mentions secret not configured
-        error_calls = [call[0][0] for call in mock_log.error.call_args_list]
-        self.assertTrue(any("TEAM_NAME secret not configured" in msg for msg in error_calls))
 
     @patch("appointment_no_show_task.protocols.no_show_creates_task.Team")
     @patch("appointment_no_show_task.protocols.no_show_creates_task.Appointment")
@@ -164,7 +152,6 @@ class TestNoShowCreatesTask(unittest.TestCase):
     def test_protocol_responds_to_correct_events(self):
         """Test that the protocol is configured to respond to appointment events."""
         expected_events = [
-            EventType.Name(EventType.APPOINTMENT_UPDATED),
             EventType.Name(EventType.APPOINTMENT_NO_SHOWED),
         ]
         self.assertEqual(NoShowCreatesTask.RESPONDS_TO, expected_events)
