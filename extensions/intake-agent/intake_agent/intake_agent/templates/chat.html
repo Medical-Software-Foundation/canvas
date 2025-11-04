@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Patient Intake</title>
+</head>
+<body>
+    <h1>Patient Chat</h1>
+
+    <h2>Patient Information</h2>
+    <dl>
+        <dt>First Name:</dt>
+        <dd>{{ patient.first_name }}</dd>
+
+        <dt>Last Name:</dt>
+        <dd>{{ patient.last_name }}</dd>
+
+        <dt>Patient ID:</dt>
+        <dd>{{ patient.id }}</dd>
+
+        {% if patient.contact_points %}
+        <dt>Contact Information:</dt>
+        <dd>
+            <ul>
+            {% for contact in patient.contact_points %}
+                <li>{{ contact.system }}: {{ contact.value }}</li>
+            {% endfor %}
+            </ul>
+        </dd>
+        {% endif %}
+    </dl>
+
+    <h2>Chat Interface</h2>
+    <p>Chat functionality coming soon...</p>
+</body>
+</html>

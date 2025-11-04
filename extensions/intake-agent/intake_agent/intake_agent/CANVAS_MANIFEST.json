@@ -1,13 +1,17 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.2.1",
+    "plugin_version": "0.4.3",
     "name": "intake_agent",
     "description": "Patient intake plugin providing a public-facing intake form for prospective new patients",
     "components": {
         "protocols": [
             {
-                "class": "intake_agent.api.intake_api:IntakeAPI",
+                "class": "intake_agent.api.intake:IntakeAPI",
                 "description": "Unauthenticated patient intake API providing public-facing intake form"
+            },
+            {
+                "class": "intake_agent.api.chat:ChatAPI",
+                "description": "Chat interface for newly registered patients"
             },
             {
                 "class": "intake_agent.api.static:Static",

@@ -51,41 +51,16 @@
     /**
      * Handle form submission
      */
-    async function handleSubmit(event) {
-        event.preventDefault();
-
-        // Validate all fields
+    function handleSubmit(event) {
+        // Validate all fields before allowing submission
         if (!validateForm()) {
+            event.preventDefault();
             return;
         }
 
-        // Get form data
-        const formData = getFormData();
-
-        console.log('Form submitted with data:', formData);
-
-        // Disable submit button and show loading state
-        setLoadingState(true);
-
-        try {
-            // TODO: Implement actual form submission to backend
-            // For now, just simulate a delay
-            await simulateSubmission(formData);
-
-            showMessage('Thank you! Your information has been received.', 'success');
-
-            // Reset form after successful submission
-            setTimeout(() => {
-                form.reset();
-                hideMessage();
-            }, 3000);
-
-        } catch (error) {
-            console.error('Submission error:', error);
-            showMessage('An error occurred. Please try again.', 'error');
-        } finally {
-            setLoadingState(false);
-        }
+        // If validation passes, allow the form to submit naturally
+        // The form will POST to the action URL specified in the form tag
+        console.log('Form validation passed, submitting to server...');
     }
 
     /**
@@ -207,76 +182,6 @@
         if (errorElement) {
             errorElement.remove();
         }
-    }
-
-    /**
-     * Get form data as an object
-     */
-    function getFormData() {
-        const formData = new FormData(form);
-        const data = {};
-
-        for (const [key, value] of formData.entries()) {
-            data[key] = value.trim();
-        }
-
-        return data;
-    }
-
-    /**
-     * Set loading state on the form
-     */
-    function setLoadingState(isLoading) {
-        if (!submitButton) return;
-
-        submitButton.disabled = isLoading;
-
-        if (isLoading) {
-            submitButton.classList.add('loading');
-            submitButton.textContent = 'Submitting...';
-        } else {
-            submitButton.classList.remove('loading');
-            submitButton.textContent = 'Continue';
-        }
-    }
-
-    /**
-     * Show a message to the user
-     */
-    function showMessage(text, type = 'info') {
-        // Remove existing message
-        hideMessage();
-
-        const messageElement = document.createElement('div');
-        messageElement.className = `message ${type} show`;
-        messageElement.textContent = text;
-
-        const formSection = document.querySelector('.form-section');
-        if (formSection) {
-            formSection.insertBefore(messageElement, form);
-        }
-    }
-
-    /**
-     * Hide the message
-     */
-    function hideMessage() {
-        const existingMessage = document.querySelector('.message');
-        if (existingMessage) {
-            existingMessage.remove();
-        }
-    }
-
-    /**
-     * Simulate form submission (placeholder for actual API call)
-     */
-    function simulateSubmission(data) {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                console.log('Simulated submission complete:', data);
-                resolve();
-            }, 1500);
-        });
     }
 
 })();

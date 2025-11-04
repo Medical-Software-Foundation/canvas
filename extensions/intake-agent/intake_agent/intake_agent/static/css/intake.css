@@ -206,6 +206,40 @@ body {
     font-size: 1rem;
 }
 
+/* Banner Messages */
+.banner {
+    padding: var(--spacing-md);
+    border-radius: 8px;
+    margin-bottom: var(--spacing-lg);
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: 2px solid;
+}
+
+.banner-info {
+    background: #E3F2FD;
+    color: #0D47A1;
+    border-color: #90CAF9;
+}
+
+.banner-warning {
+    background: #FFF3E0;
+    color: #E65100;
+    border-color: #FFB74D;
+}
+
+.banner-error {
+    background: #FFEBEE;
+    color: #C62828;
+    border-color: #EF5350;
+}
+
+.banner-success {
+    background: #E8F5E9;
+    color: #2E7D32;
+    border-color: #81C784;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .container {

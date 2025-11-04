@@ -16,13 +16,19 @@
         </header>
 
         <main class="main-content">
+            {% if banner_message %}
+            <div class="banner banner-{{ banner_type|default:'info' }}">
+                {{ banner_message }}
+            </div>
+            {% endif %}
+
             <section class="welcome-section">
                 <h2 class="page-title">Welcome to Your Health Journey</h2>
                 <p class="subtitle">We're here to support you every step of the way. Let's get started with a few simple questions.</p>
             </section>
 
             <section class="form-section">
-                <form id="intakeForm" class="intake-form">
+                <form id="intakeForm" class="intake-form" method="POST" action="/plugin-io/api/intake_agent/intake/">
                     <div class="form-group">
                         <label for="firstName" class="form-label">First Name</label>
                         <input
