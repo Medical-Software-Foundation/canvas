@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.1.2",
+    "plugin_version": "0.2.0",
     "name": "intake_agent",
     "description": "Patient intake plugin providing a public-facing intake form for prospective new patients",
     "components": {
@@ -8,6 +8,10 @@
             {
                 "class": "intake_agent.api.intake_api:IntakeAPI",
                 "description": "Unauthenticated patient intake API providing public-facing intake form"
+            },
+            {
+                "class": "intake_agent.api.static:Static",
+                "description": "Serves static CSS and JavaScript files for the intake form"
             }
         ],
         "commands": [],
