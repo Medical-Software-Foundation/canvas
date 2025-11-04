@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.2.1",
     "name": "intake_agent",
     "description": "Patient intake plugin providing a public-facing intake form for prospective new patients",
     "components": {

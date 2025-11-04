@@ -35,7 +35,7 @@ class Static(SimpleAPI):
             return [Response(css_content.encode(), content_type="text/css")]
         except Exception as e:
             log.error(f"Error serving CSS: {e}")
-            return [Response(b"/* CSS file not found */", content_type="text/css", status=404)]
+            return [Response(b"/* CSS file not found */", content_type="text/css", status_code=404)]
 
     @api.get("/js")
     def serve_js(self) -> list[Response | Effect]:
@@ -53,4 +53,4 @@ class Static(SimpleAPI):
             return [Response(js_content.encode(), content_type="application/javascript")]
         except Exception as e:
             log.error(f"Error serving JS: {e}")
-            return [Response(b"/* JS file not found */", content_type="application/javascript", status=404)]
+            return [Response(b"/* JS file not found */", content_type="application/javascript", status_code=404)]
