@@ -1,14 +1,21 @@
 /**
- * Patient Intake Form Handler
- * Manages form validation, submission, and user interactions
+ * Patient Intake Chat Handler
+ * Manages chat interface and session management
  */
 
 (function() {
     'use strict';
 
     // DOM Elements
-    const form = document.getElementById('intakeForm');
-    const submitButton = form?.querySelector('button[type="submit"]');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatForm = document.getElementById('chatForm');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = chatForm?.querySelector('button[type="submit"]');
+
+    // State
+    let sessionId = null;
+    let signature = null;
+    let isWaitingForResponse = false;
 
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
@@ -17,171 +24,282 @@
         init();
     }
 
-    function init() {
-        if (!form) {
-            console.error('Intake form not found');
+    /**
+     * Initialize the chat interface
+     */
+    async function init() {
+        if (!chatForm || !chatMessages || !messageInput) {
+            console.error('Required chat elements not found');
             return;
         }
 
         setupEventListeners();
-        console.log('Patient intake form initialized');
+        await initializeSession();
+        console.log('Chat interface initialized');
     }
 
     /**
-     * Set up all event listeners
+     * Set up event listeners
      */
     function setupEventListeners() {
         // Form submission
-        form.addEventListener('submit', handleSubmit);
+        chatForm.addEventListener('submit', handleSubmit);
 
-        // Real-time validation on blur
-        const inputs = form.querySelectorAll('.form-input');
-        inputs.forEach(input => {
-            input.addEventListener('blur', () => validateField(input));
-            input.addEventListener('input', () => clearFieldError(input));
+        // Auto-resize input on mobile
+        messageInput.addEventListener('input', adjustInputHeight);
+
+        // Prevent form submission when disabled
+        sendButton.addEventListener('click', (e) => {
+            if (isWaitingForResponse) {
+                e.preventDefault();
+            }
         });
+    }
 
-        // Phone number formatting
-        const phoneInput = document.getElementById('phone');
-        if (phoneInput) {
-            phoneInput.addEventListener('input', formatPhoneNumber);
+    /**
+     * Initialize session and WebSocket connection
+     */
+    async function initializeSession() {
+        try {
+            // Check for existing session ID and signature in localStorage
+            const storedSessionId = localStorage.getItem('intake_session_id');
+            const storedSignature = localStorage.getItem('intake_signature');
+
+            if (storedSessionId && storedSignature) {
+                // Validate existing session
+                const response = await fetch(`/plugin-io/api/intake_agent/intake/session/${storedSessionId}`, {
+                    headers: {
+                        'Authorization': `Signature ${storedSignature}`
+                    }
+                });
+                if (response.ok) {
+                    sessionId = storedSessionId;
+                    signature = storedSignature;
+                    const sessionData = await response.json();
+
+                    // Restore messages from session
+                    if (sessionData.messages && sessionData.messages.length > 0) {
+                        sessionData.messages.forEach(msg => {
+                            addMessage(msg.role, msg.content, false);
+                        });
+                    }
+
+                    return;
+                }
+            }
+
+            // Create new session
+            const response = await fetch('/plugin-io/api/intake_agent/intake/session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to create session');
+            }
+
+            const data = await response.json();
+            sessionId = data.session_id;
+            signature = data.signature;
+            localStorage.setItem('intake_session_id', sessionId);
+            localStorage.setItem('intake_signature', signature);
+
+            console.log('Session created:', sessionId);
+
+            // Load initial greeting
+            await loadInitialMessage();
+
+        } catch (error) {
+            console.error('Error initializing session:', error);
+            addMessage('agent', 'Welcome! I apologize, but I\'m having trouble connecting. Please refresh the page to try again.');
+        }
+    }
+
+    /**
+     * Load the initial message from the agent
+     */
+    async function loadInitialMessage() {
+        try {
+            showTypingIndicator();
+
+            // Send a "start" message to trigger the agent's greeting
+            const response = await fetch(`/plugin-io/api/intake_agent/intake/message/${sessionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Signature ${signature}`
+                },
+                body: JSON.stringify({
+                    message: '__START__'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to get initial message');
+            }
+
+            const data = await response.json();
+            hideTypingIndicator();
+            addMessage('agent', data.agent_response);
+
+        } catch (error) {
+            console.error('Error loading initial message:', error);
+            hideTypingIndicator();
+            addMessage('agent', 'Hello! How can I help you today?');
         }
     }
 
     /**
      * Handle form submission
      */
-    function handleSubmit(event) {
-        // Validate all fields before allowing submission
-        if (!validateForm()) {
-            event.preventDefault();
+    async function handleSubmit(event) {
+        event.preventDefault();
+
+        if (isWaitingForResponse || !sessionId) {
             return;
         }
 
-        // If validation passes, allow the form to submit naturally
-        // The form will POST to the action URL specified in the form tag
-        console.log('Form validation passed, submitting to server...');
-    }
-
-    /**
-     * Validate the entire form
-     */
-    function validateForm() {
-        const inputs = form.querySelectorAll('.form-input[required]');
-        let isValid = true;
-
-        inputs.forEach(input => {
-            if (!validateField(input)) {
-                isValid = false;
-            }
-        });
-
-        return isValid;
-    }
-
-    /**
-     * Validate a single field
-     */
-    function validateField(input) {
-        const value = input.value.trim();
-        let errorMessage = '';
-
-        if (!value && input.hasAttribute('required')) {
-            errorMessage = 'This field is required';
-        } else if (input.type === 'email' && value) {
-            if (!isValidEmail(value)) {
-                errorMessage = 'Please enter a valid email address';
-            }
-        } else if (input.type === 'tel' && value) {
-            if (!isValidPhone(value)) {
-                errorMessage = 'Please enter a valid phone number';
-            }
+        const message = messageInput.value.trim();
+        if (!message) {
+            return;
         }
 
-        if (errorMessage) {
-            setFieldError(input, errorMessage);
-            return false;
+        // Add user message to chat
+        addMessage('user', message);
+
+        // Clear input
+        messageInput.value = '';
+        adjustInputHeight();
+
+        // Disable input while waiting for response
+        setWaitingState(true);
+        showTypingIndicator();
+
+        try {
+            const response = await fetch(`/plugin-io/api/intake_agent/intake/message/${sessionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Signature ${signature}`
+                },
+                body: JSON.stringify({
+                    message: message
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to send message');
+            }
+
+            // Get agent response from the response
+            const data = await response.json();
+            hideTypingIndicator();
+            addMessage('agent', data.agent_response);
+            setWaitingState(false);
+            messageInput.focus();
+
+        } catch (error) {
+            console.error('Error sending message:', error);
+            hideTypingIndicator();
+            addMessage('agent', 'I apologize, but I encountered an error. Could you please try again?');
+            setWaitingState(false);
+            messageInput.focus();
+        }
+    }
+
+    /**
+     * Add a message to the chat
+     */
+    function addMessage(type, content, shouldScroll = true) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+
+        const bubbleDiv = document.createElement('div');
+        bubbleDiv.className = 'message-bubble';
+        bubbleDiv.textContent = content;
+
+        messageDiv.appendChild(bubbleDiv);
+        chatMessages.appendChild(messageDiv);
+
+        // Scroll to bottom
+        if (shouldScroll) {
+            scrollToBottom();
+        }
+    }
+
+    /**
+     * Show typing indicator
+     */
+    function showTypingIndicator() {
+        // Remove existing indicator if present
+        hideTypingIndicator();
+
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message agent';
+        messageDiv.id = 'typingIndicator';
+
+        const indicatorDiv = document.createElement('div');
+        indicatorDiv.className = 'typing-indicator';
+
+        for (let i = 0; i < 3; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'typing-dot';
+            indicatorDiv.appendChild(dot);
+        }
+
+        messageDiv.appendChild(indicatorDiv);
+        chatMessages.appendChild(messageDiv);
+
+        scrollToBottom();
+    }
+
+    /**
+     * Hide typing indicator
+     */
+    function hideTypingIndicator() {
+        const indicator = document.getElementById('typingIndicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+
+    /**
+     * Set waiting state
+     */
+    function setWaitingState(waiting) {
+        isWaitingForResponse = waiting;
+        messageInput.disabled = waiting;
+        sendButton.disabled = waiting;
+
+        if (waiting) {
+            sendButton.classList.add('loading');
         } else {
-            clearFieldError(input);
-            return true;
+            sendButton.classList.remove('loading');
         }
     }
 
     /**
-     * Validate email format
+     * Adjust input height for multiline text
      */
-    function isValidEmail(email) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
+    function adjustInputHeight() {
+        // Reset height to auto to get the correct scrollHeight
+        messageInput.style.height = 'auto';
+
+        // Set height based on content, with a max height
+        const maxHeight = 120;
+        const newHeight = Math.min(messageInput.scrollHeight, maxHeight);
+        messageInput.style.height = newHeight + 'px';
     }
 
     /**
-     * Validate phone format
+     * Scroll chat to bottom
      */
-    function isValidPhone(phone) {
-        const cleaned = phone.replace(/\D/g, '');
-        return cleaned.length === 10;
-    }
-
-    /**
-     * Format phone number as user types
-     */
-    function formatPhoneNumber(event) {
-        const input = event.target;
-        const value = input.value.replace(/\D/g, '');
-        let formatted = '';
-
-        if (value.length > 0) {
-            formatted = '(' + value.substring(0, 3);
-        }
-        if (value.length >= 4) {
-            formatted += ') ' + value.substring(3, 6);
-        }
-        if (value.length >= 7) {
-            formatted += '-' + value.substring(6, 10);
-        }
-
-        input.value = formatted;
-    }
-
-    /**
-     * Set error state on a field
-     */
-    function setFieldError(input, message) {
-        const formGroup = input.closest('.form-group');
-        if (!formGroup) return;
-
-        input.classList.add('error');
-
-        // Remove existing error message
-        const existingError = formGroup.querySelector('.field-error');
-        if (existingError) {
-            existingError.remove();
-        }
-
-        // Add new error message
-        const errorElement = document.createElement('span');
-        errorElement.className = 'field-error';
-        errorElement.textContent = message;
-        errorElement.style.color = '#C33';
-        errorElement.style.fontSize = '0.875rem';
-        errorElement.style.marginTop = '0.25rem';
-        formGroup.appendChild(errorElement);
-    }
-
-    /**
-     * Clear error state from a field
-     */
-    function clearFieldError(input) {
-        const formGroup = input.closest('.form-group');
-        if (!formGroup) return;
-
-        input.classList.remove('error');
-
-        const errorElement = formGroup.querySelector('.field-error');
-        if (errorElement) {
-            errorElement.remove();
-        }
+    function scrollToBottom() {
+        requestAnimationFrame(() => {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
     }
 
 })();

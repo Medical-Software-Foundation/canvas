@@ -2,90 +2,41 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Intake - Welcome</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Healthcare Chat</title>
     <link rel="stylesheet" href="/plugin-io/api/intake_agent/static/css">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
+    <div class="chat-container">
+        <header class="chat-header">
             <div class="logo">
                 <div class="logo-circle"></div>
                 <h1 class="logo-text">Healthcare</h1>
             </div>
         </header>
 
-        <main class="main-content">
-            {% if banner_message %}
-            <div class="banner banner-{{ banner_type|default:'info' }}">
-                {{ banner_message }}
-            </div>
-            {% endif %}
-
-            <section class="welcome-section">
-                <h2 class="page-title">Welcome to Your Health Journey</h2>
-                <p class="subtitle">We're here to support you every step of the way. Let's get started with a few simple questions.</p>
-            </section>
-
-            <section class="form-section">
-                <form id="intakeForm" class="intake-form" method="POST" action="/plugin-io/api/intake_agent/intake/">
-                    <div class="form-group">
-                        <label for="firstName" class="form-label">First Name</label>
-                        <input
-                            type="text"
-                            id="firstName"
-                            name="firstName"
-                            class="form-input"
-                            placeholder="Enter your first name"
-                            required
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="lastName" class="form-label">Last Name</label>
-                        <input
-                            type="text"
-                            id="lastName"
-                            name="lastName"
-                            class="form-input"
-                            placeholder="Enter your last name"
-                            required
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="email" class="form-label">Email Address</label>
-                        <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            class="form-input"
-                            placeholder="your.email@example.com"
-                            required
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="phone" class="form-label">Phone Number</label>
-                        <input
-                            type="tel"
-                            id="phone"
-                            name="phone"
-                            class="form-input"
-                            placeholder="(555) 123-4567"
-                            required
-                        >
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="submit" class="btn-primary">Continue</button>
-                    </div>
-                </form>
-            </section>
+        <main class="chat-messages" id="chatMessages">
+            <!-- Messages will be dynamically inserted here -->
         </main>
 
-        <footer class="footer">
-            <p class="footer-text">Your information is secure and confidential</p>
+        <footer class="chat-input-container">
+            <form id="chatForm" class="chat-input-form">
+                <input
+                    type="text"
+                    id="messageInput"
+                    class="chat-input"
+                    placeholder="Type your message..."
+                    autocomplete="off"
+                    required
+                >
+                <button type="submit" class="chat-send-button" aria-label="Send message">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </form>
+            <div class="chat-footer-text">Your information is secure and confidential</div>
         </footer>
     </div>
 

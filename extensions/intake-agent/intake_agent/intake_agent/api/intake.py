@@ -1,144 +1,233 @@
 from http import HTTPStatus
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.patient import Patient as PatientEffect, PatientContactPoint
-from canvas_sdk.effects.simple_api import HTMLResponse, Response
+from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse
 from canvas_sdk.handlers.simple_api import Credentials, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
-from canvas_sdk.v1.data.common import ContactPointSystem, ContactPointUse
-from canvas_sdk.v1.data.patient import Patient
 from logger import log
+
+from intake_agent.api.auth import generate_signature, verify_signature
+from intake_agent.api.session import add_message, create_session, get_session
 
 
 class IntakeAPI(SimpleAPI):
     """
-    Patient intake API handler providing an unauthenticated public-facing
-    intake form for prospective new patients.
+    Patient intake API handler providing an unauthenticated chat interface
+    for prospective new patients.
     """
 
     PREFIX = "/intake"
 
-    def authenticate(self, credentials: Credentials) -> bool:
+    # Paths that don't require authentication
+    UNAUTHENTICATED_PATHS = {
+        "/",           # GET / - Serve HTML
+        "/session",    # POST /session - Create session (returns signature)
+    }
+
+    def authenticate(self, credentials: Credentials) -> bool:  # noqa: ARG002
         """
-        Allow unauthenticated access to this endpoint.
-        Always returns True to allow public access.
+        Centralized authentication using HMAC signature verification.
+
+        Unauthenticated paths (HTML page, session creation) are exempt.
+        All other paths require a valid signature in the Authorization header.
+
+        Returns:
+            True if request is authenticated or exempt, False otherwise
         """
-        return True
+        path = self.request.path
+
+        # Remove PREFIX from path for comparison
+        if path.startswith(self.PREFIX):
+            path = path[len(self.PREFIX):]
+
+        # Allow unauthenticated access to exempt paths
+        if path in self.UNAUTHENTICATED_PATHS:
+            log.info(f"Allowing unauthenticated access to: {path}")
+            return True
+
+        # For all other paths, verify signature
+        log.info(f"Verifying signature for authenticated path: {path}")
+
+        # Get secret key
+        secret_key = self.secrets.get("PLUGIN_SECRET_KEY", "")
+        if not secret_key:
+            log.error("PLUGIN_SECRET_KEY not configured")
+            return False
+
+        # Get signature from Authorization header
+        auth_header = self.request.headers.get("Authorization", "")
+        if not auth_header.startswith("Signature "):
+            log.warning("Missing or invalid Authorization header")
+            return False
+
+        provided_signature = auth_header.replace("Signature ", "", 1)
+
+        # Extract session_id from path params
+        session_id = self.request.path_params.get("session_id")
+        if not session_id:
+            log.warning("Could not extract session_id from path params")
+            return False
+
+        log.info(f"Authenticating session: {session_id[:8]}...")
+
+        # Verify the signature
+        is_valid = verify_signature(session_id, provided_signature, secret_key)
+
+        if not is_valid:
+            log.warning(f"Authentication failed for session: {session_id[:8]}...")
+        else:
+            log.info(f"Authentication successful for session: {session_id[:8]}...")
+
+        return is_valid
 
     @api.get("/")
     def get_intake_form(self) -> list[HTMLResponse | Effect]:
         """
-        Serve the patient intake form page.
+        Serve the patient intake chat interface.
 
         Endpoint: GET /plugin-io/api/intake_agent/intake/
         """
-        log.info("Serving patient intake form")
+        log.info("Serving patient intake chat interface")
 
-        # Render the template using Canvas SDK's render_to_string
-        # Pass empty context since our template is static HTML
         html_content = render_to_string("templates/intake.html", {})
 
         return [HTMLResponse(html_content)]
 
-    @api.post("/")
-    def submit_intake_form(self) -> list[Response | Effect | HTMLResponse]:
+    @api.post("/session")
+    def create_session(self) -> list[JSONResponse | Effect]:
         """
-        Handle intake form submission and create a new patient.
-        If a patient with matching email or phone exists, show the form again with a banner.
+        Create a new chat session and return the session ID with signature.
 
-        Endpoint: POST /plugin-io/api/intake_agent/intake
+        Endpoint: POST /plugin-io/api/intake_agent/intake/session
+
+        Returns:
+            JSON response with session_id and signature
         """
-        log.info("Processing intake form submission")
+        log.info("Creating new chat session")
 
-        # Parse form data
-        form_data = self.request.form_data()
-        first_name = str(form_data.get("firstName", ""))
-        last_name = str(form_data.get("lastName", ""))
-        email = str(form_data.get("email", ""))
-        phone = str(form_data.get("phone", ""))
+        session_data = create_session()
+        session_id = session_data["session_id"]
 
-        # Check for existing patients by email or phone
-        existing_patient = None
-
-        if email:
-            # Query for patients with this email
-            patients_with_email = Patient.objects.filter(
-                telecom__system=ContactPointSystem.EMAIL,
-                telecom__value=email
-            )
-            if patients_with_email.exists():
-                existing_patient = patients_with_email.first()
-                log.info(f"Found existing patient with email {email}: {existing_patient.id}")
-
-        if not existing_patient and phone:
-            # Clean phone number for comparison (remove formatting)
-            # Use string comprehension to keep only digits
-            cleaned_phone = "".join(c for c in phone if c.isdigit())
-
-            # Query for patients with this phone number (last 10 digits)
-            if len(cleaned_phone) >= 10:
-                phone_query = cleaned_phone[-10:]
-                patients_with_phone = Patient.objects.filter(
-                    telecom__system=ContactPointSystem.PHONE,
-                    telecom__value__contains=phone_query
+        # Generate signature for the session
+        secret_key = self.secrets.get("PLUGIN_SECRET_KEY", "")
+        if not secret_key:
+            log.error("PLUGIN_SECRET_KEY not configured")
+            return [
+                JSONResponse(
+                    {"error": "Server configuration error"},
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR
                 )
-                if patients_with_phone.exists():
-                    existing_patient = patients_with_phone.first()
-                    log.info(f"Found existing patient with phone {phone}: {existing_patient.id}")
+            ]
 
-        # If existing patient found, show form again with banner
-        if existing_patient:
-            html_content = render_to_string("templates/intake.html", {
-                "banner_message": "A patient with this contact information is already on record. Please contact us if you need assistance.",
-                "banner_type": "warning"
-            })
-            return [HTMLResponse(html_content)]
-
-        # No existing patient - create new one
-        # Build contact points list
-        contact_points = []
-        if email:
-            contact_points.append(
-                PatientContactPoint(
-                    system=ContactPointSystem.EMAIL,
-                    value=email,
-                    use=ContactPointUse.HOME,
-                    rank=1,
-                    has_consent=True
-                )
-            )
-        if phone:
-            contact_points.append(
-                PatientContactPoint(
-                    system=ContactPointSystem.PHONE,
-                    value=phone,
-                    use=ContactPointUse.MOBILE,
-                    rank=2,
-                    has_consent=True
-                )
-            )
-
-        # Create the patient effect
-        patient_effect = PatientEffect(
-            first_name=first_name,
-            last_name=last_name,
-            contact_points=contact_points
-        )
-
-        # Create the patient and get the new patient ID from the effect
-        create_effect = patient_effect.create()
-
-        log.info(f"Creating new patient: {first_name} {last_name}")
-
-        # Return a 303 See Other redirect to the chat page
-        # We'll use a placeholder ID for now - in production this would come from the effect result
-        redirect_url = f"/plugin-io/api/intake_agent/chat/NEW_PATIENT"
+        signature = generate_signature(session_id, secret_key)
 
         return [
-            create_effect,
-            Response(
-                b"",
-                status_code=HTTPStatus.SEE_OTHER,
-                headers={"Location": redirect_url}
+            JSONResponse(
+                {
+                    "session_id": session_id,
+                    "signature": signature,
+                    "status": "created"
+                },
+                status_code=HTTPStatus.CREATED
+            )
+        ]
+
+    @api.get("/session/<session_id>")
+    def get_session_data(self) -> list[JSONResponse | Effect]:
+        """
+        Retrieve session data (requires authentication).
+
+        Endpoint: GET /plugin-io/api/intake_agent/intake/session/<session_id>
+        Headers: Authorization: Signature <signature>
+
+        Returns:
+            JSON response with session data
+
+        Note: Authentication is handled by the authenticate() method
+        """
+        session_id = self.request.path_params.get("session_id")
+        log.info(f"Retrieving session data for: {session_id}")
+
+        session_data = get_session(session_id)
+
+        if not session_data:
+            return [
+                JSONResponse(
+                    {"error": "Session not found"},
+                    status_code=HTTPStatus.NOT_FOUND
+                )
+            ]
+
+        return [
+            JSONResponse(session_data, status_code=HTTPStatus.OK)
+        ]
+
+    @api.post("/message/<session_id>")
+    def handle_message(self) -> list[JSONResponse | Effect]:
+        """
+        Handle a user message and broadcast agent response (requires authentication).
+
+        Endpoint: POST /plugin-io/api/intake_agent/intake/message/<session_id>
+        Headers: Authorization: Signature <signature>
+
+        Request body:
+            {
+                "message": str
+            }
+
+        Returns:
+            JSON response acknowledging receipt
+
+        Note: Authentication is handled by the authenticate() method
+        """
+        log.info("Processing user message")
+
+        session_id = self.request.path_params.get("session_id")
+
+        body = self.request.json()
+        user_message = body.get("message")
+
+        if not user_message:
+            return [
+                JSONResponse(
+                    {"error": "Missing message"},
+                    status_code=HTTPStatus.BAD_REQUEST
+                )
+            ]
+
+        # Validate session exists
+        session_data = get_session(session_id)
+        if not session_data:
+            return [
+                JSONResponse(
+                    {"error": "Session not found"},
+                    status_code=HTTPStatus.NOT_FOUND
+                )
+            ]
+
+        # Check if this is the initial start message
+        if user_message == "__START__":
+            # Don't save the start message, just respond with greeting
+            agent_response = "Hello! Welcome to our healthcare intake service. I'm here to help you get started. May I have your name?"
+        else:
+            # Add user message to session
+            add_message(session_id, "user", user_message)
+
+            # TODO: Process message with LLM and generate response
+            # For now, use a placeholder response
+            agent_response = "Thank you for your message. I'm processing your information."
+
+        # Add agent response to session
+        add_message(session_id, "agent", agent_response)
+
+        # Return the agent response directly
+        return [
+            JSONResponse(
+                {
+                    "status": "success",
+                    "session_id": session_id,
+                    "agent_response": agent_response
+                },
+                status_code=HTTPStatus.OK
             )
         ]

@@ -1,21 +1,17 @@
 {
     "sdk_version": "0.74.1",
-    "plugin_version": "0.5.3",
+    "plugin_version": "0.9.2",
     "name": "intake_agent",
-    "description": "Patient intake plugin providing a public-facing intake form for prospective new patients",
+    "description": "Patient intake plugin providing a public-facing chat interface for prospective new patients",
     "components": {
         "protocols": [
             {
                 "class": "intake_agent.api.intake:IntakeAPI",
-                "description": "Unauthenticated patient intake API providing public-facing intake form"
-            },
-            {
-                "class": "intake_agent.api.chat:ChatAPI",
-                "description": "Chat interface for newly registered patients"
+                "description": "Patient intake API with session management and chat messaging"
             },
             {
                 "class": "intake_agent.api.static:Static",
-                "description": "Serves static CSS and JavaScript files for the intake form"
+                "description": "Serves static CSS and JavaScript files for the chat interface"
             }
         ],
         "commands": [],
@@ -26,7 +22,8 @@
     "secrets": [
         "LLM_VENDOR", 
         "LLM_KEY",
-        "SYSTEM_PROMPT"
+        "SYSTEM_PROMPT",
+        "PLUGIN_SECRET_KEY"
     ],
     "tags": {},
     "references": [],

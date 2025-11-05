@@ -23,13 +23,22 @@ class TestIntakeAPI:
 
         # Mock the request object that would normally be set by the framework
         intake.request = MagicMock()
+        intake.request.path = "/intake/"
+        intake.request.headers = {}
+        intake.request.path_params = {}
+
+        # Mock secrets
+        intake.secrets = {"PLUGIN_SECRET_KEY": "test-secret-key"}
 
         return intake
 
-    def test_authenticate_allows_all_access(self, intake_api):
-        """Test that authenticate method always returns True for public access."""
+    # Authentication Tests
+
+    def test_authenticate_allows_unauthenticated_paths(self, intake_api):
+        """Test that authenticate allows access to unauthenticated paths."""
         # Arrange
         mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/"
 
         # Act
         result = intake_api.authenticate(mock_credentials)
@@ -37,11 +46,88 @@ class TestIntakeAPI:
         # Assert
         assert result is True
 
-    @patch("intake_agent.api.intake.render_to_string")
-    def test_get_returns_html_response(self, mock_render, intake_api):
-        """Test that get_intake_form method returns HTMLResponse with rendered template."""
+    def test_authenticate_allows_session_creation(self, intake_api):
+        """Test that authenticate allows POST to /session without auth."""
         # Arrange
-        expected_html = "<html><body>Test HTML</body></html>"
+        mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/session"
+
+        # Act
+        result = intake_api.authenticate(mock_credentials)
+
+        # Assert
+        assert result is True
+
+    @patch("intake_agent.api.intake.verify_signature")
+    def test_authenticate_requires_signature_for_protected_paths(
+        self, mock_verify_signature, intake_api
+    ):
+        """Test that authenticate requires valid signature for protected paths."""
+        # Arrange
+        mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/message/test-session"
+        intake_api.request.path_params = {"session_id": "test-session"}
+        intake_api.request.headers = {"Authorization": "Signature test-signature"}
+        mock_verify_signature.return_value = True
+
+        # Act
+        result = intake_api.authenticate(mock_credentials)
+
+        # Assert
+        assert result is True
+        mock_verify_signature.assert_called_once_with(
+            "test-session", "test-signature", "test-secret-key"
+        )
+
+    def test_authenticate_rejects_missing_authorization_header(self, intake_api):
+        """Test that authenticate rejects requests without Authorization header."""
+        # Arrange
+        mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/message"
+        intake_api.request.headers = {}
+
+        # Act
+        result = intake_api.authenticate(mock_credentials)
+
+        # Assert
+        assert result is False
+
+    def test_authenticate_rejects_invalid_authorization_format(self, intake_api):
+        """Test that authenticate rejects invalid Authorization header format."""
+        # Arrange
+        mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/message"
+        intake_api.request.headers = {"Authorization": "Bearer invalid-format"}
+
+        # Act
+        result = intake_api.authenticate(mock_credentials)
+
+        # Assert
+        assert result is False
+
+    @patch("intake_agent.api.intake.verify_signature")
+    def test_authenticate_rejects_invalid_signature(self, mock_verify_signature, intake_api):
+        """Test that authenticate rejects invalid signatures."""
+        # Arrange
+        mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/message"
+        intake_api.request.headers = {"Authorization": "Signature bad-signature"}
+        intake_api.request.json = MagicMock(return_value={"session_id": "test-session"})
+        mock_verify_signature.return_value = False
+
+        # Act
+        result = intake_api.authenticate(mock_credentials)
+
+        # Assert
+        assert result is False
+
+    # Endpoint Tests
+
+    @patch("intake_agent.api.intake.render_to_string")
+    def test_get_intake_form_returns_html(self, mock_render, intake_api):
+        """Test that get_intake_form returns HTMLResponse with rendered template."""
+        # Arrange
+        expected_html = "<html><body>Chat Interface</body></html>"
         mock_render.return_value = expected_html
 
         # Act
@@ -49,15 +135,13 @@ class TestIntakeAPI:
 
         # Assert
         assert len(result) == 1
-        response = result[0]
-        assert hasattr(response, "content")
-
-        # Verify render_to_string was called with correct arguments
+        assert hasattr(result[0], "content")
         mock_render.assert_called_once_with("templates/intake.html", {})
 
+    @patch("intake_agent.api.intake.log")
     @patch("intake_agent.api.intake.render_to_string")
-    def test_get_uses_empty_context(self, mock_render, intake_api):
-        """Test that get_intake_form method passes empty context to render_to_string."""
+    def test_get_intake_form_logs_request(self, mock_render, mock_log, intake_api):
+        """Test that get_intake_form logs when serving the chat interface."""
         # Arrange
         mock_render.return_value = "<html></html>"
 
@@ -65,304 +149,127 @@ class TestIntakeAPI:
         intake_api.get_intake_form()
 
         # Assert
-        # Verify the second argument (context) is an empty dict
-        call_args = mock_render.call_args
-        assert call_args[0][1] == {}
+        mock_log.info.assert_called_once_with("Serving patient intake chat interface")
 
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.render_to_string")
-    def test_get_logs_request(self, mock_render, mock_log, intake_api):
-        """Test that get_intake_form method logs when serving the intake form."""
-        # Arrange
-        mock_render.return_value = "<html></html>"
-
-        # Act
-        intake_api.get_intake_form()
-
-        # Assert
-        mock_log.info.assert_called_once_with("Serving patient intake form")
-
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    @patch("intake_agent.api.intake.PatientEffect")
-    @patch("intake_agent.api.intake.render_to_string")
-    def test_post_creates_new_patient_with_email_and_phone(
-        self, mock_render, mock_patient_effect, mock_patient, mock_log, intake_api
+    @patch("intake_agent.api.intake.generate_signature")
+    @patch("intake_agent.api.intake.create_session")
+    def test_create_session_returns_session_id_and_signature(
+        self, mock_create_session, mock_generate_signature, intake_api
     ):
-        """Test that submit_intake_form creates a new patient when no duplicates exist."""
+        """Test that create_session returns session_id and signature."""
         # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "John",
-            "lastName": "Doe",
-            "email": "john.doe@example.com",
-            "phone": "(555) 123-4567"
+        mock_create_session.return_value = {
+            "session_id": "test-session-789",
+            "created_at": "2025-01-01T00:00:00Z",
         }
-
-        # Mock Patient.objects.filter to return no existing patients
-        mock_patient.objects.filter.return_value.exists.return_value = False
-
-        # Mock patient effect
-        mock_effect_instance = MagicMock()
-        mock_create_effect = MagicMock()
-        mock_effect_instance.create.return_value = mock_create_effect
-        mock_patient_effect.return_value = mock_effect_instance
+        mock_generate_signature.return_value = "test-signature-abc"
 
         # Act
-        result = intake_api.submit_intake_form()
-
-        # Assert
-        assert len(result) == 2
-        assert result[0] == mock_create_effect
-
-        # Verify redirect response
-        redirect_response = result[1]
-        assert redirect_response.status_code == 303
-        assert redirect_response.headers["Location"] == "/plugin-io/api/intake_agent/chat/NEW_PATIENT"
-
-        # Verify patient effect was created with correct data
-        mock_patient_effect.assert_called_once()
-        call_kwargs = mock_patient_effect.call_args.kwargs
-        assert call_kwargs["first_name"] == "John"
-        assert call_kwargs["last_name"] == "Doe"
-        assert len(call_kwargs["contact_points"]) == 2
-
-        # Verify logging
-        assert mock_log.info.call_count == 2
-
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    @patch("intake_agent.api.intake.render_to_string")
-    def test_post_shows_banner_when_email_exists(
-        self, mock_render, mock_patient, mock_log, intake_api
-    ):
-        """Test that submit_intake_form shows banner when patient with email exists."""
-        # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "John",
-            "lastName": "Doe",
-            "email": "existing@example.com",
-            "phone": "(555) 123-4567"
-        }
-
-        # Mock existing patient
-        mock_existing_patient = MagicMock()
-        mock_existing_patient.id = "patient-123"
-        mock_patient.objects.filter.return_value.exists.return_value = True
-        mock_patient.objects.filter.return_value.first.return_value = mock_existing_patient
-
-        mock_render.return_value = "<html>Warning banner</html>"
-
-        # Act
-        result = intake_api.submit_intake_form()
+        result = intake_api.create_session()
 
         # Assert
         assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 201
+        mock_create_session.assert_called_once()
+        mock_generate_signature.assert_called_once_with(
+            "test-session-789", "test-secret-key"
+        )
 
-        # Verify render was called with banner context
-        mock_render.assert_called_once_with("templates/intake.html", {
-            "banner_message": "A patient with this contact information is already on record. Please contact us if you need assistance.",
-            "banner_type": "warning"
-        })
-
-        # Verify logging
-        mock_log.info.assert_any_call(f"Found existing patient with email existing@example.com: {mock_existing_patient.id}")
-
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    @patch("intake_agent.api.intake.render_to_string")
-    def test_post_shows_banner_when_phone_exists(
-        self, mock_render, mock_patient, mock_log, intake_api
-    ):
-        """Test that submit_intake_form shows banner when patient with phone exists."""
+    @patch("intake_agent.api.intake.get_session")
+    def test_get_session_data_returns_session(self, mock_get_session, intake_api):
+        """Test that get_session_data returns session data."""
         # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "John",
-            "lastName": "Doe",
-            "email": "new@example.com",
-            "phone": "(555) 987-6543"
+        intake_api.request.path_params = {"session_id": "test-session"}
+        mock_get_session.return_value = {
+            "session_id": "test-session",
+            "messages": [],
+            "status": "active",
         }
 
-        # Mock no patient with email, but patient with phone
-        mock_existing_patient = MagicMock()
-        mock_existing_patient.id = "patient-456"
-
-        def filter_side_effect(*args, **kwargs):
-            mock_queryset = MagicMock()
-            if "telecom__system" in kwargs:
-                if kwargs.get("telecom__value") == "new@example.com":
-                    # Email query returns no results
-                    mock_queryset.exists.return_value = False
-                else:
-                    # Phone query returns existing patient
-                    mock_queryset.exists.return_value = True
-                    mock_queryset.first.return_value = mock_existing_patient
-            return mock_queryset
-
-        mock_patient.objects.filter.side_effect = filter_side_effect
-        mock_render.return_value = "<html>Warning banner</html>"
-
         # Act
-        result = intake_api.submit_intake_form()
+        result = intake_api.get_session_data()
 
         # Assert
         assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 200
+        mock_get_session.assert_called_once_with("test-session")
 
-        # Verify render was called with banner context
-        mock_render.assert_called_once_with("templates/intake.html", {
-            "banner_message": "A patient with this contact information is already on record. Please contact us if you need assistance.",
-            "banner_type": "warning"
-        })
-
-        # Verify phone was cleaned (last 10 digits: 5559876543)
-        assert mock_log.info.call_count >= 2
-
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    @patch("intake_agent.api.intake.PatientEffect")
-    def test_post_creates_patient_with_only_email(
-        self, mock_patient_effect, mock_patient, mock_log, intake_api
-    ):
-        """Test creating patient with only email (no phone)."""
+    @patch("intake_agent.api.intake.get_session")
+    def test_get_session_data_returns_404_when_not_found(self, mock_get_session, intake_api):
+        """Test that get_session_data returns 404 when session not found."""
         # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "Jane",
-            "lastName": "Smith",
-            "email": "jane@example.com",
-            "phone": ""
-        }
-
-        mock_patient.objects.filter.return_value.exists.return_value = False
-
-        mock_effect_instance = MagicMock()
-        mock_create_effect = MagicMock()
-        mock_effect_instance.create.return_value = mock_create_effect
-        mock_patient_effect.return_value = mock_effect_instance
+        intake_api.request.path_params = {"session_id": "nonexistent"}
+        mock_get_session.return_value = None
 
         # Act
-        result = intake_api.submit_intake_form()
+        result = intake_api.get_session_data()
 
         # Assert
-        assert len(result) == 2
+        assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 404
 
-        # Verify patient effect has only email contact point
-        call_kwargs = mock_patient_effect.call_args.kwargs
-        assert len(call_kwargs["contact_points"]) == 1
-        # Contact point should be email
-
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    @patch("intake_agent.api.intake.PatientEffect")
-    def test_post_creates_patient_with_only_phone(
-        self, mock_patient_effect, mock_patient, mock_log, intake_api
-    ):
-        """Test creating patient with only phone (no email)."""
+    @patch("intake_agent.api.intake.add_message")
+    @patch("intake_agent.api.intake.get_session")
+    def test_handle_message_processes_user_message(self, mock_get_session, mock_add_message, intake_api):
+        """Test that handle_message processes user message and returns agent response."""
         # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "Bob",
-            "lastName": "Johnson",
-            "email": "",
-            "phone": "5551234567"
+        intake_api.request.path_params = {"session_id": "test-session"}
+        intake_api.request.json = MagicMock(
+            return_value={
+                "message": "Hello, I need help",
+            }
+        )
+        mock_get_session.return_value = {
+            "session_id": "test-session",
+            "messages": [],
+            "status": "active",
         }
-
-        mock_patient.objects.filter.return_value.exists.return_value = False
-
-        mock_effect_instance = MagicMock()
-        mock_create_effect = MagicMock()
-        mock_effect_instance.create.return_value = mock_create_effect
-        mock_patient_effect.return_value = mock_effect_instance
+        mock_add_message.return_value = {}
 
         # Act
-        result = intake_api.submit_intake_form()
+        result = intake_api.handle_message()
 
         # Assert
-        assert len(result) == 2
+        assert len(result) == 1
+        # Result is JSONResponse with agent_response
+        response = result[0]
+        assert response.status_code == 200
+        mock_add_message.assert_any_call("test-session", "user", "Hello, I need help")
+        assert mock_add_message.call_count == 2  # user + agent
 
-        # Verify patient effect has only phone contact point
-        call_kwargs = mock_patient_effect.call_args.kwargs
-        assert len(call_kwargs["contact_points"]) == 1
-
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    def test_post_phone_cleaning_removes_formatting(
-        self, mock_patient, mock_log, intake_api
-    ):
-        """Test that phone number cleaning removes formatting characters."""
+    def test_handle_message_returns_400_for_missing_fields(self, intake_api):
+        """Test that handle_message returns 400 when required fields are missing."""
         # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "Test",
-            "lastName": "User",
-            "email": "",
-            "phone": "(555) 123-4567"
-        }
-
-        mock_patient.objects.filter.return_value.exists.return_value = False
-
-        # Act - we're just testing the phone cleaning logic runs
-        # The actual filter call will verify the cleaned phone
-        with patch("intake_agent.api.intake.PatientEffect") as mock_effect:
-            mock_effect_instance = MagicMock()
-            mock_effect_instance.create.return_value = MagicMock()
-            mock_effect.return_value = mock_effect_instance
-
-            intake_api.submit_intake_form()
-
-        # Assert - verify filter was NOT called for phone since email is empty
-        # (only checks phone if no email provided or no email match found)
-        # The phone would be cleaned to "5551234567" for the query
-
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    @patch("intake_agent.api.intake.PatientEffect")
-    def test_post_skips_phone_check_if_less_than_10_digits(
-        self, mock_patient_effect, mock_patient, mock_log, intake_api
-    ):
-        """Test that phone check is skipped if cleaned phone has less than 10 digits."""
-        # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "Test",
-            "lastName": "User",
-            "email": "",
-            "phone": "123"  # Only 3 digits
-        }
-
-        mock_effect_instance = MagicMock()
-        mock_create_effect = MagicMock()
-        mock_effect_instance.create.return_value = mock_create_effect
-        mock_patient_effect.return_value = mock_effect_instance
+        intake_api.request.path_params = {"session_id": "test-session"}
+        intake_api.request.json = MagicMock(return_value={})
 
         # Act
-        result = intake_api.submit_intake_form()
+        result = intake_api.handle_message()
 
         # Assert
-        assert len(result) == 2
-        # No filter should be called since email is empty and phone < 10 digits
-        assert mock_patient.objects.filter.call_count == 0
+        assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 400
 
-    @patch("intake_agent.api.intake.log")
-    @patch("intake_agent.api.intake.Patient")
-    @patch("intake_agent.api.intake.PatientEffect")
-    def test_post_logs_patient_creation(
-        self, mock_patient_effect, mock_patient, mock_log, intake_api
-    ):
-        """Test that patient creation is logged."""
+    @patch("intake_agent.api.intake.get_session")
+    def test_handle_message_returns_404_for_invalid_session(self, mock_get_session, intake_api):
+        """Test that handle_message returns 404 when session doesn't exist."""
         # Arrange
-        intake_api.request.form_data.return_value = {
-            "firstName": "Alice",
-            "lastName": "Wonder",
-            "email": "alice@example.com",
-            "phone": "5551234567"
-        }
-
-        mock_patient.objects.filter.return_value.exists.return_value = False
-
-        mock_effect_instance = MagicMock()
-        mock_create_effect = MagicMock()
-        mock_effect_instance.create.return_value = mock_create_effect
-        mock_patient_effect.return_value = mock_effect_instance
+        intake_api.request.path_params = {"session_id": "invalid-session"}
+        intake_api.request.json = MagicMock(
+            return_value={
+                "message": "Hello",
+            }
+        )
+        mock_get_session.return_value = None
 
         # Act
-        intake_api.submit_intake_form()
+        result = intake_api.handle_message()
 
         # Assert
-        mock_log.info.assert_any_call("Processing intake form submission")
-        mock_log.info.assert_any_call("Creating new patient: Alice Wonder")
+        assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 404
