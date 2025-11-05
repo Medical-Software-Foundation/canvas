@@ -21,7 +21,7 @@ class TestLlmAnthropic(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.api_key = "test-anthropic-api-key"
-        self.model = "claude-3-5-sonnet-20241022"
+        self.model = "claude-sonnet-4-5-20250929"
         self.llm = LlmAnthropic(api_key=self.api_key, model=self.model)
 
     def test_initialization(self):
@@ -35,7 +35,7 @@ class TestLlmAnthropic(unittest.TestCase):
     def test_initialization_default_model(self):
         """Test initialization with default model."""
         llm = LlmAnthropic(api_key="test-key")
-        self.assertEqual(llm.model, "claude-3-5-sonnet-20241022")
+        self.assertEqual(llm.model, "claude-sonnet-4-5-20250929")
 
     def test_reset_messages(self):
         """Test that reset_messages clears the messages list."""

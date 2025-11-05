@@ -1,10 +1,6 @@
 [
     {
-        "stage_name": "welcome",
-        "approach": "welcome the patient and ask ",
-        "required_data_extraction": [
-            "reason_for_visit",
-            "phone_number"
-        ]
+        "name": "",
+        "description": ""
     }
 ]

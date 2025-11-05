@@ -18,13 +18,13 @@ import requests
 class LlmAnthropic:
     """Simplified Anthropic Claude LLM client for chat completions."""
 
-    def __init__(self, api_key: str, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, api_key: str, model: str = "claude-sonnet-4-5-20250929"):
         """
         Initialize the Anthropic Claude LLM client.
 
         Args:
             api_key: Anthropic API key for authentication
-            model: Claude model to use (default: claude-3-5-sonnet-20241022)
+            model: Claude model to use (default: claude-sonnet-4-5-20250929)
         """
         self.api_key = api_key
         self.model = model

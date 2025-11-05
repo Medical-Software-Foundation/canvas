@@ -6,6 +6,7 @@ from canvas_sdk.handlers.simple_api import Credentials, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from logger import log
 
+from intake_agent.agent import get_initial_greeting, process_patient_message
 from intake_agent.api.auth import generate_signature, verify_signature
 from intake_agent.api.session import add_message, create_session, get_session
 
@@ -24,7 +25,7 @@ class IntakeAPI(SimpleAPI):
         "/session",    # POST /session - Create session (returns signature)
     }
 
-    def authenticate(self, credentials: Credentials) -> bool:  # noqa: ARG002
+    def authenticate(self, credentials: Credentials) -> bool:  # noqa: ARG002, pylint: disable=unused-argument
         """
         Centralized authentication using HMAC signature verification.
 
@@ -206,21 +207,41 @@ class IntakeAPI(SimpleAPI):
             ]
 
         # Check if this is the initial start message
+        effects = []
         if user_message == "__START__":
             # Don't save the start message, just respond with greeting
-            agent_response = "Hello! Welcome to our healthcare intake service. I'm here to help you get started. May I have your name?"
+            agent_response = get_initial_greeting()
         else:
             # Add user message to session
             add_message(session_id, "user", user_message)
 
-            # TODO: Process message with LLM and generate response
-            # For now, use a placeholder response
-            agent_response = "Thank you for your message. I'm processing your information."
+            # Get LLM API key
+            llm_key = self.secrets.get("LLM_KEY", "")
+            if not llm_key:
+                log.error("LLM_KEY not configured")
+                agent_response = "I apologize, but I'm experiencing a configuration issue. Please try again later."
+            else:
+                # Get Twilio credentials for phone verification
+                twilio_account_sid = self.secrets.get("TWILIO_ACCOUNT_SID", "")
+                twilio_auth_token = self.secrets.get("TWILIO_AUTH_TOKEN", "")
+                twilio_phone_number = self.secrets.get("TWILIO_PHONE_NUMBER", "")
+
+                # Process message with LLM and generate response
+                result = process_patient_message(
+                    session_id,
+                    user_message,
+                    llm_key,
+                    twilio_account_sid,
+                    twilio_auth_token,
+                    twilio_phone_number
+                )
+                agent_response = result["response"]
+                effects = result["effects"]
 
         # Add agent response to session
         add_message(session_id, "agent", agent_response)
 
-        # Return the agent response directly
+        # Return the agent response and any effects
         return [
             JSONResponse(
                 {
@@ -230,4 +251,4 @@ class IntakeAPI(SimpleAPI):
                 },
                 status_code=HTTPStatus.OK
             )
-        ]
+        ] + effects

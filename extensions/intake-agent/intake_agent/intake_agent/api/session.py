@@ -1,33 +1,115 @@
 """
 Session management for intake chat conversations.
 
-Uses Canvas SDK cache to store conversation state with the following JSON schema:
-{
-    "session_id": str,
-    "created_at": str (ISO 8601),
-    "updated_at": str (ISO 8601),
-    "messages": [
-        {
-            "role": "agent" | "user",
-            "content": str,
-            "timestamp": str (ISO 8601)
-        }
-    ],
-    "collected_data": {
-        "first_name": str | None,
-        "last_name": str | None,
-        "email": str | None,
-        "phone": str | None
-    },
-    "status": "active" | "completed" | "abandoned"
-}
+Uses Canvas SDK cache to store conversation state. The session schema is defined
+in schemas/intake_session.json and validated on creation and updates.
 """
 
+import json
+import re
 import uuid
 from datetime import datetime, timezone
 
 from canvas_sdk.caching.plugins import get_cache
+from canvas_sdk.templates import render_to_string
 from logger import log
+
+
+def validate_session_data(session_data: dict) -> None:
+    """
+    Validate session data structure.
+
+    This validates the session data against the expected structure defined in
+    schemas/intake_session.json. Since jsonschema is not available in the Canvas
+    SDK sandbox, this implements custom validation logic.
+
+    Args:
+        session_data: Session data dictionary to validate
+
+    Raises:
+        ValueError: If session data doesn't match expected structure
+    """
+    # Check required top-level fields
+    required_fields = ["session_id", "created_at", "updated_at", "messages", "collected_data", "status"]
+    for field in required_fields:
+        if field not in session_data:
+            raise ValueError(f"Missing required field: {field}")
+
+    # Validate session_id format (32-character hex)
+    session_id = session_data["session_id"]
+    if not isinstance(session_id, str) or not re.match(r"^[a-f0-9]{32}$", session_id):
+        raise ValueError(f"Invalid session_id format: {session_id}")
+
+    # Validate timestamps are strings (ISO 8601 format)
+    for timestamp_field in ["created_at", "updated_at"]:
+        if not isinstance(session_data[timestamp_field], str):
+            raise ValueError(f"{timestamp_field} must be a string")
+
+    # Validate messages array
+    messages = session_data["messages"]
+    if not isinstance(messages, list):
+        raise ValueError("messages must be a list")
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            raise ValueError("Each message must be a dict")
+        if "role" not in msg or "content" not in msg or "timestamp" not in msg:
+            raise ValueError("Message missing required fields (role, content, timestamp)")
+        if msg["role"] not in ["agent", "user"]:
+            raise ValueError(f"Invalid message role: {msg['role']}")
+        if not isinstance(msg["content"], str):
+            raise ValueError("Message content must be a string")
+        if not isinstance(msg["timestamp"], str):
+            raise ValueError("Message timestamp must be a string")
+
+    # Validate collected_data
+    collected_data = session_data["collected_data"]
+    if not isinstance(collected_data, dict):
+        raise ValueError("collected_data must be a dict")
+
+    required_data_fields = ["first_name", "last_name", "email", "phone", "date_of_birth", "reason_for_visit"]
+    for field in required_data_fields:
+        if field not in collected_data:
+            raise ValueError(f"collected_data missing required field: {field}")
+
+        value = collected_data[field]
+        # Values can be None or strings
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"collected_data.{field} must be None or string")
+
+        # Validate date_of_birth format if present
+        if field == "date_of_birth" and value is not None:
+            if not re.match(r"^\d{4}-\d{2}-\d{2}$", value):
+                raise ValueError(f"Invalid date_of_birth format: {value} (expected YYYY-MM-DD)")
+
+    # Validate status
+    status = session_data["status"]
+    if status not in ["active", "completed", "abandoned"]:
+        raise ValueError(f"Invalid status: {status}")
+
+    # Validate patient_record_status if present (optional field)
+    # Status codes: 1=not_started, 2=pending, 3=complete
+    if "patient_record_status" in session_data:
+        patient_record_status = session_data["patient_record_status"]
+        if patient_record_status is not None and not isinstance(patient_record_status, int):
+            raise ValueError("patient_record_status must be None or int")
+        if patient_record_status is not None and patient_record_status not in [1, 2, 3]:
+            raise ValueError("patient_record_status must be 1 (not_started), 2 (pending), or 3 (complete)")
+
+    # Validate phone_verification_code if present (optional field)
+    if "phone_verification_code" in session_data:
+        verification_code = session_data["phone_verification_code"]
+        if verification_code is not None:
+            if not isinstance(verification_code, str):
+                raise ValueError("phone_verification_code must be None or string")
+            if not re.match(r"^\d{6}$", verification_code):
+                raise ValueError("phone_verification_code must be a 6-digit string")
+
+    # Validate phone_verified if present (optional field)
+    if "phone_verified" in session_data:
+        phone_verified = session_data["phone_verified"]
+        if not isinstance(phone_verified, bool):
+            raise ValueError("phone_verified must be a boolean")
 
 
 def generate_session_id() -> str:
@@ -46,6 +128,9 @@ def create_session() -> dict:
 
     Returns:
         Dictionary containing the session data
+
+    Raises:
+        jsonschema.ValidationError: If session data doesn't match schema
     """
     now = datetime.now(timezone.utc).isoformat()
     session_id = generate_session_id()
@@ -59,10 +144,18 @@ def create_session() -> dict:
             "first_name": None,
             "last_name": None,
             "email": None,
-            "phone": None
+            "phone": None,
+            "date_of_birth": None,
+            "reason_for_visit": None
         },
-        "status": "active"
+        "status": "active",
+        "phone_verification_code": None,
+        "phone_verified": False,
+        "patient_record_status": None
     }
+
+    # Validate session data against schema
+    validate_session_data(session_data)
 
     cache = get_cache()
     cache_key = f"intake_session:{session_id}"
@@ -104,12 +197,18 @@ def update_session(session_id: str, session_data: dict) -> None:
     Args:
         session_id: The session identifier
         session_data: Updated session data dictionary
+
+    Raises:
+        jsonschema.ValidationError: If session data doesn't match schema
     """
     cache = get_cache()
     cache_key = f"intake_session:{session_id}"
 
     # Update timestamp
     session_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Validate session data against schema before storing
+    validate_session_data(session_data)
 
     # Store for 1 hour (3600 seconds)
     cache.set(cache_key, session_data, timeout_seconds=3600)
@@ -153,7 +252,7 @@ def update_collected_data(session_id: str, field: str, value: str) -> dict | Non
 
     Args:
         session_id: The session identifier
-        field: Field name (first_name, last_name, email, phone)
+        field: Field name (first_name, last_name, email, phone, date_of_birth, reason_for_visit)
         value: The value to store
 
     Returns:

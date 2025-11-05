@@ -1,9 +1,22 @@
+import json
+import os
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from intake_agent.api import session
+
+
+# Load the schema content once for all tests
+_schema_path = os.path.join(
+    os.path.dirname(__file__), "..", "..", "intake_agent", "schemas", "intake_session.json"
+)
+with open(_schema_path) as f:
+    _SCHEMA_CONTENT = f.read()
+
+
+# No longer need to mock render_to_string since we're not loading the schema
 
 
 class TestSession:
@@ -36,7 +49,8 @@ class TestSession:
     ):
         """Test that create_session returns properly structured session data."""
         # Arrange
-        mock_generate_id.return_value = "test-session-id-123"
+        # Use a valid 32-character hex session ID
+        mock_generate_id.return_value = "a1b2c3d4e5f67890a1b2c3d4e5f67890"
         mock_cache = MagicMock()
         mock_get_cache.return_value = mock_cache
 
@@ -44,7 +58,7 @@ class TestSession:
         result = session.create_session()
 
         # Assert
-        assert result["session_id"] == "test-session-id-123"
+        assert result["session_id"] == "a1b2c3d4e5f67890a1b2c3d4e5f67890"
         assert "created_at" in result
         assert "updated_at" in result
         assert result["messages"] == []
@@ -59,7 +73,8 @@ class TestSession:
     def test_create_session_stores_in_cache(self, mock_generate_id, mock_get_cache):
         """Test that create_session stores session data in cache."""
         # Arrange
-        mock_generate_id.return_value = "test-session-id-456"
+        # Use a valid 32-character hex session ID
+        mock_generate_id.return_value = "b2c3d4e5f67890a1b2c3d4e5f67890a1"
         mock_cache = MagicMock()
         mock_get_cache.return_value = mock_cache
 
@@ -69,7 +84,7 @@ class TestSession:
         # Assert
         mock_cache.set.assert_called_once()
         call_args = mock_cache.set.call_args
-        assert call_args[0][0] == "intake_session:test-session-id-456"
+        assert call_args[0][0] == "intake_session:b2c3d4e5f67890a1b2c3d4e5f67890a1"
         assert call_args[1]["timeout_seconds"] == 3600  # 1 hour
 
     @patch("intake_agent.api.session.get_cache")
@@ -116,19 +131,30 @@ class TestSession:
         # Arrange
         mock_cache = MagicMock()
         mock_get_cache.return_value = mock_cache
+        # Use valid 32-character hex session ID and complete session data
         session_data = {
-            "session_id": "test-session",
-            "messages": [],
+            "session_id": "c3d4e5f67890a1b2c3d4e5f67890a1b2",
+            "created_at": "2025-01-01T00:00:00Z",
             "updated_at": "2025-01-01T00:00:00Z",
+            "messages": [],
+            "collected_data": {
+                "first_name": None,
+                "last_name": None,
+                "email": None,
+                "phone": None,
+                "date_of_birth": None,
+                "reason_for_visit": None,
+            },
+            "status": "active",
         }
 
         # Act
-        session.update_session("test-session", session_data)
+        session.update_session("c3d4e5f67890a1b2c3d4e5f67890a1b2", session_data)
 
         # Assert
         mock_cache.set.assert_called_once()
         call_args = mock_cache.set.call_args
-        assert call_args[0][0] == "intake_session:test-session"
+        assert call_args[0][0] == "intake_session:c3d4e5f67890a1b2c3d4e5f67890a1b2"
         assert "updated_at" in call_args[0][1]
         assert call_args[1]["timeout_seconds"] == 3600
 
@@ -139,13 +165,25 @@ class TestSession:
         mock_cache = MagicMock()
         mock_get_cache.return_value = mock_cache
         old_timestamp = "2025-01-01T00:00:00Z"
+        # Use valid 32-character hex session ID and complete session data
         session_data = {
-            "session_id": "test-session",
+            "session_id": "d4e5f67890a1b2c3d4e5f67890a1b2c3",
+            "created_at": old_timestamp,
             "updated_at": old_timestamp,
+            "messages": [],
+            "collected_data": {
+                "first_name": None,
+                "last_name": None,
+                "email": None,
+                "phone": None,
+                "date_of_birth": None,
+                "reason_for_visit": None,
+            },
+            "status": "active",
         }
 
         # Act
-        session.update_session("test-session", session_data)
+        session.update_session("d4e5f67890a1b2c3d4e5f67890a1b2c3", session_data)
 
         # Assert
         stored_data = mock_cache.set.call_args[0][1]
@@ -341,5 +379,21 @@ class TestSession:
 
             # Test update_session
             mock_cache.reset_mock()
-            session.update_session("test-456", {"session_id": "test-456"})
-            assert mock_cache.set.call_args[0][0] == "intake_session:test-456"
+            # Use valid 32-character hex session ID and complete session data
+            valid_session_data = {
+                "session_id": "e5f67890a1b2c3d4e5f67890a1b2c3d4",
+                "created_at": "2025-01-01T00:00:00Z",
+                "updated_at": "2025-01-01T00:00:00Z",
+                "messages": [],
+                "collected_data": {
+                    "first_name": None,
+                    "last_name": None,
+                    "email": None,
+                    "phone": None,
+                    "date_of_birth": None,
+                    "reason_for_visit": None,
+                },
+                "status": "active",
+            }
+            session.update_session("e5f67890a1b2c3d4e5f67890a1b2c3d4", valid_session_data)
+            assert mock_cache.set.call_args[0][0] == "intake_session:e5f67890a1b2c3d4e5f67890a1b2c3d4"
