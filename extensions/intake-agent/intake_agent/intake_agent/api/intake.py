@@ -6,9 +6,9 @@ from canvas_sdk.handlers.simple_api import Credentials, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from logger import log
 
-from intake_agent.agent import get_initial_greeting, process_patient_message
+from intake_agent.agent2 import IntakeAgent2
 from intake_agent.api.auth import generate_signature, verify_signature
-from intake_agent.api.session import add_message, create_session, get_session
+from intake_agent.api.session import IntakeSessionManager
 
 
 class IntakeAPI(SimpleAPI):
@@ -106,8 +106,7 @@ class IntakeAPI(SimpleAPI):
         """
         log.info("Creating new chat session")
 
-        session_data = create_session()
-        session_id = session_data["session_id"]
+        session = IntakeSessionManager.create_session()
 
         # Generate signature for the session
         secret_key = self.secrets.get("PLUGIN_SECRET_KEY", "")
@@ -120,12 +119,12 @@ class IntakeAPI(SimpleAPI):
                 )
             ]
 
-        signature = generate_signature(session_id, secret_key)
+        signature = generate_signature(session.session_id, secret_key)
 
         return [
             JSONResponse(
                 {
-                    "session_id": session_id,
+                    "session_id": session.session_id,
                     "signature": signature,
                     "status": "created"
                 },
@@ -149,9 +148,9 @@ class IntakeAPI(SimpleAPI):
         session_id = self.request.path_params.get("session_id")
         log.info(f"Retrieving session data for: {session_id}")
 
-        session_data = get_session(session_id)
-
-        if not session_data:
+        try:
+            session = IntakeSessionManager.get_session(session_id)
+        except:
             return [
                 JSONResponse(
                     {"error": "Session not found"},
@@ -160,13 +159,13 @@ class IntakeAPI(SimpleAPI):
             ]
 
         return [
-            JSONResponse(session_data, status_code=HTTPStatus.OK)
+            JSONResponse(session.to_dict(), status_code=HTTPStatus.OK)
         ]
 
     @api.post("/message/<session_id>")
     def handle_message(self) -> list[JSONResponse | Effect]:
         """
-        Handle a user message and broadcast agent response (requires authentication).
+        Handle a user message and return agent response (requires authentication).
 
         Endpoint: POST /plugin-io/api/intake_agent/intake/message/<session_id>
         Headers: Authorization: Signature <signature>
@@ -196,59 +195,47 @@ class IntakeAPI(SimpleAPI):
                 )
             ]
 
-        # Validate session exists
-        session_data = get_session(session_id)
-        if not session_data:
-            return [
-                JSONResponse(
-                    {"error": "Session not found"},
-                    status_code=HTTPStatus.NOT_FOUND
-                )
-            ]
+        session = IntakeSessionManager.get_session(session_id)
+
+        # Get all required secrets
+        llm_key = self.secrets.get("LLM_KEY", "")
+        scope_of_care = self.secrets.get("INTAKE_SCOPE_OF_CARE", "")
+        fallback_phone_number = self.secrets.get("INTAKE_FALLBACK_PHONE_NUMBER", "")
+        policies_url = self.secrets.get("POLICIES_URL", "")
+        twilio_account_sid = self.secrets.get("TWILIO_ACCOUNT_SID", "")
+        twilio_auth_token = self.secrets.get("TWILIO_AUTH_TOKEN", "")
+        twilio_phone_number = self.secrets.get("TWILIO_PHONE_NUMBER", "")
+
+        # Process message and generate response
+        agent = IntakeAgent2(
+            session,
+            llm_key,
+            scope_of_care,
+            fallback_phone_number,
+            policies_url,
+            twilio_account_sid,
+            twilio_auth_token,
+            twilio_phone_number
+        )
 
         # Check if this is the initial start message
-        effects = []
         if user_message == "__START__":
-            # Don't save the start message, just respond with greeting
-            agent_response = get_initial_greeting()
+            # deterministic greeting
+            effects = []
+            agent_response = IntakeAgent2.greeting()
         else:
-            # Add user message to session
-            add_message(session_id, "user", user_message)
+            # agentic response
+            effects = agent.listen(user_message)
+            agent_response = agent.respond()
 
-            # Get LLM API key
-            llm_key = self.secrets.get("LLM_KEY", "")
-            if not llm_key:
-                log.error("LLM_KEY not configured")
-                agent_response = "I apologize, but I'm experiencing a configuration issue. Please try again later."
-            else:
-                # Get Twilio credentials for phone verification
-                twilio_account_sid = self.secrets.get("TWILIO_ACCOUNT_SID", "")
-                twilio_auth_token = self.secrets.get("TWILIO_AUTH_TOKEN", "")
-                twilio_phone_number = self.secrets.get("TWILIO_PHONE_NUMBER", "")
-
-                # Process message with LLM and generate response
-                result = process_patient_message(
-                    session_id,
-                    user_message,
-                    llm_key,
-                    twilio_account_sid,
-                    twilio_auth_token,
-                    twilio_phone_number
-                )
-                agent_response = result["response"]
-                effects = result["effects"]
-
-        # Add agent response to session
-        add_message(session_id, "agent", agent_response)
-
-        # Return the agent response and any effects
-        return [
+        # Return the effects if any and the agent response
+        return effects + [
             JSONResponse(
                 {
                     "status": "success",
-                    "session_id": session_id,
+                    "session_id": agent.session.session_id,
                     "agent_response": agent_response
                 },
                 status_code=HTTPStatus.OK
             )
-        ] + effects
+        ]

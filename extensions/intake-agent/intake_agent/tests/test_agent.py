@@ -76,7 +76,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": "John",
                 "last_name": None,
-                "email": "john@example.com",
                 "phone": None,
                 "date_of_birth": None,
                 "reason_for_visit": None,
@@ -89,7 +88,6 @@ class TestAgent:
         # Assert
         assert "first_name: 'John'" in result
         assert "last_name: NOT COLLECTED" in result
-        assert "email: 'john@example.com'" in result
         assert "phone: NOT COLLECTED" in result
 
     def test_get_collected_data_summary_complete(self):
@@ -99,7 +97,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": "John",
                 "last_name": "Doe",
-                "email": "john@example.com",
                 "phone": "555-1234",
                 "date_of_birth": "1990-01-01",
                 "reason_for_visit": "Annual checkup",
@@ -112,7 +109,6 @@ class TestAgent:
         # Assert
         assert "first_name: 'John'" in result
         assert "last_name: 'Doe'" in result
-        assert "email: 'john@example.com'" in result
         assert "phone: '555-1234'" in result
         assert "date_of_birth: '1990-01-01'" in result
         assert "reason_for_visit: 'Annual checkup'" in result
@@ -128,13 +124,14 @@ class TestAgent:
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_get_initial_greeting_mentions_name(self):
-        """Test that get_initial_greeting asks for name."""
+    def test_get_initial_greeting_asks_reason(self):
+        """Test that get_initial_greeting asks for reason for visit."""
         # Act
         result = get_initial_greeting()
 
         # Assert
-        assert "name" in result.lower()
+        # Should ask about reason, not name (name comes later in workflow)
+        assert any(phrase in result.lower() for phrase in ["reason", "brings you", "visiting", "seeking care"])
 
     # Process Patient Message Tests
 
@@ -145,7 +142,14 @@ class TestAgent:
         mock_get_session.return_value = None
 
         # Act
-        result = process_patient_message("invalid-session", "Hello", "test-api-key")
+        result = process_patient_message(
+            "invalid-session",
+            "Hello",
+            "test-api-key",
+            "scope_of_care_text",
+            "555-0000",
+            "https://example.com/policies"
+        )
 
         # Assert
         assert isinstance(result, dict)
@@ -165,7 +169,14 @@ class TestAgent:
         }
 
         # Act
-        result = process_patient_message("test-session", "Hello again", "test-api-key")
+        result = process_patient_message(
+            "test-session",
+            "Hello again",
+            "test-api-key",
+            "scope_of_care_text",
+            "555-0000",
+            "https://example.com/policies"
+        )
 
         # Assert
         assert isinstance(result, dict)
@@ -188,7 +199,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": None,
                 "last_name": None,
-                "email": None,
                 "phone": None,
                 "date_of_birth": None,
                 "reason_for_visit": None,
@@ -203,7 +213,6 @@ class TestAgent:
                 "extracted_data": {
                     "first_name": "John",
                     "last_name": None,
-                    "email": None,
                     "phone": None,
                     "date_of_birth": None,
                     "reason_for_visit": None,
@@ -214,7 +223,14 @@ class TestAgent:
         }
 
         # Act
-        result = process_patient_message("test-session", "My name is John", "test-api-key")
+        result = process_patient_message(
+            "test-session",
+            "My name is John",
+            "test-api-key",
+            "Primary care services including checkups, chronic disease management",
+            "555-0000",
+            "https://example.com/policies"
+        )
 
         # Assert
         assert isinstance(result, dict)
@@ -240,7 +256,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": "John",
                 "last_name": "Doe",
-                "email": "john@example.com",
                 "phone": "555-1234",
                 "date_of_birth": "1990-01-01",
                 "reason_for_visit": None,
@@ -257,7 +272,6 @@ class TestAgent:
                 "extracted_data": {
                     "first_name": "John",
                     "last_name": "Doe",
-                    "email": "john@example.com",
                     "phone": "555-1234",
                     "date_of_birth": "1990-01-01",
                     "reason_for_visit": "Annual checkup",
@@ -269,15 +283,19 @@ class TestAgent:
 
         # Act
         result = process_patient_message(
-            "test-session", "I need an annual checkup", "test-api-key"
+            "test-session",
+            "I need an annual checkup",
+            "test-api-key",
+            "Primary care services including checkups, chronic disease management",
+            "555-0000",
+            "https://example.com/policies"
         )
 
         # Assert
         assert isinstance(result, dict)
         assert "Thank you! Someone will be in touch soon." in result["response"]
-        assert "patient record is being created" in result["response"]
-        assert len(result["effects"]) == 1  # Patient creation effect
-        mock_complete_session.assert_called_once_with("test-session")
+        assert result["effects"] == []  # No effects unless create_patient_now is triggered
+        mock_complete_session.assert_not_called()  # Session not completed unless send_appointment_confirmation triggered
 
     @patch("intake_agent.agent.LlmAnthropic")
     @patch("intake_agent.agent.get_session")
@@ -291,7 +309,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": None,
                 "last_name": None,
-                "email": None,
                 "phone": None,
                 "date_of_birth": None,
                 "reason_for_visit": None,
@@ -307,7 +324,14 @@ class TestAgent:
         }
 
         # Act
-        result = process_patient_message("test-session", "Hello", "test-api-key")
+        result = process_patient_message(
+            "test-session",
+            "Hello",
+            "test-api-key",
+            "Primary care services including checkups, chronic disease management",
+            "555-0000",
+            "https://example.com/policies"
+        )
 
         # Assert
         assert isinstance(result, dict)
@@ -326,7 +350,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": None,
                 "last_name": None,
-                "email": None,
                 "phone": None,
                 "date_of_birth": None,
                 "reason_for_visit": None,
@@ -345,7 +368,14 @@ class TestAgent:
         }
 
         # Act
-        result = process_patient_message("test-session", "Hello", "test-api-key")
+        result = process_patient_message(
+            "test-session",
+            "Hello",
+            "test-api-key",
+            "Primary care services including checkups, chronic disease management",
+            "555-0000",
+            "https://example.com/policies"
+        )
 
         # Assert
         assert isinstance(result, dict)
@@ -368,7 +398,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": None,
                 "last_name": None,
-                "email": None,
                 "phone": None,
                 "date_of_birth": None,
                 "reason_for_visit": None,
@@ -380,7 +409,14 @@ class TestAgent:
         mock_llm.chat_with_json.side_effect = Exception("Unexpected error")
 
         # Act
-        result = process_patient_message("test-session", "Hello", "test-api-key")
+        result = process_patient_message(
+            "test-session",
+            "Hello",
+            "test-api-key",
+            "Primary care services including checkups, chronic disease management",
+            "555-0000",
+            "https://example.com/policies"
+        )
 
         # Assert
         assert isinstance(result, dict)
@@ -403,7 +439,6 @@ class TestAgent:
             "collected_data": {
                 "first_name": "John",
                 "last_name": None,
-                "email": None,
                 "phone": None,
                 "date_of_birth": None,
                 "reason_for_visit": None,
@@ -418,7 +453,6 @@ class TestAgent:
                 "extracted_data": {
                     "first_name": "John",
                     "last_name": None,
-                    "email": None,
                     "phone": None,
                     "date_of_birth": None,
                     "reason_for_visit": None,
@@ -429,7 +463,14 @@ class TestAgent:
         }
 
         # Act
-        result = process_patient_message("test-session", "My name is John", "test-api-key")
+        result = process_patient_message(
+            "test-session",
+            "My name is John",
+            "test-api-key",
+            "Primary care services including checkups, chronic disease management",
+            "555-0000",
+            "https://example.com/policies"
+        )
 
         # Assert
         assert isinstance(result, dict)

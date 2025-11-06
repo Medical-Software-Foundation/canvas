@@ -64,8 +64,9 @@ class TestSession:
         assert result["messages"] == []
         assert result["collected_data"]["first_name"] is None
         assert result["collected_data"]["last_name"] is None
-        assert result["collected_data"]["email"] is None
         assert result["collected_data"]["phone"] is None
+        assert result["collected_data"]["date_of_birth"] is None
+        assert result["collected_data"]["reason_for_visit"] is None
         assert result["status"] == "active"
 
     @patch("intake_agent.api.session.get_cache")
@@ -138,12 +139,17 @@ class TestSession:
             "updated_at": "2025-01-01T00:00:00Z",
             "messages": [],
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": None,
                 "first_name": None,
                 "last_name": None,
-                "email": None,
-                "phone": None,
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "status": "active",
         }
@@ -172,12 +178,17 @@ class TestSession:
             "updated_at": old_timestamp,
             "messages": [],
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": None,
                 "first_name": None,
                 "last_name": None,
-                "email": None,
-                "phone": None,
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "status": "active",
         }
@@ -275,10 +286,17 @@ class TestSession:
         mock_get_session.return_value = {
             "session_id": "test-session",
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": None,
                 "first_name": None,
                 "last_name": None,
-                "email": None,
-                "phone": None,
+                "date_of_birth": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
         }
 
@@ -315,10 +333,17 @@ class TestSession:
         mock_get_session.return_value = {
             "session_id": "test-session",
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": None,
                 "first_name": None,
                 "last_name": None,
-                "email": None,
-                "phone": None,
+                "date_of_birth": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
         }
 
@@ -386,12 +411,17 @@ class TestSession:
                 "updated_at": "2025-01-01T00:00:00Z",
                 "messages": [],
                 "collected_data": {
+                    "reason_for_visit": None,
+                    "reason_in_scope": None,
+                    "proposed_appointment_times": None,
+                    "selected_appointment_time": None,
+                    "selected_appointment_index": None,
+                    "phone": None,
                     "first_name": None,
                     "last_name": None,
-                    "email": None,
-                    "phone": None,
                     "date_of_birth": None,
-                    "reason_for_visit": None,
+                    "policy_agreement_accepted": None,
+                    "patient_mrn": None,
                 },
                 "status": "active",
             }

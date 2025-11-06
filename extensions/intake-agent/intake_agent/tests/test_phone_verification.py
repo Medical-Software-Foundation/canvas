@@ -122,12 +122,17 @@ class TestPhoneVerification:
         # Arrange
         session_data = {
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": "+15551234567",
                 "first_name": "John",
                 "last_name": None,
-                "email": None,
-                "phone": "+15551234567",
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "phone_verified": False,
             "phone_verification_code": None,
@@ -144,12 +149,17 @@ class TestPhoneVerification:
         # Arrange
         session_data = {
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": "+15551234567",
                 "first_name": "John",
                 "last_name": None,
-                "email": None,
-                "phone": "+15551234567",
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "phone_verified": True,
             "phone_verification_code": "123456",
@@ -166,12 +176,17 @@ class TestPhoneVerification:
         # Arrange
         session_data = {
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": "+15559999999",  # Changed to avoid false positive
                 "first_name": "John",
                 "last_name": None,
-                "email": None,
-                "phone": "+15559999999",  # Changed to avoid false positive
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "phone_verified": False,
             "phone_verification_code": "123456",
@@ -210,12 +225,17 @@ class TestPhoneVerification:
             "status": "active",
             "messages": [],
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": "+15551234567",
                 "first_name": None,
                 "last_name": None,
-                "email": None,
-                "phone": "+15551234567",
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "phone_verified": False,
             "phone_verification_code": None,
@@ -246,12 +266,15 @@ class TestPhoneVerification:
 
         # Act
         result = process_patient_message(
-            "test-session",
-            "My phone is +15551234567",
-            "test-api-key",
-            "AC123",
-            "secret",
-            "+15559876543",
+            session_id="test-session",
+            user_message="My phone is +15551234567",
+            llm_api_key="test-api-key",
+            scope_of_care="Primary care services",
+            fallback_phone_number="555-0000",
+            policies_url="https://example.com/policies",
+            twilio_account_sid="AC123",
+            twilio_auth_token="secret",
+            twilio_phone_number="+15559876543",
         )
 
         # Assert
@@ -279,12 +302,17 @@ class TestPhoneVerification:
             "status": "active",
             "messages": [],
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": "+15551234567",
                 "first_name": None,
                 "last_name": None,
-                "email": None,
-                "phone": "+15551234567",
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "phone_verified": False,
             "phone_verification_code": "123456",
@@ -305,7 +333,12 @@ class TestPhoneVerification:
 
         # Act
         result = process_patient_message(
-            "test-session", "The code is 123456", "test-api-key"
+            session_id="test-session",
+            user_message="The code is 123456",
+            llm_api_key="test-api-key",
+            scope_of_care="Primary care services",
+            fallback_phone_number="555-0000",
+            policies_url="https://example.com/policies",
         )
 
         # Assert
@@ -337,12 +370,17 @@ class TestPhoneVerification:
             "status": "active",
             "messages": [],
             "collected_data": {
+                "reason_for_visit": None,
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": "+15551234567",
                 "first_name": None,
                 "last_name": None,
-                "email": None,
-                "phone": "+15551234567",
                 "date_of_birth": None,
-                "reason_for_visit": None,
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "phone_verified": False,
             "phone_verification_code": "123456",
@@ -363,7 +401,12 @@ class TestPhoneVerification:
 
         # Act
         result = process_patient_message(
-            "test-session", "The code is 999999", "test-api-key"
+            session_id="test-session",
+            user_message="The code is 999999",
+            llm_api_key="test-api-key",
+            scope_of_care="Primary care services",
+            fallback_phone_number="555-0000",
+            policies_url="https://example.com/policies",
         )
 
         # Assert
@@ -384,12 +427,17 @@ class TestPhoneVerification:
             "status": "active",
             "messages": [],
             "collected_data": {
+                "reason_for_visit": "Annual checkup",
+                "reason_in_scope": None,
+                "proposed_appointment_times": None,
+                "selected_appointment_time": None,
+                "selected_appointment_index": None,
+                "phone": "+15551234567",
                 "first_name": "John",
                 "last_name": "Doe",
-                "email": "john@example.com",
-                "phone": "+15551234567",
                 "date_of_birth": "1990-01-01",
-                "reason_for_visit": "Annual checkup",
+                "policy_agreement_accepted": None,
+                "patient_mrn": None,
             },
             "phone_verified": False,
             "phone_verification_code": "123456",
@@ -410,7 +458,12 @@ class TestPhoneVerification:
 
         # Act
         result = process_patient_message(
-            "test-session", "I'm ready", "test-api-key"
+            session_id="test-session",
+            user_message="I'm ready",
+            llm_api_key="test-api-key",
+            scope_of_care="Primary care services",
+            fallback_phone_number="555-0000",
+            policies_url="https://example.com/policies",
         )
 
         # Assert

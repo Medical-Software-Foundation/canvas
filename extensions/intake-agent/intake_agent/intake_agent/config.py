@@ -2,6 +2,8 @@
 Configuration settings for the intake agent plugin.
 """
 
+CACHE_TIMEOUT_SECONDS = 3600
+
 # Agent name - used for self-introduction
 AGENT_NAME = "Sarah"
 

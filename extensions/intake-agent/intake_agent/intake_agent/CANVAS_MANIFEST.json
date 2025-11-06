@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.74.1",
-    "plugin_version": "0.16.1",
+    "plugin_version": "0.21.0",
     "name": "intake_agent",
     "description": "Patient intake plugin providing a public-facing chat interface for prospective new patients",
     "components": {
@@ -26,7 +26,10 @@
         "PLUGIN_SECRET_KEY",
         "TWILIO_ACCOUNT_SID",
         "TWILIO_AUTH_TOKEN",
-        "TWILIO_PHONE_NUMBER"
+        "TWILIO_PHONE_NUMBER",
+        "INTAKE_SCOPE_OF_CARE",
+        "INTAKE_FALLBACK_PHONE_NUMBER",
+        "POLICIES_URL"
     ],
     "tags": {},
     "references": [],

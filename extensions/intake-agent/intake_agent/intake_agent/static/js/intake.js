@@ -147,7 +147,7 @@
         } catch (error) {
             console.error('Error loading initial message:', error);
             hideTypingIndicator();
-            addMessage('agent', 'Hello! How can I help you today?');
+            addMessage('agent', 'An error occurred');
         }
     }
 

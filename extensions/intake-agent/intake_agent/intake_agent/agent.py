@@ -9,8 +9,6 @@ concludes the conversation and ignores further messages.
 import random
 from datetime import datetime
 
-from canvas_sdk.effects.patient import Patient, PatientContactPoint, PatientMetadata
-from canvas_sdk.v1.data.common import ContactPointSystem, ContactPointUse
 from logger import log
 
 from intake_agent.api.session import complete_session, get_session, update_session
@@ -25,281 +23,753 @@ PATIENT_RECORD_STATUS_COMPLETE = 3
 
 
 # Required fields for patient intake
-REQUIRED_FIELDS = ["first_name", "last_name", "email", "phone", "date_of_birth", "reason_for_visit"]
+REQUIRED_FIELDS = ["reason_for_visit", "phone", "first_name", "last_name", "date_of_birth"]
 
 
-def generate_verification_code() -> str:
+def check_reason_in_scope(reason: str, scope_description: str, llm_api_key: str) -> dict:
     """
-    Generate a random 6-digit verification code.
-
-    Returns:
-        6-digit string code
-    """
-    return f"{random.randint(0, 999999):06d}"
-
-
-def send_verification_code(phone: str, code: str, twilio_account_sid: str, twilio_auth_token: str, twilio_phone_number: str) -> dict:
-    """
-    Send a verification code via SMS to the patient's phone number.
+    Use LLM to determine if the reason for visit is in scope.
 
     Args:
-        phone: Patient's phone number
-        code: 6-digit verification code
-        twilio_account_sid: Twilio Account SID
-        twilio_auth_token: Twilio Auth Token
-        twilio_phone_number: Twilio phone number to send from
+        reason: Patient's reason for visit
+        scope_description: Description of what's in scope (from INTAKE_SCOPE_OF_CARE secret)
+        llm_api_key: Anthropic API key for LLM
 
     Returns:
         Dictionary with:
-            - success: bool
+            - in_scope: bool
+            - explanation: str
             - error: str (if failed)
     """
     try:
-        client = TwilioClient(account_sid=twilio_account_sid, auth_token=twilio_auth_token)
+        llm = LlmAnthropic(api_key=llm_api_key)
 
-        message_body = f"Your verification code is: {code}\n\nPlease share this code with {AGENT_NAME} to verify your phone number."
+        system_prompt = """You are a medical triage assistant. Your job is to determine if a patient's reason for seeking care falls within the scope of services that can be handled by this intake system.
 
-        result = client.send_sms(
-            to=phone,
-            from_=twilio_phone_number,
-            body=message_body
+You will be given:
+1. The patient's reason for seeking care
+2. A description of what is in scope for this system
+
+Respond with a JSON object:
+{
+    "in_scope": true or false,
+    "explanation": "Brief explanation of why it is or isn't in scope"
+}
+
+Be conservative - if you're unsure, mark as out of scope."""
+
+        user_prompt = f"""SCOPE OF CARE:
+{scope_description}
+
+PATIENT'S REASON FOR VISIT:
+{reason}
+
+Is this reason within scope? Respond with JSON."""
+
+        result = llm.chat_with_json(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_retries=2
         )
 
         if result["success"]:
-            log.info(f"Verification code sent to {phone}: {result['message_sid']}")
-            return {"success": True, "error": None}
+            data = result["data"]
+            return {
+                "in_scope": data.get("in_scope", False),
+                "explanation": data.get("explanation", ""),
+                "error": None
+            }
         else:
-            log.error(f"Failed to send verification code to {phone}: {result['error']}")
-            return {"success": False, "error": result["error"]}
+            return {
+                "in_scope": False,
+                "explanation": "",
+                "error": result["error"]
+            }
 
     except Exception as e:
-        error_msg = f"Error sending verification code: {str(e)}"
-        log.error(error_msg)
-        return {"success": False, "error": error_msg}
+        log.error(f"Error checking reason in scope: {str(e)}")
+        return {
+            "in_scope": False,
+            "explanation": "",
+            "error": str(e)
+        }
 
 
-def get_system_prompt() -> str:
+
+
+
+
+
+
+
+
+# ===== INTAKE AGENT CLASS =====
+
+
+class IntakeAgent:
     """
-    Generate the system prompt for the intake agent based on configuration.
+    Class-based intake agent that manages the conversation flow and patient data collection.
 
-    Returns:
-        System prompt string with agent name and personality
+    This agent handles the complete 13-step intake workflow, managing session state and
+    delegating to appropriate step methods based on the current workflow state.
     """
-    # Get personality configuration
-    personality_config = AGENT_PERSONALITIES.get(AGENT_PERSONALITY, AGENT_PERSONALITIES["warm_professional"])
-    personality_description = personality_config["description"]
-    personality_traits = "\n".join([f"- {trait}" for trait in personality_config["traits"]])
 
-    return f"""You are {AGENT_NAME}, a medical intake assistant. Your goal is to collect the following required information from a prospective patient:
+    def __init__(
+        self,
+        session_id: str,
+        session_data: dict,
+        llm_api_key: str,
+        scope_of_care: str,
+        fallback_phone_number: str,
+        policies_url: str,
+        twilio_account_sid: str = None,
+        twilio_auth_token: str = None,
+        twilio_phone_number: str = None
+    ):
+        """
+        Initialize the IntakeAgent with session and configuration data.
 
-1. First name
-2. Last name
-3. Email address
-4. Phone number
-5. Date of birth (format: YYYY-MM-DD)
-6. Reason for visit (brief description of why they're seeking care)
+        Args:
+            session_id: The session identifier
+            session_data: Session data dictionary containing state and collected data
+            llm_api_key: Anthropic API key for LLM
+            scope_of_care: Description of services in scope for intake
+            fallback_phone_number: Phone number to provide when out of scope
+            policies_url: URL to clinic policies
+            twilio_account_sid: Twilio Account SID (optional, required for SMS)
+            twilio_auth_token: Twilio Auth Token (optional, required for SMS)
+            twilio_phone_number: Twilio phone number (optional, required for SMS)
+        """
+        self.session_id = session_id
+        self.session_data = session_data
+        self.llm_api_key = llm_api_key
+        self.scope_of_care = scope_of_care
+        self.fallback_phone_number = fallback_phone_number
+        self.policies_url = policies_url
+        self.twilio_account_sid = twilio_account_sid
+        self.twilio_auth_token = twilio_auth_token
+        self.twilio_phone_number = twilio_phone_number
+        self.conversation_history = get_conversation_history(session_data)
+        self.collected_data_summary = get_collected_data_summary(session_data)
+        self.collected_data = session_data.get("collected_data", {})
 
-YOUR PERSONALITY:
-{personality_description}
+    def update_session(self):
+        """Update the session in the cache with current session data."""
+        update_session(self.session_id, self.session_data)
 
-Key traits to embody:
-{personality_traits}
+    def step_1_collect_reason(self, user_message: str) -> dict:
+        """Step 1: Collect reason for visit with empathy and light follow-ups."""
+        user_prompt = f"""CONVERSATION HISTORY:
+{self.conversation_history}
 
-You should:
-- Introduce yourself by name when greeting new patients
-- Ask for missing information naturally in conversation, consistent with your personality
-- Only ask for one or two pieces of information at a time to avoid overwhelming the patient
-- Validate that email addresses look reasonable (contain @)
-- Validate that phone numbers are provided (any format is acceptable)
-- Validate that dates of birth are in YYYY-MM-DD format
-- Extract information from the patient's messages when they provide it
-- Once all information is collected, thank them and let them know someone will be in touch soon
+CURRENTLY COLLECTED DATA:
+{self.collected_data_summary}
 
-PHONE VERIFICATION PROCESS:
-- When you first extract a phone number, you MUST prioritize verifying it before asking for other information
-- Set "send_verification_code" to true to trigger sending a verification code via SMS
-- Ask the patient to share the 6-digit code they receive via text
-- Compare the code they provide against the verification code
-- Set "verification_code_match" to true if the codes match, false if they don't match
-- If verification fails, politely let them know and they can request another code
-- If they request another code (or didn't receive it), set "send_verification_code" to true again
-- Once the phone is verified, continue collecting remaining information
-- Do NOT create a patient record until the phone number is verified
+NEW PATIENT MESSAGE:
+{user_message}
 
-CRITICAL SECURITY RULE - VERIFICATION CODES:
-- NEVER reveal or mention the actual verification code in your messages to the patient
-- NEVER say things like "The code is 123456" or "I sent you 123456"
-- You will NOT see the actual verification code in the collected data - this is intentional for security
-- Only tell the patient "I've sent a verification code to your phone" or similar
-- If the code doesn't match, say "That code doesn't match. Please try again or I can send you a new code"
-- The system handles code generation and comparison automatically - you just set the flags
+===== YOUR TASK =====
 
-After each patient message, you must respond with a JSON object in this exact format:
+You are in STEP 1: Collecting the patient's reason for visit.
 
-```json
-{{
-    "extracted_data": {{
-        "first_name": "value or null",
-        "last_name": "value or null",
-        "email": "value or null",
-        "phone": "value or null",
-        "date_of_birth": "value or null",
-        "reason_for_visit": "value or null"
-    }},
-    "send_verification_code": true or false,
-    "verification_code_match": true or false or null,
-    "all_information_collected": true or false,
-    "response_to_patient": "Your message to the patient (in character with your personality)"
-}}
-```
+INSTRUCTIONS:
+- If they've provided a reason in their new message and you haven't already asked a question or two, show empathy and ask 1-2 light follow-up questions
+  (Examples: "How long has this been bothering you?" or "Is this affecting your daily activities?")
+- Extract any reason_for_visit information they provide
+- Be supportive and caring
 
-Important guidelines:
-- Only include data in extracted_data if you found it in the patient's message or conversation history
-- Set fields to null if the information hasn't been provided yet
-- Set all_information_collected to true ONLY when ALL required fields have non-null values
-- The response_to_patient should be natural, conversational, and consistent with your personality
-- If information was already collected in a previous message, include it in extracted_data
-- Don't ask for information that was already provided
-"""
+NEXT STEP LOGIC:
+- If patient has provided a clear reason for visit → next_step: "check_scope"
+- If still gathering details → next_step: "collect_reason"
 
+Extract all information and respond to the patient."""
 
-def get_conversation_history(session_data: dict) -> str:
-    """
-    Format conversation history for the LLM context.
+        llm = LlmAnthropic(api_key=self.llm_api_key)
+        result = llm.chat_with_json(
+            system_prompt=get_system_prompt(),
+            user_prompt=user_prompt,
+            max_retries=3
+        )
 
-    Args:
-        session_data: Session data containing messages
+        return result
 
-    Returns:
-        Formatted conversation history string
-    """
-    messages = session_data.get("messages", [])
-    if not messages:
-        return "No previous messages."
+    def step_2_check_scope(self, user_message: str) -> dict:
+        """Step 2: Checks if reason for visit is in scope of online intake."""
+        reason = self.session_data.get("collected_data", {}).get("reason_for_visit")
 
-    history_parts = []
-    for msg in messages:
-        role = "Patient" if msg["role"] == "user" else "Agent"
-        history_parts.append(f"{role}: {msg['content']}")
+        if not reason:
+            # Need to go back to collect_reason
+            return {
+                "success": True,
+                "data": {
+                    "next_step": "collect_reason",
+                    "extracted_data": {},
+                    "selected_appointment_index": None,
+                    "verification_code_match": None,
+                    "policy_agreement_accepted": None,
+                    "response_to_patient": "Could you tell me what brings you in today?"
+                }
+            }
 
-    return "\n".join(history_parts)
+        # Check scope
+        scope_result = check_reason_in_scope(reason, self.scope_of_care, self.llm_api_key)
 
+        if scope_result["error"]:
+            # Error checking scope, continue anyway
+            in_scope = True
+        else:
+            in_scope = scope_result["in_scope"]
 
-def get_collected_data_summary(session_data: dict) -> str:
-    """
-    Format collected data for the LLM context.
+        # Update session
+        self.session_data["collected_data"]["reason_in_scope"] = in_scope
 
-    SECURITY NOTE: This function MUST NOT reveal the verification code to the LLM,
-    as the LLM might accidentally include it in responses to the patient.
+        # TODO: Fix this
+        in_scope = True
 
-    Args:
-        session_data: Session data containing collected_data
+        if in_scope:
+            return self.step_4_request_appointments()
+        
+        return self.step_3_out_of_scope()
 
-    Returns:
-        Formatted collected data summary
-    """
-    collected = session_data.get("collected_data", {})
-    phone_verified = session_data.get("phone_verified", False)
-    verification_code = session_data.get("phone_verification_code")
+    def step_3_out_of_scope(self) -> dict:
+        """Step 3: Handle out-of-scope situations."""
+        return {
+            "success": True,
+            "data": {
+                "next_step": "complete",
+                "extracted_data": {},
+                "selected_appointment_index": None,
+                "verification_code_match": None,
+                "policy_agreement_accepted": None,
+                "response_to_patient": f"Please call us at {self.fallback_phone_number} to discuss your needs. We're here to help!"
+            }
+        }
 
-    parts = []
-    for field in REQUIRED_FIELDS:
-        value = collected.get(field)
-        status = f"'{value}'" if value else "NOT COLLECTED"
+    def step_4_request_appointments(self) -> dict:
+        """Step 4: Request available appointment slots."""
+        # System provides slots
+        # TODO: Handle the back-and-forth cycle of finding available slots, needs LLM here and conversation history. etc
+        # TODO: Implement real slots
+        appointment_slots = get_placeholder_appointment_slots()
+        self.session_data["collected_data"]["proposed_appointment_times"] = appointment_slots
 
-        # Add verification status for phone field
-        # SECURITY: Never reveal the actual verification code to the LLM
-        if field == "phone" and value:
-            if phone_verified:
-                status += " (VERIFIED)"
-            elif verification_code:
-                status += " (VERIFICATION CODE SENT, AWAITING PATIENT CONFIRMATION)"
+        # Format appointment times for presentation
+        apt_descriptions = []
+        for i, apt in enumerate(appointment_slots):
+            apt_dt = datetime.fromisoformat(apt["start_datetime"])
+            formatted = apt_dt.strftime("%A, %B %d at %I:%M %p")
+            apt_descriptions.append(f"{i+1}. {formatted} with {apt['provider']}")
+
+        apt_text = "\n".join(apt_descriptions)
+
+        return {
+            "success": True,
+            "data": {
+                "next_step": "select_appointment",
+                "extracted_data": {},
+                "selected_appointment_index": None,
+                "verification_code_match": None,
+                "policy_agreement_accepted": None,
+                "response_to_patient": f"I have these appointment times available:\n\n{apt_text}\n\nWhich time works best for you?"
+            }
+        }
+
+    def step_5_select_appointment(self, user_message: str) -> dict:
+        """Step 5: Patient selects an appointment time."""
+        user_prompt = f"""CONVERSATION HISTORY:
+{self.conversation_history}
+
+CURRENTLY COLLECTED DATA:
+{self.collected_data_summary}
+
+NEW PATIENT MESSAGE:
+{user_message}
+
+===== YOUR TASK =====
+
+You are in STEP 5: Patient is selecting a preferred appointment time (not confirmed yet)
+
+INSTRUCTIONS:
+- If the patient indicates a choice of preferred time, extract the index (0-based) into selected_appointment_index
+
+NEXT STEP LOGIC:
+- If patient selected an appointment → next_step: "collect_phone"
+- If they want different times → next_step: "request_appointments"
+- If still deciding or wants alternatives → next_step: "select_appointment"
+
+Extract the appointment choice if provided."""
+
+        llm = LlmAnthropic(api_key=self.llm_api_key)
+        result = llm.chat_with_json(
+            system_prompt=get_system_prompt(),
+            user_prompt=user_prompt,
+            max_retries=3
+        )
+
+        # Process the result: extract selected_appointment_index and store in session_data
+        if result.get("success"):
+            step_data = result["data"]
+            selected_apt_index = step_data.get("selected_appointment_index")
+
+            if selected_apt_index is not None:
+                proposed_times = self.session_data.get("collected_data", {}).get("proposed_appointment_times", [])
+                if 0 <= selected_apt_index < len(proposed_times):
+                    selected_apt = proposed_times[selected_apt_index]
+                    self.session_data["collected_data"]["selected_appointment_time"] = selected_apt["start_datetime"]
+                    self.session_data["collected_data"]["selected_appointment_index"] = selected_apt_index
+                    log.info(f"Selected appointment {selected_apt_index} for session {self.session_id}")
+                else:
+                    log.warning(f"Invalid appointment index {selected_apt_index} for session {self.session_id}")
+
+        return result
+
+    def step_6_collect_phone(self, user_message: str) -> dict:
+        """Step 6: Collect phone number."""
+        user_prompt = f"""CONVERSATION HISTORY:
+{self.conversation_history}
+
+CURRENTLY COLLECTED DATA:
+{self.collected_data_summary}
+
+NEW PATIENT MESSAGE:
+{user_message}
+
+===== YOUR TASK =====
+
+You are in STEP 6: Collecting the patient's mobile phone number.
+
+INSTRUCTIONS:
+- Ask for their mobile phone number for appointment confirmation
+- Extract the phone number when provided (any format is fine)
+- Explain we'll send a verification code
+
+NEXT STEP LOGIC:
+- If phone number provided → next_step: "send_verification"
+- If still waiting for phone → next_step: "collect_phone"
+
+Extract the phone number if provided."""
+
+        llm = LlmAnthropic(api_key=self.llm_api_key)
+        result = llm.chat_with_json(
+            system_prompt=get_system_prompt(),
+            user_prompt=user_prompt,
+            max_retries=3
+        )
+
+        if result['data'].get('next_step') == 'send_verification':
+            return self.step_7_send_verification()
+
+        return result
+
+    def step_7_send_verification(self) -> dict:
+        """Step 7: Send verification code (system action)."""
+        phone = self.session_data.get("collected_data", {}).get("phone")
+        response_to_patient = "I've sent a 6-digit verification code to your phone. Please share that code with me when you receive it."
+
+        # Send verification code via SMS
+        if phone and all([self.twilio_account_sid, self.twilio_auth_token, self.twilio_phone_number]):
+            verification_code = generate_verification_code()
+            log.info(f"Generated verification code for session {self.session_id}")
+
+            sms_result = send_verification_code(
+                phone=phone,
+                code=verification_code,
+                twilio_account_sid=self.twilio_account_sid,
+                twilio_auth_token=self.twilio_auth_token,
+                twilio_phone_number=self.twilio_phone_number
+            )
+
+            if sms_result["success"]:
+                self.session_data["phone_verification_code"] = verification_code
+                self.session_data["phone_verified"] = False
+                log.info(f"Verification code sent and stored for session {self.session_id}")
             else:
-                status += " (NOT VERIFIED YET)"
+                log.error(f"Failed to send verification code for session {self.session_id}: {sms_result['error']}")
+                response_to_patient += "\n\nI'm having trouble sending the verification code. Please try again."
+        else:
+            log.warning(f"Cannot send verification code for session {self.session_id} - missing phone or Twilio credentials")
 
-        parts.append(f"- {field}: {status}")
+        return {
+            "success": True,
+            "data": {
+                "next_step": "verify_phone",
+                "extracted_data": {},
+                "selected_appointment_index": None,
+                "verification_code_match": None,
+                "policy_agreement_accepted": None,
+                "response_to_patient": response_to_patient
+            }
+        }
 
-    return "\n".join(parts)
+    def step_8_verify_phone(self, user_message: str) -> dict:
+        """Step 8: Verify phone number with code."""
+        # First, extract the code from user message using LLM
+        user_prompt = f"""CONVERSATION HISTORY:
+{self.conversation_history}
+
+CURRENTLY COLLECTED DATA:
+{self.collected_data_summary}
+
+NEW PATIENT MESSAGE:
+{user_message}
+
+===== YOUR TASK =====
+
+You are in STEP 8: Verifying the patient's phone number.
+
+INSTRUCTIONS:
+- Ask the patient for the 6-digit code they received
+- When they provide a code, you need to extract it from their message
+- DO NOT check if it matches - just extract the code
+- SECURITY: NEVER reveal the actual verification code
+
+Extract any 6-digit code from the patient's message. If found, respond with next_step="verify_phone" so we can check it.
+If they're asking for a new code, set next_step="send_verification".
+If they haven't provided a code yet, keep next_step="verify_phone" and ask for it."""
+
+        llm = LlmAnthropic(api_key=self.llm_api_key)
+        result = llm.chat_with_json(
+            system_prompt=get_system_prompt(),
+            user_prompt=user_prompt,
+            max_retries=3
+        )
+
+        # Process the result: compare provided code with stored code
+        if result.get("success"):
+            step_data = result["data"]
+
+            # Try to extract a 6-digit code from the user message
+            import re
+            code_match = re.search(r'\b\d{6}\b', user_message)
+
+            if code_match:
+                provided_code = code_match.group(0)
+                stored_code = self.session_data.get("phone_verification_code")
+
+                if stored_code and provided_code == stored_code:
+                    self.session_data["phone_verified"] = True
+                    log.info(f"Phone verified successfully for session {self.session_id}")
+                    # Update the result to move to next step
+                    step_data["next_step"] = "collect_name_dob"
+                    step_data["response_to_patient"] = "Perfect! Your phone number is verified. Now, let's get your name and date of birth."
+                else:
+                    log.info(f"Verification code mismatch for session {self.session_id}")
+                    step_data["next_step"] = "verify_phone"
+                    step_data["response_to_patient"] = "That code doesn't match. Please check and try again, or let me know if you need a new code."
+
+        return result
+
+    def step_9_collect_name_dob(self, user_message: str) -> dict:
+        """Step 9: Collect name and date of birth."""
+        user_prompt = f"""CONVERSATION HISTORY:
+{self.conversation_history}
+
+CURRENTLY COLLECTED DATA:
+{self.collected_data_summary}
+
+NEW PATIENT MESSAGE:
+{user_message}
+
+===== YOUR TASK =====
+
+You are in STEP 9: Collecting the patient's name and date of birth.
+
+INSTRUCTIONS:
+- Ask for their full name and date of birth
+- Accept any reasonable date format initially
+- Confirm with the patient (e.g., "Just to confirm, that's John Smith, born January 15, 1990?")
+- Store date_of_birth in YYYY-MM-DD format after confirmation
+
+NEXT STEP LOGIC:
+- If have first_name AND last_name AND date_of_birth → next_step: "create_patient"
+- If still collecting → next_step: "collect_name_dob"
+
+Extract name and DOB information."""
+
+        llm = LlmAnthropic(api_key=self.llm_api_key)
+        result = llm.chat_with_json(
+            system_prompt=get_system_prompt(),
+            user_prompt=user_prompt,
+            max_retries=3
+        )
+
+        return result
+
+    def step_10_create_patient_present_policies(self, user_message: str) -> dict:
+        """Step 10: Create patient record (system action)."""
+        effects = []
+
+        # Create patient record
+        collected_data = self.session_data.get("collected_data", {})
+        phone_verified = self.session_data.get("phone_verified", False)
+        required_for_patient = ["first_name", "last_name", "phone", "date_of_birth"]
+        all_required_present = all(collected_data.get(field) for field in required_for_patient)
+        log.info(f"all_required_present: {all_required_present}")
+
+        if all_required_present and phone_verified:
+            patient_status = self.session_data.get("patient_record_status", PATIENT_RECORD_STATUS_NOT_STARTED)
+            if patient_status == PATIENT_RECORD_STATUS_NOT_STARTED:
+                log.info(f"Creating patient record for session {self.session_id}")
+                try:
+                    create_result = create_patient(collected_data, self.session_id)
+                    if create_result["success"]:
+                        effects = create_result["effects"]
+                        self.session_data["patient_record_status"] = PATIENT_RECORD_STATUS_PENDING
+                        log.info(f"Patient creation queued for session {self.session_id}")
+                    else:
+                        log.error(f"Failed to create patient for session {self.session_id}: {create_result.get('error')}")
+                        response_to_patient = "I'm having trouble creating your patient record. Let me try again."
+                except Exception as e:
+                    log.error(f"Exception creating patient for session {self.session_id}: {str(e)}")
+                    response_to_patient = "I'm having trouble creating your patient record. Let me try again."
+        else:
+            log.warning(f"Cannot create patient for session {self.session_id} - missing data or unverified phone")
+
+        result = self.step_11_present_policies(user_message)
+        response_to_patient = result['data']['response_to_patient']
+        result['data']['response_to_patient'] = "Great, I've started creating your medical record. " + response_to_patient
+        result["effects"] = effects
+
+        return result
+
+    def step_11_present_policies(self, user_message: str) -> dict:
+        """Step 11: Present policies and get agreement."""
+        user_prompt = f"""CONVERSATION HISTORY:
+{self.conversation_history}
+
+CURRENTLY COLLECTED DATA:
+{self.collected_data_summary}
+
+NEW PATIENT MESSAGE:
+{user_message}
+
+===== YOUR TASK =====
+
+You are in STEP 11: Presenting clinic policies.
+
+INSTRUCTIONS:
+- Show the policies URL as a markdown link: "Please review our [clinic policies]({self.policies_url})"
+- Ask if they've read and agree to the policies
+- Set policy_agreement_accepted to true when they agree
+
+NEXT STEP LOGIC:
+- If policy_agreement_accepted=true → next_step: "send_confirmation"
+- If they disagree or have concerns → next_step: "complete" (end session)
+- If still waiting → next_step: "present_policies"
+
+Determine if patient agrees to policies."""
+
+        llm = LlmAnthropic(api_key=self.llm_api_key)
+        result = llm.chat_with_json(
+            system_prompt=get_system_prompt(),
+            user_prompt=user_prompt,
+            max_retries=3
+        )
+
+        # Process the result: extract policy_agreement_accepted and store in session_data
+        if result.get("success"):
+            step_data = result["data"]
+            policy_accepted = step_data.get("policy_agreement_accepted")
+
+            if policy_accepted is not None:
+                self.session_data["collected_data"]["policy_agreement_accepted"] = policy_accepted
+                log.info(f"Policy agreement status: {policy_accepted}")
+
+        return result
+
+    def step_12_send_confirmation(self) -> dict:
+        """Step 12: Send appointment confirmation with MRN (system action)."""
+        response_to_patient = "Perfect! I've sent a confirmation text to your phone with your appointment details and Medical Record Number (MRN). Please save your MRN for future visits. If anything changes, please contact the clinic. Thank you!"
+
+        # Send appointment confirmation with MRN
+        collected_data = self.session_data.get("collected_data", {})
+        phone = collected_data.get("phone")
+        apt_time = collected_data.get("selected_appointment_time")
+        reason = collected_data.get("reason_for_visit")
+        mrn = collected_data.get("patient_mrn")
+
+        # Try to retrieve MRN if not stored
+        if not mrn:
+            log.info(f"Attempting to retrieve MRN for session {self.session_id}")
+            mrn = get_patient_mrn_by_session(self.session_id)
+            if mrn:
+                self.session_data["collected_data"]["patient_mrn"] = mrn
+                log.info(f"Retrieved and stored MRN {mrn} for session {self.session_id}")
+
+        # Send SMS if we have all required info
+        if all([phone, apt_time, reason, mrn, self.twilio_account_sid, self.twilio_auth_token, self.twilio_phone_number]):
+            log.info(f"Sending appointment confirmation SMS for session {self.session_id}")
+            sms_result = send_appointment_confirmation_sms(
+                phone=phone,
+                appointment_time=apt_time,
+                reason=reason,
+                mrn=mrn,
+                twilio_account_sid=self.twilio_account_sid,
+                twilio_auth_token=self.twilio_auth_token,
+                twilio_phone_number=self.twilio_phone_number
+            )
+
+            if sms_result["success"]:
+                log.info(f"Appointment confirmation sent for session {self.session_id}")
+                complete_session(self.session_id)
+            else:
+                log.error(f"Failed to send appointment confirmation for session {self.session_id}: {sms_result['error']}")
+                response_to_patient = "I'm having trouble sending the confirmation. Let me try again."
+        else:
+            log.warning(f"Cannot send confirmation for session {self.session_id} - missing required data")
+            if not mrn:
+                response_to_patient = "I'm still waiting for your patient record to be created. Let me check on that..."
+
+        return {
+            "success": True,
+            "data": {
+                "next_step": "complete",
+                "extracted_data": {},
+                "selected_appointment_index": None,
+                "verification_code_match": None,
+                "policy_agreement_accepted": None,
+                "response_to_patient": response_to_patient
+            }
+        }
+
+    def step_13_complete(self) -> dict:
+        """Step 13: Session complete."""
+        return {
+            "success": True,
+            "data": {
+                "next_step": "complete",
+                "extracted_data": {},
+                "selected_appointment_index": None,
+                "verification_code_match": None,
+                "policy_agreement_accepted": None,
+                "response_to_patient": "You're all set! Check your phone for the confirmation. Looking forward to seeing you!"
+            }
+        }
+
+    def process(self, user_message: str) -> dict:
+        """
+        Process a patient message and generate an agent response.
+
+        This method handles the complete 13-step intake workflow using the class-based
+        architecture. Each step method contains its own prompting logic, and this method
+        delegates to the appropriate step and handles side effects.
+
+        Args:
+            user_message: The patient's message
+
+        Returns:
+            Dictionary with:
+                - response: str - Agent response message to send to patient
+                - effects: list - List of Effect objects to return to Canvas
+        """
+        # Check if intake already completed
+        if self.session_data.get("status") == "completed":
+            log.info(f"Ignoring message for completed session: {self.session_id}")
+            return {
+                "response": "Thank you! Your intake is complete. Someone from our team will be in touch with you soon.",
+                "effects": []
+            }
+
+        # Get current next_step from session
+        next_step = self.session_data.get("next_step", "collect_reason")
+        log.info(f"Session {self.session_id}: current step={next_step}")
+
+        # Call the appropriate step method based on next_step
+        if next_step == "collect_reason":
+            result = self.step_1_collect_reason(user_message)
+        elif next_step == "check_scope":
+            result = self.step_2_check_scope(user_message)
+        elif next_step == "out_of_scope":
+            result = self.step_3_out_of_scope()
+        elif next_step == "request_appointments":
+            result = self.step_4_request_appointments()
+        elif next_step == "select_appointment":
+            result = self.step_5_select_appointment(user_message)
+        elif next_step == "collect_phone":
+            result = self.step_6_collect_phone(user_message)
+        elif next_step == "send_verification":
+            result = self.step_7_send_verification()
+        elif next_step == "verify_phone":
+            result = self.step_8_verify_phone(user_message)
+        elif next_step == "collect_name_dob":
+            result = self.step_9_collect_name_dob(user_message)
+        elif next_step == "create_patient":
+            result = self.step_10_create_patient_present_policies(user_message)
+        elif next_step == "present_policies":
+            result = self.step_11_present_policies(user_message)
+        elif next_step == "send_confirmation":
+            result = self.step_12_send_confirmation()
+        elif next_step == "complete":
+            result = self.step_13_complete()
+        else:
+            log.error(f"Unknown step: {next_step}")
+            return {
+                "response": "I apologize, but I encountered an error. Please try again.",
+                "effects": []
+            }
+
+        # Check if step method call was successful
+        if not result.get("success"):
+            log.error(f"Step method error for session {self.session_id}: {result.get('error')}")
+            return {
+                "response": "I apologize, but I'm having trouble processing your message. Could you please try again?",
+                "effects": []
+            }
+
+        # Extract data from step method result
+        step_data = result["data"]
+        new_next_step = step_data.get("next_step", "collect_reason")
+        extracted_data = step_data.get("extracted_data", {})
+        response_to_patient = step_data.get("response_to_patient", "")
+
+        log.info(f"Session {self.session_id}: new_next_step={new_next_step}")
+        log.info(f"Session {self.session_id}: extracted_data={extracted_data}")
+
+        if not response_to_patient:
+            log.warning(f"Empty response_to_patient for session {self.session_id}")
+            response_to_patient = "Thank you for that information. How can I help you further?"
+
+        # Update collected data in session with extracted_data
+        if extracted_data:
+            collected_data = self.session_data.get("collected_data", {})
+            for field in REQUIRED_FIELDS:
+                value = extracted_data.get(field)
+                if value is not None:
+                    collected_data[field] = value
+                    log.info(f"Updated {field} for session {self.session_id}")
+            self.session_data["collected_data"] = collected_data
+
+        # Get effects from result (for steps that create effects, like create_patient)
+        effects = []
+        if "effects" in result:
+            effects = result["effects"]
+            log.info(f"EFFECTS ARE PRESENT: {effects}")
+
+        # Handle session completion
+        if new_next_step == "complete":
+            log.info(f"Session {self.session_id} completed")
+            complete_session(self.session_id)
+
+        # Store the NEW next_step in session_data and update session
+        self.session_data["next_step"] = new_next_step
+        self.update_session()
+
+        return {
+            "response": response_to_patient,
+            "effects": effects
+        }
 
 
-def create_patient(collected_data: dict, session_id: str) -> dict:
-    """
-    Create a new patient record via Canvas SDK effects.
-
-    This method returns effects that will be processed asynchronously by Canvas.
-    The patient record will be created in the background, and we store the
-    session_id in patient metadata for later tracking.
-
-    Args:
-        collected_data: Patient data collected during intake
-        session_id: The intake session ID to store in patient metadata
-
-    Returns:
-        Dictionary with:
-            - success: bool (always True, as effects are queued)
-            - effects: list of Effect objects to be returned
-            - error: str (None for success)
-
-    Raises:
-        ValueError: If required data is missing or invalid
-    """
-    # Validate required fields
-    required = ["first_name", "last_name", "email", "phone", "date_of_birth"]
-    for field in required:
-        if not collected_data.get(field):
-            raise ValueError(f"Missing required field for patient creation: {field}")
-
-    log.info(
-        f"Creating patient for {collected_data['first_name']} {collected_data['last_name']}"
-    )
-
-    # Parse date_of_birth string (YYYY-MM-DD) to date object
-    try:
-        birthdate = datetime.strptime(collected_data["date_of_birth"], "%Y-%m-%d").date()
-    except ValueError as e:
-        raise ValueError(
-            f"Invalid date_of_birth format: {collected_data['date_of_birth']} (expected YYYY-MM-DD)"
-        ) from e
-
-    # Create patient effect
-    patient_effect = Patient(
-        first_name=collected_data["first_name"],
-        last_name=collected_data["last_name"],
-        birthdate=birthdate,
-        # Contact information
-        contact_points=[
-            PatientContactPoint(
-                system=ContactPointSystem.PHONE,
-                value=collected_data["phone"],
-                use=ContactPointUse.MOBILE,
-                rank=1,
-                has_consent=True,
-            ),
-            PatientContactPoint(
-                system=ContactPointSystem.EMAIL,
-                value=collected_data["email"],
-                use=ContactPointUse.WORK,
-                rank=2,
-                has_consent=True,
-            ),
-        ],
-        # Store intake session ID in metadata
-        metadata=[PatientMetadata(key="intake_session_id", value=session_id)],
-    )
-
-    log.info(f"Queued patient creation effect for session {session_id}")
-
-    return {
-        "success": True,
-        "effects": [patient_effect.create()],
-        "error": None,
-    }
+# ===== MAIN PROCESSING FUNCTION =====
 
 
 def process_patient_message(
     session_id: str,
     user_message: str,
     llm_api_key: str,
+    scope_of_care: str,
+    fallback_phone_number: str,
+    policies_url: str,
     twilio_account_sid: str = None,
     twilio_auth_token: str = None,
     twilio_phone_number: str = None
@@ -307,28 +777,26 @@ def process_patient_message(
     """
     Process a patient message and generate an agent response.
 
-    This function:
-    1. Checks if intake is already completed
-    2. Loads conversation history and collected data
-    3. Uses LLM to extract information and generate response
-    4. Handles phone verification (sending codes, verifying codes)
-    5. Updates session with newly extracted data
-    6. Creates patient record via SDK if all data collected and phone verified
-    7. Marks session as completed if all data collected
+    This is the public API function that creates an IntakeAgent instance and
+    processes the patient's message through the 13-step intake workflow.
 
     Args:
         session_id: The session identifier
         user_message: The patient's message
         llm_api_key: Anthropic API key for LLM
-        twilio_account_sid: Twilio Account SID (optional, required for phone verification)
-        twilio_auth_token: Twilio Auth Token (optional, required for phone verification)
-        twilio_phone_number: Twilio phone number (optional, required for phone verification)
+        scope_of_care: Description of services in scope for intake
+        fallback_phone_number: Phone number to provide when out of scope
+        policies_url: URL to clinic policies
+        twilio_account_sid: Twilio Account SID (optional, required for SMS)
+        twilio_auth_token: Twilio Auth Token (optional, required for SMS)
+        twilio_phone_number: Twilio phone number (optional, required for SMS)
 
     Returns:
         Dictionary with:
             - response: str - Agent response message to send to patient
             - effects: list - List of Effect objects to return to Canvas
     """
+    # Get session data
     session_data = get_session(session_id)
 
     if not session_data:
@@ -338,208 +806,19 @@ def process_patient_message(
             "effects": []
         }
 
-    # Check if intake already completed
-    if session_data.get("status") == "completed":
-        log.info(f"Ignoring message for completed session: {session_id}")
-        return {
-            "response": "Thank you! Your intake is complete. Someone from our team will be in touch with you soon.",
-            "effects": []
-        }
+    # Create IntakeAgent instance
+    agent = IntakeAgent(
+        session_id=session_id,
+        session_data=session_data,
+        llm_api_key=llm_api_key,
+        scope_of_care=scope_of_care,
+        fallback_phone_number=fallback_phone_number,
+        policies_url=policies_url,
+        twilio_account_sid=twilio_account_sid,
+        twilio_auth_token=twilio_auth_token,
+        twilio_phone_number=twilio_phone_number
+    )
 
-    # Get conversation history and current collected data
-    conversation_history = get_conversation_history(session_data)
-    collected_data_summary = get_collected_data_summary(session_data)
+    # Process the message and return the result
+    return agent.process(user_message)
 
-    # Build user prompt with context
-    user_prompt = f"""CONVERSATION HISTORY:
-{conversation_history}
-
-CURRENTLY COLLECTED DATA:
-{collected_data_summary}
-
-NEW PATIENT MESSAGE:
-{user_message}
-
-Please analyze this message, extract any new information, and respond to the patient. Remember to output a JSON object with extracted_data, all_information_collected, and response_to_patient fields."""
-
-    # Call LLM with JSON response
-    llm = LlmAnthropic(api_key=llm_api_key)
-
-    try:
-        result = llm.chat_with_json(
-            system_prompt=get_system_prompt(),
-            user_prompt=user_prompt,
-            max_retries=3
-        )
-
-        if not result["success"]:
-            log.error(f"LLM error for session {session_id}: {result['error']}")
-            return {
-                "response": "I apologize, but I'm having trouble processing your message. Could you please try again?",
-                "effects": []
-            }
-
-        llm_response = result["data"]
-
-        # Validate response structure
-        if not isinstance(llm_response, dict):
-            log.error(f"Invalid LLM response type for session {session_id}: {type(llm_response)}")
-            return {
-                "response": "I apologize, but I encountered an error. Please try again.",
-                "effects": []
-            }
-
-        extracted_data = llm_response.get("extracted_data", {})
-        all_info_collected = llm_response.get("all_information_collected", False)
-        response_to_patient = llm_response.get("response_to_patient", "")
-        should_send_verification_code = llm_response.get("send_verification_code", False)
-        verification_code_match = llm_response.get("verification_code_match", None)
-
-        if not response_to_patient:
-            log.warning(f"Empty response_to_patient for session {session_id}")
-            response_to_patient = "Thank you for that information. How can I help you further?"
-
-        # Update collected data in session
-        if extracted_data:
-            collected_data = session_data.get("collected_data", {})
-
-            for field in REQUIRED_FIELDS:
-                value = extracted_data.get(field)
-                if value is not None:
-                    collected_data[field] = value
-                    log.info(f"Updated {field} for session {session_id}")
-
-            session_data["collected_data"] = collected_data
-            update_session(session_id, session_data)
-
-        # Handle phone verification code sending
-        if should_send_verification_code:
-            phone = session_data.get("collected_data", {}).get("phone")
-
-            if phone and all([twilio_account_sid, twilio_auth_token, twilio_phone_number]):
-                # Generate and send verification code
-                verification_code = generate_verification_code()
-                log.info(f"Generated verification code for session {session_id}: {verification_code}")
-
-                # Send SMS
-                sms_result = send_verification_code(
-                    phone=phone,
-                    code=verification_code,
-                    twilio_account_sid=twilio_account_sid,
-                    twilio_auth_token=twilio_auth_token,
-                    twilio_phone_number=twilio_phone_number
-                )
-
-                if sms_result["success"]:
-                    # Store verification code in session
-                    session_data["phone_verification_code"] = verification_code
-                    session_data["phone_verified"] = False
-                    update_session(session_id, session_data)
-                    log.info(f"Verification code sent and stored for session {session_id}")
-                else:
-                    log.error(f"Failed to send verification code for session {session_id}: {sms_result['error']}")
-                    response_to_patient += "\n\nI'm having trouble sending the verification code. Please try again in a moment."
-            else:
-                if not phone:
-                    log.warning(f"Cannot send verification code - no phone number for session {session_id}")
-                else:
-                    log.warning(f"Cannot send verification code - missing Twilio credentials for session {session_id}")
-
-        # Handle phone verification code matching
-        if verification_code_match is not None:
-            stored_code = session_data.get("phone_verification_code")
-
-            if verification_code_match is True and stored_code:
-                # Mark phone as verified
-                session_data["phone_verified"] = True
-                update_session(session_id, session_data)
-                log.info(f"Phone verified successfully for session {session_id}")
-            elif verification_code_match is False:
-                log.info(f"Verification code mismatch for session {session_id}")
-
-        # Check if all information collected
-        effects = []
-        if all_info_collected:
-            collected_data = session_data.get("collected_data", {})
-            all_fields_present = all(
-                collected_data.get(field) is not None
-                for field in REQUIRED_FIELDS
-            )
-            phone_verified = session_data.get("phone_verified", False)
-
-            if all_fields_present and phone_verified:
-                log.info(f"All information collected and phone verified for session {session_id}")
-
-                # Get current patient record status (default to not_started)
-                patient_status = session_data.get("patient_record_status", PATIENT_RECORD_STATUS_NOT_STARTED)
-
-                # Create patient record
-                if patient_status == PATIENT_RECORD_STATUS_NOT_STARTED:
-                    log.info(f"Creating patient record for session {session_id}")
-                    result = create_patient(collected_data, session_id)
-
-                    if result["success"]:
-                        effects = result["effects"]
-
-                        # Mark status as pending
-                        session_data["patient_record_status"] = PATIENT_RECORD_STATUS_PENDING
-                        update_session(session_id, session_data)
-
-                        response_to_patient += "\n\nYour patient record is being created. Someone from our team will be in touch with you soon."
-                        log.info(f"Patient creation queued for session {session_id}")
-                    else:
-                        log.error(f"Failed to create patient: {result.get('error')}")
-                        response_to_patient += "\n\nWe've received all your information and will process it shortly."
-                elif patient_status == PATIENT_RECORD_STATUS_PENDING:
-                    log.info(f"Patient creation pending for session {session_id}")
-                    response_to_patient += "\n\nYour patient record is being created. Someone from our team will be in touch with you soon."
-                elif patient_status == PATIENT_RECORD_STATUS_COMPLETE:
-                    log.info(f"Patient record already complete for session {session_id}")
-                    # Future: Include MRN or patient info if available
-
-                # Mark session as completed
-                complete_session(session_id)
-            elif all_fields_present and not phone_verified:
-                log.warning(
-                    f"LLM indicated all_information_collected=true but phone not verified for session {session_id}"
-                )
-            else:
-                log.warning(
-                    f"LLM indicated all_information_collected=true but missing fields for session {session_id}"
-                )
-
-        return {
-            "response": response_to_patient,
-            "effects": effects
-        }
-
-    except Exception as e:
-        log.error(f"Exception processing message for session {session_id}: {str(e)}")
-        return {
-            "response": "I apologize, but I encountered an error. Please try again.",
-            "effects": []
-        }
-
-
-def get_initial_greeting() -> str:
-    """
-    Get the initial greeting message for a new patient.
-    Personalized based on agent name and personality.
-
-    Returns:
-        Initial greeting message
-    """
-    # Generate greeting based on personality
-    if AGENT_PERSONALITY == "warm_professional":
-        return f"Hello! Welcome to our healthcare intake service. My name is {AGENT_NAME}, and I'm here to help you get started with scheduling your visit. To begin, may I have your name?"
-    elif AGENT_PERSONALITY == "efficient_direct":
-        return f"Hello. I'm {AGENT_NAME}, your intake assistant. I'll need to collect some information to get you scheduled. Let's start with your name."
-    elif AGENT_PERSONALITY == "empathetic_supportive":
-        return f"Hello and welcome! I'm {AGENT_NAME}, and I'm here to support you through the intake process. I know visiting a new healthcare provider can feel overwhelming, so I'll guide you through this step by step. To start, could you please share your name with me?"
-    elif AGENT_PERSONALITY == "casual_friendly":
-        return f"Hey there! I'm {AGENT_NAME}. Thanks for reaching out! I'm here to help get you all set up for your visit. Let's start easy - what's your name?"
-    elif AGENT_PERSONALITY == "formal_courteous":
-        return f"Good day. I am {AGENT_NAME}, your medical intake coordinator. I will be assisting you with your registration today. May I please have your full name?"
-    else:
-        # Default fallback
-        return f"Hello! I'm {AGENT_NAME}, and I'm here to help you with your healthcare intake. To begin, may I have your name?"
