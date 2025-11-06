@@ -6,7 +6,7 @@ from canvas_sdk.handlers.simple_api import Credentials, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from logger import log
 
-from intake_agent.agent2 import IntakeAgent2
+from intake_agent.agent import IntakeAgent
 from intake_agent.api.auth import generate_signature, verify_signature
 from intake_agent.api.session import IntakeSessionManager
 
@@ -215,7 +215,7 @@ class IntakeAPI(SimpleAPI):
         twilio_phone_number = self.secrets.get("TWILIO_PHONE_NUMBER", "")
 
         # Process message and generate response
-        agent = IntakeAgent2(
+        agent = IntakeAgent(
             session,
             llm_key,
             scope_of_care,
@@ -230,7 +230,7 @@ class IntakeAPI(SimpleAPI):
         if user_message == "__START__":
             # deterministic greeting
             effects = []
-            agent_response = IntakeAgent2.greeting()
+            agent_response = IntakeAgent.greeting()
         else:
             # agentic response
             effects = agent.listen(user_message)

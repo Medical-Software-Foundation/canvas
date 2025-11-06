@@ -110,10 +110,40 @@ class TestIntakeAPI:
         """Test that authenticate rejects invalid signatures."""
         # Arrange
         mock_credentials = MagicMock()
-        intake_api.request.path = "/intake/message"
+        intake_api.request.path = "/intake/message/test-session"
+        intake_api.request.path_params = {"session_id": "test-session"}
         intake_api.request.headers = {"Authorization": "Signature bad-signature"}
-        intake_api.request.json = MagicMock(return_value={"session_id": "test-session"})
         mock_verify_signature.return_value = False
+
+        # Act
+        result = intake_api.authenticate(mock_credentials)
+
+        # Assert
+        assert result is False
+        mock_verify_signature.assert_called_once()
+
+    def test_authenticate_rejects_missing_secret_key(self, intake_api):
+        """Test that authenticate rejects requests when PLUGIN_SECRET_KEY is missing."""
+        # Arrange
+        mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/message/test-session"
+        intake_api.request.path_params = {"session_id": "test-session"}
+        intake_api.request.headers = {"Authorization": "Signature test-signature"}
+        intake_api.secrets = {}  # No secret key
+
+        # Act
+        result = intake_api.authenticate(mock_credentials)
+
+        # Assert
+        assert result is False
+
+    def test_authenticate_rejects_missing_session_id_in_path_params(self, intake_api):
+        """Test that authenticate rejects requests when session_id missing from path params."""
+        # Arrange
+        mock_credentials = MagicMock()
+        intake_api.request.path = "/intake/message"
+        intake_api.request.path_params = {}  # No session_id
+        intake_api.request.headers = {"Authorization": "Signature test-signature"}
 
         # Act
         result = intake_api.authenticate(mock_credentials)
@@ -175,6 +205,23 @@ class TestIntakeAPI:
             "test-session-789", "test-secret-key"
         )
 
+    @patch("intake_agent.api.intake.IntakeSessionManager.create_session")
+    def test_create_session_returns_500_when_secret_key_missing(self, mock_create_session, intake_api):
+        """Test that create_session returns 500 when PLUGIN_SECRET_KEY is missing."""
+        # Arrange
+        mock_session = MagicMock()
+        mock_session.session_id = "test-session-789"
+        mock_create_session.return_value = mock_session
+        intake_api.secrets = {}  # No secret key
+
+        # Act
+        result = intake_api.create_session()
+
+        # Assert
+        assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 500
+
     @patch("intake_agent.api.intake.IntakeSessionManager.get_session")
     def test_get_session_data_returns_session(self, mock_get_session, intake_api):
         """Test that get_session_data returns session data."""
@@ -211,7 +258,22 @@ class TestIntakeAPI:
         response = result[0]
         assert response.status_code == 404
 
-    @patch("intake_agent.api.intake.IntakeAgent2")
+    @patch("intake_agent.api.intake.IntakeSessionManager.get_session")
+    def test_get_session_data_returns_404_on_exception(self, mock_get_session, intake_api):
+        """Test that get_session_data returns 404 when get_session raises exception."""
+        # Arrange
+        intake_api.request.path_params = {"session_id": "error-session"}
+        mock_get_session.side_effect = Exception("Cache error")
+
+        # Act
+        result = intake_api.get_session_data()
+
+        # Assert
+        assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 404
+
+    @patch("intake_agent.api.intake.IntakeAgent")
     @patch("intake_agent.api.intake.IntakeSessionManager.get_session")
     def test_handle_message_processes_user_message(self, mock_get_session, mock_agent_class, intake_api):
         """Test that handle_message processes user message and returns agent response."""
@@ -295,3 +357,44 @@ class TestIntakeAPI:
         # Act & Assert - should raise an exception when trying to create agent with None session
         with pytest.raises(AttributeError):
             intake_api.handle_message()
+
+    @patch("intake_agent.api.intake.IntakeAgent")
+    @patch("intake_agent.api.intake.IntakeSessionManager.get_session")
+    def test_handle_message_handles_start_message(self, mock_get_session, mock_agent_class, intake_api):
+        """Test that handle_message handles __START__ message with greeting."""
+        # Arrange
+        intake_api.request.path_params = {"session_id": "test-session"}
+        intake_api.request.json = MagicMock(
+            return_value={
+                "message": "__START__",
+            }
+        )
+        mock_session = MagicMock()
+        mock_session.session_id = "test-session"
+        mock_get_session.return_value = mock_session
+
+        # Mock the agent instance
+        mock_agent = MagicMock()
+        mock_agent.session = mock_session
+        mock_agent_class.return_value = mock_agent
+        mock_agent_class.greeting.return_value = "Welcome! How can I help you today?"
+
+        # Mock secrets
+        intake_api.secrets = {
+            "LLM_KEY": "test-key",
+            "INTAKE_SCOPE_OF_CARE": "test-scope",
+            "INTAKE_FALLBACK_PHONE_NUMBER": "555-0000",
+            "POLICIES_URL": "https://example.com/policies",
+            "TWILIO_ACCOUNT_SID": "test-sid",
+            "TWILIO_AUTH_TOKEN": "test-token",
+            "TWILIO_PHONE_NUMBER": "+15551234567",
+        }
+
+        # Act
+        result = intake_api.handle_message()
+
+        # Assert
+        assert len(result) == 1
+        response = result[0]
+        assert response.status_code == 200
+        mock_agent_class.greeting.assert_called_once()

@@ -11,7 +11,7 @@ from intake_agent.llms.llm_anthropic import LlmAnthropic
 from intake_agent.tools import Toolkit
 
 
-class IntakeAgent2:
+class IntakeAgent:
 
     def __init__(
         self,
@@ -294,8 +294,6 @@ Key traits to embody:
         return {"effects": [], "value": ''}
 
     def prewrite_policy_agreement_timestamp(self) -> str:
-        log.info('prewrite_policy_agreement_timestamp')
-        log.info()
         return (
             f"Provide a link (opening in another tab) to our policies here: {self.policies_url}"
             " and ask the user to indicate agreement."
