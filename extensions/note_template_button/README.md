@@ -24,6 +24,9 @@ This useful and flexible extension is great starting point for organizations tha
 
 `canvas install note_template_button`
 
+## See it in action
+
+https://youtu.be/i77kscxuJak
 
 
 ### Important Note!
