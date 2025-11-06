@@ -218,7 +218,7 @@
 
         const bubbleDiv = document.createElement('div');
         bubbleDiv.className = 'message-bubble';
-        bubbleDiv.textContent = content;
+        bubbleDiv.innerHTML = content;
 
         messageDiv.appendChild(bubbleDiv);
         chatMessages.appendChild(messageDiv);

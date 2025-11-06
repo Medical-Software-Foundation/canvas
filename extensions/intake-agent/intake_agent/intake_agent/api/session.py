@@ -101,10 +101,10 @@ class IntakeSession(NamedTuple):
     patient_mrn: str = ""
     first_name: str = ""
     last_name: str = ""
-    date_of_birth: datetime | None = None
+    date_of_birth: datetime.date | None = None
     phone_number: str = ""
     phone_verification_code: str = ""
-    phone_verified_timestamp: datetime | None = None
+    user_submitted_phone_verified_code: str = ""
     health_concerns: str = ""
     proposed_appointments: list[ProposedAppointment] = []
     preferred_appointment: ProposedAppointment | None = None
@@ -125,7 +125,7 @@ class IntakeSession(NamedTuple):
         )
         self.messages.append(message)
         self.save()
-        log.info(f"Added {role} message to session {self.session_id}")
+        log.info(f"Added {role} message to session {self.session_id}: {content}")
 
     def internal_fields(self) -> list[str]:
         return [
@@ -135,10 +135,8 @@ class IntakeSession(NamedTuple):
             "patient_id",
             "patient_mrn",
             "phone_verification_code",
-            "phone_verified_timestamp",
             "proposed_appointments",
             "appointment_confirmation_timestamp",
-            "policy_agreement_timestamp",
             "messages"
         ]
 
@@ -148,7 +146,7 @@ class IntakeSession(NamedTuple):
             ["proposed_appointments"],
             ["preferred_appointment"],
             ["phone_number"],
-            ["phone_verified_timestamp"],
+            ["user_submitted_phone_verified_code"],
             ["first_name", "last_name", "date_of_birth"],
             ["policy_agreement_timestamp"],
             ["appointment_confirmation_timestamp"],
@@ -168,12 +166,15 @@ class IntakeSession(NamedTuple):
     def patient_exists(self) -> bool:
         return self.patient_id != ""
 
+    def phone_verified(self) -> bool:
+        return self.phone_verification_code == self.user_submitted_phone_verified_code
+
     def sufficient_data_to_create_patient(self) -> bool:
         return (
             self.first_name
             and self.last_name
             and self.date_of_birth
-            and self.phone_verified
+            and self.phone_verified()
         )
 
     def to_dict(self) -> dict:
@@ -188,7 +189,7 @@ class IntakeSession(NamedTuple):
             "date_of_birth": self.date_of_birth.isoformat() if self.date_of_birth else None,
             "phone_number": self.phone_number,
             "phone_verification_code": self.phone_verification_code,
-            "phone_verified_timestamp": self.phone_verified_timestamp.isoformat() if self.phone_verified_timestamp else None,
+            "user_submitted_phone_verified_code": self.user_submitted_phone_verified_code,
             "health_concerns": self.health_concerns,
             "proposed_appointments": [a.to_dict() for a in self.proposed_appointments],
             "preferred_appointment": self.preferred_appointment.to_dict() if self.preferred_appointment else None,
@@ -207,15 +208,15 @@ class IntakeSession(NamedTuple):
             patient_mrn=data["patient_mrn"],
             first_name=data["first_name"],
             last_name=data["last_name"],
-            date_of_birth=datetime.fromisoformat(data["date_of_birth"]) if data.get("date_of_birth") else None,
+            date_of_birth=datetime.fromisoformat(data["date_of_birth"]).date() if data.get("date_of_birth") else None,
             phone_number=data["phone_number"],
-            phone_verification_code=data.get("phone_verification_code", ""),
-            phone_verified_timestamp=datetime.fromisoformat(data["phone_verified_timestamp"]) if data.get("phone_verified_timestamp") else None,
+            phone_verification_code=data["phone_verification_code"],
+            user_submitted_phone_verified_code=data["user_submitted_phone_verified_code"],
             health_concerns=data["health_concerns"],
             proposed_appointments=[ProposedAppointment.from_dict(a) for a in data.get("proposed_appointments", [])],
             preferred_appointment=ProposedAppointment.from_dict(data["preferred_appointment"]) if data.get("preferred_appointment") else None,
             appointment_confirmation_timestamp=datetime.fromisoformat(data["appointment_confirmation_timestamp"]) if data.get("appointment_confirmation_timestamp") else None,
-            policy_agreement_timestamp=datetime.fromisoformat(data["policy_agreement_confirmed"]) if data.get("policy_agreement_confirmed") else None,
+            policy_agreement_timestamp=datetime.fromisoformat(data["policy_agreement_timestamp"]) if data.get("policy_agreement_timestamp") else None,
             messages=[IntakeMessage.from_dict(m) for m in data.get("messages", [])],
         )
 

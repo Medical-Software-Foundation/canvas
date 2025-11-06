@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.74.1",
-    "plugin_version": "0.21.0",
+    "plugin_version": "1.26.0",
     "name": "intake_agent",
     "description": "Patient intake plugin providing a public-facing chat interface for prospective new patients",
     "components": {

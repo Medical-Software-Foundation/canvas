@@ -158,6 +158,14 @@ class IntakeAPI(SimpleAPI):
                 )
             ]
 
+        if not session:
+            return [
+                JSONResponse(
+                    {"error": "Session not found"},
+                    status_code=HTTPStatus.NOT_FOUND
+                )
+            ]
+
         return [
             JSONResponse(session.to_dict(), status_code=HTTPStatus.OK)
         ]
