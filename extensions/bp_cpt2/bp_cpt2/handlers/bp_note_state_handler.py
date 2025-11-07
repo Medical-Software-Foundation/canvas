@@ -170,6 +170,12 @@ Provide your analysis in JSON format."""
 
     def compute(self) -> list[Effect]:
         """Main compute method called when note state changes."""
+        # Check if treatment plan codes are enabled
+        include_treatment_codes = self.secrets.get('INCLUDE_TREATMENT_PLAN_CODES', '').lower()
+        if include_treatment_codes in ('false', 'f', 'n', 'no', '0', ''):
+            log.info("Treatment plan codes disabled via INCLUDE_TREATMENT_PLAN_CODES setting")
+            return []
+
         # Get note state and note_id from event
         new_note_state = self.event.context.get('state')
         note_id = self.event.context.get('note_id')
@@ -192,7 +198,7 @@ Provide your analysis in JSON format."""
         log.info(f"Analyzing BP treatment plan for patient {patient.id}, note {note.id}")
 
         # Get BP readings for this note
-        systolic, diastolic = get_blood_pressure_readings(note=note)
+        systolic, diastolic = get_blood_pressure_readings(note)
 
         # Only add treatment codes if BP is uncontrolled (>= 140/90)
         if systolic is None or diastolic is None:
