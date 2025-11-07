@@ -35,11 +35,13 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         provider_ids = self.request.query_params.get("provider_ids")
         location_ids = self.request.query_params.get("location_ids")
         billable_only = self.request.query_params.get("billable_only") == "true"
+        note_type_ids = self.request.query_params.get("note_type_ids")
+        claim_queue_names = self.request.query_params.get("claim_queue_names")
 
         # Pagination parameters
         page = int(self.request.query_params.get("page", 1))
         page_size = int(self.request.query_params.get("page_size", 25))
-        
+
         # Sorting parameters
         sort_by = self.request.query_params.get("sort_by", "created")
         sort_direction = self.request.query_params.get("sort_direction", "desc")
@@ -67,6 +69,16 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
             clean_location_ids = [lid.strip() for lid in location_ids.split(',') if lid.strip()]
             if clean_location_ids:
                 note_queryset = note_queryset.filter(location__id__in=clean_location_ids)
+
+        if note_type_ids:
+            clean_note_type_ids = [nid.strip() for nid in note_type_ids.split(',') if nid.strip()]
+            if clean_note_type_ids:
+                note_queryset = note_queryset.filter(note_type_version__id__in=clean_note_type_ids)
+
+        if claim_queue_names:
+            clean_claim_queue_names = [cqn.strip() for cqn in claim_queue_names.split(',') if cqn.strip()]
+            if clean_claim_queue_names:
+                note_queryset = note_queryset.filter(claims__current_queue__name__in=clean_claim_queue_names)
 
         # Add annotations
         note_queryset = note_queryset.annotate(
@@ -166,6 +178,52 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
 
         return [JSONResponse({
             "locations": locations
+        }, status_code=HTTPStatus.OK)]
+
+    @api.get("/note_types")
+    def get_note_types(self) -> list[Response | Effect]:
+        """Get list of note types that have open encounters."""
+        note_types = [{"id": str(n.note_type_version.id), "name": n.note_type_version.name}
+                      for n in
+                      Note.objects.exclude(current_state__state__in=(
+                          NoteStates.LOCKED,
+                          NoteStates.DELETED,
+                          NoteStates.DISCHARGED,
+                          NoteStates.SCHEDULING,
+                          NoteStates.BOOKED,
+                          NoteStates.CANCELLED,
+                          NoteStates.CONFIRM_IMPORT,
+                          NoteStates.REVERTED
+                      ))
+                      .exclude(note_type_version__category__in=(NoteTypeCategories.MESSAGE, NoteTypeCategories.LETTER))
+                      .filter(note_type_version__isnull=False)
+                      .order_by("note_type_version__name", "note_type_version__id")
+                      .distinct("note_type_version__id", "note_type_version__name")
+                      if n.note_type_version and n.note_type_version.name]
+
+        return [JSONResponse({
+            "note_types": note_types
+        }, status_code=HTTPStatus.OK)]
+
+    @api.get("/claim_queues")
+    def get_claim_queues(self) -> list[Response | Effect]:
+        """Get list of claim queue statuses."""
+        # Return all possible claim queue statuses
+        claim_queues = [
+            {"name": "NeedsClinicianReview"},
+            {"name": "NeedsCodingReview"},
+            {"name": "QueuedForSubmission"},
+            {"name": "FiledAwaitingResponse"},
+            {"name": "RejectedNeedsReview"},
+            {"name": "AdjudicatedOpenBalance"},
+            {"name": "PatientBalance"},
+            {"name": "ZeroBalance"},
+            {"name": "Trash"},
+            {"name": "Appointment"}
+        ]
+
+        return [JSONResponse({
+            "claim_queues": claim_queues
         }, status_code=HTTPStatus.OK)]
 
     def _get_sort_fields(self, sort_by: str) -> list[str]:

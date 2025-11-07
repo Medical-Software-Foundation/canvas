@@ -662,6 +662,42 @@
                     </div>
                     
                     <div class="filter-field">
+                        <label class="filter-label">Note Type</label>
+                        <div class="filter-dropdown" id="noteTypeFilter" data-values="">
+                            <div class="selected-value">
+                                <span class="placeholder-text">All Note Types</span>
+                            </div>
+                            <div class="dropdown-options" id="note-type-options">
+                                <div class="dropdown-search">
+                                    <input type="text" id="note-type-search" placeholder="Search note types..." class="search-input">
+                                </div>
+                                <div class="dropdown-option" data-value="">
+                                    <input type="checkbox" id="note-type-all" checked>
+                                    <label for="note-type-all">All Note Types</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="filter-field">
+                        <label class="filter-label">Claim Queue</label>
+                        <div class="filter-dropdown" id="claimQueueFilter" data-values="">
+                            <div class="selected-value">
+                                <span class="placeholder-text">All Statuses</span>
+                            </div>
+                            <div class="dropdown-options" id="claim-queue-options">
+                                <div class="dropdown-search">
+                                    <input type="text" id="claim-queue-search" placeholder="Search statuses..." class="search-input">
+                                </div>
+                                <div class="dropdown-option" data-value="">
+                                    <input type="checkbox" id="claim-queue-all" checked>
+                                    <label for="claim-queue-all">All Statuses</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="filter-field">
                         <label class="filter-label">Billable Only</label>
                         <input type="checkbox" id="billableFilter" class="filter-checkbox">
                     </div>
@@ -737,9 +773,13 @@
         let loggedInStaffId = null;
         let providers = [];
         let locations = [];
+        let noteTypes = [];
+        let claimQueues = [];
         let currentFilters = {
             provider_ids: [],
             location_ids: [],
+            note_type_ids: [],
+            claim_queue_names: [],
             billable_only: false
         };
         let sortConfig = { key: null, direction: 'asc' };
@@ -780,6 +820,22 @@
                             const locationIdsString = value.filter(id => id !== null && id !== undefined && id !== '').join(',');
                             if (locationIdsString) {
                                 params.append(key, locationIdsString);
+                            }
+                        }
+                    } else if (key === 'note_type_ids' && Array.isArray(value)) {
+                        // Handle array of note type IDs as comma-separated string
+                        if (value.length > 0) {
+                            const noteTypeIdsString = value.filter(id => id !== null && id !== undefined && id !== '').join(',');
+                            if (noteTypeIdsString) {
+                                params.append(key, noteTypeIdsString);
+                            }
+                        }
+                    } else if (key === 'claim_queue_names' && Array.isArray(value)) {
+                        // Handle array of claim queue names as comma-separated string
+                        if (value.length > 0) {
+                            const claimQueueNamesString = value.filter(name => name !== null && name !== undefined && name !== '').join(',');
+                            if (claimQueueNamesString) {
+                                params.append(key, claimQueueNamesString);
                             }
                         }
                     } else if (key === 'billable_only') {
@@ -857,6 +913,36 @@
             } catch (error) {
                 console.error('Error fetching locations:', error);
                 return { locations: [] };
+            }
+        }
+
+        async function fetchNoteTypes() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/note_types`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                noteTypes = data.note_types;
+                return data;
+            } catch (error) {
+                console.error('Error fetching note types:', error);
+                return { note_types: [] };
+            }
+        }
+
+        async function fetchClaimQueues() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/claim_queues`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                claimQueues = data.claim_queues;
+                return data;
+            } catch (error) {
+                console.error('Error fetching claim queues:', error);
+                return { claim_queues: [] };
             }
         }
 
@@ -1118,7 +1204,7 @@
             const dropdown = document.getElementById(dropdownId);
             const selectedValue = dropdown.querySelector('.selected-value');
             const selectedItems = currentFilters[filterKey];
-            
+
             if (selectedItems.length === 0) {
                 // Use friendly display names for placeholder text
                 let displayName = 'All';
@@ -1126,6 +1212,10 @@
                     displayName = 'All Owners';
                 } else if (filterKey === 'location_ids') {
                     displayName = 'All Locations';
+                } else if (filterKey === 'note_type_ids') {
+                    displayName = 'All Note Types';
+                } else if (filterKey === 'claim_queue_names') {
+                    displayName = 'All Statuses';
                 }
                 selectedValue.innerHTML = `<span class="placeholder-text">${displayName}</span>`;
             } else {
@@ -1138,6 +1228,12 @@
                     } else if (filterKey === 'location_ids') {
                         const location = locations.find(l => l.id === itemId);
                         itemName = location ? location.name : itemId;
+                    } else if (filterKey === 'note_type_ids') {
+                        const noteType = noteTypes.find(nt => nt.id === itemId);
+                        itemName = noteType ? noteType.name : itemId;
+                    } else if (filterKey === 'claim_queue_names') {
+                        // For claim queues, the id and name are the same
+                        itemName = itemId;
                     }
                     return `<span class="selected-tag">${itemName}<span class="remove-tag" data-${filterKey}-id="${itemId}">×</span></span>`;
                 }).join('');
@@ -1188,7 +1284,18 @@
             populateDropdown('location-options', locations, 'location_ids', 'Locations');
         }
 
-        
+        function populateNoteTypeDropdown() {
+            // Use shared function to populate dropdown
+            populateDropdown('note-type-options', noteTypes, 'note_type_ids', 'Note Types');
+        }
+
+        function populateClaimQueueDropdown() {
+            // Transform claim queue data to have id and name properties
+            const claimQueueOptions = claimQueues.map(cq => ({ id: cq.name, name: cq.name }));
+            populateDropdown('claim-queue-options', claimQueueOptions, 'claim_queue_names', 'Statuses');
+        }
+
+
         function setupProviderDropdown() {
             // Use shared function to setup dropdown
             setupDropdown('providerFilter', 'provider-options', 'provider_ids');
@@ -1199,6 +1306,16 @@
             setupDropdown('locationFilter', 'location-options', 'location_ids');
         }
 
+        function setupNoteTypeDropdown() {
+            // Use shared function to setup dropdown
+            setupDropdown('noteTypeFilter', 'note-type-options', 'note_type_ids');
+        }
+
+        function setupClaimQueueDropdown() {
+            // Use shared function to setup dropdown
+            setupDropdown('claimQueueFilter', 'claim-queue-options', 'claim_queue_names');
+        }
+
         function setupFilterEventListeners() {
             const billableFilter = document.getElementById('billableFilter');
             const clearFiltersButton = document.getElementById('clearFilters');
@@ -1207,6 +1324,8 @@
 
             setupProviderDropdown();
             setupLocationDropdown();
+            setupNoteTypeDropdown();
+            setupClaimQueueDropdown();
 
             // Billable filter change
             billableFilter.addEventListener('change', () => {
@@ -1219,55 +1338,55 @@
                 // Reset all filters first
                 currentFilters.provider_ids = [];
                 currentFilters.location_ids = [];
+                currentFilters.note_type_ids = [];
+                currentFilters.claim_queue_names = [];
                 currentFilters.billable_only = false;
-                
+
                 // Reset UI elements
                 billableFilter.checked = false;
-                
-                // Reset provider dropdown checkboxes
-                const providerOptions = document.getElementById('provider-options');
-                if (providerOptions) {
-                    const providerCheckboxes = providerOptions.querySelectorAll('input[type="checkbox"]');
-                    providerCheckboxes.forEach(checkbox => {
-                        if (checkbox.id === 'provider_ids-all') {
-                            checkbox.checked = true;
-                        } else {
-                            checkbox.checked = false;
-                        }
-                    });
-                }
-                
-                // Reset location dropdown checkboxes
-                const locationOptions = document.getElementById('location-options');
-                if (locationOptions) {
-                    const locationCheckboxes = locationOptions.querySelectorAll('input[type="checkbox"]');
-                    locationCheckboxes.forEach(checkbox => {
-                        if (checkbox.id === 'location_ids-all') {
-                            checkbox.checked = true;
-                        } else {
-                            checkbox.checked = false;
-                        }
-                    });
-                }
-                
-                // Force update the dropdown displays
-                const providerDropdown = document.getElementById('providerFilter');
-                const locationDropdown = document.getElementById('locationFilter');
-                
-                if (providerDropdown) {
-                    const providerSelectedValue = providerDropdown.querySelector('.selected-value');
-                    if (providerSelectedValue) {
-                        providerSelectedValue.innerHTML = '<span class="placeholder-text">All Owners</span>';
+
+                // Helper function to reset dropdown checkboxes
+                const resetDropdownCheckboxes = (optionsId, filterKey) => {
+                    const options = document.getElementById(optionsId);
+                    if (options) {
+                        const checkboxes = options.querySelectorAll('input[type="checkbox"]');
+                        checkboxes.forEach(checkbox => {
+                            if (checkbox.id === `${filterKey}-all`) {
+                                checkbox.checked = true;
+                            } else {
+                                checkbox.checked = false;
+                            }
+                        });
                     }
-                }
-                
-                if (locationDropdown) {
-                    const locationSelectedValue = locationDropdown.querySelector('.selected-value');
-                    if (locationSelectedValue) {
-                        locationSelectedValue.innerHTML = '<span class="placeholder-text">All Locations</span>';
+                };
+
+                // Helper function to reset dropdown display
+                const resetDropdownDisplay = (dropdownId, placeholderText) => {
+                    const dropdown = document.getElementById(dropdownId);
+                    if (dropdown) {
+                        const selectedValue = dropdown.querySelector('.selected-value');
+                        if (selectedValue) {
+                            selectedValue.innerHTML = `<span class="placeholder-text">${placeholderText}</span>`;
+                        }
                     }
-                }
-                
+                };
+
+                // Reset provider dropdown
+                resetDropdownCheckboxes('provider-options', 'provider_ids');
+                resetDropdownDisplay('providerFilter', 'All Owners');
+
+                // Reset location dropdown
+                resetDropdownCheckboxes('location-options', 'location_ids');
+                resetDropdownDisplay('locationFilter', 'All Locations');
+
+                // Reset note type dropdown
+                resetDropdownCheckboxes('note-type-options', 'note_type_ids');
+                resetDropdownDisplay('noteTypeFilter', 'All Note Types');
+
+                // Reset claim queue dropdown
+                resetDropdownCheckboxes('claim-queue-options', 'claim_queue_names');
+                resetDropdownDisplay('claimQueueFilter', 'All Statuses');
+
                 // Apply cleared filters
                 applyFilters();
             });
@@ -1428,11 +1547,15 @@
                 await Promise.all([
                     fetchProviders(),
                     fetchLocations(),
+                    fetchNoteTypes(),
+                    fetchClaimQueues(),
                 ]);
 
-                // Populate provider and location dropdowns
+                // Populate all filter dropdowns
                 populateProviderDropdown();
                 populateLocationDropdown();
+                populateNoteTypeDropdown();
+                populateClaimQueueDropdown();
 
                 // Initialize page size dropdown
                 const pageSizeSelect = document.getElementById('pageSizeSelect');
