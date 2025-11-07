@@ -3,7 +3,7 @@ authors = [
   {email = "engineering@canvasmedical.com", name = "Canvas Team"}
 ]
 dependencies = [
-  "canvas[test-utils]"
+  "canvas[test-utils]",
 ]
 description = "Some description of your project."
 license = "MIT"

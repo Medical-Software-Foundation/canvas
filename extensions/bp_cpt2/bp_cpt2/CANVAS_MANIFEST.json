@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.67.0",
-    "plugin_version": "0.2.14",
+    "sdk_version": "0.75.0",
+    "plugin_version": "1.3.23",
     "name": "bp_cpt2",
     "description": "Automatically adds appropriate CPT/HCPCS billing codes based on blood pressure measurements from vitals or note state changes",
     "components": {
@@ -20,7 +20,8 @@
         "views": []
     },
     "secrets": [
-        "OPENAI_API_KEY"
+        "OPENAI_API_KEY",
+        "INCLUDE_TREATMENT_PLAN_CODES"
     ],
     "tags": {},
     "references": [],

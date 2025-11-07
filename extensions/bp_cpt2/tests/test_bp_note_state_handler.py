@@ -30,7 +30,7 @@ def test_skips_non_locked_non_pushed_states() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Execute compute
@@ -92,7 +92,7 @@ def test_processes_locked_state() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LLM call to return that treatment plan is documented
@@ -165,7 +165,7 @@ def test_processes_pushed_state() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LLM call
@@ -226,7 +226,7 @@ def test_skips_controlled_blood_pressure() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Execute compute
@@ -266,7 +266,7 @@ def test_skips_when_no_bp_readings() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Execute compute
@@ -328,7 +328,7 @@ def test_adds_g8753_when_treatment_plan_documented() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LLM call to return that treatment plan is documented
@@ -398,7 +398,7 @@ def test_adds_g8754_when_no_treatment_plan_no_reason() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LLM call to return no treatment plan and no reason
@@ -468,7 +468,7 @@ def test_adds_g8755_when_no_treatment_plan_with_reason() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LLM call to return no treatment plan but with documented reason
@@ -538,7 +538,7 @@ def test_handles_missing_openai_api_key() -> None:
     # Create handler instance WITHOUT API key
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={}
+        secrets={'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Execute compute
@@ -592,7 +592,7 @@ def test_prepare_note_commands_data() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Test prepare_note_commands_data
@@ -620,7 +620,7 @@ def test_prepare_medications_data_no_medications() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Test prepare_medications_data with no medications
@@ -706,7 +706,7 @@ def test_no_duplicate_treatment_codes() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LLM call
@@ -742,7 +742,7 @@ def test_prepare_medications_data_with_medications() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock Medication.objects.for_patient to return mock medications
@@ -789,7 +789,7 @@ def test_note_not_found() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Execute compute
@@ -851,7 +851,7 @@ def test_full_llm_analysis_success() -> None:
     # Create handler instance WITH API key
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key-12345'}
+        secrets={'OPENAI_API_KEY': 'test-key-12345', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LlmOpenai class to return a successful response
@@ -935,7 +935,7 @@ def test_full_llm_analysis_failure() -> None:
     # Create handler instance WITH API key
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key-12345'}
+        secrets={'OPENAI_API_KEY': 'test-key-12345', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock the LlmOpenai class to return a failed response
@@ -1010,7 +1010,7 @@ def test_determine_treatment_code_none_edge_case() -> None:
     # Create handler instance
     handler = BloodPressureNoteStateHandler(
         event=mock_event,
-        secrets={'OPENAI_API_KEY': 'test-key'}
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
     # Mock analyze_treatment_plan_with_llm to return result
@@ -1028,3 +1028,56 @@ def test_determine_treatment_code_none_edge_case() -> None:
 
             # Should return empty list when treatment_code is None
             assert len(effects) == 0, "Expected no effects when treatment_code is None"
+
+
+def test_treatment_plan_codes_disabled() -> None:
+    """
+    Test that handler returns empty list when INCLUDE_TREATMENT_PLAN_CODES is disabled.
+    """
+    # Create test patient
+    patient = PatientFactory.create()
+
+    # Create a note
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create BP observation - uncontrolled BP (150/100)
+    Observation.objects.create(
+        patient=patient,
+        note_id=note.dbid,
+        category='vital-signs',
+        name='blood_pressure',
+        value='150/100',
+        units='mmHg',
+        committer_id=1,
+        deleted=False,
+        effective_datetime=datetime.now(timezone.utc)
+    )
+
+    # Create mock event
+    mock_event = Mock()
+    mock_event.type = EventType.NOTE_STATE_CHANGE_EVENT_UPDATED
+    mock_target = Mock()
+    mock_target.id = str(uuid.uuid4())
+    mock_event.target = mock_target
+    mock_event.context = {
+        'state': 'LKD',
+        'note_id': str(note.id)
+    }
+
+    # Create handler instance WITH INCLUDE_TREATMENT_PLAN_CODES set to false
+    handler = BloodPressureNoteStateHandler(
+        event=mock_event,
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'false'}
+    )
+
+    # Execute compute
+    effects = handler.compute()
+
+    # Should return empty list immediately
+    assert len(effects) == 0, "Expected no effects when treatment codes are disabled"
