@@ -9,9 +9,9 @@ The Encounter List plugin provides a comprehensive worklist view of open encount
 ## Features
 
 - **Open Encounter Tracking**: Displays all encounters in open states (excludes things in a Locked, Deleted, Discharged, Scheduling, Booked, Reverted, Cancelled, Confirmed state)
-- **Advanced Filtering**: Filter by provider (owner), location, and billable status
-- **Multi Selection**: Select multiple providers and locations to view their encounters
-- **Command Status Tracking**: Shows uncommitted commands and delegated orders for each encounter
+- **Advanced Filtering & Search**: Search by patient name, filter by DOS range, provider (owner), location, note type, claim queue, billable, committed commands, and delegated orders
+- **Multi Selection**: Select multiple providers, locations, note types, and claim queues to view combined workloads
+- **Command Status Tracking**: Shows uncommitted commands and delegated orders for each encounter, with one-click filters for encounters that need attention
 - **Claim Queue Monitoring**: Displays current claim processing status
 - **Pagination**: Handles large datasets with 25 or 50 encounters per page
 - **Direct Navigation**: Click-through links to patient charts and encounter notes
@@ -60,22 +60,45 @@ The plugin provides one access point:
 
 ## Filtering Capabilities
 
-### Available Filters
+### Available Filters & Search
 
-1. **Owner (Provider)**: 
+1. **Patient Search**:
+   - Free-text search that supports first name, last name, nickname, and common multi-word combinations
+   - Press Enter or click Apply Filters to refresh results
+
+2. **Date of Service (DOS) Range**:
+   - Start and end date pickers to narrow encounters by service date
+   - Accepts partial ranges (start only, end only) for flexible filtering
+
+3. **Owner (Provider)**: 
    - Multi-select dropdown of active providers
    - Defaults to showing the logged-in user's encounters
    - Can select multiple providers to view combined workload
    - Option to view all providers
 
-2. **Location**: 
+4. **Location**: 
    - Multi-select dropdown of practice locations
    - Shows only locations that have open encounters
    - Option to view all locations
 
-3. **Billable Only**: 
+5. **Note Type**:
+   - Multi-select dropdown of note type names
+   - Select one or many note types to narrow results
+
+6. **Claim Queue**:
+   - Multi-select dropdown of current claim queue statuses
+   - Supports combining multiple statuses for workflow views
+
+7. **Billable Only**: 
    - Checkbox filter to show only billable encounters
    - Helps focus on revenue-generating activities
+
+8. **Has Uncommitted Commands**:
+   - Checkbox to show encounters with staged or in-review commands
+   - Useful for operational follow-up
+
+9. **Has Delegated Orders**:
+   - Checkbox to surface encounters with delegated orders that still require attention
 
 ## Data Columns Displayed
 

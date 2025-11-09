@@ -244,6 +244,49 @@
             width: 300px;
         }
 
+        .patient-search-input {
+            padding: 0.5rem 0.6rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            color: #2c3e50;
+            min-height: 36px;
+            width: 240px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .patient-search-input:focus {
+            outline: none;
+            border-color: #1d4ed8;
+            box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+        }
+
+        .date-range-inputs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-range-inputs span {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .date-input {
+            padding: 0.4rem 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            color: #2c3e50;
+            min-height: 36px;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: #1d4ed8;
+            box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+        }
+
         .filter-dropdown.open {
             border-color: #1d4ed8;
             box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
@@ -522,6 +565,33 @@
             align-items: center;
         }
 
+        .filters-group.checkbox-group {
+            width: 100%;
+            margin-top: 8px;
+            justify-content: flex-start;
+            gap: 24px;
+        }
+
+        .filters-group.search-group {
+            width: 100%;
+            justify-content: flex-start;
+            gap: 24px;
+        }
+
+        .checkbox-filter {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #2c3e50;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-filter input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+
         .filter-field {
             display: flex;
             flex-direction: column;
@@ -624,6 +694,22 @@
         
         <div class="filters-section">
             <div class="filters-container">
+                <div class="filters-group search-group">
+                    <div class="filter-field wide">
+                        <label class="filter-label">Patient Search</label>
+                        <input type="text" id="patientSearchInput" class="patient-search-input" placeholder="Search by name...">
+                    </div>
+
+                    <div class="filter-field">
+                        <label class="filter-label">DOS</label>
+                        <div class="date-range-inputs">
+                            <input type="date" id="dosStartInput" class="date-input">
+                            <span>to</span>
+                            <input type="date" id="dosEndInput" class="date-input">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="filters-group">
                     <div class="filter-field">
                         <label class="filter-label">Owner</label>
@@ -697,10 +783,21 @@
                         </div>
                     </div>
 
-                    <div class="filter-field">
-                        <label class="filter-label">Billable Only</label>
+                </div>
+                
+                <div class="filters-group checkbox-group">
+                    <label class="checkbox-filter">
                         <input type="checkbox" id="billableFilter" class="filter-checkbox">
-                    </div>
+                        <span>Billable Only</span>
+                    </label>
+                    <label class="checkbox-filter">
+                        <input type="checkbox" id="uncommittedCommandsFilter" class="filter-checkbox">
+                        <span>Has Uncommitted Commands</span>
+                    </label>
+                    <label class="checkbox-filter">
+                        <input type="checkbox" id="delegatedOrdersFilter" class="filter-checkbox">
+                        <span>Has Delegated Orders</span>
+                    </label>
                 </div>
                 
                 <!-- Refresh, Clear and Apply buttons -->
@@ -778,9 +875,14 @@
         let currentFilters = {
             provider_ids: [],
             location_ids: [],
-            note_type_ids: [],
+            note_type_names: [],
             claim_queue_names: [],
-            billable_only: false
+            billable_only: false,
+            has_uncommitted_commands: false,
+            has_delegated_orders: false,
+            patient_search: '',
+            dos_start: '',
+            dos_end: ''
         };
         let sortConfig = { key: null, direction: 'asc' };
         let paginationData = {
@@ -822,12 +924,14 @@
                                 params.append(key, locationIdsString);
                             }
                         }
-                    } else if (key === 'note_type_ids' && Array.isArray(value)) {
-                        // Handle array of note type IDs as comma-separated string
+                    } else if (key === 'note_type_names' && Array.isArray(value)) {
+                        // Handle array of note type names as comma-separated string
                         if (value.length > 0) {
-                            const noteTypeIdsString = value.filter(id => id !== null && id !== undefined && id !== '').join(',');
-                            if (noteTypeIdsString) {
-                                params.append(key, noteTypeIdsString);
+                            const noteTypeNamesString = value
+                                .filter(name => name !== null && name !== undefined && name !== '')
+                                .join(',');
+                            if (noteTypeNamesString) {
+                                params.append(key, noteTypeNamesString);
                             }
                         }
                     } else if (key === 'claim_queue_names' && Array.isArray(value)) {
@@ -838,8 +942,8 @@
                                 params.append(key, claimQueueNamesString);
                             }
                         }
-                    } else if (key === 'billable_only') {
-                        // Always include billable_only parameter, even if false
+                    } else if (['billable_only', 'has_uncommitted_commands', 'has_delegated_orders'].includes(key)) {
+                        // Always include boolean parameters, even if false
                         params.append(key, value.toString());
                     } else if (value !== null && value !== undefined && value !== '') {
                         params.append(key, value);
@@ -1212,7 +1316,7 @@
                     displayName = 'All Owners';
                 } else if (filterKey === 'location_ids') {
                     displayName = 'All Locations';
-                } else if (filterKey === 'note_type_ids') {
+                } else if (filterKey === 'note_type_names') {
                     displayName = 'All Note Types';
                 } else if (filterKey === 'claim_queue_names') {
                     displayName = 'All Statuses';
@@ -1228,9 +1332,8 @@
                     } else if (filterKey === 'location_ids') {
                         const location = locations.find(l => l.id === itemId);
                         itemName = location ? location.name : itemId;
-                    } else if (filterKey === 'note_type_ids') {
-                        const noteType = noteTypes.find(nt => nt.id === itemId);
-                        itemName = noteType ? noteType.name : itemId;
+                    } else if (filterKey === 'note_type_names') {
+                        itemName = itemId;
                     } else if (filterKey === 'claim_queue_names') {
                         // For claim queues, the id and name are the same
                         itemName = itemId;
@@ -1286,7 +1389,8 @@
 
         function populateNoteTypeDropdown() {
             // Use shared function to populate dropdown
-            populateDropdown('note-type-options', noteTypes, 'note_type_ids', 'Note Types');
+            const noteTypeOptions = noteTypes.map(nt => ({ id: nt.name, name: nt.name }));
+            populateDropdown('note-type-options', noteTypeOptions, 'note_type_names', 'Note Types');
         }
 
         function populateClaimQueueDropdown() {
@@ -1308,7 +1412,7 @@
 
         function setupNoteTypeDropdown() {
             // Use shared function to setup dropdown
-            setupDropdown('noteTypeFilter', 'note-type-options', 'note_type_ids');
+            setupDropdown('noteTypeFilter', 'note-type-options', 'note_type_names');
         }
 
         function setupClaimQueueDropdown() {
@@ -1318,9 +1422,14 @@
 
         function setupFilterEventListeners() {
             const billableFilter = document.getElementById('billableFilter');
+            const uncommittedCommandsFilter = document.getElementById('uncommittedCommandsFilter');
+            const delegatedOrdersFilter = document.getElementById('delegatedOrdersFilter');
             const clearFiltersButton = document.getElementById('clearFilters');
             const applyFiltersButton = document.getElementById('applyFilters');
             const refreshButton = document.getElementById('refreshButton');
+            const patientSearchInput = document.getElementById('patientSearchInput');
+            const dosStartInput = document.getElementById('dosStartInput');
+            const dosEndInput = document.getElementById('dosEndInput');
 
             setupProviderDropdown();
             setupLocationDropdown();
@@ -1333,17 +1442,69 @@
                 // Don't auto-refresh, wait for action button
             });
 
+            // Uncommitted commands filter change
+            uncommittedCommandsFilter.addEventListener('change', () => {
+                currentFilters.has_uncommitted_commands = uncommittedCommandsFilter.checked;
+            });
+
+            // Delegated orders filter change
+            delegatedOrdersFilter.addEventListener('change', () => {
+                currentFilters.has_delegated_orders = delegatedOrdersFilter.checked;
+            });
+
+            if (patientSearchInput) {
+                patientSearchInput.addEventListener('input', () => {
+                    currentFilters.patient_search = patientSearchInput.value.trim();
+                });
+
+                patientSearchInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        currentFilters.patient_search = patientSearchInput.value.trim();
+                        applyFilters();
+                    }
+                });
+            }
+
+            if (dosStartInput) {
+                dosStartInput.addEventListener('change', () => {
+                    currentFilters.dos_start = dosStartInput.value;
+                });
+            }
+
+            if (dosEndInput) {
+                dosEndInput.addEventListener('change', () => {
+                    currentFilters.dos_end = dosEndInput.value;
+                });
+            }
+
             // Clear All button
             clearFiltersButton.addEventListener('click', () => {
                 // Reset all filters first
                 currentFilters.provider_ids = [];
                 currentFilters.location_ids = [];
-                currentFilters.note_type_ids = [];
+                currentFilters.note_type_names = [];
                 currentFilters.claim_queue_names = [];
                 currentFilters.billable_only = false;
+                currentFilters.has_uncommitted_commands = false;
+                currentFilters.has_delegated_orders = false;
+                currentFilters.patient_search = '';
+                currentFilters.dos_start = '';
+                currentFilters.dos_end = '';
 
                 // Reset UI elements
                 billableFilter.checked = false;
+                uncommittedCommandsFilter.checked = false;
+                delegatedOrdersFilter.checked = false;
+                if (patientSearchInput) {
+                    patientSearchInput.value = '';
+                }
+                if (dosStartInput) {
+                    dosStartInput.value = '';
+                }
+                if (dosEndInput) {
+                    dosEndInput.value = '';
+                }
 
                 // Helper function to reset dropdown checkboxes
                 const resetDropdownCheckboxes = (optionsId, filterKey) => {
@@ -1380,7 +1541,7 @@
                 resetDropdownDisplay('locationFilter', 'All Locations');
 
                 // Reset note type dropdown
-                resetDropdownCheckboxes('note-type-options', 'note_type_ids');
+                resetDropdownCheckboxes('note-type-options', 'note_type_names');
                 resetDropdownDisplay('noteTypeFilter', 'All Note Types');
 
                 // Reset claim queue dropdown
@@ -1393,6 +1554,18 @@
 
             // Apply Filters button
             applyFiltersButton.addEventListener('click', () => {
+                const patientSearchInput = document.getElementById('patientSearchInput');
+                const dosStartInput = document.getElementById('dosStartInput');
+                const dosEndInput = document.getElementById('dosEndInput');
+                if (patientSearchInput) {
+                    currentFilters.patient_search = patientSearchInput.value.trim();
+                }
+                if (dosStartInput) {
+                    currentFilters.dos_start = dosStartInput.value;
+                }
+                if (dosEndInput) {
+                    currentFilters.dos_end = dosEndInput.value;
+                }
                 applyFilters();
             });
 
@@ -1403,6 +1576,19 @@
                     showLoadingSpinner();
                     document.getElementById('encounterCount').textContent = 'Loading encounters...';
                     
+                    const patientSearchInput = document.getElementById('patientSearchInput');
+                    const dosStartInput = document.getElementById('dosStartInput');
+                    const dosEndInput = document.getElementById('dosEndInput');
+                    if (patientSearchInput) {
+                        currentFilters.patient_search = patientSearchInput.value.trim();
+                    }
+                    if (dosStartInput) {
+                        currentFilters.dos_start = dosStartInput.value;
+                    }
+                    if (dosEndInput) {
+                        currentFilters.dos_end = dosEndInput.value;
+                    }
+
                     // Refresh data with current filters and sorting
                     await fetchEncounters(currentFilters, paginationData.current_page);
                     
@@ -1425,6 +1611,19 @@
                 // Show loading state
                 showLoadingSpinner();
                 document.getElementById('encounterCount').textContent = 'Loading encounters...';
+                
+                const patientSearchInput = document.getElementById('patientSearchInput');
+                const dosStartInput = document.getElementById('dosStartInput');
+                const dosEndInput = document.getElementById('dosEndInput');
+                if (patientSearchInput) {
+                    currentFilters.patient_search = patientSearchInput.value.trim();
+                }
+                if (dosStartInput) {
+                    currentFilters.dos_start = dosStartInput.value;
+                }
+                if (dosEndInput) {
+                    currentFilters.dos_end = dosEndInput.value;
+                }
                 
                 // Reset to page 1 when applying filters
                 await fetchEncounters(currentFilters, 1);
