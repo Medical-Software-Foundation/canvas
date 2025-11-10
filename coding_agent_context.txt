@@ -3313,10 +3313,16 @@ DIRECTLY_RADIOLOGY| Directly Radiology Report
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-labs/
 # Labs
-Last updated: 18 Aug 2025
+Last updated: 7 Nov 2025
 ##  Introduction #
-The `LabReport`, `LabValue` and `LabReview` models represent diagnostic
-clinical laboratory results.
+The Canvas SDK provides comprehensive models for working with laboratory data
+throughout the entire lab workflowâfrom ordering tests to reviewing results.
+The primary models include:
+  * **`LabOrder`** : Represents a lab order placed for a patient, including order details, transmission type, and associated tests
+  * **`LabTest`** : Individual tests within a lab order, tracking status from creation through processing
+  * **`LabReport`** : Contains the results returned from the lab, including all values and associated metadata
+  * **`LabValue`** : Individual test results within a lab report, including values, units, and reference ranges
+  * **`LabReview`** : Tracks the clinical review process for lab results, including provider comments and patient communication
 ##  Basic Usage #
 To retrieve a `LabReport` model by id, use the `objects.get` method on the
 model. For example:
@@ -3357,10 +3363,9 @@ be used:
     patient = Patient.objects.get(id="6cbc40b408294a5f9b41f57ba1b2b487")
     lab_report = LabReport.objects.filter(patient=patient)
 ##  Example #
-A common plugin use case may be for a plugin to run every time a new Lab
-Report is created in Canvas. The following plugin code will run every time a
-new Lab Report is created and log the patient it is for, along with the values
-and codings from the reportâs results:
+The following plugin code will run every time a new Lab Report is created and
+log the patient it is for, along with the values and codings from the
+reportâs results:
     from canvas_sdk.events import EventType
     from canvas_sdk.protocols import BaseProtocol
     from logger import log
@@ -3378,11 +3383,113 @@ and codings from the reportâs results:
                     log.info(coding.name)
                     log.info(coding.code)
             return []
-Each value and coding are instances of `LabValue` and `LabValueCoding`,
-respectively. To view the fields available for each of these models, they are
-available in the [Canvas SDK open source
-repository](https://github.com/canvas-medical/canvas-
-plugins/blob/main/canvas_sdk/v1/data/lab.py).
+For complete field documentation on all lab models, see the Attributes section
+below.
+###  Working with Lab Orders and Tests #
+You can also work with lab orders and their associated tests. Hereâs an
+example of querying a lab order and checking the status of its tests:
+    from canvas_sdk.v1.data.lab import LabOrder, LabTest
+    # Get a lab order by ID
+    lab_order = LabOrder.objects.get(id="abc123...")
+    # Access all tests in the order
+    for test in lab_order.tests.all():
+        print(f"Test: {test.ontology_test_name}")
+        print(f"Status: {test.status}")
+        print(f"Code: {test.ontology_test_code}")
+        # Check if results have been received
+        if test.report:
+            print(f"Report available with {test.report.values.count()} values")
+###  Navigating Between Lab Orders and Reports #
+Lab orders and lab reports are connected through the `LabTest` model. Hereâs
+how to navigate between them:
+####  Getting the LabOrder from a LabReport #
+    from canvas_sdk.v1.data.lab import LabReport
+    # Get a lab report
+    lab_report = LabReport.objects.get(id="report-id")
+    # Direct access to all orders via the reverse many-to-many relationship
+    for lab_order in lab_report.laborder_set.all():
+        print(f"Order ID: {lab_order.id}")
+        print(f"Ordered by: {lab_order.ordering_provider.full_name if lab_order.ordering_provider else 'N/A'}")
+        print(f"Date ordered: {lab_order.date_ordered}")
+    # Alternatively, access the order through the tests
+    for test in lab_report.tests.all():
+        lab_order = test.order
+        print(f"Order ID: {lab_order.id}")
+        break  # Usually all tests in a report share the same order
+####  Getting LabReports from a LabOrder #
+    from canvas_sdk.v1.data.lab import LabOrder
+    # Get a lab order
+    lab_order = LabOrder.objects.get(id="order-id")
+    # Direct access to all reports via the many-to-many relationship
+    for report in lab_order.reports.all():
+        print(f"Report ID: {report.id}")
+        print(f"Date performed: {report.date_performed}")
+        print(f"Number of values: {report.values.count()}")
+    # Alternatively, access reports through the tests if you need test-level details
+    for test in lab_order.tests.all():
+        if test.report:
+            print(f"Test: {test.ontology_test_name}")
+            print(f"Report ID: {test.report.id}")
+###  Working with Lab Reviews #
+Lab reviews track the clinical review process for lab results, including
+provider comments and patient communication. Hereâs how to work with the
+LabReport and LabReview relationship:
+####  Accessing the Review from a LabReport #
+    from canvas_sdk.v1.data.lab import LabReport
+    # Get a lab report
+    lab_report = LabReport.objects.get(id="report-id")
+    # Check if the report has been reviewed
+    if lab_report.review:
+        lab_review = lab_report.review
+        print(f"Review status: {lab_review.status}")
+        print(f"Internal comment: {lab_review.internal_comment}")
+        print(f"Message to patient: {lab_review.message_to_patient}")
+        # Access the provider who reviewed it
+        if lab_review.originator:
+            print(f"Reviewed by: {lab_review.originator.full_name}")
+    else:
+        print("Report has not been reviewed yet")
+####  Accessing Reports from a LabReview #
+    from canvas_sdk.v1.data.lab import LabReview
+    # Get a lab review
+    lab_review = LabReview.objects.get(id="review-id")
+    # Access all reports in this review batch
+    for report in lab_review.reports.all():
+        print(f"Report ID: {report.id}")
+        print(f"Date performed: {report.date_performed}")
+        print(f"Number of values: {report.values.count()}")
+        # Check if this report requires signature
+        if report.requires_signature:
+            print("  â ï¸  Requires provider signature")
+####  Finding Unreviewed Lab Reports #
+    from canvas_sdk.v1.data.lab import LabReport
+    from canvas_sdk.v1.data.patient import Patient
+    # Get all unreviewed lab reports for a patient
+    patient = Patient.objects.get(id="patient-id")
+    unreviewed_reports = LabReport.objects.filter(
+        patient=patient,
+        review__isnull=True,
+        deleted=False
+    )
+    print(f"Found {unreviewed_reports.count()} unreviewed reports")
+    for report in unreviewed_reports:
+        print(f"Report from {report.date_performed} - {report.values.count()} values")
+###  Filtering Lab Results by Abnormal Values #
+A common use case is to identify abnormal lab values that may require clinical
+attention:
+    from canvas_sdk.v1.data.lab import LabReport, LabValue
+    from canvas_sdk.v1.data.patient import Patient
+    # Get all lab reports for a patient
+    patient = Patient.objects.get(id="patient-id")
+    lab_reports = LabReport.objects.filter(patient=patient)
+    # Find all abnormal values
+    for report in lab_reports:
+        abnormal_values = report.values.filter(abnormal_flag__isnull=False).exclude(abnormal_flag="")
+        if abnormal_values.exists():
+            print(f"Report from {report.date_performed}:")
+            for value in abnormal_values:
+                for coding in value.codings.all():
+                    print(f"  {coding.name}: {value.value} {value.units} (Flag: {value.abnormal_flag})")
 ##  Attributes #
 ###  LabReport #
 Field Name| Type  
@@ -3487,6 +3594,7 @@ manual_processing_comment| String
 labcorp_abn_url| URL  
 reasons| LabOrderReason[]  
 tests| LabTest[]  
+reports| LabReport[]  
 ###  LabOrderReason #
 Field Name| Type  
 ---|---  
@@ -3500,6 +3608,39 @@ entered_in_error| [CanvasUser](/sdk/data-canvasuser)
 order| LabOrder  
 mode| LabReasonMode  
 reason_conditions| LabOrderReasonCondition[]  
+###  LabOrderReasonCondition #
+Field Name| Type  
+---|---  
+dbid| Integer  
+created| DateTime  
+modified| DateTime  
+originator| [CanvasUser](/sdk/data-canvasuser)  
+deleted| Boolean  
+committer| [CanvasUser](/sdk/data-canvasuser)  
+entered_in_error| [CanvasUser](/sdk/data-canvasuser)  
+reason| LabOrderReason  
+condition| [Condition](/sdk/data-condition)  
+###  LabTest #
+Represents an individual test within a lab order. Each `LabTest` tracks the
+lifecycle of a specific test from order creation through processing and result
+receipt.
+Field Name| Type  
+---|---  
+id| UUID  
+dbid| Integer  
+created| DateTime  
+modified| DateTime  
+ontology_test_name| String  
+ontology_test_code| String  
+status| LabTestOrderStatus  
+report| LabReport  
+specimen_type| String  
+specimen_source_code| String  
+specimen_source_description| String  
+specimen_source_coding_system| String  
+order| LabOrder  
+aoe_code| String  
+procedure_class| String  
 ##  Enumeration types #
 ###  TransmissionType #
 Value| Label  
@@ -3758,7 +3899,7 @@ delivery. May be null.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-note/
 # Note
-Last updated: 7 Oct 2025
+Last updated: 7 Nov 2025
 ##  Introduction #
 The `Note` model represents clinical notes that appear on a patientâs chart.
 A `Note` can contain multiple [commands](/sdk/data-command).
@@ -3773,6 +3914,68 @@ If you have a patient object, the notes for a patient can be found using the
     from canvas_sdk.v1.data.patient import Patient
     patient = Patient.objects.get(id="fd2ecd87c26044a6a755287f296dd17f")
     patient_notes = patient.notes.all()
+###  Retrieve the content of commands in a note #
+If you have a note object, the [commands](/sdk/data-command) for that note can
+be found using the `commands` attribute on the `Note` instance:
+    from canvas_sdk.v1.data.note import Note
+    note = Note.objects.get(id="89992c23-c298-4118-864a-26cb3e1ae822")
+    note_commands = note.commands.all()
+You can also filter commands by their state or other attributes:
+    from canvas_sdk.v1.data.note import Note
+    note = Note.objects.get(id="89992c23-c298-4118-864a-26cb3e1ae822")
+    # Get only committed commands
+    committed_commands = note.commands.filter(state="committed")
+    # Get commands by schema_key (e.g., prescriptions)
+    prescriptions = note.commands.filter(schema_key="prescribe")
+To access the content of a command, use the `data` attribute which contains a
+JSON object with the commandâs data:
+    import json
+    from canvas_sdk.v1.data.note import Note
+    note = Note.objects.get(id="89992c23-c298-4118-864a-26cb3e1ae822")
+    for command in note.commands.all():
+        # Get the command type
+        command_type = command.schema_key
+        # Get the command data as a dictionary
+        command_data = command.data
+        # Pretty print the command data
+        print(f"Command Type: {command_type}")
+        print(json.dumps(command_data, indent=2))
+For more information about command types and their data structure, see the
+[Command](/sdk/data-command/) documentation.
+###  Understanding the note body structure #
+The `body` field of a note contains a JSON array that represents the structure
+and layout of the note. It intermixes text content with references to
+commands:
+    import json
+    from canvas_sdk.v1.data.note import Note
+    note = Note.objects.get(id="89992c23-c298-4118-864a-26cb3e1ae822")
+    # The body is an array of objects
+    print(json.dumps(note.body, indent=2))
+The body array contains objects of two types:
+  1. **Text objects** : Represent free-form text content
+         {"type": "text", "value": "Patient reports feeling better"}
+  2. **Command objects** : Reference commands with their metadata
+         {
+           "type": "command",
+           "value": "reasonForVisit",
+           "data": {
+             "id": 1095,
+             "command_uuid": "691123c4-6c7d-415b-880b-2beefab9f64a"
+           }
+         }
+The `command_uuid` in a command object corresponds to the `id` field of the
+[Command](/sdk/data-command/) model, allowing you to retrieve the full command
+data:
+    from canvas_sdk.v1.data.note import Note
+    from canvas_sdk.v1.data.command import Command
+    note = Note.objects.get(id="89992c23-c298-4118-864a-26cb3e1ae822")
+    # Find all command references in the note body
+    for item in note.body:
+        if item.get("type") == "command":
+            command_uuid = item["data"]["command_uuid"]
+            command = Command.objects.get(id=command_uuid)
+            print(f"Command type: {command.schema_key}")
+            print(f"Command data: {command.data}")
 ###  Retrieve the audit history for a note #
 The audit history for a note can be found using the
 [`NoteStateChangeEvent`](/sdk/data-note/#notestatechangeevent) model. You can
@@ -3876,11 +4079,6 @@ The `NoteType` model can also be used to find notes by type.
     note_type = NoteType.objects.get(name="Office visit")
     patient = Patient.objects.get(id="fd2ecd87c26044a6a755287f296dd17f")
     patient_office_visits = Note.objects.filter(patient=patient, note_type_version=note_type)
-All of the [commands](/sdk/data-command) in a `Note` can be found by using the
-`commands` attribute:
-    from canvas_sdk.v1.data.note import Note
-    note = Note.objects.get(id="89992c23-c298-4118-864a-26cb3e1ae822")
-    commands_in_note = Note.commands.all()
 ##  Attributes #
 ###  Note #
 Field Name| Type| Notes  
@@ -3892,7 +4090,9 @@ modified| DateTime| Â
 patient| [Patient](/sdk/data-patient/#patient)| Â  
 note_type_version| NoteType| Â  
 title| String| Â  
-body| JSON| Â  
+body| JSON| Array of objects representing the note structure. Each object has
+a `type` (either `"text"` or `"command"`) and a `value`. Command objects also
+include a `data` field with `id` and `command_uuid`.  
 originator| [CanvasUser](/sdk/data-canvasuser)| Â  
 provider| [Staff](/sdk/data-staff/#staff)| Â  
 checksum| String| Â  
@@ -3902,6 +4102,8 @@ inpatient stay.
 datetime_of_service| DateTime| Â  
 place_of_service| String| Â  
 encounter| [Encounter](/sdk/data-encounter)| Â  
+commands| QuerySet[[Command](/sdk/data-command)]| All commands associated with
+this note  
 ###  NoteType #
 Field Name| Type  
 ---|---  
@@ -4921,7 +5123,7 @@ PROVIDER| Provider
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-task
 # Task
-Last updated: 28 Oct 2025
+Last updated: 4 Nov 2025
 ##  Introduction #
 A `Task` represents a to-do item to be addressed. Tasks can be assigned to
 individual staff members and can also have associated comments and labels.
@@ -4993,6 +5195,7 @@ task_association| [Origin](/sdk/data-enumeration-types/#origin)
 name| String  
 active| Boolean  
 modules| TaskLabelModule  
+claims| [Claim](/sdk/data-claim)[]  
 ###  TaskMetadata #
 Field Name| Type  
 ---|---  
@@ -5314,14 +5517,17 @@ events, you cannot return `ADD_BANNER_ALERT` or `ADD_OR_UPDATE_PROTOCOL_CARD`
 effects from that plugin, as this could create an infinite loop where the
 effect triggers another conditions event.
 ##  Effect Classes #
-[ Appointment MetadataInteract with appointment metadata. ](/sdk/effect-
-appointment-metadata/)[ Appointment Metadata Create FormEffect for dynamically
-displaying forms when scheduling an appointment. ](/sdk/appointment-metadata-
-create-form-effect)[ Banner AlertsContextual information in a patient's chart.
-](/sdk/effect-banner-alerts/)[ Billing Line ItemsAdd, modify, or remove
-billing codes on a note. ](/sdk/effect-billing-line-items/)[ Compound
-MedicationsCreate or update compound medications. ](/sdk/effect-compound-
-medication/)[ Form ResultEffect for dynamically displaying forms in the
+[ AppointmentsCreate, update, and cancel patient appointments. ](/sdk/effect-
+notes/#appointment-effect)[ Appointment MetadataInteract with appointment
+metadata. ](/sdk/effect-appointment-metadata/)[ Appointment Metadata Create
+FormEffect for dynamically displaying forms when scheduling an appointment.
+](/sdk/appointment-metadata-create-form-effect)[ Banner AlertsContextual
+information in a patient's chart. ](/sdk/effect-banner-alerts/)[ Billing Line
+ItemsAdd, modify, or remove billing codes on a note. ](/sdk/effect-billing-
+line-items/)[ Compound MedicationsCreate or update compound medications.
+](/sdk/effect-compound-medication/)[ Custom HTML and Django TemplatesRender
+custom HTML using Django templates. ](/sdk/layout-effect/#custom-html-and-
+django-templates)[ Form ResultEffect for dynamically displaying forms in the
 Patient Portal. ](/sdk/form-result-effect)[ Layout EffectsModify or interact
 with the layout in Canvas. ](/sdk/layout-effect/)[ MessagesInteract with
 messages in Canvas. ](/sdk/effect-messages/)[ NotesInteract with notes in
@@ -5598,9 +5804,8 @@ availability when scheduling an appointment
 
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-protocol-cards/
-# Protocol Cards
-Last updated: 7 Jul 2025
-##  Protocol Card #
+# Protocol Card
+Last updated: 7 Nov 2025
 Protocol cards appear on the right-hand-side of a patientâs chart, and can
 be accessed by clicking on the Protocols filter button in the filter menu.
 ![protocol card](/assets/images/protocol-card.png)
@@ -5869,7 +6074,7 @@ Return the Effect by calling the `.apply()` method. Both the `key` and
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-billing-line-items/
 # Billing Line Items
-Last updated: 24 Sep 2025
+Last updated: 7 Nov 2025
 The Canvas SDK allows you to create, update, and remove Billing Line Items
 from the footer of a note.
 ##  Adding a Billing Line Item #
@@ -5999,7 +6204,7 @@ page](/sdk/data-billing-line-item).
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/form-result-effect
 # Form Result
-Last updated: 13 Mar 2025
+Last updated: 7 Nov 2025
 ##  Overview #
 Forms are a key part of the Patient Portal experience. They allow developers
 to dynamically display questionnaires to patients based on various criteria
@@ -6019,13 +6224,13 @@ Attribute| Type| Description
 `questionnaire_id`| `str | UUID`| The unique ID of the Questionnaire.  
 `create_command`| `bool`| If `True`, a Questionnaire Command is created inside
 a Note.  
-`note_id`| `str | UUID | None`| Associates the response with an existing Note if applicable.
+`note_id`| `str | UUID | None`| Associates the response with an existing Note if applicable.  
 ----- END PAGE https://docs.canvasmedical.com/sdk/form-result-effect
 
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/patient-metadata-create-form-effect
 # Patient Metadata Create form
-Last updated: 15 Jul 2025
+Last updated: 7 Nov 2025
 ##  Overview #
 This allows developers to dynamically display additional fields in the patient
 profile. For more guidance please reference [âHow to add additional profile
@@ -6060,13 +6265,13 @@ A PatientMetadataCreateFormEffect consists of the following properties:
 ####  Attributes #
 Attribute| Type| Description  
 ---|---|---  
-`form_fields`| `list[FormField]`| list of fields.
+`form_fields`| `list[FormField]`| list of fields.  
 ----- END PAGE https://docs.canvasmedical.com/sdk/patient-metadata-create-form-effect
 
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/layout-effect/
 # Layout Effects
-Last updated: 25 Sep 2025
+Last updated: 7 Nov 2025
 ##  Patient Summary #
 There are many summary sections in a patientâs chart, organized by data
 type. While there is a default ordering, you can use an Effect to reorder them
@@ -6183,7 +6388,8 @@ CONTACTS| contacts
 This effect allows you to define which panel buttons should be displayed on
 the main page or the patient page.
 The order of the buttons in the array will determine their order on the panel.
-![Before and after](/assets/images/sdk/panel-configuration-before-after.png)
+![Before and after](/assets/images/sdk/panel-configuration-before-
+after.png)(width:70%)
     from canvas_sdk.effects.panel_configuration import PanelConfiguration
     PanelConfiguration(
       sections=[
@@ -6192,10 +6398,8 @@ The order of the buttons in the array will determine their order on the panel.
         PanelConfiguration.PanelPatientSection.CHANGE_REQUEST,
         PanelConfiguration.PanelPatientSection.TASK,
     ], page=PanelConfiguration.Page.PATIENT).apply()
-##  Structure #
-###  **PanelConfiguration** #
 A PanelConfiguration effect consists of the following properties:
-####  Attributes #
+###  Attributes #
 Attribute| Type| Description  
 ---|---|---  
 `sections`| `list[PanelPatientSection] or list[PanelGlobalSection]`| list of
@@ -6385,7 +6589,7 @@ Security-Policy#host-source).
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-questionnaires/
 # Questionnaires
-Last updated: 2 Oct 2025
+Last updated: 7 Nov 2025
 The Canvas SDK includes functionality for handling questionnaire-related
 events.
 ##  Creating a Questionnaire #
@@ -6470,7 +6674,7 @@ into the Canvas instance.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-tasks/
 # Tasks
-Last updated: 18 Aug 2025
+Last updated: 7 Nov 2025
 The Canvas SDK includes functionality to create, update and add comments to
 tasks in Canvas.
 ##  Adding a Task #
@@ -6592,7 +6796,7 @@ creator, defaults to CanvasBot.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/patient-portal/
 # Patient Portal
-Last updated: 24 Sep 2025
+Last updated: 7 Nov 2025
 The Canvas SDK allows you to configure the patient portal.
 ##  Configuring the Patient Portal #
 To configure the patient portal, you can use the
@@ -6613,10 +6817,11 @@ reschedule appointments
                 can_schedule_appointments=True
               ).apply()
             ]
-##  Customize Landing Page #
-To customize the landing page you can leverage the `Portal Widgets` effect.
-See [Tailoring Portal Landing Page](/guides/custom-landing-page/) for
-examples.
+##  Customize Landing Page (Portal Widgets) #
+To customize the landing page you can leverage the [Portal
+Widgets](/sdk/layout-effect/#portal-landing-page-widgets) effect.
+Visit our guide [Tailoring Portal Landing Page](/guides/custom-landing-page/)
+for examples.
 ##  Customize Appointment Cards #
 Customize your patient appointment cards so patients can easily join their
 telehealth appointments, cancel or reschedule appointments. Each appointment
@@ -6703,13 +6908,41 @@ Attribute| Type| Description
             return [
                 SendInviteEffect(user_dbid=patient.user.dbid).apply(),
             ]
+##  Send Contact Verification #
+The `SendContactVerification` effect instructs Canvas to send a verification
+(for example, an email or SMS code) to a specific Patient Contact Point.
+Typical uses are verifying a patientâs email address or phone number before
+enabling patient-portal features that require a verified contact channel.
+Attribute| Type| Description  
+---|---|---  
+`contact_point_id`| `str` or `UUID`| The id of the
+[`PatientContactPoint`](/sdk/effect-patient/#patientcontactpoint) to verify.  
+###  Validation & Errors #
+When an effect is prepared, the model validates inputs and returns structured
+error details if something is invalid.
+  * **Contact Point Exists** â The effect verifies the provided `contact_point_id` maps to an existing `PatientContactPoint` record. If no matching record exists the effect will include an error detail with message: `Patient Contact Point does not exist`.
+###  Caveats #
+  * Emitting this effect will trigger a save to the associated `PatientContactPoint`. If your plugin sends `SendContactVerification` in direct response to a `PATIENT_CONTACT_POINT_UPDATED` event, the save triggered by the effect can cause the same event to fire again, producing an infinite event loop. To avoid this, debounce or detect origin (for example, ignore updates originating from the plugin runner or set a transient flag on the model) before emitting the effect in response to contact point update events.
+###  Example Usage #
+    from canvas_sdk.effects import Effect
+    from canvas_sdk.effects.send_contact_verification import SendContactVerificationEffect
+    from canvas_sdk.events import EventType
+    from canvas_sdk.protocols import BaseProtocol
+    class Protocol(BaseProtocol):
+        RESPONDS_TO = EventType.Name(EventType.PATIENT_CONTACT_POINT_CREATED)
+        def compute(self) -> list[Effect]:
+            contact_point_id = self.event.target
+            verification_effect = SendContactVerificationEffect(contact_point_id=contact_point_id)
+            return [verification_effect.apply()]
+###  Notes #
+  * This effect only triggers a verification send for the contact point. It does not mark the contact as verified â verification completion is handled by the platform when the patient completes the challenge.
+  * The effect relies on `PatientContactPoint` existing in the database. If your integration creates contact points in the same operation, ensure they are persisted before emitting this effect.
 ----- END PAGE https://docs.canvasmedical.com/sdk/patient-portal/
 
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-patient/
-# Patient
-Last updated: 6 Oct 2025
-#  Patient Effect #
+# Patient Effect
+Last updated: 7 Nov 2025
 The `Patient` effect enables the creation and updating of patient records
 within the Canvas system. This effect captures demographic information,
 contact details, and clinical associations necessary for patient registration
@@ -6899,8 +7132,7 @@ The effect performs validation before execution to ensure data integrity:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-notes/
 # Note Effects
-Last updated: 30 Oct 2025
-#  Note Effects #
+Last updated: 7 Nov 2025
 The Canvas SDK provides effects to facilitate creating, updating, and managing
 **visit notes** , **appointments** , and **schedule events**. Below youâll
 find detailed documentation for each effect type and their operations.
@@ -7261,8 +7493,7 @@ All effects perform comprehensive validation before execution:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-messages/
 # Message Effect
-Last updated: 16 Oct 2025
-#  Message Effect #
+Last updated: 7 Nov 2025
 The `Message` effect provides a unified way to create, edit, and transmit
 messages between users (patients or staff) within the Canvas platform. It
 supports standalone creation, immediate send after creating, edits, and
@@ -7347,7 +7578,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 29 Oct 2025
+Last updated: 6 Nov 2025
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -7371,7 +7602,7 @@ The plugin author can enter custom workflow code into the `compute` method
 that will execute every time an Allergy Intolerance is created in Canvas.
 For more information on writing plugins, see the guide [here](/guides/your-
 first-plugin/).
-##  Event Types #
+##  Event Types and Context #
 The event `target` object can be accessed within the compute method of the
 plugin by `self.event.target`. If `self.event.target.type` exists, it provides
 the same type that would be imported from the Data module. For example, a type
@@ -7379,8 +7610,14 @@ of `Condition` would be the same as what you can import from
 `canvas_sdk.v1.data.condition`.
 The event `context` object can be accessed via `self.event.context`. The
 content present in each eventâs context depends on the event type. The table
-below shows what you can expect for event type, or you could take a look
+below shows what you can expect for each event type, or you could take a look
 yourself by logging it out.
+###  Common Context Patterns #
+Many events include common contextual information to help you understand the
+scope and origin of the event:
+  * **Patient context** : Most patient-related events include `"patient": {"id": pt_id}` in the context, allowing you to identify which patient the event relates to.
+  * **Note context** : Command lifecycle events (PRE_COMMIT, POST_COMMIT, etc.) include `"note": {"uuid": note_id}` in the context, indicating the note where the command was executed.
+  * **User context** : All command-related PRE_SEARCH and POST_SEARCH events include `"user": {"staff": staff_key}` in the context, containing the staff key of the user performing the search. This allows you to customize search results based on user-specific preferences, roles, or permissions.
     from canvas_sdk.events import EventType
     from canvas_sdk.protocols import BaseProtocol
     from logger import log
@@ -7762,6 +7999,29 @@ Target object| Context object
 |
     "appointment":
         "id": appt_id  
+####  Claims #
+CLAIM_CREATED  
+---  
+Occurs when a claim is created.  
+Target object| Context object  
+    "id": claim_id
+    "type": [Claim](/sdk/data-claim/)
+|
+    "patient":
+      "id": pt_id
+    "note":
+      "uuid": note_id  
+CLAIM_UPDATED  
+---  
+Occurs when a claim is updated.  
+Target object| Context object  
+    "id": claim_id
+    "type": Claim
+|
+    "patient":
+      "id": pt_id
+    "note":
+      "uuid": note_id  
 ####  Billing Line Items #
 BILLING_LINE_ITEM_CREATED  
 ---  
@@ -8723,6 +8983,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__INDICATIONS__PRE_SEARCH  
 ---  
@@ -8731,6 +8994,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__PHARMACY__POST_SEARCH  
 ---  
@@ -8739,6 +9005,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__PHARMACY__PRE_SEARCH  
 ---  
@@ -8747,6 +9016,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__PRESCRIBE__POST_SEARCH  
 ---  
@@ -8755,6 +9027,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
 ADJUST_PRESCRIPTION__PRESCRIBE__PRE_SEARCH  
 ---  
@@ -8763,6 +9038,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__CHANGE_MEDICATION_TO__POST_SEARCH  
 ---  
@@ -8771,6 +9049,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
 ADJUST_PRESCRIPTION__CHANGE_MEDICATION_TO__PRE_SEARCH  
 ---  
@@ -8779,6 +9060,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__SUPERVISING_PROVIDER__POST_SEARCH  
 ---  
@@ -8787,6 +9071,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__SUPERVISING_PROVIDER__PRE_SEARCH  
 ---  
@@ -8795,6 +9082,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__PRESCRIBER__POST_SEARCH  
 ---  
@@ -8803,6 +9093,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ADJUST_PRESCRIPTION__PRESCRIBER__PRE_SEARCH  
 ---  
@@ -8811,6 +9104,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Allergy Command #
 ALLERGY_COMMAND__POST_COMMIT  
@@ -9034,6 +9330,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[AllergySearchResult]  
 ALLERGY__ALLERGY__PRE_SEARCH  
 ---  
@@ -9042,6 +9341,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Assess Command #
 ASSESS_COMMAND__CONDITION_SELECTED  
@@ -9256,6 +9558,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[ConditionSearchResult]  
 ASSESS__CONDITION__POST_SEARCH  
 ---  
@@ -9264,6 +9569,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[ConditionSearchResult]  
 ####  Cancel Prescription Command #
 Event| Description| CANCEL_PRESCRIPTION_COMMAND__PRE_ORIGINATE|  
@@ -9456,6 +9764,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
 CHANGE_MEDICATION__MEDICATION__PRE_SEARCH  
 ---  
@@ -9464,6 +9775,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Clipboard Command #
 CLIPBOARD_COMMAND__POST_COMMIT  
@@ -9833,6 +10147,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 CLOSE_GOAL__GOAL_ID__PRE_SEARCH  
 ---  
@@ -9841,6 +10158,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Diagnose Command #
 DIAGNOSE_COMMAND__POST_COMMIT  
@@ -10064,6 +10384,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[ConditionSearchResult]  
 DIAGNOSE__DIAGNOSE__PRE_SEARCH  
 ---  
@@ -10072,6 +10395,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Educational Material Command #
 EDUCATIONAL_MATERIAL_COMMAND__POST_COMMIT  
@@ -10223,6 +10549,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 EDUCATIONAL_MATERIAL__LANGUAGE__PRE_SEARCH  
 ---  
@@ -10231,6 +10560,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 EDUCATIONAL_MATERIAL__TITLE__POST_SEARCH  
 ---  
@@ -10239,6 +10571,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 EDUCATIONAL_MATERIAL__TITLE__PRE_SEARCH  
 ---  
@@ -10247,6 +10582,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Family History Command #
 FAMILY_HISTORY_COMMAND__POST_COMMIT  
@@ -10434,6 +10772,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 FAMILY_HISTORY__FAMILY_HISTORY__PRE_SEARCH  
 ---  
@@ -10442,6 +10783,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 FAMILY_HISTORY__RELATIVE__POST_SEARCH  
 ---  
@@ -10450,6 +10794,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 FAMILY_HISTORY__RELATIVE__PRE_SEARCH  
 ---  
@@ -10458,6 +10805,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Follow Up Command #
 FOLLOW_UP_COMMAND__POST_COMMIT  
@@ -10669,6 +11019,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 FOLLOW_UP__CODING__PRE_SEARCH  
 ---  
@@ -10677,6 +11030,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 FOLLOW_UP__NOTE_TYPE__POST_SEARCH  
 ---  
@@ -10685,6 +11041,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 FOLLOW_UP__NOTE_TYPE__PRE_SEARCH  
 ---  
@@ -10693,6 +11052,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Goal Command #
 GOAL_COMMAND__POST_COMMIT  
@@ -11310,6 +11672,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMAGING_ORDER__IMAGE__PRE_SEARCH  
 ---  
@@ -11318,6 +11683,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMAGING_ORDER__IMAGING_CENTER__POST_SEARCH  
 ---  
@@ -11326,6 +11694,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMAGING_ORDER__IMAGING_CENTER__PRE_SEARCH  
 ---  
@@ -11334,6 +11705,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMAGING_ORDER__INDICATIONS__POST_SEARCH  
 ---  
@@ -11342,6 +11716,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMAGING_ORDER__INDICATIONS__PRE_SEARCH  
 ---  
@@ -11350,6 +11727,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMAGING_ORDER__ORDERING_PROVIDER__POST_SEARCH  
 ---  
@@ -11358,6 +11738,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMAGING_ORDER__ORDERING_PROVIDER__PRE_SEARCH  
 ---  
@@ -11366,6 +11749,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Immunization Statement Command #
 IMMUNIZATION_STATEMENT_COMMAND__POST_COMMIT  
@@ -11577,6 +11963,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMMUNIZATION_STATEMENT__STATEMENT__PRE_SEARCH  
 ---  
@@ -11585,6 +11974,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Immunize Command #
 IMMUNIZE_COMMAND__POST_COMMIT  
@@ -11820,6 +12212,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMMUNIZE__CODING__PRE_SEARCH  
 ---  
@@ -11828,6 +12223,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMMUNIZE__GIVEN_BY__POST_SEARCH  
 ---  
@@ -11836,6 +12234,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMMUNIZE__GIVEN_BY__PRE_SEARCH  
 ---  
@@ -11844,6 +12245,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMMUNIZE__LOT_NUMBER__POST_SEARCH  
 ---  
@@ -11852,6 +12256,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 IMMUNIZE__LOT_NUMBER__PRE_SEARCH  
 ---  
@@ -11860,6 +12267,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Instruct Command #
 INSTRUCT_COMMAND__POST_COMMIT  
@@ -12035,6 +12445,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 INSTRUCT__INSTRUCT__PRE_SEARCH  
 ---  
@@ -12043,6 +12456,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Lab Order Command #
 LAB_ORDER_COMMAND__POST_COMMIT  
@@ -12266,6 +12682,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 LAB_ORDER__DIAGNOSIS__PRE_SEARCH  
 ---  
@@ -12274,6 +12693,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 LAB_ORDER__LAB_PARTNER__POST_SEARCH  
 ---  
@@ -12282,6 +12704,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 LAB_ORDER__LAB_PARTNER__PRE_SEARCH  
 ---  
@@ -12290,6 +12715,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 LAB_ORDER__ORDERING_PROVIDER__POST_SEARCH  
 ---  
@@ -12298,6 +12726,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 LAB_ORDER__ORDERING_PROVIDER__PRE_SEARCH  
 ---  
@@ -12306,6 +12737,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 LAB_ORDER__TESTS__POST_SEARCH  
 ---  
@@ -12314,6 +12748,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 LAB_ORDER__TESTS__PRE_SEARCH  
 ---  
@@ -12322,6 +12759,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Medical History Command #
 MEDICAL_HISTORY_COMMAND__POST_COMMIT  
@@ -12581,6 +13021,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 MEDICAL_HISTORY__APPROXIMATE_END_DATE__PRE_SEARCH  
 ---  
@@ -12589,6 +13032,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 MEDICAL_HISTORY__APPROXIMATE_START_DATE__POST_SEARCH  
 ---  
@@ -12597,6 +13043,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 MEDICAL_HISTORY__APPROXIMATE_START_DATE__PRE_SEARCH  
 ---  
@@ -12605,6 +13054,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 MEDICAL_HISTORY__PAST_MEDICAL_HISTORY__POST_SEARCH  
 ---  
@@ -12613,6 +13065,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[ConditionSearchResult]  
 MEDICAL_HISTORY__PAST_MEDICAL_HISTORY__PRE_SEARCH  
 ---  
@@ -12621,6 +13076,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Medication Statement Command #
 MEDICATION_STATEMENT_COMMAND__POST_COMMIT  
@@ -12796,6 +13254,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
 MEDICATION_STATEMENT__MEDICATION__PRE_SEARCH  
 ---  
@@ -12804,8 +13265,11 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
-####  Perfom Command #
+####  Perform Command #
 PERFORM_COMMAND__POST_COMMIT  
 ---  
 Target object| Context object  
@@ -12979,6 +13443,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PERFORM__PERFORM__PRE_SEARCH  
 ---  
@@ -12987,6 +13454,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Physical Exam Command #
 PHYSICAL_EXAM_COMMAND__POST_COMMIT  
@@ -13150,6 +13620,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PHYSICAL_EXAM__QUESTIONNAIRE__PRE_SEARCH  
 ---  
@@ -13158,6 +13631,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Plan Command #
 PLAN_COMMAND__POST_COMMIT  
@@ -13596,6 +14072,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__INDICATIONS__PRE_SEARCH  
 ---  
@@ -13604,6 +14083,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__PHARMACY__POST_SEARCH  
 ---  
@@ -13612,6 +14094,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__PHARMACY__PRE_SEARCH  
 ---  
@@ -13620,6 +14105,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__PRESCRIBE__POST_SEARCH  
 ---  
@@ -13628,6 +14116,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__PRESCRIBE__PRE_SEARCH  
 ---  
@@ -13636,6 +14127,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
 PRESCRIBE__SUPERVISING_PROVIDER__POST_SEARCH  
 ---  
@@ -13644,6 +14138,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__SUPERVISING_PROVIDER__PRE_SEARCH  
 ---  
@@ -13652,6 +14149,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__PRESCRIBER__POST_SEARCH  
 ---  
@@ -13660,6 +14160,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 PRESCRIBE__PRESCRIBER__PRE_SEARCH  
 ---  
@@ -13668,6 +14171,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Questionnaire Command #
 QUESTIONNAIRE_COMMAND__POST_COMMIT  
@@ -13843,6 +14349,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 QUESTIONNAIRE__QUESTIONNAIRE__PRE_SEARCH  
 ---  
@@ -13851,6 +14360,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Reason for Visit Command #
 REASON_FOR_VISIT_COMMAND__POST_COMMIT  
@@ -14039,6 +14551,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REASON_FOR_VISIT__CODING__PRE_SEARCH  
 ---  
@@ -14047,6 +14562,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Refer Command #
 REFER_COMMAND__POST_COMMIT  
@@ -14306,6 +14824,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFER_COMMAND__REFER_TO__PRE_SEARCH  
 ---  
@@ -14314,6 +14835,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFER_COMMAND__INDICATIONS__POST_SEARCH  
 ---  
@@ -14322,6 +14846,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFER_COMMAND__INDICATIONS__PRE_SEARCH  
 ---  
@@ -14330,6 +14857,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFER_COMMAND__DOCUMENTS_TO_INCLUDE__POST_SEARCH  
 ---  
@@ -14338,6 +14868,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFER_COMMAND__DOCUMENTS_TO_INCLUDE__PRE_SEARCH  
 ---  
@@ -14346,6 +14879,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFER_COMMAND__LINKED_ITEMS__POST_SEARCH  
 ---  
@@ -14354,6 +14890,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFER_COMMAND__LINKED_ITEMS__PRE_SEARCH  
 ---  
@@ -14362,6 +14901,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Refill Prescription Command #
 REFILL_COMMAND__POST_COMMIT  
@@ -14645,6 +15187,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__INDICATIONS__PRE_SEARCH  
 ---  
@@ -14653,6 +15198,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__PHARMACY__POST_SEARCH  
 ---  
@@ -14661,6 +15209,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__PHARMACY__PRE_SEARCH  
 ---  
@@ -14669,6 +15220,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__PRESCRIBE__POST_SEARCH  
 ---  
@@ -14677,6 +15231,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
 REFILL__PRESCRIBE__PRE_SEARCH  
 ---  
@@ -14685,6 +15242,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__SUPERVISING_PROVIDER__POST_SEARCH  
 ---  
@@ -14693,6 +15253,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__SUPERVISING_PROVIDER__PRE_SEARCH  
 ---  
@@ -14701,6 +15264,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__PRESCRIBER__POST_SEARCH  
 ---  
@@ -14709,6 +15275,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REFILL__PRESCRIBER__PRE_SEARCH  
 ---  
@@ -14717,6 +15286,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Remove Allergy Command #
 REMOVE_ALLERGY_COMMAND__POST_COMMIT  
@@ -14892,6 +15464,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 REMOVE_ALLERGY__ALLERGY__PRE_SEARCH  
 ---  
@@ -14900,6 +15475,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Resolve Condition Command #
 RESOLVE_CONDITION_COMMAND__POST_COMMIT  
@@ -15087,6 +15665,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 RESOLVE_CONDITION__CONDITION__POST_SEARCH  
 ---  
@@ -15095,6 +15676,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[ConditionSearchResult]  
 ####  Review of Systems Command #
 ROS_COMMAND__POST_COMMIT  
@@ -15258,6 +15842,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ROS__QUESTIONNAIRE__PRE_SEARCH  
 ---  
@@ -15266,6 +15853,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Snooze Protocol Command #
 Event| Description| SNOOZE_PROTOCOL_COMMAND__PRE_ORIGINATE|  
@@ -15458,6 +16048,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[MedicationSearchResult]  
 STOP_MEDICATION__MEDICATION__PRE_SEARCH  
 ---  
@@ -15466,6 +16059,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Structured Assessment Command #
 STRUCTURED_ASSESSMENT_COMMAND__POST_COMMIT  
@@ -15629,6 +16225,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 STRUCTURED_ASSESSMENT__QUESTIONNAIRE__PRE_SEARCH  
 ---  
@@ -15637,6 +16236,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Surgical History Command #
 SURGICAL_HISTORY_COMMAND__POST_COMMIT  
@@ -15848,6 +16450,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 SURGICAL_HISTORY__PAST_SURGICAL_HISTORY__PRE_SEARCH  
 ---  
@@ -15856,6 +16461,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Task Command #
 TASK_COMMAND__POST_COMMIT  
@@ -16079,6 +16687,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 TASK__ASSIGN_TO__PRE_SEARCH  
 ---  
@@ -16087,6 +16698,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 TASK__LABELS__POST_SEARCH  
 ---  
@@ -16095,6 +16709,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 TASK__LABELS__PRE_SEARCH  
 ---  
@@ -16103,6 +16720,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Update Diagnosis Command #
 Event| Description| UPDATE_DIAGNOSIS_COMMAND__PRE_ORIGINATE|  
@@ -16332,6 +16952,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 UPDATE_GOAL__GOAL_STATEMENT__POST_SEARCH  
 ---  
@@ -16340,6 +16963,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 UPDATE_GOAL__GOAL_STATEMENT__PRE_SEARCH  
 ---  
@@ -16348,6 +16974,9 @@ Target object| Context object
     "type": [Command](/sdk/data-command/)
 |
     "search_term": str
+    "user": {
+      "staff": staff_key
+    }
     "results": list[dict]  
 ####  Vitals Command #
 VITALS_COMMAND__POST_COMMIT  
@@ -17355,7 +17984,7 @@ effect/#modals).
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/handlers-applications/
 # Applications
-Last updated: 8 Oct 2025
+Last updated: 7 Nov 2025
 Applications are accessible in the app drawer and launch your content when
 clicked. Applications can be patient specific, or global.
 ##  Implementing an Application #
@@ -17556,7 +18185,7 @@ Hereâs what your `CANVAS_MANIFEST.json` might look like:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/handlers-basehandler/
 # Base Handler
-Last updated: 24 Sep 2025
+Last updated: 7 Nov 2025
 The `BaseHandler` is the simplest of all handlers. Specify which events you
 are interested in, then provide the code to execute when one of those events
 is emitted. All the [handlers](/sdk/handlers/) inherit from `BaseHandler`, and
@@ -17592,7 +18221,7 @@ additional information at runtime.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/handlers-crontask/
 # CronTask
-Last updated: 7 Jan 2025
+Last updated: 7 Nov 2025
 You can write a handler that subclasses `CronTask` to execute code on a
 schedule. You might use this to automate reporting on task performance (every
 hour, send the number of tasks created during the previous hour, and the
@@ -19834,6 +20463,22 @@ For complete details about medication search result data contracts and other
 search result structures, see the [Search Result Data
 Structures](/sdk/events/#search-result-data-structures) section in the Events
 documentation.
+##  Accessing User Context #
+All command-related PRE_SEARCH and POST_SEARCH events include information
+about the user performing the search in the event context. This includes
+search events for fields like prescriber, medication, diagnosis, pharmacy, and
+many others across various commands.
+You can access the userâs staff key from the context:
+    def compute(self):
+        user_context = self.context.get("user", {})
+        staff_key = user_context.get("staff")
+        # Use the staff key to customize search results
+        # based on the user's role, preferences, or permissions
+This can be useful for customizing search results based on:
+  * User-specific preferences or settings
+  * Role-based filtering (e.g., showing different prescriber options based on the userâs specialty)
+  * Permission-based access control
+  * Userâs organization or practice location
 ##  Watch Me Build It #
 ----- END PAGE https://docs.canvasmedical.com/guides/customize-search-results/
 
