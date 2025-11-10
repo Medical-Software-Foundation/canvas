@@ -31,7 +31,3 @@ The plugin determines which codes to add based on blood pressure values:
 - G8753: Most recent BP >= 140/90 and treatment plan documented
 - G8754: Most recent BP >= 140/90 and no treatment plan, reason not given
 - G8755: Most recent BP >= 140/90 and no treatment plan, documented reason
-
-## Example Note with Claim Coding
-
-  <img width="1200" height="1428" alt="image" src="https://github.com/user-attachments/assets/f11d1a2e-8ce8-4493-a63d-51a2545edf12" />
