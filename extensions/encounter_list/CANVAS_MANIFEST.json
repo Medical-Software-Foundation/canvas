@@ -1,15 +1,15 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "canvas-2.0.0",
     "name": "encounter_list",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "The Encounter List plugin provides a comprehensive worklist view of open encounters",
     "url_permissions": [],
     "components": {
         "applications": [
             {
                 "class": "encounter_list.applications.my_application:MyApplication",
                 "name": "Encounter List",
-                "description": "An Application that does xyz...",
+                "description": "An Application that opens a comprehensive worklist view of open encounters.",
                 "scope": "global",
                 "icon": "assets/logo.png"
             }
@@ -17,7 +17,7 @@
         "protocols": [
             {
                 "class": "encounter_list.applications.my_application:EncounterListApi",
-                "description": "Provides api for the application",
+                "description": "Provides api to fetch, filter, and sort open encounters",
                 "data_access": {
                     "event": "",
                     "read": [],
