@@ -3,13 +3,28 @@ from typing import Optional
 from canvas_sdk.effects import Effect
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
-from canvas_sdk.v1.data import Command, Observation, BillingLineItem, Note
-from canvas_sdk.v1.data.assessment import Assessment
+from canvas_sdk.v1.data import Command, BillingLineItem, Note
 from canvas_sdk.effects.billing_line_item import AddBillingLineItem, UpdateBillingLineItem
 from logger import log
 
-from bp_cpt2.utils import get_blood_pressure_readings
-from bp_cpt2.llm_openai import LlmOpenai
+from bp_cpt2.bp_claim_coder import (
+    get_blood_pressure_readings,
+    SYSTOLIC_CODES,
+    DIASTOLIC_CODES,
+    CONTROL_STATUS_CODES,
+    NOT_DOCUMENTED_CODES,
+    CPT_3074F,
+    CPT_3075F,
+    CPT_3077F,
+    CPT_3078F,
+    CPT_3079F,
+    CPT_3080F,
+    HCPCS_G8783,
+    HCPCS_G8784,
+    HCPCS_G8752,
+    HCPCS_G8950,
+    HCPCS_G8951
+)
 
 
 class BloodPressureVitalsHandler(BaseHandler):
@@ -22,122 +37,20 @@ class BloodPressureVitalsHandler(BaseHandler):
         EventType.Name(EventType.VITALS_COMMAND__POST_COMMIT)
     ]
 
-    # Code categories - codes within the same category are mutually exclusive
-    SYSTOLIC_CODES = {"3074F", "3075F", "3077F"}
-    DIASTOLIC_CODES = {"3078F", "3079F", "3080F"}
-    CONTROL_STATUS_CODES = {"G8783", "G8784"}  # G8752 can coexist with these
-    NOT_DOCUMENTED_CODES = {"G8950", "G8951"}  # These are also mutually exclusive
-
     def get_code_category(self, code: str) -> Optional[set[str]]:
         """
         Get the category (set of mutually exclusive codes) that a code belongs to.
         Returns None if the code doesn't belong to any mutually exclusive category.
         """
-        if code in self.SYSTOLIC_CODES:
-            return self.SYSTOLIC_CODES
-        elif code in self.DIASTOLIC_CODES:
-            return self.DIASTOLIC_CODES
-        elif code in self.CONTROL_STATUS_CODES:
-            return self.CONTROL_STATUS_CODES
-        elif code in self.NOT_DOCUMENTED_CODES:
-            return self.NOT_DOCUMENTED_CODES
+        if code in SYSTOLIC_CODES:
+            return SYSTOLIC_CODES
+        elif code in DIASTOLIC_CODES:
+            return DIASTOLIC_CODES
+        elif code in CONTROL_STATUS_CODES:
+            return CONTROL_STATUS_CODES
+        elif code in NOT_DOCUMENTED_CODES:
+            return NOT_DOCUMENTED_CODES
         return None
-
-    def get_hypertension_related_assessments(self, note: Note) -> list[str]:
-        """
-        Get assessment IDs that are related to hypertension using LLM analysis.
-
-        Args:
-            note: Note object to get assessments from
-
-        Returns:
-            List of assessment IDs (as strings) that are hypertension-related
-        """
-        # Get all assessments for this note
-        assessments = list(Assessment.objects.filter(note_id=note.dbid, deleted=False))
-        if not assessments:
-            return []
-
-        # Build assessment data for LLM analysis
-        assessment_data = []
-        for assessment in assessments:
-            if not assessment.condition:
-                continue
-
-            # Get condition codings
-            codings = []
-            try:
-                condition_codings = assessment.condition.codings.filter(system='ICD-10')
-                for coding in condition_codings:
-                    coding_info = {
-                        "system": coding.system if hasattr(coding, 'system') else '',
-                        "code": coding.code if hasattr(coding, 'code') else '',
-                        "display": coding.display if hasattr(coding, 'display') else ''
-                    }
-                    codings.append(coding_info)
-            except (AttributeError, Exception):
-                pass
-
-            if codings:
-                assessment_entry = {
-                    "assessment_id": str(assessment.id),
-                    "codings": codings
-                }
-                assessment_data.append(assessment_entry)
-
-        if not assessment_data:
-            return []
-
-        # Use LLM to identify hypertension-related assessments
-        try:
-            openai_api_key = self.secrets.get('OPENAI_API_KEY')
-            if not openai_api_key:
-                log.warning(f"Note {note.id} - OPENAI_API_KEY not configured, cannot filter hypertension-related assessments")
-                return []
-
-            client = LlmOpenai(api_key=openai_api_key)
-
-            system_prompt = "You are a medical coding assistant that helps identify hypertension-related diagnoses."
-            user_prompt = f"""Analyze the following assessments and determine which ones are clearly related to hypertension (high blood pressure).
-
-Assessments to analyze:
-{assessment_data}
-
-Return a JSON object with a single key "hypertension_related_assessment_ids" containing an array of assessment_id strings that are related to hypertension.
-
-Examples of hypertension-related conditions:
-- Essential hypertension
-- Hypertensive heart disease
-- Hypertensive chronic kidney disease
-- Secondary hypertension
-- Hypertensive crisis
-- Renovascular hypertension
-- And other conditions that are directly caused by or related to high blood pressure
-
-Do NOT include conditions that are merely risk factors for hypertension (like diabetes, obesity) or complications that can occur with many conditions.
-
-If none of the assessments are hypertension-related, return an empty array."""
-
-            response = client.chat_with_json(system_prompt=system_prompt, user_prompt=user_prompt, max_retries=2)
-
-            if response and isinstance(response, dict) and response.get('success'):
-                response_data = response.get('data', {})
-                related_ids = response_data.get('hypertension_related_assessment_ids', [])
-
-                if isinstance(related_ids, list):
-                    log.info(f"Note {note.id} - Found {len(related_ids)} hypertension-related assessments")
-                    return related_ids
-                else:
-                    log.warning(f"Note {note.id} - LLM returned invalid format for hypertension_related_assessment_ids")
-                    return []
-            else:
-                error_msg = response.get('error', 'Unknown error') if isinstance(response, dict) else 'Invalid response format'
-                log.warning(f"Note {note.id} - LLM request failed: {error_msg}")
-                return []
-
-        except Exception as e:
-            log.error(f"Note {note.id} - Error identifying hypertension-related assessments: {e}")
-            return []
 
     def check_for_documented_reason(self, note: Note) -> bool:
         """Check if there's a documented reason for BP not being taken by looking at vitals command data."""
@@ -165,7 +78,6 @@ If none of the assessments are hypertension-related, return an empty array."""
 
         return False
 
-
     def determine_bp_codes(self, systolic: Optional[float], diastolic: Optional[float], note: Note) -> list[str]:
         """
         Determine appropriate CPT/HCPCS codes based on BP readings.
@@ -177,34 +89,34 @@ If none of the assessments are hypertension-related, return an empty array."""
             log.info(f"Patient {self.patient.id} - Blood pressure not fully documented")
             # Check if there's a documented reason for no BP
             if self.check_for_documented_reason(note):
-                codes.append("G8951")  # BP not documented, documented reason
-                log.info(f"Patient {self.patient.id} - Using G8951 (documented reason for no BP)")
+                codes.append(HCPCS_G8951)  # BP not documented, documented reason
+                log.info(f"Patient {self.patient.id} - Using {HCPCS_G8951} (documented reason for no BP)")
             else:
-                codes.append("G8950")  # BP not documented, reason not given
+                codes.append(HCPCS_G8950)  # BP not documented, reason not given
             return codes
 
         # Measurement codes - Systolic
         if systolic < 130:
-            codes.append("3074F")
+            codes.append(CPT_3074F)
         elif systolic < 140:
-            codes.append("3075F")
+            codes.append(CPT_3075F)
         else:  # systolic >= 140
-            codes.append("3077F")
+            codes.append(CPT_3077F)
 
         # Measurement codes - Diastolic
         if diastolic < 80:
-            codes.append("3078F")
+            codes.append(CPT_3078F)
         elif diastolic < 90:
-            codes.append("3079F")
+            codes.append(CPT_3079F)
         else:  # diastolic >= 90
-            codes.append("3080F")
+            codes.append(CPT_3080F)
 
         # Blood Pressure Control codes
         if systolic < 140 and diastolic < 90:
-            codes.append("G8783")  # BP documented and controlled
-            codes.append("G8752")  # Most recent BP < 140/90
+            codes.append(HCPCS_G8783)  # BP documented and controlled
+            codes.append(HCPCS_G8752)  # Most recent BP < 140/90
         else:
-            codes.append("G8784")  # BP documented but not controlled
+            codes.append(HCPCS_G8784)  # BP documented but not controlled
 
         log.info(f"Patient {self.patient.id} - Determined BP codes: {codes}")
         return codes
@@ -227,8 +139,8 @@ If none of the assessments are hypertension-related, return an empty array."""
             # This should never happen - determine_bp_codes always returns at least one code
             raise ValueError(f"No BP codes determined for patient {self.patient.id}")
 
-        # Get hypertension-related assessments for the note using LLM analysis
-        assessments = self.get_hypertension_related_assessments(note)
+        # Note: Assessment linking is now handled by the note state handler when the note is locked
+        # This ensures assessments added after vitals are properly linked
 
         # Get existing billing line items for this note
         existing_billing_items = list(BillingLineItem.objects.filter(note_id=note.dbid))
@@ -259,7 +171,7 @@ If none of the assessments are hypertension-related, return an empty array."""
                     billing_line_item_id=str(conflicting_item.id),
                     cpt=code,
                     units=1,
-                    assessment_ids=assessments,
+                    assessment_ids=[],
                     modifiers=[]
                 )
                 effects.append(update_effect.apply())
@@ -274,7 +186,7 @@ If none of the assessments are hypertension-related, return an empty array."""
                     note_id=str(note.id),
                     cpt=code,
                     units=1,
-                    assessment_ids=assessments,
+                    assessment_ids=[],
                     modifiers=[]
                 )
                 effects.append(add_effect.apply())

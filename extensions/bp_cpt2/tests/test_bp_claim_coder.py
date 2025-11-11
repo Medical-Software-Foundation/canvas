@@ -8,7 +8,7 @@ import pytest
 from canvas_sdk.test_utils.factories import PatientFactory
 from canvas_sdk.v1.data import Note, Observation
 
-from bp_cpt2.utils import get_blood_pressure_readings
+from bp_cpt2.bp_claim_coder import get_blood_pressure_readings
 
 
 def test_get_blood_pressure_readings_by_patient() -> None:

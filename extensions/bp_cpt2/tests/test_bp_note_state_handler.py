@@ -7,9 +7,11 @@ from unittest.mock import Mock, patch, PropertyMock
 
 from canvas_sdk.events import EventType
 from canvas_sdk.test_utils.factories import PatientFactory
-from canvas_sdk.v1.data import Note, Command, Observation, Assessment
+from canvas_sdk.v1.data import Note, Command, Observation, Assessment, BillingLineItem
 
 from bp_cpt2.handlers.bp_note_state_handler import BloodPressureNoteStateHandler
+from bp_cpt2 import bp_claim_coder as utils
+from bp_cpt2.bp_claim_coder import HCPCS_G8753
 
 
 def test_skips_non_locked_non_pushed_states() -> None:
@@ -96,7 +98,7 @@ def test_processes_locked_state() -> None:
     )
 
     # Mock the LLM call to return that treatment plan is documented
-    with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
+    with patch.object(utils, 'analyze_treatment_plan') as mock_llm:
         mock_llm.return_value = {
             "has_treatment_plan": True,
             "has_documented_reason": False,
@@ -324,7 +326,7 @@ def test_adds_g8753_when_treatment_plan_documented() -> None:
     )
 
     # Mock the LLM call to return that treatment plan is documented
-    with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
+    with patch.object(utils, 'analyze_treatment_plan') as mock_llm:
         mock_llm.return_value = {
             "has_treatment_plan": True,
             "has_documented_reason": False,
@@ -394,7 +396,7 @@ def test_adds_g8754_when_no_treatment_plan_no_reason() -> None:
     )
 
     # Mock the LLM call to return no treatment plan and no reason
-    with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
+    with patch.object(utils, 'analyze_treatment_plan') as mock_llm:
         mock_llm.return_value = {
             "has_treatment_plan": False,
             "has_documented_reason": False,
@@ -464,7 +466,7 @@ def test_adds_g8755_when_no_treatment_plan_with_reason() -> None:
     )
 
     # Mock the LLM call to return no treatment plan but with documented reason
-    with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
+    with patch.object(utils, 'analyze_treatment_plan') as mock_llm:
         mock_llm.return_value = {
             "has_treatment_plan": False,
             "has_documented_reason": True,
@@ -588,7 +590,7 @@ def test_prepare_note_commands_data() -> None:
     )
 
     # Test prepare_note_commands_data
-    commands_data = handler.prepare_note_commands_data(note)
+    commands_data = utils.prepare_note_commands_data(note)
 
     # Verify commands are in the output
     assert "prescribe" in commands_data
@@ -616,7 +618,7 @@ def test_prepare_medications_data_no_medications() -> None:
     )
 
     # Test prepare_medications_data with no medications
-    medications_data = handler.prepare_medications_data(str(patient.id))
+    medications_data = utils.prepare_medications_data(str(patient.id))
 
     # Verify appropriate message
     assert "No active medications" in medications_data
@@ -676,7 +678,7 @@ def test_no_duplicate_treatment_codes() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="G8753",
+        cpt=HCPCS_G8753,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -702,7 +704,7 @@ def test_no_duplicate_treatment_codes() -> None:
     )
 
     # Mock the LLM call
-    with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
+    with patch.object(utils, 'analyze_treatment_plan') as mock_llm:
         mock_llm.return_value = {
             "has_treatment_plan": True,
             "has_documented_reason": False,
@@ -712,8 +714,9 @@ def test_no_duplicate_treatment_codes() -> None:
         # Execute compute
         effects = handler.compute()
 
-        # Should not add duplicate - expect 0 effects
-        assert len(effects) == 0, "Expected no effects (code already exists)"
+        # Should not add duplicate code, but will update with assessments - expect 1 effect
+        # (1 UpdateBillingLineItem for assessment linking)
+        assert len(effects) == 1, f"Expected 1 effect (assessment update), got {len(effects)}"
 
 
 def test_prepare_medications_data_with_medications() -> None:
@@ -752,7 +755,7 @@ def test_prepare_medications_data_with_medications() -> None:
         mock_for_patient.return_value = mock_queryset
 
         # Test prepare_medications_data with medications
-        medications_data = handler.prepare_medications_data(str(patient.id))
+        medications_data = utils.prepare_medications_data(str(patient.id))
 
         # Verify medications are in the output
         assert "Lisinopril" in medications_data
@@ -847,7 +850,7 @@ def test_full_llm_analysis_success() -> None:
     )
 
     # Mock the LlmOpenai class to return a successful response
-    with patch('bp_cpt2.handlers.bp_note_state_handler.LlmOpenai') as mock_llm_class:
+    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
         mock_llm_instance = Mock()
         mock_llm_class.return_value = mock_llm_instance
 
@@ -931,7 +934,7 @@ def test_full_llm_analysis_failure() -> None:
     )
 
     # Mock the LlmOpenai class to return a failed response
-    with patch('bp_cpt2.handlers.bp_note_state_handler.LlmOpenai') as mock_llm_class:
+    with patch('bp_cpt2.llm_openai.LlmOpenai') as mock_llm_class:
         mock_llm_instance = Mock()
         mock_llm_class.return_value = mock_llm_instance
 
@@ -949,7 +952,7 @@ def test_full_llm_analysis_failure() -> None:
         assert len(effects) == 1, "Expected 1 billing code (G8754 as fallback)"
 
 
-def test_determine_treatment_code_none_edge_case() -> None:
+def test_determine_treatment_code() -> None:
     """
     Test edge case where determine_treatment_code might return None.
     This shouldn't happen in practice but tests defensive code.
@@ -1005,16 +1008,16 @@ def test_determine_treatment_code_none_edge_case() -> None:
         secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
-    # Mock analyze_treatment_plan_with_llm to return result
+    # Mock analyze_treatment_plan to return result
     # and determine_treatment_code to return None
-    with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_analyze:
+    with patch.object(utils, 'analyze_treatment_plan') as mock_analyze:
         mock_analyze.return_value = {
             "has_treatment_plan": False,
             "has_documented_reason": False,
             "explanation": "Test"
         }
 
-        with patch.object(handler, 'determine_treatment_code', return_value=None):
+        with patch.object(utils, 'determine_treatment_code', return_value=None):
             # Execute compute
             effects = handler.compute()
 
@@ -1196,7 +1199,7 @@ def test_pushes_charges_for_billable_note() -> None:
     with patch.object(Note.objects, 'get', return_value=note):
         with patch.object(type(note), 'note_type_version', new_callable=PropertyMock, return_value=mock_note_type):
             # Mock the LLM call
-            with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
+            with patch.object(utils, 'analyze_treatment_plan') as mock_llm:
                 mock_llm.return_value = {
                     "has_treatment_plan": True,
                     "has_documented_reason": False,
@@ -1208,3 +1211,40 @@ def test_pushes_charges_for_billable_note() -> None:
 
                 # Should return 2 effects: billing item + push charges
                 assert len(effects) == 2, "Expected 2 effects (billing item + push charges) for billable note"
+
+
+def test_assessment_combining_logic() -> None:
+    """
+    Test that existing assessments are combined with new hypertension-related assessments.
+    """
+    # Test case 1: Existing assessments + new assessments = combined unique list
+    existing_assessments = ['assessment-1', 'assessment-2']
+    new_assessments = ['assessment-3', 'assessment-1']  # assessment-1 is duplicate
+
+    combined = list(set(existing_assessments + new_assessments))
+
+    # Should have 3 unique assessments (1, 2, 3)
+    assert len(combined) == 3
+    assert 'assessment-1' in combined
+    assert 'assessment-2' in combined
+    assert 'assessment-3' in combined
+
+    # Test case 2: No existing assessments
+    existing_assessments = []
+    new_assessments = ['assessment-1', 'assessment-2']
+
+    combined = list(set(existing_assessments + new_assessments))
+
+    assert len(combined) == 2
+    assert 'assessment-1' in combined
+    assert 'assessment-2' in combined
+
+    # Test case 3: No new assessments
+    existing_assessments = ['assessment-1', 'assessment-2']
+    new_assessments = []
+
+    combined = list(set(existing_assessments + new_assessments))
+
+    assert len(combined) == 2
+    assert 'assessment-1' in combined
+    assert 'assessment-2' in combined

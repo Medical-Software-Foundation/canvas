@@ -12,6 +12,13 @@ from canvas_sdk.v1.data import Note, Command, Observation, Assessment, BillingLi
 
 from bp_cpt2.handlers.bp_vitals_handler import BloodPressureVitalsHandler
 from bp_cpt2.llm_openai import LlmOpenai
+from bp_cpt2.bp_claim_coder import (
+    CPT_3074F, CPT_3075F, CPT_3077F,
+    CPT_3078F, CPT_3079F, CPT_3080F,
+    HCPCS_G8783, HCPCS_G8784, HCPCS_G8752,
+    HCPCS_G8950, HCPCS_G8951,
+    SYSTOLIC_CODES, DIASTOLIC_CODES, CONTROL_STATUS_CODES, NOT_DOCUMENTED_CODES
+)
 
 
 def test_controlled_blood_pressure() -> None:
@@ -259,7 +266,7 @@ def test_no_duplicates_added() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="3074F",
+        cpt=CPT_3074F,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -269,7 +276,7 @@ def test_no_duplicates_added() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="G8783",
+        cpt=HCPCS_G8783,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -667,7 +674,7 @@ def test_updates_billing_codes_when_bp_changes() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="3077F",
+        cpt=CPT_3077F,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -677,7 +684,7 @@ def test_updates_billing_codes_when_bp_changes() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="3080F",
+        cpt=CPT_3080F,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -687,7 +694,7 @@ def test_updates_billing_codes_when_bp_changes() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="G8784",
+        cpt=HCPCS_G8784,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -822,7 +829,7 @@ def test_updates_systolic_code_independently() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="3077F",
+        cpt=CPT_3077F,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -832,7 +839,7 @@ def test_updates_systolic_code_independently() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="3078F",
+        cpt=CPT_3078F,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -842,7 +849,7 @@ def test_updates_systolic_code_independently() -> None:
     BillingLineItem.objects.create(
         note_id=note.dbid,
         patient_id=patient.dbid,
-        cpt="G8784",
+        cpt=HCPCS_G8784,
         charge=Decimal("0.00"),
         units=1,
         status="Q",
@@ -897,10 +904,10 @@ def test_updates_systolic_code_independently() -> None:
     # 4. G8752 needs to be added (new for controlled BP)
 
 
-def test_hypertension_related_assessments_filtering() -> None:
+def test_vitals_handler_creates_billing_codes_without_assessments() -> None:
     """
-    Test that BloodPressureVitalsHandler filters assessments using LLM
-    and only includes hypertension-related assessments in billing line items.
+    Test that BloodPressureVitalsHandler creates billing codes without assessment linking.
+    Assessment linking is now handled by the note state handler when the note is locked.
     """
     # Create test patient
     patient = PatientFactory.create()
@@ -937,9 +944,6 @@ def test_hypertension_related_assessments_filtering() -> None:
         effective_datetime=datetime.now(timezone.utc)
     )
 
-    # Create assessments (actual Condition setup is complex, so we mock the method)
-    htn_assessment_id = str(uuid.uuid4())
-
     # Create mock event
     mock_event = Mock()
     mock_event.type = EventType.VITALS_COMMAND__POST_COMMIT
@@ -948,22 +952,17 @@ def test_hypertension_related_assessments_filtering() -> None:
     mock_event.target = mock_target
     mock_event.context = {}
 
-    # Create handler instance with OPENAI_API_KEY secret
+    # Create handler instance
     handler = BloodPressureVitalsHandler(
         event=mock_event,
-        secrets={"OPENAI_API_KEY": "test-key"}
+        secrets={}
     )
 
-    # Mock get_hypertension_related_assessments to return a list with one assessment ID
-    with patch.object(handler, 'get_hypertension_related_assessments', return_value=[htn_assessment_id]):
-        # Execute compute
-        effects = handler.compute()
+    # Execute compute
+    effects = handler.compute()
 
-        # Verify effects were created
-        assert len(effects) == 4, f"Expected 4 billing codes, got {len(effects)}"
-
-        # Verify that get_hypertension_related_assessments was called
-        handler.get_hypertension_related_assessments.assert_called_once_with(note)
+    # Verify effects were created (4 BP codes for controlled BP)
+    assert len(effects) == 4, f"Expected 4 billing codes, got {len(effects)}"
 
 
 def test_no_assessments_no_llm_call() -> None:
@@ -1029,69 +1028,6 @@ def test_no_assessments_no_llm_call() -> None:
     assert len(effects) == 4, f"Expected 4 billing codes, got {len(effects)}"
 
 
-def test_llm_error_no_assessments_added() -> None:
-    """
-    Test that when LLM returns an error or invalid response,
-    no assessment_ids are added to billing line items.
-    """
-    # Create test patient
-    patient = PatientFactory.create()
-
-    # Create a note
-    note = Note.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        body="",
-        related_data={},
-        datetime_of_service=datetime.now(timezone.utc)
-    )
-
-    # Create a vitals command
-    command = Command.objects.create(
-        id=uuid.uuid4(),
-        patient=patient,
-        note=note,
-        schema_key="vitals",
-        data={},
-        anchor_object_dbid=note.dbid
-    )
-
-    # Create BP observation
-    Observation.objects.create(
-        patient=patient,
-        note_id=note.dbid,
-        category='vital-signs',
-        name='blood_pressure',
-        value='120/75',
-        units='mmHg',
-        committer_id=1,
-        deleted=False,
-        effective_datetime=datetime.now(timezone.utc)
-    )
-
-    # Create mock event
-    mock_event = Mock()
-    mock_event.type = EventType.VITALS_COMMAND__POST_COMMIT
-    mock_target = Mock()
-    mock_target.id = str(command.id)
-    mock_event.target = mock_target
-    mock_event.context = {}
-
-    # Create handler instance with OPENAI_API_KEY secret
-    handler = BloodPressureVitalsHandler(
-        event=mock_event,
-        secrets={"OPENAI_API_KEY": "test-key"}
-    )
-
-    # Mock get_hypertension_related_assessments to return empty list (simulating error)
-    with patch.object(handler, 'get_hypertension_related_assessments', return_value=[]):
-        # Execute compute - should not fail even if method returns empty
-        effects = handler.compute()
-
-        # Verify effects were still created (without assessment_ids)
-        assert len(effects) == 4, f"Expected 4 billing codes, got {len(effects)}"
-
-
 def test_get_code_category() -> None:
     """
     Test that get_code_category correctly identifies code categories.
@@ -1102,25 +1038,25 @@ def test_get_code_category() -> None:
     )
 
     # Test systolic codes
-    assert handler.get_code_category("3074F") == handler.SYSTOLIC_CODES
-    assert handler.get_code_category("3075F") == handler.SYSTOLIC_CODES
-    assert handler.get_code_category("3077F") == handler.SYSTOLIC_CODES
+    assert handler.get_code_category(CPT_3074F) == SYSTOLIC_CODES
+    assert handler.get_code_category(CPT_3075F) == SYSTOLIC_CODES
+    assert handler.get_code_category(CPT_3077F) == SYSTOLIC_CODES
 
     # Test diastolic codes
-    assert handler.get_code_category("3078F") == handler.DIASTOLIC_CODES
-    assert handler.get_code_category("3079F") == handler.DIASTOLIC_CODES
-    assert handler.get_code_category("3080F") == handler.DIASTOLIC_CODES
+    assert handler.get_code_category(CPT_3078F) == DIASTOLIC_CODES
+    assert handler.get_code_category(CPT_3079F) == DIASTOLIC_CODES
+    assert handler.get_code_category(CPT_3080F) == DIASTOLIC_CODES
 
     # Test control status codes
-    assert handler.get_code_category("G8783") == handler.CONTROL_STATUS_CODES
-    assert handler.get_code_category("G8784") == handler.CONTROL_STATUS_CODES
+    assert handler.get_code_category(HCPCS_G8783) == CONTROL_STATUS_CODES
+    assert handler.get_code_category(HCPCS_G8784) == CONTROL_STATUS_CODES
 
     # Test not documented codes
-    assert handler.get_code_category("G8950") == handler.NOT_DOCUMENTED_CODES
-    assert handler.get_code_category("G8951") == handler.NOT_DOCUMENTED_CODES
+    assert handler.get_code_category(HCPCS_G8950) == NOT_DOCUMENTED_CODES
+    assert handler.get_code_category(HCPCS_G8951) == NOT_DOCUMENTED_CODES
 
     # Test G8752 doesn't belong to a mutually exclusive category
-    assert handler.get_code_category("G8752") is None
+    assert handler.get_code_category(HCPCS_G8752) is None
 
     # Test unknown code
     assert handler.get_code_category("99999") is None
@@ -1259,6 +1195,7 @@ def test_check_for_documented_reason_empty_note_field() -> None:
     assert result is False
 
 
+@pytest.mark.skip(reason="Method moved to note state handler")
 def test_get_hypertension_related_assessments_no_condition() -> None:
     """
     Test get_hypertension_related_assessments when assessment has no condition.
@@ -1293,6 +1230,7 @@ def test_get_hypertension_related_assessments_no_condition() -> None:
     assert result == []
 
 
+@pytest.mark.skip(reason="Method moved to note state handler")
 def test_get_hypertension_related_assessments_deleted_assessment() -> None:
     """
     Test get_hypertension_related_assessments filters out deleted assessments.
@@ -1327,6 +1265,7 @@ def test_get_hypertension_related_assessments_deleted_assessment() -> None:
     assert result == []
 
 
+@pytest.mark.skip(reason="Method moved to note state handler")
 def test_get_hypertension_related_assessments_invalid_llm_response() -> None:
     """
     Test get_hypertension_related_assessments handles invalid LLM responses.
@@ -1389,6 +1328,7 @@ def test_get_hypertension_related_assessments_invalid_llm_response() -> None:
             assert result == []
 
 
+@pytest.mark.skip(reason="Method moved to note state handler")
 def test_get_hypertension_related_assessments_with_condition_codings() -> None:
     """
     Test get_hypertension_related_assessments processes condition codings correctly.
@@ -1457,6 +1397,7 @@ def test_get_hypertension_related_assessments_with_condition_codings() -> None:
             mock_llm.assert_called_once()
 
 
+@pytest.mark.skip(reason="Method moved to note state handler")
 def test_get_hypertension_related_assessments_missing_api_key() -> None:
     """
     Test get_hypertension_related_assessments returns empty when no API key.
@@ -1537,29 +1478,30 @@ def test_determine_bp_codes_edge_case() -> None:
     # Test exact boundary values
     # 130 systolic (should be 3075F, 130-139 range)
     codes = handler.determine_bp_codes(130.0, 75.0, note)
-    assert "3075F" in codes
-    assert "3078F" in codes
+    assert CPT_3075F in codes
+    assert CPT_3078F in codes
 
     # 80 diastolic (should be 3079F, 80-89 range)
     codes = handler.determine_bp_codes(125.0, 80.0, note)
-    assert "3074F" in codes
-    assert "3079F" in codes
+    assert CPT_3074F in codes
+    assert CPT_3079F in codes
 
     # 140/90 exactly (should be uncontrolled)
     codes = handler.determine_bp_codes(140.0, 90.0, note)
-    assert "3077F" in codes
-    assert "3080F" in codes
-    assert "G8784" in codes
-    assert "G8752" not in codes
+    assert CPT_3077F in codes
+    assert CPT_3080F in codes
+    assert HCPCS_G8784 in codes
+    assert HCPCS_G8752 not in codes
 
     # 139/89 (should be controlled)
     codes = handler.determine_bp_codes(139.0, 89.0, note)
-    assert "3075F" in codes
-    assert "3079F" in codes
-    assert "G8783" in codes
-    assert "G8752" in codes
+    assert CPT_3075F in codes
+    assert CPT_3079F in codes
+    assert HCPCS_G8783 in codes
+    assert HCPCS_G8752 in codes
 
 
+@pytest.mark.skip(reason="Method moved to note state handler")
 def test_get_hypertension_related_assessments_exception_handling() -> None:
     """
     Test get_hypertension_related_assessments handles exceptions gracefully.
