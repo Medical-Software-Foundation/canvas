@@ -3,9 +3,12 @@ from typing import Optional
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.billing_line_item import AddBillingLineItem
+from canvas_sdk.effects.note import Note as NoteEffect
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Command, Medication, Note, Assessment, BillingLineItem
+from canvas_sdk.v1.data.note import NoteStates
+
 from logger import log
 
 from bp_cpt2.llm_openai import LlmOpenai
@@ -182,8 +185,8 @@ Provide your analysis in JSON format."""
 
         log.info(f"Note {note_id} state change to: {new_note_state}")
 
-        # Only process when note is locked or charges are pushed
-        if new_note_state not in ['LKD', 'PSH']:
+        # Only process when note is locked
+        if new_note_state != NoteStates.LOCKED:
             log.info(f"Skipping BP treatment analysis for note {note_id} - state is {new_note_state}")
             return []
 
@@ -192,6 +195,11 @@ Provide your analysis in JSON format."""
             note = Note.objects.get(id=note_id)
         except Note.DoesNotExist:
             log.error(f"Note {note_id} not found")
+            return []
+
+        # Check if note is billable
+        if note.note_type_version and not note.note_type_version.is_billable:
+            log.info(f"Skipping BP treatment analysis for note {note_id} - note type is not billable")
             return []
 
         patient = note.patient
@@ -260,4 +268,11 @@ Provide your analysis in JSON format."""
 
         log.info(f"Added treatment billing code {treatment_code} for patient {patient.id}: {analysis_result.get('explanation')}")
 
-        return [billing_item.apply()]
+        effects = [billing_item.apply()]
+
+        # Only push charges if note is billable
+        if note.note_type_version and note.note_type_version.is_billable:
+            note_effect = NoteEffect(instance_id=str(note.id))
+            effects.append(note_effect.push_charges())
+
+        return effects

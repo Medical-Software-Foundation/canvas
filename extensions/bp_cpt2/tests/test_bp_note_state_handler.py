@@ -3,7 +3,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, PropertyMock
 
 from canvas_sdk.events import EventType
 from canvas_sdk.test_utils.factories import PatientFactory
@@ -113,9 +113,9 @@ def test_processes_locked_state() -> None:
         assert len(effects) == 1, "Expected 1 billing code for treatment plan documented"
 
 
-def test_processes_pushed_state() -> None:
+def test_skips_pushed_state() -> None:
     """
-    Test that handler processes notes in PSH state.
+    Test that handler does NOT process notes in PSH (pushed) state.
     """
     # Create test patient
     patient = PatientFactory.create()
@@ -168,19 +168,11 @@ def test_processes_pushed_state() -> None:
         secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
     )
 
-    # Mock the LLM call
-    with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
-        mock_llm.return_value = {
-            "has_treatment_plan": True,
-            "has_documented_reason": False,
-            "explanation": "Treatment plan documented"
-        }
+    # Execute compute
+    effects = handler.compute()
 
-        # Execute compute
-        effects = handler.compute()
-
-        # Verify that effects are created for PSH state
-        assert len(effects) == 1, "Expected 1 billing code for PSH state"
+    # Verify that no effects are created for PSH state
+    assert len(effects) == 0, "Expected no billing codes for PSH state"
 
 
 def test_skips_controlled_blood_pressure() -> None:
@@ -1081,3 +1073,138 @@ def test_treatment_plan_codes_disabled() -> None:
 
     # Should return empty list immediately
     assert len(effects) == 0, "Expected no effects when treatment codes are disabled"
+
+
+def test_skips_non_billable_note() -> None:
+    """
+    Test that handler skips processing when note type is not billable.
+    """
+    # Create test patient
+    patient = PatientFactory.create()
+
+    # Create a note
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create BP observation - uncontrolled BP (150/100)
+    Observation.objects.create(
+        patient=patient,
+        note_id=note.dbid,
+        category='vital-signs',
+        name='blood_pressure',
+        value='150/100',
+        units='mmHg',
+        committer_id=1,
+        deleted=False,
+        effective_datetime=datetime.now(timezone.utc)
+    )
+
+    # Create mock event
+    mock_event = Mock()
+    mock_event.type = EventType.NOTE_STATE_CHANGE_EVENT_UPDATED
+    mock_target = Mock()
+    mock_target.id = str(uuid.uuid4())
+    mock_event.target = mock_target
+    mock_event.context = {
+        'state': 'LKD',
+        'note_id': str(note.id)
+    }
+
+    # Create handler instance
+    handler = BloodPressureNoteStateHandler(
+        event=mock_event,
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
+    )
+
+    # Mock the note_type_version to have is_billable = False
+    mock_note_type = Mock()
+    mock_note_type.is_billable = False
+
+    with patch.object(Note.objects, 'get', return_value=note):
+        with patch.object(type(note), 'note_type_version', new_callable=PropertyMock, return_value=mock_note_type):
+            # Execute compute
+            effects = handler.compute()
+
+            # Should return empty list when note is not billable
+            assert len(effects) == 0, "Expected no effects when note type is not billable"
+
+
+def test_pushes_charges_for_billable_note() -> None:
+    """
+    Test that handler pushes charges when note type is billable.
+    """
+    # Create test patient
+    patient = PatientFactory.create()
+
+    # Create a note
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create BP observation - uncontrolled BP (150/100)
+    Observation.objects.create(
+        patient=patient,
+        note_id=note.dbid,
+        category='vital-signs',
+        name='blood_pressure',
+        value='150/100',
+        units='mmHg',
+        committer_id=1,
+        deleted=False,
+        effective_datetime=datetime.now(timezone.utc)
+    )
+
+    # Create an assessment for the note
+    Assessment.objects.create(
+        id=uuid.uuid4(),
+        note=note,
+        patient_id=patient.dbid,
+        originator_id=1,
+        deleted=False
+    )
+
+    # Create mock event
+    mock_event = Mock()
+    mock_event.type = EventType.NOTE_STATE_CHANGE_EVENT_UPDATED
+    mock_target = Mock()
+    mock_target.id = str(uuid.uuid4())
+    mock_event.target = mock_target
+    mock_event.context = {
+        'state': 'LKD',
+        'note_id': str(note.id)
+    }
+
+    # Create handler instance
+    handler = BloodPressureNoteStateHandler(
+        event=mock_event,
+        secrets={'OPENAI_API_KEY': 'test-key', 'INCLUDE_TREATMENT_PLAN_CODES': 'true'}
+    )
+
+    # Mock the note_type_version to have is_billable = True
+    mock_note_type = Mock()
+    mock_note_type.is_billable = True
+
+    with patch.object(Note.objects, 'get', return_value=note):
+        with patch.object(type(note), 'note_type_version', new_callable=PropertyMock, return_value=mock_note_type):
+            # Mock the LLM call
+            with patch.object(handler, 'analyze_treatment_plan_with_llm') as mock_llm:
+                mock_llm.return_value = {
+                    "has_treatment_plan": True,
+                    "has_documented_reason": False,
+                    "explanation": "Treatment documented"
+                }
+
+                # Execute compute
+                effects = handler.compute()
+
+                # Should return 2 effects: billing item + push charges
+                assert len(effects) == 2, "Expected 2 effects (billing item + push charges) for billable note"
