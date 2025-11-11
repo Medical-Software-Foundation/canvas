@@ -3,12 +3,13 @@
 
 import uuid
 from datetime import datetime, timezone
+from unittest.mock import Mock, patch
 
 import pytest
 from canvas_sdk.test_utils.factories import PatientFactory
-from canvas_sdk.v1.data import Note, Observation
+from canvas_sdk.v1.data import Note, Observation, Assessment
 
-from bp_cpt2.bp_claim_coder import get_blood_pressure_readings
+from bp_cpt2.bp_claim_coder import get_blood_pressure_readings, get_hypertension_related_assessments, process_bp_billing_for_note
 
 
 def test_get_blood_pressure_readings_by_patient() -> None:
@@ -311,3 +312,172 @@ def test_get_blood_pressure_readings_minimum_from_three() -> None:
 
     assert systolic == 130.0
     assert diastolic == 85.0
+
+
+def test_get_hypertension_related_assessments_no_assessments() -> None:
+    """
+    Test get_hypertension_related_assessments when note has no assessments.
+    Covers early return path (line 309).
+    """
+    # Create test patient and note (no assessments)
+    patient = PatientFactory.create()
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Call function - should return empty list without calling LLM
+    result = get_hypertension_related_assessments(note, "test-api-key")
+    assert result == []
+
+
+def test_get_hypertension_related_assessments_assessments_without_conditions() -> None:
+    """
+    Test get_hypertension_related_assessments when assessments have no conditions.
+    Covers the path where assessments exist but have no conditions (line 314-315, 338-339).
+    """
+    # Create test patient and note
+    patient = PatientFactory.create()
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create assessments WITHOUT conditions
+    Assessment.objects.create(
+        id=uuid.uuid4(),
+        note=note,
+        patient_id=patient.dbid,
+        originator_id=1,
+        deleted=False
+    )
+
+    # Call function - should return empty list because assessments have no conditions
+    result = get_hypertension_related_assessments(note, "test-api-key")
+    assert result == []
+
+
+def test_get_hypertension_related_assessments_no_api_key() -> None:
+    """
+    Test get_hypertension_related_assessments without API key.
+    Covers lines 343-345 (missing API key path).
+    """
+    # Create test patient and note
+    patient = PatientFactory.create()
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Call function without API key
+    result = get_hypertension_related_assessments(note, None)
+
+    # Should return empty list
+    assert result == []
+
+    # Also test with empty string
+    result = get_hypertension_related_assessments(note, "")
+    assert result == []
+
+
+def test_process_bp_billing_cache_hit() -> None:
+    """
+    Test that process_bp_billing_for_note skips processing when cache key exists.
+    Covers lines 425-427 (cache hit path).
+    """
+    # Create test patient and note
+    patient = PatientFactory.create()
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create BP observation
+    Observation.objects.create(
+        patient=patient,
+        note_id=note.dbid,
+        category='vital-signs',
+        name='blood_pressure',
+        value='150/100',
+        units='mmHg',
+        committer_id=1,
+        deleted=False,
+        effective_datetime=datetime.now(timezone.utc)
+    )
+
+    # Mock cache to return that key already exists
+    mock_cache = Mock()
+    mock_cache.__contains__ = Mock(return_value=True)  # Key exists in cache
+
+    with patch('bp_cpt2.bp_claim_coder.get_cache', return_value=mock_cache):
+        # Call with was_just_locked=True to trigger cache check
+        result = process_bp_billing_for_note(
+            note=note,
+            openai_api_key="test-key",
+            include_treatment_codes=False,
+            was_just_locked=True
+        )
+
+        # Should return empty list due to cache hit
+        assert result == []
+
+
+def test_process_bp_billing_cache_miss_sets_key() -> None:
+    """
+    Test that process_bp_billing_for_note sets cache key on miss.
+    Covers lines 429-431 (cache miss, set key path).
+    """
+    # Create test patient and note
+    patient = PatientFactory.create()
+    note = Note.objects.create(
+        id=uuid.uuid4(),
+        patient=patient,
+        body="",
+        related_data={},
+        datetime_of_service=datetime.now(timezone.utc)
+    )
+
+    # Create BP observation
+    Observation.objects.create(
+        patient=patient,
+        note_id=note.dbid,
+        category='vital-signs',
+        name='blood_pressure',
+        value='150/100',
+        units='mmHg',
+        committer_id=1,
+        deleted=False,
+        effective_datetime=datetime.now(timezone.utc)
+    )
+
+    # Mock cache to return that key doesn't exist
+    mock_cache = Mock()
+    mock_cache.__contains__ = Mock(return_value=False)  # Key doesn't exist
+    mock_cache.set = Mock()
+
+    with patch('bp_cpt2.bp_claim_coder.get_cache', return_value=mock_cache):
+        # Call with was_just_locked=True to trigger cache check
+        result = process_bp_billing_for_note(
+            note=note,
+            openai_api_key="test-key",
+            include_treatment_codes=False,
+            was_just_locked=True
+        )
+
+        # Should have called cache.set to store the key
+        mock_cache.set.assert_called_once()
+        call_args = mock_cache.set.call_args
+        assert call_args[0][0] == f"lock:{note.id}"  # Cache key
+        assert call_args[1]['timeout_seconds'] == 300  # 5 minutes

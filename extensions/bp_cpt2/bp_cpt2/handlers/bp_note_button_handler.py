@@ -31,7 +31,7 @@ class BloodPressureNoteButtonHandler(ActionButton):
         if not to_bool(show_button):
             return False
 
-        note_id = self.context.get('note_id')
+        note_id = self.event.context.get('note_id')
         current_note_state = NoteStateChangeEvent.objects.filter(note_id=note_id).order_by("created").last()
         return bool(
             current_note_state
@@ -49,7 +49,7 @@ class BloodPressureNoteButtonHandler(ActionButton):
     def handle(self) -> list[Effect]:
         """Handle button click - process BP billing codes for the note."""
         # Get note_id from context
-        note_id = self.context.get('note_id')
+        note_id = self.event.context.get('note_id')
         if not note_id:
             log.error("No note_id in context")
             return []

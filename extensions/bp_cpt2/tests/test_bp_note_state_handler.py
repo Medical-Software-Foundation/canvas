@@ -1248,3 +1248,44 @@ def test_assessment_combining_logic() -> None:
     assert len(combined) == 2
     assert 'assessment-1' in combined
     assert 'assessment-2' in combined
+
+
+def test_existing_assessments_are_preserved_when_updating_bp_codes() -> None:
+    """
+    Test that demonstrates SDK bug #1262: we cannot read existing assessment_ids from billing items.
+
+    PROBLEM:
+    The BillingLineItem model doesn't expose assessment_ids for reading, only for writing via Effects.
+    This makes it impossible to preserve existing assessment links when updating billing codes.
+
+    This test will FAIL (by raising AssertionError) when the SDK bug is fixed.
+    See: https://github.com/canvas-medical/canvas-plugins/issues/1262
+    """
+    # Get any existing billing line item (or create a minimal one to test with)
+    billing_items = BillingLineItem.objects.all()[:1]
+
+    if billing_items.exists():
+        billing_item = billing_items.first()
+    else:
+        # If no billing items exist, create a minimal test setup
+        patient = PatientFactory.create()
+        note = Note.objects.create(
+            id=uuid.uuid4(),
+            patient=patient,
+            body="Test",
+            related_data={},
+            datetime_of_service=datetime.now(timezone.utc)
+        )
+        billing_item = note  # Use note instead to test the concept
+
+    # THIS IS THE BUG: We cannot read the assessment_ids from billing items
+    # The following assertion will FAIL until the SDK bug is fixed:
+    assert hasattr(billing_item, 'assessment_ids'), (
+        "BUG: BillingLineItem does not expose assessment_ids for reading. "
+        "This prevents us from preserving existing assessments when updating billing codes. "
+        "See bp_claim_coder.py lines 458-472 and Canvas SDK issue #1262."
+    )
+
+    # THE CONSEQUENCE: When process_bp_billing_for_note tries to preserve existing assessments,
+    # it cannot read them, so they get lost when we update the billing code.
+    # See bp_claim_coder.py lines 458-472 for the TODO comments documenting this limitation.

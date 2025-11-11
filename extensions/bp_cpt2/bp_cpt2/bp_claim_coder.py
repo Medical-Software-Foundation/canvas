@@ -456,7 +456,8 @@ def process_bp_billing_for_note(
             existing_assessment_ids = []
 
             # TODO: Get the billing line item's current assessments to merge with
-            # TODO: https://github.com/canvas-medical/canvas-plugins/issues/1262
+            # BUG: https://github.com/canvas-medical/canvas-plugins/issues/1262
+            # TODO: Unskip the skipped tests when this is fixed
             # TODO: The following represents a gesture of how one might hope it would work
             # try:
             #     if hasattr(billing_item, 'assessment_ids'):
