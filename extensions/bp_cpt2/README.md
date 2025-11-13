@@ -150,5 +150,5 @@ uv run canvas install bp_cpt2 --host <your-host> \
 
 **Important**: The OpenAI API key **must** be associated with a U.S. region project. API keys from other regions will not work with this plugin. You can verify your project's region in your OpenAI account settings.
 
-## Example Note with Claim Coding
-![Blood Pressure CPT-II claim coding example](https://images.prismic.io/canvas-website/aRJesLpReVYa4Ubn_499768700-4e072ef8-5d80-41f2-8b7d-91c5cf3ab822.png?auto=format,compress)
+## Watch the Agent in Action
+[![Watch the video](https://img.youtube.com/vi/bmPeq6rq1go/0.jpg)](https://www.youtube.com/watch?v=bmPeq6rq1go)
