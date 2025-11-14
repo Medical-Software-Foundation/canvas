@@ -10,9 +10,9 @@ from canvas_sdk.handlers.application import Application
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data import Note, Command, Referral, ImagingOrder, Staff
-from canvas_sdk.v1.data.note import NoteStates, NoteTypeCategories
+from canvas_sdk.v1.data.claim import ClaimQueue
+from canvas_sdk.v1.data.note import NoteStates, NoteTypeCategories, NoteType
 from canvas_sdk.v1.data.task import TaskStatus
-from logger import log
 
 
 class MyApplication(Application):
@@ -35,14 +35,21 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         provider_ids = self.request.query_params.get("provider_ids")
         location_ids = self.request.query_params.get("location_ids")
         billable_only = self.request.query_params.get("billable_only") == "true"
+        note_type_names = self.request.query_params.get("note_type_names")
+        claim_queue_names = self.request.query_params.get("claim_queue_names")
+        has_uncommitted_commands = self.request.query_params.get("has_uncommitted_commands") == "true"
+        has_delegated_orders = self.request.query_params.get("has_delegated_orders") == "true"
+        patient_search = self.request.query_params.get("patient_search")
+        dos_start = self.request.query_params.get("dos_start")
+        dos_end = self.request.query_params.get("dos_end")
 
         # Pagination parameters
         page = int(self.request.query_params.get("page", 1))
         page_size = int(self.request.query_params.get("page_size", 25))
-        
+
         # Sorting parameters
-        sort_by = self.request.query_params.get("sort_by", "created")
-        sort_direction = self.request.query_params.get("sort_direction", "desc")
+        sort_by = self.request.query_params.get("sort_by", "dos")
+        sort_direction = self.request.query_params.get("sort_direction", "asc")
 
         note_queryset = Note.objects.exclude(current_state__state__in=(
             NoteStates.LOCKED,
@@ -68,6 +75,22 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
             if clean_location_ids:
                 note_queryset = note_queryset.filter(location__id__in=clean_location_ids)
 
+        if note_type_names:
+            clean_note_type_names = [name.strip() for name in note_type_names.split(',') if name.strip()]
+            if clean_note_type_names:
+                note_queryset = note_queryset.filter(note_type_version__name__in=clean_note_type_names)
+
+        if claim_queue_names:
+            clean_claim_queue_names = [cqn.strip() for cqn in claim_queue_names.split(',') if cqn.strip()]
+            if clean_claim_queue_names:
+                note_queryset = note_queryset.filter(claims__current_queue__name__in=clean_claim_queue_names)
+
+        if patient_search:
+            note_queryset = self._apply_patient_search(note_queryset, patient_search)
+
+        if dos_start or dos_end:
+            note_queryset = self._apply_dos_range_filter(note_queryset, dos_start, dos_end)
+
         # Add annotations
         note_queryset = note_queryset.annotate(
             staged_commands_count=Count(
@@ -76,14 +99,17 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
             )
         )
 
+        if has_uncommitted_commands:
+            note_queryset = note_queryset.filter(staged_commands_count__gt=0)
+
         if billable_only:
             note_queryset = note_queryset.filter(note_type_version__is_billable=True)
 
         # Apply sorting and pagination
-        if sort_by == "delegatedOrders":
+        if sort_by == "delegatedOrders" or has_delegated_orders:
             # For delegated orders, calculate count first, then sort
             paginated_notes, total_count, total_pages = self._sort_and_paginate_delegated_orders(
-                note_queryset, sort_direction, page, page_size
+                note_queryset, sort_direction, page, page_size, has_delegated_orders
             )
         else:
             # For other columns, use normal database sorting
@@ -168,6 +194,30 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
             "locations": locations
         }, status_code=HTTPStatus.OK)]
 
+    @api.get("/note_types")
+    def get_note_types(self) -> list[Response | Effect]:
+        """Get list of note type names."""
+
+        note_types = list(NoteType.objects.exclude(
+            category__in=(
+                NoteTypeCategories.MESSAGE,
+                NoteTypeCategories.LETTER,
+            )
+        ).order_by("name").values("name").distinct())
+
+        return [JSONResponse({
+            "note_types": note_types
+        }, status_code=HTTPStatus.OK)]
+
+    @api.get("/claim_queues")
+    def get_claim_queues(self) -> list[Response | Effect]:
+        """Get list of claim queue names."""
+        claim_queues = list(ClaimQueue.objects.values("name"))
+
+        return [JSONResponse({
+            "claim_queues": claim_queues
+        }, status_code=HTTPStatus.OK)]
+
     def _get_sort_fields(self, sort_by: str) -> list[str]:
         """Map frontend sort field names to database field names, returning a list of fields."""
         sort_mapping = {
@@ -184,7 +234,7 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         }
         return sort_mapping.get(sort_by, ["created"])
 
-    def _sort_and_paginate_delegated_orders(self, note_queryset, sort_direction, page, page_size):
+    def _sort_and_paginate_delegated_orders(self, note_queryset, sort_direction, page, page_size, has_delegated_orders):
         """Sort and paginate for delegated orders using Python calculation."""
         # Get all notes without pagination to calculate delegated orders
         all_notes = list(note_queryset)
@@ -193,6 +243,10 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         notes_with_delegated_count = []
         for note in all_notes:
             delegated_commands = self._calculate_delegated_orders_count(note)
+            if not has_delegated_orders and delegated_commands > 0:
+                continue
+            if has_delegated_orders and delegated_commands == 0:
+                continue
             notes_with_delegated_count.append((note, delegated_commands))
         
         # Sort by delegated orders count
@@ -206,6 +260,55 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         
         # Apply pagination
         return self._apply_pagination(sorted_notes, page, page_size)
+
+    def _apply_patient_search(self, note_queryset, patient_search: str):
+        """Apply patient name search across first, last, and nickname fields."""
+        normalized_search = patient_search.strip()
+        if not normalized_search:
+            return note_queryset
+
+        search_terms = normalized_search.split()
+
+        search_filter = (
+            Q(patient__first_name__icontains=normalized_search)
+            | Q(patient__last_name__icontains=normalized_search)
+            | Q(patient__nickname__icontains=normalized_search)
+        )
+
+        if len(search_terms) >= 2:
+            first_term = search_terms[0]
+            last_term = search_terms[-1]
+            search_filter |= (
+                (Q(patient__first_name__icontains=first_term) | Q(patient__nickname__icontains=first_term))
+                & Q(patient__last_name__icontains=last_term)
+            )
+        elif len(search_terms) == 1:
+            single_term = search_terms[0]
+            search_filter |= Q(patient__first_name__icontains=single_term)
+            search_filter |= Q(patient__last_name__icontains=single_term)
+            search_filter |= Q(patient__nickname__icontains=single_term)
+
+        return note_queryset.filter(search_filter)
+
+    def _apply_dos_range_filter(self, note_queryset, dos_start: str | None, dos_end: str | None):
+        """Filter notes by date of service range."""
+        try:
+            parsed_start = arrow.get(dos_start).date() if dos_start else None
+        except (arrow.parser.ParserError, TypeError, ValueError):
+            parsed_start = None
+
+        try:
+            parsed_end = arrow.get(dos_end).date() if dos_end else None
+        except (arrow.parser.ParserError, TypeError, ValueError):
+            parsed_end = None
+
+        if parsed_start:
+            note_queryset = note_queryset.filter(datetime_of_service__date__gte=parsed_start)
+
+        if parsed_end:
+            note_queryset = note_queryset.filter(datetime_of_service__date__lte=parsed_end)
+
+        return note_queryset
 
     def _sort_and_paginate_database(self, note_queryset, sort_by, sort_direction, page, page_size):
         """Sort and paginate using database sorting."""

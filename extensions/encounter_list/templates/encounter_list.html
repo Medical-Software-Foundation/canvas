@@ -244,6 +244,49 @@
             width: 300px;
         }
 
+        .patient-search-input {
+            padding: 0.5rem 0.6rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            color: #2c3e50;
+            min-height: 36px;
+            width: 240px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .patient-search-input:focus {
+            outline: none;
+            border-color: #1d4ed8;
+            box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+        }
+
+        .date-range-inputs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .date-range-inputs span {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .date-input {
+            padding: 0.4rem 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            color: #2c3e50;
+            min-height: 36px;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: #1d4ed8;
+            box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+        }
+
         .filter-dropdown.open {
             border-color: #1d4ed8;
             box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
@@ -522,6 +565,33 @@
             align-items: center;
         }
 
+        .filters-group.checkbox-group {
+            width: 100%;
+            margin-top: 8px;
+            justify-content: flex-start;
+            gap: 24px;
+        }
+
+        .filters-group.search-group {
+            width: 100%;
+            justify-content: flex-start;
+            gap: 24px;
+        }
+
+        .checkbox-filter {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #2c3e50;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-filter input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+
         .filter-field {
             display: flex;
             flex-direction: column;
@@ -624,6 +694,22 @@
         
         <div class="filters-section">
             <div class="filters-container">
+                <div class="filters-group search-group">
+                    <div class="filter-field wide">
+                        <label class="filter-label">Patient Search</label>
+                        <input type="text" id="patientSearchInput" class="patient-search-input" placeholder="Search by name...">
+                    </div>
+
+                    <div class="filter-field">
+                        <label class="filter-label">DOS</label>
+                        <div class="date-range-inputs">
+                            <input type="date" id="dosStartInput" class="date-input">
+                            <span>to</span>
+                            <input type="date" id="dosEndInput" class="date-input">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="filters-group">
                     <div class="filter-field">
                         <label class="filter-label">Owner</label>
@@ -662,9 +748,56 @@
                     </div>
                     
                     <div class="filter-field">
-                        <label class="filter-label">Billable Only</label>
-                        <input type="checkbox" id="billableFilter" class="filter-checkbox">
+                        <label class="filter-label">Note Type</label>
+                        <div class="filter-dropdown" id="noteTypeFilter" data-values="">
+                            <div class="selected-value">
+                                <span class="placeholder-text">All Note Types</span>
+                            </div>
+                            <div class="dropdown-options" id="note-type-options">
+                                <div class="dropdown-search">
+                                    <input type="text" id="note-type-search" placeholder="Search note types..." class="search-input">
+                                </div>
+                                <div class="dropdown-option" data-value="">
+                                    <input type="checkbox" id="note-type-all" checked>
+                                    <label for="note-type-all">All Note Types</label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
+                    <div class="filter-field">
+                        <label class="filter-label">Claim Queue</label>
+                        <div class="filter-dropdown" id="claimQueueFilter" data-values="">
+                            <div class="selected-value">
+                                <span class="placeholder-text">All Statuses</span>
+                            </div>
+                            <div class="dropdown-options" id="claim-queue-options">
+                                <div class="dropdown-search">
+                                    <input type="text" id="claim-queue-search" placeholder="Search statuses..." class="search-input">
+                                </div>
+                                <div class="dropdown-option" data-value="">
+                                    <input type="checkbox" id="claim-queue-all" checked>
+                                    <label for="claim-queue-all">All Statuses</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                
+                <div class="filters-group checkbox-group">
+                    <label class="checkbox-filter">
+                        <input type="checkbox" id="billableFilter" class="filter-checkbox">
+                        <span>Billable Only</span>
+                    </label>
+                    <label class="checkbox-filter">
+                        <input type="checkbox" id="uncommittedCommandsFilter" class="filter-checkbox">
+                        <span>Has Uncommitted Commands</span>
+                    </label>
+                    <label class="checkbox-filter">
+                        <input type="checkbox" id="delegatedOrdersFilter" class="filter-checkbox">
+                        <span>Has Delegated Orders</span>
+                    </label>
                 </div>
                 
                 <!-- Refresh, Clear and Apply buttons -->
@@ -737,10 +870,19 @@
         let loggedInStaffId = null;
         let providers = [];
         let locations = [];
+        let noteTypes = [];
+        let claimQueues = [];
         let currentFilters = {
             provider_ids: [],
             location_ids: [],
-            billable_only: false
+            note_type_names: [],
+            claim_queue_names: [],
+            billable_only: false,
+            has_uncommitted_commands: false,
+            has_delegated_orders: false,
+            patient_search: '',
+            dos_start: '',
+            dos_end: ''
         };
         let sortConfig = { key: null, direction: 'asc' };
         let paginationData = {
@@ -782,8 +924,26 @@
                                 params.append(key, locationIdsString);
                             }
                         }
-                    } else if (key === 'billable_only') {
-                        // Always include billable_only parameter, even if false
+                    } else if (key === 'note_type_names' && Array.isArray(value)) {
+                        // Handle array of note type names as comma-separated string
+                        if (value.length > 0) {
+                            const noteTypeNamesString = value
+                                .filter(name => name !== null && name !== undefined && name !== '')
+                                .join(',');
+                            if (noteTypeNamesString) {
+                                params.append(key, noteTypeNamesString);
+                            }
+                        }
+                    } else if (key === 'claim_queue_names' && Array.isArray(value)) {
+                        // Handle array of claim queue names as comma-separated string
+                        if (value.length > 0) {
+                            const claimQueueNamesString = value.filter(name => name !== null && name !== undefined && name !== '').join(',');
+                            if (claimQueueNamesString) {
+                                params.append(key, claimQueueNamesString);
+                            }
+                        }
+                    } else if (['billable_only', 'has_uncommitted_commands', 'has_delegated_orders'].includes(key)) {
+                        // Always include boolean parameters, even if false
                         params.append(key, value.toString());
                     } else if (value !== null && value !== undefined && value !== '') {
                         params.append(key, value);
@@ -857,6 +1017,36 @@
             } catch (error) {
                 console.error('Error fetching locations:', error);
                 return { locations: [] };
+            }
+        }
+
+        async function fetchNoteTypes() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/note_types`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                noteTypes = data.note_types;
+                return data;
+            } catch (error) {
+                console.error('Error fetching note types:', error);
+                return { note_types: [] };
+            }
+        }
+
+        async function fetchClaimQueues() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/claim_queues`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                claimQueues = data.claim_queues;
+                return data;
+            } catch (error) {
+                console.error('Error fetching claim queues:', error);
+                return { claim_queues: [] };
             }
         }
 
@@ -1118,7 +1308,7 @@
             const dropdown = document.getElementById(dropdownId);
             const selectedValue = dropdown.querySelector('.selected-value');
             const selectedItems = currentFilters[filterKey];
-            
+
             if (selectedItems.length === 0) {
                 // Use friendly display names for placeholder text
                 let displayName = 'All';
@@ -1126,6 +1316,10 @@
                     displayName = 'All Owners';
                 } else if (filterKey === 'location_ids') {
                     displayName = 'All Locations';
+                } else if (filterKey === 'note_type_names') {
+                    displayName = 'All Note Types';
+                } else if (filterKey === 'claim_queue_names') {
+                    displayName = 'All Statuses';
                 }
                 selectedValue.innerHTML = `<span class="placeholder-text">${displayName}</span>`;
             } else {
@@ -1138,6 +1332,11 @@
                     } else if (filterKey === 'location_ids') {
                         const location = locations.find(l => l.id === itemId);
                         itemName = location ? location.name : itemId;
+                    } else if (filterKey === 'note_type_names') {
+                        itemName = itemId;
+                    } else if (filterKey === 'claim_queue_names') {
+                        // For claim queues, the id and name are the same
+                        itemName = itemId;
                     }
                     return `<span class="selected-tag">${itemName}<span class="remove-tag" data-${filterKey}-id="${itemId}">×</span></span>`;
                 }).join('');
@@ -1188,7 +1387,19 @@
             populateDropdown('location-options', locations, 'location_ids', 'Locations');
         }
 
-        
+        function populateNoteTypeDropdown() {
+            // Use shared function to populate dropdown
+            const noteTypeOptions = noteTypes.map(nt => ({ id: nt.name, name: nt.name }));
+            populateDropdown('note-type-options', noteTypeOptions, 'note_type_names', 'Note Types');
+        }
+
+        function populateClaimQueueDropdown() {
+            // Transform claim queue data to have id and name properties
+            const claimQueueOptions = claimQueues.map(cq => ({ id: cq.name, name: cq.name }));
+            populateDropdown('claim-queue-options', claimQueueOptions, 'claim_queue_names', 'Statuses');
+        }
+
+
         function setupProviderDropdown() {
             // Use shared function to setup dropdown
             setupDropdown('providerFilter', 'provider-options', 'provider_ids');
@@ -1199,14 +1410,31 @@
             setupDropdown('locationFilter', 'location-options', 'location_ids');
         }
 
+        function setupNoteTypeDropdown() {
+            // Use shared function to setup dropdown
+            setupDropdown('noteTypeFilter', 'note-type-options', 'note_type_names');
+        }
+
+        function setupClaimQueueDropdown() {
+            // Use shared function to setup dropdown
+            setupDropdown('claimQueueFilter', 'claim-queue-options', 'claim_queue_names');
+        }
+
         function setupFilterEventListeners() {
             const billableFilter = document.getElementById('billableFilter');
+            const uncommittedCommandsFilter = document.getElementById('uncommittedCommandsFilter');
+            const delegatedOrdersFilter = document.getElementById('delegatedOrdersFilter');
             const clearFiltersButton = document.getElementById('clearFilters');
             const applyFiltersButton = document.getElementById('applyFilters');
             const refreshButton = document.getElementById('refreshButton');
+            const patientSearchInput = document.getElementById('patientSearchInput');
+            const dosStartInput = document.getElementById('dosStartInput');
+            const dosEndInput = document.getElementById('dosEndInput');
 
             setupProviderDropdown();
             setupLocationDropdown();
+            setupNoteTypeDropdown();
+            setupClaimQueueDropdown();
 
             // Billable filter change
             billableFilter.addEventListener('change', () => {
@@ -1214,66 +1442,130 @@
                 // Don't auto-refresh, wait for action button
             });
 
+            // Uncommitted commands filter change
+            uncommittedCommandsFilter.addEventListener('change', () => {
+                currentFilters.has_uncommitted_commands = uncommittedCommandsFilter.checked;
+            });
+
+            // Delegated orders filter change
+            delegatedOrdersFilter.addEventListener('change', () => {
+                currentFilters.has_delegated_orders = delegatedOrdersFilter.checked;
+            });
+
+            if (patientSearchInput) {
+                patientSearchInput.addEventListener('input', () => {
+                    currentFilters.patient_search = patientSearchInput.value.trim();
+                });
+
+                patientSearchInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        currentFilters.patient_search = patientSearchInput.value.trim();
+                        applyFilters();
+                    }
+                });
+            }
+
+            if (dosStartInput) {
+                dosStartInput.addEventListener('change', () => {
+                    currentFilters.dos_start = dosStartInput.value;
+                });
+            }
+
+            if (dosEndInput) {
+                dosEndInput.addEventListener('change', () => {
+                    currentFilters.dos_end = dosEndInput.value;
+                });
+            }
+
             // Clear All button
             clearFiltersButton.addEventListener('click', () => {
                 // Reset all filters first
                 currentFilters.provider_ids = [];
                 currentFilters.location_ids = [];
+                currentFilters.note_type_names = [];
+                currentFilters.claim_queue_names = [];
                 currentFilters.billable_only = false;
-                
+                currentFilters.has_uncommitted_commands = false;
+                currentFilters.has_delegated_orders = false;
+                currentFilters.patient_search = '';
+                currentFilters.dos_start = '';
+                currentFilters.dos_end = '';
+
                 // Reset UI elements
                 billableFilter.checked = false;
-                
-                // Reset provider dropdown checkboxes
-                const providerOptions = document.getElementById('provider-options');
-                if (providerOptions) {
-                    const providerCheckboxes = providerOptions.querySelectorAll('input[type="checkbox"]');
-                    providerCheckboxes.forEach(checkbox => {
-                        if (checkbox.id === 'provider_ids-all') {
-                            checkbox.checked = true;
-                        } else {
-                            checkbox.checked = false;
-                        }
-                    });
+                uncommittedCommandsFilter.checked = false;
+                delegatedOrdersFilter.checked = false;
+                if (patientSearchInput) {
+                    patientSearchInput.value = '';
                 }
-                
-                // Reset location dropdown checkboxes
-                const locationOptions = document.getElementById('location-options');
-                if (locationOptions) {
-                    const locationCheckboxes = locationOptions.querySelectorAll('input[type="checkbox"]');
-                    locationCheckboxes.forEach(checkbox => {
-                        if (checkbox.id === 'location_ids-all') {
-                            checkbox.checked = true;
-                        } else {
-                            checkbox.checked = false;
-                        }
-                    });
+                if (dosStartInput) {
+                    dosStartInput.value = '';
                 }
-                
-                // Force update the dropdown displays
-                const providerDropdown = document.getElementById('providerFilter');
-                const locationDropdown = document.getElementById('locationFilter');
-                
-                if (providerDropdown) {
-                    const providerSelectedValue = providerDropdown.querySelector('.selected-value');
-                    if (providerSelectedValue) {
-                        providerSelectedValue.innerHTML = '<span class="placeholder-text">All Owners</span>';
+                if (dosEndInput) {
+                    dosEndInput.value = '';
+                }
+
+                // Helper function to reset dropdown checkboxes
+                const resetDropdownCheckboxes = (optionsId, filterKey) => {
+                    const options = document.getElementById(optionsId);
+                    if (options) {
+                        const checkboxes = options.querySelectorAll('input[type="checkbox"]');
+                        checkboxes.forEach(checkbox => {
+                            if (checkbox.id === `${filterKey}-all`) {
+                                checkbox.checked = true;
+                            } else {
+                                checkbox.checked = false;
+                            }
+                        });
                     }
-                }
-                
-                if (locationDropdown) {
-                    const locationSelectedValue = locationDropdown.querySelector('.selected-value');
-                    if (locationSelectedValue) {
-                        locationSelectedValue.innerHTML = '<span class="placeholder-text">All Locations</span>';
+                };
+
+                // Helper function to reset dropdown display
+                const resetDropdownDisplay = (dropdownId, placeholderText) => {
+                    const dropdown = document.getElementById(dropdownId);
+                    if (dropdown) {
+                        const selectedValue = dropdown.querySelector('.selected-value');
+                        if (selectedValue) {
+                            selectedValue.innerHTML = `<span class="placeholder-text">${placeholderText}</span>`;
+                        }
                     }
-                }
-                
+                };
+
+                // Reset provider dropdown
+                resetDropdownCheckboxes('provider-options', 'provider_ids');
+                resetDropdownDisplay('providerFilter', 'All Owners');
+
+                // Reset location dropdown
+                resetDropdownCheckboxes('location-options', 'location_ids');
+                resetDropdownDisplay('locationFilter', 'All Locations');
+
+                // Reset note type dropdown
+                resetDropdownCheckboxes('note-type-options', 'note_type_names');
+                resetDropdownDisplay('noteTypeFilter', 'All Note Types');
+
+                // Reset claim queue dropdown
+                resetDropdownCheckboxes('claim-queue-options', 'claim_queue_names');
+                resetDropdownDisplay('claimQueueFilter', 'All Statuses');
+
                 // Apply cleared filters
                 applyFilters();
             });
 
             // Apply Filters button
             applyFiltersButton.addEventListener('click', () => {
+                const patientSearchInput = document.getElementById('patientSearchInput');
+                const dosStartInput = document.getElementById('dosStartInput');
+                const dosEndInput = document.getElementById('dosEndInput');
+                if (patientSearchInput) {
+                    currentFilters.patient_search = patientSearchInput.value.trim();
+                }
+                if (dosStartInput) {
+                    currentFilters.dos_start = dosStartInput.value;
+                }
+                if (dosEndInput) {
+                    currentFilters.dos_end = dosEndInput.value;
+                }
                 applyFilters();
             });
 
@@ -1284,6 +1576,19 @@
                     showLoadingSpinner();
                     document.getElementById('encounterCount').textContent = 'Loading encounters...';
                     
+                    const patientSearchInput = document.getElementById('patientSearchInput');
+                    const dosStartInput = document.getElementById('dosStartInput');
+                    const dosEndInput = document.getElementById('dosEndInput');
+                    if (patientSearchInput) {
+                        currentFilters.patient_search = patientSearchInput.value.trim();
+                    }
+                    if (dosStartInput) {
+                        currentFilters.dos_start = dosStartInput.value;
+                    }
+                    if (dosEndInput) {
+                        currentFilters.dos_end = dosEndInput.value;
+                    }
+
                     // Refresh data with current filters and sorting
                     await fetchEncounters(currentFilters, paginationData.current_page);
                     
@@ -1306,6 +1611,19 @@
                 // Show loading state
                 showLoadingSpinner();
                 document.getElementById('encounterCount').textContent = 'Loading encounters...';
+                
+                const patientSearchInput = document.getElementById('patientSearchInput');
+                const dosStartInput = document.getElementById('dosStartInput');
+                const dosEndInput = document.getElementById('dosEndInput');
+                if (patientSearchInput) {
+                    currentFilters.patient_search = patientSearchInput.value.trim();
+                }
+                if (dosStartInput) {
+                    currentFilters.dos_start = dosStartInput.value;
+                }
+                if (dosEndInput) {
+                    currentFilters.dos_end = dosEndInput.value;
+                }
                 
                 // Reset to page 1 when applying filters
                 await fetchEncounters(currentFilters, 1);
@@ -1428,11 +1746,15 @@
                 await Promise.all([
                     fetchProviders(),
                     fetchLocations(),
+                    fetchNoteTypes(),
+                    fetchClaimQueues(),
                 ]);
 
-                // Populate provider and location dropdowns
+                // Populate all filter dropdowns
                 populateProviderDropdown();
                 populateLocationDropdown();
+                populateNoteTypeDropdown();
+                populateClaimQueueDropdown();
 
                 // Initialize page size dropdown
                 const pageSizeSelect = document.getElementById('pageSizeSelect');
