@@ -244,7 +244,7 @@ Configure plugin secrets.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/commands/
 # Commands
-Last updated: 16 Oct 2025
+Last updated: 11 Nov 2025
 The commands module lets you create and update commands within a specific note
 in Canvas. Commands are the building blocks of many end-user workflows in
 Canvas, including nearly all clinical workflows for documentation, like HPIs
@@ -270,6 +270,8 @@ instance.
 All commands have the following methods:
 ####  originate #
 Returns an Effect that originates a new command in the note body.
+**See also:** For efficiently inserting multiple commands at once, see [Batch
+Originate Commands](/sdk/effect-batch-originate/).
 ####  edit #
 Returns an Effect that edits an existing command with the values set on the
 command class instance.
@@ -283,6 +285,10 @@ note body.
 ####  commit #
 Returns an Effect that commits an existing, non-committed command to the note
 body.
+####  review #
+Returns an Effect that sets a command in review.
+**Limited availability** The `review()` method can only be called on Prescribe
+commands objects. Other command types do not support this operation.
 ####  send #
 Returns an Effect that sends a signed command.
 **Limited availability** The `send()` method can only be called on LabOrder
@@ -2009,10 +2015,9 @@ visit/)[ ReferralA referral directing a specific patient to another provider
 or specialist. ](/sdk/data-referral/)[ ServiceProviderData associated with
 Service Providers. ](/sdk/data-serviceprovider/)[ StaffData associated with
 Staff members. ](/sdk/data-staff)[ TaskData associated with Tasks.
-](/sdk/data-task)[ TeamData associated with Teams. ](/sdk/data-team)[ UserData
-associated with Users. ](/sdk/data-user)[ ValueSetsLists of codes and terms
-from various clinical coding systems grouped by a defining concept.
-](/sdk/data-value-sets/)
+](/sdk/data-task)[ TeamData associated with Teams. ](/sdk/data-team)[
+ValueSetsLists of codes and terms from various clinical coding systems grouped
+by a defining concept. ](/sdk/data-value-sets/)
 ----- END PAGE https://docs.canvasmedical.com/sdk/data/
 
 
@@ -2349,16 +2354,32 @@ REMOVED| Removed
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-canvasuser/
 # CanvasUser
-Last updated: 8 Apr 2025
+Last updated: 13 Nov 2025
 ##  Introduction #
-The `CanvasUser` model represents a user of the Canvas instance. This could be
-linked to a staff member or a patient. This model isnât meant to be
-referenced directly, but is sometimes used to attribute a record to user.
+The `CanvasUser` model represents a Canvas User. This could be linked to a
+staff member or a patient. This model isnât meant to be referenced directly,
+but is sometimes used to attribute a record to user.
+##  Basic usage #
+To get a user by identifier, use the `get` method on the `CanvasUser` model
+manager:
+    from canvas_sdk.v1.data import CanvasUser
+    user = CanvasUser.objects.get(dbid=123)
+##  Filtering #
+Users can be filtered by any attribute that exists on the model.
+Filtering for users is done with the `filter` method on the `CanvasUser` model
+manager.
+###  By attribute #
+Specify attributes with `filter` to filter by those attributes:
+    from canvas_sdk.v1.data import CanvasUser
+    users = CanvasUser.objects.filter(phone_number="1111111111", email="test@canvasmedical.com")
 ##  Attributes #
+###  User #
 Field Name| Type  
 ---|---  
 dbid| Integer  
 email| String  
+phone_number| String  
+last_invite_date_time| DateTime  
 ----- END PAGE https://docs.canvasmedical.com/sdk/data-canvasuser/
 
 
@@ -4400,7 +4421,7 @@ include_zz_qualifier| Boolean
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-patient/
 # Patient
-Last updated: 24 Sep 2025
+Last updated: 13 Nov 2025
 ##  Introduction #
 The `Patient` model represents an individual receiving care or other health-
 related services.
@@ -4487,7 +4508,7 @@ settings| PatientSetting
 subscribed_coverages| [Coverage](/sdk/data-coverage/#coverage)[]  
 tasks| [Task](/sdk/data-task/#task)[]  
 telecom| PatientContactPoint[]  
-user| [CanvasUser](/sdk/data-user/)[]  
+user| [CanvasUser](/sdk/data-canvasuser/)[]  
 ###  PatientAddress #
 Field Name| Type  
 ---|---  
@@ -5309,35 +5330,6 @@ REVIEW_COVERAGES| Review incomplete patient coverages
 ----- END PAGE https://docs.canvasmedical.com/sdk/data-team
 
 
------ BEGIN PAGE https://docs.canvasmedical.com/sdk/data-user
-# User
-Last updated: 1 Oct 2025
-##  Introduction #
-The `CanvasUser` model represents a Canvas User.
-##  Basic usage #
-To get a user by identifier, use the `get` method on the `CanvasUser` model
-manager:
-    from canvas_sdk.v1.data import CanvasUser
-    user = CanvasUser.objects.get(dbid=123)
-##  Filtering #
-Users can be filtered by any attribute that exists on the model.
-Filtering for users is done with the `filter` method on the `CanvasUser` model
-manager.
-###  By attribute #
-Specify attributes with `filter` to filter by those attributes:
-    from canvas_sdk.v1.data import CanvasUser
-    users = CanvasUser.objects.filter(phone_number="1111111111", email="test@canvasmedical.com")
-##  Attributes #
-###  User #
-Field Name| Type  
----|---  
-dbid| Integer  
-email| String  
-phone_number| String  
-last_invite_date_time| DateTime  
------ END PAGE https://docs.canvasmedical.com/sdk/data-user
-
-
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-value-sets/
 # ValueSets
 Last updated: 24 Sep 2025
@@ -5449,7 +5441,7 @@ plugin:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effects/
 # Effects
-Last updated: 16 Oct 2025
+Last updated: 11 Nov 2025
 Effects are instructions that plugins can return in order to perform an action
 in the Canvas EMR. This makes it possible to define workflows that create
 commands, show notifications, modify search results, etc.
@@ -5542,12 +5534,10 @@ create-form-effect)[ Patient PortalCustomize your Patient Portal.
 ](/sdk/patient-portal/)[ Protocol CardsCalls to action in a patient's chart,
 commonly used for decision support intervention. ](/sdk/effect-protocol-
 cards/)[ QuestionnairesInteract with questionnaires and interviews.
-](/sdk/effect-questionnaires/)[ Send Contact VerificationEffect to send a
-verification message to a patient contact. ](/sdk/effect-send-contact-
-verification/)[ TasksCreate or update tasks. ](/sdk/effect-tasks/)[ Task
-MetadataInteract with Task metadata. ](/sdk/effect-task-metadata/)[
-CommandsThe building blocks of many end-user workflows in Canvas, including
-nearly all clinical workflows for documentation. ](/sdk/commands/)
+](/sdk/effect-questionnaires/)[ TasksCreate or update tasks. ](/sdk/effect-
+tasks/)[ Task MetadataInteract with Task metadata. ](/sdk/effect-task-
+metadata/)[ CommandsThe building blocks of many end-user workflows in Canvas,
+including nearly all clinical workflows for documentation. ](/sdk/commands/)
 ##  Effect Types #
 The following effects are available to be applied in Canvas.
 Effect| Description  
@@ -5647,9 +5637,11 @@ note.
 EDIT_PRESCRIBE_COMMAND| Can be used to edit a prescribe command in a note.  
 SEND_PRESCRIBE_COMMAND| Can be used to send a committed prescribe command in a
 note.  
+REVIEW_PRESCRIBE_COMMAND| Can be used to set a prescribe command in review.  
 ORIGINATE_REFILL_COMMAND| Can be used to originate a refill command in a note.  
 EDIT_REFILL_COMMAND| Can be used to edit a refill command in a note.  
 SEND_REFILL_COMMAND| Can be used to send a committed refill command in a note.  
+REVIEW_REFILL_COMMAND| Can be used to set a refill command in review.  
 ORIGINATE_MEDICATION_STATEMENT_COMMAND| Can be used to originate a medication
 statement command in a note.  
 EDIT_MEDICATION_STATEMENT_COMMAND| Can be used to edit a medication statement
@@ -5740,6 +5732,8 @@ EDIT_ADJUST_PRESCRIPTION_COMMAND| Can be used to edit an adjust prescription
 command in a note.  
 SEND_ADJUST_PRESCRIPTION_COMMAND| Can be used to send a adjust prescription
 command in a note.  
+REVIEW_ADJUST_PRESCRIPTION_COMMAND| Can be used to set an adjust prescription
+command in review.  
 ORIGINATE_RESOLVE_CONDITION_COMMAND| Can be used to originate a resolve
 condition command in a note.  
 EDIT_RESOLVE_CONDITION_COMMAND| Can be used to edit a resolve condition
@@ -6271,7 +6265,7 @@ Attribute| Type| Description
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/layout-effect/
 # Layout Effects
-Last updated: 7 Nov 2025
+Last updated: 11 Nov 2025
 ##  Patient Summary #
 There are many summary sections in a patientâs chart, organized by data
 type. While there is a default ordering, you can use an Effect to reorder them
@@ -6457,6 +6451,38 @@ The `LaunchModalEffect` class has the following properties:
     * `RIGHT_CHART_PANE`: Opens the URL in the right-hand pane of the patient chart.
     * `RIGHT_CHART_PANE_LARGE`: Like above, but a bit wider.
   * **title** : A string containing the title of the modal and will be displayed when minimized. Defaults to `Untitled`
+###  Closing Modals from Applications #
+When building applications with the Canvas SDK, you may encounter scenarios
+where you need to programmatically dismiss modals. This can be particularly
+useful in automated testing or when creating user flows that require closing
+modals based on certain conditions.
+Hereâs a simple example of how to dismiss modals from your applications
+using JavaScript.
+    <script>
+        let messagePort = null;
+        // Listen for the port transfer from the Canvas Application
+        window.addEventListener('message', (event) => {
+          // Check if this is the INIT_CHANNEL message with a port
+          if (event.data?.type === 'INIT_CHANNEL' && event.ports[0]) {
+            // Store the port for later use
+            messagePort = event.ports[0];
+            messagePort.start();
+            messagePort.postMessage({ type: 'CLOSE_MODAL' });
+          }
+        });
+    </script>
+And thatâs it! This script establishes a communication channel with the
+Canvas Application by listening for the `INIT_CHANNEL` event, capturing the
+message port, and then sending a `CLOSE_MODAL` message through that port to
+close any open modals when the application loads. You can customize the event
+listener to trigger the modal dismissal based on your specific requirements.
+While developers might find odd to be sending a message to themselves, this is
+the current method supported by the Canvas SDK for dismissing modals, in order
+to avoid potential security issues with cross-origin messaging and flooding
+the main application with messages.
+This twist on the _Holywood Principle_ ensures that your application remains
+secure while still providing the functionality needed to manage modals
+effectively.
 ##  Portal Landing Page Widgets #
 The `PortalWidget` class allows you to add widgets of various sizes to the
 patient portal landing page. You can fully customize your widgets or leverage
@@ -6506,13 +6532,13 @@ passed to a `LaunchModalEffect` or `PortalWidget`.
 Consider a simple HTML file named `templates/custom_content.html`:
     <!DOCTYPE html>
     <html>
-    <head>
+      <head>
         <title>{{ title }}</title>
-    </head>
-    <body>
+      </head>
+      <body>
         <h1>{{ heading }}</h1>
         <p>{{ message }}</p>
-    </body>
+      </body>
     </html>
 This template uses Django template placeholders like `{{ title }}`, `{{
 heading }}`, and `{{ message }}` to dynamically render content based on the
@@ -6569,20 +6595,20 @@ The URLs must match the format available
 [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-
 Security-Policy#host-source).
     {
-        "sdk_version": "0.1.4",
-        "plugin_version": "0.0.1",
-        "name": "custom_html",
-        "description": "...",
-        "url_permissions": [
-            {
-                "url": "https://example.com/info",
-                "permissions": ["ALLOW_SAME_ORIGIN", "MICROPHONE", "CAMERA"]
-            },
-            {
-                "url": "https://d3js.org/d3.v4.js",
-                "permissions": ["SCRIPTS"]
-            }
-        ]
+      "sdk_version": "0.1.4",
+      "plugin_version": "0.0.1",
+      "name": "custom_html",
+      "description": "...",
+      "url_permissions": [
+        {
+          "url": "https://example.com/info",
+          "permissions": ["ALLOW_SAME_ORIGIN", "MICROPHONE", "CAMERA"]
+        },
+        {
+          "url": "https://d3js.org/d3.v4.js",
+          "permissions": ["SCRIPTS"]
+        }
+      ]
     }
 ----- END PAGE https://docs.canvasmedical.com/sdk/layout-effect/
 
@@ -7578,7 +7604,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 6 Nov 2025
+Last updated: 13 Nov 2025
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -7649,8 +7675,8 @@ CARE_TEAM_MEMBERSHIP_CREATED
 ---  
 Occurs when a new care team member is added for a patient.  
 Target object| Context object  
-    "id": care_team_id
-    "type": None
+    "id": care_team_membership_id
+    "type": [CareTeamMembership](/sdk/data-care-team/#careteammembership)
 |
     "patient":
         "id": pt_id  
@@ -7658,8 +7684,8 @@ CARE_TEAM_MEMBERSHIP_UPDATED
 ---  
 Occurs when a care team member is adjusted for a patient.  
 Target object| Context object  
-    "id": care_team_id
-    "type": None
+    "id": care_team_membership_id
+    "type": [CareTeamMembership](/sdk/data-care-team/#careteammembership)
 |
     "patient":
         "id": pt_id  
@@ -7667,8 +7693,8 @@ CARE_TEAM_MEMBERSHIP_DELETED
 ---  
 Occurs when a care team member is removed for a patient.  
 Target object| Context object  
-    "id": care_team_id
-    "type": None
+    "id": care_team_membership_id
+    "type": [CareTeamMembership](/sdk/data-care-team/#careteammembership)
 |
     "patient":
         "id": pt_id  
@@ -7677,7 +7703,7 @@ PATIENT_ADDRESS_CREATED
 Occurs when an address is added for a patient.  
 Target object| Context object  
     "id": address_id
-    "type": None
+    "type": [PatientAddress](/sdk/data-patient/#patientaddress)
 |
     "patient":
         "id": pt_id  
@@ -7686,7 +7712,7 @@ PATIENT_ADDRESS_UPDATED
 Occurs when one of a patient's addresses is updated.  
 Target object| Context object  
     "id": address_id
-    "type": None
+    "type": [PatientAddress](/sdk/data-patient/#patientaddress)
 |
     "patient":
         "id": pt_id  
@@ -7695,7 +7721,7 @@ PATIENT_ADDRESS_DELETED
 Occurs when one of a patient's addresses is removed.  
 Target object| Context object  
     "id": address_id
-    "type": None
+    "type": [PatientAddress](/sdk/data-patient/#patientaddress)
 |
     "patient":
         "id": pt_id  
@@ -7731,7 +7757,7 @@ PATIENT_CONTACT_POINT_CREATED
 Occurs when a contact method for a patient is added.  
 Target object| Context object  
     "id": contact_point_id
-    "type": None
+    "type": [PatientContactPoint](/sdk/data-patient/#patientcontactpoint)
 |
     "patient":
         "id": pt_id  
@@ -7740,7 +7766,7 @@ PATIENT_CONTACT_POINT_UPDATED
 Occurs when a contact method for a patient is updated.  
 Target object| Context object  
     "id": contact_point_id
-    "type": None
+    "type": [PatientContactPoint](/sdk/data-patient/#patientcontactpoint)
 |
     "patient":
         "id": pt_id  
@@ -7749,7 +7775,7 @@ PATIENT_CONTACT_POINT_DELETED
 Occurs when a contact method for a patient is removed.  
 Target object| Context object  
     "id": contact_point_id
-    "type": None
+    "type": [PatientContactPoint](/sdk/data-patient/#patientcontactpoint)
 |
     "patient":
         "id": pt_id  
@@ -7786,7 +7812,7 @@ PATIENT_METADATA_CREATED
 Occurs when a patient's metadata is created.  
 Target object| Context object  
     "id": patientmetadata_id
-    "type": None
+    "type": [PatientMetadata](/sdk/data-patient/#patientmetadata)
 |
     "patient":
         "id": pt_id  
@@ -7795,7 +7821,7 @@ PATIENT_METADATA_UPDATED
 Occurs when a patient's metadata is updated.  
 Target object| Context object  
     "id": patientmetadata_id
-    "type": None
+    "type": [PatientMetadata](/sdk/data-patient/#patientmetadata)
 |
     "patient":
         "id": pt_id  
@@ -7807,7 +7833,7 @@ allergy may become available with subsequent ALLERGY_INTOLERANCE_UPDATED
 events.  
 Target object| Context object  
     "id": allergy_id
-    "type": None
+    "type": [AllergyIntolerance](/sdk/data-allergy-intolerance/#allergyintolerance)
 |
     "patient":
         "id": pt_id  
@@ -7816,7 +7842,7 @@ ALLERGY_INTOLERANCE_UPDATED
 Occurs when an allergy is updated for a patient.  
 Target object| Context object  
     "id": allergy_id
-    "type": None
+    "type": [AllergyIntolerance](/sdk/data-allergy-intolerance/#allergyintolerance)
 |
     "patient":
         "id": pt_id  
@@ -7826,7 +7852,7 @@ APPOINTMENT_CREATED
 Occurs when an appointment is first created/booked.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "patient":
         "id": pt_id  
@@ -7835,7 +7861,7 @@ APPOINTMENT_UPDATED
 Occurs when details of an appointment are updated.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "patient":
         "id": pt_id  
@@ -7844,7 +7870,7 @@ APPOINTMENT_CHECKED_IN
 Occurs when a patient has arrived and been checked in for their appointment.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "patient":
         "id": pt_id  
@@ -7853,7 +7879,7 @@ APPOINTMENT_RESTORED
 Occurs when a cancelled appointment is restored to a non-cancelled status.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "patient":
         "id": pt_id  
@@ -7862,7 +7888,7 @@ APPOINTMENT_CANCELED
 Occurs when an appointment is cancelled.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "patient":
         "id": pt_id  
@@ -7871,7 +7897,7 @@ APPOINTMENT_NO_SHOWED
 Occurs when an appointment is marked as a no-show.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "patient":
         "id": pt_id  
@@ -7887,7 +7913,7 @@ APPOINTMENT__FORM__PROVIDERS__PRE_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "category": [NoteTypeCategories](/sdk/data-note/#notetypecategories)  
 APPOINTMENT__FORM__PROVIDERS__POST_SEARCH  
@@ -7895,7 +7921,7 @@ APPOINTMENT__FORM__PROVIDERS__POST_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "providers": list[dict]
     "selected_values": dict
@@ -7905,7 +7931,7 @@ APPOINTMENT__FORM__LOCATIONS__PRE_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "category": [NoteTypeCategories](/sdk/data-note/#notetypecategories)  
 APPOINTMENT__FORM__LOCATIONS__POST_SEARCH  
@@ -7913,7 +7939,7 @@ APPOINTMENT__FORM__LOCATIONS__POST_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "locations": list[dict]
     "selected_values": dict
@@ -7923,7 +7949,7 @@ APPOINTMENT__FORM__VISIT_TYPES__PRE_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "category": [NoteTypeCategories](/sdk/data-note/#notetypecategories)  
 APPOINTMENT__FORM__VISIT_TYPES__POST_SEARCH  
@@ -7931,7 +7957,7 @@ APPOINTMENT__FORM__VISIT_TYPES__POST_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "visit_types": list[dict]
     "selected_values": dict
@@ -7941,7 +7967,7 @@ APPOINTMENT__FORM__DURATIONS__PRE_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "category": [NoteTypeCategories](/sdk/data-note/#notetypecategories)  
 APPOINTMENT__FORM__DURATIONS__POST_SEARCH  
@@ -7949,7 +7975,7 @@ APPOINTMENT__FORM__DURATIONS__POST_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "durations": list[dict]
     "selected_values": dict
@@ -7959,7 +7985,7 @@ APPOINTMENT__FORM__REASON_FOR_VISIT__PRE_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "category": [NoteTypeCategories](/sdk/data-note/#notetypecategories)  
 APPOINTMENT__FORM__REASON_FOR_VISIT__POST_SEARCH  
@@ -7967,7 +7993,7 @@ APPOINTMENT__FORM__REASON_FOR_VISIT__POST_SEARCH
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "reason_for_visit": list[dict]
     "selected_values": dict
@@ -7977,7 +8003,7 @@ APPOINTMENT__FORM__GET_ADDITIONAL_FIELDS
 Occurs when a schedule appointment form is loaded.  
 Target object| Context object  
     "id": appointment_id
-    "type": None
+    "type": [Appointment](/sdk/data-appointment/#appointment/)
 |
     "category": [NoteTypeCategories](/sdk/data-note/#notetypecategories)  
 ####  Appointment Metadata #
@@ -7986,26 +8012,24 @@ APPOINTMENT_METADATA_CREATED
 Occurs when an appointment's metadata is created.  
 Target object| Context object  
     "id": appointmentmetadata_id
-    "type": None
+    "type": [AppointmentMetadata](/sdk/data-appointment/#appointmentmetadata)
 |
-    "appointment":
-        "id": appt_id  
+    empty  
 APPOINTMENT_METADATA_UPDATED  
 ---  
 Occurs when an appointment's metadata is updated.  
 Target object| Context object  
     "id": appointmentmetadata_id
-    "type": None
+    "type": [AppointmentMetadata](/sdk/data-appointment/#appointmentmetadata)
 |
-    "appointment":
-        "id": appt_id  
+    empty  
 ####  Claims #
 CLAIM_CREATED  
 ---  
 Occurs when a claim is created.  
 Target object| Context object  
     "id": claim_id
-    "type": [Claim](/sdk/data-claim/)
+    "type": [Claim](/sdk/data-claim/#claim)
 |
     "patient":
       "id": pt_id
@@ -8016,7 +8040,7 @@ CLAIM_UPDATED
 Occurs when a claim is updated.  
 Target object| Context object  
     "id": claim_id
-    "type": Claim
+    "type": [Claim](/sdk/data-claim/#claim)
 |
     "patient":
       "id": pt_id
@@ -8028,7 +8052,7 @@ BILLING_LINE_ITEM_CREATED
 Occurs when a billing line item is created from adding a CPT code to a note.  
 Target object| Context object  
     "id": billing_line_item_id
-    "type": BillingLineItem
+    "type": [BillingLineItem](/sdk/data-billing-line-item/#billinglineitem)
 |
     "patient":
         "id": pt_id  
@@ -8037,7 +8061,7 @@ BILLING_LINE_ITEM_UPDATED
 Occurs when a billing line item is modified.  
 Target object| Context object  
     "id": billing_line_item_id
-    "type": BillingLineItem
+    "type": [BillingLineItem](/sdk/data-billing-line-item/#billinglineitem)
 |
     "patient":
         "id": pt_id  
@@ -8047,7 +8071,7 @@ CONDITION_ASSESSED
 Occurs when a condition is assessed through the Assess Condition command.  
 Target object| Context object  
     "id": condition_id
-    "type": [Condition](/sdk/data-condition/)
+    "type": [Condition](/sdk/data-condition/#condition)
 |
     "patient":
         "id": pt_id  
@@ -8057,7 +8081,7 @@ Occurs when a condition is diagnosed for a patient. Additional details for the
 condition may become available with subsequent CONDITION_UPDATED events.  
 Target object| Context object  
     "id": condition_id
-    "type": [Condition](/sdk/data-condition/)
+    "type": [Condition](/sdk/data-condition/#condition)
 |
     "patient":
         "id": pt_id  
@@ -8066,7 +8090,7 @@ CONDITION_RESOLVED
 Occurs when a condition is resolved through the Resolve Condition command.  
 Target object| Context object  
     "id": condition_id
-    "type": [Condition](/sdk/data-condition/)
+    "type": [Condition](/sdk/data-condition/#condition)
 |
     "patient":
         "id": pt_id  
@@ -8075,7 +8099,7 @@ CONDITION_UPDATED
 Occurs when a condition is updated for a patient.  
 Target object| Context object  
     "id": condition_id
-    "type": [Condition](/sdk/data-condition/)
+    "type": [Condition](/sdk/data-condition/#condition)
 |
     "patient":
         "id": pt_id  
@@ -8094,45 +8118,45 @@ CONSENT_DELETED
 Occurs when a patient consent is removed/deleted.  
 Target object| Context object  
     "id": consent_id
-    type: None
+    "type": None
 |
     "patient":
-       id: pt_id  
+       "id": pt_id  
 CONSENT_UPDATED  
 ---  
 Occurs when a patient consent is updated.  
 Target object| Context object  
     "id": consent_id
-    type: None
+    "type": None
 |
     "patient":
-       id: pt_id  
+       "id": pt_id  
 ####  Coverages #
 COVERAGE_CREATED  
 ---  
 Occurs when a coverage for a patient is created.  
 Target object| Context object  
     "id": coverage_id
-    type: None
+    "type": [Coverage](/sdk/data-coverage/#coverage)
 |
     "patient":
-       id: pt_id  
+       "id": pt_id  
 COVERAGE_UPDATED  
 ---  
 Occurs when a coverage for a patient is updated.  
 Target object| Context object  
     "id": coverage_id
-    type: None
+    "type": [Coverage](/sdk/data-coverage/#coverage)
 |
     "patient":
-       id: pt_id  
+       "id": pt_id  
 ####  Detected Issues #
 DETECTED_ISSUE_CREATED  
 ---  
 Occurs when a detected issue is created.  
 Target object| Context object  
     "id": detected_issue_id
-    "type": None
+    "type": [DetectedIssue](/sdk/data-detected-issue/#detectedissue)
 |
     "patient":
        "id": pt_id  
@@ -8141,7 +8165,7 @@ DETECTED_ISSUE_UPDATED
 Occurs when a detected issue is updated.  
 Target object| Context object  
     "id": detected_issue_id
-    "type": None
+    "type": [DetectedIssue](/sdk/data-detected-issue/#detectedissue)
 |
     "patient":
        "id": pt_id  
@@ -8150,7 +8174,7 @@ DETECTED_ISSUE_EVIDENCE_CREATED
 Occurs when detected issue evidence is created.  
 Target object| Context object  
     "id": detected_issue_evidence_id
-    "type": None
+    "type": [DetectedIssueEvidence](/sdk/data-detected-issue/#detectedissueevidence)
 |
     empty  
 DETECTED_ISSUE_EVIDENCE_UPDATED  
@@ -8158,7 +8182,7 @@ DETECTED_ISSUE_EVIDENCE_UPDATED
 Occurs when a detected issue evidence is updated.  
 Target object| Context object  
     "id": detected_issue_evidence_id
-    "type": None
+    "type": [DetectedIssueEvidence](/sdk/data-detected-issue/#detectedissueevidence)
 |
     empty  
 ####  Devices #
@@ -8167,7 +8191,7 @@ DEVICE_CREATED
 Occurs when a device is created.  
 Target object| Context object  
     "id": device_id
-    "type": None
+    "type": [Device](/sdk/data-device/#device)
 |
     "patient":
        "id": pt_id  
@@ -8176,7 +8200,7 @@ DEVICE_UPDATED
 Occurs when a device is updated.  
 Target object| Context object  
     "id": device_id
-    "type": None
+    "type": [Device](/sdk/data-device/#device)
 |
     "patient":
        "id": pt_id  
@@ -8214,7 +8238,7 @@ ENCOUNTER_CREATED
 Occurs when an encounter is created.  
 Target object| Context object  
     "id": encounter_id
-    "type": None
+    "type": [Encounter](/sdk/data-encounter/#encounter)
 |
     empty  
 ENCOUNTER_UPDATED  
@@ -8222,7 +8246,7 @@ ENCOUNTER_UPDATED
 Occurs when an encounter is updated.  
 Target object| Context object  
     "id": encounter_id
-    "type": None
+    "type": [Encounter](/sdk/data-encounter/#encounter)
 |
     empty  
 ####  Imaging Reports #
@@ -8232,7 +8256,7 @@ Occurs when an imaging report is entered into the data integration section of
 canvas.  
 Target object| Context object  
     "id": report_id
-    "type": None
+    "type": [ImagingReport](/sdk/data-imaging/#imagingreport)
 |
     "patient":
        "id": pt_id  
@@ -8241,7 +8265,7 @@ IMAGING_REPORT_UPDATED
 Occurs when an imaging report is updated.  
 Target object| Context object  
     "id": report_id
-    "type": None
+    "type": [ImagingReport](/sdk/data-imaging/#imagingreport)
 |
     "patient":
        "id": pt_id  
@@ -8253,7 +8277,7 @@ immunization may become available with subsequent
 IMMUNIZATION_STATEMENT_UPDATED events.  
 Target object| Context object  
     "id": immunization_id
-    "type": None
+    "type": [Immunization](/sdk/data-immunization/#immunization)
 |
     "patient":
        "id": pt_id  
@@ -8262,7 +8286,7 @@ IMMUNIZATION_UPDATED
 Occurs when an immunization is updated.  
 Target object| Context object  
     "id": immunization_id
-    "type": None
+    "type": [Immunization](/sdk/data-immunization/#immunization)
 |
     "patient":
        "id": pt_id  
@@ -8273,7 +8297,7 @@ immunization statement may become available with subsequent
 IMMUNIZATION_STATEMENT_UPDATED events.  
 Target object| Context object  
     "id": immunization_id
-    "type": None
+    "type": [Immunization](/sdk/data-immunization/#immunization)
 |
     "patient":
        "id": pt_id  
@@ -8282,7 +8306,7 @@ IMMUNIZATION_STATEMENT_UPDATED
 Occurs when an immunization statement is updated.  
 Target object| Context object  
     "id": immunization_id
-    "type": None
+    "type": [Immunization](/sdk/data-immunization/#immunization)
 |
     "patient":
        "id": pt_id  
@@ -8315,7 +8339,7 @@ the Questionnaire endpoint in the FHIR API. Additional details for the
 interview may become available with subsequent INTERVIEW_UPDATED events.  
 Target object| Context object  
     "id": interview_id
-    "type": [Interview](/sdk/data-questionnaire/)
+    "type": [Interview](/sdk/data-questionnaire/#interview)
 |
     "patient":
        "id": pt_id  
@@ -8324,7 +8348,7 @@ INTERVIEW_UPDATED
 Occurs when an interview is updated.  
 Target object| Context object  
     "id": interview_id
-    "type": [Interview](/sdk/data-questionnaire/)
+    "type": [Interview](/sdk/data-questionnaire/#interview)
 |
     "patient":
        "id": pt_id  
@@ -8336,7 +8360,7 @@ details for the lab order may become available with subsequent
 LAB_ORDER_UPDATED events.  
 Target object| Context object  
     "id": laborder_id
-    "type": [LabOrder](/sdk/data-labs/)
+    "type": [LabOrder](/sdk/data-labs/#laborder)
 |
     "patient":
        "id": pt_id  
@@ -8345,7 +8369,7 @@ LAB_ORDER_UPDATED
 Occurs when a lab order is updated.  
 Target object| Context object  
     "id": laborder_id
-    "type": [LabOrder](/sdk/data-labs/)
+    "type": [LabOrder](/sdk/data-labs/#laborder)
 |
     "patient":
        "id": pt_id  
@@ -8355,7 +8379,7 @@ Occurs when a lab report is created either through Data Integration,
 electronic ingestion or the FHIR API.  
 Target object| Context object  
     "id": labreport_id
-    "type": [LabReport](/sdk/data-labs/)
+    "type": [LabReport](/sdk/data-labs/#labreport)
 |
     "patient":
        "id": pt_id  
@@ -8364,7 +8388,7 @@ LAB_REPORT_UPDATED
 Occurs when a lab report is updated.  
 Target object| Context object  
     "id": labreport_id
-    "type": [LabReport](/sdk/data-labs/)
+    "type": [LabReport](/sdk/data-labs/#labreport)
 |
     "patient":
        "id": pt_id  
@@ -8374,7 +8398,7 @@ MEDICATION_LIST_ITEM_CREATED
 Occurs when a medication is added for a patient.  
 Target object| Context object  
     "id": medication_id
-    "type": [Medication](/sdk/data-medication/)
+    "type": [Medication](/sdk/data-medication/#medication)
 |
     "patient":
        "id": pt_id  
@@ -8383,7 +8407,7 @@ MEDICATION_LIST_ITEM_UPDATED
 Occurs when a medication is updated for a patient.  
 Target object| Context object  
     "id": medication_id
-    "type": [Medication](/sdk/data-medication/)
+    "type": [Medication](/sdk/data-medication/#medication)
 |
     "patient":
        "id": pt_id  
@@ -8392,7 +8416,7 @@ PRESCRIPTION_UPDATED
 Occurs when a prescription is updated.  
 Target object| Context object  
     "id": prescription_id
-    "type": [Medication](/sdk/data-medication/)
+    "type": [Medication](/sdk/data-medication/#medication)
 |
     "patient":
        "id": pt_id  
@@ -8403,7 +8427,7 @@ command. Additional details for the prescription become available with
 subsequent PRESCRIPTION_UPDATED events.  
 Target object| Context object  
     "id": prescription_id
-    "type": [Medication](/sdk/data-medication/)
+    "type": [Medication](/sdk/data-medication/#medication)
 |
     "patient":
        "id": pt_id  
@@ -8413,7 +8437,7 @@ MESSAGE_CREATED
 Occurs when a message (patient/practitioner communication) is created.  
 Target object| Context object  
     "id": message_id
-    "type": None
+    "type": [Message](/sdk/data-message/#message)
 |
     "patient":
        "id": pt_id  
@@ -8468,7 +8492,7 @@ OBSERVATION_CREATED
 Occurs when an observation is created.  
 Target object| Context object  
     "id": observation_id
-    "type": None
+    "type": [Observation](/sdk/data-observation/#observation)
 |
     "patient":
        "id": pt_id  
@@ -8477,7 +8501,7 @@ OBSERVATION_UPDATED
 Occurs when an observation is updated.  
 Target object| Context object  
     "id": observation_id
-    "type": None
+    "type": [Observation](/sdk/data-observation/#observation)
 |
     "patient":
        "id": pt_id  
@@ -8486,7 +8510,7 @@ PROTOCOL_OVERRIDE_CREATED
 ---  
 Target object| Context object  
     "id": protocoloverride_id
-    "type": None
+    "type": [ProtocolOverride](/sdk/data-protocol-override/#protocoloverride)
 |
     "patient":
        "id": pt_id  
@@ -8494,7 +8518,7 @@ PROTOCOL_OVERRIDE_UPDATED
 ---  
 Target object| Context object  
     "id": protocoloverride_id
-    "type": None
+    "type": [ProtocolOverride](/sdk/data-protocol-override/#protocoloverride)
 |
     "patient":
        "id": pt_id  
@@ -8502,7 +8526,7 @@ PROTOCOL_OVERRIDE_DELETED
 ---  
 Target object| Context object  
     "id": protocoloverride_id
-    "type": None
+    "type": [ProtocolOverride](/sdk/data-protocol-override/#protocoloverride)
 |
     "patient":
        "id": pt_id  
@@ -8512,7 +8536,7 @@ REFERRAL_REPORT_CREATED
 Occurs when a specialist consult report is created in Data Integration.  
 Target object| Context object  
     "id": referralreport_id
-    "type": None
+    "type": [ReferralReport](/sdk/data-referral/#referralreport)
 |
     "patient":
        "id": pt_id  
@@ -8521,7 +8545,7 @@ REFERRAL_REPORT_UPDATED
 Occurs when a specialist consult report is updated.  
 Target object| Context object  
     "id": referralreport_id
-    "type": None
+    "type": [ReferralReport](/sdk/data-referral/#referralreport)
 |
     "patient":
        "id": pt_id  
@@ -8531,7 +8555,7 @@ TASK_CREATED
 Occurs when a task is created.  
 Target object| Context object  
     "id": task_id
-    "type": [Task](/sdk/data-task/)
+    "type": [Task](/sdk/data-task/#task)
 |
     "patient":
        "id": pt_id  
@@ -8540,7 +8564,7 @@ TASK_UPDATED
 Occurs when a task is updated.  
 Target object| Context object  
     "id": task_id
-    "type": [Task](/sdk/data-task/)
+    "type": [Task](/sdk/data-task/#task)
 |
     "patient":
        "id": pt_id  
@@ -8549,7 +8573,7 @@ TASK_COMMENT_CREATED
 Occurs when a comment is added to a task.  
 Target object| Context object  
     "id": taskcomment_id
-    "type": [TaskComment](/sdk/data-task/)
+    "type": [TaskComment](/sdk/data-task/#taskcomment)
 |
     empty  
 TASK_COMMENT_UPDATED  
@@ -8557,7 +8581,7 @@ TASK_COMMENT_UPDATED
 Occurs when a comment for a task is updated.  
 Target object| Context object  
     "id": taskcomment_id
-    "type": [TaskComment](/sdk/data-task/)
+    "type": [TaskComment](/sdk/data-task/#taskcomment)
 |
     empty  
 TASK_COMMENT_DELETED  
@@ -8565,7 +8589,7 @@ TASK_COMMENT_DELETED
 Occurs when a comment for a task is removed.  
 Target object| Context object  
     "id": taskcomment_id
-    "type": [TaskComment](/sdk/data-task/)
+    "type": [TaskComment](/sdk/data-task/#taskcomment)
 |
     empty  
 TASK_LABELS_ADJUSTED  
@@ -8573,7 +8597,7 @@ TASK_LABELS_ADJUSTED
 Occurs when a task's labels are changed.  
 Target object| Context object  
     "id": task_label_id
-    "type": [TaskLabel](/sdk/data-task/#tasklabel/)
+    "type": [TaskLabel](/sdk/data-task/#tasklabel)
 |
     "patient":
        "id": pt_id
@@ -8585,7 +8609,7 @@ TASK_COMPLETED
 Occurs when a task is set to completed.  
 Target object| Context object  
     "id": task_id
-    "type": [Task](/sdk/data-task/)
+    "type": [Task](/sdk/data-task/#task)
 |
     "patient":
        "id": pt_id  
@@ -8594,7 +8618,7 @@ TASK_CLOSED
 Occurs when a task is set to closed.  
 Target object| Context object  
     "id": task_id
-    "type": [Task](/sdk/data-task/)
+    "type": [Task](/sdk/data-task/#task)
 |
     "patient":
        "id": pt_id  
@@ -8604,7 +8628,7 @@ STAFF_CREATED
 Occurs when a staff is created.  
 Target object| Context object  
     "id": staff_id
-    "type": [Staff](/sdk/data-staff/)
+    "type": [Staff](/sdk/data-staff/#staff)
 |
     empty  
 STAFF_UPDATED  
@@ -8612,7 +8636,7 @@ STAFF_UPDATED
 Occurs when a staff is updated.  
 Target object| Context object  
     "id": staff_id
-    "type": [Staff](/sdk/data-staff/)
+    "type": [Staff](/sdk/data-staff/#staff)
 |
     empty  
 STAFF_ACTIVATED  
@@ -8621,7 +8645,7 @@ Occurs when a staff record is created with active=True, or a staff record's
 active field is updated from False to True.  
 Target object| Context object  
     "id": staff_id
-    "type": [Staff](/sdk/data-staff/)
+    "type": [Staff](/sdk/data-staff/#staff)
 |
     empty  
 STAFF_DEACTIVATED  
@@ -8629,7 +8653,7 @@ STAFF_DEACTIVATED
 Occurs when a staff record's active field is updated from True to False.  
 Target object| Context object  
     "id": staff_id
-    "type": [Staff](/sdk/data-staff/)
+    "type": [Staff](/sdk/data-staff/#staff)
 |
     empty  
 ####  Vital Signs #
