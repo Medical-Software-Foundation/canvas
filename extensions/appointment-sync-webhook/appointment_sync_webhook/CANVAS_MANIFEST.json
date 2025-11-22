@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "appointment_sync_webhook",
+    "description": "Webhook handler that syncs appointment lifecycle events (created, cancelled, no-show) to external systems",
+    "components": {
+        "protocols": [
+            {
+                "class": "appointment_sync_webhook.protocols.appointment_sync_webhook:AppointmentSyncWebhook",
+                "description": "Sends webhook notifications when appointments are created, cancelled, or marked as no-show"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["WEBHOOK_URL"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
