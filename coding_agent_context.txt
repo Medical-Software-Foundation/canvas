@@ -7604,7 +7604,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 13 Nov 2025
+Last updated: 17 Nov 2025
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -7628,6 +7628,24 @@ The plugin author can enter custom workflow code into the `compute` method
 that will execute every time an Allergy Intolerance is created in Canvas.
 For more information on writing plugins, see the guide [here](/guides/your-
 first-plugin/).
+##  Event Actor #
+The actor is the user that initiated the event. It can be accessed within the
+compute method of the plugin by `self.event.actor`. It should be available for
+events that are directly initiated or triggered by a user â for example,
+SimpleAPI events, command pre- and post-search events, action button events.
+For side-effect events or automated events where the action cannot be
+attributed to a specific user, the actor may be absent.
+    from canvas_sdk.effects import Effect
+    from canvas_sdk.handlers import BaseHandler
+    from logger import log
+    class CustomHandler(BaseHandler):
+        RESPONDS_TO = []
+        def compute(self) -> list[Effect]:
+            actor = self.event.actor
+            log.info(actor.dbid)        # The database ID of the actor, if available
+            log.info(actor.instance)  # The corresponding CanvasUser instance
+            log.info(actor.instance.person_subclass) # The corresponding Staff or Patient instance
+            return []
 ##  Event Types and Context #
 The event `target` object can be accessed within the compute method of the
 plugin by `self.event.target`. If `self.event.target.type` exists, it provides
