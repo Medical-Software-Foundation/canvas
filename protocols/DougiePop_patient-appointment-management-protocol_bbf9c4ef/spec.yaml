@@ -1,0 +1,9 @@
+status: "draft"
+githubUrl: ""
+contributors:
+  - username: "DougiePop"
+referencePapers:
+  - title: "Efficient Patient Appointment Management Protocol"
+    description: "This protocol outlines the management of patient appointments, focusing on eligible patients needing follow-ups within 30 days. It includes criteria for exclusion, actions for scheduling, and methods for communication and reminders. The goal is to enhance appointment efficiency, reduce no-shows, and optimize provider schedules."
+    url: ""
+
