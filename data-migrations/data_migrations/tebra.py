@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+by#!/usr/bin/env python
 """
 Fetch patients from Tebra (formerly Kareo) via SOAP API.
 
@@ -728,9 +728,9 @@ class TebraSoapClient:
 def main():
     """Main entry point for the script."""
     # Get credentials from environment variables or replace with actual values
-    username = os.getenv("TEBRA_USERNAME", "reba.magier@canvasmedical.com")
-    password = os.getenv("TEBRA_PASSWORD", "jyd@ryn*dcd!EKX0wan")
-    customer_key = os.getenv("TEBRA_CUSTOMER_KEY", "z87ed45rg62f")
+    username = os.getenv("TEBRA_USERNAME", "")
+    password = os.getenv("TEBRA_PASSWORD", "")
+    customer_key = os.getenv("TEBRA_CUSTOMER_KEY", "")
     print(username, customer_key)
 
     print("\nFetching practices from Tebra...")
