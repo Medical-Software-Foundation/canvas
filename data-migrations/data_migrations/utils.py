@@ -28,6 +28,11 @@ def write_to_json(filename, data):
     """
         Write a dict to a JSON file
     """
+    # Create the directory if it doesn't exist
+    directory = os.path.dirname(filename)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)
+    
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     print(f"Successfully created {filename}")
