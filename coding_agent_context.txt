@@ -94,7 +94,7 @@ Check if a key exists in cache:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/canvas_cli/
 # Canvas CLI
-Last updated: 29 Aug 2025
+Last updated: 25 Nov 2025
 ##  Getting Started #
 ###  Installation using `pip` #
 To install the Canvas CLI using `pip`, execute `pip install canvas`. Python
@@ -214,11 +214,24 @@ Validate the Canvas Manifest json file.
 **Options** :
   * `--help`: Show this message and exit.
 ###  `canvas logs` #
-Subscribes to a log stream and prints to your console.
+Subscribes to a log stream and prints to your console. Optionally fetches
+historical logs first.
 **Usage** :
     $ canvas logs [OPTIONS]
 **Options** :
   * `--host TEXT`: Canvas instance to connect to
+  * `--help`: Show this message and exit.
+  * `--since TEXT`: Lookback window (e.g. â24hâ, â2h30mâ). Mutually exclusive with âstart/âend.
+  * `--start TEXT`: Start time (ISO/RFC3339) or ânowâ.
+  * `--end TEXT`: End time (ISO/RFC3339) or ânowâ. Defaults to now if start is provided.
+  * `--no-follow`: Historical only; do not stream live logs.
+  * `--level TEXT`: Repeatable. âlevel ERROR âlevel WARN
+  * `--source TEXT`: Filter by source/service.
+  * `--page-size INTEGER`: Fetch size per page (historical). [default: 200]
+  * `--limit INTEGER`: Max historical logs to print.
+  * `--all`: Fetch all pages until exhausted (historical).
+  * `--interactive`: After each page, prompt to load more.
+  * `--cursor TEXT`: Resume token from a previous run.
   * `--help`: Show this message and exit.
 ###  `canvas config list` #
 List all secrets from a plugin.
@@ -4630,7 +4643,7 @@ UNK| unknown
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-practicelocation/
 # Practice Location
-Last updated: 24 Sep 2025
+Last updated: 10 Nov 2025
 ##  Introduction #
 The `PracticeLocation` model lists all the clinical practice locations that
 fall under an [Organization](/sdk/data-organization).
@@ -4642,6 +4655,12 @@ so:
 To retrieve a list of all practice locations:
     from canvas_sdk.v1.data.practicelocation import PracticeLocation
     practice_locations = PracticeLocation.objects.all()
+To query addresses that are associated with a `PracticeLocation`, related
+`PracticeLocationAddress` model instances can be accessed by using the
+`addresses` attribute. For exmample:
+    from canvas_sdk.v1.data.practicelocation import PracticeLocation
+    practice_location = PracticeLocation.objects.first()
+    practice_location_addresses = practice_location.addresses.all()
 Each `PracticeLocation` has location-specific settings that control certain
 behavior within the EMR application. To retrieve the available settings for a
 `PracticeLocation` instance, the `settings` attribute can be used to retrieve
@@ -4680,6 +4699,26 @@ billing_location_name| String
 group_npi_number| String  
 taxonomy_number| String  
 include_zz_qualifier| Boolean  
+addresses| PracticeLocationAddress  
+###  PracticeLocationAddress #
+Field Name| Type  
+---|---  
+dbid| Integer  
+practice_location| PracticeLocation  
+line1| String  
+line2| String  
+city| String  
+district| String  
+state_code| String  
+postal_code| String  
+use| [AddressUse](/sdk/data-enumeration-types/#addressuse)  
+type| [AddressType](/sdk/data-enumeration-types/#addresstype)  
+longitude| Float  
+latitude| Float  
+start| Date  
+end| Date  
+country| String  
+state| [AddressState](/sdk/data-enumeration-types/#addressstate)  
 ###  PracticeLocationSetting #
 Field Name| Type  
 ---|---  
@@ -19590,7 +19629,7 @@ an argument and returns a dictionary containing the questionnaire definition.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/secrets/
 # Managing Secrets
-Last updated: 27 Aug 2025
+Last updated: 24 Nov 2025
 Canvas provides a secure key-value secret store that allows your plugins to
 access sensitive information (such as API tokens) without hardcoding them into
 source files. This guide explains how to define, configure, and access secrets
@@ -19624,7 +19663,16 @@ Or, go directly to:
 On this page, you will find input fields for each secret defined in your
 manifest.
 ![Setting plugin
-secrets](/assets/images/sdk/secrets/plugins_secrets_setting.png)
+secrets](/assets/images/sdk/secrets/plugins_secrets_settings_with_permissions.png)
+Plugin secrets can be protected by managing user permissions. Only users
+explicitly assigned as âmanaging usersâ for a plugin can view or modify
+its secrets (as well as other sensitive settings like the plugin package file
+download link). Other users can see basic plugin details and enable or disable
+plugins, but they will not be able to access or change secret values. To add
+or remove managing users for a plugin, use the âManaging usersâ section on
+the plugin detail page in the Admin UI. This ensures that sensitive
+configuration, such as API tokens, remains visible only to authorized
+personnel.
 ###  Configuring Secrets in the CLI #
 You can set secrets either after a plugin is installed or as part of the
 install. Secrets must be listed under the secrets field in the pluginâs
