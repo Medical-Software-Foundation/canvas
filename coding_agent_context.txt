@@ -257,7 +257,7 @@ Configure plugin secrets.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/commands/
 # Commands
-Last updated: 11 Nov 2025
+Last updated: 4 Dec 2025
 The commands module lets you create and update commands within a specific note
 in Canvas. Commands are the building blocks of many end-user workflows in
 Canvas, including nearly all clinical workflows for documentation, like HPIs
@@ -880,6 +880,44 @@ Priority| Description
      ),
     )
 * * *
+##  ImagingReview #
+**Command-specific parameters** :
+Name| Type| Required| Description  
+---|---|---|---  
+`report_ids`|  _list[string]_| `true`| List of imaging report IDs to review.  
+`message_to_patient`|  _string_| `false`| Message to communicate findings to
+the patient.  
+`communication_method`|  _ReportReviewCommunicationMethod enum_| `false`|
+Method for patient communication. Must be one of
+`ReportReviewCommunicationMethod`.  
+`linked_items_urns`|  _list[string]_| `false`| List of URNs for items linked
+to the review.  
+`comment`|  _string_| `false`| Internal comment about the review.  
+**Enums and Types** :
+**`ReportReviewCommunicationMethod`**
+Communication Method| Value| Description  
+---|---|---  
+`DELEGATED_CALL_CAN_LEAVE_MESSAGE`| `"DM"`| Delegated call - can leave message  
+`DELEGATED_CALL_NEED_ANSWER`| `"DA"`| Delegated call - need answer  
+`DELEGATED_LETTER`| `"DL"`| Delegated letter to be sent to patient  
+`ALREADY_LEFT_MESSAGE`| `"AM"`| Already left message for patient  
+`ALREADY_REVIEWED_WITH_PATIENT`| `"AR"`| Already reviewed with patient  
+**Example** :
+    from canvas_sdk.commands import ImagingReviewCommand
+    from canvas_sdk.commands.commands.review import ReportReviewCommunicationMethod
+    from canvas_sdk.v1.data import ImagingReport, Patient
+    patient = Patient.objects.get(id="patient-id")
+    # Get imaging reports to review
+    imaging_reports = ImagingReport.objects.filter(patient=patient, review__isnull=True)
+    report_ids = [str(report.id) for report in imaging_reports]
+    imaging_review = ImagingReviewCommand(
+        note_uuid="a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+        report_ids=report_ids,
+        message_to_patient="Your imaging results show no abnormalities.",
+        communication_method=ReportReviewCommunicationMethod.DELEGATED_CALL_CAN_LEAVE_MESSAGE,
+        comment="All clear, no follow-up needed."
+    )
+* * *
 ##  ImmunizationStatement #
 **Command-specific parameters** :
 Name| Type| Required| Description  
@@ -1029,6 +1067,44 @@ requirements before sending.
       diagnosis_codes=["E119"],
       fasting_required=True,
       comment="Patient should fast for 8 hours before the test."
+    )
+* * *
+##  LabReview #
+**Command-specific parameters** :
+Name| Type| Required| Description  
+---|---|---|---  
+`report_ids`|  _list[string]_| `true`| List of lab report IDs to review.  
+`message_to_patient`|  _string_| `false`| Message to communicate findings to
+the patient.  
+`communication_method`|  _ReportReviewCommunicationMethod enum_| `false`|
+Method for patient communication. Must be one of
+`ReportReviewCommunicationMethod`.  
+`linked_items_urns`|  _list[string]_| `false`| List of URNs for items linked
+to the review.  
+`comment`|  _string_| `false`| Internal comment about the review.  
+**Enums and Types** :
+**`ReportReviewCommunicationMethod`**
+Communication Method| Value| Description  
+---|---|---  
+`DELEGATED_CALL_CAN_LEAVE_MESSAGE`| `"DM"`| Delegated call - can leave message  
+`DELEGATED_CALL_NEED_ANSWER`| `"DA"`| Delegated call - need answer  
+`DELEGATED_LETTER`| `"DL"`| Delegated letter to be sent to patient  
+`ALREADY_LEFT_MESSAGE`| `"AM"`| Already left message for patient  
+`ALREADY_REVIEWED_WITH_PATIENT`| `"AR"`| Already reviewed with patient  
+**Example** :
+    from canvas_sdk.commands import LabReviewCommand
+    from canvas_sdk.commands.commands.review import ReportReviewCommunicationMethod
+    from canvas_sdk.v1.data import LabReport, Patient
+    patient = Patient.objects.get(id="patient-id")
+    # Get lab reports to review
+    lab_reports = LabReport.objects.filter(patient=patient, review__isnull=True)
+    report_ids = [str(report.id) for report in lab_reports]
+    lab_review = LabReviewCommand(
+        note_uuid="a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+        report_ids=report_ids,
+        message_to_patient="Your lab results are within normal range.",
+        communication_method=ReportReviewCommunicationMethod.DELEGATED_CALL_CAN_LEAVE_MESSAGE,
+        comment="All values normal, no follow-up needed."
     )
 * * *
 ##  MedicalHistory #
@@ -1643,6 +1719,44 @@ DIAGNOSTIC_UNCERTAINTY| Diagnostic Uncertainty
      ),
     )
 * * *
+##  ReferralReview #
+**Command-specific parameters** :
+Name| Type| Required| Description  
+---|---|---|---  
+`report_ids`|  _list[string]_| `true`| List of referral report IDs to review.  
+`message_to_patient`|  _string_| `false`| Message to communicate findings to
+the patient.  
+`communication_method`|  _ReportReviewCommunicationMethod enum_| `false`|
+Method for patient communication. Must be one of
+`ReferralReviewCommand.ReportReviewCommunicationMethod`.  
+`linked_items_urns`|  _list[string]_| `false`| List of URNs for items linked
+to the review.  
+`comment`|  _string_| `false`| Internal comment about the review.  
+**Enums and Types** :
+**`ReportReviewCommunicationMethod`**
+Communication Method| Value| Description  
+---|---|---  
+`DELEGATED_CALL_CAN_LEAVE_MESSAGE`| `"DM"`| Delegated call - can leave message  
+`DELEGATED_CALL_NEED_ANSWER`| `"DA"`| Delegated call - need answer  
+`DELEGATED_LETTER`| `"DL"`| Delegated letter to be sent to patient  
+`ALREADY_LEFT_MESSAGE`| `"AM"`| Already left message for patient  
+`ALREADY_REVIEWED_WITH_PATIENT`| `"AR"`| Already reviewed with patient  
+**Example** :
+    from canvas_sdk.commands import ReferralReviewCommand
+    from canvas_sdk.commands.commands.review import ReportReviewCommunicationMethod
+    from canvas_sdk.v1.data import Patient, ReferralReport
+    patient = Patient.objects.get(id="patient-id")
+    # Get referral reports to review
+    referral_reports = ReferralReport.objects.filter(patient=patient, review__isnull=True)
+    report_ids = [str(report.id) for report in referral_reports]
+    referral_review = ReferralReviewCommand(
+        note_uuid="a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+        report_ids=report_ids,
+        message_to_patient="Your referral has been reviewed and approved.",
+        communication_method=ReportReviewCommunicationMethod.DELEGATED_CALL_CAN_LEAVE_MESSAGE,
+        comment="Referral approved, patient notified."
+    )
+* * *
 ##  Refill #
 **Command-specific parameters** :
 Check the Prescribe command for the parameters used in the Refill command.
@@ -1974,6 +2088,7 @@ assessment/)[ BannerAlertAn alert notification linked to a patient.
 ](/sdk/data-banner-alert/)[ BillingLineItemA billable code linked to a patient
 note. ](/sdk/data-billing-line-item/)[ BusinessLineA group of patients that
 share a common brand under an organization. ](/sdk/data-business-line/)[
+CalendarCalendars associated with providers. ](/sdk/data-calendar/)[
 CanvasUserUser accounts associated with other records. ](/sdk/data-
 canvasuser/)[ CareTeamTeams assigned for patient care. ](/sdk/data-care-
 team/)[ ChargeDescriptionMasterBilling charges in Canvas that can be added to
@@ -5555,28 +5670,32 @@ FormEffect for dynamically displaying forms when scheduling an appointment.
 ](/sdk/appointment-metadata-create-form-effect)[ Banner AlertsContextual
 information in a patient's chart. ](/sdk/effect-banner-alerts/)[ Billing Line
 ItemsAdd, modify, or remove billing codes on a note. ](/sdk/effect-billing-
-line-items/)[ Compound MedicationsCreate or update compound medications.
-](/sdk/effect-compound-medication/)[ Custom HTML and Django TemplatesRender
-custom HTML using Django templates. ](/sdk/layout-effect/#custom-html-and-
-django-templates)[ Form ResultEffect for dynamically displaying forms in the
-Patient Portal. ](/sdk/form-result-effect)[ Layout EffectsModify or interact
-with the layout in Canvas. ](/sdk/layout-effect/)[ MessagesInteract with
-messages in Canvas. ](/sdk/effect-messages/)[ NotesInteract with notes in
-Canvas. ](/sdk/effect-notes/)[ PatientInteract with patient data.
-](/sdk/effect-patient/)[ Patient Chart GroupEffect for grouping items on a
-patient chart section. ](/sdk/patient-chart-group-effect/)[ Patient External
-IDCreate a new external identifier for a patient. ](/sdk/effect-create-
-patient-external-identifier/)[ Patient MetadataInteract with patient metadata.
-](/sdk/effect-patient-metadata/)[ Patient Metadata Create FormEffect for
-dynamically displaying forms in the Patient profile. ](/sdk/patient-metadata-
-create-form-effect)[ Patient PortalCustomize your Patient Portal.
-](/sdk/patient-portal/)[ Protocol CardsCalls to action in a patient's chart,
-commonly used for decision support intervention. ](/sdk/effect-protocol-
-cards/)[ QuestionnairesInteract with questionnaires and interviews.
-](/sdk/effect-questionnaires/)[ TasksCreate or update tasks. ](/sdk/effect-
-tasks/)[ Task MetadataInteract with Task metadata. ](/sdk/effect-task-
-metadata/)[ CommandsThe building blocks of many end-user workflows in Canvas,
-including nearly all clinical workflows for documentation. ](/sdk/commands/)
+line-items/)[ ClaimsManage labels, update line items, move to a queue, or post
+a payment. ](/sdk/effect-claims/)[ Compound MedicationsCreate or update
+compound medications. ](/sdk/effect-compound-medication/)[ Custom HTML and
+Django TemplatesRender custom HTML using Django templates. ](/sdk/layout-
+effect/#custom-html-and-django-templates)[ Create CalendarCreate a calendar
+for a provider. ](/sdk/calendar-create-effect/)[ Manage Calendar EventsManage
+calendar events. ](/sdk/calendar-event-management-effects/)[ Form ResultEffect
+for dynamically displaying forms in the Patient Portal. ](/sdk/form-result-
+effect)[ Layout EffectsModify or interact with the layout in Canvas.
+](/sdk/layout-effect/)[ MessagesInteract with messages in Canvas.
+](/sdk/effect-messages/)[ NotesInteract with notes in Canvas. ](/sdk/effect-
+notes/)[ PatientInteract with patient data. ](/sdk/effect-patient/)[ Patient
+Chart GroupEffect for grouping items on a patient chart section.
+](/sdk/patient-chart-group-effect/)[ Patient External IDCreate a new external
+identifier for a patient. ](/sdk/effect-create-patient-external-identifier/)[
+Patient MetadataInteract with patient metadata. ](/sdk/effect-patient-
+metadata/)[ Patient Metadata Create FormEffect for dynamically displaying
+forms in the Patient profile. ](/sdk/patient-metadata-create-form-effect)[
+Patient PortalCustomize your Patient Portal. ](/sdk/patient-portal/)[ Protocol
+CardsCalls to action in a patient's chart, commonly used for decision support
+intervention. ](/sdk/effect-protocol-cards/)[ QuestionnairesInteract with
+questionnaires and interviews. ](/sdk/effect-questionnaires/)[ TasksCreate or
+update tasks. ](/sdk/effect-tasks/)[ Task MetadataInteract with Task metadata.
+](/sdk/effect-task-metadata/)[ CommandsThe building blocks of many end-user
+workflows in Canvas, including nearly all clinical workflows for
+documentation. ](/sdk/commands/)
 ##  Effect Types #
 The following effects are available to be applied in Canvas.
 Effect| Description  
