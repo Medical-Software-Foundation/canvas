@@ -2726,7 +2726,7 @@ origination_source| String
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-enumeration-types/
 # Common Enumeration Type
-Last updated: 24 Jan 2025
+Last updated: 9 Dec 2025
 ##  Introduction #
 This page shows common enumeration types that are used in multiple models.
 ##  Enumeration types #
@@ -2748,6 +2748,14 @@ home| Home
 work| Work  
 temp| Temp  
 old| Old  
+###  AddressUseWithBilling #
+Value| Label  
+---|---  
+home| Home  
+work| Work  
+temp| Temp  
+old| Old  
+billing| Billing  
 ###  ColorEnum #
 Value| Label  
 ---|---  
@@ -2769,6 +2777,14 @@ Value| Label
 ---|---  
 active| Active  
 deleted| Deleted  
+###  ContactPointSystem #
+Value| Label  
+---|---  
+phone| phone  
+fax| fax  
+email| email  
+pager| pager  
+other| other  
 ###  ContactPointUse #
 Value| Label  
 ---|---  
@@ -4387,7 +4403,7 @@ Value| Description
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-observation/
 # Observation
-Last updated: 8 Apr 2025
+Last updated: 7 Nov 2025
 ##  Introduction #
 The `Observation` model represents measurements or assertions made about a
 patient, such as vital signs, lab results, or other clinical findings.
@@ -4455,7 +4471,7 @@ entered_in_error| [CanvasUser](/sdk/data-canvasuser)
 deleted| Boolean  
 patient| [Patient](/sdk/data-patient/#patient)  
 is_member_of| Observation  
-category| String  
+category| String (comma-separated list of categories  
 units| String  
 value| String  
 note_id| Integer  
@@ -4511,7 +4527,7 @@ observation| Observation
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-organization/
 # Organization
-Last updated: 24 Sep 2025
+Last updated: 9 Dec 2025
 ##  Introduction #
 The `Organization` model represents the overall Organization in a Canvas EMR
 instance. An `Organization` can have multiple related [Practice
@@ -4544,6 +4560,49 @@ tax_id_type| [TaxIDType](/sdk/data-enumeration-types/#taxidtype)
 group_npi_number| String  
 group_taxonomy_number| String  
 include_zz_qualifier| Boolean  
+##  OrganizationAddress #
+The `OrganizationAddress` model represents a physical or mailing address
+associated with an Organization. Multiple addresses can be linked to a single
+Organization, each with its own type and details.
+###  Attributes #
+Field Name| Type  
+---|---  
+id| UUID  
+dbid| Integer  
+organization| Organization  
+use| [AddressUseWithBilling](/sdk/data-enumeration-
+types/#addressusewithbilling)  
+type| [AddressType](/sdk/data-enumeration-types/#addresstype)  
+longitude| Float  
+latitude| Float  
+start| Date  
+end| Date  
+country| String  
+state| [AddressState](/sdk/data-enumeration-types/#addressstate)  
+address_search_index| String  
+line1| String  
+line2| String  
+city| String  
+district| String  
+state_code| String  
+postal_code| String  
+##  OrganizationContactPoint #
+The `OrganizationContactPoint` model represents a contact method (such as
+phone, email, or fax) for an Organization. Multiple contact points can be
+associated with a single Organization, each with its own type, use, and
+status.
+###  Attributes #
+Field Name| Type  
+---|---  
+id| UUID  
+dbid| Integer  
+organization| Organization  
+system| [ContactPointSystem](/sdk/data-enumeration-types/#contactpointsystem)  
+value| String  
+use| [ContactPointUse](/sdk/data-enumeration-types/#contactpointuse)  
+use_notes| String  
+rank| Integer  
+state| [ContactPointState](/sdk/data-enumeration-types/#contactpointstate)  
 ----- END PAGE https://docs.canvasmedical.com/sdk/data-organization/
 
 
@@ -4758,7 +4817,7 @@ UNK| unknown
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-practicelocation/
 # Practice Location
-Last updated: 10 Nov 2025
+Last updated: 9 Dec 2025
 ##  Introduction #
 The `PracticeLocation` model lists all the clinical practice locations that
 fall under an [Organization](/sdk/data-organization).
@@ -4840,7 +4899,24 @@ Field Name| Type
 dbid| Integer  
 practice_location| PracticeLocation  
 name| String  
-value| JSON
+value| JSON  
+##  PracticeLocationContactPoint #
+The `PracticeLocationContactPoint` model represents a contact method (such as
+phone, email, or fax) for a Practice Location. Multiple contact points can be
+associated with a single Practice Location, each with its own type, use, and
+status.
+###  Attributes #
+Field Name| Type  
+---|---  
+id| UUID  
+dbid| Integer  
+practice_location| PracticeLocation  
+system| [ContactPointSystem](/sdk/data-enumeration-types/#contactpointsystem)  
+value| String  
+use| [ContactPointUse](/sdk/data-enumeration-types/#contactpointuse)  
+use_notes| String  
+rank| Integer  
+state| [ContactPointState](/sdk/data-enumeration-types/#contactpointstate)
 ----- END PAGE https://docs.canvasmedical.com/sdk/data-practicelocation/
 
 
