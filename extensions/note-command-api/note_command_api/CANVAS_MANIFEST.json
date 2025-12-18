@@ -1,0 +1,26 @@
+{
+    "sdk_version": "0.84.0",
+    "plugin_version": "0.0.1",
+    "name": "note_command_api",
+    "description": "SimpleAPI endpoint that provides read-only access to Canvas notes with enhanced command data",
+    "components": {
+        "protocols": [
+            {
+                "class": "note_command_api.protocols.note_api:NoteCommandAPI",
+                "description": "GET /note/<note_id> - Returns note data with command attributes populated in body array"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "simpleapi-api-key"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
