@@ -28,7 +28,7 @@ Retrieves a note by ID and returns all note attributes with enhanced command dat
 - `note_id` (required): UUID of the note to retrieve
 
 **Headers:**
-- `X-Api-Key`: Your Canvas API key (configured via `simpleapi-api-key` secret)
+- `authorization`: Your Canvas API key (configured via `simpleapi-api-key` secret)
 
 **Response:** JSON object containing:
 - `id`: Note UUID
