@@ -257,7 +257,7 @@ Configure plugin secrets.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/commands/
 # Commands
-Last updated: 4 Dec 2025
+Last updated: 15 Dec 2025
 The commands module lets you create and update commands within a specific note
 in Canvas. Commands are the building blocks of many end-user workflows in
 Canvas, including nearly all clinical workflows for documentation, like HPIs
@@ -1947,6 +1947,45 @@ AssigneeType| Value| Description
         linked_items_urns=["urn:task:123", "urn:note:456"]
     )
 * * *
+##  UncategorizedDocumentReview #
+**Command-specific parameters** :
+Name| Type| Required| Description  
+---|---|---|---  
+`report_ids`|  _list[string]_| `true`| List of uncategorized document IDs to
+review.  
+`message_to_patient`|  _string_| `false`| Message to communicate findings to
+the patient.  
+`communication_method`|  _ReportReviewCommunicationMethod enum_| `false`|
+Method for patient communication. Must be one of
+`ReportReviewCommunicationMethod`.  
+`linked_items_urns`|  _list[string]_| `false`| List of URNs for items linked
+to the review.  
+`comment`|  _string_| `false`| Internal comment about the review.  
+**Enums and Types** :
+**`ReportReviewCommunicationMethod`**
+Communication Method| Value| Description  
+---|---|---  
+`DELEGATED_CALL_CAN_LEAVE_MESSAGE`| `"DM"`| Delegated call - can leave message  
+`DELEGATED_CALL_NEED_ANSWER`| `"DA"`| Delegated call - need answer  
+`DELEGATED_LETTER`| `"DL"`| Delegated letter to be sent to patient  
+`ALREADY_LEFT_MESSAGE`| `"AM"`| Already left message for patient  
+`ALREADY_REVIEWED_WITH_PATIENT`| `"AR"`| Already reviewed with patient  
+**Example** :
+    from canvas_sdk.commands import UncategorizedDocumentReviewCommand
+    from canvas_sdk.v1.data import UncategorizedClinicalDocument, Patient
+    from canvas_sdk.commands.commands.review import ReportReviewCommunicationMethod
+    patient = Patient.objects.last()
+    # Get uncategorized documents to review
+    uncategorized_documents = UncategorizedClinicalDocument.objects.filter(patient=patient, review__isnull=True)
+    report_ids = [str(doc.id) for doc in uncategorized_documents]
+    uncategorized_review = UncategorizedDocumentReviewCommand(
+        note_uuid="a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+        report_ids=report_ids,
+        message_to_patient="Your document has been reviewed.",
+        communication_method=ReportReviewCommunicationMethod.DELEGATED_CALL_CAN_LEAVE_MESSAGE,
+        comment="Document reviewed, no further action needed."
+    )
+* * *
 ##  UpdateDiagnosis #
 **Command-specific parameters** :
 Name| Type| Required| Description  
@@ -2144,6 +2183,8 @@ or specialist. ](/sdk/data-referral/)[ ServiceProviderData associated with
 Service Providers. ](/sdk/data-serviceprovider/)[ StaffData associated with
 Staff members. ](/sdk/data-staff)[ TaskData associated with Tasks.
 ](/sdk/data-task)[ TeamData associated with Teams. ](/sdk/data-team)[
+Uncategorized Clinical DocumentsData associated with uncategorized clinical
+documents and their reviews. ](/sdk/data-uncategorized-clinical-document)[
 ValueSetsLists of codes and terms from various clinical coding systems grouped
 by a defining concept. ](/sdk/data-value-sets/)
 ----- END PAGE https://docs.canvasmedical.com/sdk/data/
@@ -2482,7 +2523,7 @@ REMOVED| Removed
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-canvasuser/
 # CanvasUser
-Last updated: 13 Nov 2025
+Last updated: 15 Dec 2025
 ##  Introduction #
 The `CanvasUser` model represents a Canvas User. This could be linked to a
 staff member or a patient. This model isnât meant to be referenced directly,
@@ -2507,6 +2548,8 @@ Field Name| Type
 dbid| Integer  
 email| String  
 phone_number| String  
+is_staff| Boolean  
+is_portal_registered| Boolean  
 last_invite_date_time| DateTime  
 ----- END PAGE https://docs.canvasmedical.com/sdk/data-canvasuser/
 
@@ -7838,7 +7881,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 17 Nov 2025
+Last updated: 18 Dec 2025
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -9827,7 +9870,7 @@ Target object| Context object
       "uuid": note_id
     "patient":
       "id": pt_id  
-ASSESS__CONDITION__POST_SEARCH  
+ASSESS__CONDITION__PRE_SEARCH  
 ---  
 Target object| Context object  
     "id": command_uuid
@@ -12029,6 +12072,231 @@ Target object| Context object
       "staff": staff_key
     }
     "results": list[dict]  
+####  Imaging Review Command #
+IMAGING_REVIEW_COMMAND__POST_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__POST_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__POST_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__POST_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__POST_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__POST_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__PRE_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__PRE_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__PRE_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__PRE_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__PRE_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW_COMMAND__PRE_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+IMAGING_REVIEW__REPORT__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+IMAGING_REVIEW__REPORT__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+IMAGING_REVIEW__COMMUNICATION_METHOD__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+IMAGING_REVIEW__COMMUNICATION_METHOD__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
 ####  Immunization Statement Command #
 IMMUNIZATION_STATEMENT_COMMAND__POST_COMMIT  
 ---  
@@ -13029,6 +13297,231 @@ Target object| Context object
     }
     "results": list[dict]  
 LAB_ORDER__TESTS__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+####  Lab Review Command #
+LAB_REVIEW_COMMAND__POST_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__POST_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__POST_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__POST_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__POST_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__POST_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__PRE_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__PRE_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__PRE_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__PRE_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__PRE_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW_COMMAND__PRE_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+LAB_REVIEW__REPORT__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+LAB_REVIEW__REPORT__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+LAB_REVIEW__COMMUNICATION_METHOD__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+LAB_REVIEW__COMMUNICATION_METHOD__POST_SEARCH  
 ---  
 Target object| Context object  
     "id": command_uuid
@@ -15181,6 +15674,231 @@ Target object| Context object
       "staff": staff_key
     }
     "results": list[dict]  
+####  Referral Review Command #
+REFERRAL_REVIEW_COMMAND__POST_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__POST_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__POST_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__POST_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__POST_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__POST_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__PRE_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__PRE_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__PRE_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__PRE_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__PRE_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW_COMMAND__PRE_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+REFERRAL_REVIEW__REPORT__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+REFERRAL_REVIEW__REPORT__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+REFERRAL_REVIEW__COMMUNICATION_METHOD__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+REFERRAL_REVIEW__COMMUNICATION_METHOD__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
 ####  Refill Prescription Command #
 REFILL_COMMAND__POST_COMMIT  
 ---  
@@ -17222,16 +17940,6 @@ Target object| Context object
       "uuid": note_id
     "patient":
       "id": pt_id  
----  
-Target object| Context object  
-    "id": command_uuid
-    "type": [Command](/sdk/data-command/)
-|
-    "search_term": str
-    "user": {
-      "staff": staff_key
-    }
-    "results": list[dict]  
 UPDATE_GOAL__GOAL_STATEMENT__POST_SEARCH  
 ---  
 Target object| Context object  
@@ -17244,6 +17952,231 @@ Target object| Context object
     }
     "results": list[dict]  
 UPDATE_GOAL__GOAL_STATEMENT__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+####  Uncategorized Document Review Command #
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__POST_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__POST_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__POST_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__POST_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__POST_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__POST_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__PRE_COMMIT  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__PRE_DELETE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__PRE_ENTER_IN_ERROR  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__PRE_EXECUTE_ACTION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__PRE_ORIGINATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__PRE_UPDATE  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "report": str
+      "message_to_patient": str
+      "communication_method": str
+      "internal_comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__REPORT__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__REPORT__POST_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__COMMUNICATION_METHOD__PRE_SEARCH  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "search_term": str
+    "user": {
+      "staff": staff_key
+    }
+    "results": list[dict]  
+UNCATEGORIZED_DOCUMENT_REVIEW_COMMAND__COMMUNICATION_METHOD__POST_SEARCH  
 ---  
 Target object| Context object  
     "id": command_uuid
