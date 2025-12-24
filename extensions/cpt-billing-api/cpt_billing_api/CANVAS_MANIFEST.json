@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "cpt_billing_api",
+    "description": "API endpoint for adding CPT billing codes to Canvas notes",
+    "components": {
+        "protocols": [
+            {
+                "class": "cpt_billing_api.protocols.billing_api:BillingAPI",
+                "description": "SimpleAPI endpoint for adding billing line items to notes"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["simpleapi-api-key"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
