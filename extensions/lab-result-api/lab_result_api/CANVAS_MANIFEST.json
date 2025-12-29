@@ -2,12 +2,12 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "lab_result_api",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "SimpleAPI endpoint that provides read-only access to Canvas lab results with ordering provider, lab facility, and test values",
     "components": {
         "protocols": [
             {
-                "class": "lab_result_api.protocols.my_protocol:Protocol",
-                "description": "A protocol that does xyz..."
+                "class": "lab_result_api.protocols.lab_result_api:LabResultAPI",
+                "description": "GET /lab-result/<lab_report_id> - Returns lab result data with ordering provider, lab facility, and individual test results"
             }
         ],
         "commands": [],
@@ -15,7 +15,9 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": [
+        "simpleapi-api-key"
+    ],
     "tags": {},
     "references": [],
     "license": "",
