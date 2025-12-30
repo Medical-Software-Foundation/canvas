@@ -8,6 +8,10 @@
             {
                 "class": "note_command_api.protocols.note_api:NoteCommandAPI",
                 "description": "GET /note/<note_id> - Returns note data with command attributes populated in body array"
+            },
+            {
+                "class": "note_command_api.protocols.change_note_state:NoteStateChangeAPI",
+                "description": "POST /note/<note_id>/state - Changes the state of a note"
             }
         ],
         "commands": [],

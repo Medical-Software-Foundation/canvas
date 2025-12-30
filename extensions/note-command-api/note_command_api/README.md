@@ -3,20 +3,21 @@ note-command-api
 
 ## Description
 
-SimpleAPI endpoint that provides read-only access to Canvas notes with enhanced command data. This plugin exposes a GET endpoint that retrieves note data and enriches the note body with detailed command attributes from the Canvas data module.
+SimpleAPI endpoints that provide both read-only access and state management for Canvas notes. This plugin exposes a GET endpoint that retrieves note data with enhanced command attributes, and a POST endpoint that changes note states.
 
 ## Features
 
 - Retrieve complete note data by note ID
 - Automatically enhance command entries in note body with full command attributes
 - Filter empty text entries from note body
+- Change note states (lock, unlock, sign, push_charges, check_in, no_show, cancel)
 - Include comprehensive metadata:
   - Current state and state history with originator details
   - Patient information
   - Provider and originator details with staff status
   - Command attributes including originator, committer, state, and data
 
-## API Endpoint
+## API Endpoints
 
 ### GET plugin-io/api/note_command_api/note/<note_id>
 
@@ -61,10 +62,56 @@ Retrieves a note by ID and returns all note attributes with enhanced command dat
 - `400 Bad Request`: Missing note_id parameter
 - `404 Not Found`: Note does not exist
 
-## Example Usage
+**Example Usage:**
 
 ```bash
 curl -X GET "https://your-canvas-instance.com/plugin-io/api/note_command_api/note/788881ce-e451-44c3-b42d-6dbaebc999bb" \
+  -H "authorization: your-api-key-here"
+```
+
+### POST plugin-io/api/note_command_api/note/<note_id>/state
+
+Changes the state of a note by executing the specified state transition effect.
+
+**Authentication:** API Key (via APIKeyAuthMixin)
+
+**Path Parameters:**
+- `note_id` (required): UUID of the note to modify
+
+**Query Parameters:**
+- `state` (required): The state action to perform. Valid values:
+  - `lock`: Lock the note for editing
+  - `unlock`: Unlock the note
+  - `sign`: Sign the note
+  - `push_charges`: Push charges for the note
+  - `check_in`: Check in the patient for the appointment
+  - `no_show`: Mark the appointment as no show
+  - `cancel`: Cancel the associated appointment
+
+**Headers:**
+- `authorization`: Your Canvas API key (configured via `simpleapi-api-key` secret)
+
+**Response:** JSON object containing:
+- `message`: Confirmation message with note ID and state change
+
+**Error Responses:**
+- `400 Bad Request`: Missing note_id parameter, missing state parameter, or invalid state value
+- `404 Not Found`: Note does not exist
+- `500 Internal Server Error`: Error executing state change effect
+
+**Example Usage:**
+
+```bash
+# Lock a note
+curl -X POST "https://your-canvas-instance.com/plugin-io/api/note_command_api/note/788881ce-e451-44c3-b42d-6dbaebc999bb/state?state=lock" \
+  -H "authorization: your-api-key-here"
+
+# Sign a note
+curl -X POST "https://your-canvas-instance.com/plugin-io/api/note_command_api/note/788881ce-e451-44c3-b42d-6dbaebc999bb/state?state=sign" \
+  -H "authorization: your-api-key-here"
+
+# Cancel appointment
+curl -X POST "https://your-canvas-instance.com/plugin-io/api/note_command_api/note/788881ce-e451-44c3-b42d-6dbaebc999bb/state?state=cancel" \
   -H "authorization: your-api-key-here"
 ```
 
@@ -76,10 +123,20 @@ curl -X GET "https://your-canvas-instance.com/plugin-io/api/note_command_api/not
 
 ## Testing
 
-Run tests with coverage:
+Run all tests with coverage:
 
 ```bash
-uv run pytest tests/protocols/test_note_api.py --cov=note_command_api --cov-report=term-missing --cov-branch
+uv run pytest tests/ --cov=note_command_api --cov-report=term-missing --cov-branch
+```
+
+Run individual test files:
+
+```bash
+# Test note retrieval API
+uv run pytest tests/protocols/test_note_api.py -v
+
+# Test note state change API
+uv run pytest tests/protocols/test_change_note_state.py -v
 ```
 
 Current coverage: 100%
