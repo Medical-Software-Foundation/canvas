@@ -52,6 +52,7 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         sort_direction = self.request.query_params.get("sort_direction", "asc")
 
         note_queryset = Note.objects.exclude(current_state__state__in=(
+            NoteStates.SIGNED,
             NoteStates.LOCKED,
             NoteStates.DELETED,
             NoteStates.DISCHARGED,
