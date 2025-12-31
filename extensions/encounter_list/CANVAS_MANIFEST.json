@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "canvas-2.0.0",
+    "plugin_version": "canvas-3.0.0",
     "name": "encounter_list",
     "description": "The Encounter List plugin provides a comprehensive worklist view of open encounters",
     "url_permissions": [],
