@@ -8,7 +8,7 @@ The Encounter List plugin provides a comprehensive worklist view of open encount
 
 ## Features
 
-- **Open Encounter Tracking**: Displays all encounters in open states (excludes things in a Locked, Deleted, Discharged, Scheduling, Booked, Reverted, Cancelled, Confirmed state)
+- **Open Encounter Tracking**: Displays all encounters in open states (excludes things in a Signed, Locked, Deleted, Discharged, Scheduling, Booked, Reverted, Cancelled, Confirmed state)
 - **Advanced Filtering & Search**: Search by patient name, filter by DOS range, provider (owner), location, note type, claim queue, billable, committed commands, and delegated orders
 - **Multi Selection**: Select multiple providers, locations, note types, and claim queues to view combined workloads
 - **Command Status Tracking**: Shows uncommitted commands and delegated orders for each encounter, with one-click filters for encounters that need attention
