@@ -1,0 +1,36 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "vitalstream",
+    "description": "An integration for the VitalStream device by Caretaker",
+    "components": {
+        "protocols": [
+            {
+                "class": "vitalstream.routes.vitalstream_api:CaretakerPortalAPI",
+                "description": "API to receive readings from the vitalstream device"
+            },
+            {
+                "class": "vitalstream.routes.vitalstream_ui_api:VitalstreamUIAPI",
+                "description": "API to provide the UI for this integration"
+            },
+            {
+                "class": "vitalstream.applications.vitalstream_ui:VitalstreamUILauncher",
+                "description": "ActionButton launcher to launch the UI"
+            },
+            {
+                "class": "vitalstream.channels.live_observations:LiveObservationsChannel",
+                "description": "Websocket for the integration UI"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
