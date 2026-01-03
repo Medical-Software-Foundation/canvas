@@ -7,29 +7,34 @@
         <script type="text/javascript" src="/plugin-io/api/vitalstream/main.js"></script>
         <title>VitalStream by Caretaker</title>
         <script>
+            var session_id = "{{session_id}}";
             window.addEventListener("load", () => {{
                 new QRCode(
                     document.getElementById("qr-code"),
                     {
-                        text: "{{session_id}}",
+                        text: session_id,
                         width: 128,
                         height: 128,
                     }
                 );
+
+                // Create WebSocket connection.
+
+                // TODO: convert hyphens in UUID to underscores
+                session_id = session_id.replaceAll("-", "_");
+
+                const socket = new WebSocket("wss://{{subdomain}}.canvasmedical.com/plugin-io/ws/vitalstream/" + session_id + "/");
+
+                // Connection opened
+                socket.addEventListener("open", (event) => {
+                    document.getElementById("session-status").innerHTML = "Connected, waiting for data.";
+                });
+
+                // Listen for messages
+                socket.addEventListener("message", (event) => {
+                    document.getElementById("live-feed").append(event.data);
+                });
             }});
-            
-            // Create WebSocket connection.
-            const socket = new WebSocket("wss://{{subdomain}}.canvasmedical.com/plugin-io/ws/vitalstream/{{session_id}}/");
-
-            // Connection opened
-            socket.addEventListener("open", (event) => {
-                document.getElementById("connection-status").innerHTML = "Connected, waiting for data.";
-            });
-
-            // Listen for messages
-            socket.addEventListener("message", (event) => {
-                document.getElementById("live-feed").append(event.data);
-            });
         </script>
     </head>
     <body>

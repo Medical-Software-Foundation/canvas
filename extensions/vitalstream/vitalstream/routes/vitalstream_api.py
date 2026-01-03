@@ -16,9 +16,9 @@ class CaretakerPortalAPI(SimpleAPI):
     """
 
     def authenticate(self, credentials: Credentials) -> bool:
-        # Temporarily allow all requests (until 1/2)
+        # Temporarily allow all requests (until 1/7)
         # Just for development purposes.
-        return arrow.utcnow() < arrow.get('2026-01-02')
+        return arrow.utcnow() < arrow.get('2026-01-07')
 
 
     """
@@ -38,11 +38,16 @@ class CaretakerPortalAPI(SimpleAPI):
 
         # The session id is entered as the patient id on the device via QR
         # code
-        session_id = self.request.json().get('patid')
+        session_id = self.request.json().get('patid').lower()
 
         # Ensure the request body is referencing an active session
         cache = get_cache()
         session = cache.get(session_key(session_id))
         if session is not None:
-            effects.append(Broadcast(message=self.request.text(), channel=session_id).apply())
+            # TODO: channel names do not currently support hyphens, so they're
+            # being substituted with underscores. We need to broadcast to the
+            # version that has underscores.
+            session_id = session_id.replace("-", "_")
+
+            effects.append(Broadcast(message=self.request.json(), channel=session_id).apply())
         return effects
