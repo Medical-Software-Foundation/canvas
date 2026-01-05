@@ -1,0 +1,18 @@
+digraph {
+    rankdir=TB;
+
+    InitialPopulation [label="Initial Population", shape=box, style=rounded, color=green, fontcolor=green, comment="The initial population includes all patients registered within the healthcare facility's electronic health record (EHR) system who have an active status and are eligible for scheduling appointments."];
+    SubsetConsideration [label="Subset in Consideration", shape=box, style=rounded, color=green, fontcolor=green, comment="The subset in consideration consists of patients from the initial population who have requested an appointment or have been identified by healthcare providers as needing a follow-up appointment within the next 30 days."];
+    InactiveDeceased [label="Inactive or Deceased", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have been marked as inactive or deceased in the EHR system."];
+    OptedOut [label="Opted Out", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have explicitly opted out of receiving appointment scheduling services."];
+    OutstandingBalance [label="Outstanding Balance", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have an outstanding balance that exceeds the threshold defined by the facility's billing policy, unless a payment plan is in place."];
+    NonCompliance [label="Non-Compliance", shape=ellipse, color=blue, fontcolor=blue, comment="Patients who have been flagged for non-compliance with previous appointment attendance without valid reasons."];
+    EligiblePatients [label="Eligible Patients", shape=box, style=rounded, color=green, fontcolor=green, comment="Eligible patients will be contacted to schedule an appointment."];
+
+    InitialPopulation -> SubsetConsideration [label="if", color=blue, fontcolor=blue];
+    SubsetConsideration -> InactiveDeceased [label="and", color=blue, fontcolor=blue];
+    InactiveDeceased -> OptedOut [label="and", color=blue, fontcolor=blue];
+    OptedOut -> OutstandingBalance [label="and", color=blue, fontcolor=blue];
+    OutstandingBalance -> NonCompliance [label="and", color=blue, fontcolor=blue];
+    NonCompliance -> EligiblePatients [label="then", color=blue, fontcolor=blue];
+}
