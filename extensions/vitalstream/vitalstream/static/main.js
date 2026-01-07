@@ -1,4 +1,63 @@
+window.addEventListener("load", () => {{
+  var session_id = window._caretaker.session_id;
+  var subdomain = window._caretaker.subdomain;
 
+  new QRCode(
+    document.getElementById("qr-code"),
+    {
+      text: session_id,
+      width: 128,
+      height: 128,
+    }
+  );
+
+  // Create WebSocket connection.
+
+  // TODO: convert hyphens in UUID to underscores
+  session_id = session_id.replaceAll("-", "_");
+
+  const socket = new WebSocket("wss://" + subdomain + ".canvasmedical.com/plugin-io/ws/vitalstream/" + session_id + "/");
+
+  // Connection opened
+  socket.addEventListener("open", (event) => {
+    setSessionStatus("Waiting for data...");
+  });
+
+  // Listen for messages
+  socket.addEventListener("message", (event) => {
+    ensureInstructionsAreClosed();
+    setSessionStatus("Receiving data...");
+
+    data = JSON.parse(event.data).message
+
+    if (Object.hasOwn(data, "measurements")) {
+      for (var timestamp of Object.keys(data.measurements).sort()) {
+        const measurementContainer = document.createElement("div");
+        measurementContainer.setAttribute("class", "measurement");
+        const timestampHeader = document.createElement("h4");
+        const timestampText = document.createTextNode(timestamp);
+        timestampHeader.appendChild(timestampText);
+        measurementContainer.appendChild(timestampHeader);
+
+        for (var reading in data.measurements[timestamp]) {
+          measurementContainer.appendChild(document.createTextNode(reading + ": " + data.measurements[timestamp][reading] + " "));
+        }
+        document.getElementById("live-feed").append(measurementContainer);
+      }
+    }
+  });
+}});
+
+function setSessionStatus(message) {
+  document.getElementById("session-status").innerHTML = message;
+}
+
+function ensureInstructionsAreClosed() {
+  var details = document.getElementById('instructions');
+  if (details.hasAttribute('open')) {
+    details.removeAttribute('open');
+  }
+}
 
 // We use qrcode.js, included below the license.
 //

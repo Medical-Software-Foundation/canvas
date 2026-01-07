@@ -27,7 +27,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["AUTHORIZED_SERIAL_NUMBERS"],
     "tags": {},
     "references": [],
     "license": "",
