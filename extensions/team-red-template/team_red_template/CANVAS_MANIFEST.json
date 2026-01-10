@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "team_red_template",
+    "description": "Auto-populates telehealth visit notes with detailed HPI and standard commands when reason for visit is entered",
+    "components": {
+        "protocols": [
+            {
+                "class": "team_red_template.protocols.telehealth_note_template:TelehealthNoteTemplate",
+                "description": "Automatically inserts detailed HPI with patient demographics and standard note commands (ROS, PHQ-9, Exam, Instruct) when a reason for visit is originated in a telehealth visit note",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
