@@ -18,6 +18,7 @@ div.header img.logo {
 }
 
 details {
+  margin: 10px;
   background: rgb(46, 187, 227);
   border-radius: 6px;
   padding: 12px 16px;
