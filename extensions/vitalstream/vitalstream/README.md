@@ -31,7 +31,24 @@ This plugin provides an integration for the VitalStream device by Caretaker Medi
 
 The plugin requires the following secret:
 
-- `AUTHORIZED_SERIAL_NUMBERS`: A newline-separated list of authorized VitalStream device serial numbers.
+- `AUTHORIZED_SERIAL_NUMBERS`: A newline-separated list of authorized VitalStream device serial numbers. You can get the device's serial number from the "About" section of the Settings screen in the VitalStream app.
+
+In the VitalStream app on the tablet:
+
+- Under "settings", go to the "Data Forwarding" menu.
+  - "Enable Forwarding" should be ON
+  - "Portal" should be "Caretaker Portal"
+  - "Portal URL" should be `Https://<subdomain>.canvasmedical.com/plugin-io/api/vitalstream`
+
+## Usage
+
+- In Canvas, create a note
+- Click the "Record with VitalStream" button
+- Right pane opens, revealing QR code used to pair the device
+- Start a session on the caretaker tablet, click the camera icon to scan the code
+  - Data starts flowing in
+  - Data is not persisted immediately when received, it is averaged at a user-configurable cadence. The averages are what get persisted as Observation records
+  - When the caretaker user clicks "Done" on the tablet, the user needs to wait for the last data to come through and get averaged (and thus saved as observations)
 
 ## Opportunities for enhancement
 
