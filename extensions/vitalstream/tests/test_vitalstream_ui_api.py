@@ -187,10 +187,11 @@ class TestPostMeasurements(TestVitalstreamUIAPI):
         call_kwargs = mock_observation.call_args.kwargs
         assert call_kwargs["patient_id"] == "patient-789"
         assert call_kwargs["note_id"] == 123
+        assert call_kwargs["category"] == "vital-signs"
         assert call_kwargs["name"] == "Mean heart rate"
-        assert call_kwargs["value"] == 72
+        assert call_kwargs["value"] == "72"
         assert call_kwargs["units"] == "{beats}/min"
-        assert call_kwargs["codings"][0]["code"] == "103205-1"
+        assert call_kwargs["codings"][0].code == "103205-1"
 
     @patch("vitalstream.routes.vitalstream_ui_api.Observation")
     @patch("vitalstream.routes.vitalstream_ui_api.Note")
@@ -223,11 +224,12 @@ class TestPostMeasurements(TestVitalstreamUIAPI):
 
         mock_observation.assert_called_once()
         call_kwargs = mock_observation.call_args.kwargs
+        assert call_kwargs["category"] == "vital-signs"
         assert call_kwargs["name"] == "Blood pressure panel mean systolic and mean diastolic"
-        assert call_kwargs["codings"][0]["code"] == "96607-7"
+        assert call_kwargs["codings"][0].code == "96607-7"
         assert len(call_kwargs["components"]) == 1
-        assert call_kwargs["components"][0]["value_quantity"] == 120
-        assert call_kwargs["components"][0]["codings"][0]["code"] == "96608-5"
+        assert call_kwargs["components"][0].value_quantity == "120"
+        assert call_kwargs["components"][0].codings[0].code == "96608-5"
 
     @patch("vitalstream.routes.vitalstream_ui_api.Observation")
     @patch("vitalstream.routes.vitalstream_ui_api.Note")
@@ -260,11 +262,12 @@ class TestPostMeasurements(TestVitalstreamUIAPI):
 
         mock_observation.assert_called_once()
         call_kwargs = mock_observation.call_args.kwargs
+        assert call_kwargs["category"] == "vital-signs"
         assert call_kwargs["name"] == "Blood pressure panel mean systolic and mean diastolic"
-        assert call_kwargs["codings"][0]["code"] == "96607-7"
+        assert call_kwargs["codings"][0].code == "96607-7"
         assert len(call_kwargs["components"]) == 1
-        assert call_kwargs["components"][0]["value_quantity"] == 80
-        assert call_kwargs["components"][0]["codings"][0]["code"] == "96609-3"
+        assert call_kwargs["components"][0].value_quantity == "80"
+        assert call_kwargs["components"][0].codings[0].code == "96609-3"
 
     @patch("vitalstream.routes.vitalstream_ui_api.Observation")
     @patch("vitalstream.routes.vitalstream_ui_api.Note")

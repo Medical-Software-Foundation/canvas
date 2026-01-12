@@ -4,7 +4,7 @@ import arrow
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.observation import Observation
+from canvas_sdk.effects.observation import CodingData, Observation, ObservationComponentData
 from canvas_sdk.effects.simple_api import HTMLResponse, Response
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
@@ -93,9 +93,9 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
         data = self.request.json()
         # data expected: { timestamp, hr, sys, dia, resp, spo2 }
 
-        note = Note.objects.get(id=session["note_id"])
+        note = Note.objects.get(dbid=session["note_id"])
         patient_id = note.patient.id
-        effective_datetime = data["timestamp"]
+        effective_datetime = arrow.get(data["timestamp"]).datetime
 
         effects: list[Response | Effect] = []
 
@@ -106,15 +106,16 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                 observation = Observation(
                     patient_id=patient_id,
                     note_id=note.dbid,
+                    category="vital-signs",
                     name=vital_info["display"],
-                    value=value,
+                    value=str(value),
                     units=vital_info["units"],
                     effective_datetime=effective_datetime,
-                    codings=[{
-                        "system": "http://loinc.org",
-                        "code": vital_info["code"],
-                        "display": vital_info["display"],
-                    }],
+                    codings=[CodingData(
+                        system="http://loinc.org",
+                        code=vital_info["code"],
+                        display=vital_info["display"],
+                    )],
                 )
                 effects.append(observation.create())
 
@@ -126,27 +127,28 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
             for key, component_info in BP_COMPONENTS.items():
                 value = data.get(key)
                 if value is not None:
-                    components.append({
-                        "name": component_info["display"],
-                        "value_quantity": value,
-                        "units": component_info["units"],
-                        "codings": [{
-                            "system": "http://loinc.org",
-                            "code": component_info["code"],
-                            "display": component_info["display"],
-                        }],
-                    })
+                    components.append(ObservationComponentData(
+                        name=component_info["display"],
+                        value_quantity=str(value),
+                        value_quantity_unit=component_info["units"],
+                        codings=[CodingData(
+                            system="http://loinc.org",
+                            code=component_info["code"],
+                            display=component_info["display"],
+                        )],
+                    ))
 
             bp_observation = Observation(
                 patient_id=patient_id,
                 note_id=note.dbid,
+                category="vital-signs",
                 name=BP_PANEL["display"],
                 effective_datetime=effective_datetime,
-                codings=[{
-                    "system": "http://loinc.org",
-                    "code": BP_PANEL["code"],
-                    "display": BP_PANEL["display"],
-                }],
+                codings=[CodingData(
+                    system="http://loinc.org",
+                    code=BP_PANEL["code"],
+                    display=BP_PANEL["display"],
+                )],
                 components=components,
             )
             effects.append(bp_observation.create())

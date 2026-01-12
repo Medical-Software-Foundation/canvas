@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "sdk_version": "0.85.0",
+    "plugin_version": "1.0.0",
     "name": "vitalstream",
     "description": "An integration for the VitalStream device by Caretaker",
     "components": {
