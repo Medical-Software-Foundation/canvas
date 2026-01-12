@@ -33,6 +33,13 @@ The plugin requires the following secret:
 
 - `AUTHORIZED_SERIAL_NUMBERS`: A newline-separated list of authorized VitalStream device serial numbers.
 
+## Opportunities for enhancement
+
+The UI implements optimistic creation of the averaged Observations. An
+enhancement to this would be to perform a lookup of the newly created
+observations to confirm persistence. The measurements could start out dark
+grey in the table and turn black once confirmed.
+
 ## Testing
 
 Run the test suite with:
