@@ -90,6 +90,90 @@ function createTableCell(content) {
   return cell;
 }
 
+// Averaging state
+let currentBucketKey = null;
+let measurementBuffer = [];  // { data, row } objects
+let bucketFinalizeTimeout = null;
+
+function getAveragingFrequency() {
+  return parseInt(document.getElementById('averaging-frequency-select').value, 10);
+}
+
+function getBucketKey(timestamp) {
+  const bucketSize = getAveragingFrequency() * 1000;
+  const time = new Date(timestamp).getTime();
+  return Math.floor(time / bucketSize) * bucketSize;
+}
+
+function calculateAverages(bufferEntries) {
+  const sums = { hr: 0, sys: 0, dia: 0, resp: 0, spo2: 0 };
+  const counts = { hr: 0, sys: 0, dia: 0, resp: 0, spo2: 0 };
+
+  for (const entry of bufferEntries) {
+    for (const key of Object.keys(sums)) {
+      if (typeof entry.data[key] !== 'undefined') {
+        sums[key] += entry.data[key];
+        counts[key]++;
+      }
+    }
+  }
+
+  const averages = {};
+  for (const key of Object.keys(sums)) {
+    averages[key] = counts[key] > 0 ? Math.round(sums[key] / counts[key]) : undefined;
+  }
+  return averages;
+}
+
+function finalizeBucket(bucketKey, bufferEntries) {
+  if (bufferEntries.length === 0) return;
+
+  // Remove raw rows from live-feed
+  for (const entry of bufferEntries) {
+    entry.row.remove();
+  }
+
+  const averages = calculateAverages(bufferEntries);
+  const row = createMeasurementRow(
+    bucketKey,
+    averages.hr,
+    averages.sys,
+    averages.dia,
+    averages.resp,
+    averages.spo2,
+  );
+  document.getElementById("persisted-records").appendChild(row);
+
+  // Send averaged measurements to backend
+  const session_id = window._caretaker.session_id;
+  const subdomain = window._caretaker.subdomain;
+  fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/measurements/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      timestamp: new Date(bucketKey).toISOString(),
+      hr: averages.hr,
+      sys: averages.sys,
+      dia: averages.dia,
+      resp: averages.resp,
+      spo2: averages.spo2,
+    }),
+  });
+}
+
+function scheduleBucketFinalization() {
+  clearTimeout(bucketFinalizeTimeout);
+  const frequency = getAveragingFrequency() * 1000;
+  bucketFinalizeTimeout = setTimeout(() => {
+    if (measurementBuffer.length > 0) {
+      finalizeBucket(currentBucketKey, measurementBuffer);
+      measurementBuffer = [];
+      currentBucketKey = null;
+    }
+  }, frequency);
+}
+
 function handleNewDiscreteMeasurement(timestamp, data) {
   const measurementRow = createMeasurementRow(
     timestamp,
@@ -100,6 +184,16 @@ function handleNewDiscreteMeasurement(timestamp, data) {
     data.spo2,
   );
   document.getElementById("live-feed").append(measurementRow);
+
+  // Handle averaging
+  const bucketKey = getBucketKey(timestamp);
+  if (currentBucketKey !== null && bucketKey !== currentBucketKey) {
+    finalizeBucket(currentBucketKey, measurementBuffer);
+    measurementBuffer = [];
+  }
+  currentBucketKey = bucketKey;
+  measurementBuffer.push({ data, row: measurementRow });
+  scheduleBucketFinalization();
 }
 
 function setSessionStatus(message) {
