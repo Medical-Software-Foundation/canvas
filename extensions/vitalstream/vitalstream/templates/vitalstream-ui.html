@@ -22,11 +22,51 @@
             <summary>Instructions to connect</summary>
             <div id='session-start'>
                 <p>Scan the code below using the VitalStream device to link to your note.</p>
+                <p>Session id: <pre>{{session_id}}</pre></p>
                 <div id='qr-code'></div>
             </div>
         </details>
         <div id='session'>
-            <div id='live-feed'></div>
+            <table class='timeseries-table' id='live-feed'>
+                <caption>
+                    Live Readings from Device
+                </caption>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>HR</th>
+                        <th>BP</th>
+                        <th>Resp</th>
+                        <th>SpO2</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+            <div id='persistence-line'>
+                <span>Average readings every: </span>
+                <select name='averaging-frequency' id='averaging-frequency-select'>
+                    <option value=30>30 seconds</option>
+                    <option value=60>1 minute</option>
+                    <option value=300>5 minutes</option>
+                </select>
+            </div>
+            <table class='timeseries-table' id='persisted-records'>
+                <caption>
+                    Averaged Readings Saved to Chart
+                </caption>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>HR</th>
+                        <th>BP</th>
+                        <th>Resp</th>
+                        <th>SpO2</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
         </div>
     </body>
 </html>

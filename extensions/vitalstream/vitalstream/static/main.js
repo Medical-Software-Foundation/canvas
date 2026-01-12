@@ -15,7 +15,10 @@ window.addEventListener("load", () => {{
 
   // TODO: convert hyphens in UUID to underscores
   session_id = session_id.replaceAll("-", "_");
+  connectToWebsocket(session_id, subdomain);
+}});
 
+function connectToWebsocket(session_id, subdomain) {
   const socket = new WebSocket("wss://" + subdomain + ".canvasmedical.com/plugin-io/ws/vitalstream/" + session_id + "/");
 
   // Connection opened
@@ -26,30 +29,96 @@ window.addEventListener("load", () => {{
   // Listen for messages
   socket.addEventListener("message", (event) => {
     ensureInstructionsAreClosed();
-    setSessionStatus("Receiving data...");
+    setSessionStatus("Receiving data...", true);
 
     data = JSON.parse(event.data).message
 
     if (Object.hasOwn(data, "measurements")) {
       for (var timestamp of Object.keys(data.measurements).sort()) {
-        const measurementContainer = document.createElement("div");
-        measurementContainer.setAttribute("class", "measurement");
-        const timestampHeader = document.createElement("h4");
-        const timestampText = document.createTextNode(timestamp);
-        timestampHeader.appendChild(timestampText);
-        measurementContainer.appendChild(timestampHeader);
-
-        for (var reading in data.measurements[timestamp]) {
-          measurementContainer.appendChild(document.createTextNode(reading + ": " + data.measurements[timestamp][reading] + " "));
-        }
-        document.getElementById("live-feed").append(measurementContainer);
+        handleNewDiscreteMeasurement(timestamp, data.measurements[timestamp]);
       }
     }
   });
-}});
+
+  // Connection closed
+  socket.addEventListener("close", (event) => {
+    setSessionStatus("Disconnected. Attempting to reconnect.");
+    setTimeout(() => connectToWebsocket(session_id, subdomain), 3000); // retry after 3 seconds
+  });
+
+  // Connection error
+  socket.addEventListener("error", (event) => {
+    setSessionStatus("Connection error");
+  });
+}
+
+function createMeasurementRow(timestamp, heartRate, systolic, diastolic, respiratoryRate, oxygenSaturation) {
+  const measurementContainer = document.createElement("tr");
+  
+  measurementContainer.appendChild(createTableCell(new Date(timestamp).toLocaleTimeString("en-US")));
+  measurementContainer.appendChild(createTableCell(heartRate));
+
+  // Require at least one of systolic/diastolic to be present before creating
+  // a cell with any content.
+  // If neither are defined, no content.
+  // If one is defined, show the data we have and make clear what data we
+  // don't have
+  // If both are defined, show both, of course.
+  if (typeof systolic === 'undefined' && typeof diastolic === 'undefined') {
+      measurementContainer.appendChild(createTableCell(undefined));
+  } else if (typeof systolic === 'undefined' || typeof diastolic === 'undefined') {
+    if (typeof systolic === 'undefined') {
+      measurementContainer.appendChild(createTableCell("???/" + diastolic));
+    } else if (typeof diastolic === 'undefined') {
+      measurementContainer.appendChild(createTableCell(systolic + "/???"));
+    }
+  } else {
+    measurementContainer.appendChild(createTableCell(systolic + "/" + diastolic));
+  }
+
+  measurementContainer.appendChild(createTableCell(respiratoryRate));
+  measurementContainer.appendChild(createTableCell(oxygenSaturation));
+  return measurementContainer;
+}
+
+function createTableCell(content) {
+  const cell = document.createElement("td");
+  if (typeof content !== 'undefined') {
+    const cellContent = document.createTextNode(content);
+    cell.appendChild(cellContent);
+  }
+  return cell;
+}
+
+function handleNewDiscreteMeasurement(timestamp, data) {
+  const measurementRow = createMeasurementRow(
+    timestamp,
+    data.hr,
+    data.sys,
+    data.dia,
+    data.resp,
+    data.spo2,
+  );
+  document.getElementById("live-feed").append(measurementRow);
+}
 
 function setSessionStatus(message) {
   document.getElementById("session-status").innerHTML = message;
+}
+
+let sessionTimeout = null;
+
+function setSessionStatus(message, setIdleTimer = false) {
+  const status = document.getElementById('session-status');
+  status.innerHTML = message;
+
+  clearTimeout(sessionTimeout);
+
+  if (setIdleTimer) {
+    sessionTimeout = setTimeout(() => {
+      status.innerHTML = 'Connected, idle...';
+    }, 5000);
+  }
 }
 
 function ensureInstructionsAreClosed() {
