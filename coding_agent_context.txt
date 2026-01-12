@@ -5714,7 +5714,7 @@ plugin:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effects/
 # Effects
-Last updated: 11 Nov 2025
+Last updated: 8 Jan 2026
 Effects are instructions that plugins can return in order to perform an action
 in the Canvas EMR. This makes it possible to define workflows that create
 commands, show notifications, modify search results, etc.
@@ -5800,8 +5800,9 @@ for dynamically displaying forms in the Patient Portal. ](/sdk/form-result-
 effect)[ Layout EffectsModify or interact with the layout in Canvas.
 ](/sdk/layout-effect/)[ MessagesInteract with messages in Canvas.
 ](/sdk/effect-messages/)[ NotesInteract with notes in Canvas. ](/sdk/effect-
-notes/)[ PatientInteract with patient data. ](/sdk/effect-patient/)[ Patient
-Chart GroupEffect for grouping items on a patient chart section.
+notes/)[ ObservationsCreate or update clinical observations. ](/sdk/effect-
+observation/)[ PatientInteract with patient data. ](/sdk/effect-patient/)[
+Patient Chart GroupEffect for grouping items on a patient chart section.
 ](/sdk/patient-chart-group-effect/)[ Patient External IDCreate a new external
 identifier for a patient. ](/sdk/effect-create-patient-external-identifier/)[
 Patient MetadataInteract with patient metadata. ](/sdk/effect-patient-
@@ -6069,6 +6070,11 @@ RESCHEDULE_APPOINTMENT| Can be used to reschedule an appointment. Check out
 [Appointment Effects](/sdk/effect-notes/#reschedule-appointment).  
 RESCHEDULE_SCHEDULE_EVENT| Can be used to reschedule a schedule event. Check
 out [Schedule Event Effects](/sdk/effect-notes/#reschedule-schedule-event).  
+APPOINTMENT_LABEL_ADDED| Add one or more labels to an appointment (max 3
+total). Check out [Appointment Label Effects](/sdk/effect-appointment-
+labels/).  
+APPOINTMENT_LABEL_REMOVED| Remove one or more labels from an appointment.
+Check out [Appointment Label Effects](/sdk/effect-appointment-labels/).  
 APPOINTMENT__SLOTS__POST_SEARCH_RESULTS| Can be used to modify slot
 availability when scheduling an appointment  
 ----- END PAGE https://docs.canvasmedical.com/sdk/effects/
@@ -6542,7 +6548,7 @@ Attribute| Type| Description
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/layout-effect/
 # Layout Effects
-Last updated: 11 Nov 2025
+Last updated: 9 Jan 2026
 ##  Patient Summary #
 There are many summary sections in a patientâs chart, organized by data
 type. While there is a default ordering, you can use an Effect to reorder them
@@ -6760,6 +6766,31 @@ the main application with messages.
 This twist on the _Holywood Principle_ ensures that your application remains
 secure while still providing the functionality needed to manage modals
 effectively.
+##  Resizing Modals #
+Modal overlays can now be dynamically resized by embedded applications using
+the MessageChannel API. Applications launching with a `DEFAULT_MODAL` target
+can send a `RESIZE` message to adjust the modalâs width and/or height:
+    <script>
+        let messagePort = null;
+        // Listen for the port transfer from the Canvas Application
+        window.addEventListener('message', (event) => {
+          // Check if this is the INIT_CHANNEL message with a port
+          if (event.data?.type === 'INIT_CHANNEL' && event.ports?.[0]) {
+            // Store the port for later use
+            messagePort = event.ports[0];
+            messagePort.start();
+            // Example: Resize modal to specific dimensions
+            messagePort.postMessage({
+              type: 'RESIZE',
+              width: 800,  // pixels
+              height: 600  // pixels
+            });
+          }
+        });
+    </script>
+This enables embedded applications to optimize their display area based on
+content requirements, improving the user experience for dynamic or responsive
+plugin interfaces.
 ##  Portal Landing Page Widgets #
 The `PortalWidget` class allows you to add widgets of various sizes to the
 patient portal landing page. You can fully customize your widgets or leverage
@@ -7435,7 +7466,7 @@ The effect performs validation before execution to ensure data integrity:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-notes/
 # Note Effects
-Last updated: 29 Dec 2025
+Last updated: 8 Jan 2026
 The Canvas SDK provides effects to facilitate creating, updating, and managing
 **visit notes** , **appointments** , and **schedule events**. Below youâll
 find detailed documentation for each effect type and their operations.
@@ -7868,6 +7899,30 @@ Cancels an existing appointment and updates its status.
         def compute(self):
             appointment_effect = Appointment(instance_id="existing-appointment-uuid")
             return appointment_effect.cancel()
+##  Managing Appointment Labels #
+Canvas supports adding up to 3 labels per appointment for categorization and
+workflow automation. Labels can be managed programmatically using the
+appointment label effects.
+For detailed documentation on appointment label management, see [Appointment
+Label Effects](/sdk/effect-appointment-labels/).
+###  Quick Example #
+    from canvas_sdk.effects.note.appointment import AddAppointmentLabel, RemoveAppointmentLabel
+    from canvas_sdk.events import EventType
+    from canvas_sdk.handlers.base import BaseHandler
+    class MyHandler(BaseHandler):
+        RESPONDS_TO = [EventType.Name(EventType.APPOINTMENT_LABEL_ADDED), EventType.Name(EventType.APPOINTMENT_LABEL_REMOVED)]
+        def compute(self):
+            # Add labels to an appointment
+            add_effect = AddAppointmentLabel(
+                appointment_id="appointment-uuid",
+                labels={"URGENT", "FOLLOW_UP"}
+            )
+            # Remove labels from an appointment
+            remove_effect = RemoveAppointmentLabel(
+                appointment_id="appointment-uuid",
+                labels={"CANCELLED"}
+            )
+            return [add_effect.apply(), remove_effect.apply()]
 * * *
 ##  Validation #
 All effects perform comprehensive validation before execution:
@@ -7974,7 +8029,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 18 Dec 2025
+Last updated: 8 Jan 2026
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -8289,6 +8344,26 @@ Target object| Context object
 |
     "patient":
         "id": pt_id  
+APPOINTMENT_LABEL_ADDED  
+---  
+Occurs when one or more labels are added to an appointment.  
+Target object| Context object  
+    "id": appointment_id
+    "type": None
+|
+    "patient":
+        "id": pt_id
+    "label": label_name  
+APPOINTMENT_LABEL_REMOVED  
+---  
+Occurs when one or more labels are removed from an appointment.  
+Target object| Context object  
+    "id": appointment_id
+    "type": None
+|
+    "patient":
+        "id": pt_id
+    "label": label_name  
 APPOINTMENT__SLOTS__POST_SEARCH  
 ---  
 Occurs when requesting slot availability when scheduling an appointment.  
