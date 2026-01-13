@@ -1,0 +1,55 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "portal_content",
+    "description": "Unified patient portal for educational materials, imaging reports, lab reports, and visit notes",
+    "components": {
+        "protocols": [
+            {
+                "class": "portal_content.api.portal_api:PortalContentAPI",
+                "description": "API handler for all patient portal content types"
+            }
+        ],
+        "applications": [
+            {
+                "class": "portal_content.views.education_app:EducationMaterialsApp",
+                "icon": "assets/education_icon.png",
+                "scope": "portal_menu_item",
+                "name": "My Learning Materials",
+                "description": "View educational materials"
+            },
+            {
+                "class": "portal_content.views.imaging_app:ImagingReportsApp",
+                "icon": "assets/imaging_icon.png",
+                "scope": "portal_menu_item",
+                "name": "My Imaging Reports",
+                "description": "View imaging reports"
+            },
+            {
+                "class": "portal_content.views.labs_app:LabReportsApp",
+                "icon": "assets/labs_icon.png",
+                "scope": "portal_menu_item",
+                "name": "My Lab Reports",
+                "description": "View lab reports"
+            },
+            {
+                "class": "portal_content.views.visits_app:VisitNotesApp",
+                "icon": "assets/visits_icon.png",
+                "scope": "portal_menu_item",
+                "name": "My Visit Notes",
+                "description": "View visit note summaries"
+            }
+        ]
+    },
+    "secrets": [
+        "ENABLED_COMPONENTS",
+        "CLIENT_ID",
+        "CLIENT_SECRET",
+        "NOTE_TYPES"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
