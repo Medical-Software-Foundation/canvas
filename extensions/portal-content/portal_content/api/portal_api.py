@@ -64,7 +64,7 @@ class PortalContentAPI(PatientSessionAuthMixin, SimpleAPI):
                 log.error("CLIENT_ID and CLIENT_SECRET secrets not configured")
                 return None
 
-            environment = self.environment.get("CUSTOMER_IDENTIFIER", "talkiatry-sandbox")
+            environment = self.environment.get("CUSTOMER_IDENTIFIER", "")
             token_host = f"https://{environment}.canvasmedical.com"
 
             log.info(f"Requesting FHIR token from {token_host} for patient {patient_id}")
@@ -109,7 +109,7 @@ class PortalContentAPI(PatientSessionAuthMixin, SimpleAPI):
                 log.error("Failed to retrieve FHIR token")
                 return None
 
-            environment = self.environment.get("CUSTOMER_IDENTIFIER", "talkiatry-sandbox")
+            environment = self.environment.get("CUSTOMER_IDENTIFIER", "")
             base_url = f"https://fumage-{environment}.canvasmedical.com"
 
             log.info(f"Using FHIR base URL: {base_url} with patient-scoped token")
