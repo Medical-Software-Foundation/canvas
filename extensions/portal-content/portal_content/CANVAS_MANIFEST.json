@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "sdk_version": "0.65.0",
+    "plugin_version": "0.0.2",
     "name": "portal_content",
     "description": "Unified patient portal for educational materials, imaging reports, lab reports, and visit notes",
     "components": {
