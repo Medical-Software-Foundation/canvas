@@ -30,37 +30,37 @@ When the button is clicked, the plugin:
 
 The following 27 command types can be committed with this button (when SDK commands are enabled):
 
-Allergy
-Assess
-Change Medication
-Close Goal
-Consult Report Review
-Diagnose
-Family History
-Follow Up
-Goal
-History Of Present Illness
-Imaging Review
-Immunization Statement
-Instruct
-Lab Review
-Medical History
-Medication Statement
-Past Surgical History
-Perform
-Plan
-Physical Exam
-Questionnaire
-Remove Allergy
-Resolve Condition
-Review Of Systems
-Stop Medication
-Structured Assessment
-Task
-Uncategorized Document Review
-Update Diagnosis
-Update Goal
-Vitals
+- Allergy
+- Assess
+- Change Medication
+- Close Goal
+- Consult Report Review
+- Diagnose
+- Family History
+- Follow Up
+- Goal
+- History Of Present Illness
+- Imaging Review
+- Immunization Statement
+- Instruct
+- Lab Review
+- Medical History
+- Medication Statement
+- Past Surgical History
+- Perform
+- Plan
+- Physical Exam
+- Questionnaire
+- Remove Allergy
+- Resolve Condition
+- Review Of Systems
+- Stop Medication
+- Structured Assessment
+- Task
+- Uncategorized Document Review
+- Update Diagnosis
+- Update Goal
+- Vitals
 
 ## Installation & Usage
 
