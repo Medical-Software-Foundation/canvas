@@ -38,24 +38,6 @@ ENABLED_COMPONENTS=visits
 NOTE_TYPES=therapy,psych
 ```
 
-## Migration from Individual Plugins
-
-This plugin replaces the following individual plugins:
-- `patient_portal_education`
-- `patient_portal_imaging`
-- `patient_portal_labs`
-- `patient_visit_notes`
-
-### Migration Steps
-
-1. Install `portal_content` plugin
-2. Configure secrets:
-   - Copy `CLIENT_ID` and `CLIENT_SECRET` from any of the existing plugins
-   - Set `ENABLED_COMPONENTS` to match your previously installed plugins
-   - Copy `NOTE_TYPES` if you were using visit notes filtering
-3. Disable/uninstall the individual plugins
-4. Verify functionality in patient portal
-
 ## API Endpoints
 
 | Content Type | Portal URL | Data URL | PDF URL |
