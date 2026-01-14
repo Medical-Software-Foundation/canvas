@@ -5,7 +5,7 @@ authors = [
 dependencies = [
   "canvas[test-utils]"
 ]
-description = "Some description of your project."
+description = "UI and API to integrate with the VitalStream device by Caretaker Medical."
 license = "MIT"
 name = "vitalstream"
 readme = "vitalstream/README.md"
