@@ -5,31 +5,14 @@ import arrow
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.observation import CodingData, Observation, ObservationComponentData
-from canvas_sdk.effects.simple_api import HTMLResponse, Response
+from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import Note
 from canvas_sdk.v1.data.staff import Staff
 
+from vitalstream.constants import BP_COMPONENTS, BP_PANEL, VITAL_SIGNS
 from vitalstream.util import session_key
-
-
-# LOINC codes for averaged vital signs
-VITAL_SIGNS = {
-    "hr": {"code": "103205-1", "display": "Mean heart rate", "units": "{beats}/min"},
-    "resp": {"code": "103217-6", "display": "Mean respiratory rate", "units": "/min"},
-    "spo2": {"code": "103209-3", "display": "Mean oxygen saturation", "units": "%"},
-}
-
-# Blood pressure panel with components
-BP_PANEL = {
-    "code": "96607-7",
-    "display": "Blood pressure panel mean systolic and mean diastolic",
-}
-BP_COMPONENTS = {
-    "sys": {"code": "96608-5", "display": "Systolic blood pressure mean", "units": "mm[Hg]"},
-    "dia": {"code": "96609-3", "display": "Diastolic blood pressure mean", "units": "mm[Hg]"},
-}
 
 
 class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
@@ -83,10 +66,9 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
 
         if session is None:
             return [
-                Response(
-                    b'{"error": "Session not found"}',
+                JSONResponse(
+                    {"error": "Session not found"},
                     status_code=HTTPStatus.NOT_FOUND,
-                    content_type="application/json",
                 )
             ]
 
@@ -154,11 +136,7 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
             effects.append(bp_observation.create())
 
         effects.append(
-            Response(
-                b'{"status": "ok"}',
-                status_code=HTTPStatus.OK,
-                content_type="application/json",
-            )
+            JSONResponse({"status": "ok"})
         )
 
         return effects
