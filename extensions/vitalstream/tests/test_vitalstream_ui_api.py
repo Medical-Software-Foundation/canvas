@@ -1,6 +1,7 @@
 from http import HTTPStatus
 from unittest.mock import Mock, patch
 
+import arrow
 import pytest
 
 from vitalstream.routes.vitalstream_ui_api import VitalstreamUIAPI
@@ -434,7 +435,7 @@ class TestFinalizeSession(TestVitalstreamUIAPI):
 
         mock_note_instance = Mock()
         mock_note_instance.dbid = 123
-        mock_note_instance.uuid = "note-uuid-123"
+        mock_note_instance.id = "note-uuid-123"
         mock_note.objects.get.return_value = mock_note_instance
 
         mock_queryset = Mock()
@@ -470,13 +471,13 @@ class TestFinalizeSession(TestVitalstreamUIAPI):
 
         mock_note_instance = Mock()
         mock_note_instance.dbid = 123
-        mock_note_instance.uuid = "note-uuid-123"
+        mock_note_instance.id = "note-uuid-123"
         mock_note.objects.get.return_value = mock_note_instance
 
         # Create mock observation with value (simple vital sign)
         from datetime import datetime
         mock_obs = Mock()
-        mock_obs.effective_datetime = datetime(2026, 1, 7, 8, 50, 14)
+        mock_obs.effective_datetime = arrow.get('2026-01-07 08:50:14Z').datetime
         mock_obs.name = "Mean heart rate"
         mock_obs.value = "72"
         mock_obs.units = "{beats}/min"
@@ -501,7 +502,7 @@ class TestFinalizeSession(TestVitalstreamUIAPI):
         call_kwargs = mock_plan_command.call_args.kwargs
         assert call_kwargs["note_uuid"] == "note-uuid-123"
         assert "VitalStream Measurements:" in call_kwargs["narrative"]
-        assert "08:50:14 - Mean heart rate: 72 {beats}/min" in call_kwargs["narrative"]
+        assert "08:50:14 UTC - Mean heart rate: 72 {beats}/min" in call_kwargs["narrative"]
 
     @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
     @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
@@ -515,7 +516,7 @@ class TestFinalizeSession(TestVitalstreamUIAPI):
 
         mock_note_instance = Mock()
         mock_note_instance.dbid = 123
-        mock_note_instance.uuid = "note-uuid-123"
+        mock_note_instance.id = "note-uuid-123"
         mock_note.objects.get.return_value = mock_note_instance
 
         # Create mock BP panel observation (no value, has components)
@@ -570,7 +571,7 @@ class TestFinalizeSession(TestVitalstreamUIAPI):
 
         mock_note_instance = Mock()
         mock_note_instance.dbid = 123
-        mock_note_instance.uuid = "note-uuid-123"
+        mock_note_instance.id = "note-uuid-123"
         mock_note.objects.get.return_value = mock_note_instance
 
         mock_queryset = Mock()
@@ -605,7 +606,7 @@ class TestFinalizeSession(TestVitalstreamUIAPI):
 
         mock_note_instance = Mock()
         mock_note_instance.dbid = 123
-        mock_note_instance.uuid = "note-uuid-123"
+        mock_note_instance.id = "note-uuid-123"
         mock_note.objects.get.return_value = mock_note_instance
 
         mock_queryset = Mock()

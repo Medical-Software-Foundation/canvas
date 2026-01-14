@@ -171,7 +171,7 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
             # Build narrative from observations
             narrative_lines = ["VitalStream Measurements:"]
             for obs in observations:
-                timestamp = obs.effective_datetime.strftime("%H:%M:%S")
+                timestamp = obs.effective_datetime.strftime("%H:%M:%S %Z")
                 if obs.value:
                     narrative_lines.append(f"  {timestamp} - {obs.name}: {obs.value} {obs.units or ''}")
                 else:
@@ -182,7 +182,7 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
             narrative = "\n".join(narrative_lines)
 
         plan_command = PlanCommand(
-            note_uuid=note.uuid,
+            note_uuid=str(note.id),
             narrative=narrative,
         )
 
