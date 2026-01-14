@@ -3,15 +3,17 @@ from http import HTTPStatus
 import arrow
 
 from canvas_sdk.caching.plugins import get_cache
+from canvas_sdk.commands import PlanCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.observation import CodingData, Observation, ObservationComponentData
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import Note
+from canvas_sdk.v1.data.observation import Observation as ObservationData
 from canvas_sdk.v1.data.staff import Staff
 
-from vitalstream.constants import BP_COMPONENTS, BP_PANEL, VITAL_SIGNS
+from vitalstream.constants import ALL_VITAL_CODES, BP_COMPONENTS, BP_PANEL, VITAL_SIGNS
 from vitalstream.util import session_key
 
 
@@ -140,6 +142,54 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
         )
 
         return effects
+
+    @api.post("/vitalstream-ui/sessions/<session_id>/finalize/")
+    def finalize_session(self) -> list[Response | Effect]:
+        """Create a Plan command with a summary of all vital sign observations."""
+        session_id = self.request.path_params["session_id"]
+        session = self.validate_session(session_id)
+
+        if session is None:
+            return [
+                JSONResponse(
+                    {"error": "Session not found"},
+                    status_code=HTTPStatus.NOT_FOUND,
+                )
+            ]
+
+        note = Note.objects.get(dbid=session["note_id"])
+
+        # Query observations for this note with our vital sign codes
+        observations = ObservationData.objects.filter(
+            note_id=note.dbid,
+            codings__code__in=ALL_VITAL_CODES,
+        ).order_by("effective_datetime")
+
+        if not observations.exists():
+            narrative = "No data found."
+        else:
+            # Build narrative from observations
+            narrative_lines = ["VitalStream Measurements:"]
+            for obs in observations:
+                timestamp = obs.effective_datetime.strftime("%H:%M:%S")
+                if obs.value:
+                    narrative_lines.append(f"  {timestamp} - {obs.name}: {obs.value} {obs.units or ''}")
+                else:
+                    # BP panel with components
+                    components = obs.components.all()
+                    component_values = [f"{c.name}: {c.value_quantity} {c.value_quantity_unit or ''}" for c in components]
+                    narrative_lines.append(f"  {timestamp} - {obs.name}: {', '.join(component_values)}")
+            narrative = "\n".join(narrative_lines)
+
+        plan_command = PlanCommand(
+            note_uuid=note.uuid,
+            narrative=narrative,
+        )
+
+        return [
+            plan_command.originate(),
+            JSONResponse({"status": "ok"}),
+        ]
 
     # Serve the application js
     @api.get("/main.js")

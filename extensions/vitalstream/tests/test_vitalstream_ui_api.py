@@ -402,3 +402,227 @@ class TestGetCss(TestVitalstreamUIAPI):
         assert effects[0].headers["Content-Type"] == "text/css"
         assert effects[0].content == b"body { color: red; }"
         mock_render.assert_called_once_with("static/styles.css")
+
+
+class TestFinalizeSession(TestVitalstreamUIAPI):
+    """Tests for the finalize_session method."""
+
+    @patch.object(VitalstreamUIAPI, "validate_session")
+    def test_returns_404_when_session_invalid(self, mock_validate) -> None:
+        """Test that finalize_session returns 404 when session is invalid."""
+        mock_validate.return_value = None
+
+        api = self.create_api_instance(
+            path_params={"session_id": "invalid-session"}
+        )
+
+        effects = api.finalize_session()
+
+        assert len(effects) == 1
+        assert effects[0].status_code == HTTPStatus.NOT_FOUND
+        assert effects[0].headers["Content-Type"] == "application/json"
+
+    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
+    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
+    @patch("vitalstream.routes.vitalstream_ui_api.Note")
+    @patch.object(VitalstreamUIAPI, "validate_session")
+    def test_creates_plan_with_no_data_found_when_no_observations(
+        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
+    ) -> None:
+        """Test that finalize_session creates plan with 'No data found.' when no observations exist."""
+        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
+
+        mock_note_instance = Mock()
+        mock_note_instance.dbid = 123
+        mock_note_instance.uuid = "note-uuid-123"
+        mock_note.objects.get.return_value = mock_note_instance
+
+        mock_queryset = Mock()
+        mock_queryset.exists.return_value = False
+        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
+
+        mock_plan_instance = Mock()
+        mock_plan_instance.originate.return_value = Mock()
+        mock_plan_command.return_value = mock_plan_instance
+
+        api = self.create_api_instance(
+            path_params={"session_id": "valid-session"}
+        )
+
+        effects = api.finalize_session()
+
+        assert len(effects) == 2
+        mock_plan_command.assert_called_once_with(
+            note_uuid="note-uuid-123",
+            narrative="No data found.",
+        )
+        mock_plan_instance.originate.assert_called_once()
+
+    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
+    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
+    @patch("vitalstream.routes.vitalstream_ui_api.Note")
+    @patch.object(VitalstreamUIAPI, "validate_session")
+    def test_creates_plan_with_observation_narrative(
+        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
+    ) -> None:
+        """Test that finalize_session creates plan with narrative from observations."""
+        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
+
+        mock_note_instance = Mock()
+        mock_note_instance.dbid = 123
+        mock_note_instance.uuid = "note-uuid-123"
+        mock_note.objects.get.return_value = mock_note_instance
+
+        # Create mock observation with value (simple vital sign)
+        from datetime import datetime
+        mock_obs = Mock()
+        mock_obs.effective_datetime = datetime(2026, 1, 7, 8, 50, 14)
+        mock_obs.name = "Mean heart rate"
+        mock_obs.value = "72"
+        mock_obs.units = "{beats}/min"
+
+        mock_queryset = Mock()
+        mock_queryset.exists.return_value = True
+        mock_queryset.__iter__ = Mock(return_value=iter([mock_obs]))
+        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
+
+        mock_plan_instance = Mock()
+        mock_plan_instance.originate.return_value = Mock()
+        mock_plan_command.return_value = mock_plan_instance
+
+        api = self.create_api_instance(
+            path_params={"session_id": "valid-session"}
+        )
+
+        effects = api.finalize_session()
+
+        assert len(effects) == 2
+        mock_plan_command.assert_called_once()
+        call_kwargs = mock_plan_command.call_args.kwargs
+        assert call_kwargs["note_uuid"] == "note-uuid-123"
+        assert "VitalStream Measurements:" in call_kwargs["narrative"]
+        assert "08:50:14 - Mean heart rate: 72 {beats}/min" in call_kwargs["narrative"]
+
+    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
+    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
+    @patch("vitalstream.routes.vitalstream_ui_api.Note")
+    @patch.object(VitalstreamUIAPI, "validate_session")
+    def test_creates_plan_with_bp_panel_components(
+        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
+    ) -> None:
+        """Test that finalize_session handles BP panel observations with components."""
+        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
+
+        mock_note_instance = Mock()
+        mock_note_instance.dbid = 123
+        mock_note_instance.uuid = "note-uuid-123"
+        mock_note.objects.get.return_value = mock_note_instance
+
+        # Create mock BP panel observation (no value, has components)
+        from datetime import datetime
+        mock_component_sys = Mock()
+        mock_component_sys.name = "Systolic blood pressure mean"
+        mock_component_sys.value_quantity = "120"
+        mock_component_sys.value_quantity_unit = "mm[Hg]"
+
+        mock_component_dia = Mock()
+        mock_component_dia.name = "Diastolic blood pressure mean"
+        mock_component_dia.value_quantity = "80"
+        mock_component_dia.value_quantity_unit = "mm[Hg]"
+
+        mock_obs = Mock()
+        mock_obs.effective_datetime = datetime(2026, 1, 7, 8, 50, 14)
+        mock_obs.name = "Blood pressure panel mean systolic and mean diastolic"
+        mock_obs.value = None  # BP panel has no direct value
+        mock_obs.units = None
+        mock_obs.components.all.return_value = [mock_component_sys, mock_component_dia]
+
+        mock_queryset = Mock()
+        mock_queryset.exists.return_value = True
+        mock_queryset.__iter__ = Mock(return_value=iter([mock_obs]))
+        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
+
+        mock_plan_instance = Mock()
+        mock_plan_instance.originate.return_value = Mock()
+        mock_plan_command.return_value = mock_plan_instance
+
+        api = self.create_api_instance(
+            path_params={"session_id": "valid-session"}
+        )
+
+        effects = api.finalize_session()
+
+        assert len(effects) == 2
+        call_kwargs = mock_plan_command.call_args.kwargs
+        assert "Blood pressure panel" in call_kwargs["narrative"]
+        assert "Systolic blood pressure mean: 120 mm[Hg]" in call_kwargs["narrative"]
+        assert "Diastolic blood pressure mean: 80 mm[Hg]" in call_kwargs["narrative"]
+
+    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
+    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
+    @patch("vitalstream.routes.vitalstream_ui_api.Note")
+    @patch.object(VitalstreamUIAPI, "validate_session")
+    def test_filters_observations_by_vital_codes(
+        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
+    ) -> None:
+        """Test that finalize_session filters observations by vital sign codes."""
+        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
+
+        mock_note_instance = Mock()
+        mock_note_instance.dbid = 123
+        mock_note_instance.uuid = "note-uuid-123"
+        mock_note.objects.get.return_value = mock_note_instance
+
+        mock_queryset = Mock()
+        mock_queryset.exists.return_value = False
+        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
+
+        mock_plan_instance = Mock()
+        mock_plan_instance.originate.return_value = Mock()
+        mock_plan_command.return_value = mock_plan_instance
+
+        api = self.create_api_instance(
+            path_params={"session_id": "valid-session"}
+        )
+
+        api.finalize_session()
+
+        # Verify filter was called with correct parameters
+        mock_obs_data.objects.filter.assert_called_once()
+        filter_kwargs = mock_obs_data.objects.filter.call_args.kwargs
+        assert filter_kwargs["note_id"] == 123
+        assert "codings__code__in" in filter_kwargs
+
+    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
+    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
+    @patch("vitalstream.routes.vitalstream_ui_api.Note")
+    @patch.object(VitalstreamUIAPI, "validate_session")
+    def test_orders_observations_by_datetime(
+        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
+    ) -> None:
+        """Test that finalize_session orders observations by effective_datetime."""
+        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
+
+        mock_note_instance = Mock()
+        mock_note_instance.dbid = 123
+        mock_note_instance.uuid = "note-uuid-123"
+        mock_note.objects.get.return_value = mock_note_instance
+
+        mock_queryset = Mock()
+        mock_queryset.exists.return_value = False
+        mock_filter_result = Mock()
+        mock_filter_result.order_by.return_value = mock_queryset
+        mock_obs_data.objects.filter.return_value = mock_filter_result
+
+        mock_plan_instance = Mock()
+        mock_plan_instance.originate.return_value = Mock()
+        mock_plan_command.return_value = mock_plan_instance
+
+        api = self.create_api_instance(
+            path_params={"session_id": "valid-session"}
+        )
+
+        api.finalize_session()
+
+        # Verify order_by was called with effective_datetime
+        mock_filter_result.order_by.assert_called_once_with("effective_datetime")

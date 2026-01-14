@@ -120,7 +120,7 @@ function handleNewDiscreteMeasurement(timestamp, data) {
   });
 }
 
-function saveToChart(session_id, subdomain) {
+async function saveToChart(session_id, subdomain) {
   if (pendingMeasurements.length === 0) {
     return;
   }
@@ -139,6 +139,9 @@ function saveToChart(session_id, subdomain) {
 
   // Handle edge case: all measurements at same time or only one reading requested
   const bucketSize = numReadings > 1 && timeSpan > 0 ? timeSpan / numReadings : timeSpan + 1;
+
+  // Collect all fetch promises
+  const fetchPromises = [];
 
   // Create buckets and average measurements
   for (let i = 0; i < numReadings; i++) {
@@ -172,14 +175,26 @@ function saveToChart(session_id, subdomain) {
 
     // Only send if we have at least one measurement type
     if (Object.keys(averaged).length > 1) {
-      fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/measurements/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(averaged),
-      });
+      fetchPromises.push(
+        fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/measurements/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(averaged),
+        })
+      );
     }
   }
+
+  // Wait for all measurements to be saved
+  await Promise.all(fetchPromises);
+
+  // Finalize session by creating plan command
+  await fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/finalize/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
 
   pendingMeasurements = [];
 

@@ -14,3 +14,9 @@ BP_COMPONENTS = {
     "sys": {"code": "96608-5", "display": "Systolic blood pressure mean", "units": "mm[Hg]"},
     "dia": {"code": "96609-3", "display": "Diastolic blood pressure mean", "units": "mm[Hg]"},
 }
+
+# All LOINC codes for filtering observations
+ALL_VITAL_CODES = (
+    {info["code"] for info in VITAL_SIGNS.values()} |
+    {BP_PANEL["code"]}
+)
