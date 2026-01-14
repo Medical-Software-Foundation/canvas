@@ -7,13 +7,15 @@ This plugin provides an integration for the VitalStream device by Caretaker Medi
 
 - **Real-time Vital Signs Display**: Receives continuous vital sign measurements from VitalStream devices via WebSocket, displaying them in a live feed within the patient chart.
 
-- **Automatic Averaging**: Configurable time-based averaging of vital signs (30 seconds, 1 minute, or 5 minutes) to reduce noise and provide clinically meaningful readings.
+- **User-Controlled Averaging**: When ready, the user selects the desired number of readings (1-50, default 10) and clicks "Save to Chart". The measurements are averaged into evenly-distributed time buckets across the session duration.
 
-- **Observation Recording**: Averaged measurements are automatically saved to the patient's chart as Observations with appropriate LOINC codes for:
+- **Observation Recording**: Averaged measurements are saved to the patient's chart as Observations with appropriate LOINC codes for:
   - Mean heart rate (103205-1)
   - Mean respiratory rate (103217-6)
   - Mean oxygen saturation (103209-3)
   - Blood pressure panel with mean systolic and diastolic components (96607-7)
+
+- **Command Summary**: When saving to chart, a command is automatically inserted into the note with a summary of all recorded vital sign measurements.
 
 - **Secure Session Management**: Each VitalStream session is tied to a specific note and staff member, with QR code-based device pairing.
 
@@ -38,7 +40,7 @@ In the VitalStream app on the tablet:
 - Under "settings", go to the "Data Forwarding" menu.
   - "Enable Forwarding" should be ON
   - "Portal" should be "Caretaker Portal"
-  - "Portal URL" should be `Https://<subdomain>.canvasmedical.com/plugin-io/api/vitalstream`
+  - "Portal URL" should be `https://<subdomain>.canvasmedical.com/plugin-io/api/vitalstream`
 
 ## Usage
 
@@ -46,16 +48,18 @@ In the VitalStream app on the tablet:
 - Click the "Record with VitalStream" button
 - Right pane opens, revealing QR code used to pair the device
 - Start a session on the caretaker tablet, click the camera icon to scan the code
-  - Data starts flowing in
-  - Data is not persisted immediately when received, it is averaged at a user-configurable cadence. The averages are what get persisted as Observation records
-  - When the caretaker user clicks "Done" on the tablet, the user needs to wait for the last data to come through and get averaged (and thus saved as observations)
+  - Data starts flowing in and is displayed in real-time
+  - Data is not persisted until the user clicks "Save to Chart"
+- When finished recording, select the desired number of readings (1-50) and click "Save to Chart"
+  - The raw measurements are averaged into the selected number of time buckets
+  - Averaged readings are saved as Observations
+  - A command is inserted into the note summarizing the measurements
 
 ## Opportunities for enhancement
 
 The UI implements optimistic creation of the averaged Observations. An
 enhancement to this would be to perform a lookup of the newly created
-observations to confirm persistence. The measurements could start out dark
-grey in the table and turn black once confirmed.
+observations to confirm persistence.
 
 ## Testing
 
