@@ -16,7 +16,7 @@ window.addEventListener("load", () => {{
 
   // Set up save button
   document.getElementById('save-to-chart-btn').addEventListener('click', () => {
-    saveToChart(session_id, subdomain);
+    saveToChart(window._caretaker.session_id, subdomain);
   });
 
   // Create WebSocket connection.
