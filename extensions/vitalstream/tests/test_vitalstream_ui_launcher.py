@@ -56,16 +56,17 @@ class TestVitalstreamUILauncher:
         launcher = self.create_launcher_instance(
             context={
                 "note_id": "note-123",
-                "user": {"type": "Patient", "id": "patient-456"},
             }
         )
+        launcher.event.actor.instance.is_staff = False
 
         with pytest.raises(RuntimeError, match="Launching user must be Staff!"):
             launcher.handle()
 
     def test_handle_raises_error_when_user_is_missing(self) -> None:
-        """Test that handle raises RuntimeError when user is missing from context."""
+        """Test that handle raises RuntimeError when actor instance is missing."""
         launcher = self.create_launcher_instance(context={"note_id": "note-123"})
+        launcher.event.actor.instance = None
 
         with pytest.raises(RuntimeError, match="Launching user must be Staff!"):
             launcher.handle()
@@ -82,9 +83,10 @@ class TestVitalstreamUILauncher:
         launcher = self.create_launcher_instance(
             context={
                 "note_id": "note-123",
-                "user": {"type": "Staff", "id": "staff-456"},
             }
         )
+        launcher.event.actor.instance.is_staff = True
+        launcher.event.actor.instance.person_subclass.id = "staff-456"
 
         effects = launcher.handle()
 

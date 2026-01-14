@@ -26,10 +26,9 @@ class VitalstreamUILauncher(ActionButton):
     def handle(self) -> list[Effect]:
         note_id = self.context.get("note_id")
 
-        if self.context.get('user', {}).get('type') != 'Staff':
+        if not self.event.actor.instance or not self.event.actor.instance.is_staff:
             raise RuntimeError('Launching user must be Staff!')
-        staff_id = self.context.get('user', {}).get('id')
-
+        staff_id = self.event.actor.instance.person_subclass.id
         session_id = self.get_new_session_id(note_id, staff_id)
 
         return [
