@@ -1,3 +1,6 @@
+// Store measurements for later submission
+let pendingMeasurements = [];
+
 window.addEventListener("load", () => {{
   var session_id = window._caretaker.session_id;
   var subdomain = window._caretaker.subdomain;
@@ -10,6 +13,11 @@ window.addEventListener("load", () => {{
       height: 128,
     }
   );
+
+  // Set up save button
+  document.getElementById('save-to-chart-btn').addEventListener('click', () => {
+    saveToChart(session_id, subdomain);
+  });
 
   // Create WebSocket connection.
 
@@ -90,90 +98,6 @@ function createTableCell(content) {
   return cell;
 }
 
-// Averaging state
-let currentBucketKey = null;
-let measurementBuffer = [];  // { data, row } objects
-let bucketFinalizeTimeout = null;
-
-function getAveragingFrequency() {
-  return parseInt(document.getElementById('averaging-frequency-select').value, 10);
-}
-
-function getBucketKey(timestamp) {
-  const bucketSize = getAveragingFrequency() * 1000;
-  const time = new Date(timestamp).getTime();
-  return Math.floor(time / bucketSize) * bucketSize;
-}
-
-function calculateAverages(bufferEntries) {
-  const sums = { hr: 0, sys: 0, dia: 0, resp: 0, spo2: 0 };
-  const counts = { hr: 0, sys: 0, dia: 0, resp: 0, spo2: 0 };
-
-  for (const entry of bufferEntries) {
-    for (const key of Object.keys(sums)) {
-      if (typeof entry.data[key] !== 'undefined') {
-        sums[key] += entry.data[key];
-        counts[key]++;
-      }
-    }
-  }
-
-  const averages = {};
-  for (const key of Object.keys(sums)) {
-    averages[key] = counts[key] > 0 ? Math.round(sums[key] / counts[key]) : undefined;
-  }
-  return averages;
-}
-
-function finalizeBucket(bucketKey, bufferEntries) {
-  if (bufferEntries.length === 0) return;
-
-  // Remove raw rows from live-feed
-  for (const entry of bufferEntries) {
-    entry.row.remove();
-  }
-
-  const averages = calculateAverages(bufferEntries);
-  const row = createMeasurementRow(
-    bucketKey,
-    averages.hr,
-    averages.sys,
-    averages.dia,
-    averages.resp,
-    averages.spo2,
-  );
-  document.getElementById("persisted-records").appendChild(row);
-
-  // Send averaged measurements to backend
-  const session_id = window._caretaker.session_id;
-  const subdomain = window._caretaker.subdomain;
-  fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/measurements/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({
-      timestamp: new Date(bucketKey).toISOString(),
-      hr: averages.hr,
-      sys: averages.sys,
-      dia: averages.dia,
-      resp: averages.resp,
-      spo2: averages.spo2,
-    }),
-  });
-}
-
-function scheduleBucketFinalization() {
-  clearTimeout(bucketFinalizeTimeout);
-  const frequency = getAveragingFrequency() * 1000;
-  bucketFinalizeTimeout = setTimeout(() => {
-    if (measurementBuffer.length > 0) {
-      finalizeBucket(currentBucketKey, measurementBuffer);
-      measurementBuffer = [];
-      currentBucketKey = null;
-    }
-  }, frequency);
-}
-
 function handleNewDiscreteMeasurement(timestamp, data) {
   const measurementRow = createMeasurementRow(
     timestamp,
@@ -183,17 +107,93 @@ function handleNewDiscreteMeasurement(timestamp, data) {
     data.resp,
     data.spo2,
   );
-  document.getElementById("live-feed").append(measurementRow);
+  document.getElementById("measurements-table").querySelector("tbody").prepend(measurementRow);
 
-  // Handle averaging
-  const bucketKey = getBucketKey(timestamp);
-  if (currentBucketKey !== null && bucketKey !== currentBucketKey) {
-    finalizeBucket(currentBucketKey, measurementBuffer);
-    measurementBuffer = [];
+  // Store measurement for later submission
+  pendingMeasurements.push({
+    timestamp: new Date(timestamp).toISOString(),
+    hr: data.hr,
+    sys: data.sys,
+    dia: data.dia,
+    resp: data.resp,
+    spo2: data.spo2,
+  });
+}
+
+function saveToChart(session_id, subdomain) {
+  if (pendingMeasurements.length === 0) {
+    return;
   }
-  currentBucketKey = bucketKey;
-  measurementBuffer.push({ data, row: measurementRow });
-  scheduleBucketFinalization();
+
+  const numReadings = Math.min(50, Math.max(1, parseInt(document.getElementById('num-readings').value, 10) || 10));
+
+  // Sort measurements by timestamp
+  const sorted = [...pendingMeasurements].sort((a, b) =>
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  // Find time range
+  const minTime = new Date(sorted[0].timestamp).getTime();
+  const maxTime = new Date(sorted[sorted.length - 1].timestamp).getTime();
+  const timeSpan = maxTime - minTime;
+
+  // Handle edge case: all measurements at same time or only one reading requested
+  const bucketSize = numReadings > 1 && timeSpan > 0 ? timeSpan / numReadings : timeSpan + 1;
+
+  // Create buckets and average measurements
+  for (let i = 0; i < numReadings; i++) {
+    const bucketStart = minTime + (i * bucketSize);
+    const bucketEnd = minTime + ((i + 1) * bucketSize);
+    const bucketTimestamp = new Date(bucketStart + (bucketSize / 2)).toISOString();
+
+    // Find measurements in this bucket
+    const bucketMeasurements = sorted.filter(m => {
+      const t = new Date(m.timestamp).getTime();
+      return t >= bucketStart && (i === numReadings - 1 ? t <= bucketEnd : t < bucketEnd);
+    });
+
+    if (bucketMeasurements.length === 0) {
+      continue;
+    }
+
+    // Calculate averages for each measurement type
+    const measurementTypes = ['hr', 'sys', 'dia', 'resp', 'spo2'];
+    const averaged = { timestamp: bucketTimestamp };
+
+    for (const type of measurementTypes) {
+      const values = bucketMeasurements
+        .map(m => m[type])
+        .filter(v => typeof v !== 'undefined');
+
+      if (values.length > 0) {
+        averaged[type] = Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
+      }
+    }
+
+    // Only send if we have at least one measurement type
+    if (Object.keys(averaged).length > 1) {
+      fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/measurements/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(averaged),
+      });
+    }
+  }
+
+  pendingMeasurements = [];
+
+  // Clear the table and show confirmation message
+  const tbody = document.getElementById("measurements-table").querySelector("tbody");
+  tbody.innerHTML = '';
+
+  const caption = document.getElementById("measurements-table").querySelector("caption");
+  const originalCaption = caption.textContent;
+  caption.textContent = 'Saved to chart!';
+
+  setTimeout(() => {
+    caption.textContent = originalCaption;
+  }, 3000);
 }
 
 function setSessionStatus(message) {

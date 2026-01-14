@@ -27,33 +27,14 @@
             </div>
         </details>
         <div id='session'>
-            <table class='timeseries-table' id='live-feed'>
-                <caption>
-                    Live Readings from Device
-                </caption>
-                <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>HR</th>
-                        <th>BP</th>
-                        <th>Resp</th>
-                        <th>SpO2</th>
-                    </tr>
-                </thead>
-                <tbody>
-                </tbody>
-            </table>
             <div id='persistence-line'>
-                <span>Average readings every: </span>
-                <select name='averaging-frequency' id='averaging-frequency-select'>
-                    <option value=30>30 seconds</option>
-                    <option value=60>1 minute</option>
-                    <option value=300>5 minutes</option>
-                </select>
+                <label for='num-readings'>Number of readings:</label>
+                <input type='number' id='num-readings' name='num-readings' min='1' max='50' value='10' />
+                <button id='save-to-chart-btn' type='button'>Save to Chart</button>
             </div>
-            <table class='timeseries-table' id='persisted-records'>
+            <table class='timeseries-table' id='measurements-table'>
                 <caption>
-                    Averaged Readings Saved to Chart
+                    Readings from Device
                 </caption>
                 <thead>
                     <tr>
