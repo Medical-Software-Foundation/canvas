@@ -22,7 +22,14 @@
                 "description": "Websocket for the integration UI"
             }
         ],
-        "commands": [],
+        "commands": [
+            {
+                "name": "VitalStream",
+                "label": "VitalStream",
+                "schema_key": "vitalStream",
+                "section": "history"
+            }
+        ],
         "content": [],
         "effects": [],
         "views": []
