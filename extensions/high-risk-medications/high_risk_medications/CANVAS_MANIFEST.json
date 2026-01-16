@@ -1,0 +1,68 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "high_risk_medications",
+    "description": "Adds 'High Risk' annotations to medications in search results and displays active high-risk medications for patients.",
+    "components": {
+        "protocols": [
+            {
+                "class": "high_risk_medications.protocols.high_risk_medication_annotations:Protocol",
+                "description": "A protocol that adds 'High Risk' annotations to medications in search results for prescribe, refill, and medication statement commands."
+            },
+            {
+                "class": "high_risk_medications.protocols.medication_change_broadcast:MedicationChangeBroadcast",
+                "description": "A protocol that broadcasts WebSocket notifications when medications are added/changed/removed."
+            },
+            {
+                "class": "high_risk_medications.applications.high_risk_meds_viewer:HighRiskMedsActionButton",
+                "description": "A protocol that adds an action button to the patient chart if there are high-risk medications."
+            },
+            {
+                "class": "high_risk_medications.protocols.banner_alert:HighRiskMedicationsBannerAlert",
+                "description": "A protocol that adds a banner alert to the patient chart if there are high-risk medications."
+            },
+            {
+                "class": "high_risk_medications.protocols.patient_summary_configuration:SummarySectionLayout",
+                "description": "A protocol that customizes the patient summary section layout."
+            },
+            {
+                "class": "high_risk_medications.api.high_risk_meds_api:HighRiskMedsAPI",
+                "description": "API endpoint for fetching high-risk medications data",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "high_risk_medications.api.high_risk_meds_api:HighRiskMedsWebSocket",
+                "description": "WebSocket handler for real-time medication updates",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "high_risk_medications.applications.high_risk_meds_viewer:HighRiskMedsViewer",
+                "name": "High Risk Meds",
+                "icon": "/assets/alert.png",
+                "scope": "patient_specific",
+                "show_in_panel": false,
+                "description": "Displays active high-risk medications for the current patient"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
