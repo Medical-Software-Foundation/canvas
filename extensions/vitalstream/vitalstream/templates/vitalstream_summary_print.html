@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .vitalstream-summary-print {
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+
+            .section {
+                margin-bottom: 8px;
+            }
+
+            .timestamp {
+                font-weight: bold;
+            }
+        }
+    </style>
+</head>
+<body class="vitalstream-summary-print">
+    {% if observations %}
+        {% for obs in observations %}
+            <div class="section">
+                <span class="timestamp">{{ obs.timestamp }}</span> - {{ obs.name }}: {{ obs.value }}
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="section">No data found.</div>
+    {% endif %}
+</body>
+</html>

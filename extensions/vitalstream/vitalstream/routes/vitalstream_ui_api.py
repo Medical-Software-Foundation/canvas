@@ -1,9 +1,10 @@
 from http import HTTPStatus
+import uuid
 
 import arrow
 
 from canvas_sdk.caching.plugins import get_cache
-from canvas_sdk.commands import PlanCommand
+from canvas_sdk.commands.commands.custom_command import CustomCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.observation import CodingData, Observation, ObservationComponentData
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
@@ -145,7 +146,7 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/vitalstream-ui/sessions/<session_id>/finalize/")
     def finalize_session(self) -> list[Response | Effect]:
-        """Create a Plan command with a summary of all vital sign observations."""
+        """Create a Custom command with a summary of all vital sign observations."""
         session_id = self.request.path_params["session_id"]
         session = self.validate_session(session_id)
 
@@ -165,29 +166,38 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
             codings__code__in=ALL_VITAL_CODES,
         ).order_by("effective_datetime")
 
-        if not observations.exists():
-            narrative = "No data found."
-        else:
-            # Build narrative from observations
-            narrative_lines = ["VitalStream Measurements:"]
-            for obs in observations:
-                timestamp = obs.effective_datetime.strftime("%H:%M:%S %Z")
-                if obs.value:
-                    narrative_lines.append(f"  {timestamp} - {obs.name}: {obs.value} {obs.units or ''}")
-                else:
-                    # BP panel with components
-                    components = obs.components.all()
-                    component_values = [f"{c.name}: {c.value_quantity} {c.value_quantity_unit or ''}" for c in components]
-                    narrative_lines.append(f"  {timestamp} - {obs.name}: {', '.join(component_values)}")
-            narrative = "\n".join(narrative_lines)
+        # Prepare observations data for template
+        observation_list = []
+        for obs in observations:
+            timestamp = obs.effective_datetime.strftime("%H:%M:%S %Z")
+            if obs.value:
+                observation_list.append({
+                    "timestamp": timestamp,
+                    "name": obs.name,
+                    "value": f"{obs.value} {obs.units or ''}".strip()
+                })
+            else:
+                # BP panel with components
+                components = obs.components.all()
+                component_values = [f"{c.name}: {c.value_quantity} {c.value_quantity_unit or ''}" for c in components]
+                observation_list.append({
+                    "timestamp": timestamp,
+                    "name": obs.name,
+                    "value": ", ".join(component_values)
+                })
 
-        plan_command = PlanCommand(
-            note_uuid=str(note.id),
-            narrative=narrative,
+        context = {"observations": observation_list}
+
+        custom_command = CustomCommand(
+            schema_key="vitalStream",
+            content=render_to_string("templates/vitalstream_summary.html", context),
+            print_content=render_to_string("templates/vitalstream_summary_print.html", context)
         )
+        custom_command.command_uuid = str(uuid.uuid4())
+        custom_command.note_uuid = str(note.id)
 
         return [
-            plan_command.originate(),
+            custom_command.originate(),
             JSONResponse({"status": "ok"}),
         ]
 
