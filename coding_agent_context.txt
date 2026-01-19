@@ -257,7 +257,7 @@ Configure plugin secrets.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/commands/
 # Commands
-Last updated: 15 Dec 2025
+Last updated: 16 Jan 2026
 The commands module lets you create and update commands within a specific note
 in Canvas. Commands are the building blocks of many end-user workflows in
 Canvas, including nearly all clinical workflows for documentation, like HPIs
@@ -285,6 +285,12 @@ All commands have the following methods:
 Returns an Effect that originates a new command in the note body.
 **See also:** For efficiently inserting multiple commands at once, see [Batch
 Originate Commands](/sdk/effect-batch-originate/).
+**Example** :
+    from canvas_sdk.commands import PlanCommand
+    def compute():
+        new_plan = PlanCommand(note_uuid='rk786p', narrative='new')
+        new_plan.narrative = 'newer'
+        return [new_plan.originate()]
 ####  edit #
 Returns an Effect that edits an existing command with the values set on the
 command class instance.
@@ -292,31 +298,54 @@ command class instance.
   * **Partial Edits:** If you update only some fields of the command, any fields not explicitly modified will retain their existing values.
   * **No Changes:** Calling `edit()` without making any changes will result in a no-op; the command remains unchanged.
   * **Invalid Values:** If you attempt to set an invalid value, you should receive a validation error.
+**Example** :
+    from canvas_sdk.commands import PlanCommand
+    def compute():
+        existing_plan = PlanCommand(command_uuid='63hdik', narrative='something new')
+        return [existing_plan.edit()]
 ####  delete #
 Returns an Effect that deletes an existing, non-committed command from the
 note body.
+**Example** :
+    from canvas_sdk.commands import PlanCommand
+    def compute():
+        existing_plan = PlanCommand(command_uuid='63hdik')
+        return [existing_plan.delete()]
 ####  commit #
 Returns an Effect that commits an existing, non-committed command to the note
 body.
+**Example** :
+    from canvas_sdk.commands import PlanCommand
+    def compute():
+        existing_plan = PlanCommand(command_uuid='63hdik')
+        return [existing_plan.commit()]
 ####  review #
 Returns an Effect that sets a command in review.
 **Limited availability** The `review()` method can only be called on Prescribe
 commands objects. Other command types do not support this operation.
+**Example** :
+    from canvas_sdk.commands import PrescribeCommand
+    def compute():
+        existing_prescribe = PrescribeCommand(command_uuid='e32b85d9-ccb7-4e4f-a0e5-8783ed2d9528')
+        return [existing_prescribe.review()]
 ####  send #
 Returns an Effect that sends a signed command.
 **Limited availability** The `send()` method can only be called on LabOrder
 and Prescribe command objects. Other command types do not support this
 operation.
+**Example** :
+    from canvas_sdk.commands import PrescribeCommand
+    def compute():
+        existing_prescribe = PrescribeCommand(command_uuid='e32b85d9-ccb7-4e4f-a0e5-8783ed2d9528')
+        return [existing_prescribe.send()]
 ####  enter_in_error #
 Returns an effect that enter-in-errors an existing, committed command in the
 note body.
 **Example** :
     from canvas_sdk.commands import PlanCommand
     def compute():
-        existing_plan = PlanCommand(command_uuid='63hdik', narrative='something new')
-        new_plan = PlanCommand(note_uuid='rk786p', narrative='new')
-        new_plan.narrative = 'newer'
-        return [existing_plan.edit(), new_plan.originate()]
+        existing_plan = PlanCommand(command_uuid='63hdik')
+        return [existing_plan.enter_in_error()]
 ##  Command Constants #
 The `canvas_sdk.commands.constants` module provides essential classes and
 enumerations used across various Canvas SDK command implementations. These
@@ -531,6 +560,17 @@ This pattern ensures that both the originate and commit operations use the
 same `command_uuid`, allowing them to be chained together reliably in a single
 plugin execution.
 Command-specific details for each command class can be found below.
+##  Custom Commands #
+For creating custom commands with HTML-rendered content that can be inserted
+into patient charts, see the [CustomCommand](/sdk/commands-custom-command/)
+documentation.
+Custom commands are different from standard commands:
+  * They allow you to display read-only HTML content in the patient chart
+  * They must be configured in your pluginâs manifest before use
+  * They support both display and print versions of content
+  * They are designed for displaying formatted data, not for capturing user input
+Learn more: [CustomCommand Reference](/sdk/commands-custom-command/)
+* * *
 ##  AdjustPrescription #
 **Command-specific parameters** :
 Name| Type| Required| Description  
@@ -659,7 +699,6 @@ toward the goal.
         achievement_status=GoalCommand.AchievementStatus.ACHIEVED,
         progress="Patient has achieved the target weight goal of 150 lbs."
     )
-* * *
 ##  Diagnose #
 **Command-specific parameters** :
 Name| Type| Required| Description  
@@ -5714,7 +5753,7 @@ plugin:
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effects/
 # Effects
-Last updated: 8 Jan 2026
+Last updated: 12 Jan 2026
 Effects are instructions that plugins can return in order to perform an action
 in the Canvas EMR. This makes it possible to define workflows that create
 commands, show notifications, modify search results, etc.
@@ -5791,28 +5830,30 @@ information in a patient's chart. ](/sdk/effect-banner-alerts/)[ Billing Line
 ItemsAdd, modify, or remove billing codes on a note. ](/sdk/effect-billing-
 line-items/)[ ClaimsManage labels, update line items, move to a queue, or post
 a payment. ](/sdk/effect-claims/)[ Compound MedicationsCreate or update
-compound medications. ](/sdk/effect-compound-medication/)[ Custom HTML and
-Django TemplatesRender custom HTML using Django templates. ](/sdk/layout-
-effect/#custom-html-and-django-templates)[ Create CalendarCreate a calendar
-for a provider. ](/sdk/calendar-create-effect/)[ Manage Calendar EventsManage
-calendar events. ](/sdk/calendar-event-management-effects/)[ Form ResultEffect
-for dynamically displaying forms in the Patient Portal. ](/sdk/form-result-
-effect)[ Layout EffectsModify or interact with the layout in Canvas.
-](/sdk/layout-effect/)[ MessagesInteract with messages in Canvas.
-](/sdk/effect-messages/)[ NotesInteract with notes in Canvas. ](/sdk/effect-
-notes/)[ ObservationsCreate or update clinical observations. ](/sdk/effect-
-observation/)[ PatientInteract with patient data. ](/sdk/effect-patient/)[
-Patient Chart GroupEffect for grouping items on a patient chart section.
-](/sdk/patient-chart-group-effect/)[ Patient External IDCreate a new external
-identifier for a patient. ](/sdk/effect-create-patient-external-identifier/)[
-Patient MetadataInteract with patient metadata. ](/sdk/effect-patient-
-metadata/)[ Patient Metadata Create FormEffect for dynamically displaying
-forms in the Patient profile. ](/sdk/patient-metadata-create-form-effect)[
-Patient PortalCustomize your Patient Portal. ](/sdk/patient-portal/)[ Protocol
-CardsCalls to action in a patient's chart, commonly used for decision support
-intervention. ](/sdk/effect-protocol-cards/)[ QuestionnairesInteract with
-questionnaires and interviews. ](/sdk/effect-questionnaires/)[ TasksCreate or
-update tasks. ](/sdk/effect-tasks/)[ Task MetadataInteract with Task metadata.
+compound medications. ](/sdk/effect-compound-medication/)[ Command
+ValidationValidate commands and return structured error messages to users.
+](/sdk/effect-command-validation/)[ Custom HTML and Django TemplatesRender
+custom HTML using Django templates. ](/sdk/layout-effect/#custom-html-and-
+django-templates)[ Create CalendarCreate a calendar for a provider.
+](/sdk/calendar-create-effect/)[ Manage Calendar EventsManage calendar events.
+](/sdk/calendar-event-management-effects/)[ Form ResultEffect for dynamically
+displaying forms in the Patient Portal. ](/sdk/form-result-effect)[ Layout
+EffectsModify or interact with the layout in Canvas. ](/sdk/layout-effect/)[
+MessagesInteract with messages in Canvas. ](/sdk/effect-messages/)[
+NotesInteract with notes in Canvas. ](/sdk/effect-notes/)[ ObservationsCreate
+or update clinical observations. ](/sdk/effect-observation/)[ PatientInteract
+with patient data. ](/sdk/effect-patient/)[ Patient Chart GroupEffect for
+grouping items on a patient chart section. ](/sdk/patient-chart-group-
+effect/)[ Patient External IDCreate a new external identifier for a patient.
+](/sdk/effect-create-patient-external-identifier/)[ Patient MetadataInteract
+with patient metadata. ](/sdk/effect-patient-metadata/)[ Patient Metadata
+Create FormEffect for dynamically displaying forms in the Patient profile.
+](/sdk/patient-metadata-create-form-effect)[ Patient PortalCustomize your
+Patient Portal. ](/sdk/patient-portal/)[ Protocol CardsCalls to action in a
+patient's chart, commonly used for decision support intervention.
+](/sdk/effect-protocol-cards/)[ QuestionnairesInteract with questionnaires and
+interviews. ](/sdk/effect-questionnaires/)[ TasksCreate or update tasks.
+](/sdk/effect-tasks/)[ Task MetadataInteract with Task metadata.
 ](/sdk/effect-task-metadata/)[ CommandsThe building blocks of many end-user
 workflows in Canvas, including nearly all clinical workflows for
 documentation. ](/sdk/commands/)
@@ -5866,6 +5907,8 @@ CREATE_TASK_COMMENT| Add a comment to an existing task.
 COMMAND_AVAILABLE_ACTIONS_RESULTS| Can be used to sort or filter command
 available actions. Checkout command available [actions](sdk/commands/#command-
 actions)  
+COMMAND_VALIDATION_ERRORS| Can be used to return validation errors for
+commands. Check out [Command Validation](/sdk/effect-command-validation/).  
 ORIGINATE_ALLERGY_COMMAND| Can be used to originate an allergy command in a
 note.  
 EDIT_ALLERGY_COMMAND| Can be used to edit an allergy command in a note.  
@@ -8029,7 +8072,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 8 Jan 2026
+Last updated: 12 Jan 2026
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -9257,6 +9300,29 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "prescribe": dict
+      "change_medication_to": dict
+      "indications": list[dict]
+      "sig": str
+      "days_supply": int
+      "quantity_to_dispense": int
+      "type_to_dispense": dict
+      "refills": int
+      "substitutions": str
+      "pharmacy": dict
+      "prescriber": dict
+      "note_to_pharmacist": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 ADJUST_PRESCRIPTION_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -9657,6 +9723,23 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+ALLERGY_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "allergy": dict
+      "severity": str
+      "narrative": str
+      "approximate_date":
+        "input": str
+        "date": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 ALLERGY_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -9903,6 +9986,21 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+ASSESS_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "condition": dict
+      "background": str
+      "status": str
+      "narrative": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 ASSESS_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -10073,6 +10171,7 @@ CANCEL_PRESCRIPTION_COMMAND__POST_DELETE|
 CANCEL_PRESCRIPTION_COMMAND__PRE_ENTER_IN_ERROR|  
 CANCEL_PRESCRIPTION_COMMAND__POST_ENTER_IN_ERROR|  
 CANCEL_PRESCRIPTION_COMMAND__AVAILABLE_ACTIONS|  
+CANCEL_PRESCRIPTION_COMMAND__POST_VALIDATION|  
 CANCEL_PRESCRIPTION_COMMAND__PRE_EXECUTE_ACTION|  
 CANCEL_PRESCRIPTION_COMMAND__POST_EXECUTE_ACTION|  
 CANCEL_PRESCRIPTION__SELECTED_PRESCRIPTION__PRE_SEARCH|  
@@ -10127,6 +10226,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+CHANGE_MEDICATION_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "medication": dict
+      "sig": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 CHANGE_MEDICATION_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -10313,6 +10425,18 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+CLIPBOARD_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "text": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 CLIPBOARD_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -10501,6 +10625,20 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+CLOSE_GOAL_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "goal_id": dict
+      "achievement_status": str
+      "progress": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 CLOSE_GOAL_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -10711,6 +10849,23 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+DIAGNOSE_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "diagnose": dict
+      "background": str
+      "approximate_date_of_onset":
+        "input": str
+        "date": str
+      "today_assessment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 DIAGNOSE_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -10930,6 +11085,17 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+EDUCATIONAL_MATERIAL_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields": dict
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 EDUCATIONAL_MATERIAL_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -11126,6 +11292,20 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+FAMILY_HISTORY_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "family_history": dict
+      "relative": dict
+      "note": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 FAMILY_HISTORY_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -11355,6 +11535,22 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+FOLLOW_UP_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "requested_date": dict
+      "note_type": dict
+      "coding": dict
+      "reason_for_visit": dict
+      "comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 FOLLOW_UP_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -11605,6 +11801,23 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+GOAL_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "goal_statement": str
+      "start_date": str
+      "due_date": str
+      "achievement_status": str
+      "priority": str
+      "progress": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 GOAL_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -11805,6 +12018,18 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+HISTORY_OF_PRESENT_ILLNESS_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "narrative": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 HISTORY_OF_PRESENT_ILLNESS_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -11981,6 +12206,25 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+IMAGING_ORDER_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "image": dict
+      "indications": list[dict]
+      "priority": str
+      "additional_details": str
+      "imaging_center": dict
+      "comment": str
+      "ordering_provider": dict
+      "linked_items": list[dict]
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 IMAGING_ORDER_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -12524,6 +12768,22 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+IMMUNIZATION_STATEMENT_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "statement": dict
+      "date":
+        "date": str
+        "input": str
+      "comments": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 IMMUNIZATION_STATEMENT_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -12755,6 +13015,24 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+IMMUNIZE_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "coding": dict
+      "lot_number": dict
+      "manufacturer": str
+      "exp_date_original": str
+      "sig_original": str
+      "consent_given": bool
+      "given_by": dict
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 IMMUNIZE_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -13033,6 +13311,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+INSTRUCT_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "instruct": dict
+      "narrative": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 INSTRUCT_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -13234,6 +13525,23 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+LAB_ORDER_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "lab_partner": dict
+      "tests": list[dict]
+      "ordering_provider": dict
+      "diagnosis": list[dict]
+      "fasting_status": bool
+      "comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 LAB_ORDER_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -13771,6 +14079,26 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+MEDICAL_HISTORY_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "past_medical_history": dict
+      "approximate_start_date":
+        "date": str
+        "input": str
+      "approximate_end_date":
+        "date": str
+        "input": str
+      "show_on_condition_list": bool
+      "comments": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 MEDICAL_HISTORY_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -14067,6 +14395,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+MEDICATION_STATEMENT_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "medication": dict
+      "sig": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 MEDICATION_STATEMENT_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -14256,6 +14597,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+PERFORM_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "perform": dict
+      "notes": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 PERFORM_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -14442,6 +14796,18 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+PHYSICAL_EXAM_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "questionnaire": dict
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 PHYSICAL_EXAM_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -14619,6 +14985,18 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+PLAN_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "narrative": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 PLAN_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -14804,6 +15182,28 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+PRESCRIBE_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "prescribe": dict
+      "indications": list[dict]
+      "sig": str
+      "days_supply": int
+      "quantity_to_dispense": int
+      "type_to_dispense": dict
+      "refills": int
+      "substitutions": str
+      "pharmacy": dict
+      "prescriber": dict
+      "note_to_pharmacist": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 PRESCRIBE_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -15162,6 +15562,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+QUESTIONNAIRE_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "questionnaire": dict
+      "result": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 QUESTIONNAIRE_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -15351,6 +15764,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+REASON_FOR_VISIT_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "coding": dict
+      "comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 REASON_FOR_VISIT_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -15574,6 +16000,26 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+REFER_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "refer_to": dict
+      "indications": list[dict]
+      "clinical_question": str
+      "priority": str
+      "notes_to_specialist": str
+      "include_visit_note": bool
+      "internal_comment": str
+      "documents_to_include": dict
+      "linked_items": list[dict]
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 REFER_COMMAND_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -16144,6 +16590,28 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+REFILL_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "prescribe": dict
+      "indications": list[dict]
+      "sig": str
+      "days_supply": int
+      "quantity_to_dispense": int
+      "type_to_dispense": dict
+      "refills": int
+      "substitutions": str
+      "pharmacy": dict
+      "prescriber": dict
+      "note_to_pharmacist": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 REFILL_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -16502,6 +16970,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+REMOVE_ALLERGY_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "allergy": dict
+      "narrative": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 REMOVE_ALLERGY_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -16694,6 +17175,20 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+RESOLVE_CONDITION_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "condition": dict
+      "show_in_condition_list": bool
+      "rationale": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 RESOLVE_CONDITION_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -16889,6 +17384,18 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+ROS_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "questionnaire": dict
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 ROS_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -17032,6 +17539,7 @@ SNOOZE_PROTOCOL_COMMAND__POST_DELETE|
 SNOOZE_PROTOCOL_COMMAND__PRE_ENTER_IN_ERROR|  
 SNOOZE_PROTOCOL_COMMAND__POST_ENTER_IN_ERROR|  
 SNOOZE_PROTOCOL_COMMAND__AVAILABLE_ACTIONS|  
+SNOOZE_PROTOCOL_COMMAND__POST_VALIDATION|  
 SNOOZE_PROTOCOL_COMMAND__PRE_EXECUTE_ACTION|  
 SNOOZE_PROTOCOL_COMMAND__POST_EXECUTE_ACTION|  
 SNOOZE_PROTOCOL__PROTOCOL__PRE_SEARCH|  
@@ -17086,6 +17594,19 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+STOP_MEDICATION_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "medication": dict
+      "rationale": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 STOP_MEDICATION_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -17272,6 +17793,18 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+STRUCTURED_ASSESSMENT_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "questionnaire": dict
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 STRUCTURED_ASSESSMENT_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -17461,6 +17994,22 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+SURGICAL_HISTORY_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "past_surgical_history": dict
+      "approximate_date":
+        "input": str
+        "date": str
+      "comment": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 SURGICAL_HISTORY_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -17689,6 +18238,23 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+TASK_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "title": str
+      "assign_to": dict
+      "due_date": str
+      "comment": str
+      "labels": list[dict]
+      "linked_items": list[dict]
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 TASK_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -17899,6 +18465,7 @@ UPDATE_DIAGNOSIS_COMMAND__POST_DELETE|
 UPDATE_DIAGNOSIS_COMMAND__PRE_ENTER_IN_ERROR|  
 UPDATE_DIAGNOSIS_COMMAND__POST_ENTER_IN_ERROR|  
 UPDATE_DIAGNOSIS_COMMAND__AVAILABLE_ACTIONS|  
+UPDATE_DIAGNOSIS_COMMAND__POST_VALIDATION|  
 UPDATE_DIAGNOSIS_COMMAND__PRE_EXECUTE_ACTION|  
 UPDATE_DIAGNOSIS_COMMAND__POST_EXECUTE_ACTION|  
 UPDATE_DIAGNOSIS__CONDITION__PRE_SEARCH|  
@@ -17964,6 +18531,22 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+UPDATE_GOAL_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "goal_statement": dict
+      "due_date": str
+      "achievement_status": str
+      "priority": str
+      "progress": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 UPDATE_GOAL_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
@@ -18441,6 +19024,31 @@ Target object| Context object
       "name": string
     "user":
       "staff": staff_id  
+VITALS_COMMAND__POST_VALIDATION  
+---  
+Target object| Context object  
+    "id": command_uuid
+    "type": [Command](/sdk/data-command/)
+|
+    "fields":
+      "height": str
+      "weight_lbs": str
+      "weight_oz": str
+      "waist_circumference": str
+      "body_temperature": str
+      "body_temperature_site": str
+      "blood_pressure_systole": int
+      "blood_pressure_diastole": str
+      "blood_pressure_position_and_site": str
+      "pulse": str
+      "pulse_rhythm": str
+      "respiration_rate": int
+      "oxygen saturation": str
+      "note": str
+    "note":
+      "uuid": note_id
+    "patient":
+      "id": pt_id  
 VITALS_COMMAND__POST_EXECUTE_ACTION  
 ---  
 Target object| Context object  
