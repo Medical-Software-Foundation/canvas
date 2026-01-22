@@ -28,25 +28,11 @@ class HighRiskMedsAPI(StaffSessionAuthMixin, SimpleAPI):
         log.info(f"Loading high-risk medications view for patient {patient_id}")
 
         try:
-            high_risk_meds = get_high_risk_meds(patient_id)
-
-            # Build medication HTML
-            med_items = []
-            for med in high_risk_meds:
-                med_items.append(f"""
-                    <div class="med-item">
-                        <div class="med-header">
-                            <span class="high-risk-badge">HIGH RISK</span>
-                            <span class="med-name">{med['name']}</span>
-                        </div>
-                    </div>
-                """)
+            high_risk_meds = get_high_risk_meds(patient_id, self.secrets["HIGH_RISK_PATTERNS"])
 
             context = {
                 "patient_id": patient_id,
-                "has_high_risk_meds": len(high_risk_meds) > 0,
-                "count": len(high_risk_meds),
-                "medications": "\n".join(med_items),
+                "medications": high_risk_meds,
                 "customer_identifier": self.environment['CUSTOMER_IDENTIFIER'],
             }
 
@@ -57,15 +43,15 @@ class HighRiskMedsAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        except Exception as e:
-            log.error(f"Error loading view: {str(e)}")
+        except (KeyError, AttributeError) as e:
+            log.error(f"Data access error: {str(e)}")
             return [
                 HTMLResponse(
                     render_to_string(
                         "assets/templates/error.html",
-                        {"error_message": str(e)}
+                        {"error_message": "Error accessing medication data"}
                     ),
-                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
 
@@ -96,17 +82,9 @@ class HighRiskMedsWebSocket(WebSocketAPI):
     """Authenticate websocket connections for live medication updates."""
 
     def authenticate(self) -> bool:
-        log.info(f"WebSocket authenticate called. Channel: {self.websocket.channel}")
-        log.info(f"WebSocket headers: {self.websocket.headers}")
-
         logged_in_user = self.websocket.logged_in_user
-        log.info(f"Logged in user: {logged_in_user}")
 
         if not logged_in_user:
-            log.warning("No logged_in_user found in WebSocket connection")
             return False
 
-        is_staff = logged_in_user.get("type") == "Staff"
-        log.info(f"Authentication result: {is_staff}")
-
-        return is_staff
+        return logged_in_user.get("type") == "Staff"

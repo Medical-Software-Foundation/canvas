@@ -2,10 +2,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
 from canvas_sdk.effects.banner_alert import AddBannerAlert, RemoveBannerAlert
-from canvas_sdk.v1.data.medication import Medication
-
-from logger import log
-from high_risk_medications.helper import HIGH_RISK_PATTERNS, get_high_risk_meds
+from high_risk_medications.helper import get_high_risk_meds
 
 class HighRiskMedicationsBannerAlert(BaseProtocol):
 
@@ -26,15 +23,19 @@ class HighRiskMedicationsBannerAlert(BaseProtocol):
     def compute(self) -> list[Effect]:
        
         patient_id = self.context.get("patient", {}).get("id")
-        high_risk_meds = get_high_risk_meds(patient_id)
+        high_risk_meds = get_high_risk_meds(patient_id, self.secrets["HIGH_RISK_PATTERNS"])
 
         if high_risk_meds:
             med_names = [med['name'] for med in high_risk_meds]
+            narrative = f"High Risk Meds: {', '.join(med_names)}"
+            if len(narrative) > 90:
+                count = len(high_risk_meds)
+                narrative = f"{count} High Risk Meds"
             return [
                 AddBannerAlert(
                     patient_id=patient_id,
                     key=self.BANNER_KEY,
-                    narrative=f"High Risk Med: {', '.join(med_names)}",
+                    narrative=narrative,
                     placement=[AddBannerAlert.Placement.CHART],
                     intent=AddBannerAlert.Intent.ALERT,
                 ).apply()

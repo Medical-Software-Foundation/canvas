@@ -42,6 +42,10 @@
                     "read": [],
                     "write": []
                 }
+            },
+            {
+                "class": "high_risk_medications.protocols.chart_summary_grouping:Protocol",
+                "description": "A protocol that groups high-risk medications in the patient summary chart."
             }
         ],
         "applications": [
@@ -59,7 +63,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["HIGH_RISK_PATTERNS"],
     "tags": {},
     "references": [],
     "license": "",

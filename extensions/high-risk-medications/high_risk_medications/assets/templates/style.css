@@ -97,3 +97,40 @@ body {
     color: #6c757d;
     font-size: 14px;
 }
+
+/* Error styles */
+.error-box {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 15px;
+}
+
+.error-box h3 {
+    margin: 0 0 10px 0;
+    color: #721c24;
+}
+
+.error-box p {
+    margin: 0;
+    color: #721c24;
+}
+
+.error-box details {
+    margin-top: 10px;
+    color: #721c24;
+}
+
+.error-box summary {
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.error-box pre {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 12px;
+}

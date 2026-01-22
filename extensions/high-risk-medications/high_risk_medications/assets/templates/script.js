@@ -1,9 +1,6 @@
 // JavaScript for high-risk medications real-time updates
-console.log("High-risk medications script loaded!");
-
 (function () {
   const container = document.getElementById("high-risk-container");
-  console.log("Container element:", container);
 
   if (!container) {
     console.error("high-risk-container not found!");
@@ -61,21 +58,10 @@ console.log("High-risk medications script loaded!");
     // Replace dashes with underscores to match broadcast channel format
     const channelName = patientId.replace(/-/g, "_");
     const wsUrl = `wss://${customerIdentifier}.canvasmedical.com/plugin-io/ws/high_risk_medications/${channelName}/`;
-    console.log("Connecting to WebSocket:", wsUrl, "(patient:", patientId, ")");
-
     const socket = new WebSocket(wsUrl);
 
-    socket.onopen = () => {
-      console.log("WebSocket connection established");
-    };
-
     socket.onmessage = (event) => {
-      console.log("WebSocket message received:", event.data);
       refreshView();
-    };
-
-    socket.onclose = (event) => {
-      console.log("WebSocket connection closed:", event.code, event.reason);
     };
 
     socket.onerror = (error) => {
@@ -86,8 +72,6 @@ console.log("High-risk medications script loaded!");
     setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: "ping" }));
-      } else {
-        console.log("WebSocket not open, state:", socket.readyState);
       }
     }, 30000); // Send ping every 30 seconds
   });

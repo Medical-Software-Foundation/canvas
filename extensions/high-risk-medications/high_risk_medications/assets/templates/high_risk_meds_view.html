@@ -6,15 +6,22 @@
 </head>
 <body>
     <div id="high-risk-container" data-patient-id="{{ patient_id }}" data-customer-identifier="{{ customer_identifier }}">
-        {% if has_high_risk_meds %}
+        {% if medications %}
             <div id="medications-content">
                 <div class="alert-box">
                     <h3>⚠️ High-Risk Medications Alert</h3>
-                    <p>This patient has {{ count }} active high-risk medication(s) requiring special attention.</p>
+                    <p>This patient has {{ medications|length }} active high-risk medication(s) requiring special attention.</p>
                 </div>
 
                 <div class="medications-list">
-                    {{ medications|safe }}
+                    {% for med in medications %}
+                    <div class="med-item">
+                        <div class="med-header">
+                            <span class="high-risk-badge">HIGH RISK</span>
+                            <span class="med-name">{{ med.name }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
 
                 <div class="info-box">

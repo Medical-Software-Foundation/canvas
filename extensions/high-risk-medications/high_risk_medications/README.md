@@ -76,6 +76,7 @@ Pattern matching is substring-based, so "insulin lispro 100 unit/mL" matches "in
 - **`banner_alert.py`**: Manages banner alerts in the patient timeline
 - **`medication_change_broadcast.py`**: Broadcasts WebSocket notifications when medications change
 - **`patient_summary_configuration.py`**: Configures patient summary section layout
+- **`chart_summary_grouping.py`**: Groups high-risk medications in the patient summary chart with a dedicated "⚠️ High Risk Medications" group
 
 ### Applications
 
@@ -110,12 +111,7 @@ high-risk-medications/              # Container directory
 ├── tests/                          # Test suite (79 tests, 90%+ coverage)
 │   ├── conftest.py                 # Shared test fixtures
 │   ├── protocols/
-│   │   ├── test_high_risk_medication_annotations.py
-│   │   ├── test_banner_alert.py
-│   │   ├── test_medication_change_broadcast.py
-│   │   └── test_patient_summary_configuration.py
 │   └── applications/
-│       └── test_high_risk_meds_viewer.py
 └── high_risk_medications/          # Plugin package
     ├── CANVAS_MANIFEST.json        # Plugin manifest
     ├── README.md                   # This file

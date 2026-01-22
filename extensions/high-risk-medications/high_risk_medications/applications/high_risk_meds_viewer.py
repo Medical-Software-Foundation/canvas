@@ -9,8 +9,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import Application
 from canvas_sdk.handlers.action_button import ActionButton
-from canvas_sdk.v1.data.medication import Medication
-from logger import log
+from high_risk_medications.helper import get_high_risk_meds
 
 
 class HighRiskMedsViewer(Application):
@@ -27,10 +26,7 @@ class HighRiskMedsViewer(Application):
         patient_id = self.event.context.get("patient", {}).get("id")
 
         if not patient_id:
-            log.warning("No patient context available")
             return []
-
-        log.info(f"Loading high-risk medications for patient {patient_id}")
 
         # Load the view via SimpleAPI URL
         return LaunchModalEffect(
@@ -48,21 +44,10 @@ class HighRiskMedsActionButton(ActionButton):
     BUTTON_TITLE = "High Risk Medications"
     BUTTON_KEY = "high-risk-meds"
     BUTTON_LOCATION = ActionButton.ButtonLocation.CHART_SUMMARY_MEDICATIONS_SECTION
-    HIGH_RISK_PATTERNS = ["warfarin", "insulin", "digoxin", "methotrexate"]
 
     def visible(self) -> bool:
         """Only show button if patient has high-risk medications."""
-        medications = Medication.objects.filter(
-            patient__id=self.target,
-            status="active"
-        )
-
-        for med in medications:
-            coding = med.codings.first()
-            med_name = coding.display or ""
-            if any(pattern in med_name.lower() for pattern in self.HIGH_RISK_PATTERNS):
-                return True
-        return False
+        return get_high_risk_meds(self.target, self.secrets["HIGH_RISK_PATTERNS"])
 
     def handle(self) -> list[Effect]:
         """Launch the high-risk medications view."""

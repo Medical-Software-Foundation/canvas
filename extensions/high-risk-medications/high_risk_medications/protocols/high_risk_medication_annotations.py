@@ -14,7 +14,10 @@ from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
 
 from logger import log
-from high_risk_medications.helper import HIGH_RISK_PATTERNS
+
+# Default patterns for handlers without access to secrets
+HIGH_RISK_PATTERNS = ["warfarin", "insulin", "digoxin", "methotrexate"]
+
 
 class Protocol(BaseProtocol):
     """

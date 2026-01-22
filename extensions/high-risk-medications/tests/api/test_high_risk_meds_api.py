@@ -20,6 +20,7 @@ class TestHighRiskMedsAPI:
         api_instance.request = MagicMock()
         api_instance.request.path_params = {"patient_id": "patient-123"}
         api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": '["warfarin", "insulin"]'}
 
         high_risk_meds = [
             {"name": "Warfarin 5mg Tablet", "id": "med-123"},
@@ -38,7 +39,7 @@ class TestHighRiskMedsAPI:
         assert len(responses) == 1
         response = responses[0]
         assert response.status_code == HTTPStatus.OK
-        mock_get_meds.assert_called_once_with("patient-123")
+        mock_get_meds.assert_called_once_with("patient-123", '["warfarin", "insulin"]')
 
     def test_get_view_returns_html_response_with_no_medications(self, mock_event, mock_environment):
         """Test that get_view returns HTML when patient has no high-risk medications."""
@@ -47,6 +48,7 @@ class TestHighRiskMedsAPI:
         api_instance.request = MagicMock()
         api_instance.request.path_params = {"patient_id": "patient-456"}
         api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": "warfarin,insulin"}
 
         # Execute
         with patch("high_risk_medications.api.high_risk_meds_api.get_high_risk_meds") as mock_get_meds:
@@ -60,7 +62,7 @@ class TestHighRiskMedsAPI:
         assert len(responses) == 1
         response = responses[0]
         assert response.status_code == HTTPStatus.OK
-        mock_get_meds.assert_called_once_with("patient-456")
+        mock_get_meds.assert_called_once_with("patient-456", "warfarin,insulin")
 
     def test_get_view_renders_correct_context(self, mock_event, mock_environment):
         """Test that get_view passes correct context to template."""
@@ -69,6 +71,7 @@ class TestHighRiskMedsAPI:
         api_instance.request = MagicMock()
         api_instance.request.path_params = {"patient_id": "patient-789"}
         api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": "warfarin,digoxin"}
 
         high_risk_meds = [
             {"name": "Warfarin 5mg", "id": "med-1"},
@@ -88,19 +91,17 @@ class TestHighRiskMedsAPI:
                 context = call_args[0][1]
 
                 assert context["patient_id"] == "patient-789"
-                assert context["has_high_risk_meds"] is True
-                assert context["count"] == 2
+                assert context["medications"] == high_risk_meds
                 assert context["customer_identifier"] == "test-customer"
-                assert "Warfarin 5mg" in context["medications"]
-                assert "Digoxin 0.25mg" in context["medications"]
 
-    def test_get_view_context_has_high_risk_meds_false_when_empty(self, mock_event, mock_environment):
-        """Test that context has_high_risk_meds is False when no medications."""
+    def test_get_view_context_medications_empty_when_no_high_risk(self, mock_event, mock_environment):
+        """Test that context medications is empty list when no high-risk medications."""
         # Setup
         api_instance = HighRiskMedsAPI(event=mock_event)
         api_instance.request = MagicMock()
         api_instance.request.path_params = {"patient_id": "patient-999"}
         api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": "warfarin"}
 
         # Execute
         with patch("high_risk_medications.api.high_risk_meds_api.get_high_risk_meds") as mock_get_meds:
@@ -114,21 +115,21 @@ class TestHighRiskMedsAPI:
                 call_args = mock_render.call_args
                 context = call_args[0][1]
 
-                assert context["has_high_risk_meds"] is False
-                assert context["count"] == 0
+                assert context["medications"] == []
 
-    def test_get_view_handles_exception_with_error_response(self, mock_event, mock_environment):
-        """Test that get_view returns error HTML when exception occurs."""
+    def test_get_view_handles_data_error_with_bad_request(self, mock_event, mock_environment):
+        """Test that get_view returns 400 for data access errors."""
         # Setup
         api_instance = HighRiskMedsAPI(event=mock_event)
         api_instance.request = MagicMock()
         api_instance.request.path_params = {"patient_id": "patient-error"}
         api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": "warfarin"}
 
         # Execute
         with patch("high_risk_medications.api.high_risk_meds_api.get_high_risk_meds") as mock_get_meds:
             with patch("high_risk_medications.api.high_risk_meds_api.render_to_string") as mock_render:
-                mock_get_meds.side_effect = Exception("Database error")
+                mock_get_meds.side_effect = KeyError("missing_key")
                 mock_render.return_value = "<html>Error</html>"
 
                 responses = api_instance.get_view()
@@ -136,12 +137,29 @@ class TestHighRiskMedsAPI:
         # Verify
         assert len(responses) == 1
         response = responses[0]
-        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
-        # Verify error template was called
-        call_args = mock_render.call_args
-        assert call_args[0][0] == "assets/templates/error.html"
-        assert "Database error" in call_args[0][1]["error_message"]
+    def test_get_view_handles_attribute_error_with_bad_request(self, mock_event, mock_environment):
+        """Test that get_view returns 400 for attribute errors."""
+        # Setup
+        api_instance = HighRiskMedsAPI(event=mock_event)
+        api_instance.request = MagicMock()
+        api_instance.request.path_params = {"patient_id": "patient-error"}
+        api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": "warfarin"}
+
+        # Execute
+        with patch("high_risk_medications.api.high_risk_meds_api.get_high_risk_meds") as mock_get_meds:
+            with patch("high_risk_medications.api.high_risk_meds_api.render_to_string") as mock_render:
+                mock_get_meds.side_effect = AttributeError("missing_attribute")
+                mock_render.return_value = "<html>Error</html>"
+
+                responses = api_instance.get_view()
+
+        # Verify
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_get_view_includes_patient_id_in_path_params(self, mock_event, mock_environment):
         """Test that get_view extracts patient_id from path params."""
@@ -150,6 +168,7 @@ class TestHighRiskMedsAPI:
         api_instance.request = MagicMock()
         api_instance.request.path_params = {"patient_id": "test-patient-id-123"}
         api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": "warfarin"}
 
         # Execute
         with patch("high_risk_medications.api.high_risk_meds_api.get_high_risk_meds") as mock_get_meds:
@@ -160,15 +179,16 @@ class TestHighRiskMedsAPI:
                 api_instance.get_view()
 
         # Verify patient_id was used
-        mock_get_meds.assert_called_once_with("test-patient-id-123")
+        mock_get_meds.assert_called_once_with("test-patient-id-123", "warfarin")
 
-    def test_get_view_builds_medication_html_correctly(self, mock_event, mock_environment):
-        """Test that medication items are formatted as HTML."""
+    def test_get_view_passes_medications_as_list(self, mock_event, mock_environment):
+        """Test that medications are passed as a list to the template."""
         # Setup
         api_instance = HighRiskMedsAPI(event=mock_event)
         api_instance.request = MagicMock()
         api_instance.request.path_params = {"patient_id": "patient-html"}
         api_instance.environment = mock_environment
+        api_instance.secrets = {"HIGH_RISK_PATTERNS": "methotrexate"}
 
         high_risk_meds = [
             {"name": "Methotrexate 2.5mg", "id": "med-999"}
@@ -182,15 +202,14 @@ class TestHighRiskMedsAPI:
 
                 api_instance.get_view()
 
-                # Verify HTML structure
+                # Verify medications are passed as list (not HTML string)
                 call_args = mock_render.call_args
                 context = call_args[0][1]
-                medications_html = context["medications"]
+                medications = context["medications"]
 
-                assert "HIGH RISK" in medications_html
-                assert "Methotrexate 2.5mg" in medications_html
-                assert "med-item" in medications_html
-                assert "med-header" in medications_html
+                assert isinstance(medications, list)
+                assert len(medications) == 1
+                assert medications[0]["name"] == "Methotrexate 2.5mg"
 
     def test_get_css_returns_css_response(self, mock_event):
         """Test that get_css returns CSS with correct content type."""

@@ -80,3 +80,13 @@ def mock_websocket():
     websocket.headers = {}
     websocket.logged_in_user = {"id": "staff-456", "type": "Staff"}
     return websocket
+
+
+# Default high-risk medication patterns used in tests
+HIGH_RISK_PATTERNS = "warfarin,insulin,digoxin,methotrexate"
+
+
+@pytest.fixture
+def high_risk_secrets():
+    """Create secrets dict with high-risk medication patterns."""
+    return {"HIGH_RISK_PATTERNS": HIGH_RISK_PATTERNS}
