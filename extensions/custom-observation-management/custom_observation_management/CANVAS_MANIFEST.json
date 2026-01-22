@@ -2,7 +2,7 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "custom_observation_management",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "RESTful API for managing patient observations with filtering and date range queries",
     "components": {
         "protocols": [
             {
