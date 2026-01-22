@@ -2,12 +2,14 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "chart_collision_detector",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Detects when multiple providers are viewing the same patient chart and shows a warning modal",
     "components": {
-        "protocols": [
+        "protocols": [],
+        "applications": [
             {
-                "class": "chart_collision_detector.protocols.my_protocol:Protocol",
-                "description": "A protocol that does xyz..."
+                "class": "chart_collision_detector.protocols.chart_collision_app:ChartCollisionApp",
+                "name": "Chart Monitor",
+                "description": "Monitors patient chart access and warns when another provider is viewing"
             }
         ],
         "commands": [],
