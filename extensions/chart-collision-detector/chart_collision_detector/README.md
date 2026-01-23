@@ -27,3 +27,5 @@ The Chart Collision Detector is a Canvas application plugin that monitors patien
 
 The cache TTL (Time To Live) can be configured by setting the `CACHE_TTL_SECONDS` secret in your plugin configuration. If not set, it defaults to 300 seconds (5 minutes).
 
+In order to get this application to automatically open, you need to set in Admin Settings to update the Application's `Open on load`. If you dont have access to this setting, please reach out to Support
+
