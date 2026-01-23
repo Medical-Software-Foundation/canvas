@@ -7,11 +7,11 @@
         "protocols": [],
         "applications": [
             {
-                "class": "chart_collision_detector.protocols.chart_collision_app:ChartCollisionApp",
+                "class": "chart_collision_detector.applications.chart_collision_app:ChartCollisionApp",
                 "name": "Chart Monitor",
                 "description": "Monitors patient chart access and warns when another provider is viewing",
-                "scope": "patient_specific",
-                "icon": "./icon.svg"
+                "scope": "patient_specific", 
+                "icon": "icon.png"
             }
         ],
         "commands": [],
@@ -19,7 +19,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["CACHE_TTL_SECONDS"],
     "tags": {},
     "references": [],
     "license": "",
