@@ -89,7 +89,7 @@ class ChartCollisionApp(Application):
         if staff_id not in current_viewers:
             current_viewers.append(staff_id)
 
-        timeout_seconds = self.secrets.get("CACHE_TTL_SECONDS") or self.DEFAULT_CACHE_TTL_SECONDS
+        timeout_seconds = int(self.secrets.get("CACHE_TTL_SECONDS") or self.DEFAULT_CACHE_TTL_SECONDS)
         # Save updated viewers list to cache
         cache.set(
             cache_key,
