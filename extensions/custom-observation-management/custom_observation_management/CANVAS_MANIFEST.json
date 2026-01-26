@@ -6,11 +6,31 @@
     "components": {
         "protocols": [
             {
-                "class": "custom_observation_management.protocols.my_protocol:ObservationAPI",
+                "class": "custom_observation_management.protocols.observation_api:ObservationAPI",
                 "description": "A protocol that allows for the management of observations"
+            },
+            {
+                "class": "custom_observation_management.protocols.observation_visualizer:ObservationVisualizerAPI",
+                "description": "API to serve the observation visualizer HTML, CSS, and JavaScript"
             }
         ],
-        "commands": [],
+        "applications": [
+            {
+                "class": "custom_observation_management.applications.observation_visualizer:ObservationVisualizerApp",
+                "description": "Application to visualize patient observations in table and graph views",
+                "scope": "patient_specific",
+                "icon": "assets/observation_visualizer.png",
+                "name": "Observation Visualizer"
+            }
+        ],
+        "commands": [
+            {
+                "name": "ObservationSummary",
+                "label": "Observation Summary",
+                "schema_key": "observationSummary",
+                "section": "assessment"
+            }
+        ],
         "content": [],
         "effects": [],
         "views": []

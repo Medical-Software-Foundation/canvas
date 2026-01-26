@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from custom_observation_management.protocols.my_protocol import ObservationAPI
+from custom_observation_management.protocols.observation_api import ObservationAPI
 
 
 class TestGetObservationsForPatient:
@@ -27,11 +27,11 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-                with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+                with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                     mock_patient_class.objects.filter.return_value.exists.return_value = True
-                    mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+                    mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
                     mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                         "id": "note-uuid-123",
                         "datetime_of_service": None,
@@ -42,7 +42,9 @@ class TestGetObservationsForPatient:
                     mock_patient_class.objects.filter.assert_called_with(id="patient-uuid-123")
                     assert len(result) == 1
                     response_data = json.loads(result[0].content)
-                    assert isinstance(response_data, list)
+                    assert "observations" in response_data
+                    assert "pagination" in response_data
+                    assert isinstance(response_data["observations"], list)
 
     def test_get_observations_patient_not_found(
         self,
@@ -57,7 +59,7 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = False
 
             result = handler.get_observations_for_patient()
@@ -81,9 +83,9 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -108,9 +110,9 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -135,9 +137,9 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -162,9 +164,9 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -192,9 +194,9 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -259,14 +261,14 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-            with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
+        with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+            with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
                 mock_note_class.objects.filter.return_value.exists.return_value = True
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
                 }
-                mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+                mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
 
                 result = handler.get_observations_for_patient()
 
@@ -286,7 +288,7 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
+        with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
             mock_note_class.objects.filter.return_value.exists.return_value = False
 
             result = handler.get_observations_for_patient()
@@ -310,9 +312,9 @@ class TestGetObservationsForPatient:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.filter.return_value = [mock_observation]
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -344,8 +346,8 @@ class TestGetSingleObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 mock_obs_class.objects.get.return_value = mock_observation
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
@@ -399,8 +401,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_effect_instance = MagicMock()
                 mock_effect_class.return_value = mock_effect_instance
@@ -450,7 +452,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = True
 
             result = handler.create_observation()
@@ -477,7 +479,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = True
 
             result = handler.create_observation()
@@ -504,7 +506,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = False
 
             result = handler.create_observation()
@@ -535,9 +537,9 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                     mock_patient_class.objects.filter.return_value.exists.return_value = True
                     mock_note_class.objects.filter.return_value.exists.return_value = True
                     mock_effect_instance = MagicMock()
@@ -571,8 +573,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_effect_instance = MagicMock()
                 mock_effect_class.return_value = mock_effect_instance
@@ -608,8 +610,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_effect_instance = MagicMock()
                 mock_effect_class.return_value = mock_effect_instance
@@ -653,8 +655,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_effect_instance = MagicMock()
                 mock_effect_class.return_value = mock_effect_instance
@@ -701,8 +703,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_effect_instance = MagicMock()
                 mock_effect_class.return_value = mock_effect_instance
@@ -740,8 +742,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_effect_instance = MagicMock()
                 mock_effect_class.return_value = mock_effect_instance
@@ -773,9 +775,9 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
-                with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+                with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                     mock_patient_class.objects.filter.return_value.exists.return_value = True
                     mock_obs_class.objects.filter.return_value.exists.return_value = True
                     mock_effect_instance = MagicMock()
@@ -808,7 +810,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = True
 
             result = handler.create_observation()
@@ -839,7 +841,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = True
 
             result = handler.create_observation()
@@ -868,7 +870,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = True
 
             result = handler.create_observation()
@@ -896,8 +898,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_note_class.objects.filter.return_value.exists.return_value = False
 
@@ -926,8 +928,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.Observation") as mock_obs_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_obs_class.objects.filter.return_value.exists.return_value = False
 
@@ -956,9 +958,9 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
-                with patch("custom_observation_management.protocols.my_protocol.ObservationEffect") as mock_effect_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                     mock_patient_class.objects.filter.return_value.exists.return_value = True
                     # Return dbid when looking up note by UUID
                     mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
@@ -994,7 +996,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = True
 
             result = handler.create_observation()
@@ -1022,8 +1024,8 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
-            with patch("custom_observation_management.protocols.my_protocol.Note") as mock_note_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = None
 
@@ -1052,7 +1054,7 @@ class TestCreateObservation:
         handler.request = mock_request
         handler.secrets = mock_secrets
 
-        with patch("custom_observation_management.protocols.my_protocol.Patient") as mock_patient_class:
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             mock_patient_class.objects.filter.return_value.exists.return_value = True
 
             result = handler.create_observation()
@@ -1061,3 +1063,966 @@ class TestCreateObservation:
             response_data = json.loads(result[0].content)
             assert result[0].status_code == HTTPStatus.BAD_REQUEST
             assert any("'note_uuid' must be a string" in e for e in response_data["errors"])
+
+    def test_create_observation_invalid_value_type(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when value is not a string."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "value": 120,  # Invalid type - should be string
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+            result = handler.create_observation()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert any("'value' must be a string" in e for e in response_data["errors"])
+
+    def test_create_observation_invalid_units_type(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when units is not a string."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "units": 123,  # Invalid type - should be string
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+            result = handler.create_observation()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert any("'units' must be a string" in e for e in response_data["errors"])
+
+    def test_create_observation_invalid_note_id_type(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when note_id is not an integer."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "note_id": "not-an-int",  # Invalid type - should be integer
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+            result = handler.create_observation()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert any("'note_id' must be an integer" in e for e in response_data["errors"])
+
+    def test_create_observation_invalid_is_member_of_id_type(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when is_member_of_id is not a string."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "is_member_of_id": 12345,  # Invalid type - should be string
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+            result = handler.create_observation()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert any("'is_member_of_id' must be a string" in e for e in response_data["errors"])
+
+    def test_create_observation_invalid_category_list_contents(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when category list contains non-strings."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "category": ["vital-signs", 123],  # Invalid - list contains non-string
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+            result = handler.create_observation()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert any("category" in e for e in response_data["errors"])
+
+    def test_create_observation_codings_not_object(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when codings contains non-object items."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "codings": ["not-an-object"],  # Invalid - should be dict
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+            result = handler.create_observation()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert any("codings[0]' must be an object" in e for e in response_data["errors"])
+
+    def test_create_observation_components_not_object(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when components contains non-object items."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "components": ["not-an-object"],  # Invalid - should be dict
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+            result = handler.create_observation()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert any("components[0]' must be an object" in e for e in response_data["errors"])
+
+
+class TestGetObservationsPagination:
+    """Tests for pagination in GET /observations endpoint."""
+
+    def test_pagination_page_less_than_one_returns_empty_results(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that page < 1 returns expected response (page value used as-is in response)."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"page": "0", "page_size": "10", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                response_data = json.loads(result[0].content)
+                # Page 0 internally gets normalized to page 1 for slicing
+                # but current_page in response shows the original parsed value
+                assert response_data["pagination"]["current_page"] == 0
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_pagination_page_exceeds_total_pages(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that page > total_pages returns expected response."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"page": "100", "page_size": "10", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                response_data = json.loads(result[0].content)
+                # With 1 observation and page_size 10, total_pages = 1
+                # Page value in response matches original parsed value
+                assert response_data["pagination"]["current_page"] == 100
+                assert response_data["pagination"]["total_pages"] == 1
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_pagination_invalid_page_defaults_to_one(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that invalid page value defaults to 1."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"page": "not-a-number", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                response_data = json.loads(result[0].content)
+                assert response_data["pagination"]["current_page"] == 1
+                assert response_data["pagination"]["page_size"] == 25
+
+    def test_pagination_page_size_capped_at_100(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that page_size is capped at 100."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"page_size": "500", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                response_data = json.loads(result[0].content)
+                assert response_data["pagination"]["page_size"] == 100
+
+
+class TestGetObservationsSorting:
+    """Tests for sorting in GET /observations endpoint."""
+
+    def test_sort_by_name(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test sorting by name."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"sort_by": "name", "sort_order": "asc", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_sort_by_value_numeric(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test sorting by numeric value."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"sort_by": "value", "sort_order": "asc", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        # Create observations with numeric values
+        mock_obs1 = MagicMock()
+        mock_obs1.id = "obs-1"
+        mock_obs1.name = "Weight"
+        mock_obs1.value = "150"
+        mock_obs1.category = "vital-signs"
+        mock_obs1.units = "lbs"
+        mock_obs1.note_id = 123
+        mock_obs1.effective_datetime = None
+        mock_obs1.patient = MagicMock()
+        mock_obs1.patient.id = "patient-uuid"
+        mock_obs1.patient.first_name = "John"
+        mock_obs1.patient.last_name = "Doe"
+        mock_obs1.is_member_of = None
+        mock_obs1.codings.all.return_value = []
+        mock_obs1.components.all.return_value = []
+        mock_obs1.value_codings.all.return_value = []
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_obs1]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_sort_by_units(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test sorting by units."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"sort_by": "units", "sort_order": "desc", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_sort_by_category(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test sorting by category."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"sort_by": "category", "sort_order": "asc", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_invalid_sort_by_defaults_to_date(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that invalid sort_by defaults to 'date'."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"sort_by": "invalid_column", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_invalid_sort_order_defaults_to_desc(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that invalid sort_order defaults to 'desc'."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"sort_order": "invalid_order", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+
+class TestGetObservationsUngrouped:
+    """Tests for ungrouped mode in GET /observations endpoint."""
+
+    def test_ungrouped_mode_returns_flat_list(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that ungrouped=true returns flat list without grouping."""
+        mock_request.query_params = {"ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                response_data = json.loads(result[0].content)
+                assert result[0].status_code == HTTPStatus.OK
+                # Each observation should have empty members in ungrouped mode
+                for obs in response_data["observations"]:
+                    assert obs.get("members") == []
+
+    def test_ungrouped_false_groups_observations(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test that ungrouped=false (default) groups observations."""
+        mock_request.query_params = {"ungrouped": "false"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                # Setup for grouped mode - needs more complex mocking
+                base_exclude = MagicMock()
+                mock_obs_class.objects.exclude.return_value = base_exclude
+                base_exclude.exclude.return_value.exclude.return_value.filter.return_value = MagicMock()
+
+                # Mock the filter chain for grouped mode
+                filter_result = MagicMock()
+                base_exclude.exclude.return_value.exclude.return_value.filter.return_value = filter_result
+                filter_result.exclude.return_value.values_list.return_value = []
+                filter_result.filter.return_value.values_list.return_value = [mock_observation.id]
+                base_exclude.exclude.return_value.exclude.return_value.filter.return_value.order_by.return_value = [mock_observation]
+
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+
+class TestGetObservationsNoteUuidFilter:
+    """Tests for note_uuid filter in GET /observations endpoint."""
+
+    def test_note_uuid_filter_success(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test filtering by note_uuid."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"note_uuid": "note-uuid-456", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+            with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+                # First call is for note_uuid lookup, returns dbid
+                # Subsequent calls are for _map_observation_to_dict which needs id and datetime_of_service
+                mock_note_class.objects.filter.return_value.values.return_value.first.side_effect = [
+                    {"dbid": 12345},  # First call: note_uuid filter lookup
+                    {"id": "note-uuid-123", "datetime_of_service": None},  # Second call: observation mapping
+                ]
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+
+                result = handler.get_observations_for_patient()
+
+                assert len(result) == 1
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_note_uuid_filter_not_found(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when note_uuid doesn't exist."""
+        mock_request.query_params = {"note_uuid": "nonexistent-note-uuid"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+            mock_note_class.objects.filter.return_value.values.return_value.first.return_value = None
+
+            result = handler.get_observations_for_patient()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.NOT_FOUND
+            assert "Note not found" in response_data["error"]
+
+    def test_note_uuid_filter_invalid_raises_error(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when note_uuid causes an exception."""
+        mock_request.query_params = {"note_uuid": "invalid-uuid-format"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+            mock_note_class.objects.filter.return_value.values.return_value.first.side_effect = Exception("Invalid UUID")
+
+            result = handler.get_observations_for_patient()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert "Invalid note_uuid" in response_data["error"]
+
+    def test_note_dbid_filter_invalid_raises_error(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when note_dbid causes an exception."""
+        mock_request.query_params = {"note_dbid": "invalid"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+            mock_note_class.objects.filter.return_value.exists.side_effect = Exception("Invalid format")
+
+            result = handler.get_observations_for_patient()
+
+            assert len(result) == 1
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.BAD_REQUEST
+            assert "Invalid note_dbid" in response_data["error"]
+
+
+class TestGetObservationsNameFallback:
+    """Tests for name fallback logic (using codings[0].display when name is blank)."""
+
+    def test_name_fallback_to_codings_display(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test that blank name falls back to codings[0].display."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        # Create observation with blank name but valid codings
+        mock_obs = MagicMock()
+        mock_obs.id = "obs-uuid-123"
+        mock_obs.name = ""  # Blank name
+        mock_obs.category = "vital-signs"
+        mock_obs.value = "120/80"
+        mock_obs.units = "mmHg"
+        mock_obs.note_id = 12345
+        mock_obs.effective_datetime = None
+        mock_obs.patient = MagicMock()
+        mock_obs.patient.id = "patient-uuid-123"
+        mock_obs.patient.first_name = "John"
+        mock_obs.patient.last_name = "Doe"
+        mock_obs.is_member_of = None
+        mock_obs.components.all.return_value = []
+        mock_obs.value_codings.all.return_value = []
+
+        # Mock coding with display value
+        mock_coding = MagicMock()
+        mock_coding.system = "http://loinc.org"
+        mock_coding.code = "85354-9"
+        mock_coding.display = "Blood Pressure Panel"  # This should be used as fallback
+        mock_coding.version = ""
+        mock_coding.user_selected = False
+        mock_obs.codings.all.return_value = [mock_coding]
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_obs]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                response_data = json.loads(result[0].content)
+                # The name should fall back to codings[0].display
+                assert response_data["observations"][0]["name"] == "Blood Pressure Panel"
+
+
+class TestGetObservationsValueFallback:
+    """Tests for value fallback logic (using value_codings when value is blank)."""
+
+    def test_value_fallback_to_value_codings(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test that blank value falls back to comma-separated value_codings displays."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        # Create observation with blank value but valid value_codings
+        mock_obs = MagicMock()
+        mock_obs.id = "obs-uuid-123"
+        mock_obs.name = "Smoking Status"
+        mock_obs.category = "social-history"
+        mock_obs.value = ""  # Blank value
+        mock_obs.units = None
+        mock_obs.note_id = 12345
+        mock_obs.effective_datetime = None
+        mock_obs.patient = MagicMock()
+        mock_obs.patient.id = "patient-uuid-123"
+        mock_obs.patient.first_name = "John"
+        mock_obs.patient.last_name = "Doe"
+        mock_obs.is_member_of = None
+        mock_obs.components.all.return_value = []
+        mock_obs.codings.all.return_value = []
+
+        # Mock value_codings with display values
+        mock_value_coding = MagicMock()
+        mock_value_coding.system = "http://snomed.info/sct"
+        mock_value_coding.code = "266919005"
+        mock_value_coding.display = "Never smoked"  # This should be used as fallback
+        mock_value_coding.version = ""
+        mock_value_coding.user_selected = False
+        mock_obs.value_codings.all.return_value = [mock_value_coding]
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_obs]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                response_data = json.loads(result[0].content)
+                # The value should fall back to value_codings[0].display
+                assert response_data["observations"][0]["value"] == "Never smoked"
+
+
+class TestGetObservationFilters:
+    """Tests for GET /observation-filters endpoint."""
+
+    def test_get_observation_filters_success(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test successfully getting observation filters."""
+        mock_request.query_params = {}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        mock_obs = MagicMock()
+        mock_obs.name = "Blood Pressure"
+        mock_obs.codings.first.return_value = None
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            queryset_mock = MagicMock()
+            mock_obs_class.objects.exclude.return_value = queryset_mock
+            queryset_mock.prefetch_related.return_value = [mock_obs]
+            queryset_mock.exclude.return_value.exclude.return_value.values_list.return_value.distinct.return_value.order_by.return_value = ["vital-signs"]
+
+            result = handler.get_observation_filters()
+
+            assert len(result) == 1
+            assert result[0].status_code == HTTPStatus.OK
+
+    def test_get_observation_filters_with_patient_id(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test getting observation filters filtered by patient_id."""
+        mock_request.query_params = {"patient_id": "patient-uuid-123"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+                mock_patient_class.objects.filter.return_value.exists.return_value = True
+
+                queryset_mock = MagicMock()
+                mock_obs_class.objects.exclude.return_value = queryset_mock
+                queryset_mock.filter.return_value = queryset_mock
+                queryset_mock.prefetch_related.return_value = []
+                queryset_mock.exclude.return_value.exclude.return_value.values_list.return_value.distinct.return_value.order_by.return_value = []
+
+                result = handler.get_observation_filters()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_get_observation_filters_patient_not_found(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test error when patient_id doesn't exist."""
+        mock_request.query_params = {"patient_id": "nonexistent-patient"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            mock_patient_class.objects.filter.return_value.exists.return_value = False
+
+            result = handler.get_observation_filters()
+
+            response_data = json.loads(result[0].content)
+            assert result[0].status_code == HTTPStatus.NOT_FOUND
+            assert "Patient not found" in response_data["error"]
+
+    def test_get_observation_filters_name_fallback_to_codings(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test that observation filters uses codings fallback for names."""
+        mock_request.query_params = {}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        # Create observation with blank name but valid codings
+        mock_obs = MagicMock()
+        mock_obs.name = ""  # Blank name
+        mock_coding = MagicMock()
+        mock_coding.display = "Blood Pressure Panel"
+        mock_obs.codings.first.return_value = mock_coding
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            queryset_mock = MagicMock()
+            mock_obs_class.objects.exclude.return_value = queryset_mock
+            queryset_mock.prefetch_related.return_value = [mock_obs]
+            queryset_mock.exclude.return_value.exclude.return_value.values_list.return_value.distinct.return_value.order_by.return_value = []
+
+            result = handler.get_observation_filters()
+
+            response_data = json.loads(result[0].content)
+            assert "Blood Pressure Panel" in response_data["names"]
+
+
+class TestGetObservationsWithNameFilterAndPipeSeparator:
+    """Tests for name filter using || separator."""
+
+    def test_name_filter_with_pipe_separator(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test filtering by multiple names using || separator."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"name": "Blood Pressure||Heart Rate", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
+
+    def test_category_filter_with_pipe_separator(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+        mock_observation: MagicMock,
+    ) -> None:
+        """Test filtering by multiple categories using || separator."""
+        # Use ungrouped mode for simpler mocking
+        mock_request.query_params = {"category": "vital-signs||laboratory", "ungrouped": "true"}
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_observation]
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                    "id": "note-uuid-123",
+                    "datetime_of_service": None,
+                }
+
+                result = handler.get_observations_for_patient()
+
+                assert result[0].status_code == HTTPStatus.OK
