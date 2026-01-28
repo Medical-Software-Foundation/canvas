@@ -1,12 +1,198 @@
 from http import HTTPStatus
 from typing import Any
+
+import arrow
+import uuid
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.note.note import Note as NoteEffect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyAuthMixin, SimpleAPIRoute
 from canvas_sdk.v1.data.note import Note
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.practicelocation import PracticeLocationPOS
+from canvas_sdk.v1.data.note import NoteType
+from canvas_sdk.v1.data.patient import Patient
+from canvas_sdk.v1.data.staff import Staff
+from canvas_sdk.v1.data.practicelocation import PracticeLocation
 from logger import log
+from django.db.models import Q
+
+
+class CreateNoteAPI(APIKeyAuthMixin, SimpleAPIRoute):
+    """
+    SimpleAPI endpoint for creating notes.
+
+    POST /create-note - Creates a new note.
+
+    Request body:
+        {
+            "instance_id": "uuid (optional) - If not provided, a new UUID will be generated",
+
+            # Note type - ONE of the following is required:
+            "note_type_id": "uuid - Must reference an existing active NoteType",
+            "note_type_name": "string - Name of an existing active NoteType",
+            "note_type_code": "string - Code of an existing active NoteType",
+
+            "datetime_of_service": "datetime string (required) - e.g. '2025-02-21 23:31:42'",
+
+            "patient_id": "uuid (required) - Must reference an existing Patient",
+
+            # Practice location - ONE of the following is required:
+            "practice_location_id": "uuid - Must reference an existing active PracticeLocation",
+            "practice_location_name": "string - Full name or short name of an active PracticeLocation",
+
+            # Provider - ONE of the following is required:
+            "provider_id": "uuid - Must reference an existing active Staff member",
+            "provider_name": "string - Full name (first + last) of an active Staff member",
+
+            "title": "string (optional) - Custom title for the note"
+        }
+
+    Response:
+        - 202 Accepted: Note creation accepted with {"message": "...", "note_id": "..."}
+        - 400 Bad Request: Validation errors (missing required fields, invalid UUIDs,
+          entity not found, note already exists, etc.)
+
+    Authentication:
+        Requires API key authentication via the 'simpleapi-api-key' secret.
+    """
+
+    PATH = "/create-note"
+
+    def get_practice_location_identifier(self, request_body: dict[str, Any]) -> str:
+        """
+        Get the practice location identifier from the request body.
+        """
+        if practice_location_name := request_body.get("practice_location_name"):
+            return PracticeLocation.objects.filter(Q(full_name=practice_location_name) | Q(short_name=practice_location_name), active=True).values_list('id', flat=True).first()
+        elif practice_location_id := request_body.get("practice_location_id"):
+            return PracticeLocation.objects.filter(id=practice_location_id, active=True).values_list('id', flat=True).first()
+        return None
+
+    def get_provider_identifier(self, request_body: dict[str, Any]) -> str:
+        """
+        Get the provider identifier from the request body.
+        """
+        if provider_name := request_body.get("provider_name"):
+            for provider in Staff.objects.filter(active=True).values('id', 'first_name', 'last_name'):
+                if f"{provider['first_name']} {provider['last_name']}".strip() == provider_name.strip():
+                    return provider['id']
+        elif provider_id := request_body.get("provider_id"):
+            return Staff.objects.filter(id=provider_id, active=True).values_list('id', flat=True).first()
+        return None
+
+    def get_note_type_identifier(self, request_body: dict[str, Any]) -> str:
+        """
+        Get the note type identifier from the request body.
+        """
+        if note_type_name := request_body.get("note_type_name"):
+            return NoteType.objects.filter(name=note_type_name, is_active=True).values_list('id', flat=True).first()
+        elif note_type_code := request_body.get("note_type_code"):
+            return NoteType.objects.filter(code=note_type_code, is_active=True).values_list('id', flat=True).first()
+        elif note_type_id := request_body.get("note_type_id"):
+            return NoteType.objects.filter(id=note_type_id, is_active=True).values_list('id', flat=True).first()
+        return None
+
+    def post(self) -> list[Response | Effect]:
+        """Create a new note with validation of all referenced entities."""
+        required_attributes = {
+            ("note_type_id", "note_type_name", "note_type_code"),
+            ("datetime_of_service",),
+            ("patient_id",),
+            ("practice_location_id", "practice_location_name"),
+            ("provider_id", "provider_name"),
+        }
+        errors = []
+        request_body = self.request.json()
+        for attribute_tuple in required_attributes:
+            # at least one of the attributes in the tuple must be present in the request body
+            if not any(request_body.get(attribute) for attribute in attribute_tuple):
+                errors.append(f"Missing required attribute(s): {', '.join(attribute_tuple)}")
+        
+        if errors:
+            return [
+                JSONResponse(
+                    {"errors": errors},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        # validate uuid strings
+        uuid_attributes = ["instance_id", "note_type_id", "patient_id", "practice_location_id", "provider_id"]
+        for attribute_name in uuid_attributes:
+            if attribute := request_body.get(attribute_name):
+                try:
+                    uuid.UUID(attribute)
+                except ValueError:
+                    errors.append(f"Invalid {attribute_name}, must be a valid UUID string but got {attribute}")
+
+        if errors:
+            return [
+                JSONResponse(
+                    {"errors": errors},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        log.info(f"Request body: {request_body}")
+
+        if instance_id := request_body.get("instance_id"):
+            if Note.objects.filter(id=instance_id).exists():
+                errors.append("Note already exists")
+        else:
+            instance_id = str(uuid.uuid4())
+
+        # get note type
+        note_type_identifier = self.get_note_type_identifier(request_body)
+        if not note_type_identifier:
+            errors.append("Note type not found")
+        
+        try:
+            datetime_of_service = arrow.get(request_body["datetime_of_service"]).datetime
+        except ValueError:
+            errors.append("Invalid datetime_of_service, must be a valid datetime string")
+
+        patient_id = request_body["patient_id"]
+        if not Patient.objects.filter(id=patient_id).exists():
+            errors.append("Patient not found")
+        
+        practice_location_identifier = self.get_practice_location_identifier(request_body)
+        if not practice_location_identifier:
+            errors.append("Practice location not found")
+
+        provider_identifier = self.get_provider_identifier(request_body)
+        if not provider_identifier:
+            errors.append("Provider not found")
+
+        title = str(request_body.get("title"))
+
+        if errors:
+            return [
+                JSONResponse(
+                    {"errors": errors},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        note_effect = NoteEffect(
+            instance_id=instance_id,
+            note_type_id=note_type_identifier,
+            datetime_of_service=datetime_of_service,
+            patient_id=patient_id,
+            practice_location_id=practice_location_identifier,
+            provider_id=provider_identifier,
+            title=title,
+        )
+
+        return [
+            note_effect.create(),
+            JSONResponse(
+                {"message": "Note creation accepted",
+                 "note_id": instance_id},
+                status_code=HTTPStatus.ACCEPTED,
+            ),
+        ]
+
 class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
     """
     SimpleAPI endpoint that returns note data with enhanced command attributes.
