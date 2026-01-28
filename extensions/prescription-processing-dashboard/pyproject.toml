@@ -3,7 +3,8 @@ authors = [
   {email = "engineering@canvasmedical.com", name = "Canvas Team"}
 ]
 dependencies = [
-  "canvas[test-utils]"
+  "canvas[test-utils]",
+  "pytest-cov>=7.0.0",
 ]
 description = "Some description of your project."
 license = "MIT"
@@ -13,4 +14,18 @@ requires-python = ">=3.11"
 version = "0.1.0"
 
 [tool.pytest.ini_options]
-python_files = ["*_tests.py", "test_*.py", "tests.py"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["prescription_processing_dashboard"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
