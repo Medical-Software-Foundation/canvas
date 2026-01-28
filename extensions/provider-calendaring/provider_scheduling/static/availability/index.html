@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<script>
+    window.providers = {{ providers|safe }};
+    window.locations = {{ locations|safe }};
+    window.recurrence = {{ recurrence|safe }};
+    window.noteTypes = {{ noteTypes|safe }};
+    window.calendarTypes = {{ calendarTypes|safe }};
+    window.events = {{ events|safe }};
+    window.loggedInUserId = "{{ loggedInUserId }}";
+</script>
+<html>
+    <head>
+        <title>Availability Manager</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="availability.css">
+        <script type="text/javascript" src="availability.js"></script>
+
+    </head>
+
+    <body>
+        <div id="app"></div>
+    </body>
+</html>

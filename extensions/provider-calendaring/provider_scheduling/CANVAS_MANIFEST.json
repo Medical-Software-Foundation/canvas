@@ -1,0 +1,61 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "provider_scheduling",
+    "description": "A plugin to manage availability calendars",
+    "components": {
+        "applications": [
+            {
+                "class": "provider_scheduling.applications.availability_manager:AvailabilityManager",
+                "name": "Availability Manager",
+                "description": "An application to manage availability calendars",
+                "scope": "provider_menu_item",
+                "icon": "assets/calendar.png"
+            },
+            {
+                "class": "provider_scheduling.applications.utilization_dashboard:UtilizationDashboard",
+                "name": "Schedule Utilization",
+                "description": "Dashboard to view schedule utilization metrics",
+                "scope": "provider_menu_item",
+                "icon": "assets/calendar.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "provider_scheduling.handlers.availability_web_app:AvailabilityWebApp",
+                "description": "Serves the application",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "provider_scheduling.api.calendar:CalendarAPI",
+                "description": "endpoint to create calendars"
+            },
+            {
+                "class": "provider_scheduling.api.events:CalendarEventsAPI",
+                "description": "endpoint to create calendar events"
+            },
+            {
+                "class": "provider_scheduling.handlers.utilization_web_app:UtilizationWebApp",
+                "description": "Serves the utilization dashboard application"
+            },
+            {
+                "class": "provider_scheduling.api.utilization:UtilizationAPI",
+                "description": "API endpoint for utilization metrics"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
