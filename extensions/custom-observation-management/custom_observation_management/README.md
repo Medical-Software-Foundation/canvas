@@ -1,174 +1,135 @@
 # Custom Observation Management
 
-A Canvas plugin providing a RESTful API for managing patient observations.
+A Canvas plugin for managing and visualizing patient observations with table and graph views.
 
-## Description
+## Features
 
-This plugin exposes HTTP endpoints for retrieving and creating patient observations in Canvas. It supports flexible filtering including date range queries, making it useful for integrations that need to query observations by time period.
+- **REST API** for creating and querying observations with filtering, sorting, and pagination
+- **Observation Visualizer** application accessible from patient charts
+- **Table View** with expandable grouped observations
+- **Graph View** for trending numeric observations over time
+- **Add to Chart Review** functionality to create clinical notes with observation summaries
 
-## Authentication
+## Components
 
-All endpoints require API key authentication. Configure the `simpleapi-api-key` secret in your Canvas instance.
+### ObservationAPI
 
-## Endpoints
+RESTful API for observation management. Requires API key authentication.
 
-### GET /observation/<observation_id>
+**Endpoints:**
 
-Retrieve a single observation by UUID.
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/observation/<observation_id>` | Get a single observation by ID |
+| GET | `/observations` | List observations with filters |
+| GET | `/observation-filters` | Get unique names/categories for filter dropdowns |
+| POST | `/observation` | Create a new observation |
 
-**Response:** JSON object with observation details.
+**Query Parameters for GET /observations:**
 
-### GET /observations
+| Parameter | Description |
+|-----------|-------------|
+| `patient_id` | Filter by patient UUID |
+| `note_dbid` | Filter by note database ID |
+| `note_uuid` | Filter by note UUID |
+| `name` | Filter by observation name (use `\|\|` for multiple) |
+| `category` | Filter by category (use `\|\|` for multiple) |
+| `effective_datetime_start` | Filter by start date (ISO 8601) |
+| `effective_datetime_end` | Filter by end date (ISO 8601) |
+| `sort_by` | Sort column: `date`, `name`, `value`, `units`, `category` |
+| `sort_order` | Sort direction: `asc`, `desc` |
+| `ungrouped` | If `true`, return flat list without parent-child grouping |
+| `page` | Page number (default: 1) |
+| `page_size` | Items per page (default: 25, max: 100) |
 
-List observations with optional filters.
+### ObservationVisualizerApp
 
-**Query Parameters:**
+Patient-specific application that launches the observation visualizer modal from the Applications menu in a patient chart.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `patient_id` | string | Filter by patient UUID |
-| `note_dbid` | string | Filter by note database ID |
-| `note_uuid` | string | Filter by note UUID |
-| `name` | string | Filter by observation name (exact match) |
-| `category` | string | Filter by category (comma-separated for multiple) |
-| `effective_datetime_start` | string | Observations on or after this datetime (ISO 8601) |
-| `effective_datetime_end` | string | Observations on or before this datetime (ISO 8601) |
+### ObservationVisualizerAPI
 
-**Examples:**
+Serves the visualizer UI and proxies requests to the ObservationAPI with staff session authentication.
 
-```
-GET /observations?patient_id=abc-123-def
-GET /observations?name=Blood%20Pressure&category=vital-signs
-GET /observations?effective_datetime_start=2024-01-01T00:00:00Z&effective_datetime_end=2024-12-31T23:59:59Z
-```
+**Endpoints:**
 
-### POST /observation
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/visualizer` | Main HTML page |
+| GET | `/visualizer/style.css` | Stylesheet |
+| GET | `/visualizer/script.js` | JavaScript |
+| GET | `/visualizer/observations` | Proxy to ObservationAPI |
+| GET | `/visualizer/observation-filters` | Proxy to get filter options |
+| POST | `/visualizer/create-chart-review` | Create Chart Review note with observation summary |
 
-Create a new observation.
+### ObservationSummary Command
 
-**Required Fields:**
+Custom command schema for embedding observation summaries in Chart Review notes.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `patient_id` | string | Patient UUID |
-| `name` | string | Observation name/type (e.g., "Blood Pressure") |
-| `effective_datetime` | string | When the observation was taken (ISO 8601) |
+## Configuration
 
-**Optional Fields:**
+### Required Secrets
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `category` | string or string[] | Observation category (e.g., "vital-signs") |
-| `value` | string | The observation value (e.g., "120/80") |
-| `units` | string | Units of measurement (e.g., "mmHg") |
-| `note_id` | integer | Database ID of the associated note |
-| `is_member_of_id` | string | UUID of parent observation (for grouped observations) |
-| `codings` | object[] | FHIR codings for the observation |
-| `components` | object[] | Observation components (e.g., systolic/diastolic) |
-| `value_codings` | object[] | FHIR codings for the observation value |
+- `simpleapi-api-key` - API key for authenticating requests to the ObservationAPI
 
-**Coding Object Structure:**
+## Installation
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `system` | string | Yes | The coding system URI (e.g., "http://loinc.org") |
-| `code` | string | Yes | The code value |
-| `display` | string | Yes | Human-readable display text |
-| `version` | string | No | Version of the coding system |
-| `user_selected` | boolean | No | Whether the coding was user-selected |
+1. Deploy the plugin to your Canvas instance
+2. Configure the `simpleapi-api-key` secret in plugin settings
+3. The "Observation Visualizer" application will appear in patient chart Applications menus
 
-**Component Object Structure:**
+## Usage
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Component name (e.g., "Systolic") |
-| `value_quantity` | string | Yes | The component value |
-| `value_quantity_unit` | string | Yes | Units for the value |
-| `codings` | object[] | No | FHIR codings for this component |
+### Creating Observations via API
 
-**Example Request (minimal):**
-
-```json
-{
-    "patient_id": "abc-123-def",
-    "name": "Blood Pressure",
-    "effective_datetime": "2024-06-15T10:30:00Z"
-}
-```
-
-**Example Request (with all fields):**
-
-```json
-{
-    "patient_id": "abc-123-def",
+```bash
+curl -X POST "https://your-instance/plugin-io/api/custom_observation_management/observation" \
+  -H "Authorization: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "patient_id": "patient-uuid",
     "name": "Blood Pressure",
     "effective_datetime": "2024-06-15T10:30:00Z",
     "category": "vital-signs",
     "value": "120/80",
     "units": "mmHg",
-    "codings": [
-        {
-            "system": "http://loinc.org",
-            "code": "85354-9",
-            "display": "Blood pressure panel"
-        }
-    ],
     "components": [
-        {
-            "name": "Systolic",
-            "value_quantity": "120",
-            "value_quantity_unit": "mmHg",
-            "codings": [
-                {
-                    "system": "http://loinc.org",
-                    "code": "8480-6",
-                    "display": "Systolic blood pressure"
-                }
-            ]
-        },
-        {
-            "name": "Diastolic",
-            "value_quantity": "80",
-            "value_quantity_unit": "mmHg",
-            "codings": [
-                {
-                    "system": "http://loinc.org",
-                    "code": "8462-4",
-                    "display": "Diastolic blood pressure"
-                }
-            ]
-        }
+      {
+        "name": "Systolic",
+        "value_quantity": "120",
+        "value_quantity_unit": "mmHg"
+      },
+      {
+        "name": "Diastolic",
+        "value_quantity": "80",
+        "value_quantity_unit": "mmHg"
+      }
     ]
-}
-
-## Response Format
-
-Observations are returned with the following structure:
-
-```json
-{
-    "id": "observation-uuid",
-    "patient": {
-        "id": "patient-uuid",
-        "first_name": "John",
-        "last_name": "Doe"
-    },
-    "name": "Blood Pressure",
-    "category": "vital-signs",
-    "value": "120/80",
-    "units": "mmHg",
-    "effective_datetime": "2024-06-15T10:30:00+00:00",
-    "note": {
-        "id": "note-uuid",
-        "dbid": 12345,
-        "datetime_of_service": "2024-06-15T10:00:00+00:00"
-    },
-    "codings": [],
-    "components": [],
-    "value_codings": []
-}
+  }'
 ```
 
-## Important Note
+### Using the Visualizer
 
-The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it gets updated if you add, remove, or rename protocols.
+1. Open a patient chart in Canvas
+2. Click the Applications menu
+3. Select "Observation Visualizer"
+4. Use filters to narrow down observations
+5. Toggle between Table and Graph views
+6. Click "Add to Chart Review" to create a clinical note with selected observations
+
+## Development
+
+### Running Tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+### Running Tests with Coverage
+
+```bash
+uv run pytest tests/ --cov=custom_observation_management --cov-report=term-missing
+```
+
+## License
+
+See LICENSE file for details.
