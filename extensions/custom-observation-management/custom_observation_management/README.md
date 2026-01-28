@@ -2,6 +2,10 @@
 
 A Canvas plugin for managing and visualizing patient observations with table and graph views.
 
+## Video
+
+Here is a video demonstrating this plugin in action: https://www.loom.com/share/a475c3cba69149f2b60851b6f9ec1da8 
+
 ## Features
 
 - **REST API** for creating and querying observations with filtering, sorting, and pagination
@@ -63,7 +67,14 @@ Serves the visualizer UI and proxies requests to the ObservationAPI with staff s
 
 ### ObservationSummary Command
 
-Custom command schema for embedding observation summaries in Chart Review notes.
+Custom command schema for embedding observation summaries in notes.
+
+**Automatic Command Creation:** When creating an observation via the API with a `note_id` or `note_uuid`, a CustomCommand is automatically added to the associated note containing an observation summary with:
+- Observation name
+- Value with units
+- Date/Time (displayed in EST with am/pm format)
+- Category (if provided)
+- Components (if provided, displayed as a line-separated list)
 
 ## Configuration
 
@@ -106,6 +117,46 @@ curl -X POST "https://your-instance/plugin-io/api/custom_observation_management/
     ]
   }'
 ```
+
+### Creating Observations with Note Association
+
+When you include a `note_id` or `note_uuid`, the observation is linked to that note and a CustomCommand with the observation summary is automatically added to the note:
+
+```bash
+curl -X POST "https://your-instance/plugin-io/api/custom_observation_management/observation" \
+  -H "Authorization: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "patient_id": "patient-uuid",
+    "name": "Blood Pressure",
+    "effective_datetime": "2024-06-15T10:30:00Z",
+    "note_uuid": "note-uuid-here",
+    "category": "vital-signs",
+    "value": "120/80",
+    "units": "mmHg",
+    "components": [
+      {
+        "name": "Systolic",
+        "value_quantity": "120",
+        "value_quantity_unit": "mmHg"
+      },
+      {
+        "name": "Diastolic",
+        "value_quantity": "80",
+        "value_quantity_unit": "mmHg"
+      }
+    ]
+  }'
+```
+
+This will create the observation and add a summary command to the note displaying:
+- Name: Blood Pressure
+- Value: 120/80 mmHg
+- Date/Time: 2024-06-15 06:30 AM EST
+- Category: vital-signs
+- Components:
+  - Systolic: 120 mmHg
+  - Diastolic: 80 mmHg
 
 ### Using the Visualizer
 

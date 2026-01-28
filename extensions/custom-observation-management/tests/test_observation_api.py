@@ -540,20 +540,34 @@ class TestCreateObservation:
         with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
-                    mock_patient_class.objects.filter.return_value.exists.return_value = True
-                    mock_note_class.objects.filter.return_value.exists.return_value = True
-                    mock_effect_instance = MagicMock()
-                    mock_effect_class.return_value = mock_effect_instance
+                    with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
+                        mock_patient_class.objects.filter.return_value.exists.return_value = True
+                        # Return UUID when looking up note by dbid
+                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                            "id": "note-uuid-from-dbid"
+                        }
+                        mock_effect_instance = MagicMock()
+                        mock_effect_class.return_value = mock_effect_instance
+                        mock_command_instance = MagicMock()
+                        mock_command_class.return_value = mock_command_instance
 
-                    result = handler.create_observation()
+                        result = handler.create_observation()
 
-                    call_kwargs = mock_effect_class.call_args.kwargs
-                    assert call_kwargs["category"] == "vital-signs"
-                    assert call_kwargs["value"] == "120/80"
-                    assert call_kwargs["units"] == "mmHg"
-                    assert call_kwargs["note_id"] == 12345
-                    assert len(result) == 2
-                    assert result[1].status_code == HTTPStatus.CREATED
+                        call_kwargs = mock_effect_class.call_args.kwargs
+                        assert call_kwargs["category"] == "vital-signs"
+                        assert call_kwargs["value"] == "120/80"
+                        assert call_kwargs["units"] == "mmHg"
+                        assert call_kwargs["note_id"] == 12345
+                        # Verify CustomCommand was created with observation summary
+                        mock_command_class.assert_called_once()
+                        command_kwargs = mock_command_class.call_args.kwargs
+                        assert command_kwargs["note_uuid"] == "note-uuid-from-dbid"
+                        assert command_kwargs["schema_key"] == "observationSummary"
+                        assert "Blood Pressure" in command_kwargs["content"]
+                        assert "120/80 mmHg" in command_kwargs["content"]
+                        # Result: observation effect, custom command, json response
+                        assert len(result) == 3
+                        assert result[2].status_code == HTTPStatus.CREATED
 
     def test_create_observation_with_category_list(
         self,
@@ -901,7 +915,8 @@ class TestCreateObservation:
         with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 mock_patient_class.objects.filter.return_value.exists.return_value = True
-                mock_note_class.objects.filter.return_value.exists.return_value = False
+                # Note lookup now uses .values().first() to get UUID
+                mock_note_class.objects.filter.return_value.values.return_value.first.return_value = None
 
                 result = handler.create_observation()
 
@@ -961,21 +976,31 @@ class TestCreateObservation:
         with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
-                    mock_patient_class.objects.filter.return_value.exists.return_value = True
-                    # Return dbid when looking up note by UUID
-                    mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
-                        "dbid": 12345
-                    }
-                    mock_effect_instance = MagicMock()
-                    mock_effect_class.return_value = mock_effect_instance
+                    with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
+                        mock_patient_class.objects.filter.return_value.exists.return_value = True
+                        # Return dbid when looking up note by UUID
+                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                            "dbid": 12345
+                        }
+                        mock_effect_instance = MagicMock()
+                        mock_effect_class.return_value = mock_effect_instance
+                        mock_command_instance = MagicMock()
+                        mock_command_class.return_value = mock_command_instance
 
-                    result = handler.create_observation()
+                        result = handler.create_observation()
 
-                    call_kwargs = mock_effect_class.call_args.kwargs
-                    # Verify note_id was converted from note_uuid
-                    assert call_kwargs["note_id"] == 12345
-                    assert len(result) == 2
-                    assert result[1].status_code == HTTPStatus.CREATED
+                        call_kwargs = mock_effect_class.call_args.kwargs
+                        # Verify note_id was converted from note_uuid
+                        assert call_kwargs["note_id"] == 12345
+                        # Verify CustomCommand was created with observation summary
+                        mock_command_class.assert_called_once()
+                        command_kwargs = mock_command_class.call_args.kwargs
+                        assert command_kwargs["note_uuid"] == "note-uuid-456"
+                        assert command_kwargs["schema_key"] == "observationSummary"
+                        assert "Blood Pressure" in command_kwargs["content"]
+                        # Result: observation effect, custom command, json response
+                        assert len(result) == 3
+                        assert result[2].status_code == HTTPStatus.CREATED
 
     def test_create_observation_with_both_note_id_and_note_uuid(
         self,
@@ -1063,6 +1088,159 @@ class TestCreateObservation:
             response_data = json.loads(result[0].content)
             assert result[0].status_code == HTTPStatus.BAD_REQUEST
             assert any("'note_uuid' must be a string" in e for e in response_data["errors"])
+
+    def test_create_observation_with_note_id_creates_custom_command(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test that CustomCommand is automatically created when note_id is provided."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Weight",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "value": "75",
+            "units": "kg",
+            "category": "vital-signs",
+            "note_id": 99999,
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
+                    with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
+                        mock_patient_class.objects.filter.return_value.exists.return_value = True
+                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                            "id": "note-uuid-for-command"
+                        }
+                        mock_effect_instance = MagicMock()
+                        mock_effect_class.return_value = mock_effect_instance
+                        mock_command_instance = MagicMock()
+                        mock_command_class.return_value = mock_command_instance
+
+                        result = handler.create_observation()
+
+                        # Verify CustomCommand was created
+                        mock_command_class.assert_called_once()
+                        command_kwargs = mock_command_class.call_args.kwargs
+
+                        # Verify CustomCommand parameters
+                        assert command_kwargs["note_uuid"] == "note-uuid-for-command"
+                        assert command_kwargs["schema_key"] == "observationSummary"
+
+                        # Verify HTML content contains observation data
+                        content = command_kwargs["content"]
+                        assert "Weight" in content
+                        assert "75 kg" in content
+                        assert "vital-signs" in content
+                        assert "<table" in content
+                        assert "print_content" in command_kwargs
+                        assert command_kwargs["print_content"] == content
+
+                        # Verify originate() was called on the command
+                        mock_command_instance.originate.assert_called_once()
+
+                        # Result: observation effect, custom command, json response
+                        assert len(result) == 3
+                        assert result[2].status_code == HTTPStatus.CREATED
+
+    def test_create_observation_without_note_no_custom_command(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test that CustomCommand is NOT created when no note is associated."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
+                with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
+                    mock_patient_class.objects.filter.return_value.exists.return_value = True
+                    mock_effect_instance = MagicMock()
+                    mock_effect_class.return_value = mock_effect_instance
+
+                    result = handler.create_observation()
+
+                    # Verify CustomCommand was NOT called
+                    mock_command_class.assert_not_called()
+
+                    # Result: observation effect, json response (no custom command)
+                    assert len(result) == 2
+                    assert result[1].status_code == HTTPStatus.CREATED
+
+    def test_create_observation_with_components_in_custom_command(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_secrets: dict[str, str],
+    ) -> None:
+        """Test that components are included in CustomCommand content."""
+        mock_request.json.return_value = {
+            "patient_id": "patient-uuid-123",
+            "name": "Blood Pressure",
+            "effective_datetime": "2024-06-15T10:30:00Z",
+            "note_id": 12345,
+            "components": [
+                {
+                    "name": "Systolic",
+                    "value_quantity": "120",
+                    "value_quantity_unit": "mmHg",
+                },
+                {
+                    "name": "Diastolic",
+                    "value_quantity": "80",
+                    "value_quantity_unit": "mmHg",
+                },
+            ],
+        }
+
+        handler = ObservationAPI(event=mock_event)
+        handler.request = mock_request
+        handler.secrets = mock_secrets
+
+        with patch("custom_observation_management.protocols.observation_api.Patient") as mock_patient_class:
+            with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
+                with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
+                    with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
+                        mock_patient_class.objects.filter.return_value.exists.return_value = True
+                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                            "id": "note-uuid-for-components"
+                        }
+                        mock_effect_instance = MagicMock()
+                        mock_effect_class.return_value = mock_effect_instance
+                        mock_command_instance = MagicMock()
+                        mock_command_class.return_value = mock_command_instance
+
+                        result = handler.create_observation()
+
+                        # Verify CustomCommand was created
+                        mock_command_class.assert_called_once()
+                        command_kwargs = mock_command_class.call_args.kwargs
+
+                        # Verify HTML content contains components (each on new line)
+                        content = command_kwargs["content"]
+                        assert "Components" in content
+                        assert "Systolic: 120 mmHg" in content
+                        assert "Diastolic: 80 mmHg" in content
+                        assert "<br/>" in content  # Components separated by line breaks
+
+                        # Result: observation effect, custom command, json response
+                        assert len(result) == 3
+                        assert result[2].status_code == HTTPStatus.CREATED
 
     def test_create_observation_invalid_value_type(
         self,

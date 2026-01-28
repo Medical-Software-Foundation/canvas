@@ -15,6 +15,7 @@ from typing import Any
 import arrow
 from django.db.models import Q
 
+from canvas_sdk.commands.commands.custom_command import CustomCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.observation import CodingData, Observation as ObservationEffect, ObservationComponentData
 from canvas_sdk.effects.simple_api import JSONResponse, Response
@@ -37,6 +38,80 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
     Authentication:
         Requires API key authentication via the 'simpleapi-api-key' secret.
     """
+
+    def _build_observation_summary_html(
+        self,
+        name: str,
+        value: str | None,
+        units: str | None,
+        effective_datetime: Any,
+        category: str | list[str] | None,
+        components: list[ObservationComponentData] | None = None,
+    ) -> str:
+        """
+        Build HTML content for a CustomCommand observation summary.
+
+        Args:
+            name: The observation name.
+            value: The observation value.
+            units: The units of measurement.
+            effective_datetime: The datetime of the observation.
+            category: The observation category (str or list).
+            components: Optional list of observation components.
+
+        Returns:
+            HTML string formatted for display in a CustomCommand.
+        """
+        # Format the datetime for display in EST with am/pm
+        if effective_datetime:
+            if hasattr(effective_datetime, 'strftime'):
+                # Convert to EST timezone
+                est_dt = arrow.get(effective_datetime).to("America/New_York")
+                datetime_str = est_dt.strftime("%Y-%m-%d %I:%M %p EST")
+            else:
+                datetime_str = str(effective_datetime)
+        else:
+            datetime_str = "N/A"
+
+        # Format category
+        if isinstance(category, list):
+            category_str = ", ".join(category)
+        else:
+            category_str = category or ""
+
+        # Build the value display with units
+        value_display = value or "N/A"
+        if value and units:
+            value_display = f"{value} {units}"
+
+        # Build HTML table
+        rows = [
+            f"<tr><td><strong>Name</strong></td><td>{name}</td></tr>",
+            f"<tr><td><strong>Value</strong></td><td>{value_display}</td></tr>",
+            f"<tr><td><strong>Date/Time</strong></td><td>{datetime_str}</td></tr>",
+        ]
+
+        if category_str:
+            rows.append(f"<tr><td><strong>Category</strong></td><td>{category_str}</td></tr>")
+
+        # Add components if present (each on a new line)
+        if components:
+            component_lines = []
+            for comp in components:
+                comp_display = f"{comp.name}: {comp.value_quantity}"
+                if comp.value_quantity_unit:
+                    comp_display += f" {comp.value_quantity_unit}"
+                component_lines.append(comp_display)
+            components_html = "<br/>".join(component_lines)
+            rows.append(f"<tr><td><strong>Components</strong></td><td>{components_html}</td></tr>")
+
+        return (
+            '<table style="width: 100%; border-collapse: collapse;">'
+            '<tbody>'
+            + "".join(rows)
+            + '</tbody>'
+            '</table>'
+        )
 
     def _map_coding_to_dict(self, codings) -> list[dict[str, Any]]:
         """Convert FHIR coding objects to a list of dictionaries."""
@@ -391,6 +466,8 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
                 "page_size": page_size,
                 "has_previous": page > 1,
                 "has_next": page < total_pages,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
             }
         }, status_code=HTTPStatus.OK)]
 
@@ -687,16 +764,23 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
             errors.append("'units' must be a string")
 
         # Note reference - can be note_id (int) or note_uuid (str), but not both
+        # We track both note_id (dbid) and note_uuid_str for CustomCommand creation
         note_id = data.get("note_id")
         note_uuid = data.get("note_uuid")
+        note_uuid_str = None  # Will hold the UUID string for CustomCommand
 
         if note_id is not None and note_uuid is not None:
             errors.append("Cannot specify both 'note_id' and 'note_uuid'. Use one or the other.")
         elif note_id is not None:
             if not isinstance(note_id, int):
                 errors.append("'note_id' must be an integer")
-            elif not Note.objects.filter(dbid=note_id).exists():
-                errors.append("Note not found")
+            else:
+                # Look up the note by dbid to get its UUID for CustomCommand
+                note_record = Note.objects.filter(dbid=note_id).values("id").first()
+                if note_record:
+                    note_uuid_str = str(note_record["id"])
+                else:
+                    errors.append("Note not found")
         elif note_uuid is not None:
             if not isinstance(note_uuid, str):
                 errors.append("'note_uuid' must be a string")
@@ -705,6 +789,7 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
                 note_record = Note.objects.filter(id=note_uuid).values("dbid").first()
                 if note_record:
                     note_id = note_record["dbid"]
+                    note_uuid_str = note_uuid  # Keep the UUID for CustomCommand
                 else:
                     errors.append("Note not found")
 
@@ -747,4 +832,27 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
             value_codings=value_codings,
         ).create()
 
-        return [effect, JSONResponse({"message": "Observation successfully sent to Canvas"}, status_code=HTTPStatus.CREATED)]
+        effects: list[Effect | Response] = [effect]
+
+        # If a note is associated, automatically add a CustomCommand with observation summary
+        if note_uuid_str:
+            # Build observation summary HTML content
+            summary_content = self._build_observation_summary_html(
+                name=name,
+                value=value,
+                units=units,
+                effective_datetime=effective_datetime,
+                category=category,
+                components=components,
+            )
+
+            command = CustomCommand(
+                note_uuid=note_uuid_str,
+                schema_key="observationSummary",
+                content=summary_content,
+                print_content=summary_content,
+            )
+            effects.append(command.originate())
+
+        effects.append(JSONResponse({"message": "Observation successfully sent to Canvas"}, status_code=HTTPStatus.CREATED))
+        return effects
