@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "command_validation",
+    "description": "Validates commands before commit - ensures questionnaires have all questions answered",
+    "components": {
+        "handlers": [
+            {
+                "class": "command_validation.handlers.questionnaire_validation:RequireAllQuestionsAnsweredHandler",
+                "description": "Prevents committing a questionnaire unless all questions are answered"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
