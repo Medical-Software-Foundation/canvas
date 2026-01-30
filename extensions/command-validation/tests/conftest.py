@@ -14,39 +14,42 @@ def mock_event():
         event.type = EventType.QUESTIONNAIRE_COMMAND__POST_VALIDATION
         event.target = Mock()
         event.target.id = command_id
-        event.context = {
-            "fields": {
-                "questionnaire": {},
-                "result": ""
-            },
-            "note": {"uuid": "test-note-id"},
-            "patient": {"id": "test-patient-id"},
-        }
         return event
     return _create_event
 
 
 @pytest.fixture
-def mock_interview():
-    """Factory fixture to create mock interview with questions and responses."""
-    def _create_interview(question_ids: list, answered_ids: list, question_names: dict = None):
-        if question_names is None:
-            question_names = {qid: f"Question {qid}" for qid in question_ids}
+def mock_command_data():
+    """Factory fixture to create mock command data with questionnaire responses."""
+    def _create_data(questions: list, responses: dict):
+        """
+        Args:
+            questions: List of question dicts with 'pk', 'name', 'type', 'label'
+            responses: Dict of question_name -> response value
+        """
+        return {
+            "result": "",
+            "questionnaire": {
+                "text": "Test Questionnaire",
+                "extra": {
+                    "pk": 1,
+                    "name": "Test Questionnaire",
+                    "questions": questions,
+                },
+                "value": 1,
+            },
+            **responses
+        }
+    return _create_data
 
-        interview = Mock()
 
-        # Mock questionnaire
-        questionnaire = Mock()
-        questionnaire.questions.values_list.return_value = question_ids
-        questionnaire.questions.filter.return_value.values_list.return_value = [
-            question_names.get(qid, f"Question {qid}")
-            for qid in question_ids if qid not in answered_ids
-        ]
-
-        interview.questionnaires.first.return_value = questionnaire
-
-        # Mock interview responses
-        interview.interview_responses.values_list.return_value = answered_ids
-
-        return interview
-    return _create_interview
+def create_question(pk: int, name: str, question_type: str, label: str) -> dict:
+    """Helper to create a question definition."""
+    return {
+        "pk": pk,
+        "name": name,
+        "type": question_type,
+        "label": label,
+        "coding": {"code": "test", "system": "test"},
+        "options": [],
+    }

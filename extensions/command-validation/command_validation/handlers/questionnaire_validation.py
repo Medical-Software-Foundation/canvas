@@ -17,37 +17,38 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
 
         log.info(f"[RequireAllQuestionsAnsweredHandler] Validating questionnaire command {command_id}")
 
-        # Get the command and its associated interview
         command = Command.objects.get(id=command_id)
-        interview = command.data_object
+        data = command.data
 
-        if not interview:
-            log.warning(f"[RequireAllQuestionsAnsweredHandler] No interview found for command {command_id}")
+        if not data:
+            log.warning(f"[RequireAllQuestionsAnsweredHandler] No data found for command {command_id}")
             return []
 
-        # Get the questionnaire and its questions
-        questionnaire = interview.questionnaires.first()
-        if not questionnaire:
-            log.warning(f"[RequireAllQuestionsAnsweredHandler] No questionnaire found for interview")
+        # Get questionnaire questions from the data
+        questionnaire_info = data.get("questionnaire", {})
+        extra = questionnaire_info.get("extra", {})
+        questions = extra.get("questions", [])
+
+        if not questions:
+            log.warning(f"[RequireAllQuestionsAnsweredHandler] No questions found in questionnaire")
             return []
 
-        # Get all questions and responses
-        all_questions = set(questionnaire.questions.values_list("id", flat=True))
-        answered_questions = set(
-            interview.interview_responses.values_list("question_id", flat=True)
-        )
+        # Check which questions are unanswered
+        unanswered = []
+        for question in questions:
+            question_name = question.get("name")
+            question_label = question.get("label", question_name)
+            question_type = question.get("type")
 
-        # Find unanswered questions
-        unanswered_questions = all_questions - answered_questions
+            response = data.get(question_name)
 
-        if unanswered_questions:
-            unanswered_count = len(unanswered_questions)
-            total_count = len(all_questions)
+            # Check if the question is answered based on its type
+            if not self._is_answered(response, question_type):
+                unanswered.append(question_label)
 
-            # Get the names of unanswered questions for the error message
-            unanswered_names = list(
-                questionnaire.questions.filter(id__in=unanswered_questions).values_list("name", flat=True)
-            )
+        if unanswered:
+            unanswered_count = len(unanswered)
+            total_count = len(questions)
 
             log.info(
                 f"[RequireAllQuestionsAnsweredHandler] Blocking commit - "
@@ -56,7 +57,7 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
 
             validation_error = CommandValidationErrorEffect()
             if unanswered_count <= 3:
-                questions_display = ", ".join(unanswered_names)
+                questions_display = ", ".join(unanswered)
                 validation_error.add_error(
                     f"Cannot commit questionnaire: {unanswered_count} question(s) unanswered. "
                     f"Please answer: {questions_display}"
@@ -70,3 +71,25 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
 
         log.info(f"[RequireAllQuestionsAnsweredHandler] All questions answered, allowing commit for command {command_id}")
         return []
+
+    def _is_answered(self, response, question_type: str) -> bool:
+        """Check if a question response is considered answered."""
+        if response is None:
+            return False
+
+        # For single choice (SING), response is an integer (pk of selected option)
+        if question_type == "SING":
+            return isinstance(response, int)
+
+        # For multiple choice (MULT), response is a list - check if any option is selected
+        if question_type == "MULT":
+            if not isinstance(response, list):
+                return False
+            return any(opt.get("selected", False) for opt in response)
+
+        # For text (TXT), response is a string - check if not empty
+        if question_type == "TXT":
+            return isinstance(response, str) and response.strip() != ""
+
+        # For unknown types, consider answered if response exists
+        return True
