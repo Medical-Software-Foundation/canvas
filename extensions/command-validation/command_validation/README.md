@@ -25,9 +25,9 @@ Cannot commit questionnaire: 2/3 questions unanswered.
 Prevents committing prescription commands without a valid days_supply.
 
 **Events:**
-- `PRESCRIBE_COMMAND__PRE_COMMIT`
-- `REFILL_COMMAND__PRE_COMMIT`
-- `ADJUST_PRESCRIPTION_COMMAND__PRE_COMMIT`
+- `PRESCRIBE_COMMAND__POST_VALIDATION`
+- `REFILL_COMMAND__POST_VALIDATION`
+- `ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION`
 
 **Validation Rule:** The `days_supply` field must be present and greater than 0.
 

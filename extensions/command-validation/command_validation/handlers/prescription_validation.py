@@ -10,9 +10,9 @@ class RequireDaysSupplyHandler(BaseHandler):
     """Prevents committing prescription commands without a valid days_supply."""
 
     RESPONDS_TO = [
-        EventType.Name(EventType.PRESCRIBE_COMMAND__PRE_COMMIT),
-        EventType.Name(EventType.REFILL_COMMAND__PRE_COMMIT),
-        EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__PRE_COMMIT),
+        EventType.Name(EventType.PRESCRIBE_COMMAND__POST_VALIDATION),
+        EventType.Name(EventType.REFILL_COMMAND__POST_VALIDATION),
+        EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION),
     ]
 
     def compute(self) -> list[Effect]:

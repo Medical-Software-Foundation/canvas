@@ -9,9 +9,9 @@ from command_validation.handlers.prescription_validation import RequireDaysSuppl
 
 def test_handler_responds_to_prescribe_events() -> None:
     """Test that the handler is configured to respond to prescription events."""
-    assert EventType.Name(EventType.PRESCRIBE_COMMAND__PRE_COMMIT) in RequireDaysSupplyHandler.RESPONDS_TO
-    assert EventType.Name(EventType.REFILL_COMMAND__PRE_COMMIT) in RequireDaysSupplyHandler.RESPONDS_TO
-    assert EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__PRE_COMMIT) in RequireDaysSupplyHandler.RESPONDS_TO
+    assert EventType.Name(EventType.PRESCRIBE_COMMAND__POST_VALIDATION) in RequireDaysSupplyHandler.RESPONDS_TO
+    assert EventType.Name(EventType.REFILL_COMMAND__POST_VALIDATION) in RequireDaysSupplyHandler.RESPONDS_TO
+    assert EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION) in RequireDaysSupplyHandler.RESPONDS_TO
 
 
 @patch("command_validation.handlers.prescription_validation.Command")
