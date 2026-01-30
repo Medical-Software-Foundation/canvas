@@ -47,8 +47,8 @@ def test_blocks_commit_with_zero_days_supply(mock_command) -> None:
 
 
 @patch("command_validation.handlers.prescription_validation.Command")
-def test_blocks_commit_with_empty_string_days_supply(mock_command) -> None:
-    """Test that the handler blocks commit when days_supply is empty string."""
+def test_allows_commit_with_empty_string_days_supply(mock_command) -> None:
+    """Test that the handler allows commit when days_supply is empty string."""
     event = Mock()
     event.target.id = "test-command-id"
 
@@ -59,7 +59,7 @@ def test_blocks_commit_with_empty_string_days_supply(mock_command) -> None:
     handler = RequireDaysSupplyHandler(event=event)
     effects = handler.compute()
 
-    assert len(effects) == 1
+    assert len(effects) == 0
 
 
 @patch("command_validation.handlers.prescription_validation.Command")
@@ -70,22 +70,6 @@ def test_allows_commit_with_valid_days_supply(mock_command) -> None:
 
     command = Mock()
     command.data = {"days_supply": 30, "sig": "Take one daily"}
-    mock_command.objects.get.return_value = command
-
-    handler = RequireDaysSupplyHandler(event=event)
-    effects = handler.compute()
-
-    assert len(effects) == 0
-
-
-@patch("command_validation.handlers.prescription_validation.Command")
-def test_allows_commit_when_no_data(mock_command) -> None:
-    """Test that the handler allows commit when there's no data."""
-    event = Mock()
-    event.target.id = "test-command-id"
-
-    command = Mock()
-    command.data = None
     mock_command.objects.get.return_value = command
 
     handler = RequireDaysSupplyHandler(event=event)

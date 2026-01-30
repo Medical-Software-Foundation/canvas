@@ -23,14 +23,9 @@ class RequireDaysSupplyHandler(BaseHandler):
 
         command = Command.objects.get(id=command_id)
         data = command.data
-
-        if not data:
-            log.warning(f"[RequireDaysSupplyHandler] No data found for command {command_id}")
-            return []
-
         days_supply = data.get("days_supply")
 
-        if days_supply is None or days_supply == 0 or days_supply == "":
+        if days_supply is None or days_supply == 0:
             log.info(
                 f"[RequireDaysSupplyHandler] Blocking commit - "
                 f"days_supply is empty or 0 for command {command_id}"
@@ -38,7 +33,7 @@ class RequireDaysSupplyHandler(BaseHandler):
 
             validation_error = CommandValidationErrorEffect()
             validation_error.add_error(
-                "Cannot commit prescription: Days supply is required and must be greater than 0."
+                "Days supply is required and must be greater than 0."
             )
             return [validation_error.apply()]
 

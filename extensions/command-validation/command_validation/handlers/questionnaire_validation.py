@@ -18,7 +18,7 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
         log.info(f"[RequireAllQuestionsAnsweredHandler] Validating questionnaire command {command_id}")
 
         command = Command.objects.get(id=command_id)
-        data = command.data or {}
+        data = command.data
 
         # Get questionnaire questions from the data
         questionnaire_info = data.get("questionnaire", {})

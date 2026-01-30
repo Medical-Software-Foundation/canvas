@@ -105,19 +105,6 @@ def test_allows_commit_with_all_questions_answered(mock_command, mock_event, moc
 
 
 @patch("command_validation.handlers.questionnaire_validation.Command")
-def test_allows_commit_when_no_data(mock_command, mock_event) -> None:
-    """Test that the handler allows commit when there's no data."""
-    command = Mock()
-    command.data = None
-    mock_command.objects.get.return_value = command
-
-    handler = RequireAllQuestionsAnsweredHandler(event=mock_event())
-    effects = handler.compute()
-
-    assert len(effects) == 0
-
-
-@patch("command_validation.handlers.questionnaire_validation.Command")
 def test_allows_commit_when_no_questions(mock_command, mock_event, mock_command_data) -> None:
     """Test that the handler allows commit when there are no questions."""
     data = mock_command_data(questions=[], responses={})

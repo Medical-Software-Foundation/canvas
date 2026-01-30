@@ -29,11 +29,11 @@ Prevents committing prescription commands without a valid days_supply.
 - `REFILL_COMMAND__POST_VALIDATION`
 - `ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION`
 
-**Validation Rule:** The `days_supply` field must be present and greater than 0.
+**Validation Rule:** The `days_supply` field must not be `None` or `0`.
 
 **Error Message:**
 ```
-Cannot commit prescription: Days supply is required and must be greater than 0.
+Days supply is required and must be greater than 0.
 ```
 
 ## Development
