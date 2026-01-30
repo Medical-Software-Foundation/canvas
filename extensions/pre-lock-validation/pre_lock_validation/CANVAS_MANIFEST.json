@@ -1,0 +1,28 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "pre_lock_validation",
+    "description": "Validates pre-lock conditions: requires committed vitals and no staged commands",
+    "components": {
+        "handlers": [
+            {
+                "class": "pre_lock_validation.handlers.require_vitals:RequireVitalsToLockHandler",
+                "description": "Prevents locking a note unless it contains committed vitals"
+            },
+            {
+                "class": "pre_lock_validation.handlers.no_staged_commands:NoStagedCommandsToLockHandler",
+                "description": "Prevents locking a note if there are any staged commands"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
