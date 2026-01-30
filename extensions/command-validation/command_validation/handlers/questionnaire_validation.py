@@ -18,11 +18,7 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
         log.info(f"[RequireAllQuestionsAnsweredHandler] Validating questionnaire command {command_id}")
 
         command = Command.objects.get(id=command_id)
-        data = command.data
-
-        if not data:
-            log.warning(f"[RequireAllQuestionsAnsweredHandler] No data found for command {command_id}")
-            return []
+        data = command.data or {}
 
         # Get questionnaire questions from the data
         questionnaire_info = data.get("questionnaire", {})
@@ -56,17 +52,9 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
             )
 
             validation_error = CommandValidationErrorEffect()
-            if unanswered_count <= 3:
-                questions_display = ", ".join(unanswered)
-                validation_error.add_error(
-                    f"Cannot commit questionnaire: {unanswered_count} question(s) unanswered. "
-                    f"Please answer: {questions_display}"
-                )
-            else:
-                validation_error.add_error(
-                    f"Cannot commit questionnaire: {unanswered_count} of {total_count} questions unanswered. "
-                    f"Please answer all questions before committing."
-                )
+            validation_error.add_error(
+                f"Cannot commit questionnaire: {unanswered_count}/{total_count} questions unanswered."
+            )
             return [validation_error.apply()]
 
         log.info(f"[RequireAllQuestionsAnsweredHandler] All questions answered, allowing commit for command {command_id}")
@@ -91,5 +79,5 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
         if question_type == "TXT":
             return isinstance(response, str) and response.strip() != ""
 
-        # For unknown types, consider answered if response exists
-        return True
+        # For unknown types, return False
+        return False

@@ -2,28 +2,38 @@
 
 Validates commands before commit to ensure data completeness and quality.
 
-## Event Reference
-
-This plugin responds to `QUESTIONNAIRE_COMMAND__POST_VALIDATION`, which fires after validation when a questionnaire command is being committed. Returning a `CommandValidationErrorEffect` blocks the commit and displays the error to the user.
-
 ## Handlers
 
 ### RequireAllQuestionsAnsweredHandler
 
 Prevents committing a questionnaire unless all questions have been answered.
 
-**Validation Rule:** When a user attempts to commit a questionnaire command, this handler checks that every question in the questionnaire has at least one response. If any questions are unanswered, the commit is blocked.
+**Event:** `QUESTIONNAIRE_COMMAND__POST_VALIDATION`
 
-**Error Messages:**
+**Validation Rule:** Checks that every question in the questionnaire has a response based on question type:
+- **SING** (Single choice): Must have a selected option (integer pk)
+- **MULT** (Multiple choice): At least one option must be selected
+- **TXT** (Text): Must be a non-empty string
 
-When 3 or fewer questions are unanswered, the specific questions are listed:
+**Error Message:**
 ```
-Cannot commit questionnaire: 2 question(s) unanswered. Please answer: Height, Blood Pressure
+Cannot commit questionnaire: 2/3 questions unanswered.
 ```
 
-When more than 3 questions are unanswered, a summary is shown:
+### RequireDaysSupplyHandler
+
+Prevents committing prescription commands without a valid days_supply.
+
+**Events:**
+- `PRESCRIBE_COMMAND__PRE_COMMIT`
+- `REFILL_COMMAND__PRE_COMMIT`
+- `ADJUST_PRESCRIPTION_COMMAND__PRE_COMMIT`
+
+**Validation Rule:** The `days_supply` field must be present and greater than 0.
+
+**Error Message:**
 ```
-Cannot commit questionnaire: 8 of 10 questions unanswered. Please answer all questions before committing.
+Cannot commit prescription: Days supply is required and must be greater than 0.
 ```
 
 ## Development
@@ -46,7 +56,8 @@ uv run pytest --cov=command_validation --cov-report=term-missing
 command_validation/
 ├── handlers/
 │   ├── __init__.py
-│   └── questionnaire_validation.py   # RequireAllQuestionsAnsweredHandler
+│   ├── questionnaire_validation.py   # RequireAllQuestionsAnsweredHandler
+│   └── prescription_validation.py    # RequireDaysSupplyHandler
 ├── CANVAS_MANIFEST.json
 ├── README.md
 └── __init__.py
