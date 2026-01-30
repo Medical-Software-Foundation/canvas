@@ -23,6 +23,7 @@ class NoStagedCommandsToLockHandler(BaseHandler):
             return []
 
         # Check for any staged commands on this note
+        # RFV command are excluded from this validation because they are not committable
         staged_commands = list(Command.objects.exclude(schema_key='reasonForVisit').filter(
             note__id=note_id,
             state="staged"
@@ -30,9 +31,8 @@ class NoStagedCommandsToLockHandler(BaseHandler):
 
         if staged_commands:
             count = len(staged_commands)
-            schema_keys = [cmd.schema_key for cmd in staged_commands]
-            unique_keys = sorted(set(schema_keys))
-            keys_display = ", ".join(unique_keys)
+            schema_keys = {cmd.schema_key for cmd in staged_commands}
+            keys_display = ", ".join(list(schema_keys))
 
             log.info(f"[NoStagedCommandsToLockHandler] Blocking lock - {count} staged commands found for note {note_id}: {keys_display}")
             validation_error = EventValidationError()
