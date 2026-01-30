@@ -2,12 +2,12 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "imaging_fhir_poc",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "POC plugin that makes FHIR API requests when imaging reviews are committed",
     "components": {
         "protocols": [
             {
-                "class": "imaging_fhir_poc.protocols.my_protocol:Protocol",
-                "description": "A protocol that does xyz..."
+                "class": "imaging_fhir_poc.handlers.imaging_review_fhir:ImagingReviewFhirHandler",
+                "description": "Handles imaging review commits and fetches DocumentReference resources via FHIR API"
             }
         ],
         "commands": [],
@@ -15,7 +15,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["CLIENT_ID", "CLIENT_SECRET", "FHIR_BASE_URL"],
     "tags": {},
     "references": [],
     "license": "",
