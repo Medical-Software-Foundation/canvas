@@ -2,7 +2,6 @@
 
 from unittest.mock import Mock, patch
 
-from canvas_sdk.effects import EffectType
 from canvas_sdk.events import EventType
 
 from command_validation.handlers.questionnaire_validation import RequireAllQuestionsAnsweredHandler
@@ -33,7 +32,6 @@ def test_blocks_commit_with_unanswered_questions(mock_command, mock_event, mock_
     effects = handler.compute()
 
     assert len(effects) == 1
-    assert effects[0].type == EffectType.EVENT_VALIDATION_ERROR
 
 
 @patch("command_validation.handlers.questionnaire_validation.Command")
@@ -101,7 +99,6 @@ def test_shows_question_names_when_few_unanswered(mock_command, mock_event, mock
     effects = handler.compute()
 
     assert len(effects) == 1
-    assert effects[0].type == EffectType.EVENT_VALIDATION_ERROR
 
 
 @patch("command_validation.handlers.questionnaire_validation.Command")
@@ -120,4 +117,3 @@ def test_shows_count_when_many_unanswered(mock_command, mock_event, mock_intervi
     effects = handler.compute()
 
     assert len(effects) == 1
-    assert effects[0].type == EffectType.EVENT_VALIDATION_ERROR

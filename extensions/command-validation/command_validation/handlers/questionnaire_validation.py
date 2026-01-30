@@ -1,5 +1,5 @@
+from canvas_sdk.commands.validation import CommandValidationErrorEffect
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.validation import EventValidationError
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data.command import Command
@@ -54,7 +54,7 @@ class RequireAllQuestionsAnsweredHandler(BaseHandler):
                 f"{unanswered_count}/{total_count} questions unanswered for command {command_id}"
             )
 
-            validation_error = EventValidationError()
+            validation_error = CommandValidationErrorEffect()
             if unanswered_count <= 3:
                 questions_display = ", ".join(unanswered_names)
                 validation_error.add_error(
