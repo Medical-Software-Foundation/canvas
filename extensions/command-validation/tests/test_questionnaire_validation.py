@@ -10,7 +10,7 @@ from command_validation.handlers.questionnaire_validation import RequireAllQuest
 def test_handler_responds_to_pre_commit_event() -> None:
     """Test that the handler is configured to respond to the correct event type."""
     assert RequireAllQuestionsAnsweredHandler.RESPONDS_TO == EventType.Name(
-        EventType.QUESTIONNAIRE_COMMAND__PRE_COMMIT
+        EventType.QUESTIONNAIRE_COMMAND__POST_VALIDATION
     )
 
 

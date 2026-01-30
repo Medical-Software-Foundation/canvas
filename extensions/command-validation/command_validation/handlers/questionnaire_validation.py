@@ -9,7 +9,7 @@ from logger import log
 class RequireAllQuestionsAnsweredHandler(BaseHandler):
     """Prevents committing a questionnaire unless all questions are answered."""
 
-    RESPONDS_TO = EventType.Name(EventType.QUESTIONNAIRE_COMMAND__PRE_COMMIT)
+    RESPONDS_TO = EventType.Name(EventType.QUESTIONNAIRE_COMMAND__POST_VALIDATION)
 
     def compute(self) -> list[Effect]:
         """Block questionnaire commit if any questions are unanswered."""

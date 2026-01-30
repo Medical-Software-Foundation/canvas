@@ -11,7 +11,7 @@ def mock_event():
     """Factory fixture to create mock events with configurable target."""
     def _create_event(command_id: str = "test-command-id"):
         event = Mock()
-        event.type = EventType.QUESTIONNAIRE_COMMAND__PRE_COMMIT
+        event.type = EventType.QUESTIONNAIRE_COMMAND__POST_VALIDATION
         event.target = Mock()
         event.target.id = command_id
         event.context = {

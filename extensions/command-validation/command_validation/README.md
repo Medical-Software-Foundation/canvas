@@ -4,7 +4,7 @@ Validates commands before commit to ensure data completeness and quality.
 
 ## Event Reference
 
-This plugin responds to `QUESTIONNAIRE_COMMAND__PRE_COMMIT`, which fires before a questionnaire command is committed. Returning a `CommandValidationErrorEffect` blocks the commit and displays the error to the user.
+This plugin responds to `QUESTIONNAIRE_COMMAND__POST_VALIDATION`, which fires after validation when a questionnaire command is being committed. Returning a `CommandValidationErrorEffect` blocks the commit and displays the error to the user.
 
 ## Handlers
 
