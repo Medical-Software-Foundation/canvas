@@ -2183,7 +2183,7 @@ one or more active or proposed clinical actions for a patient. ](/sdk/data-
 detected-issue/)[ DeviceType of a manufactured item that is used in the
 provision of healthcare. ](/sdk/data-device/)[ EligibilitySummarySummary of
 copay and coinsurance for a Coverage. ](/sdk/data-
-coverage/#eligilibitysummary)[ EncounterA patient Encounter connected to a
+coverage/#eligilibitysummary/)[ EncounterA patient Encounter connected to a
 Note in Canvas. ](/sdk/data-encounter/)[ ExternalEventExternal clinical events
 from ADT feeds such as admissions, discharges, and transfers. ](/sdk/data-
 external-event/)[ FacilityA location where healthcare services are provided.
@@ -2193,15 +2193,16 @@ a vaccination that is being administered to a patient, either now, in the
 past, or in the future. ](/sdk/data-immunization/)[ LabsAnalysis of clinical
 specimens to obtain information about the health of a patient. ](/sdk/data-
 labs/)[ LabPartnerLab partners and the tests they offer within Canvas.
-](/sdk/data-lab-partner-and-test/)[ MedicationA record of a medication that is
-being consumed by a patient, either now, in the past, or in the future.
-](/sdk/data-medication/)[ Medication HistoryA record of a patient's medication
-history, including medications that were taken in the past but are no longer
-active. ](/sdk/data-medication-history/)[ Medication StatementA record of a
-medication statement by a patient from the past. ](/sdk/data-medication-
-statement/)[ MessageMessages sent to and from Canvas. ](/sdk/data-message/)[
-NoteClinical notes on patient charts. ](/sdk/data-note/)[
-ObservationMeasurements and simple assertions made about a patient.
+](/sdk/data-lab-partner-and-test/)[ LetterPatient correspondence letters
+created within Canvas. ](/sdk/data-letter/)[ MedicationA record of a
+medication that is being consumed by a patient, either now, in the past, or in
+the future. ](/sdk/data-medication/)[ Medication HistoryA record of a
+patient's medication history, including medications that were taken in the
+past but are no longer active. ](/sdk/data-medication-history/)[ Medication
+StatementA record of a medication statement by a patient from the past.
+](/sdk/data-medication-statement/)[ MessageMessages sent to and from Canvas.
+](/sdk/data-message/)[ NoteClinical notes on patient charts. ](/sdk/data-
+note/)[ ObservationMeasurements and simple assertions made about a patient.
 ](/sdk/data-observation/)[ OrganizationThe clinical organization present in
 the Canvas EMR. ](/sdk/data-organization/)[ PatientData used to categorize
 individuals for identification, records matching, and other purposes.
@@ -2215,19 +2216,19 @@ ProtocolCurrentThe current state of clinical protocols applied to patients
 within Canvas. ](/sdk/data-protocol-current/)[ ProtocolOverrideA record of a
 protocol being snoozed for a patient. ](/sdk/data-protocol-override/)[ Stop
 Medication EventA record of a Stop Medication Event, when a medication is
-removed from a patient's medication list. ](/sdk/data-stop-medication-event)[
+removed from a patient's medication list. ](/sdk/data-stop-medication-event/)[
 QuestionnaireGroups of coded questions and the coded patient responses.
-](/sdk/data-questionnaire)[ ReasonForVisitThe reason for a patient's visit.
+](/sdk/data-questionnaire/)[ ReasonForVisitThe reason for a patient's visit.
 ](/sdk/data-reason-for-visit/)[ ReferralA referral directing a specific
 patient to another provider or specialist. ](/sdk/data-referral/)[
 ServiceProviderData associated with Service Providers. ](/sdk/data-
 serviceprovider/)[ StaffData associated with Staff members. ](/sdk/data-
-staff)[ TaskData associated with Tasks. ](/sdk/data-task)[ TeamData associated
-with Teams. ](/sdk/data-team)[ Uncategorized Clinical DocumentsData associated
-with uncategorized clinical documents and their reviews. ](/sdk/data-
-uncategorized-clinical-document)[ ValueSetsLists of codes and terms from
-various clinical coding systems grouped by a defining concept. ](/sdk/data-
-value-sets/)
+staff/)[ TaskData associated with Tasks. ](/sdk/data-task/)[ TeamData
+associated with Teams. ](/sdk/data-team/)[ Uncategorized Clinical
+DocumentsData associated with uncategorized clinical documents and their
+reviews. ](/sdk/data-uncategorized-clinical-document/)[ ValueSetsLists of
+codes and terms from various clinical coding systems grouped by a defining
+concept. ](/sdk/data-value-sets/)
 ----- END PAGE https://docs.canvasmedical.com/sdk/data/
 
 
@@ -2476,7 +2477,7 @@ profile| Profile
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-billing-line-item/
 # BillingLineItem
-Last updated: 8 Sep 2025
+Last updated: 28 Jan 2026
 ##  Introduction #
 The `BillingLineItem` model represents billing line items linked to
 [Notes](/sdk/data-note) that can be found in the note footer. BillingLineItems
@@ -2543,6 +2544,7 @@ units| Integer
 command_type| String  
 command_id| Integer  
 status| BillingLineItemStatus  
+assessments| [Assessment](/sdk/data-assessment)[]  
 ###  BillingLineItemModifier #
 Field Name| Type  
 ---|---  
@@ -5827,7 +5829,7 @@ effect triggers another conditions event.
 notes/#appointment-effect)[ Appointment MetadataInteract with appointment
 metadata. ](/sdk/effect-appointment-metadata/)[ Appointment Metadata Create
 FormEffect for dynamically displaying forms when scheduling an appointment.
-](/sdk/appointment-metadata-create-form-effect)[ Banner AlertsContextual
+](/sdk/appointment-metadata-create-form-effect/)[ Banner AlertsContextual
 information in a patient's chart. ](/sdk/effect-banner-alerts/)[ Billing Line
 ItemsAdd, modify, or remove billing codes on a note. ](/sdk/effect-billing-
 line-items/)[ ClaimsManage labels, update line items, move to a queue, or post
@@ -5837,31 +5839,32 @@ EventsCreate or update external clinical events from ADT feeds. ](/sdk/effect-
 external-event/)[ Command ValidationValidate commands and return structured
 error messages to users. ](/sdk/effect-command-validation/)[ Custom HTML and
 Django TemplatesRender custom HTML using Django templates. ](/sdk/layout-
-effect/#custom-html-and-django-templates)[ Create CalendarCreate a calendar
-for a provider. ](/sdk/calendar-create-effect/)[ Manage Calendar EventsManage
-calendar events. ](/sdk/calendar-event-management-effects/)[ Form ResultEffect
-for dynamically displaying forms in the Patient Portal. ](/sdk/form-result-
-effect)[ Layout EffectsModify or interact with the layout in Canvas.
-](/sdk/layout-effect/)[ MessagesInteract with messages in Canvas.
-](/sdk/effect-messages/)[ NotesInteract with notes in Canvas. ](/sdk/effect-
-notes/)[ ObservationsCreate or update clinical observations. ](/sdk/effect-
-observation/)[ PatientInteract with patient data. ](/sdk/effect-patient/)[
-Patient Facility AddressCreate, update, or delete patient facility address
-associations. ](/sdk/effect-patient-facility-address/)[ Patient Chart
-GroupEffect for grouping items on a patient chart section. ](/sdk/patient-
-chart-group-effect/)[ Patient External IDCreate a new external identifier for
-a patient. ](/sdk/effect-create-patient-external-identifier/)[ Patient
-MetadataInteract with patient metadata. ](/sdk/effect-patient-metadata/)[
-Patient Metadata Create FormEffect for dynamically displaying forms in the
-Patient profile. ](/sdk/patient-metadata-create-form-effect)[ Patient
-PortalCustomize your Patient Portal. ](/sdk/patient-portal/)[ Protocol
-CardsCalls to action in a patient's chart, commonly used for decision support
-intervention. ](/sdk/effect-protocol-cards/)[ QuestionnairesInteract with
-questionnaires and interviews. ](/sdk/effect-questionnaires/)[ TasksCreate or
-update tasks. ](/sdk/effect-tasks/)[ Task MetadataInteract with Task metadata.
-](/sdk/effect-task-metadata/)[ CommandsThe building blocks of many end-user
-workflows in Canvas, including nearly all clinical workflows for
-documentation. ](/sdk/commands/)
+effect/#custom-html-and-django-templates/)[ Create CalendarCreate a calendar
+for a provider. ](/sdk/calendar-create-effect/)[ Event Validation ErrorEffect
+for blocking event creation with a validation error message. ](/sdk/effect-
+event-validation-error/)[ Manage Calendar EventsManage calendar events.
+](/sdk/calendar-event-management-effects/)[ Form ResultEffect for dynamically
+displaying forms in the Patient Portal. ](/sdk/form-result-effect/)[ Layout
+EffectsModify or interact with the layout in Canvas. ](/sdk/layout-effect/)[
+MessagesInteract with messages in Canvas. ](/sdk/effect-messages/)[
+NotesInteract with notes in Canvas. ](/sdk/effect-notes/)[ ObservationsCreate
+or update clinical observations. ](/sdk/effect-observation/)[ PatientInteract
+with patient data. ](/sdk/effect-patient/)[ Patient Facility AddressCreate,
+update, or delete patient facility address associations. ](/sdk/effect-
+patient-facility-address/)[ Patient Chart GroupEffect for grouping items on a
+patient chart section. ](/sdk/patient-chart-group-effect/)[ Patient External
+IDCreate a new external identifier for a patient. ](/sdk/effect-create-
+patient-external-identifier/)[ Patient MetadataInteract with patient metadata.
+](/sdk/effect-patient-metadata/)[ Patient Metadata Create FormEffect for
+dynamically displaying forms in the Patient profile. ](/sdk/patient-metadata-
+create-form-effect/)[ Patient PortalCustomize your Patient Portal.
+](/sdk/patient-portal/)[ Protocol CardsCalls to action in a patient's chart,
+commonly used for decision support intervention. ](/sdk/effect-protocol-
+cards/)[ QuestionnairesInteract with questionnaires and interviews.
+](/sdk/effect-questionnaires/)[ TasksCreate or update tasks. ](/sdk/effect-
+tasks/)[ Task MetadataInteract with Task metadata. ](/sdk/effect-task-
+metadata/)[ CommandsThe building blocks of many end-user workflows in Canvas,
+including nearly all clinical workflows for documentation. ](/sdk/commands/)
 ##  Effect Types #
 The following effects are available to be applied in Canvas.
 Effect| Description  
@@ -8077,7 +8080,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 12 Jan 2026
+Last updated: 28 Jan 2026
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -8162,6 +8165,15 @@ Target object| Context object
     "type": [Patient](/sdk/data-patient/)
 |
     empty  
+PATIENT_PREFERRED_PHARMACY_UPDATED  
+---  
+Occurs when a patient's preferred pharmacy is created or updated.  
+Target object| Context object  
+    "id": pt_id
+    "type": [Patient](/sdk/data-patient/)
+|
+    "patient":
+        "id": pt_id  
 CARE_TEAM_MEMBERSHIP_CREATED  
 ---  
 Occurs when a new care team member is added for a patient.  
@@ -8294,6 +8306,34 @@ Occurs when an external identifier for a patient is deleted.
 Target object| Context object  
     "id": patientexternalidentifier_id
     "type": [PatientExternalIdentifier](/sdk/data-patient/#patientexternalidentifier)
+|
+    "patient":
+        "id": pt_id  
+####  Patient Facility Address #
+PATIENT_FACILITY_ADDRESS_CREATED  
+---  
+Occurs when a patient facility address is created.  
+Target object| Context object  
+    "id": patientfacilityaddress_id
+    "type": [PatientFacilityAddress](/sdk/data-patient/#patientfacilityaddress)
+|
+    "patient":
+        "id": pt_id  
+PATIENT_FACILITY_ADDRESS_UPDATED  
+---  
+Occurs when a patient facility address is updated.  
+Target object| Context object  
+    "id": patientfacilityaddress_id
+    "type": [PatientFacilityAddress](/sdk/data-patient/#patientfacilityaddress)
+|
+    "patient":
+        "id": pt_id  
+PATIENT_FACILITY_ADDRESS_DELETED  
+---  
+Occurs when a patient facility address is deleted.  
+Target object| Context object  
+    "id": patientfacilityaddress_id
+    "type": [PatientFacilityAddress](/sdk/data-patient/#patientfacilityaddress)
 |
     "patient":
         "id": pt_id  
@@ -8984,6 +9024,20 @@ Target object| Context object
     "note_id": note_id,
     "patient_id": pt_id,
     "state": [str](/sdk/data-note/#notestates)  
+NOTE_STATE_CHANGE_EVENT_PRE_CREATE  
+---  
+Occurs **before** a note state change event is created. This event allows
+protocols to perform validation and block the note state change if needed. If
+an [`EventValidationError`](/sdk/effect-event-validation-error) effect is
+returned, the note state change event is aborted and the error message is
+surfaced to the user.  
+Target object| Context object  
+    "id": nsce_id
+    "type": NoteStateChangeEvent
+|
+    "note_id": note_id,
+    "patient_id": pt_id,
+    "state": [str](/sdk/data-note/#notestates)  
 NOTE_STATE_CHANGE_EVENT_UPDATED  
 ---  
 Occurs if a note state change event is updated. Locking and unlocking both
@@ -8997,6 +9051,25 @@ Target object| Context object
     "note_id": note_id,
     "patient_id": pt_id,
     "state": [str](/sdk/data-note/#notestates)  
+####  Letters #
+LETTER_CREATED  
+---  
+Occurs when a letter is created.  
+Target object| Context object  
+    "id": letter_id
+    "type": [Letter](/sdk/data-letter/)
+|
+    "patient":
+       "id": pt_id  
+LETTER_UPDATED  
+---  
+Occurs when a letter is updated.  
+Target object| Context object  
+    "id": letter_id
+    "type": [Letter](/sdk/data-letter/)
+|
+    "patient":
+       "id": pt_id  
 ####  Observations #
 OBSERVATION_CREATED  
 ---  
