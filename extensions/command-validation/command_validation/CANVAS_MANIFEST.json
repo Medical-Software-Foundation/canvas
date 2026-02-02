@@ -1,0 +1,28 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "command_validation",
+    "description": "Validates commands before commit - ensures questionnaires have all questions answered and prescriptions have valid days supply",
+    "components": {
+        "handlers": [
+            {
+                "class": "command_validation.handlers.questionnaire_validation:RequireAllQuestionsAnsweredHandler",
+                "description": "Prevents committing a questionnaire unless all questions are answered"
+            },
+            {
+                "class": "command_validation.handlers.prescription_validation:RequireDaysSupplyHandler",
+                "description": "Prevents committing prescription commands without a valid days_supply"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
