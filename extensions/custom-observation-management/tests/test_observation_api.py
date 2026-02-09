@@ -348,7 +348,9 @@ class TestGetSingleObservation:
 
         with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
-                mock_obs_class.objects.get.return_value = mock_observation
+                # get_observation uses _get_observation_queryset().get(); mock the prefetch chain
+                prefetched = mock_obs_class.objects.select_related.return_value.prefetch_related.return_value
+                prefetched.get.return_value = mock_observation
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -356,7 +358,7 @@ class TestGetSingleObservation:
 
                 result = handler.get_observation()
 
-                mock_obs_class.objects.get.assert_called_with(id="obs-uuid-123")
+                prefetched.get.assert_called_with(id="obs-uuid-123")
                 assert len(result) == 1
                 assert result[0].status_code == HTTPStatus.OK
 
@@ -541,17 +543,28 @@ class TestCreateObservation:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                     with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
-                        mock_patient_class.objects.filter.return_value.exists.return_value = True
-                        # Return UUID when looking up note by dbid
-                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
-                            "id": "note-uuid-from-dbid"
-                        }
-                        mock_effect_instance = MagicMock()
-                        mock_effect_class.return_value = mock_effect_instance
-                        mock_command_instance = MagicMock()
-                        mock_command_class.return_value = mock_command_instance
+                        with patch("custom_observation_management.protocols.observation_api.render_to_string") as mock_render:
+                            def _render(template_name: str, context: dict | None = None) -> str:
+                                ctx = context or {}
+                                return (
+                                    "<table><tbody>"
+                                    f'<tr><td>Name</td><td>{ctx.get("name", "")}</td></tr>'
+                                    f'<tr><td>Value</td><td>{ctx.get("value_display", "")}</td></tr>'
+                                    f'<tr><td>Category</td><td>{ctx.get("category_str", "")}</td></tr>'
+                                    "</tbody></table>"
+                                )
+                            mock_render.side_effect = _render
+                            mock_patient_class.objects.filter.return_value.exists.return_value = True
+                            # Return UUID when looking up note by dbid
+                            mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                                "id": "note-uuid-from-dbid"
+                            }
+                            mock_effect_instance = MagicMock()
+                            mock_effect_class.return_value = mock_effect_instance
+                            mock_command_instance = MagicMock()
+                            mock_command_class.return_value = mock_command_instance
 
-                        result = handler.create_observation()
+                            result = handler.create_observation()
 
                         call_kwargs = mock_effect_class.call_args.kwargs
                         assert call_kwargs["category"] == "vital-signs"
@@ -977,17 +990,28 @@ class TestCreateObservation:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                     with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
-                        mock_patient_class.objects.filter.return_value.exists.return_value = True
-                        # Return dbid when looking up note by UUID
-                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
-                            "dbid": 12345
-                        }
-                        mock_effect_instance = MagicMock()
-                        mock_effect_class.return_value = mock_effect_instance
-                        mock_command_instance = MagicMock()
-                        mock_command_class.return_value = mock_command_instance
+                        with patch("custom_observation_management.protocols.observation_api.render_to_string") as mock_render:
+                            def _render(template_name: str, context: dict | None = None) -> str:
+                                ctx = context or {}
+                                return (
+                                    "<table><tbody>"
+                                    f'<tr><td>Name</td><td>{ctx.get("name", "")}</td></tr>'
+                                    f'<tr><td>Value</td><td>{ctx.get("value_display", "")}</td></tr>'
+                                    f'<tr><td>Category</td><td>{ctx.get("category_str", "")}</td></tr>'
+                                    "</tbody></table>"
+                                )
+                            mock_render.side_effect = _render
+                            mock_patient_class.objects.filter.return_value.exists.return_value = True
+                            # Return dbid when looking up note by UUID
+                            mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                                "dbid": 12345
+                            }
+                            mock_effect_instance = MagicMock()
+                            mock_effect_class.return_value = mock_effect_instance
+                            mock_command_instance = MagicMock()
+                            mock_command_class.return_value = mock_command_instance
 
-                        result = handler.create_observation()
+                            result = handler.create_observation()
 
                         call_kwargs = mock_effect_class.call_args.kwargs
                         # Verify note_id was converted from note_uuid
@@ -998,6 +1022,8 @@ class TestCreateObservation:
                         assert command_kwargs["note_uuid"] == "note-uuid-456"
                         assert command_kwargs["schema_key"] == "observationSummary"
                         assert "Blood Pressure" in command_kwargs["content"]
+                        mock_render.assert_called_once()
+                        assert mock_render.call_args[0][0] == "templates/observation_summary.html"
                         # Result: observation effect, custom command, json response
                         assert len(result) == 3
                         assert result[2].status_code == HTTPStatus.CREATED
@@ -1114,16 +1140,27 @@ class TestCreateObservation:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                     with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
-                        mock_patient_class.objects.filter.return_value.exists.return_value = True
-                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
-                            "id": "note-uuid-for-command"
-                        }
-                        mock_effect_instance = MagicMock()
-                        mock_effect_class.return_value = mock_effect_instance
-                        mock_command_instance = MagicMock()
-                        mock_command_class.return_value = mock_command_instance
+                        with patch("custom_observation_management.protocols.observation_api.render_to_string") as mock_render:
+                            def _render(template_name: str, context: dict | None = None) -> str:
+                                ctx = context or {}
+                                return (
+                                    "<table><tbody>"
+                                    f'<tr><td>Name</td><td>{ctx.get("name", "")}</td></tr>'
+                                    f'<tr><td>Value</td><td>{ctx.get("value_display", "")}</td></tr>'
+                                    f'<tr><td>Category</td><td>{ctx.get("category_str", "")}</td></tr>'
+                                    "</tbody></table>"
+                                )
+                            mock_render.side_effect = _render
+                            mock_patient_class.objects.filter.return_value.exists.return_value = True
+                            mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                                "id": "note-uuid-for-command"
+                            }
+                            mock_effect_instance = MagicMock()
+                            mock_effect_class.return_value = mock_effect_instance
+                            mock_command_instance = MagicMock()
+                            mock_command_class.return_value = mock_command_instance
 
-                        result = handler.create_observation()
+                            result = handler.create_observation()
 
                         # Verify CustomCommand was created
                         mock_command_class.assert_called_once()
@@ -1133,7 +1170,7 @@ class TestCreateObservation:
                         assert command_kwargs["note_uuid"] == "note-uuid-for-command"
                         assert command_kwargs["schema_key"] == "observationSummary"
 
-                        # Verify HTML content contains observation data
+                        # Verify HTML content contains observation data (from template render)
                         content = command_kwargs["content"]
                         assert "Weight" in content
                         assert "75 kg" in content
@@ -1141,6 +1178,12 @@ class TestCreateObservation:
                         assert "<table" in content
                         assert "print_content" in command_kwargs
                         assert command_kwargs["print_content"] == content
+                        mock_render.assert_called_once()
+                        assert mock_render.call_args[0][0] == "templates/observation_summary.html"
+                        ctx = mock_render.call_args[0][1]
+                        assert ctx["name"] == "Weight"
+                        assert ctx["value_display"] == "75 kg"
+                        assert ctx["category_str"] == "vital-signs"
 
                         # Verify originate() was called on the command
                         mock_command_instance.originate.assert_called_once()
@@ -1216,16 +1259,31 @@ class TestCreateObservation:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
                 with patch("custom_observation_management.protocols.observation_api.ObservationEffect") as mock_effect_class:
                     with patch("custom_observation_management.protocols.observation_api.CustomCommand") as mock_command_class:
-                        mock_patient_class.objects.filter.return_value.exists.return_value = True
-                        mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
-                            "id": "note-uuid-for-components"
-                        }
-                        mock_effect_instance = MagicMock()
-                        mock_effect_class.return_value = mock_effect_instance
-                        mock_command_instance = MagicMock()
-                        mock_command_class.return_value = mock_command_instance
+                        with patch("custom_observation_management.protocols.observation_api.render_to_string") as mock_render:
+                            def _render(template_name: str, context: dict | None = None) -> str:
+                                ctx = context or {}
+                                parts = [
+                                    "<table><tbody>",
+                                    f'<tr><td>Name</td><td>{ctx.get("name", "")}</td></tr>',
+                                    f'<tr><td>Value</td><td>{ctx.get("value_display", "")}</td></tr>',
+                                    f'<tr><td>Category</td><td>{ctx.get("category_str", "")}</td></tr>',
+                                ]
+                                if ctx.get("components"):
+                                    comps = "<br/>".join(c.get("display", "") for c in ctx["components"])
+                                    parts.append(f'<tr><td>Components</td><td>{comps}</td></tr>')
+                                parts.append("</tbody></table>")
+                                return "".join(parts)
+                            mock_render.side_effect = _render
+                            mock_patient_class.objects.filter.return_value.exists.return_value = True
+                            mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
+                                "id": "note-uuid-for-components"
+                            }
+                            mock_effect_instance = MagicMock()
+                            mock_effect_class.return_value = mock_effect_instance
+                            mock_command_instance = MagicMock()
+                            mock_command_class.return_value = mock_command_instance
 
-                        result = handler.create_observation()
+                            result = handler.create_observation()
 
                         # Verify CustomCommand was created
                         mock_command_class.assert_called_once()
@@ -1965,7 +2023,9 @@ class TestGetObservationsNameFallback:
 
         with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_obs]
+                # get_observations_for_patient uses _get_observation_queryset(exclude().exclude().exclude()).filter()
+                base = mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value
+                base.select_related.return_value.prefetch_related.return_value.filter.return_value = [mock_obs]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
@@ -2023,7 +2083,9 @@ class TestGetObservationsValueFallback:
 
         with patch("custom_observation_management.protocols.observation_api.Observation") as mock_obs_class:
             with patch("custom_observation_management.protocols.observation_api.Note") as mock_note_class:
-                mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value.filter.return_value = [mock_obs]
+                # get_observations_for_patient uses _get_observation_queryset(exclude().exclude().exclude()).filter()
+                base = mock_obs_class.objects.exclude.return_value.exclude.return_value.exclude.return_value
+                base.select_related.return_value.prefetch_related.return_value.filter.return_value = [mock_obs]
                 mock_note_class.objects.filter.return_value.values.return_value.first.return_value = {
                     "id": "note-uuid-123",
                     "datetime_of_service": None,
