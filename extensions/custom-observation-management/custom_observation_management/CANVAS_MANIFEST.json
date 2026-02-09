@@ -35,7 +35,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": ["simpleapi-api-key"],
+    "secrets": ["simpleapi-api-key", "TIMEZONE"],
     "tags": {},
     "references": [],
     "license": "",

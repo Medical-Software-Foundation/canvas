@@ -489,6 +489,12 @@ tr.component-row.nested td {
     border-radius: 6px 6px 0 0;
 }
 
+.no-data.observation-load-error {
+    color: #721c24;
+    background: #f8d7da;
+    border-color: #f5c6cb;
+}
+
 .graph-controls {
     display: flex;
     align-items: center;

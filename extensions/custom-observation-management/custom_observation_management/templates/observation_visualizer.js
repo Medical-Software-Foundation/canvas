@@ -37,6 +37,8 @@ let chartReviewData = {
     observations: [],
     totalCount: 0
 };
+// Table load error state (set when fetchObservations fails)
+let loadError = false;
 
 // DOM Elements
 const loadingOverlay = document.getElementById('loadingOverlay');
@@ -121,9 +123,12 @@ async function fetchObservations(page = 1) {
         );
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            loadError = true;
+            observations = [];
+            return { observations: [], pagination: paginationData };
         }
 
+        loadError = false;
         const data = await response.json();
         observations = data.observations || [];
         paginationData = data.pagination || {
@@ -138,6 +143,7 @@ async function fetchObservations(page = 1) {
         return data;
     } catch (error) {
         console.error('Error fetching observations:', error);
+        loadError = true;
         observations = [];
         return { observations: [], pagination: paginationData };
     } finally {
@@ -547,11 +553,16 @@ function renderTable() {
     if (observations.length === 0) {
         tableBody.innerHTML = '';
         noDataMessage.style.display = 'flex';
+        noDataMessage.textContent = loadError
+            ? noDataMessage.getAttribute('data-error-text')
+            : noDataMessage.getAttribute('data-no-data-text');
+        noDataMessage.classList.toggle('observation-load-error', loadError);
         document.querySelector('.table-wrapper').style.display = 'none';
         return;
     }
 
     noDataMessage.style.display = 'none';
+    noDataMessage.classList.remove('observation-load-error');
     document.querySelector('.table-wrapper').style.display = 'block';
 
     let html = '';
@@ -1099,7 +1110,11 @@ async function fetchAllObservations() {
         );
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            return {
+                observations: [],
+                totalCount: 0,
+                error: true
+            };
         }
 
         const data = await response.json();
@@ -1109,7 +1124,7 @@ async function fetchAllObservations() {
         };
     } catch (error) {
         console.error('Error fetching all observations:', error);
-        return { observations: [], totalCount: 0 };
+        return { observations: [], totalCount: 0, error: true };
     }
 }
 
@@ -1130,7 +1145,20 @@ async function openChartReviewModal() {
     errorMessage.style.display = 'none';
 
     // Fetch ALL observations (not just current page)
-    const { observations: allObservations, totalCount } = await fetchAllObservations();
+    const result = await fetchAllObservations();
+
+    if (result.error) {
+        summaryPreview.innerHTML = (
+            '<div class="observation-load-error" style="padding: 20px; text-align: center; color: #721c24; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px;">' +
+            'There was an error loading the observations. ' +
+            '</div>'
+        );
+        createChartReviewBtn.disabled = true;
+        createChartReviewBtn.textContent = 'Create Chart Review Note';
+        return;
+    }
+
+    const { observations: allObservations, totalCount } = result;
 
     // Store for use in createChartReview
     chartReviewData.observations = allObservations;

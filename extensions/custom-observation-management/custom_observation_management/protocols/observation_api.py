@@ -13,15 +13,16 @@ from http import HTTPStatus
 from typing import Any
 
 import arrow
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 
 from canvas_sdk.commands.commands.custom_command import CustomCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.observation import CodingData, Observation as ObservationEffect, ObservationComponentData
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyAuthMixin, SimpleAPI, api
+from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import Note
-from canvas_sdk.v1.data.observation import Observation
+from canvas_sdk.v1.data.observation import Observation, ObservationComponent
 from canvas_sdk.v1.data.patient import Patient
 from logger import log
 
@@ -49,7 +50,9 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
         components: list[ObservationComponentData] | None = None,
     ) -> str:
         """
-        Build HTML content for a CustomCommand observation summary.
+        Build HTML content for a CustomCommand observation summary using a Django template.
+
+        Uses canvas_sdk.templates.render_to_string per the layout effect docs
 
         Args:
             name: The observation name.
@@ -62,56 +65,42 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
         Returns:
             HTML string formatted for display in a CustomCommand.
         """
-        # Format the datetime for display in EST with am/pm
         if effective_datetime:
             if hasattr(effective_datetime, 'strftime'):
-                # Convert to EST timezone
-                est_dt = arrow.get(effective_datetime).to("America/New_York")
-                datetime_str = est_dt.strftime("%Y-%m-%d %I:%M %p EST")
+                timezone = self.secrets.get("TIMEZONE", "America/New_York")
+                est_dt = arrow.get(effective_datetime).to(timezone)
+                datetime_str = est_dt.strftime("%Y-%m-%d %I:%M %p %Z")
             else:
                 datetime_str = str(effective_datetime)
         else:
             datetime_str = "N/A"
 
-        # Format category
         if isinstance(category, list):
             category_str = ", ".join(category)
         else:
             category_str = category or ""
 
-        # Build the value display with units
         value_display = value or "N/A"
         if value and units:
             value_display = f"{value} {units}"
 
-        # Build HTML table
-        rows = [
-            f"<tr><td><strong>Name</strong></td><td>{name}</td></tr>",
-            f"<tr><td><strong>Value</strong></td><td>{value_display}</td></tr>",
-            f"<tr><td><strong>Date/Time</strong></td><td>{datetime_str}</td></tr>",
-        ]
-
-        if category_str:
-            rows.append(f"<tr><td><strong>Category</strong></td><td>{category_str}</td></tr>")
-
-        # Add components if present (each on a new line)
+        component_list: list[dict[str, str]] = []
         if components:
-            component_lines = []
             for comp in components:
                 comp_display = f"{comp.name}: {comp.value_quantity}"
                 if comp.value_quantity_unit:
                     comp_display += f" {comp.value_quantity_unit}"
-                component_lines.append(comp_display)
-            components_html = "<br/>".join(component_lines)
-            rows.append(f"<tr><td><strong>Components</strong></td><td>{components_html}</td></tr>")
+                component_list.append({"display": comp_display})
 
-        return (
-            '<table style="width: 100%; border-collapse: collapse;">'
-            '<tbody>'
-            + "".join(rows)
-            + '</tbody>'
-            '</table>'
-        )
+        context = {
+            "name": name,
+            "value_display": value_display,
+            "datetime_str": datetime_str,
+            "category_str": category_str,
+            "components": component_list,
+        }
+        rendered = render_to_string("templates/observation_summary.html", context)
+        return rendered if rendered is not None else ""
 
     def _map_coding_to_dict(self, codings) -> list[dict[str, Any]]:
         """Convert FHIR coding objects to a list of dictionaries."""
@@ -175,6 +164,23 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
             "value_codings": value_codings_list,
         }
 
+    def _get_observation_queryset(self, base=None):
+        """
+        Return an Observation queryset with related data prefetched to avoid N+1 queries.
+
+        Prefetches: patient, is_member_of, codings, value_codings, components and each
+        component's codings.
+        """
+        qs = base if base is not None else Observation.objects
+        return qs.select_related("patient", "is_member_of").prefetch_related(
+            "codings",
+            "value_codings",
+            Prefetch(
+                "components",
+                queryset=ObservationComponent.objects.prefetch_related("codings"),
+            ),
+        )
+
     @api.get("/observation/<observation_id>")
     def get_observation(self) -> list[Response | Effect]:
         """
@@ -194,8 +200,9 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
                 JSONResponse({"error": "Observation ID is required"}, status_code=HTTPStatus.BAD_REQUEST)
             ]
 
-        observation = Observation.objects.get(id=observation_id)
-        if not observation:
+        try:
+            observation = self._get_observation_queryset().get(id=observation_id)
+        except Observation.DoesNotExist:
             return [
                 JSONResponse({"error": "Observation not found"}, status_code=HTTPStatus.NOT_FOUND)
             ]
@@ -375,13 +382,15 @@ class ObservationAPI(APIKeyAuthMixin, SimpleAPI):
         # Grouping parameter
         ungrouped = self.request.query_params.get("ungrouped", "false").lower() == "true"
 
-        # Query all observations matching filters (excluding deleted/error)
-        base_queryset = Observation.objects.exclude(
-            deleted=True
-        ).exclude(
-            entered_in_error_id__isnull=False
-        ).exclude(
-            name__in=['bmi_percentile', 'weight_for_length_percentile']
+        # Query all observations matching filters (excluding deleted/error), with related data prefetched
+        base_queryset = self._get_observation_queryset(
+            Observation.objects.exclude(
+                deleted=True
+            ).exclude(
+                entered_in_error_id__isnull=False
+            ).exclude(
+                name__in=['bmi_percentile', 'weight_for_length_percentile']
+            )
         )
         matching_observations = base_queryset.filter(*filters)
 
