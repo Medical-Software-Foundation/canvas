@@ -1,6 +1,6 @@
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/
 # The Canvas SDK
-Last updated: 17 Jan 2025
+Last updated: 6 Feb 2026
 ##  Get started #
 Here are some step-by-step guides to get you started:
 [ Your First PluginThis guide steps you through installing the Canvas SDK,
@@ -27,7 +27,9 @@ has access to additional information through the [data module](/sdk/data),
 which exposes a subset of the Canvas application database through a series of
 [Django ORM
 classes](https://docs.djangoproject.com/en/5.1/ref/models/querysets/) backed
-by read-only views.
+by read-only views. The SDK also includes a [clients module](/sdk/clients/)
+with pre-built integrations for third-party services like AI/ML providers,
+cloud storage, email, and messaging.
 ##  Where can I get additional help? #
 Our [open-source GitHub repo](https://github.com/canvas-medical/canvas-
 plugins) has a [discussions](https://github.com/canvas-medical/canvas-
