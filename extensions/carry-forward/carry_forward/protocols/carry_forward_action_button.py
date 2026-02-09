@@ -541,6 +541,7 @@ class CarryForwardActionButton(ActionButton):
             AdjustPrescriptionCommand.Meta.key: (RefillCommand, self._carry_forward_adjust_prescription_as_refill, False),
             ChangeMedicationCommand.Meta.key: (RefillCommand, self._carry_forward_change_medication_as_refill, False),
             PrescribeCommand.Meta.key: (RefillCommand, self._carry_forward_prescribe_as_refill, False),
+            # If a previous note had a goal, we probably just want to update it this time
             GoalCommand.Meta.key: (UpdateGoalCommand, self._carry_forward_goal_as_update_goal, False),
 
 
@@ -594,4 +595,8 @@ class CarryForwardActionButton(ActionButton):
                 originating_effects.append(effect)
                 log.info(f"Originating command with {effect.__dict__}")
 
+        if not originating_effects:
+            log.warning(f"No commands to carry forward found for note {note_id}")
+            return []
+        
         return [BatchOriginateCommandEffect(commands=originating_effects).apply()] + editing_effects

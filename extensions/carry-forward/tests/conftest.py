@@ -67,24 +67,43 @@ class MockCommand:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+    def __getattr__(self, name):
+        """Return None for unset attributes, mimicking SDK command defaults."""
+        return None
+
     def originate(self):
         """Mock originate method."""
         return MagicMock()
 
+class MockQuestionnaireBaseCommand(MockCommand):
+    """Mock base for questionnaire-type commands that have questions and edit()."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.questions = []
+
+    def edit(self):
+        return MagicMock()
+
+    def set_question_enabled(self, question_id, enabled):
+        pass
+
 # Create mock command classes
 commands_mock = MagicMock()
-commands_mock.DiagnoseCommand = type('DiagnoseCommand', (MockCommand,), {})
-commands_mock.PhysicalExamCommand = type('PhysicalExamCommand', (MockCommand,), {})
-commands_mock.HistoryOfPresentIllnessCommand = type('HistoryOfPresentIllnessCommand', (MockCommand,), {})
-commands_mock.PlanCommand = type('PlanCommand', (MockCommand,), {})
-commands_mock.PerformCommand = type('PerformCommand', (MockCommand,), {})
-commands_mock.QuestionnaireCommand = type('QuestionnaireCommand', (MockCommand,), {})
-commands_mock.ReasonForVisitCommand = type('ReasonForVisitCommand', (MockCommand,), {})
-commands_mock.ReviewOfSystemsCommand = type('ReviewOfSystemsCommand', (MockCommand,), {})
-commands_mock.StructuredAssessmentCommand = type('StructuredAssessmentCommand', (MockCommand,), {})
+commands_mock.DiagnoseCommand = type('DiagnoseCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'diagnose'})})
+commands_mock.PhysicalExamCommand = type('PhysicalExamCommand', (MockQuestionnaireBaseCommand,), {'Meta': type('Meta', (), {'key': 'exam'})})
+commands_mock.HistoryOfPresentIllnessCommand = type('HistoryOfPresentIllnessCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'hpi'})})
+commands_mock.PlanCommand = type('PlanCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'plan'})})
+commands_mock.PerformCommand = type('PerformCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'perform'})})
+commands_mock.QuestionnaireCommand = type('QuestionnaireCommand', (MockQuestionnaireBaseCommand,), {'Meta': type('Meta', (), {'key': 'questionnaire'})})
+commands_mock.ReasonForVisitCommand = type('ReasonForVisitCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'reasonForVisit'})})
+commands_mock.ReviewOfSystemsCommand = type('ReviewOfSystemsCommand', (MockQuestionnaireBaseCommand,), {'Meta': type('Meta', (), {'key': 'ros'})})
+commands_mock.StructuredAssessmentCommand = type('StructuredAssessmentCommand', (MockQuestionnaireBaseCommand,), {'Meta': type('Meta', (), {'key': 'structuredAssessment'})})
 
 # Create VitalsCommand with special attributes
 class MockVitalsCommand(MockCommand):
+    class Meta:
+        key = "vitals"
+
     class BodyTemperatureSite:
         AXILLARY = "axillary"
         ORAL = "oral"
@@ -115,6 +134,9 @@ commands_mock.VitalsCommand = MockVitalsCommand
 
 # Create AssessCommand with Status enum
 class MockAssessCommand(MockCommand):
+    class Meta:
+        key = "assess"
+
     class Status:
         IMPROVED = "improved"
         STABLE = "stable"
@@ -123,10 +145,13 @@ class MockAssessCommand(MockCommand):
 commands_mock.AssessCommand = MockAssessCommand
 
 # Create FollowUpCommand
-commands_mock.FollowUpCommand = type('FollowUpCommand', (MockCommand,), {})
+commands_mock.FollowUpCommand = type('FollowUpCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'followUp'})})
 
 # Create ImagingOrderCommand with Priority enum
 class MockImagingOrderCommand(MockCommand):
+    class Meta:
+        key = "imagingOrder"
+
     class Priority:
         ROUTINE = "routine"
         URGENT = "urgent"
@@ -134,13 +159,16 @@ class MockImagingOrderCommand(MockCommand):
 commands_mock.ImagingOrderCommand = MockImagingOrderCommand
 
 # Create InstructCommand
-commands_mock.InstructCommand = type('InstructCommand', (MockCommand,), {})
+commands_mock.InstructCommand = type('InstructCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'instruct'})})
 
 # Create LabOrderCommand
-commands_mock.LabOrderCommand = type('LabOrderCommand', (MockCommand,), {})
+commands_mock.LabOrderCommand = type('LabOrderCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'labOrder'})})
 
 # Create ReferCommand with Priority and ClinicalQuestion enums
 class MockReferCommand(MockCommand):
+    class Meta:
+        key = "refer"
+
     class Priority:
         ROUTINE = "routine"
         URGENT = "urgent"
@@ -154,13 +182,16 @@ class MockReferCommand(MockCommand):
 commands_mock.ReferCommand = MockReferCommand
 
 # Create TaskCommand
-commands_mock.TaskCommand = type('TaskCommand', (MockCommand,), {})
+commands_mock.TaskCommand = type('TaskCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'task'})})
 
 # Create RefillCommand
-commands_mock.RefillCommand = type('RefillCommand', (MockCommand,), {})
+commands_mock.RefillCommand = type('RefillCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'refill'})})
 
 # Create GoalCommand with AchievementStatus and Priority enums
 class MockGoalCommand(MockCommand):
+    class Meta:
+        key = "goal"
+
     class AchievementStatus:
         IN_PROGRESS = "in-progress"
         IMPROVING = "improving"
@@ -181,6 +212,9 @@ commands_mock.GoalCommand = MockGoalCommand
 
 # Create UpdateGoalCommand with AchievementStatus and Priority enums
 class MockUpdateGoalCommand(MockCommand):
+    class Meta:
+        key = "updateGoal"
+
     class AchievementStatus:
         IN_PROGRESS = "in-progress"
         IMPROVING = "improving"
@@ -213,11 +247,17 @@ commands_mock.FamilyHistoryCommand = type('FamilyHistoryCommand', (MockCommand,)
 
 # Create PrescribeCommand with Substitutions enum
 class MockPrescribeCommand(MockCommand):
+    class Meta:
+        key = "prescribe"
+
     class Substitutions:
         ALLOWED = "allowed"
         NOT_ALLOWED = "not_allowed"
 
 commands_mock.PrescribeCommand = MockPrescribeCommand
+
+commands_mock.UpdateDiagnosisCommand = type('UpdateDiagnosisCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'updateDiagnosis'})})
+commands_mock.AdjustPrescriptionCommand = type('AdjustPrescriptionCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'adjustPrescription'})})
 
 sys.modules['canvas_sdk.commands'] = commands_mock
 
@@ -255,7 +295,7 @@ sys.modules['canvas_sdk.commands.commands.task'] = task_mock
 
 # Mock change medication command
 change_medication_mock = MagicMock()
-change_medication_mock.ChangeMedicationCommand = MagicMock
+change_medication_mock.ChangeMedicationCommand = type('ChangeMedicationCommand', (MockCommand,), {'Meta': type('Meta', (), {'key': 'changeMedication'})})
 sys.modules['canvas_sdk.commands.commands.change_medication'] = change_medication_mock
 
 # Mock additional data models

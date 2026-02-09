@@ -431,8 +431,8 @@ class TestHandle:
 
                 effects = handler.handle()
 
-                # Returns 1 BatchOriginateCommandEffect with empty commands list
-                assert len(effects) == 1
+                # Returns empty list when no commands to carry forward
+                assert len(effects) == 0
 
     def test_handle_diagnose_with_missing_optional_fields(self, mock_event, mock_note, mock_previous_note):
         """Test carrying forward diagnose command with missing optional fields."""
@@ -1011,7 +1011,7 @@ class TestSmartCarryForward:
 
                     # Mock the MedicationCoding lookup for changeMedication
                     mock_coding = MagicMock()
-                    mock_coding.code = "fdb-code-789"
+                    mock_coding.code = 789
                     mock_med_coding.filter.return_value.first.return_value = mock_coding
 
                     # Mock the Command lookups for finding the source prescription
@@ -1019,7 +1019,7 @@ class TestSmartCarryForward:
                     mock_prescribe_cmd.schema_key = "prescribe"
                     mock_prescribe_cmd.modified = datetime(2024, 12, 7, 10, 0, 0)
                     mock_prescribe_cmd.data = {
-                        "prescribe": {"value": "fdb-code-789"},
+                        "prescribe": {"value": 789},
                         "indications": [],
                         "sig": "Original sig",
                         "pharmacy": {"value": "pharmacy-123"}
@@ -1033,14 +1033,15 @@ class TestSmartCarryForward:
                         # First call returns the changeMedication command
                         if 'note' in kwargs:
                             mock_order.return_value = [mock_command]
+                            mock_filter.order_by = MagicMock(return_value=mock_order.return_value)
                         else:
                             # Subsequent calls for finding source command
                             if 'schema_key' in kwargs and kwargs.get('schema_key') == 'prescribe':
-                                mock_order.return_value.last.return_value = mock_prescribe_cmd
+                                mock_order.last.return_value = mock_prescribe_cmd
                             else:
-                                mock_order.return_value.last.return_value = None
+                                mock_order.last.return_value = None
+                            mock_filter.order_by = MagicMock(return_value=mock_order)
 
-                        mock_filter.order_by = MagicMock(return_value=mock_order.return_value if 'note' in kwargs else mock_order)
                         return mock_filter
 
                     mock_cmd_objects.filter = MagicMock(side_effect=command_filter_side_effect)
