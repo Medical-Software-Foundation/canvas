@@ -4,7 +4,7 @@ A Canvas plugin for managing and visualizing patient observations with table and
 
 ## Video
 
-Here is a video demonstrating this plugin in action: https://www.loom.com/share/a475c3cba69149f2b60851b6f9ec1da8 
+Here is a video demonstrating this plugin in action: https://www.loom.com/share/a475c3cba69149f2b60851b6f9ec1da8
 
 ## Features
 
