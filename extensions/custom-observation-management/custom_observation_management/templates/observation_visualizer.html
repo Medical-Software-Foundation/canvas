@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Observation Results</title>
+    <link rel="stylesheet" href="visualizer/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <header>
+        <h2>Observation Results</h2>
+        <div class="header-actions">
+            <div class="view-toggle">
+                <button id="tableViewBtn" class="btn btn-active">Table View</button>
+                <button id="graphViewBtn" class="btn">Graph View</button>
+            </div>
+            <button id="addToNoteBtn" class="btn btn-primary">Add to Chart Review</button>
+        </div>
+    </header>
+
+    <div class="filters-section">
+        <div class="filter-group">
+            <label>Observation Names</label>
+            <div class="filter-dropdown" id="nameFilter" data-values="">
+                <div class="selected-value">
+                    <span class="placeholder-text">All Observations</span>
+                </div>
+                <div class="dropdown-options" id="name-options">
+                    <div class="dropdown-search">
+                        <input type="text" id="name-search" placeholder="Search observations..." class="search-input">
+                    </div>
+                    <div class="dropdown-option" data-value="">
+                        <input type="checkbox" id="name-all" checked>
+                        <label for="name-all">All Observations</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label>Categories</label>
+            <div class="filter-dropdown" id="categoryFilter" data-values="">
+                <div class="selected-value">
+                    <span class="placeholder-text">All Categories</span>
+                </div>
+                <div class="dropdown-options" id="category-options">
+                    <div class="dropdown-search">
+                        <input type="text" id="category-search" placeholder="Search categories..." class="search-input">
+                    </div>
+                    <div class="dropdown-option" data-value="">
+                        <input type="checkbox" id="category-all" checked>
+                        <label for="category-all">All Categories</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="filter-group">
+            <label>Date Range</label>
+            <div class="date-range">
+                <input type="date" id="startDate" placeholder="Start Date">
+                <span>to</span>
+                <input type="date" id="endDate" placeholder="End Date">
+            </div>
+        </div>
+        <div class="filter-group checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="ungroupedCheckbox">
+                <span>Show ungrouped</span>
+            </label>
+        </div>
+        <div class="filter-actions">
+            <button id="applyFiltersBtn" class="btn btn-primary">Apply Filters</button>
+            <button id="clearFiltersBtn" class="btn">Clear Filters</button>
+        </div>
+    </div>
+
+    <main>
+        <div id="tableView" class="view-container">
+            <div class="table-wrapper">
+                <table id="observationsTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Name</th>
+                            <th>Value</th>
+                            <th>Units</th>
+                            <th>Category</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <div id="noDataMessage" class="no-data" style="display: none;" data-no-data-text="No observations found for the selected filters." data-error-text="There was an error loading the observations.">
+                No observations found for the selected filters.
+            </div>
+            <div class="pagination-container" id="paginationContainer">
+                <div class="pagination-info" id="paginationInfo">Loading...</div>
+                <div class="pagination-controls">
+                    <div class="page-size-container">
+                        <label for="pageSizeSelect" class="page-size-label">Per page:</label>
+                        <select id="pageSizeSelect" class="page-size-select">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="pagination-buttons">
+                        <button id="prevButton" class="pagination-btn" disabled>Previous</button>
+                        <span id="pageNumbers" class="page-numbers">Page 1 of 1</span>
+                        <button id="nextButton" class="pagination-btn" disabled>Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="graphView" class="view-container" style="display: none;">
+            <div class="graph-controls">
+                <div class="control-group" id="graph1Ctrl">
+                    <label for="metricSelect1">Metric #1</label>
+                    <select id="metricSelect1"></select>
+                </div>
+                <button id="addGraphBtn" class="btn">Compare Metrics</button>
+                <div class="control-group" id="graph2Ctrl" style="display: none;">
+                    <label for="metricSelect2">Metric #2</label>
+                    <select id="metricSelect2"></select>
+                    <button id="removeGraphBtn" class="btn-icon" aria-label="Remove Chart">&times;</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-wrapper">
+                    <canvas id="observationChart1"></canvas>
+                </div>
+                <div id="chart2Wrapper" class="chart-wrapper" style="display: none;">
+                    <canvas id="observationChart2"></canvas>
+                </div>
+            </div>
+            <div id="noGraphDataMessage" class="no-data" style="display: none;">
+                No numeric observations available for graphing.
+            </div>
+        </div>
+    </main>
+
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <span>Loading observations...</span>
+    </div>
+
+    <!-- Add to Chart Review Modal -->
+    <div id="chartReviewModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add to Chart Review Note</h3>
+                <button id="closeModalBtn" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="summary-section">
+                    <h4>Summary</h4>
+                    <div id="summaryPreview" class="summary-preview"></div>
+                </div>
+                <div class="comment-section">
+                    <label for="summaryComment">Add Comment (optional)</label>
+                    <textarea id="summaryComment" placeholder="Enter any additional notes or comments..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="createChartReviewBtn" class="btn btn-primary">Create Chart Review Note</button>
+                <button id="cancelModalBtn" class="btn">Cancel</button>
+            </div>
+            <div id="successMessage" class="copy-success" style="display: none;">
+                Chart Review Note created successfully!
+            </div>
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const PATIENT_ID = "{{ patient_id }}";
+        const STAFF_ID = "{{ staff_id }}";
+    </script>
+    <script src="visualizer/script.js"></script>
+</body>
+
+</html>
