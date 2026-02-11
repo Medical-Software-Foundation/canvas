@@ -2,7 +2,663 @@ from http import HTTPStatus
 from unittest.mock import MagicMock, patch, call
 import json
 import pytest
-from note_command_api.protocols.note_api import NoteCommandAPI
+from note_command_api.protocols.note_api import NoteCommandAPI, CreateNoteAPI
+
+
+class TestCreateNoteAPI:
+    """Test suite for CreateNoteAPI SimpleAPI handler."""
+
+    @pytest.fixture
+    def valid_request_body(self):
+        """Return a valid request body for creating a note."""
+        return {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+
+    def _setup_mocks_for_success(self, mock_note_class, mock_note_type_class,
+                                  mock_patient_class, mock_location_class,
+                                  mock_staff_class):
+        """Configure mocks for a successful note creation."""
+        mock_note_class.objects.filter.return_value.exists.return_value = False
+        mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+        mock_patient_class.objects.filter.return_value.exists.return_value = True
+        mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+        mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = "provider-uuid"
+        mock_staff_class.objects.filter.return_value.values.return_value = []
+
+    def test_create_note_success(self, mock_event, mock_request, valid_request_body):
+        """Test successful POST request creates note and returns 202."""
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.NoteEffect") as mock_note_effect_class:
+
+            self._setup_mocks_for_success(mock_note_class, mock_note_type_class,
+                                          mock_patient_class, mock_location_class, mock_staff_class)
+
+            mock_effect = MagicMock()
+            mock_note_effect_class.return_value.create.return_value = mock_effect
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 2
+            json_response = responses[1]
+            assert json_response.status_code == HTTPStatus.ACCEPTED
+            response_data = json.loads(json_response.content)
+            assert response_data["message"] == "Note creation accepted"
+            assert "note_id" in response_data
+
+    def test_create_note_with_instance_id(self, mock_event, mock_request, valid_request_body):
+        """Test successful POST request with provided instance_id."""
+        valid_request_body["instance_id"] = "52345678-1234-1234-1234-123456789abc"
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.NoteEffect") as mock_note_effect_class:
+
+            self._setup_mocks_for_success(mock_note_class, mock_note_type_class,
+                                          mock_patient_class, mock_location_class, mock_staff_class)
+
+            mock_effect = MagicMock()
+            mock_note_effect_class.return_value.create.return_value = mock_effect
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 2
+            json_response = responses[1]
+            assert json_response.status_code == HTTPStatus.ACCEPTED
+            response_data = json.loads(json_response.content)
+            assert response_data["note_id"] == "52345678-1234-1234-1234-123456789abc"
+
+    def test_create_note_with_title(self, mock_event, mock_request, valid_request_body):
+        """Test successful POST request with optional title."""
+        valid_request_body["title"] = "My Custom Note Title"
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.NoteEffect") as mock_note_effect_class:
+
+            self._setup_mocks_for_success(mock_note_class, mock_note_type_class,
+                                          mock_patient_class, mock_location_class, mock_staff_class)
+
+            mock_effect = MagicMock()
+            mock_note_effect_class.return_value.create.return_value = mock_effect
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            mock_note_effect_class.assert_called_once()
+            call_kwargs = mock_note_effect_class.call_args[1]
+            assert call_kwargs["title"] == "My Custom Note Title"
+
+    def test_create_note_with_note_type_name(self, mock_event, mock_request):
+        """Test successful POST request using note_type_name instead of note_type_id."""
+        request_body = {
+            "note_type_name": "Progress Note",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+        mock_request.json.return_value = request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.NoteEffect") as mock_note_effect_class:
+
+            self._setup_mocks_for_success(mock_note_class, mock_note_type_class,
+                                          mock_patient_class, mock_location_class, mock_staff_class)
+
+            mock_effect = MagicMock()
+            mock_note_effect_class.return_value.create.return_value = mock_effect
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 2
+            assert responses[1].status_code == HTTPStatus.ACCEPTED
+
+    def test_create_note_with_provider_name(self, mock_event, mock_request):
+        """Test successful POST request using provider_name instead of provider_id."""
+        request_body = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_name": "John Smith",
+        }
+        mock_request.json.return_value = request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.NoteEffect") as mock_note_effect_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            mock_staff_class.objects.filter.return_value.values.return_value = [
+                {"id": "provider-uuid", "first_name": "John", "last_name": "Smith"}
+            ]
+
+            mock_effect = MagicMock()
+            mock_note_effect_class.return_value.create.return_value = mock_effect
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 2
+            assert responses[1].status_code == HTTPStatus.ACCEPTED
+
+    def test_create_note_with_practice_location_name(self, mock_event, mock_request):
+        """Test successful POST request using practice_location_name instead of practice_location_id."""
+        request_body = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_name": "Main Clinic",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+        mock_request.json.return_value = request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.NoteEffect") as mock_note_effect_class:
+
+            self._setup_mocks_for_success(mock_note_class, mock_note_type_class,
+                                          mock_patient_class, mock_location_class, mock_staff_class)
+
+            mock_effect = MagicMock()
+            mock_note_effect_class.return_value.create.return_value = mock_effect
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 2
+            assert responses[1].status_code == HTTPStatus.ACCEPTED
+
+    def test_create_note_missing_note_type(self, mock_event, mock_request):
+        """Test POST request missing note type identifier returns 400."""
+        mock_request.json.return_value = {
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+
+        handler = CreateNoteAPI(event=mock_event)
+        handler.request = mock_request
+
+        responses = handler.post()
+
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        response_data = json.loads(response.content)
+        assert any("note_type_id" in err for err in response_data["errors"])
+
+    def test_create_note_missing_datetime_of_service(self, mock_event, mock_request):
+        """Test POST request missing datetime_of_service returns 400."""
+        mock_request.json.return_value = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+
+        handler = CreateNoteAPI(event=mock_event)
+        handler.request = mock_request
+
+        responses = handler.post()
+
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        response_data = json.loads(response.content)
+        assert any("datetime_of_service" in err for err in response_data["errors"])
+
+    def test_create_note_missing_patient_id(self, mock_event, mock_request):
+        """Test POST request missing patient_id returns 400."""
+        mock_request.json.return_value = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+
+        handler = CreateNoteAPI(event=mock_event)
+        handler.request = mock_request
+
+        responses = handler.post()
+
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        response_data = json.loads(response.content)
+        assert any("patient_id" in err for err in response_data["errors"])
+
+    def test_create_note_missing_practice_location(self, mock_event, mock_request):
+        """Test POST request missing practice location identifier returns 400."""
+        mock_request.json.return_value = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+
+        handler = CreateNoteAPI(event=mock_event)
+        handler.request = mock_request
+
+        responses = handler.post()
+
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        response_data = json.loads(response.content)
+        assert any("practice_location" in err for err in response_data["errors"])
+
+    def test_create_note_missing_provider(self, mock_event, mock_request):
+        """Test POST request missing provider identifier returns 400."""
+        mock_request.json.return_value = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+        }
+
+        handler = CreateNoteAPI(event=mock_event)
+        handler.request = mock_request
+
+        responses = handler.post()
+
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        response_data = json.loads(response.content)
+        assert any("provider" in err for err in response_data["errors"])
+
+    def test_create_note_invalid_uuid(self, mock_event, mock_request, valid_request_body):
+        """Test POST request with invalid UUID returns 400."""
+        valid_request_body["instance_id"] = "not-a-valid-uuid"
+        mock_request.json.return_value = valid_request_body
+
+        handler = CreateNoteAPI(event=mock_event)
+        handler.request = mock_request
+
+        responses = handler.post()
+
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        response_data = json.loads(response.content)
+        assert any("Invalid instance_id" in err for err in response_data["errors"])
+
+    def test_create_note_invalid_patient_id_uuid(self, mock_event, mock_request):
+        """Test POST request with invalid patient_id UUID returns 400."""
+        mock_request.json.return_value = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "invalid-patient-uuid",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+
+        handler = CreateNoteAPI(event=mock_event)
+        handler.request = mock_request
+
+        responses = handler.post()
+
+        assert len(responses) == 1
+        response = responses[0]
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        response_data = json.loads(response.content)
+        assert any("Invalid patient_id" in err for err in response_data["errors"])
+
+    def test_create_note_duplicate_instance_id(self, mock_event, mock_request, valid_request_body):
+        """Test POST request with existing instance_id returns 400."""
+        valid_request_body["instance_id"] = "62345678-1234-1234-1234-123456789abc"
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = True
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = "provider-uuid"
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert "Note already exists" in response_data["errors"]
+
+    def test_create_note_note_type_not_found(self, mock_event, mock_request, valid_request_body):
+        """Test POST request with non-existent note_type_id returns 400."""
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = None
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = "provider-uuid"
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert "Note type not found" in response_data["errors"]
+
+    def test_create_note_patient_not_found(self, mock_event, mock_request, valid_request_body):
+        """Test POST request with non-existent patient_id returns 400."""
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = False
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = "provider-uuid"
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert "Patient not found" in response_data["errors"]
+
+    def test_create_note_practice_location_not_found(self, mock_event, mock_request, valid_request_body):
+        """Test POST request with non-existent practice_location_id returns 400."""
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = None
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = "provider-uuid"
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert "Practice location not found" in response_data["errors"]
+
+    def test_create_note_provider_not_found(self, mock_event, mock_request, valid_request_body):
+        """Test POST request with non-existent provider_id returns 400."""
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = None
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert "Provider not found" in response_data["errors"]
+
+    def test_create_note_multiple_validation_errors(self, mock_event, mock_request, valid_request_body):
+        """Test POST request accumulates multiple validation errors."""
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = None
+            mock_patient_class.objects.filter.return_value.exists.return_value = False
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = None
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = None
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert len(response_data["errors"]) >= 4
+            assert "Note type not found" in response_data["errors"]
+            assert "Patient not found" in response_data["errors"]
+            assert "Practice location not found" in response_data["errors"]
+            assert "Provider not found" in response_data["errors"]
+
+    def test_create_note_with_note_type_code(self, mock_event, mock_request):
+        """Test successful POST request using note_type_code instead of note_type_id."""
+        request_body = {
+            "note_type_code": "progress-note",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_id": "42345678-1234-1234-1234-123456789abc",
+        }
+        mock_request.json.return_value = request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.NoteEffect") as mock_note_effect_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = "provider-uuid"
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            mock_effect = MagicMock()
+            mock_note_effect_class.return_value.create.return_value = mock_effect
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 2
+            assert responses[1].status_code == HTTPStatus.ACCEPTED
+            # Verify note_type_code filter was called
+            mock_note_type_class.objects.filter.assert_called()
+
+    def test_create_note_invalid_datetime_format(self, mock_event, mock_request, valid_request_body):
+        """Test POST request with invalid datetime_of_service format returns 400."""
+        valid_request_body["datetime_of_service"] = "not-a-valid-datetime"
+        mock_request.json.return_value = valid_request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class, \
+             patch("note_command_api.protocols.note_api.arrow") as mock_arrow:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            mock_staff_class.objects.filter.return_value.values_list.return_value.first.return_value = "provider-uuid"
+            mock_staff_class.objects.filter.return_value.values.return_value = []
+
+            # Make arrow.get raise ValueError for invalid datetime
+            mock_arrow.get.side_effect = ValueError("Invalid datetime")
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert any("Invalid datetime_of_service" in err for err in response_data["errors"])
+
+    def test_create_note_provider_name_no_match(self, mock_event, mock_request):
+        """Test POST request with provider_name that doesn't match any provider returns 400."""
+        request_body = {
+            "note_type_id": "12345678-1234-1234-1234-123456789abc",
+            "datetime_of_service": "2025-02-21 23:31:42",
+            "patient_id": "22345678-1234-1234-1234-123456789abc",
+            "practice_location_id": "32345678-1234-1234-1234-123456789abc",
+            "provider_name": "Nonexistent Provider",
+        }
+        mock_request.json.return_value = request_body
+
+        with patch("note_command_api.protocols.note_api.Note") as mock_note_class, \
+             patch("note_command_api.protocols.note_api.NoteType") as mock_note_type_class, \
+             patch("note_command_api.protocols.note_api.Patient") as mock_patient_class, \
+             patch("note_command_api.protocols.note_api.PracticeLocation") as mock_location_class, \
+             patch("note_command_api.protocols.note_api.Staff") as mock_staff_class:
+
+            mock_note_class.objects.filter.return_value.exists.return_value = False
+            mock_note_type_class.objects.filter.return_value.values_list.return_value.first.return_value = "note-type-uuid"
+            mock_patient_class.objects.filter.return_value.exists.return_value = True
+            mock_location_class.objects.filter.return_value.values_list.return_value.first.return_value = "location-uuid"
+            # Return providers that don't match the requested name
+            mock_staff_class.objects.filter.return_value.values.return_value = [
+                {"id": "provider-1", "first_name": "John", "last_name": "Smith"},
+                {"id": "provider-2", "first_name": "Jane", "last_name": "Doe"},
+            ]
+
+            handler = CreateNoteAPI(event=mock_event)
+            handler.request = mock_request
+
+            responses = handler.post()
+
+            assert len(responses) == 1
+            response = responses[0]
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            response_data = json.loads(response.content)
+            assert "Provider not found" in response_data["errors"]
+
+
+class TestCreateNoteAPIHelperMethods:
+    """Test suite for CreateNoteAPI helper methods directly."""
+
+    def test_get_practice_location_identifier_no_identifier(self, mock_event):
+        """Test get_practice_location_identifier returns None when no identifier provided."""
+        handler = CreateNoteAPI(event=mock_event)
+        result = handler.get_practice_location_identifier({})
+        assert result is None
+
+    def test_get_provider_identifier_no_identifier(self, mock_event):
+        """Test get_provider_identifier returns None when no identifier provided."""
+        handler = CreateNoteAPI(event=mock_event)
+        with patch("note_command_api.protocols.note_api.Staff"):
+            result = handler.get_provider_identifier({})
+        assert result is None
+
+    def test_get_note_type_identifier_no_identifier(self, mock_event):
+        """Test get_note_type_identifier returns None when no identifier provided."""
+        handler = CreateNoteAPI(event=mock_event)
+        result = handler.get_note_type_identifier({})
+        assert result is None
+
+
 class TestNoteCommandAPI:
     """Test suite for NoteCommandAPI SimpleAPI handler."""
     def test_get_note_success(self, mock_event, mock_request, mock_note, mock_command):

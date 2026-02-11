@@ -3,10 +3,14 @@ note-command-api
 
 ## Description
 
-SimpleAPI endpoints that provide both read-only access and state management for Canvas notes. This plugin exposes a GET endpoint that retrieves note data with enhanced command attributes, and a POST endpoint that changes note states.
+SimpleAPI endpoints for creating, retrieving, and managing Canvas notes. This plugin provides:
+- A POST endpoint to create new notes with flexible identifier lookup
+- A GET endpoint that retrieves note data with enhanced command attributes
+- A POST endpoint that changes note states
 
 ## Features
 
+- **Create notes** with flexible identifier options (lookup by ID or name)
 - Retrieve complete note data by note ID
 - Automatically enhance command entries in note body with full command attributes
 - Filter empty text entries from note body
@@ -18,6 +22,74 @@ SimpleAPI endpoints that provide both read-only access and state management for 
   - Command attributes including originator, committer, state, and data
 
 ## API Endpoints
+
+### POST plugin-io/api/note_command_api/create-note
+
+Creates a new note with flexible identifier lookup options.
+
+**Authentication:** API Key (via APIKeyAuthMixin)
+
+**Headers:**
+- `authorization`: Your Canvas API key (configured via `simpleapi-api-key` secret)
+- `Content-Type`: application/json
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `instance_id` | UUID string | No | Custom note ID. If not provided, a UUID will be generated. |
+| `note_type_id` | UUID string | One of three | ID of an existing active NoteType |
+| `note_type_name` | string | One of three | Name of an existing active NoteType |
+| `note_type_code` | string | One of three | Code of an existing active NoteType |
+| `datetime_of_service` | datetime string | Yes | e.g., "2025-02-21 23:31:42" |
+| `patient_id` | UUID string | Yes | ID of an existing Patient |
+| `practice_location_id` | UUID string | One of two | ID of an existing active PracticeLocation |
+| `practice_location_name` | string | One of two | Full name or short name of an active PracticeLocation |
+| `provider_id` | UUID string | One of two | ID of an existing active Staff member |
+| `provider_name` | string | One of two | Full name (first + last) of an active Staff member |
+| `title` | string | No | Custom title for the note |
+
+**Response (202 Accepted):**
+```json
+{
+  "message": "Note creation accepted",
+  "note_id": "generated-or-provided-uuid"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Missing required fields, invalid UUIDs, or entity not found
+
+**Example Usage:**
+
+```bash
+# Create note using IDs
+curl -X POST "https://your-canvas-instance.com/plugin-io/api/note_command_api/create-note" \
+  -H "authorization: your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "note_type_id": "c5df4f03-58e4-442b-ad6c-0d3dadc6b726",
+    "datetime_of_service": "2025-02-21 23:31:42",
+    "patient_id": "5350cd20de8a470aa570a852859ac87e",
+    "practice_location_id": "306b19f0-231a-4cd4-ad2d-a55c885fd9f8",
+    "provider_id": "6b33e69474234f299a56d480b03476d3",
+    "title": "Follow-up Visit"
+  }'
+
+# Create note using names (flexible lookup)
+curl -X POST "https://your-canvas-instance.com/plugin-io/api/note_command_api/create-note" \
+  -H "authorization: your-api-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "note_type_name": "Progress Note",
+    "datetime_of_service": "2025-02-21 23:31:42",
+    "patient_id": "5350cd20de8a470aa570a852859ac87e",
+    "practice_location_name": "Main Clinic",
+    "provider_name": "John Smith"
+  }'
+```
+
+---
 
 ### GET plugin-io/api/note_command_api/note/<note_id>
 
@@ -119,7 +191,10 @@ curl -X POST "https://your-canvas-instance.com/plugin-io/api/note_command_api/no
 
 1. Install the plugin in your Canvas instance
 2. Configure the `simpleapi-api-key` secret with your API key
-3. The endpoint will be available at `/note/<note_id>`
+3. The endpoints will be available at:
+   - `POST /plugin-io/api/note_command_api/create-note` - Create new notes
+   - `GET /plugin-io/api/note_command_api/note/<note_id>` - Retrieve note data
+   - `POST /plugin-io/api/note_command_api/note/<note_id>/state` - Change note state
 
 ## Testing
 
