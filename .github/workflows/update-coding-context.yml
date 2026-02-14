@@ -2,7 +2,7 @@ name: Update Coding Agent Context
 
 on:
   schedule:
-    - cron: '0 9 * * 1'  # Every Monday at 9am UTC
+    - cron: '0 1 * * *'  # Every day at 1am UTC
   workflow_dispatch:  # Allows manual trigger from Actions tab
 
 jobs:
