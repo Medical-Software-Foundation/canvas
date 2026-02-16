@@ -1,0 +1,15 @@
+<table style="width: 100%; border-collapse: collapse;">
+  <tbody>
+    <tr><td><strong>Name</strong></td><td>{{ name }}</td></tr>
+    <tr><td><strong>Value</strong></td><td>{{ value_display }}</td></tr>
+    <tr><td><strong>Date/Time</strong></td><td>{{ datetime_str }}</td></tr>
+    {% if category_str %}
+    <tr><td><strong>Category</strong></td><td>{{ category_str }}</td></tr>
+    {% endif %}
+    {% if components %}
+    <tr><td><strong>Components</strong></td><td>
+      {% for comp in components %}{{ comp.display }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+    </td></tr>
+    {% endif %}
+  </tbody>
+</table>
