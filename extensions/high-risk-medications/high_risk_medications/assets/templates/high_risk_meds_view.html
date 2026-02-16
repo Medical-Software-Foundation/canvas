@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/plugin-io/api/high_risk_medications/style.css">
+</head>
+<body>
+    <div id="high-risk-container" data-patient-id="{{ patient_id }}" data-customer-identifier="{{ customer_identifier }}">
+        {% if medications %}
+            <div id="medications-content">
+                <div class="alert-box">
+                    <h3>⚠️ High-Risk Medications Alert</h3>
+                    <p>This patient has {{ medications|length }} active high-risk medication(s) requiring special attention.</p>
+                </div>
+
+                <div class="medications-list">
+                    {% for med in medications %}
+                    <div class="med-item">
+                        <div class="med-header">
+                            <span class="high-risk-badge">HIGH RISK</span>
+                            <span class="med-name">{{ med.name }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="info-box">
+                    <strong>About High-Risk Medications:</strong>
+                    <ul>
+                        <li>Require enhanced monitoring and patient education</li>
+                        <li>May need dose adjustments or additional lab work</li>
+                        <li>Review for drug interactions before prescribing new medications</li>
+                    </ul>
+                </div>
+            </div>
+        {% else %}
+            <div id="medications-content">
+                <div class="success-box">
+                    <h3>✓ No High-Risk Medications</h3>
+                    <p>This patient currently has no active high-risk medications.</p>
+                </div>
+                <p class="info-text">
+                    High-risk medications monitored: warfarin, insulin, digoxin, methotrexate
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="/plugin-io/api/high_risk_medications/script.js"></script>
+</body>
+</html>
