@@ -3,12 +3,15 @@
 Last updated: 6 Feb 2026
 ##  Get started #
 Here are some step-by-step guides to get you started:
-[ Your First PluginThis guide steps you through installing the Canvas SDK,
-creating a plugin, and deploying it to a Canvas instance. ](/guides/your-
-first-plugin) [ Creating WebhooksMake automatic API requests based on Canvas
-events ](/guides/creating-webhooks-with-the-canvas-sdk) [ Customize Search
-ResultsAdd your own logic to surface the right options with the appropriate
-context ](/guides/customize-search-results)
+[ Your First Plugin (with Claude Code)Use an AI assistant to build and deploy
+your first Canvas plugin through natural conversation. ](/guides/your-first-
+plugin-with-claude-code) [ Your First Plugin (Manual)This guide steps you
+through installing the Canvas SDK, creating a plugin, and deploying it to a
+Canvas instance. ](/guides/your-first-plugin) [ Creating WebhooksMake
+automatic API requests based on Canvas events ](/guides/creating-webhooks-
+with-the-canvas-sdk) [ Customize Search ResultsAdd your own logic to surface
+the right options with the appropriate context ](/guides/customize-search-
+results)
 And here are some other [guides](/guides)
 ##  What is the Canvas SDK? #
 The Canvas SDK is your toolkit for customizing workflows natively across the
@@ -2161,8 +2164,9 @@ API](https://docs.djangoproject.com/en/5.1/ref/models/querysets/).
 The pages below provide listings of the models, their attributes, and examples
 of usage.
 [ AllergyIntoleranceHarmful or undesired physiological responses associated
-with exposure to a substance. ](/sdk/data-allergy-intolerance/)[ AppointmentA
-scheduled meeting between a patient and a provider. ](/sdk/data-appointment/)[
+with exposure to a substance. ](/sdk/data-allergy-intolerance/)[ ApplicationA
+plugin application. ](/sdk/data-application/)[ AppointmentA scheduled meeting
+between a patient and a provider. ](/sdk/data-appointment/)[
 AssessmentClinical assessment of a patient's condition. ](/sdk/data-
 assessment/)[ BannerAlertAn alert notification linked to a patient.
 ](/sdk/data-banner-alert/)[ BillingLineItemA billable code linked to a patient
@@ -6673,7 +6677,7 @@ Attribute| Type| Description
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/layout-effect/
 # Layout Effects
-Last updated: 9 Jan 2026
+Last updated: 11 Feb 2026
 ##  Patient Summary #
 There are many summary sections in a patientâs chart, organized by data
 type. While there is a default ordering, you can use an Effect to reorder them
@@ -6858,6 +6862,8 @@ The `LaunchModalEffect` class has the following properties:
     * `NEW_WINDOW`: Opens the content in a new browser window.
     * `RIGHT_CHART_PANE`: Opens the URL in the right-hand pane of the patient chart.
     * `RIGHT_CHART_PANE_LARGE`: Like above, but a bit wider.
+    * `PAGE`: Opens the content as a full page.
+    * `NOTE`: Opens the content within a note tab (used with Note Applications).
   * **title** : A string containing the title of the modal and will be displayed when minimized. Defaults to `Untitled`
 ###  Closing Modals from Applications #
 When building applications with the Canvas SDK, you may encounter scenarios
@@ -8154,7 +8160,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 28 Jan 2026
+Last updated: 11 Feb 2026
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -19558,6 +19564,16 @@ Target| Context object
       "user":
         "id": str
         "type": [Staff](/sdk/data-staff/) | [Patient](/sdk/data-patient/)  
+SHOW_NOTE_BODY_BUTTON  
+---  
+Occurs when patient notes are being loaded  
+Target| Context object  
+    patient_id
+|
+      "note_id": str
+      "user":
+        "id": str
+        "type": [Staff](/sdk/data-staff/) | [Patient](/sdk/data-patient/)  
 SHOW_CHART_SUMMARY_SOCIAL_DETERMINANTS_SECTION_BUTTON  
 ---  
 Occurs when patient chart summary is being loaded, specifically for social
@@ -19787,6 +19803,9 @@ Context object:
     "user":
         "id": str
         "type": [Staff](/sdk/data-staff/) | [Patient](/sdk/data-patient/)  
+GET_HOMEPAGE_CONFIGURATION| Homepage is loading. See [Set default
+homepage](/guides/set-default-homepage/) for examples of how to use this
+event.  
 ###  Search Result Data Structures #
 Many event payloads include search results. This section documents the common
 structures within them.
@@ -20121,7 +20140,7 @@ effect/#modals).
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/handlers-applications/
 # Applications
-Last updated: 7 Nov 2025
+Last updated: 11 Feb 2026
 Applications are accessible in the app drawer and launch your content when
 clicked. Applications can be patient specific, or global.
 ##  Implementing an Application #
@@ -20267,9 +20286,93 @@ on plugin installation.
 This is also where you can define the title and icon that displays your app in
 the app drawer. The icon will be rendered at 48px by 48px, so should be square
 and simple enough to not lose detail at that size.
-Other information you can define about your application is the `scope`
-(`"patient_specific"` or `"global"`), which determines if the application is
-visible only in a patient chart or outside of charts.
+##  Application Scopes #
+The `scope` attribute determines where your application is visible within
+Canvas. The following scopes are available:
+Scope| Description  
+---|---  
+`patient_specific`| Visible only within a patientâs chart in the app drawer  
+`global`| Visible outside of patient charts in the app drawer  
+`full_chart`| Displayed as a tab in the patient chart navigation menu
+alongside Chart and Profile  
+`provider_menu_item`| Displayed as a menu item in the provider menu  
+`portal_menu_item`| Displayed as a menu item in the patient portal  
+###  Full Chart Scope #
+Applications with the `full_chart` scope appear as navigation tabs at the top
+of the patient chart, alongside the default âChartâ and âProfileâ
+tabs. This is ideal for building comprehensive patient-level views or
+dashboards.
+    {
+      "class": "my_plugin.apps.analytics:PatientAnalytics",
+      "name": "Analytics",
+      "description": "Patient analytics dashboard",
+      "icon": "/assets/analytics-icon.png",
+      "scope": "full_chart"
+    }
+##  Note Applications #
+Note Applications appear as tabs within a patientâs note, allowing you to
+embed custom interfaces directly in the clinical documentation workflow.
+###  Implementing a Note Application #
+To create a Note Application, your handler class should inherit from
+`NoteApplication` and define two required class attributes:
+Attribute| Description  
+---|---  
+`NAME`| The display title shown on the tab (supports emojis)  
+`IDENTIFIER`| A unique key for the application (recommended format:
+`plugin_name__app_name`)  
+Your class must implement the `handle()` method, which is called when the user
+clicks on the tab. This method should return a list of `Effect`s, typically a
+`LaunchModalEffect` with `target` set to `LaunchModalEffect.TargetType.NOTE`.
+    from canvas_sdk.effects import Effect
+    from canvas_sdk.effects.launch_modal import LaunchModalEffect
+    from canvas_sdk.handlers.application import NoteApplication
+    class PatientIntakeApp(NoteApplication):
+        """Note application for patient intake workflow."""
+        NAME = "ð Patient Intake"
+        IDENTIFIER = "my_plugin__patient_intake"
+        def handle(self) -> list[Effect]:
+            """Launch the intake form when the tab is clicked."""
+            note_id = self.context.get("note_id")
+            return [
+                LaunchModalEffect(
+                    target=LaunchModalEffect.TargetType.NOTE,
+                    content="<html>Your form HTML here</html>",
+                    title="Patient Intake Form"
+                ).apply()
+            ]
+![Note Application Tabs](../../../assets/images/note-application-tabs.png)
+###  Context and Event Data #
+The `handle()` method has access to context data through `self.context`:
+Key| Description  
+---|---  
+`note_id`| The database ID of the current note  
+`user`| Information about the current user  
+Additional data is available through the event object:
+Property| Description  
+---|---  
+`self.event.target`| The patient associated with the note  
+`self.event.actor`| The authenticated user who triggered the event  
+###  Controlling Visibility #
+You can control when your Note Application tab is visible by overriding the
+`visible()` method. This method has access to the same context and event data
+as `handle()`:
+    from canvas_sdk.effects import Effect
+    from canvas_sdk.effects.launch_modal import LaunchModalEffect
+    from canvas_sdk.handlers.application import NoteApplication
+    class ConditionalIntakeApp(NoteApplication):
+        NAME = "ð Intake"
+        IDENTIFIER = "my_plugin__conditional_intake"
+        def visible(self) -> bool:
+            """Only show for specific conditions."""
+            # Add your visibility logic here
+            return True
+        def handle(self) -> list[Effect]:
+            return [LaunchModalEffect(
+                target=LaunchModalEffect.TargetType.NOTE,
+                content="<html>Form content</html>",
+                title="Intake"
+            ).apply()]
+##  Panel Display #
 If you want to increase your applicationâs visibility and display it
 alongside other panel buttons (instead of in the applications drawer), you can
 add the `show_in_panel` attribute. If youâve added more than one application
@@ -20415,7 +20518,7 @@ real-time communication channels for interactive plugin behavior and updates.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/handlers-simple-api-http/
 # SimpleAPI HTTP
-Last updated: 24 Sep 2025
+Last updated: 9 Feb 2026
 The Canvas SDK provides a way to define an HTTP API with any number of
 endpoints in your instance. Developers can define the routes and implement the
 code that will handle incoming HTTP requests.
@@ -20424,17 +20527,17 @@ events from other services. An endpoint receiving a request can invoke Effects
 in a Canvas instance, send another request to a different service, or simply
 return a response back to the requester.
 ##  Quickstart #
-Follow the instructions in [Your First
-Plugin](https://docs.canvasmedical.com/guides/your-first-plugin/) to create a
-plugins project. For this exercise, use `my_api` as your project (i.e. plugin)
-name.
+Follow the instructions in [Your First Plugin (with Claude
+Code)](https://docs.canvasmedical.com/guides/your-first-plugin-with-claude-
+code/) to create a plugins project. For this exercise, use `my_api` as your
+project (i.e. plugin) name.
 Open `CANVAS_MANIFEST.json` in your editor. You can modify filenames,
 directory structures, and class names as you see fit in your project, but for
 this exercise, we are just going to set the value at `components -> protocols
 -> 0 -> class` to be `my_api.protocols.my_protocol:MyAPI`.
 Weâre going to need a secret value for authentication. The instructions for
-declaring secrets are outlined on the [Your First
-Plugin](https://docs.canvasmedical.com/guides/your-first-plugin/) page.
+declaring secrets are outlined on the [Your First Plugin
+(Manual)](https://docs.canvasmedical.com/guides/your-first-plugin/) page.
 Declare a secret in `CANVAS_MANIFEST.json` named `my-api-key`.
 Open `my_api/protocols/my_protocol.py` and replace the contents of the file
 with this code:
@@ -20454,8 +20557,8 @@ with this code:
                 JSONResponse({"message": "Hello world!"})
             ]
 The next step is to deploy your plugin; the instructions for doing so are on
-the [Your First Plugin](https://docs.canvasmedical.com/guides/your-first-
-plugin/) page.
+the [Your First Plugin (Manual)](https://docs.canvasmedical.com/guides/your-
+first-plugin/) page.
 You can see in the code above that the `authenticate` method is going to
 authenticate using API key authentication. Weâve already declared the
 secret, so now we need to generate a value and set it on your instance. You
@@ -21758,14 +21861,18 @@ containing all secret values.
 
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/guides/your-first-plugin/
-# Your First Plugin
-Last updated: 12 Sep 2025
+# Your First Plugin (Manual)
+Last updated: 6 Feb 2026
 Plugins are your tool for customizing the Canvas experience. By using the
 modules of the Canvas SDK, you can react to [events](/sdk/events/) emitted
 from the EHR, request additional [data](/sdk/data/) if needed, and respond
 with [effects](/sdk/effects/) that alter workflows and add or change data in
 Canvas. You can also use [utils](/sdk/utils/) to do things like call out to
 web services with our provided HTTP client.
+This guide is for manual coding. Want a faster, AI-assisted approach? Check
+out [Your First Plugin (with Claude Code)](/guides/your-first-plugin-with-
+claude-code/), which uses an AI assistant to guide you through building and
+deploying your plugin.
 ##  Video #
 The video below showcases a Canvas engineer working through this guide step-
 by-step.
@@ -21934,13 +22041,14 @@ will tail the logs for all plugins installed on that instance.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/guides/custom-landing-page/
 # Building a Custom Portal Landing Page
-Last updated: 24 Sep 2025
+Last updated: 9 Feb 2026
 This guide provides examples of how to leverage patient data to personalize
 the portal landing page, and explains how to integrate the ready-made widgets
 provided by Canvas.
 This guide assumes pre-existing knowledge of the Canvas SDK. If you're
-starting from scratch, you may want to read and implement [Your First
-Plugin](/guides/your-first-plugin/) before working through this exercise.
+starting from scratch, you may want to read and implement [Your First Plugin
+(with Claude Code)](/guides/your-first-plugin-with-claude-code/) before
+working through this exercise.
 ##  What Are Widgets in the Patient Portal? #
 [Widgets](/sdk/layout-effect/#portal-landing-page-widgets) in the patient
 portal are interactive components that enhance the user experience by
@@ -22245,14 +22353,15 @@ widget](/assets/images/sdk/widgets/upcoming_appointments_widget.png)
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/guides/creating-webhooks-with-the-canvas-sdk/
 # Creating Webhooks With the Canvas SDK
-Last updated: 14 Aug 2025
+Last updated: 9 Feb 2026
 Webhooks are user-defined callbacks that make a request to an API. You may
 want to create a webhook to notify a system you control that some event has
 occurred in Canvas. This guide shows how to create a webhook that sends an API
 request containing the ID of a Task upon its creation.
 This guide assumes pre-existing knowledge of the Canvas SDK. If you're
-starting from scratch, you may want to read and implement [Your First
-Plugin](/guides/your-first-plugin/) before working through this exercise.
+starting from scratch, you may want to read and implement [Your First Plugin
+(with Claude Code)](/guides/your-first-plugin-with-claude-code/) before
+working through this exercise.
 ##  Initialize a new plugin #
 The Canvas CLI gives you a great head start when creating a plugin. Simply run
 `canvas init`, and answer the prompt to name your plugin.
@@ -23445,7 +23554,7 @@ can listen for those requests and update your internal status of that task.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/guides/tailoring-the-chart-to-the-patient/
 # Tailoring the Chart to the Patient
-Last updated: 24 Sep 2025
+Last updated: 9 Feb 2026
 Different patients have different needs, and your tools should reflect that.
 EMRs are able to be used in a wide variety of scenarios. In order to be able
 to do just about anything, your EMR is packed to the gills with features and
@@ -23458,8 +23567,9 @@ interface based on the patient in front of you creates a focused environment
 for you to deliver care without irrelevant options getting between you and
 your patient.
 This guide assumes pre-existing knowledge of the Canvas SDK. If you're
-starting from scratch, you may want to read and implement [Your First
-Plugin](/guides/your-first-plugin/) before working through this exercise.
+starting from scratch, you may want to read and implement [Your First Plugin
+(with Claude Code)](/guides/your-first-plugin-with-claude-code/) before
+working through this exercise.
 ##  Chart Customizations for Pediatric Patients #
 We will make two simple changes to the charting interface when the selected
 patient is a child:
