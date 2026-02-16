@@ -1,0 +1,28 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "chart_collision_detector",
+    "description": "Detects when multiple providers are viewing the same patient chart and shows a warning modal",
+    "components": {
+        "protocols": [],
+        "applications": [
+            {
+                "class": "chart_collision_detector.applications.chart_collision_app:ChartCollisionApp",
+                "name": "Chart Monitor",
+                "description": "Monitors patient chart access and warns when another provider is viewing",
+                "scope": "patient_specific", 
+                "icon": "icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["CACHE_TTL_SECONDS"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
