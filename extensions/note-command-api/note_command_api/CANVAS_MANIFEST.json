@@ -6,6 +6,10 @@
     "components": {
         "protocols": [
             {
+                "class": "note_command_api.protocols.note_api:CreateNoteAPI",
+                "description": "POST /create-note - Creates a new note with flexible identifier lookup"
+            },
+            {
                 "class": "note_command_api.protocols.note_api:NoteCommandAPI",
                 "description": "GET /note/<note_id> - Returns note data with command attributes populated in body array"
             },
