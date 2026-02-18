@@ -1,0 +1,25 @@
+{
+    "sdk_version": "0.44.3",
+    "plugin_version": "0.0.1",
+    "name": "commit_all_commands_button",
+    "description": "A protocol that adds a button in the note footer to commit all uncommitted commands in a Note.",
+    "components": {
+        "protocols": [
+            {
+                "class": "commit_all_commands_button.protocols.commit_all_commands:CommitButtonHandler",
+                "description": "A protocol that adds a button in the note footer to commit all uncommitted commands in a Note.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "carry_forward",
+    "description": "Adds a button to carry forward commands from the previous note to the current note",
+    "components": {
+        "protocols": [
+            {
+                "class": "carry_forward.protocols.carry_forward_action_button:CarryForwardActionButton",
+                "description": "A protocol that provides a button in the note header to carry forward commands from last encounter"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
