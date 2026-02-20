@@ -23,4 +23,3 @@ SQL queries for patient demographics, clinical records, medications, lab orders,
 - Most clinical queries exclude test patients (names containing "zztest" or "test").
 - Records marked as deleted or entered-in-error are excluded by default.
 - Medication and allergy coding uses the FDB Health system (`http://www.fdbhealth.com/`).
-- Each report also has a standalone `.sql` file in the `sample-sql/` root directory for direct use.
