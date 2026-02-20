@@ -1,0 +1,526 @@
+name: Health Risk Assessment
+form_type: QUES
+code_system: INTERNAL
+code: HRA_AWV
+can_originate_in_charting: true
+questions:
+  # Section 1: General Health Rating
+  - content: "In general, compared to other people your age, would you say that your health is"
+    code_system: INTERNAL
+    code: HRA_GENERAL_HEALTH
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Poor"
+        code: HRA_GENERAL_HEALTH_POOR
+        code_description: ''
+        value: ''
+      - name: "Fair"
+        code: HRA_GENERAL_HEALTH_FAIR
+        code_description: ''
+        value: ''
+      - name: "Good"
+        code: HRA_GENERAL_HEALTH_GOOD
+        code_description: ''
+        value: ''
+      - name: "Very good"
+        code: HRA_GENERAL_HEALTH_VERY_GOOD
+        code_description: ''
+        value: ''
+      - name: "Excellent"
+        code: HRA_GENERAL_HEALTH_EXCELLENT
+        code_description: ''
+        value: ''
+
+  # Section 2: Physical Activity Difficulty
+  - content: "How much difficulty do you have stooping, crouching or kneeling"
+    code_system: INTERNAL
+    code: HRA_DIFF_STOOPING
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "No Difficulty"
+        code: HRA_DIFF_STOOPING_NONE
+        code_description: ''
+        value: ''
+      - name: "A Little Difficulty"
+        code: HRA_DIFF_STOOPING_LITTLE
+        code_description: ''
+        value: ''
+      - name: "Some Difficulty"
+        code: HRA_DIFF_STOOPING_SOME
+        code_description: ''
+        value: ''
+      - name: "A Lot of Difficulty"
+        code: HRA_DIFF_STOOPING_LOT
+        code_description: ''
+        value: ''
+      - name: "Unable to Do"
+        code: HRA_DIFF_STOOPING_UNABLE
+        code_description: ''
+        value: ''
+
+  - content: "How much difficulty do you have lifting or carrying objects as heavy as 10 pounds"
+    code_system: INTERNAL
+    code: HRA_DIFF_LIFTING
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "No Difficulty"
+        code: HRA_DIFF_LIFTING_NONE
+        code_description: ''
+        value: ''
+      - name: "A Little Difficulty"
+        code: HRA_DIFF_LIFTING_LITTLE
+        code_description: ''
+        value: ''
+      - name: "Some Difficulty"
+        code: HRA_DIFF_LIFTING_SOME
+        code_description: ''
+        value: ''
+      - name: "A Lot of Difficulty"
+        code: HRA_DIFF_LIFTING_LOT
+        code_description: ''
+        value: ''
+      - name: "Unable to Do"
+        code: HRA_DIFF_LIFTING_UNABLE
+        code_description: ''
+        value: ''
+
+  - content: "How much difficulty do you have reaching or extending arms above shoulder level"
+    code_system: INTERNAL
+    code: HRA_DIFF_REACHING
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "No Difficulty"
+        code: HRA_DIFF_REACHING_NONE
+        code_description: ''
+        value: ''
+      - name: "A Little Difficulty"
+        code: HRA_DIFF_REACHING_LITTLE
+        code_description: ''
+        value: ''
+      - name: "Some Difficulty"
+        code: HRA_DIFF_REACHING_SOME
+        code_description: ''
+        value: ''
+      - name: "A Lot of Difficulty"
+        code: HRA_DIFF_REACHING_LOT
+        code_description: ''
+        value: ''
+      - name: "Unable to Do"
+        code: HRA_DIFF_REACHING_UNABLE
+        code_description: ''
+        value: ''
+
+  - content: "How much difficulty do you have writing, or handling and grasping small objects"
+    code_system: INTERNAL
+    code: HRA_DIFF_WRITING
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "No Difficulty"
+        code: HRA_DIFF_WRITING_NONE
+        code_description: ''
+        value: ''
+      - name: "A Little Difficulty"
+        code: HRA_DIFF_WRITING_LITTLE
+        code_description: ''
+        value: ''
+      - name: "Some Difficulty"
+        code: HRA_DIFF_WRITING_SOME
+        code_description: ''
+        value: ''
+      - name: "A Lot of Difficulty"
+        code: HRA_DIFF_WRITING_LOT
+        code_description: ''
+        value: ''
+      - name: "Unable to Do"
+        code: HRA_DIFF_WRITING_UNABLE
+        code_description: ''
+        value: ''
+
+  - content: "How much difficulty do you have walking a quarter of a mile"
+    code_system: INTERNAL
+    code: HRA_DIFF_WALKING_QUARTER
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "No Difficulty"
+        code: HRA_DIFF_WALKING_QUARTER_NONE
+        code_description: ''
+        value: ''
+      - name: "A Little Difficulty"
+        code: HRA_DIFF_WALKING_QUARTER_LITTLE
+        code_description: ''
+        value: ''
+      - name: "Some Difficulty"
+        code: HRA_DIFF_WALKING_QUARTER_SOME
+        code_description: ''
+        value: ''
+      - name: "A Lot of Difficulty"
+        code: HRA_DIFF_WALKING_QUARTER_LOT
+        code_description: ''
+        value: ''
+      - name: "Unable to Do"
+        code: HRA_DIFF_WALKING_QUARTER_UNABLE
+        code_description: ''
+        value: ''
+
+  - content: "How much difficulty do you have with heavy housework such as scrubbing floors or washing windows"
+    code_system: INTERNAL
+    code: HRA_DIFF_HOUSEWORK
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "No Difficulty"
+        code: HRA_DIFF_HOUSEWORK_NONE
+        code_description: ''
+        value: ''
+      - name: "A Little Difficulty"
+        code: HRA_DIFF_HOUSEWORK_LITTLE
+        code_description: ''
+        value: ''
+      - name: "Some Difficulty"
+        code: HRA_DIFF_HOUSEWORK_SOME
+        code_description: ''
+        value: ''
+      - name: "A Lot of Difficulty"
+        code: HRA_DIFF_HOUSEWORK_LOT
+        code_description: ''
+        value: ''
+      - name: "Unable to Do"
+        code: HRA_DIFF_HOUSEWORK_UNABLE
+        code_description: ''
+        value: ''
+
+  # Section 3: ADL/IADL Questions
+  - content: "Because of your health or physical condition, do you have difficulty shopping for personal items (like toilet items or medicines)"
+    code_system: INTERNAL
+    code: HRA_ADL_SHOPPING
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_SHOPPING_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_SHOPPING_NO
+        code_description: ''
+        value: ''
+      - name: "Don't Know"
+        code: HRA_ADL_SHOPPING_DK
+        code_description: ''
+        value: ''
+
+  - content: "Do you get help with shopping"
+    code_system: INTERNAL
+    code: HRA_ADL_SHOPPING_HELP
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_SHOPPING_HELP_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_SHOPPING_HELP_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_SHOPPING_HELP_NA
+        code_description: ''
+        value: ''
+
+  - content: "Is that because of your health (shopping)"
+    code_system: INTERNAL
+    code: HRA_ADL_SHOPPING_HEALTH
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_SHOPPING_HEALTH_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_SHOPPING_HEALTH_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_SHOPPING_HEALTH_NA
+        code_description: ''
+        value: ''
+
+  - content: "Because of your health or physical condition, do you have difficulty managing money (like keeping track of expenses or paying bills)"
+    code_system: INTERNAL
+    code: HRA_ADL_MONEY
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_MONEY_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_MONEY_NO
+        code_description: ''
+        value: ''
+      - name: "Don't Know"
+        code: HRA_ADL_MONEY_DK
+        code_description: ''
+        value: ''
+
+  - content: "Do you get help with managing money"
+    code_system: INTERNAL
+    code: HRA_ADL_MONEY_HELP
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_MONEY_HELP_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_MONEY_HELP_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_MONEY_HELP_NA
+        code_description: ''
+        value: ''
+
+  - content: "Is that because of your health (managing money)"
+    code_system: INTERNAL
+    code: HRA_ADL_MONEY_HEALTH
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_MONEY_HEALTH_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_MONEY_HEALTH_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_MONEY_HEALTH_NA
+        code_description: ''
+        value: ''
+
+  - content: "Because of your health or physical condition, do you have difficulty walking across the room"
+    code_system: INTERNAL
+    code: HRA_ADL_WALKING
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_WALKING_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_WALKING_NO
+        code_description: ''
+        value: ''
+      - name: "Don't Know"
+        code: HRA_ADL_WALKING_DK
+        code_description: ''
+        value: ''
+
+  - content: "Do you get help with walking"
+    code_system: INTERNAL
+    code: HRA_ADL_WALKING_HELP
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_WALKING_HELP_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_WALKING_HELP_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_WALKING_HELP_NA
+        code_description: ''
+        value: ''
+
+  - content: "Is that because of your health (walking)"
+    code_system: INTERNAL
+    code: HRA_ADL_WALKING_HEALTH
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_WALKING_HEALTH_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_WALKING_HEALTH_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_WALKING_HEALTH_NA
+        code_description: ''
+        value: ''
+
+  - content: "Because of your health or physical condition, do you have difficulty doing light housework (like washing dishes, straightening up, or light cleaning)"
+    code_system: INTERNAL
+    code: HRA_ADL_LIGHT_HOUSEWORK
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_LIGHT_HOUSEWORK_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_LIGHT_HOUSEWORK_NO
+        code_description: ''
+        value: ''
+      - name: "Don't Know"
+        code: HRA_ADL_LIGHT_HOUSEWORK_DK
+        code_description: ''
+        value: ''
+
+  - content: "Do you get help with light housework"
+    code_system: INTERNAL
+    code: HRA_ADL_LIGHT_HOUSEWORK_HELP
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_LIGHT_HOUSEWORK_HELP_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_LIGHT_HOUSEWORK_HELP_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_LIGHT_HOUSEWORK_HELP_NA
+        code_description: ''
+        value: ''
+
+  - content: "Is that because of your health (light housework)"
+    code_system: INTERNAL
+    code: HRA_ADL_LIGHT_HOUSEWORK_HEALTH
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_LIGHT_HOUSEWORK_HEALTH_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_LIGHT_HOUSEWORK_HEALTH_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_LIGHT_HOUSEWORK_HEALTH_NA
+        code_description: ''
+        value: ''
+
+  - content: "Because of your health or physical condition, do you have difficulty bathing or showering"
+    code_system: INTERNAL
+    code: HRA_ADL_BATHING
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_BATHING_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_BATHING_NO
+        code_description: ''
+        value: ''
+      - name: "Don't Know"
+        code: HRA_ADL_BATHING_DK
+        code_description: ''
+        value: ''
+
+  - content: "Do you get help with bathing or showering"
+    code_system: INTERNAL
+    code: HRA_ADL_BATHING_HELP
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_BATHING_HELP_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_BATHING_HELP_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_BATHING_HELP_NA
+        code_description: ''
+        value: ''
+
+  - content: "Is that because of your health (bathing)"
+    code_system: INTERNAL
+    code: HRA_ADL_BATHING_HEALTH
+    code_description: ''
+    responses_type: SING
+    responses_code_system: INTERNAL
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: HRA_ADL_BATHING_HEALTH_YES
+        code_description: ''
+        value: ''
+      - name: "No"
+        code: HRA_ADL_BATHING_HEALTH_NO
+        code_description: ''
+        value: ''
+      - name: "N/A"
+        code: HRA_ADL_BATHING_HEALTH_NA
+        code_description: ''
+        value: ''
