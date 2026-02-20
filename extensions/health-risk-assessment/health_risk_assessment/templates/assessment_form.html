@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Risk Assessment</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #F7F8FA;
+            --bg-surface: #FFFFFF;
+            --bg-hover: rgba(13, 148, 136, 0.06);
+            --bg-followup: #F0FDFA;
+            --text-primary: #1A1D21;
+            --text-secondary: #4B5563;
+            --text-muted: #6B7280;
+            --text-inverse: #FFFFFF;
+            --accent: #0D9488;
+            --accent-hover: #0B7C72;
+            --accent-light: #CCFBF1;
+            --border: #E2E8F0;
+            --unselected: #94A3B8;
+            --disabled: #E5E7EB;
+            --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --font-display: 'DM Sans', system-ui, sans-serif;
+            --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+            --transition: 0.15s ease;
+
+            /* Responsive sizing using viewport units */
+            --radio-size: clamp(16px, 2.5vw, 22px);
+            --radio-dot: clamp(6px, 1vw, 9px);
+            --spacing-xs: clamp(4px, 0.8vw, 8px);
+            --spacing-sm: clamp(8px, 1.2vw, 14px);
+            --spacing-md: clamp(12px, 1.8vw, 18px);
+            --spacing-lg: clamp(16px, 2.2vw, 24px);
+            --font-xs: clamp(9px, 1.2vw, 11px);
+            --font-sm: clamp(11px, 1.4vw, 13px);
+            --font-base: clamp(12px, 1.6vw, 15px);
+            --font-md: clamp(13px, 1.8vw, 16px);
+            --font-lg: clamp(15px, 2vw, 19px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: var(--font-body);
+            font-size: var(--font-base);
+            line-height: 1.5;
+            color: var(--text-primary);
+            background: var(--bg-base);
+        }
+
+        .container {
+            padding: var(--spacing-md) var(--spacing-lg) calc(60px + var(--spacing-lg)) var(--spacing-lg);
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 2px solid var(--border);
+        }
+
+        .header-title {
+            font-family: var(--font-display);
+            font-size: var(--font-lg);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Sticky Footer */
+        .sticky-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+            padding: var(--spacing-sm) var(--spacing-lg);
+            z-index: 50;
+        }
+
+        .footer-content {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--spacing-sm);
+        }
+
+        .progress-container {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            flex: 1;
+            min-width: 0;
+        }
+
+        .progress-label {
+            font-size: var(--font-sm);
+            color: var(--text-secondary);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .progress-bar {
+            flex: 1;
+            min-width: 60px;
+            max-width: 200px;
+            height: clamp(6px, 1vw, 10px);
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: var(--font-base);
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        .submit-btn {
+            padding: var(--spacing-sm) var(--spacing-lg);
+            font-family: var(--font-display);
+            font-size: var(--font-base);
+            font-weight: 600;
+            color: var(--text-inverse);
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all var(--transition);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
+        }
+        .submit-btn:disabled {
+            background: var(--disabled);
+            cursor: not-allowed;
+        }
+
+        .submit-btn:not(:disabled) {
+            animation: subtle-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes subtle-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
+            50% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.15); }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: clamp(6px, 1vw, 12px);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            box-shadow: var(--shadow-card);
+        }
+
+        .card:last-child { margin-bottom: 0; }
+
+        .section-label {
+            font-family: var(--font-display);
+            font-size: var(--font-xs);
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: var(--spacing-sm);
+            padding-bottom: var(--spacing-xs);
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* General Health Pills */
+        .general-health-row {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+
+        .general-health-question {
+            font-size: var(--font-base);
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        .pill-group {
+            display: flex;
+            gap: var(--spacing-xs);
+            flex-wrap: wrap;
+        }
+
+        .pill {
+            position: relative;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            background: var(--bg-surface);
+            border: 2px solid var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: var(--font-sm);
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all var(--transition);
+        }
+
+        .pill:hover {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        .pill input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+        .pill.selected {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: var(--text-inverse);
+        }
+
+        /* Tables */
+        .question-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+
+        .question-table th {
+            padding: var(--spacing-xs) 2px var(--spacing-sm);
+            font-family: var(--font-display);
+            font-size: var(--font-xs);
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            text-align: center;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .question-table th:first-child {
+            text-align: left;
+            padding-left: 0;
+            font-size: var(--font-sm);
+            text-transform: none;
+            letter-spacing: 0;
+            color: var(--text-secondary);
+            width: 45%;
+        }
+
+        .question-table td {
+            padding: 0;
+            text-align: center;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .question-table td:first-child {
+            text-align: left;
+            padding: var(--spacing-sm) var(--spacing-xs) var(--spacing-sm) 0;
+            font-size: var(--font-base);
+            line-height: 1.4;
+            color: var(--text-primary);
+        }
+
+        .question-table tbody tr:hover { background: var(--bg-hover); }
+        .question-table tbody tr:last-child td { border-bottom: none; }
+
+        /* Radio cells */
+        .radio-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: clamp(32px, 5vw, 48px);
+            cursor: pointer;
+            padding: var(--spacing-xs);
+        }
+
+        /* Unified radio button style */
+        .table-radio,
+        .followup-radio {
+            appearance: none;
+            -webkit-appearance: none;
+            width: var(--radio-size);
+            height: var(--radio-size);
+            min-width: var(--radio-size);
+            min-height: var(--radio-size);
+            border: 2px solid var(--unselected);
+            border-radius: 50%;
+            background: var(--bg-surface);
+            cursor: pointer;
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .table-radio:hover,
+        .followup-radio:hover {
+            border-color: var(--accent);
+            background: var(--accent-light);
+        }
+
+        .table-radio:checked,
+        .followup-radio:checked {
+            border-color: var(--accent);
+            background: var(--accent);
+        }
+
+        .table-radio:checked::after,
+        .followup-radio:checked::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: var(--radio-dot);
+            height: var(--radio-dot);
+            background: white;
+            border-radius: 50%;
+        }
+
+        /* Follow-up rows */
+        .followup-row {
+            display: none;
+            background: linear-gradient(90deg, #F0FDFA 0%, #ECFDF5 100%);
+            border-left: 4px solid var(--accent);
+        }
+
+        .followup-row.visible { display: table-row; }
+
+        .followup-row td {
+            padding: var(--spacing-sm) 0 !important;
+            border-bottom: 1px solid #D1FAE5 !important;
+        }
+
+        .followup-row td:first-child {
+            font-size: var(--font-sm);
+            color: var(--text-secondary);
+            font-style: italic;
+            padding-left: var(--spacing-md) !important;
+        }
+
+        /* Loading & Success */
+        .container.hidden { display: none; }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: var(--bg-base);
+            z-index: 100;
+        }
+
+        .overlay.visible { display: flex; }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text { color: var(--text-secondary); font-size: 13px; }
+
+        .success-icon {
+            width: 52px;
+            height: 52px;
+            background: var(--accent-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+        }
+
+        .success-icon svg { width: 26px; height: 26px; color: var(--accent); }
+        .success-text { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .success-subtext { color: var(--text-secondary); font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container" id="formContainer">
+        <form id="hraForm">
+            <input type="hidden" name="note_id" value="{{ note_id }}">
+            <input type="hidden" name="questionnaire_id" value="{{ questionnaire_id }}">
+
+            <!-- Header -->
+            <div class="header">
+                <h1 class="header-title">Health Risk Assessment</h1>
+            </div>
+
+            <!-- General Health -->
+            <div class="card">
+                <div class="section-label">General Health</div>
+                <div class="general-health-row">
+                    <div class="general-health-question">Compared to other people your age, would you say your health is:</div>
+                    <div class="pill-group">
+                        <label class="pill"><input type="radio" name="HRA_GENERAL_HEALTH" value="HRA_GENERAL_HEALTH_POOR" required>Poor</label>
+                        <label class="pill"><input type="radio" name="HRA_GENERAL_HEALTH" value="HRA_GENERAL_HEALTH_FAIR">Fair</label>
+                        <label class="pill"><input type="radio" name="HRA_GENERAL_HEALTH" value="HRA_GENERAL_HEALTH_GOOD">Good</label>
+                        <label class="pill"><input type="radio" name="HRA_GENERAL_HEALTH" value="HRA_GENERAL_HEALTH_VERY_GOOD">Very Good</label>
+                        <label class="pill"><input type="radio" name="HRA_GENERAL_HEALTH" value="HRA_GENERAL_HEALTH_EXCELLENT">Excellent</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Physical Activity -->
+            <div class="card">
+                <div class="section-label">Physical Activity</div>
+                <table class="question-table">
+                    <thead>
+                        <tr>
+                            <th style="width:50%">How much difficulty do you have with:</th>
+                            <th>None</th>
+                            <th>A Little</th>
+                            <th>Some</th>
+                            <th>A Lot</th>
+                            <th>Unable</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Stooping, crouching, or kneeling</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_STOOPING" value="HRA_DIFF_STOOPING_NONE" required></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_STOOPING" value="HRA_DIFF_STOOPING_LITTLE"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_STOOPING" value="HRA_DIFF_STOOPING_SOME"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_STOOPING" value="HRA_DIFF_STOOPING_LOT"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_STOOPING" value="HRA_DIFF_STOOPING_UNABLE"></label></td>
+                        </tr>
+                        <tr>
+                            <td>Lifting or carrying objects as heavy as 10 pounds</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_LIFTING" value="HRA_DIFF_LIFTING_NONE" required></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_LIFTING" value="HRA_DIFF_LIFTING_LITTLE"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_LIFTING" value="HRA_DIFF_LIFTING_SOME"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_LIFTING" value="HRA_DIFF_LIFTING_LOT"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_LIFTING" value="HRA_DIFF_LIFTING_UNABLE"></label></td>
+                        </tr>
+                        <tr>
+                            <td>Reaching or extending arms above shoulder level</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_REACHING" value="HRA_DIFF_REACHING_NONE" required></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_REACHING" value="HRA_DIFF_REACHING_LITTLE"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_REACHING" value="HRA_DIFF_REACHING_SOME"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_REACHING" value="HRA_DIFF_REACHING_LOT"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_REACHING" value="HRA_DIFF_REACHING_UNABLE"></label></td>
+                        </tr>
+                        <tr>
+                            <td>Writing, or handling and grasping small objects</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WRITING" value="HRA_DIFF_WRITING_NONE" required></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WRITING" value="HRA_DIFF_WRITING_LITTLE"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WRITING" value="HRA_DIFF_WRITING_SOME"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WRITING" value="HRA_DIFF_WRITING_LOT"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WRITING" value="HRA_DIFF_WRITING_UNABLE"></label></td>
+                        </tr>
+                        <tr>
+                            <td>Walking a quarter of a mile</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WALKING_QUARTER" value="HRA_DIFF_WALKING_QUARTER_NONE" required></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WALKING_QUARTER" value="HRA_DIFF_WALKING_QUARTER_LITTLE"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WALKING_QUARTER" value="HRA_DIFF_WALKING_QUARTER_SOME"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WALKING_QUARTER" value="HRA_DIFF_WALKING_QUARTER_LOT"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_WALKING_QUARTER" value="HRA_DIFF_WALKING_QUARTER_UNABLE"></label></td>
+                        </tr>
+                        <tr>
+                            <td>Heavy housework (scrubbing floors, washing windows)</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_HOUSEWORK" value="HRA_DIFF_HOUSEWORK_NONE" required></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_HOUSEWORK" value="HRA_DIFF_HOUSEWORK_LITTLE"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_HOUSEWORK" value="HRA_DIFF_HOUSEWORK_SOME"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_HOUSEWORK" value="HRA_DIFF_HOUSEWORK_LOT"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_DIFF_HOUSEWORK" value="HRA_DIFF_HOUSEWORK_UNABLE"></label></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Daily Activities -->
+            <div class="card">
+                <div class="section-label">Daily Activities</div>
+                <table class="question-table">
+                    <thead>
+                        <tr>
+                            <th style="width:55%">Because of a health or physical condition, do you have difficulty with:</th>
+                            <th>Yes</th>
+                            <th>No</th>
+                            <th>Don't Know</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Shopping -->
+                        <tr data-adl="shopping">
+                            <td>Shopping for personal items (toiletries, medicines)</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_SHOPPING" value="HRA_ADL_SHOPPING_YES" required data-adl-trigger="shopping"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_SHOPPING" value="HRA_ADL_SHOPPING_NO" data-adl-trigger="shopping"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_SHOPPING" value="HRA_ADL_SHOPPING_DK" data-adl-trigger="shopping"></label></td>
+                        </tr>
+                        <tr class="followup-row" id="shopping-followup-yes">
+                            <td>Do you receive help with shopping?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_SHOPPING_HELP" value="HRA_ADL_SHOPPING_HELP_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_SHOPPING_HELP" value="HRA_ADL_SHOPPING_HELP_NO"></label></td>
+                            <td></td>
+                        </tr>
+                        <tr class="followup-row" id="shopping-followup-dk">
+                            <td>Is that because of your health?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_SHOPPING_HEALTH" value="HRA_ADL_SHOPPING_HEALTH_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_SHOPPING_HEALTH" value="HRA_ADL_SHOPPING_HEALTH_NO"></label></td>
+                            <td></td>
+                        </tr>
+
+                        <!-- Money -->
+                        <tr data-adl="money">
+                            <td>Managing money (tracking expenses, paying bills)</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_MONEY" value="HRA_ADL_MONEY_YES" required data-adl-trigger="money"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_MONEY" value="HRA_ADL_MONEY_NO" data-adl-trigger="money"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_MONEY" value="HRA_ADL_MONEY_DK" data-adl-trigger="money"></label></td>
+                        </tr>
+                        <tr class="followup-row" id="money-followup-yes">
+                            <td>Do you receive help with managing money?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_MONEY_HELP" value="HRA_ADL_MONEY_HELP_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_MONEY_HELP" value="HRA_ADL_MONEY_HELP_NO"></label></td>
+                            <td></td>
+                        </tr>
+                        <tr class="followup-row" id="money-followup-dk">
+                            <td>Is that because of your health?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_MONEY_HEALTH" value="HRA_ADL_MONEY_HEALTH_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_MONEY_HEALTH" value="HRA_ADL_MONEY_HEALTH_NO"></label></td>
+                            <td></td>
+                        </tr>
+
+                        <!-- Walking -->
+                        <tr data-adl="walking">
+                            <td>Walking across the room</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_WALKING" value="HRA_ADL_WALKING_YES" required data-adl-trigger="walking"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_WALKING" value="HRA_ADL_WALKING_NO" data-adl-trigger="walking"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_WALKING" value="HRA_ADL_WALKING_DK" data-adl-trigger="walking"></label></td>
+                        </tr>
+                        <tr class="followup-row" id="walking-followup-yes">
+                            <td>Do you receive help with walking?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_WALKING_HELP" value="HRA_ADL_WALKING_HELP_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_WALKING_HELP" value="HRA_ADL_WALKING_HELP_NO"></label></td>
+                            <td></td>
+                        </tr>
+                        <tr class="followup-row" id="walking-followup-dk">
+                            <td>Is that because of your health?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_WALKING_HEALTH" value="HRA_ADL_WALKING_HEALTH_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_WALKING_HEALTH" value="HRA_ADL_WALKING_HEALTH_NO"></label></td>
+                            <td></td>
+                        </tr>
+
+                        <!-- Light Housework -->
+                        <tr data-adl="lighthousework">
+                            <td>Light housework (dishes, straightening up, light cleaning)</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_LIGHT_HOUSEWORK" value="HRA_ADL_LIGHT_HOUSEWORK_YES" required data-adl-trigger="lighthousework"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_LIGHT_HOUSEWORK" value="HRA_ADL_LIGHT_HOUSEWORK_NO" data-adl-trigger="lighthousework"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_LIGHT_HOUSEWORK" value="HRA_ADL_LIGHT_HOUSEWORK_DK" data-adl-trigger="lighthousework"></label></td>
+                        </tr>
+                        <tr class="followup-row" id="lighthousework-followup-yes">
+                            <td>Do you receive help with light housework?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_LIGHT_HOUSEWORK_HELP" value="HRA_ADL_LIGHT_HOUSEWORK_HELP_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_LIGHT_HOUSEWORK_HELP" value="HRA_ADL_LIGHT_HOUSEWORK_HELP_NO"></label></td>
+                            <td></td>
+                        </tr>
+                        <tr class="followup-row" id="lighthousework-followup-dk">
+                            <td>Is that because of your health?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_LIGHT_HOUSEWORK_HEALTH" value="HRA_ADL_LIGHT_HOUSEWORK_HEALTH_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_LIGHT_HOUSEWORK_HEALTH" value="HRA_ADL_LIGHT_HOUSEWORK_HEALTH_NO"></label></td>
+                            <td></td>
+                        </tr>
+
+                        <!-- Bathing -->
+                        <tr data-adl="bathing">
+                            <td>Bathing or showering</td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_BATHING" value="HRA_ADL_BATHING_YES" required data-adl-trigger="bathing"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_BATHING" value="HRA_ADL_BATHING_NO" data-adl-trigger="bathing"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="table-radio" name="HRA_ADL_BATHING" value="HRA_ADL_BATHING_DK" data-adl-trigger="bathing"></label></td>
+                        </tr>
+                        <tr class="followup-row" id="bathing-followup-yes">
+                            <td>Do you receive help with bathing?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_BATHING_HELP" value="HRA_ADL_BATHING_HELP_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_BATHING_HELP" value="HRA_ADL_BATHING_HELP_NO"></label></td>
+                            <td></td>
+                        </tr>
+                        <tr class="followup-row" id="bathing-followup-dk">
+                            <td>Is that because of your health?</td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_BATHING_HEALTH" value="HRA_ADL_BATHING_HEALTH_YES"></label></td>
+                            <td><label class="radio-cell"><input type="radio" class="followup-radio" name="HRA_ADL_BATHING_HEALTH" value="HRA_ADL_BATHING_HEALTH_NO"></label></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Sticky Footer -->
+            <div class="sticky-footer">
+                <div class="footer-content">
+                    <div class="progress-container">
+                        <span class="progress-label">Progress</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <span class="progress-text" id="progressText">0/12</span>
+                    </div>
+                    <button type="submit" class="submit-btn" id="submitBtn" disabled>Submit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Loading -->
+    <div class="overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p class="loading-text">Submitting assessment...</p>
+    </div>
+
+    <!-- Success -->
+    <div class="overlay" id="successOverlay">
+        <div class="success-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+        <p class="success-text">Assessment Submitted</p>
+        <p class="success-subtext">Added to the note</p>
+    </div>
+
+    <script>
+        // MessageChannel for Canvas
+        let messagePort = null;
+
+        window.addEventListener('message', (event) => {
+            if (event.data?.type === 'INIT_CHANNEL' && event.ports[0]) {
+                messagePort = event.ports[0];
+                messagePort.start();
+                messagePort.postMessage({ type: 'READY', message: 'HRA iframe is ready' });
+            }
+        });
+
+        function closeModal() {
+            if (messagePort) {
+                messagePort.postMessage({ type: 'CLOSE_MODAL' });
+            }
+        }
+
+        // LocalStorage cache
+        const noteId = document.querySelector('input[name="note_id"]').value;
+        const CACHE_KEY = `hra_form_cache_${noteId}`;
+
+        function saveFormState() {
+            const formState = {};
+            document.querySelectorAll('input[type="radio"]:checked').forEach(input => {
+                formState[input.name] = input.value;
+            });
+            try { localStorage.setItem(CACHE_KEY, JSON.stringify(formState)); } catch (e) {}
+        }
+
+        function restoreFormState() {
+            try {
+                const cached = localStorage.getItem(CACHE_KEY);
+                if (!cached) return;
+
+                const formState = JSON.parse(cached);
+                Object.entries(formState).forEach(([name, value]) => {
+                    const input = document.querySelector(`input[name="${name}"][value="${value}"]`);
+                    if (input) {
+                        input.checked = true;
+                        const pill = input.closest('.pill');
+                        if (pill) {
+                            document.querySelectorAll(`input[name="${name}"]`).forEach(s => {
+                                const p = s.closest('.pill');
+                                if (p) p.classList.remove('selected');
+                            });
+                            pill.classList.add('selected');
+                        }
+                        if (input.dataset.adlTrigger) {
+                            handleAdlChange(input);
+                        }
+                    }
+                });
+                updateProgress();
+            } catch (e) {}
+        }
+
+        function clearFormCache() {
+            try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+        }
+
+        // Progress tracking
+        function updateProgress() {
+            let answered = 0;
+            const requiredQuestions = [
+                'HRA_GENERAL_HEALTH',
+                'HRA_DIFF_STOOPING', 'HRA_DIFF_LIFTING', 'HRA_DIFF_REACHING',
+                'HRA_DIFF_WRITING', 'HRA_DIFF_WALKING_QUARTER', 'HRA_DIFF_HOUSEWORK',
+                'HRA_ADL_SHOPPING', 'HRA_ADL_MONEY', 'HRA_ADL_WALKING',
+                'HRA_ADL_LIGHT_HOUSEWORK', 'HRA_ADL_BATHING'
+            ];
+
+            requiredQuestions.forEach(q => {
+                if (document.querySelector(`input[name="${q}"]:checked`)) answered++;
+            });
+
+            // Count visible follow-ups that are answered
+            document.querySelectorAll('.followup-row.visible').forEach(row => {
+                const radios = row.querySelectorAll('input[type="radio"]');
+                if (radios.length > 0) {
+                    const name = radios[0].name;
+                    if (document.querySelector(`input[name="${name}"]:checked`)) answered++;
+                }
+            });
+
+            const visibleFollowups = document.querySelectorAll('.followup-row.visible').length;
+            const totalNeeded = 12 + visibleFollowups;
+
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            const submitBtn = document.getElementById('submitBtn');
+
+            const percentage = Math.round((answered / totalNeeded) * 100);
+            progressFill.style.width = `${percentage}%`;
+            progressText.textContent = `${answered}/${totalNeeded}`;
+
+            submitBtn.disabled = answered < totalNeeded;
+        }
+
+        // ADL follow-up logic
+        const adlMapping = {
+            'shopping': { yesFollowup: 'shopping-followup-yes', dkFollowup: 'shopping-followup-dk', helpField: 'HRA_ADL_SHOPPING_HELP', healthField: 'HRA_ADL_SHOPPING_HEALTH' },
+            'money': { yesFollowup: 'money-followup-yes', dkFollowup: 'money-followup-dk', helpField: 'HRA_ADL_MONEY_HELP', healthField: 'HRA_ADL_MONEY_HEALTH' },
+            'walking': { yesFollowup: 'walking-followup-yes', dkFollowup: 'walking-followup-dk', helpField: 'HRA_ADL_WALKING_HELP', healthField: 'HRA_ADL_WALKING_HEALTH' },
+            'lighthousework': { yesFollowup: 'lighthousework-followup-yes', dkFollowup: 'lighthousework-followup-dk', helpField: 'HRA_ADL_LIGHT_HOUSEWORK_HELP', healthField: 'HRA_ADL_LIGHT_HOUSEWORK_HEALTH' },
+            'bathing': { yesFollowup: 'bathing-followup-yes', dkFollowup: 'bathing-followup-dk', helpField: 'HRA_ADL_BATHING_HELP', healthField: 'HRA_ADL_BATHING_HEALTH' }
+        };
+
+        function handleAdlChange(input) {
+            const adlKey = input.dataset.adlTrigger;
+            const mapping = adlMapping[adlKey];
+            const yesFollowupRow = document.getElementById(mapping.yesFollowup);
+            const dkFollowupRow = document.getElementById(mapping.dkFollowup);
+
+            // Hide both follow-ups first and clear selections
+            yesFollowupRow.classList.remove('visible');
+            dkFollowupRow.classList.remove('visible');
+            yesFollowupRow.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+            dkFollowupRow.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+
+            // Remove any hidden NA values
+            removeHiddenNa(mapping.helpField);
+            removeHiddenNa(mapping.healthField);
+
+            if (input.value.endsWith('_YES')) {
+                // Show "Do you receive help?" follow-up
+                yesFollowupRow.classList.add('visible');
+                setHiddenNa(mapping.healthField);
+            } else if (input.value.endsWith('_DK')) {
+                // Show "Is that because of your health?" follow-up
+                dkFollowupRow.classList.add('visible');
+                setHiddenNa(mapping.helpField);
+            } else {
+                // No - set both to NA
+                setHiddenNa(mapping.helpField);
+                setHiddenNa(mapping.healthField);
+            }
+            updateProgress();
+        }
+
+        function setHiddenNa(fieldName) {
+            removeHiddenNa(fieldName);
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = fieldName;
+            hidden.value = fieldName + '_NA';
+            hidden.dataset.autoNa = 'true';
+            document.getElementById('hraForm').appendChild(hidden);
+        }
+
+        function removeHiddenNa(fieldName) {
+            const existing = document.querySelector(`input[name="${fieldName}"][data-auto-na="true"]`);
+            if (existing) existing.remove();
+        }
+
+        // Event bindings
+        document.querySelectorAll('.pill input').forEach(input => {
+            input.addEventListener('change', function() {
+                document.querySelectorAll(`input[name="${this.name}"]`).forEach(s => {
+                    s.closest('.pill').classList.remove('selected');
+                });
+                this.closest('.pill').classList.add('selected');
+                updateProgress();
+                saveFormState();
+            });
+        });
+
+        document.querySelectorAll('.table-radio').forEach(input => {
+            input.addEventListener('change', function() {
+                updateProgress();
+                saveFormState();
+            });
+        });
+
+        document.querySelectorAll('[data-adl-trigger]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                handleAdlChange(this);
+                saveFormState();
+            });
+        });
+
+        document.querySelectorAll('.followup-radio').forEach(input => {
+            input.addEventListener('change', function() {
+                updateProgress();
+                saveFormState();
+            });
+        });
+
+        // Form submission
+        document.getElementById('hraForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const responses = {};
+            document.querySelectorAll('input[type="radio"]:checked').forEach(input => {
+                responses[input.name] = input.value;
+            });
+            document.querySelectorAll('input[type="hidden"][data-auto-na="true"]').forEach(input => {
+                responses[input.name] = input.value;
+            });
+
+            const noteIdVal = document.querySelector('input[name="note_id"]').value;
+
+            document.getElementById('formContainer').classList.add('hidden');
+            document.getElementById('loadingOverlay').classList.add('visible');
+
+            try {
+                const origin = (window.parent && window.parent.location) ? window.parent.location.origin : window.location.origin;
+                const apiUrl = origin + '/plugin-io/api/health_risk_assessment/submit-hra';
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ note_id: noteIdVal, responses: responses }),
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    clearFormCache();
+                    document.getElementById('loadingOverlay').classList.remove('visible');
+                    document.getElementById('successOverlay').classList.add('visible');
+                    setTimeout(() => closeModal(), 1500);
+                } else {
+                    throw new Error(result.error || 'Submission failed');
+                }
+            } catch (error) {
+                console.error('Submission error:', error);
+                document.getElementById('loadingOverlay').classList.remove('visible');
+                document.getElementById('formContainer').classList.remove('hidden');
+                alert('Failed to submit: ' + error.message);
+            }
+        });
+
+        // Initialize
+        restoreFormState();
+        updateProgress();
+    </script>
+</body>
+</html>
