@@ -34,4 +34,4 @@ SQL queries for accounts receivable, claims, payments, charges, and denial track
 - **patient_balance** — The computed amount the patient owes after all payments, adjustments, and transfers.
 - **aggregate_coverage_balance** — The computed amount insurance still owes on a claim.
 - Most reports exclude claims in the **Zero Balance** (fully resolved) and **Trash** (voided/deleted) queues.
-- Each report is available as both a `.sql` file (ready to run) and a `.md` file (documented with column descriptions).
+- Some reports also have a standalone `.sql` file in the `sample-sql/` root directory for direct use.

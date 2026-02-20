@@ -15,4 +15,4 @@ SQL queries for appointments, clinical documentation status, and referral tracki
 
 - The **Unlocked Notes** report is useful for identifying documentation that still needs provider sign-off.
 - Referrals exclude test patients and entries created by Canvas Support.
-- Each report is available as both a `.sql` file (ready to run) and a `.md` file (documented with column descriptions).
+- Each report also has a standalone `.sql` file in the `sample-sql/` root directory for direct use.
