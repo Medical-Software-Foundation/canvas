@@ -76,6 +76,43 @@ ORDER BY source.document_type, source.review_status;
 | `AR` | Already Reviewed | Reviewed outside of Canvas (e.g., paper review) |
 | `RN` | Review Not Required | No review needed |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Document Type                   | Review Status        | Count |
+|---------------------------------|----------------------|------:|
+| Imaging Report                  | Pending Review       |    18 |
+| Imaging Report                  | Review Not Required  |     4 |
+| Imaging Report                  | Reviewed             |    62 |
+| Imaging Report                  | Reviewed Offline     |    11 |
+| Lab Report                      | Pending Review       |    47 |
+| Lab Report                      | Review Not Required  |    12 |
+| Lab Report                      | Reviewed             |   284 |
+| Lab Report                      | Reviewed Offline     |    33 |
+| Referral Report                 | Pending Review       |    23 |
+| Referral Report                 | Review Not Required  |     6 |
+| Referral Report                 | Reviewed             |    89 |
+| Referral Report                 | Reviewed Offline     |    14 |
+| Uncategorized Clinical Document | Pending Review       |    31 |
+| Uncategorized Clinical Document | Review Not Required  |     9 |
+| Uncategorized Clinical Document | Reviewed             |   156 |
+| Uncategorized Clinical Document | Reviewed Offline     |    22 |
+
+### Summary by Review Status
+
+| Review Status        | Total | % of All |
+|----------------------|------:|---------:|
+| Pending Review       |   119 |    14.5% |
+| Reviewed             |   591 |    72.0% |
+| Reviewed Offline     |    80 |     9.7% |
+| Review Not Required  |    31 |     3.8% |
+| **TOTAL**            |   821 |   100.0% |
+
+### Visualization
+
+![Document Review Status Chart](document_review_status_chart.png)
+
 ## Notes
 
 - Within `review_mode = 'RR'`, the presence of a `review_id` distinguishes "Pending Review" (no review yet) from "Reviewed" (review completed).
