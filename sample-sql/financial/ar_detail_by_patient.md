@@ -46,6 +46,27 @@ ORDER BY total_outstanding DESC;
 | `open_claim_count` | Number of open claims for this patient |
 | `last_payment_date` | Date/time of the most recent payment posted to any of this patient's open claims |
 
+## Sample Output
+
+*Synthetic data for illustration purposes (top 10 by total outstanding).*
+
+| Patient Name       | MRN     | Total Outstanding | Patient Balance | Insurance Balance | Open Claims | Last Payment   |
+|--------------------|---------|------------------:|----------------:|------------------:|------------:|----------------|
+| Martinez, Ana      | MRN-001 |          $12,700  |         $4,200  |           $8,500  |           4 | 2026-02-10     |
+| Thompson, John     | MRN-002 |          $10,050  |         $3,850  |           $6,200  |           3 | 2026-01-28     |
+| Williams, Keisha   | MRN-003 |           $8,900  |         $3,100  |           $5,800  |           3 | 2026-02-05     |
+| Nguyen, David      | MRN-004 |           $7,050  |         $2,750  |           $4,300  |           2 | 2026-01-15     |
+| Brown, Lisa        | MRN-005 |           $6,300  |         $2,400  |           $3,900  |           2 | 2026-02-12     |
+| Garcia, Carlos     | MRN-006 |           $5,200  |         $2,100  |           $3,100  |           2 | 2025-12-20     |
+| Johnson, Marie     | MRN-007 |           $4,500  |         $1,800  |           $2,700  |           2 | 2026-01-08     |
+| Lee, Steven        | MRN-008 |           $3,750  |         $1,550  |           $2,200  |           1 | 2026-02-01     |
+| Davis, Rachel      | MRN-009 |           $3,000  |         $1,200  |           $1,800  |           1 | 2025-11-30     |
+| Wilson, Mark       | MRN-010 |           $2,350  |           $950  |           $1,400  |           1 | 2026-01-22     |
+
+### Visualization
+
+![A/R Detail by Patient Chart](assets/ar_detail_by_patient_chart.png)
+
 ## Key Concepts
 
 - `patient_balance` on a claim is the computed amount the patient owes after all payments, adjustments, and transfers have been applied.

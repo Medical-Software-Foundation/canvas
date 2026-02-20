@@ -34,6 +34,21 @@ ORDER BY total_outstanding DESC;
 | `insurance_outstanding` | Amount owed by insurance |
 | `patient_outstanding` | Amount owed by patients |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Rendering Provider | NPI         | Open Claims | Total Outstanding | Insurance Outstanding | Patient Outstanding |
+|--------------------|-------------|------------:|------------------:|----------------------:|--------------------:|
+| Dr. Sarah Chen     | 1234567890  |          38 |          $37,000  |              $31,200  |             $5,800  |
+| Dr. James Wilson   | 1234567891  |          29 |          $28,900  |              $24,800  |             $4,100  |
+| Dr. Maria Lopez    | 1234567892  |          24 |          $21,700  |              $18,500  |             $3,200  |
+| Dr. David Park     | 1234567893  |          18 |          $15,200  |              $12,700  |             $2,500  |
+
+### Visualization
+
+![A/R by Provider Chart](assets/ar_by_provider_chart.png)
+
 ## Key Concepts
 
 - `patient_balance` on a claim is the computed amount the patient owes after all payments, adjustments, and transfers have been applied.

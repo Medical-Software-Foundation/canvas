@@ -35,6 +35,35 @@ ORDER BY patient_responsibility DESC;
 | `claim_count` | Number of claims with a patient balance |
 | `current_queue` | Which claim workflow queue those claims are in (e.g., "Patient Balance", "Adjudicated Open Balance") |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Name       | MRN     | Patient Responsibility | Claim Count | Current Queue            |
+|--------------------|---------|-----------------------:|------------:|--------------------------|
+| Martinez, Ana      | MRN-001 |               $2,850   |           3 | Patient Balance          |
+| Thompson, John     | MRN-002 |               $2,100   |           2 | Patient Balance          |
+| Williams, Keisha   | MRN-003 |               $1,750   |           2 | Adjudicated Open Balance |
+| Nguyen, David      | MRN-004 |               $1,400   |           1 | Patient Balance          |
+| Brown, Lisa        | MRN-005 |               $1,200   |           1 | Adjudicated Open Balance |
+| Garcia, Carlos     | MRN-006 |                 $980   |           1 | Insurance Follow-Up      |
+| Johnson, Marie     | MRN-007 |                 $750   |           1 | Coding Review            |
+| Lee, Steven        | MRN-008 |                 $620   |           1 | Appointment              |
+
+### Summary by Queue
+
+| Queue                    | Total Balance | Claim Count |
+|--------------------------|:------------:|:-----------:|
+| Patient Balance          |      $18,400 |          42 |
+| Adjudicated Open Balance |      $12,600 |          28 |
+| Insurance Follow-Up      |       $8,900 |          19 |
+| Coding Review            |       $4,200 |          11 |
+| Appointment              |       $2,100 |           6 |
+
+### Visualization
+
+![Patient Balance by Queue Chart](assets/ar_patient_balance_by_queue_chart.png)
+
 ## Tips
 
 - If you want a **single row per patient** (without the queue breakdown), remove `q.name` from both the `SELECT` and `GROUP BY` clauses.

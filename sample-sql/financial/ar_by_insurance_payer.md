@@ -35,6 +35,23 @@ ORDER BY total_outstanding DESC;
 | `patient_outstanding` | Patient responsibility on these claims |
 | `total_outstanding` | Combined outstanding amount |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Payer Name                | Payer ID  | Open Claims | Insurance Outstanding | Patient Outstanding | Total Outstanding |
+|---------------------------|-----------|------------:|----------------------:|--------------------:|------------------:|
+| Blue Cross Blue Shield    | BCBS001   |          42 |              $38,200  |             $6,100  |          $44,300  |
+| Aetna                     | AETNA01   |          31 |              $24,500  |             $4,200  |          $28,700  |
+| Medicare Part B           | MCR002    |          28 |              $19,800  |             $3,100  |          $22,900  |
+| UnitedHealth              | UHC001    |          22 |              $15,300  |             $2,800  |          $18,100  |
+| Cigna                     | CIGNA01   |          16 |              $11,400  |             $1,900  |          $13,300  |
+| Medicaid                  | MCD001    |          12 |               $9,000  |             $1,500  |          $10,500  |
+
+### Visualization
+
+![A/R by Insurance Payer Chart](assets/ar_by_insurance_payer_chart.png)
+
 ## Notes
 
 - This query uses the claim's **current coverage assignment**. Claims without an assigned coverage (e.g., patient-only claims) will not appear.

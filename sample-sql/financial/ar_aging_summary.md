@@ -45,6 +45,22 @@ ORDER BY MIN(CURRENT_DATE - n.datetime_of_service::date);
 | `insurance_outstanding` | Portion still owed by insurance |
 | `patient_outstanding` | Portion that is patient responsibility |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Aging Bucket | Claim Count | Total Outstanding | Insurance Outstanding | Patient Outstanding |
+|-------------|------------:|------------------:|----------------------:|--------------------:|
+| 0–30 days   |          85 |          $50,470  |              $42,150  |             $8,320  |
+| 31–60 days  |          52 |          $34,140  |              $28,730  |             $5,410  |
+| 61–90 days  |          34 |          $19,560  |              $15,890  |             $3,670  |
+| 90+ days    |          61 |          $38,660  |              $31,420  |             $7,240  |
+| **TOTAL**   |     **232** |     **$142,830**  |         **$118,190**  |        **$24,640**  |
+
+### Visualization
+
+![A/R Aging Summary Chart](assets/ar_aging_summary_chart.png)
+
 ## Key Concepts
 
 - Aging is calculated from the **date of service** on the associated note, not the claim creation date — this aligns with standard A/R aging methodology.
