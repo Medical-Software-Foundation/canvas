@@ -33,6 +33,10 @@ SQL queries for patient demographics, clinical records, medications, lab orders,
 | [Patients by Location](patients_by_location.md) | Patient distribution across practice locations |
 | [Patients by Provider](patients_by_provider.md) | Patient panel size per provider |
 | [Questionnaire Questions & Responses](questionnaire_questions_responses.md) | Questionnaire configuration — available questions and response options |
+| [Vital Signs by Patient](vital_signs_by_patient.md) | All committed vital sign readings per patient — BP, weight, BMI, height, temperature, pulse, O2 sat, respiration rate |
+| [Abnormal Vitals](abnormal_vitals.md) | Patients with out-of-range vitals based on most recent reading and standard clinical thresholds |
+| [BMI Distribution](bmi_distribution.md) | Patient population breakdown by WHO BMI categories (underweight through obese class III) |
+| [Blood Pressure Control](blood_pressure_control.md) | Most recent BP per patient classified by AHA guidelines with target compliance flag |
 
 ## Notes
 
