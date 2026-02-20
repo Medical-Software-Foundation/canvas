@@ -44,6 +44,27 @@ ORDER BY q.queue_sort_ordering;
 | 8 | Patient Balance |
 | 9 | Zero Balance |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Queue Status           | Queue Order | Claim Count | Patient Balance | Insurance Balance | Total Balance |
+|------------------------|:-----------:|------------:|----------------:|------------------:|--------------:|
+| Appointment            |           1 |          28 |         $2,800  |           $5,600  |       $8,400  |
+| Needs Clinician Review |           2 |          15 |         $1,500  |           $3,000  |       $4,500  |
+| Needs Coding Review    |           3 |          22 |         $2,200  |           $4,400  |       $6,600  |
+| Queued for Submission  |           4 |          18 |         $1,800  |           $3,600  |       $5,400  |
+| Filed / Awaiting       |           5 |         145 |        $12,350  |          $50,000  |      $62,350  |
+| Rejected / Needs Review|           6 |           8 |         $1,200  |           $3,600  |       $4,800  |
+| Adjudicated Open       |           7 |          64 |         $9,600  |          $19,200  |      $28,800  |
+| Patient Balance        |           8 |          52 |        $18,400  |              $0   |      $18,400  |
+| Zero Balance           |           9 |         830 |            $0   |              $0   |          $0   |
+| **TOTAL**              |             |    **1,182**|    **$49,850**  |      **$89,400**  | **$139,250**  |
+
+### Visualization
+
+![Claims Status Chart](assets/claims_status_chart.png)
+
 ## Notes
 
 - Trashed claims (queue order 10) are excluded.

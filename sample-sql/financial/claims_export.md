@@ -76,6 +76,22 @@ ORDER BY n.datetime_of_service DESC;
 | `total_paid` | Sum of all valid payments posted |
 | `total_adjusted` | Sum of all valid write-off adjustments |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Claim ID | DOS        | Patient Name     | Provider         | Queue              | Payer | Total Charges | Total Paid | Total Adjusted | Total Balance |
+|---------:|------------|------------------|------------------|--------------------|-------|:-------------:|-----------:|---------------:|--------------:|
+|     1042 | 2026-02-10 | Martinez, Ana    | Dr. Sarah Chen   | Filed / Awaiting   | BCBS  |       $2,100  |    $1,850  |           $0   |         $250  |
+|     1038 | 2026-02-05 | Thompson, John   | Dr. James Wilson | Adjudicated Open   | Aetna |       $1,800  |    $1,420  |         $180   |         $200  |
+|     1035 | 2026-01-28 | Williams, Keisha | Dr. Maria Lopez  | Patient Balance    | UHC   |       $2,400  |    $1,680  |         $320   |         $400  |
+|     1031 | 2026-01-22 | Nguyen, David    | Dr. Sarah Chen   | Zero Balance       | MCR   |       $1,500  |    $1,100  |         $400   |           $0  |
+|     1028 | 2026-01-15 | Brown, Lisa      | Dr. David Park   | Queued for Submit  | Cigna |       $1,250  |       $0   |           $0   |       $1,250  |
+
+### Visualization
+
+![Claims Financial Summary Chart](assets/claims_export_chart.png)
+
 ## Notes
 
 - Trashed claims (queue order 10) are excluded.

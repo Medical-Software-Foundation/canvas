@@ -38,6 +38,23 @@ GROUP BY
 | `check_date` | Date of the check |
 | `total_amount` | Sum of all line item payments for this claim/check combination |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Name     | Patient Key | Claim Account | Check Number | Check Date | Total Amount |
+|------------------|-------------|---------------|--------------|------------|-------------:|
+| Martinez, Ana    | PAT-001     | CLM-10042     | CHK-90412    | 2026-02-15 |     $1,850   |
+| Martinez, Ana    | PAT-001     | CLM-10038     | CHK-90412    | 2026-02-15 |     $1,240   |
+| Thompson, John   | PAT-002     | CLM-10035     | CHK-90387    | 2026-02-08 |     $2,180   |
+| Williams, Keisha | PAT-003     | CLM-10031     | CHK-90401    | 2026-02-12 |     $1,680   |
+| Nguyen, David    | PAT-004     | CLM-10028     | CHK-90395    | 2026-02-10 |     $1,100   |
+| Brown, Lisa      | PAT-005     | CLM-10025     | CHK-90410    | 2026-02-14 |       $980   |
+
+### Visualization
+
+![Claim Payments Chart](assets/claim_payments_chart.png)
+
 ## Notes
 
 - Payments are grouped by patient, claim, and check — so a single claim may have multiple rows if it received payments from different checks.

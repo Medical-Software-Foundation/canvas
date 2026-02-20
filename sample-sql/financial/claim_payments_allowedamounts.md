@@ -58,6 +58,22 @@ GROUP BY
 | `patient_balance` | Current outstanding patient balance on the claim |
 | `aggregate_coverage_balance` | Current outstanding insurance balance on the claim |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Name     | Claim ID | Patient Payment | Coverage Payment | Allowed Amount | Patient Balance | Insurance Balance |
+|------------------|---------:|----------------:|-----------------:|---------------:|----------------:|------------------:|
+| Martinez, Ana    |     1042 |           $250  |          $1,850  |        $2,100  |           $420  |             $850  |
+| Thompson, John   |     1038 |           $180  |          $1,420  |        $1,600  |           $350  |               $0  |
+| Williams, Keisha |     1035 |           $320  |          $1,680  |        $2,000  |             $0  |             $520  |
+| Nguyen, David    |     1031 |           $150  |          $1,100  |        $1,250  |           $275  |               $0  |
+| Brown, Lisa      |     1028 |           $200  |            $980  |        $1,180  |           $180  |             $340  |
+
+### Visualization
+
+![Claim Payments with Allowed Amounts Chart](assets/claim_payments_allowedamounts_chart.png)
+
 ## Notes
 
 - Payment type (patient vs. coverage) is determined by which posting subtype exists — `patientposting` or `coverageposting`.
