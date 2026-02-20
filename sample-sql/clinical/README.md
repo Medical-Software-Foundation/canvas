@@ -9,6 +9,7 @@ SQL queries for patient demographics, clinical records, medications, lab orders,
 | [Active Coverages](active_coverages.md) | Active patients and their current insurance coverage details, including care team lead |
 | [Active Patient List](active_patient_list.md) | All active patients with key demographics, default provider, and default location |
 | [Allergies](allergies.md) | Patient allergy and intolerance records with severity, reaction, and FDB Health coding |
+| [Chronic Disease Registry](chronic_disease_registry.md) | Patients with chronic conditions (diabetes, hypertension, COPD, asthma, heart failure, CKD) by ICD-10 prefix |
 | [Completed Prescriptions](completed_prescriptions.md) | Finalized prescriptions with medication name, SIG, quantity, refills, and prescriber |
 | [Health Gorilla Codes](healthgorilla_codes.md) | Health Gorilla lab order codes with associated lab names |
 | [Immunizations](immunizations.md) | Combined historical (documented) and administered immunizations for active patients |
@@ -18,6 +19,7 @@ SQL queries for patient demographics, clinical records, medications, lab orders,
 | [Medications](medications.md) | Active patient medications with NDC codes, SIG, and FDB Health coding |
 | [New Patient Report](new_patient_report.md) | New patient registrations grouped by month over the last 12 months |
 | [Patient Conditions](patient_conditions.md) | Active ICD-10 diagnoses for active patients |
+| [Patients by Diagnosis](patients_by_diagnosis.md) | Patient counts per ICD-10 diagnosis, ranked most to least common |
 | [Patient Demographics](patient_demographics.md) | Patient name, DOB, MRN, birth sex, address, phone, and email |
 | [Patient Demographics Breakdown](patient_demographics_breakdown.md) | Age, sex, race, and ethnicity distribution breakdowns for active patients |
 | [Patients by Insurance](patients_by_insurance.md) | Patient counts by insurance plan type (Medicare, Medicaid, Commercial, etc.) |
