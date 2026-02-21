@@ -54,6 +54,24 @@ ORDER BY total_charges DESC;
 | `total_adjustments` | Total write-off adjustments |
 | `outstanding_balance` | Charges minus payments minus adjustments |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| CPT   | Description                   | Claims | Units | Total Charges | Total Payments | Adjustments | Outstanding |
+|-------|-------------------------------|-------:|------:|--------------:|---------------:|------------:|------------:|
+| 99214 | Established - Moderate        |    324 |   324 |      $68,400  |       $51,300  |     $5,400  |    $11,700  |
+| 99213 | Established - Low Complexity  |    450 |   450 |      $58,500  |       $43,800  |     $4,600  |    $10,100  |
+| 99215 | Established - Detailed        |    190 |   190 |      $52,200  |       $39,100  |     $3,900  |     $9,200  |
+| 99203 | New Patient - Low             |    194 |   194 |      $35,800  |       $26,800  |     $2,700  |     $6,300  |
+| 99395 | Preventive 18-39              |    130 |   130 |      $28,600  |       $21,400  |     $2,100  |     $5,100  |
+| 99204 | New Patient - Moderate        |     86 |    86 |      $24,200  |       $18,100  |     $1,800  |     $4,300  |
+| 99385 | New Patient Preventive 18-39  |     84 |    84 |      $18,400  |       $13,800  |     $1,400  |     $3,200  |
+
+### Visualization
+
+![Revenue by CPT Code Chart](assets/revenue_by_cpt_code_chart.png)
+
 ## Notes
 
 - Internal system line items (`COPAY`, `UNLINKED`) are excluded.

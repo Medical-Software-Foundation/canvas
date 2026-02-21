@@ -104,6 +104,29 @@ ORDER BY
 | `remit_month` | "Last 30 Days" or the month abbreviation (e.g., "Jan") |
 | `date_month` | First day of the month (NULL for the "Last 30 Days" row) |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Claims | Denials | % Denied | Period       | Month      |
+|-------:|--------:|---------:|--------------|------------|
+|    145 |      12 |    8.28% | Last 30 Days |            |
+|    168 |      13 |    7.74% | Jan          | 2026-01-01 |
+|    152 |      14 |    9.21% | Dec          | 2025-12-01 |
+|    174 |      12 |    6.90% | Nov          | 2025-11-01 |
+|    162 |      12 |    7.41% | Oct          | 2025-10-01 |
+|    158 |      13 |    8.23% | Sep          | 2025-09-01 |
+|    171 |      11 |    6.43% | Aug          | 2025-08-01 |
+|    165 |      13 |    7.88% | Jul          | 2025-07-01 |
+|    148 |      13 |    8.78% | Jun          | 2025-06-01 |
+|    170 |      12 |    7.06% | May          | 2025-05-01 |
+|    163 |      11 |    6.75% | Apr          | 2025-04-01 |
+|    155 |      12 |    7.74% | Mar          | 2025-03-01 |
+
+### Visualization
+
+![Remit Denial Rate Chart](assets/remit_denial_rate_chart.png)
+
 ## Notes
 
 - The "Last 30 Days" row provides a rolling recent snapshot and always appears first.

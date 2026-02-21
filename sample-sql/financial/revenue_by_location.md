@@ -53,6 +53,21 @@ ORDER BY total_charges DESC;
 | `total_payments` | Total payments received |
 | `outstanding_balance` | Charges minus payments minus adjustments |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Location           | Claims | Providers | Patients | Total Charges | Total Payments | Outstanding |
+|--------------------|-------:|----------:|---------:|--------------:|---------------:|------------:|
+| Main Street Clinic |    485 |         4 |      420 |     $142,000  |      $106,500  |    $21,200  |
+| Downtown Medical   |    338 |         3 |      285 |      $98,500  |       $73,800  |    $14,800  |
+| Westside Health    |    232 |         2 |      195 |      $68,200  |       $51,100  |    $10,200  |
+| North Campus       |    148 |         2 |      128 |      $42,800  |       $32,100  |     $6,400  |
+
+### Visualization
+
+![Revenue by Location Chart](assets/revenue_by_location_chart.png)
+
 ## Notes
 
 - Internal system line items (`COPAY`, `UNLINKED`) are excluded from charge calculations.

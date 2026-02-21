@@ -31,6 +31,23 @@ ORDER BY bp.created DESC;
 | `adjustment_code` | Specific reason code for the adjustment |
 | `posted_date` | Date/time the posting was created |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Claim ID | Adjustment Amount | Type | Code | Posted Date        |
+|---------:|------------------:|------|------|--------------------|
+|     1042 |           $85.00  | CO   | 45   | 2026-02-20 14:32   |
+|     1038 |           $42.50  | CO   | 45   | 2026-02-19 10:15   |
+|     1038 |          $120.00  | PR   | 1    | 2026-02-19 10:15   |
+|     1035 |           $65.00  | OA   | 23   | 2026-02-18 16:45   |
+|     1031 |          $180.00  | WO   | 253  | 2026-02-18 11:20   |
+|     1028 |           $35.00  | CO   | 97   | 2026-02-17 09:30   |
+
+### Visualization
+
+![Adjustment Report Chart](assets/adjustment_report_chart.png)
+
 ## Adjustment Group Codes Reference
 
 | Code | Meaning |

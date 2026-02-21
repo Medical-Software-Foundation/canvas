@@ -55,6 +55,21 @@ ORDER BY total_charges DESC;
 | `outstanding_balance` | Charges minus payments minus adjustments |
 | `avg_charge_per_claim` | Average charge amount per claim |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider         | Claims | Patients | Total Charges | Total Payments | Outstanding | Avg/Claim |
+|------------------|-------:|---------:|--------------:|---------------:|------------:|----------:|
+| Dr. Sarah Chen   |    598 |      310 |     $128,500  |       $96,300  |    $19,200  |   $214.88 |
+| Dr. James Wilson |    496 |      245 |      $98,200  |       $73,600  |    $14,700  |   $197.98 |
+| Dr. Maria Lopez  |    453 |      198 |      $82,400  |       $61,800  |    $12,300  |   $181.90 |
+| Dr. David Park   |    325 |      142 |      $56,800  |       $42,600  |     $8,500  |   $174.77 |
+
+### Visualization
+
+![Revenue by Provider Chart](assets/revenue_by_provider_chart.png)
+
 ## Notes
 
 - Internal system line items (`COPAY`, `UNLINKED`) are excluded from charge calculations.

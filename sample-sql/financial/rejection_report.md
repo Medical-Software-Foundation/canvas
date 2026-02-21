@@ -26,6 +26,23 @@ ORDER BY c.id, cr.response_time DESC;
 | `posted_date` | Timestamp when the rejection response was received |
 | `payer_response_message` | The exact rejection/denial message from the payer |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Claim ID | Posted Date        | Payer Response Message                                                          |
+|---------:|--------------------|---------------------------------------------------------------------------------|
+|     1042 | 2026-02-20 08:15   | ERA DENIAL - Claim denied as patient cannot be identified as our insured.       |
+|     1038 | 2026-02-19 14:30   | ERA DENIAL - Missing or invalid diagnosis code.                                 |
+|     1038 | 2026-02-19 14:30   | ERA DENIAL - Procedure code inconsistent with modifier.                         |
+|     1035 | 2026-02-18 09:45   | ERA DENIAL - Duplicate claim/service.                                           |
+|     1031 | 2026-02-17 11:20   | ERA DENIAL - Prior authorization number missing or invalid.                     |
+|     1028 | 2026-02-15 16:00   | ERA DENIAL - Timely filing limit has been exceeded.                             |
+
+### Visualization
+
+![Rejection Report Chart](assets/rejection_report_chart.png)
+
 ## Notes
 
 - A single claim rejection can have **multiple response messages** (one row per denial reason), so you may see multiple rows per claim.

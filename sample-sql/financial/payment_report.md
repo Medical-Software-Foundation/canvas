@@ -31,6 +31,23 @@ ORDER BY bp.created DESC;
 | `posted_date` | Date/time the posting was created (not the check date) |
 | `billing_code` | CPT/procedure code from the claim line item |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Claim ID | Paid Amount | Posted Date        | Billing Code |
+|---------:|------------:|--------------------|--------------|
+|     1042 |     $195.00 | 2026-02-20 14:32   | 99214        |
+|     1042 |      $85.00 | 2026-02-20 14:32   | 99213        |
+|     1038 |     $275.00 | 2026-02-19 10:15   | 99215        |
+|     1035 |     $130.00 | 2026-02-18 16:45   | 99213        |
+|     1031 |     $185.00 | 2026-02-18 11:20   | 99203        |
+|     1028 |     $220.00 | 2026-02-17 09:30   | 99395        |
+
+### Visualization
+
+![Payment Report Chart](assets/payment_report_chart.png)
+
 ## Notes
 
 - Only active payments are included — entered-in-error payments and postings are excluded.
