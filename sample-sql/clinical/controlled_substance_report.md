@@ -69,6 +69,21 @@ ORDER BY written_date DESC;
 | `count_of_refills_allowed` | Number of refills allowed |
 | `pharmacy_name` | Name of the pharmacy |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Type              | Medication               | NDC           | EPCS | Prescriber       | Written    | Qty | Refills | Pharmacy          |
+|-------------------|--------------------------|---------------|:----:|------------------|------------|----:|--------:|-------------------|
+| Coded Medication  | Adderall 20mg Tablet     | 57844-0120-01 | Yes  | Dr. Sarah Chen   | 2026-02-14 |  30 |       2 | CVS Pharmacy      |
+| Coded Medication  | Hydrocodone 5-325mg Tab  | 00406-0123-01 | Yes  | Dr. James Wilson | 2026-02-12 |  20 |       0 | Walgreens         |
+| Coded Medication  | Alprazolam 0.5mg Tablet  | 00781-1062-01 | Yes  | Dr. Maria Lopez  | 2026-02-10 |  30 |       1 | Rite Aid          |
+| Compound Medication| Custom Ketamine 10% Cream|              |      | Dr. David Park   | 2026-02-08 |   1 |       2 | Compounding Rx    |
+
+### Visualization
+
+![Controlled Substance Report Chart](assets/controlled_substance_report_chart.png)
+
 ## Notes
 
 - For coded medications, the DEA schedule is determined dynamically via an external drug database lookup and is not stored as a column. The `is_epcs` flag is the best on-record indicator.

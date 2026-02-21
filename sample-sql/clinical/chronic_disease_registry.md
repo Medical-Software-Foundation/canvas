@@ -117,6 +117,36 @@ ORDER BY patient_count DESC;
 | `I50%` | Heart Failure |
 | `N18%` | Chronic Kidney Disease |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+### Summary
+
+| Chronic Condition       | Patients |
+|------------------------|--------:|
+| Hypertension            |     298 |
+| Type 2 Diabetes         |     215 |
+| Asthma                  |     142 |
+| COPD                    |      98 |
+| Chronic Kidney Disease  |      76 |
+| Heart Failure           |      54 |
+| Type 1 Diabetes         |      38 |
+
+### Patient Detail
+
+| Condition        | Patient        | ICD-10 | Diagnosis                        | Onset      | Status  |
+|------------------|----------------|--------|----------------------------------|------------|---------|
+| Hypertension     | Adams, Karen   | I10    | Essential hypertension           | 2021-03-14 | active  |
+| Type 2 Diabetes  | Chen, Robert   | E11.65 | Type 2 DM with hyperglycemia     | 2019-08-22 | active  |
+| Asthma           | Garcia, Maria  | J45.20 | Mild intermittent asthma         | 2022-01-10 | active  |
+| COPD             | Johnson, David | J44.1  | COPD with acute exacerbation     | 2018-05-30 | relapse |
+| CKD              | Park, James    | N18.3  | CKD Stage 3                      | 2020-11-15 | active  |
+
+### Visualization
+
+![Chronic Disease Registry Chart](assets/chronic_disease_registry_chart.png)
+
 ## Tips
 
 - To add more conditions, add ICD-10 prefixes to both the `CASE` statement and the `WHERE` clause (e.g., `cc.code LIKE 'E78%'` for hyperlipidemia).

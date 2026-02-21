@@ -52,6 +52,22 @@ WHERE
 | `erx_status` | Electronic prescribing status |
 | `prescriber_name` | Full name of the prescriber |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| MRN    | Patient        | Written    | Medication                   | SIG                          | Qty | Refills | Prescriber       |
+|--------|----------------|------------|------------------------------|------------------------------|----:|--------:|------------------|
+| 100042 | Adams, Karen   | 2026-02-15 | Lisinopril 10mg Tablet       | Take 1 tablet by mouth daily |  30 |       5 | Dr. Sarah Chen   |
+| 100038 | Chen, Robert   | 2026-02-12 | Metformin 500mg Tablet       | Take 1 tablet twice daily    |  60 |       3 | Dr. James Wilson |
+| 100035 | Garcia, Maria  | 2026-02-10 | Albuterol 90mcg Inhaler      | Inhale 2 puffs every 4-6 hrs |   1 |       2 | Dr. Maria Lopez  |
+| 100031 | Johnson, David | 2026-02-08 | Atorvastatin 20mg Tablet     | Take 1 tablet at bedtime     |  30 |       5 | Dr. David Park   |
+| 100028 | Miller, Sarah  | 2026-02-05 | Amoxicillin 500mg Capsule    | Take 1 capsule 3 times daily |  21 |       0 | Dr. Sarah Chen   |
+
+### Visualization
+
+![Completed Prescriptions Chart](assets/completed_prescriptions_chart.png)
+
 ## Notes
 
 - Test patients (last name containing "test") are excluded.

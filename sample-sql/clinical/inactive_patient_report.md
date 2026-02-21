@@ -46,6 +46,23 @@ ORDER BY last_appointment_date ASC NULLS FIRST;
 - Adjust `INTERVAL '6 months'` to any desired threshold (e.g., `'3 months'`, `'12 months'`).
 - Patients who have never had an appointment appear first (sorted with NULLs first).
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Key | Name           | DOB        | Last Appointment    | Days Since |
+|-------------|----------------|------------|---------------------|----------:|
+| PT-10015    | Taylor, Robert |1982-04-12  |                     |           |
+| PT-10019    | Brown, Lisa    |1975-11-28  |                     |           |
+| PT-10023    | Wilson, Mark   |1968-07-03  | 2024-08-15 09:00    |       554 |
+| PT-10027    | Lee, Jennifer  |1990-02-14  | 2025-01-22 14:30    |       394 |
+| PT-10032    | Martinez, Ana  |1985-09-20  | 2025-05-10 10:00    |       286 |
+| PT-10036    | Clark, James   |1958-12-05  | 2025-07-18 11:15    |       217 |
+
+### Visualization
+
+![Inactive Patient Report Chart](assets/inactive_patient_report_chart.png)
+
 ## Notes
 
 - Only considers completed appointments — cancelled and no-showed appointments are excluded.

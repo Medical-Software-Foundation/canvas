@@ -98,6 +98,22 @@ ORDER BY
 | `expiration_date` | Vaccine expiration date (administered only) |
 | `signature` | Original signature (administered only) |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Key | Name          | Type                  | Code  | System | Vaccine                | Date       | Lot        | Manufacturer |
+|-------------|---------------|-----------------------|-------|--------|------------------------|------------|------------|-------------|
+| PT-10042    | Adams, Karen  | Administered          | 197   | CVX    | Influenza, injectable  | 2026-01-15 | FL2026A    | Sanofi      |
+| PT-10042    | Adams, Karen  | Administered          | 213   | CVX    | COVID-19 (Moderna)     | 2025-10-08 | CM2025B    | Moderna     |
+| PT-10038    | Chen, Robert  | Documented (Historical)| 90715 | CPT    | Tdap                   | 2024-06-20 |            |             |
+| PT-10035    | Garcia, Maria | Administered          | 33    | CVX    | Pneumococcal (PCV13)   | 2025-11-12 | PC2025C    | Pfizer      |
+| PT-10031    | Johnson, David| Administered          | 187   | CVX    | Shingrix (RZV)         | 2025-09-05 | SH2025A    | GSK         |
+
+### Visualization
+
+![Immunizations Chart](assets/immunizations_chart.png)
+
 ## Notes
 
 - Historical immunizations will have NULL values for `lot_number`, `manufacturer`, `expiration_date`, and `signature`.
