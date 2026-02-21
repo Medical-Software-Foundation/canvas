@@ -38,6 +38,23 @@ ORDER BY total_appointments DESC;
 | `cancelled` | Cancelled appointments |
 | `no_shows` | No-show appointments |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Type             | Visit Type Name     | Total | Active | Cancelled | No-Shows |
+|------------------|---------------------|------:|-------:|----------:|---------:|
+| Office Visit     | Follow-Up Visit     | 2,145 |  1,925 |       152 |       68 |
+| Office Visit     | New Patient Visit   | 1,100 |    985 |        82 |       33 |
+| Video Visit      | Telehealth Follow-Up|   842 |    758 |        62 |       22 |
+| Telephone Visit  | Phone Check-In      |   456 |    412 |        32 |       12 |
+| Lab Visit        | Lab Draw            |   198 |    182 |        14 |        2 |
+| Home Visit       | Home Health Visit   |    86 |     78 |         6 |        2 |
+
+### Visualization
+
+![Appointments by Type Chart](assets/appointments_by_type_chart.png)
+
 ## Appointment Type Reference
 
 | Code | Label |

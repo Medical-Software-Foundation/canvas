@@ -89,6 +89,24 @@ ORDER BY pct_completed ASC;
 | `no_note` | Appointments with no associated note |
 | `pct_completed` | Percentage of appointments with signed notes |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+### Summary by Provider
+
+| Provider         | Total | Signed | Unsigned | In Progress | No Note | % Completed |
+|------------------|------:|-------:|---------:|------------:|--------:|------------:|
+| Dr. Sarah Chen   |   305 |    285 |       12 |           5 |       3 |       93.4% |
+| Dr. James Wilson |   278 |    248 |       18 |           8 |       4 |       89.2% |
+| Dr. Maria Lopez  |   254 |    212 |       24 |          12 |       6 |       83.5% |
+| Dr. David Park   |   194 |    172 |       14 |           6 |       2 |       88.7% |
+| Dr. Amy Foster   |   142 |    128 |        8 |           4 |       2 |       90.1% |
+
+### Visualization
+
+![Appointment Chart Completion](assets/appointment_chart_completion_chart.png)
+
 ## Reference
 
 | Field | Values |

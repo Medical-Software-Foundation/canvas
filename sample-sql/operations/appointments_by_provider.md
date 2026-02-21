@@ -32,6 +32,22 @@ ORDER BY total_appointments DESC;
 | `no_shows` | No-show appointments |
 | `avg_duration_minutes` | Average appointment duration in minutes |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider         | Total | Active | Cancelled | No-Shows | Avg Duration |
+|------------------|------:|-------:|----------:|---------:|-------------:|
+| Dr. Sarah Chen   | 1,441 |  1,285 |       108 |       48 |         24.5 |
+| Dr. James Wilson | 1,182 |  1,048 |        92 |       42 |         28.2 |
+| Dr. Maria Lopez  | 1,006 |    892 |        78 |       36 |         22.8 |
+| Dr. David Park   |   814 |    724 |        62 |       28 |         26.1 |
+| Dr. Amy Foster   |   618 |    548 |        48 |       22 |         20.4 |
+
+### Visualization
+
+![Appointments by Provider Chart](assets/appointments_by_provider_chart.png)
+
 ## Notes
 
 - Add `AND a.start_time >= '2024-01-01' AND a.start_time < '2025-01-01'` to filter by date range.

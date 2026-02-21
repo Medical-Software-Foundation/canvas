@@ -27,6 +27,23 @@ ORDER BY month;
 | `cancelled` | Cancelled appointments |
 | `no_shows` | No-show appointments |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Month      | Total | Active | Cancelled | No-Shows |
+|------------|------:|-------:|----------:|---------:|
+| 2026-02-01 |   531 |    475 |        40 |       16 |
+| 2026-01-01 |   574 |    508 |        46 |       20 |
+| 2025-12-01 |   494 |    442 |        38 |       14 |
+| 2025-11-01 |   525 |    465 |        42 |       18 |
+| 2025-10-01 |   601 |    525 |        52 |       24 |
+| 2025-09-01 |   541 |    488 |        38 |       15 |
+
+### Visualization
+
+![Appointment Volume Chart](assets/appointment_volume_chart.png)
+
 ## Tips
 
 - Change `'month'` to `'week'` or `'day'` in `DATE_TRUNC` to adjust time granularity.
