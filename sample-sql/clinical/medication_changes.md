@@ -99,6 +99,22 @@ ORDER BY change_date DESC;
 | `directions` | SIG / dosing instructions (NULL for discontinuations) |
 | `rationale` | Reason for discontinuation (NULL for other change types) |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Change Type   | Date       | Medication               | Patient ID | Provider         | Directions                   | Rationale          |
+|---------------|------------|--------------------------|------------|------------------|------------------------------|---------------------|
+| Addition      | 2026-02-14 | Lisinopril 10mg Tablet   |       1042 | Dr. Sarah Chen   | Take 1 tablet daily          |                     |
+| Adjustment    | 2026-02-12 | Metformin 500mg → 1000mg |       1038 | Dr. James Wilson | Take 1 tablet twice daily    |                     |
+| Sig Change    | 2026-02-10 | Atorvastatin 20mg Tablet |       1035 |                  | Take at bedtime (was morning)|                     |
+| Discontinuation| 2026-02-08| Hydrochlorothiazide 25mg |       1031 |                  |                              | Switched to ACE inh |
+| Addition      | 2026-02-05 | Albuterol 90mcg Inhaler  |       1028 | Dr. Maria Lopez  | 2 puffs every 4-6 hrs PRN    |                     |
+
+### Visualization
+
+![Medication Changes Chart](assets/medication_changes_chart.png)
+
 ## Tips
 
 - Adjust `INTERVAL '30 days'` to any desired lookback period.

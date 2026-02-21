@@ -50,6 +50,22 @@ WHERE
 | `representative_ndc` | National Drug Code |
 | `fdbhealth_code` | FDB Health medication code |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Key | Name          | Medication              | SIG                          | Status | Created    | NDC           |
+|-------------|---------------|-------------------------|------------------------------|--------|------------|---------------|
+| PT-10042    | Adams, Karen  | Lisinopril 10mg Tablet  | Take 1 tablet by mouth daily | active | 2025-08-14 | 68180-0513-01 |
+| PT-10038    | Chen, Robert  | Metformin 500mg Tablet  | Take 1 tablet twice daily    | active | 2024-03-22 | 00093-7214-01 |
+| PT-10035    | Garcia, Maria | Albuterol 90mcg Inhaler | Inhale 2 puffs every 4-6 hrs | active | 2025-11-10 | 00173-0682-20 |
+| PT-10031    | Johnson, David| Atorvastatin 20mg Tab   | Take 1 tablet at bedtime     | active | 2024-09-05 | 00378-3952-77 |
+| PT-10028    | Miller, Sarah | Levothyroxine 50mcg Tab | Take 1 tablet every morning  | active | 2025-01-18 | 00781-5072-01 |
+
+### Visualization
+
+![Medications Chart](assets/medications_chart.png)
+
 ## Notes
 
 - The SIG field uses `COALESCE` to pull from the prescription first, falling back to the medication statement.

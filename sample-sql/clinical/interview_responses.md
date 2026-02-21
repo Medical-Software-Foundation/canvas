@@ -39,6 +39,22 @@ ORDER BY
 | `question_name` | Name of the specific question |
 | `response_value` | The response option value selected by the patient |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient ID | Created             | Note ID | Questionnaire      | Question              | Response |
+|-----------:|---------------------|--------:|--------------------|-----------------------|----------|
+|       1042 | 2026-02-15 10:30:00 |    5621 | PHQ-9 Depression   | Little interest?      | 2        |
+|       1042 | 2026-02-15 10:30:00 |    5621 | PHQ-9 Depression   | Feeling down?         | 1        |
+|       1038 | 2026-02-12 14:15:00 |    5598 | GAD-7 Anxiety      | Feeling nervous?      | 3        |
+|       1035 | 2026-02-10 09:00:00 |    5584 | AUDIT-C Alcohol    | How often do you drink?| 1       |
+|       1031 | 2026-02-08 11:45:00 |    5570 | Fall Risk           | Fallen in past year?  | No       |
+
+### Visualization
+
+![Interview Responses Chart](assets/interview_responses_chart.png)
+
 ## Notes
 
 - Each row represents a single question-response pair. An interview with multiple questions will produce multiple rows.
