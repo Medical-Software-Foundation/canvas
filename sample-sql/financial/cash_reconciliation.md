@@ -65,6 +65,24 @@ ORDER BY d.report_date;
 | `total_posted_to_claims` | Total amount actually posted to claims |
 | `unposted_variance` | Difference between collected and posted (unposted amount) |
 
+## Sample Output
+
+*Synthetic data for illustration purposes (last 7 days).*
+
+| Date       | Total Collected | Cash   | Check   | Card    | Other | Payments | Posted to Claims | Variance |
+|------------|----------------:|-------:|--------:|--------:|------:|---------:|-----------------:|---------:|
+| 2026-02-14 |         $4,850  |  $200  | $1,200  | $3,250  |  $200 |        8 |          $4,200  |    $650  |
+| 2026-02-15 |         $3,200  |  $150  | $1,800  | $1,100  |  $150 |        5 |          $3,200  |      $0  |
+| 2026-02-16 |         $5,100  |  $300  | $2,400  | $2,100  |  $300 |       10 |          $4,600  |    $500  |
+| 2026-02-17 |             $0  |    $0  |     $0  |     $0  |    $0 |        0 |              $0  |      $0  |
+| 2026-02-18 |         $4,200  |  $180  | $1,600  | $2,200  |  $220 |        7 |          $3,800  |    $400  |
+| 2026-02-19 |         $6,300  |  $350  | $2,800  | $2,750  |  $400 |       12 |          $5,500  |    $800  |
+| 2026-02-20 |         $2,800  |  $120  |   $900  | $1,600  |  $180 |        4 |          $1,900  |    $900  |
+
+### Visualization
+
+![Cash Reconciliation Chart](assets/cash_reconciliation_chart.png)
+
 ## Tips
 
 - Change `INTERVAL '6 days'` to `'29 days'` for a monthly view, or `'89 days'` for a quarterly view.

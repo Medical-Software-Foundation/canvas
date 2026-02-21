@@ -70,6 +70,29 @@ ORDER BY
 | `charge_total` | Total charges for the month ($0 if no charges) |
 | `month_of_service` | Month and year in "Mon YYYY" format (e.g., "Dec 2024") |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Charge Total | Month of Service |
+|-------------:|------------------|
+|     $88,500  | Jan 2026         |
+|     $74,300  | Dec 2025         |
+|     $91,400  | Nov 2025         |
+|     $81,200  | Oct 2025         |
+|     $85,600  | Sep 2025         |
+|     $79,800  | Aug 2025         |
+|     $82,100  | Jul 2025         |
+|     $74,500  | Jun 2025         |
+|     $78,200  | May 2025         |
+|     $68,900  | Apr 2025         |
+|     $72,400  | Mar 2025         |
+|     $62,100  | Feb 2025         |
+
+### Visualization
+
+![Monthly Charge Totals Chart](assets/monthly_charge_totals_chart.png)
+
 ## Notes
 
 - Claims in the Trash queue are excluded.

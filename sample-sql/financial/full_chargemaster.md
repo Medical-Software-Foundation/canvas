@@ -41,6 +41,25 @@ ORDER BY
 | `payorspecific_charge_enddate` | End date of the payer-specific charge |
 | `payorspecific_charge_capitated` | Whether this charge is part of a capitated set |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| CPT   | Charge Name                    | Charge Amount | Start Date | Payer | Payer Amount | Capitated |
+|-------|--------------------------------|--------------:|------------|-------|-------------:|-----------|
+| 99213 | Established - Low Complexity   |        $130   | 2025-01-01 |       |              |           |
+| 99213 | Established - Low Complexity   |        $130   | 2025-01-01 | BCBS  |       $115   | No        |
+| 99213 | Established - Low Complexity   |        $130   | 2025-01-01 | Aetna |       $120   | No        |
+| 99214 | Established - Moderate         |        $195   | 2025-01-01 |       |              |           |
+| 99214 | Established - Moderate         |        $195   | 2025-01-01 | BCBS  |       $175   | No        |
+| 99215 | Established - Detailed         |        $275   | 2025-01-01 |       |              |           |
+| 99203 | New Patient - Low              |        $185   | 2025-01-01 |       |              |           |
+| 99395 | Preventive 18-39               |        $220   | 2025-01-01 | BCBS  |       $200   | No        |
+
+### Visualization
+
+![Chargemaster Chart](assets/full_chargemaster_chart.png)
+
 ## Notes
 
 - CPT codes without any payer-specific overrides will show NULL values in the payer-specific columns.

@@ -73,6 +73,24 @@ ORDER BY bp.created DESC;
 | `amount_transferred` | Total amount transferred (e.g., between coverages) |
 | `posting_description` | Free-text description on the posting |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Posting Date | Claim # | Patient Name   | Type      | Payer  | Method | Amount Paid | Adjusted | Transferred |
+|--------------|---------|----------------|-----------|--------|--------|------------:|---------:|------------:|
+| 2026-02-20   | CLM-1042 | Martinez, Ana | Insurance | BCBS   | check  |     $1,850  |    $250  |         $0  |
+| 2026-02-20   | CLM-1042 | Martinez, Ana | Patient   |        | card   |       $150  |      $0  |         $0  |
+| 2026-02-19   | CLM-1038 | Thompson, John| Insurance | Aetna  | check  |     $1,420  |    $180  |       $200  |
+| 2026-02-19   | CLM-1035 | Williams, K.  | Insurance | UHC    | check  |     $1,680  |    $320  |         $0  |
+| 2026-02-18   | CLM-1031 | Nguyen, David | Insurance | MCR    | check  |     $1,100  |    $400  |         $0  |
+| 2026-02-18   | CLM-1031 | Nguyen, David | Patient   |        | cash   |       $150  |      $0  |         $0  |
+| 2026-02-17   | CLM-1028 | Brown, Lisa   | Patient   |        | card   |       $200  |      $0  |         $0  |
+
+### Visualization
+
+![Payment Posting Chart](assets/payment_posting_chart.png)
+
 ## Notes
 
 - Only valid postings are included (entered-in-error postings are excluded).

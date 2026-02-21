@@ -63,6 +63,25 @@ GROUP BY
 | `patient_key` | Unique patient identifier |
 | `total_patient_balance` | Sum of patient balances across all qualifying claims |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Key | Total Patient Balance |
+|-------------|----------------------:|
+| PAT-001     |              $4,250   |
+| PAT-002     |              $3,180   |
+| PAT-003     |              $2,640   |
+| PAT-004     |              $2,100   |
+| PAT-005     |              $1,850   |
+| PAT-006     |              $1,420   |
+| PAT-007     |                $980   |
+| PAT-008     |                $620   |
+
+### Visualization
+
+![Patient Balance Chart](assets/patient_balance_chart.png)
+
 ## Notes
 
 - Claims in the Trash and ZeroBalance queues are excluded.
