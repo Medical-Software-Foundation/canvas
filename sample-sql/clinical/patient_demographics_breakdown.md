@@ -77,6 +77,51 @@ ORDER BY patient_count DESC;
 | `ethnicity` | Individual ethnicity value |
 | `patient_count` | Number of active patients with that ethnicity |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+### Age Distribution
+
+| Age Group | Patients |
+|-----------|--------:|
+| 0-17      |     142 |
+| 18-34     |     198 |
+| 35-49     |     285 |
+| 50-64     |     310 |
+| 65+       |     189 |
+
+### Sex Distribution
+
+| Sex at Birth | Patients |
+|-------------|--------:|
+| Female       |     612 |
+| Male         |     485 |
+| Other        |      27 |
+
+### Race Distribution
+
+| Race     | Patients |
+|----------|--------:|
+| White    |     485 |
+| Black    |     198 |
+| Hispanic |     156 |
+| Asian    |     112 |
+| Other    |      98 |
+| Unknown  |      75 |
+
+### Ethnicity Distribution
+
+| Ethnicity        | Patients |
+|-----------------|--------:|
+| Non-Hispanic     |     742 |
+| Hispanic/Latino  |     312 |
+| Unknown          |      70 |
+
+### Visualization
+
+![Patient Demographics Breakdown Chart](assets/patient_demographics_breakdown_chart.png)
+
 ## Notes
 
 - Race and ethnicity are stored as arrays — a patient with multiple values will appear in multiple rows. Use `UNNEST` to expand them.

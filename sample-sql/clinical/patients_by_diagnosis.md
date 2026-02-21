@@ -28,6 +28,27 @@ ORDER BY patient_count DESC;
 | `diagnosis_description` | Display name of the diagnosis |
 | `patient_count` | Number of unique patients with this active diagnosis |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| ICD-10 | Diagnosis                          | Patients |
+|--------|-------------------------------------|--------:|
+| I10    | Essential hypertension              |     298 |
+| E11.65 | Type 2 DM with hyperglycemia        |     215 |
+| E78.5  | Hyperlipidemia, unspecified          |     198 |
+| J45.20 | Mild intermittent asthma            |     142 |
+| F41.1  | Generalized anxiety disorder        |     128 |
+| E03.9  | Hypothyroidism, unspecified          |     112 |
+| M54.5  | Low back pain                       |      98 |
+| K21.0  | GERD with esophagitis               |      86 |
+| G47.33 | Obstructive sleep apnea             |      74 |
+| F32.9  | Major depressive disorder           |      68 |
+
+### Visualization
+
+![Patients by Diagnosis Chart](assets/patients_by_diagnosis_chart.png)
+
 ## Notes
 
 - Only ICD-10 coded conditions are included (each condition can have multiple coding systems).

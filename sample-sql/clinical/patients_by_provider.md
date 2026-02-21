@@ -41,6 +41,22 @@ GROUP BY s.id, s.first_name, s.last_name
 ORDER BY panel_size DESC;
 ```
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider ID | Provider Name    | Panel Size |
+|-------------|------------------|----------:|
+|           1 | Dr. Sarah Chen   |       312 |
+|           2 | Dr. James Wilson |       268 |
+|           3 | Dr. Maria Lopez  |       224 |
+|           4 | Dr. David Park   |       186 |
+|           5 | Dr. Amy Foster   |       134 |
+
+### Visualization
+
+![Patients by Provider Chart](assets/patients_by_provider_chart.png)
+
 ## Notes
 
 - Panel size is based on the `default_provider_id` field on the patient record, not on appointment history.

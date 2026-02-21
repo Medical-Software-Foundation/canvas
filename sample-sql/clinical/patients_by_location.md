@@ -41,6 +41,21 @@ GROUP BY loc.id, loc.full_name
 ORDER BY patient_count DESC;
 ```
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Location ID | Location Name       | Patients |
+|-------------|---------------------|--------:|
+|           1 | Main Street Clinic  |     420 |
+|           4 | North Campus        |     224 |
+|           2 | Downtown Medical    |     285 |
+|           3 | Westside Health     |     195 |
+
+### Visualization
+
+![Patients by Location Chart](assets/patients_by_location_chart.png)
+
 ## Notes
 
 - Distribution is based on the `default_location_id` field on the patient record, not on appointment location history.

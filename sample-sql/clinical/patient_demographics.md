@@ -53,6 +53,21 @@ GROUP BY
 | `mobile_phone` | Mobile phone number |
 | `email_address` | Email address |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Status | Patient Key | Name          | Preferred | DOB        | MRN    | Sex | Address                            | Mobile       | Email                   |
+|--------|-------------|---------------|-----------|------------|--------|-----|------------------------------------|--------------|-------------------------|
+| Active | PT-10042    | Karen Adams   | Karen     | 1985-03-14 | 100042 | F   | 123 Oak St, Springfield, IL 62704  | 555-0142     | kadams@email.com        |
+| Active | PT-10038    | Robert Chen   |           | 1952-11-22 | 100038 | M   | 456 Elm Ave, Springfield, IL 62701 | 555-0138     | rchen@email.com         |
+| Active | PT-10035    | Maria Garcia  | Mari      | 1990-07-08 | 100035 | F   | 789 Pine Rd, Springfield, IL 62702 | 555-0135     |                         |
+| Active | PT-10031    | David Johnson |           | 1968-01-30 | 100031 | M   | 321 Maple Dr, Springfield, IL 62703| 555-0131     | djohnson@email.com      |
+
+### Visualization
+
+![Patient Demographics Chart](assets/patient_demographics_chart.png)
+
 ## Notes
 
 - Test patients (names containing "zztest") are excluded.

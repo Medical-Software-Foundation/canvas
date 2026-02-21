@@ -78,6 +78,24 @@ WHERE p.active = TRUE
 | `pip` | Personal Injury |
 | `other` | Other |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Insurance Type       | Patients |
+|---------------------|--------:|
+| Commercial           |     385 |
+| Medicare             |     248 |
+| Blue Cross Blue Shield|    198 |
+| Medicaid             |     142 |
+| Self-Pay             |      87 |
+| Tricare/Champus      |      56 |
+| Other                |      28 |
+
+### Visualization
+
+![Patients by Insurance Chart](assets/patients_by_insurance_chart.png)
+
 ## Notes
 
 - Active coverage requires `state = 'active'`, `stack = 'IN_USE'`, a start date on or before today, and either no end date or an end date on or after today.
