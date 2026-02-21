@@ -31,6 +31,22 @@ ORDER BY total_referrals DESC;
 | `pending` | Referrals not yet committed (finalized) |
 | `completed` | Referrals that have been committed |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Specialty        | Specialist        | Practice            | Total | Pending | Completed |
+|------------------|-------------------|---------------------|------:|--------:|----------:|
+| Cardiology       | Dr. Kim, John     | Heart Center        |   142 |       8 |       134 |
+| Orthopedics      | Dr. Patel, Anita  | Joint Specialists   |   118 |       6 |       112 |
+| Dermatology      | Dr. Lee, Susan    | Skin Care Clinic    |    98 |       5 |        93 |
+| Endocrinology    | Dr. Nguyen, Tran  | Diabetes Center     |    76 |       4 |        72 |
+| Neurology        | Dr. Brown, Michael| Neuro Associates    |    64 |       3 |        61 |
+
+### Visualization
+
+![Referral Source Chart](assets/referral_source_chart.png)
+
 ## Notes
 
 - **Important:** Canvas does not store a "referral source" field on patients (e.g., "referred by Dr. Smith" or "found us on Google"). There is no table or column tracking where new patients were referred *from*. This report shows **outgoing** referral patterns — which specialists your practice refers patients **to**.

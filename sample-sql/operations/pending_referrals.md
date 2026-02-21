@@ -55,6 +55,21 @@ ORDER BY r.date_referred DESC;
 | `latest_fax_event` | Timestamp of the most recent fax action event |
 | `fax_delivered` | Whether the referral was successfully delivered by fax (TRUE/FALSE) |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Ref ID | Patient        | Key      | Specialist        | Specialty    | Practice            | Priority | Date       | Status    | Fax |
+|-------:|----------------|----------|-------------------|-------------|---------------------|----------|------------|-----------|:---:|
+|    245 | Karen Adams    | PT-10042 | Dr. Kim, John     | Cardiology  | Heart Center        | Routine  | 2026-02-18 | New       |     |
+|    242 | Robert Chen    | PT-10038 | Dr. Patel, Anita  | Orthopedics | Joint Specialists   | Urgent   | 2026-02-15 | Forwarded | Yes |
+|    240 | Maria Garcia   | PT-10035 | Dr. Lee, Susan    | Dermatology | Skin Care Clinic    | Routine  | 2026-02-12 | New       |     |
+|    238 | David Johnson  | PT-10031 | Dr. Nguyen, Tran  | Endocrinology| Diabetes Center    | Routine  | 2026-02-10 | Forwarded | No  |
+
+### Visualization
+
+![Pending Referrals Chart](assets/pending_referrals_chart.png)
+
 ## Notes
 
 - A referral is considered "pending" when `committer_id IS NULL` (not yet finalized by the provider).

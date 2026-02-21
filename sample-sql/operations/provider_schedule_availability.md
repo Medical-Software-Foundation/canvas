@@ -32,6 +32,22 @@ ORDER BY appointment_date, provider_name;
 | `booked_minutes` | Total booked minutes |
 | `estimated_free_minutes` | Estimated free time remaining (480 minus booked, minimum 0) |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider         | Date       | Booked Appts | Booked Min | Free Min |
+|------------------|------------|------------:|-----------:|---------:|
+| Dr. Sarah Chen   | 2026-02-21 |          14 |        385 |       95 |
+| Dr. James Wilson | 2026-02-21 |          16 |        420 |       60 |
+| Dr. Maria Lopez  | 2026-02-21 |          12 |        310 |      170 |
+| Dr. David Park   | 2026-02-21 |          13 |        345 |      135 |
+| Dr. Amy Foster   | 2026-02-21 |          10 |        265 |      215 |
+
+### Visualization
+
+![Provider Schedule Availability Chart](assets/provider_schedule_availability_chart.png)
+
 ## Notes
 
 - Canvas does not store provider schedule templates (available hours) in a dedicated table, so "free minutes" is estimated by subtracting booked time from a configurable workday length.

@@ -47,6 +47,21 @@ ORDER BY
 | `referred_to_practice` | Practice name of the referred-to provider |
 | `referred_to_speciality` | Specialty of the referred-to provider |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Date       | Clinical Question                  | Priority | Patient        | MRN    | Referred To       | Practice            | Specialty    |
+|------------|-----------------------------------|----------|----------------|--------|-------------------|---------------------|-------------|
+| 2026-02-18 | Evaluate chest pain on exertion   | Urgent   | Karen Adams    | 100042 | Dr. Kim, John     | Heart Center        | Cardiology  |
+| 2026-02-15 | R knee pain, MRI recommended      | Routine  | Robert Chen    | 100038 | Dr. Patel, Anita  | Joint Specialists   | Orthopedics |
+| 2026-02-12 | Persistent rash, unresponsive     | Routine  | Maria Garcia   | 100035 | Dr. Lee, Susan    | Skin Care Clinic    | Dermatology |
+| 2026-02-10 | Poorly controlled A1c, needs mgmt | Routine  | David Johnson  | 100031 | Dr. Nguyen, Tran  | Diabetes Center     | Endocrinology|
+
+### Visualization
+
+![Referrals Chart](assets/referrals_chart.png)
+
 ## Notes
 
 - Referrals created by Canvas Support (originator_id = 2) are excluded.

@@ -42,6 +42,22 @@ ORDER BY provider_name, location_name;
 | `next_available_slot` | Date/time of the earliest open appointment slot |
 | `days_until_available` | Number of days from now until that slot |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider         | Location       | Next Slot           | Days |
+|------------------|----------------|---------------------|-----:|
+| Dr. Maria Lopez  | Westside       | 2026-02-22 09:00:00 |  1.5 |
+| Dr. Amy Foster   | Downtown       | 2026-02-22 14:00:00 |  2.1 |
+| Dr. Sarah Chen   | Main Street    | 2026-02-23 10:30:00 |  3.2 |
+| Dr. David Park   | North Campus   | 2026-02-24 11:00:00 |  4.2 |
+| Dr. James Wilson | Downtown       | 2026-02-26 09:00:00 |  5.8 |
+
+### Visualization
+
+![Time to Next Available Chart](assets/time_to_next_available_chart.png)
+
 ## Notes
 
 - This looks for future appointment slots with no patient assigned (open/available).

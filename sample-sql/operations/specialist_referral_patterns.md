@@ -36,6 +36,22 @@ ORDER BY referring_provider, referral_count DESC;
 | `first_referral` | Date of the earliest referral in this pair |
 | `most_recent_referral` | Date of the most recent referral in this pair |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Referring Provider | Specialty     | Specialist        | Practice          | Count | First      | Most Recent |
+|-------------------|---------------|-------------------|-------------------|------:|------------|-------------|
+| Dr. Sarah Chen    | Cardiology    | Dr. Kim, John     | Heart Center      |    38 | 2024-03-15 | 2026-02-18  |
+| Dr. James Wilson  | Orthopedics   | Dr. Patel, Anita  | Joint Specialists |    32 | 2024-05-22 | 2026-02-15  |
+| Dr. Sarah Chen    | Dermatology   | Dr. Lee, Susan    | Skin Care Clinic  |    28 | 2024-06-10 | 2026-02-12  |
+| Dr. Maria Lopez   | Endocrinology | Dr. Nguyen, Tran  | Diabetes Center   |    24 | 2024-08-05 | 2026-02-10  |
+| Dr. David Park    | Cardiology    | Dr. Kim, John     | Heart Center      |    22 | 2024-09-18 | 2026-02-08  |
+
+### Visualization
+
+![Specialist Referral Patterns Chart](assets/specialist_referral_patterns_chart.png)
+
 ## Notes
 
 - The referring provider is identified via the clinical note associated with the referral (`api_note.provider_id`).

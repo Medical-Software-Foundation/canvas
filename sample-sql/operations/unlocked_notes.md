@@ -46,6 +46,23 @@ WHERE
 | `originator_name` | Name of the staff member who originated the note |
 | `provider_name` | Name of the provider on the note |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Created             | DOS        | State | Location       | Originator       | Provider         |
+|---------------------|------------|-------|----------------|------------------|------------------|
+| 2026-02-19 16:30:00 | 2026-02-19 | PSH   | Main Street    | Dr. Sarah Chen   | Dr. Sarah Chen   |
+| 2026-02-18 14:15:00 | 2026-02-18 | NEW   | Downtown       | Dr. James Wilson | Dr. James Wilson |
+| 2026-02-17 09:45:00 | 2026-02-17 | PSH   | Westside       | Dr. Maria Lopez  | Dr. Maria Lopez  |
+| 2026-02-15 11:00:00 | 2026-02-15 | NEW   | North Campus   | Dr. David Park   | Dr. David Park   |
+| 2026-02-12 10:30:00 | 2026-02-12 | PSH   | Main Street    | MA Johnson       | Dr. Sarah Chen   |
+| 2026-02-10 08:00:00 | 2026-02-10 | NEW   | Downtown       | MA Smith         | Dr. James Wilson |
+
+### Visualization
+
+![Unlocked Notes Chart](assets/unlocked_notes_chart.png)
+
 ## Notes
 
 - Only the most recent state change event is used to determine the current note state.
