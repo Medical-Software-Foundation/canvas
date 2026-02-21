@@ -43,6 +43,23 @@ ORDER BY
 | `allergy_codesystem` | Code system used (FDB Health) |
 | `fdb_code` | Combined category and FDB Health code |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Recorded   | Type        | Allergen         | Severity | Reaction               | FDB Code    |
+|------------|-------------|------------------|----------|------------------------|-------------|
+| 2026-02-12 | Allergy     | Penicillin       | High     | Anaphylaxis            | DRUG-12345  |
+| 2026-02-10 | Allergy     | Sulfonamides     | Moderate | Rash, hives            | DRUG-23456  |
+| 2026-02-08 | Intolerance | Ibuprofen        | Low      | GI upset               | DRUG-34567  |
+| 2026-01-28 | Allergy     | Codeine          | High     | Respiratory distress   | DRUG-45678  |
+| 2026-01-25 | Allergy     | Latex            | Moderate | Contact dermatitis     | ENVR-56789  |
+| 2026-01-20 | Intolerance | Aspirin          | Low      | Stomach pain           | DRUG-67890  |
+
+### Visualization
+
+![Allergies Chart](assets/allergies_chart.png)
+
 ## Notes
 
 - Only records coded in the FDB Health system (`http://www.fdbhealth.com/`) are included.

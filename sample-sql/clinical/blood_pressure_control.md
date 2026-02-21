@@ -75,6 +75,23 @@ ORDER BY p.last_name, p.first_name;
 | Stage 1 Hypertension | 130–139 mmHg | **or** 80–89 mmHg |
 | Stage 2 Hypertension | ≥ 140 mmHg | **or** ≥ 90 mmHg |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient        | Systolic | Diastolic | Date       | Category              | Meets Target |
+|----------------|--------:|---------:|------------|----------------------|:------------:|
+| Adams, Karen   |     118 |       76 | 2026-02-10 | Normal                |     Yes      |
+| Chen, Robert   |     152 |       88 | 2026-02-08 | Stage 2 Hypertension  |     No       |
+| Garcia, Maria  |     124 |       78 | 2026-02-12 | Elevated              |     Yes      |
+| Johnson, David |     136 |       84 | 2026-02-05 | Stage 1 Hypertension  |     Yes      |
+| Miller, Sarah  |     110 |       72 | 2026-02-14 | Normal                |     Yes      |
+| Park, James    |     142 |       92 | 2026-02-11 | Stage 2 Hypertension  |     No       |
+
+### Visualization
+
+![Blood Pressure Control Chart](assets/blood_pressure_control_chart.png)
+
 ## Notes
 
 - Systolic and diastolic readings are paired from the **same visit/reading** (`reading_id` match) to ensure accurate classification.

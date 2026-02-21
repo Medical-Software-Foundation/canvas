@@ -45,6 +45,23 @@ ORDER BY p.last_name, p.first_name;
 | `default_provider` | Assigned default provider's full name |
 | `default_location` | Assigned default practice location |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Key | Name           | DOB        | Age | Sex | Provider        | Location       |
+|-------------|----------------|------------|----:|-----|-----------------|----------------|
+| PT-10042    | Adams, Karen   | 1985-03-14 |  40 | F   | Dr. Sarah Chen  | Main Street    |
+| PT-10038    | Chen, Robert   | 1952-11-22 |  73 | M   | Dr. James Wilson| Downtown       |
+| PT-10035    | Garcia, Maria  | 1990-07-08 |  35 | F   | Dr. Maria Lopez | Westside       |
+| PT-10031    | Johnson, David | 1968-01-30 |  58 | M   | Dr. David Park  | North Campus   |
+| PT-10028    | Miller, Sarah  | 2010-05-19 |  15 | F   | Dr. Sarah Chen  | Main Street    |
+| PT-10024    | Park, James    | 1975-09-03 |  50 | M   | Dr. James Wilson| Downtown       |
+
+### Visualization
+
+![Active Patient List Chart](assets/active_patient_list_chart.png)
+
 ## Notes
 
 - Patients still being built in the system are excluded via `under_construction = FALSE`.

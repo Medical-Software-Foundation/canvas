@@ -58,6 +58,23 @@ ORDER BY bmi_category;
 | Obese Class II | 35 – 39.9 |
 | Obese Class III | ≥ 40 |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| BMI Category                  | Patients | % of Total |
+|-------------------------------|--------:|-----------:|
+| 1 - Underweight (< 18.5)     |      24 |       3.0% |
+| 2 - Normal (18.5–24.9)       |     285 |      35.5% |
+| 3 - Overweight (25–29.9)     |     248 |      30.9% |
+| 4 - Obese Class I (30–34.9)  |     142 |      17.7% |
+| 5 - Obese Class II (35–39.9) |      68 |       8.5% |
+| 6 - Obese Class III (≥ 40)   |      35 |       4.4% |
+
+### Visualization
+
+![BMI Distribution Chart](assets/bmi_distribution_chart.png)
+
 ## Notes
 
 - Uses each patient's **most recent** BMI reading only.

@@ -91,6 +91,25 @@ ORDER BY last_name, first_name, sign;
 | Respiration Rate | < 12 breaths/min | > 20 breaths/min |
 | BMI | < 18.5 (underweight) | >= 30 (obese) |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient          | Vital Type   | Value  | Units  | Date       | Abnormality              |
+|------------------|-------------|-------:|--------|------------|--------------------------|
+| Adams, Karen     | bmi         |  32.4  |        | 2026-02-10 | Obese (BMI >= 30)        |
+| Chen, Robert     | systole     |   152  | mmHg   | 2026-02-08 | High Systolic BP (> 140) |
+| Garcia, Maria    | pulse       |   108  | bpm    | 2026-02-12 | Tachycardia (> 100)      |
+| Johnson, David   | oxygen_sat  |    92  | %      | 2026-02-05 | Low O2 Saturation (< 95%)|
+| Miller, Sarah    | body_temp   | 101.2  | °F     | 2026-02-14 | Fever (> 100.4°F)        |
+| Park, James      | diastole    |    94  | mmHg   | 2026-02-11 | High Diastolic BP (> 90) |
+| Wilson, Emily    | bmi         |  17.8  |        | 2026-01-28 | Underweight (BMI < 18.5) |
+| Young, Michael   | pulse       |    52  | bpm    | 2026-02-09 | Bradycardia (< 60)       |
+
+### Visualization
+
+![Abnormal Vitals Chart](assets/abnormal_vitals_chart.png)
+
 ## Notes
 
 - Only each patient's **most recent** reading per vital type is evaluated.

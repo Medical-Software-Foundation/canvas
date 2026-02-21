@@ -63,6 +63,23 @@ ORDER BY
 | `coverage_end_date` | End date of the coverage (NULL indicates active coverage) |
 | `team_lead` | Name of the patient's care team lead |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Key | Name          | Coverage      | Type       | Rank    | Team Lead       |
+|-------------|---------------|---------------|------------|---------|-----------------|
+| PT-10042    | Adams, Karen  | Blue Cross PPO| Commercial | Primary | Dr. Sarah Chen  |
+| PT-10038    | Chen, Robert  | Medicare A&B  | Medicare   | Primary | Dr. James Wilson|
+| PT-10035    | Garcia, Maria | Medicaid      | Medicaid   | Primary | Dr. Maria Lopez |
+| PT-10031    | Johnson, David| Aetna HMO     | Commercial | Primary | Dr. David Park  |
+| PT-10028    | Miller, Sarah | Tricare Prime | Tricare    | Primary | Dr. Sarah Chen  |
+| PT-10024    | Park, James   | UHC PPO       | Commercial | Primary | Dr. James Wilson|
+
+### Visualization
+
+![Active Coverages Chart](assets/active_coverages_chart.png)
+
 ## Notes
 
 - Results are sorted by patient key descending (most recent patients first).
