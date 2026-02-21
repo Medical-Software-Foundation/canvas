@@ -38,3 +38,20 @@ ORDER BY times_prescribed DESC;
 | `unique_prescribers` | Number of distinct prescribers who prescribed it |
 | `avg_dispense_qty` | Average dispense quantity |
 | `avg_duration_days` | Average prescription duration in days |
+
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Medication            | NDC           | Prescribed | Patients | Prescribers | Avg Qty | Avg Days |
+|-----------------------|---------------|----------:|---------:|------------:|--------:|---------:|
+| Lisinopril 10mg Tab   | 68180-0513-01 |       285 |      198 |           4 |    30.0 |     30.0 |
+| Metformin 500mg Tab   | 00093-7214-01 |       248 |      172 |           4 |    60.0 |     30.0 |
+| Atorvastatin 20mg Tab | 00378-3952-77 |       224 |      168 |           5 |    30.0 |     30.0 |
+| Levothyroxine 50mcg   | 00781-5072-01 |       186 |      142 |           3 |    30.0 |     30.0 |
+| Amlodipine 5mg Tab    | 00093-3171-01 |       168 |      128 |           4 |    30.0 |     30.0 |
+| Omeprazole 20mg Cap   | 00093-5288-01 |       152 |      112 |           4 |    30.0 |     30.0 |
+
+### Visualization
+
+![Prescriptions by Drug Chart](assets/prescriptions_by_drug_chart.png)

@@ -53,6 +53,23 @@ LEFT JOIN public.api_responseoptionset ar ON q.response_option_set_id = ar.id;
 | `response_code_system` | Code system for the response |
 | `response_code` | Code for the response |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Status | Questionnaire  | Command    | Question               | Response Set     | Response Type    |
+|--------|----------------|------------|------------------------|------------------|------------------|
+| Active | PHQ-9          | phq9       | Little interest?       | PHQ Frequency    | Multiple Choice  |
+| Active | PHQ-9          | phq9       | Feeling down?          | PHQ Frequency    | Multiple Choice  |
+| Active | GAD-7          | gad7       | Feeling nervous?       | GAD Frequency    | Multiple Choice  |
+| Active | AUDIT-C        | auditc     | How often do you drink?| AUDIT Frequency  | Multiple Choice  |
+| Active | Fall Risk      | fallrisk   | Fallen in past year?   | Yes/No           | Multiple Choice  |
+| Inactive| Legacy Pain   |            | Rate your pain (0-10)  | Numeric Scale    | Numeric          |
+
+### Visualization
+
+![Questionnaire Questions Responses Chart](assets/questionnaire_questions_responses_chart.png)
+
 ## Notes
 
 - This shows the questionnaire *configuration* (available questions and options), not patient responses. For actual patient responses, see `interview_responses.sql`.

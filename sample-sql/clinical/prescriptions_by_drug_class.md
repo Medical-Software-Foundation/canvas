@@ -32,6 +32,23 @@ ORDER BY total_prescriptions DESC;
 | `unique_patients` | Number of distinct patients prescribed drugs in this class |
 | `unique_prescribers` | Number of distinct prescribers |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Therapeutic Class Path                          | Prescriptions | Drugs | Patients | Prescribers |
+|-------------------------------------------------|-------------:|------:|---------:|------------:|
+| Cardiovascular > Antihypertensives > ACE Inh.   |          412 |     6 |      285 |           5 |
+| Endocrine > Antidiabetics > Biguanides          |          356 |     3 |      248 |           4 |
+| Cardiovascular > Antilipemics > HMG-CoA Reductase|         298 |     5 |      224 |           5 |
+| Endocrine > Thyroid Hormones                    |          198 |     4 |      186 |           3 |
+| Cardiovascular > Calcium Channel Blockers       |          172 |     4 |      142 |           4 |
+| Gastrointestinal > Proton Pump Inhibitors       |          156 |     3 |      128 |           4 |
+
+### Visualization
+
+![Prescriptions by Drug Class Chart](assets/prescriptions_by_drug_class_chart.png)
+
 ## Notes
 
 - The `etc_path_name` column is an array showing the full class hierarchy.

@@ -35,3 +35,19 @@ ORDER BY total_prescriptions DESC;
 | `adjustments` | Count of dosage adjustment prescriptions |
 | `unique_medications` | Number of distinct medications prescribed |
 | `epcs_prescriptions` | Count of electronic prescriptions for controlled substances |
+
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider         | Total Rx | Patients | Refills | Adjustments | Unique Meds | EPCS |
+|------------------|--------:|---------:|--------:|------------:|------------:|-----:|
+| Dr. Sarah Chen   |     555 |      312 |     142 |          28 |          85 |   18 |
+| Dr. James Wilson |     454 |      268 |     118 |          24 |          72 |   14 |
+| Dr. Maria Lopez  |     384 |      224 |      98 |          18 |          68 |   10 |
+| Dr. David Park   |     286 |      198 |      76 |          12 |          54 |    8 |
+| Dr. Amy Foster   |     222 |      156 |      58 |           8 |          42 |    6 |
+
+### Visualization
+
+![Prescriptions by Provider Chart](assets/prescriptions_by_provider_chart.png)

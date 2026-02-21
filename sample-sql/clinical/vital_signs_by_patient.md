@@ -41,6 +41,25 @@ ORDER BY p.last_name, p.first_name, vs.sign, vs.date_recorded DESC;
 | `units` | Unit of measure |
 | `date_recorded` | Date/time the vital sign was recorded |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Key | Name          | Vital       | Value | Units  | Date       |
+|-------------|---------------|-------------|------:|--------|------------|
+| PT-10042    | Adams, Karen  | systole     |   126 | mmHg   | 2026-02-10 |
+| PT-10042    | Adams, Karen  | systole     |   128 | mmHg   | 2026-01-15 |
+| PT-10042    | Adams, Karen  | systole     |   134 | mmHg   | 2025-12-08 |
+| PT-10042    | Adams, Karen  | diastole    |    78 | mmHg   | 2026-02-10 |
+| PT-10042    | Adams, Karen  | weight      |  2976 | oz     | 2026-02-10 |
+| PT-10042    | Adams, Karen  | bmi         |  26.4 |        | 2026-02-10 |
+| PT-10038    | Chen, Robert  | systole     |   148 | mmHg   | 2026-02-08 |
+| PT-10038    | Chen, Robert  | pulse       |    72 | bpm    | 2026-02-08 |
+
+### Visualization
+
+![Vital Signs by Patient Chart](assets/vital_signs_by_patient_chart.png)
+
 ## Notes
 
 - Only committed readings are included (`committer_id IS NOT NULL`, `entered_in_error_id IS NULL`, `deleted = FALSE`).

@@ -33,6 +33,23 @@ ORDER BY written_date;
 | `refills` | Count of refill prescriptions |
 | `adjustments` | Count of dosage adjustment prescriptions |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Written Date | Total Rx | Patients | Prescribers | Refills | Adjustments |
+|--------------|--------:|---------:|------------:|--------:|------------:|
+| 2026-02-20   |      38 |       32 |           4 |      12 |           3 |
+| 2026-02-19   |      52 |       44 |           5 |      16 |           4 |
+| 2026-02-18   |      46 |       38 |           4 |      14 |           2 |
+| 2026-02-17   |      10 |        8 |           2 |       4 |           0 |
+| 2026-02-16   |      15 |       12 |           2 |       5 |           1 |
+| 2026-02-15   |      40 |       34 |           4 |      12 |           3 |
+
+### Visualization
+
+![Prescriptions Written Chart](assets/prescriptions_written_chart.png)
+
 ## Notes
 
 - Replace `:start_date` / `:end_date` with your desired date range (e.g., `'2024-01-01'`).
