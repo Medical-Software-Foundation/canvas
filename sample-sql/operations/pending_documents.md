@@ -81,6 +81,22 @@ ORDER BY source.priority DESC, source.uploaded_date ASC;
 | `patient_name` | Patient's full name |
 | `patient_key` | Patient MRN / external key |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Type                      | ID   | Name                   | Original   | Uploaded   | Priority | Patient        | Key      |
+|---------------------------|-----:|------------------------|------------|------------|:--------:|----------------|----------|
+| Lab Report                | 3245 | CBC with Differential  | 2026-02-18 | 2026-02-19 | FALSE    | Karen Adams    | PT-10042 |
+| Lab Report                | 3242 | Comprehensive Metabolic| 2026-02-17 | 2026-02-18 | TRUE     | Robert Chen    | PT-10038 |
+| Uncategorized Clinical Doc| 3240 | Scanned document       | 2026-02-15 | 2026-02-16 | FALSE    | Maria Garcia   | PT-10035 |
+| Imaging Report            | 3238 | Chest X-Ray            | 2026-02-14 | 2026-02-15 | FALSE    | David Johnson  | PT-10031 |
+| Referral Report           | 3235 | Cardiology Consult     | 2026-02-12 | 2026-02-13 | TRUE     | James Park     | PT-10024 |
+
+### Visualization
+
+![Pending Documents Chart](assets/pending_documents_chart.png)
+
 ## Notes
 
 - A document is "pending review" when `review_mode = 'RR'` (Review Required) and no review record is linked (`review_id IS NULL`).

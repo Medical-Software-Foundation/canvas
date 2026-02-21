@@ -29,6 +29,23 @@ ORDER BY document_count DESC;
 | `earliest_date` | Date of the oldest document in this group |
 | `latest_date` | Date of the most recent document in this group |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Document Type    | Category        | Count | Earliest   | Latest     |
+|------------------|-----------------|------:|------------|------------|
+| Clinical Note    | Progress Note   | 2,845 | 2023-01-04 | 2026-02-20 |
+| Lab Result       | Laboratory      | 1,542 | 2023-02-15 | 2026-02-19 |
+| Imaging Report   | Radiology       |   856 | 2023-06-22 | 2026-02-18 |
+| Referral Report  | Specialty       |   642 | 2023-08-10 | 2026-02-17 |
+| Consent Form     | Administrative  |   398 | 2024-01-05 | 2026-02-15 |
+| Insurance Card   | N/A             |   285 | 2024-03-12 | 2026-02-14 |
+
+### Visualization
+
+![Documents by Type Chart](assets/documents_by_type_chart.png)
+
 ## Notes
 
 - Only documents with status `'current'` are included (excludes superseded or entered-in-error records).

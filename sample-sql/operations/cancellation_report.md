@@ -48,6 +48,21 @@ ORDER BY cancel_event.created DESC;
 | `appointment_reason` | User-selected appointment reason, if recorded |
 | `cancelled_at` | Timestamp when the cancellation occurred |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Appt ID | Patient        | Provider         | Location       | Scheduled           | Duration | Reason        | Cancelled At        |
+|--------:|----------------|------------------|----------------|---------------------|--------:|---------------|---------------------|
+|    8542 | Karen Adams    | Dr. Sarah Chen   | Main Street    | 2026-02-20 09:00:00 |      30 | Follow-Up     | 2026-02-19 14:30:00 |
+|    8538 | Robert Chen    | Dr. James Wilson | Downtown       | 2026-02-19 14:00:00 |      30 | New Patient   | 2026-02-18 10:15:00 |
+|    8535 | Maria Garcia   | Dr. Maria Lopez  | Westside       | 2026-02-18 10:30:00 |      20 |               | 2026-02-17 16:00:00 |
+|    8531 | David Johnson  | Dr. David Park   | North Campus   | 2026-02-17 11:00:00 |      30 | Annual Exam   | 2026-02-16 09:45:00 |
+
+### Visualization
+
+![Cancellation Report Chart](assets/cancellation_report_chart.png)
+
 ## Notes
 
 - Cancellations are identified by the most recent note state being `'CLD'` (Cancelled).

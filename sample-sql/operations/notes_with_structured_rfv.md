@@ -41,6 +41,21 @@ ORDER BY n.datetime_of_service DESC;
 | `rfv_code` | Reason for visit code |
 | `rfv_display` | Display text for the reason for visit |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Patient Link          | Patient        | DOB        | DOS                 | Note ID | Provider         | RFV System | RFV Code | RFV Display      |
+|-----------------------|----------------|------------|---------------------|--------:|------------------|------------|----------|------------------|
+| https://.../ PT-10042 | Karen Adams    | 1985-03-14 | 2026-02-20 09:00:00 |    5621 | Dr. Sarah Chen   | ICD-10     | Z00.00   | General exam     |
+| https://.../ PT-10038 | Robert Chen    | 1952-11-22 | 2026-02-19 14:00:00 |    5618 | Dr. James Wilson | SNOMED     | 185345009| Follow-up visit  |
+| https://.../ PT-10035 | Maria Garcia   | 1990-07-08 | 2026-02-18 10:00:00 |    5615 | Dr. Maria Lopez  | ICD-10     | R05.9    | Cough            |
+| https://.../ PT-10031 | David Johnson  | 1968-01-30 | 2026-02-17 11:00:00 |    5612 | Dr. David Park   | SNOMED     | 410429000| Medication review|
+
+### Visualization
+
+![Notes with Structured RFV Chart](assets/notes_with_structured_rfv_chart.png)
+
 ## Notes
 
 - Replace `<instancename>` in the `patient_link` column with your actual Canvas Medical instance name.

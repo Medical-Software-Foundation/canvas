@@ -53,6 +53,22 @@ ORDER BY month DESC, avg_wait_minutes DESC;
 | `min_wait_minutes` | Shortest wait time |
 | `max_wait_minutes` | Longest wait time |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider         | Location       | Month      | Appts | Avg Wait | Median | Min | Max  |
+|------------------|----------------|------------|------:|---------:|-------:|----:|-----:|
+| Dr. James Wilson | Main Street    | 2026-02-01 |    85 |     18.2 |   15.5 | 2.0 | 42.5 |
+| Dr. David Park   | Downtown       | 2026-02-01 |    62 |     15.8 |   13.0 | 1.5 | 38.0 |
+| Dr. Sarah Chen   | Main Street    | 2026-02-01 |    98 |     12.4 |   10.0 | 0.5 | 35.2 |
+| Dr. Amy Foster   | North Campus   | 2026-02-01 |    48 |     10.2 |    8.5 | 1.0 | 28.0 |
+| Dr. Maria Lopez  | Westside       | 2026-02-01 |    72 |      8.6 |    7.0 | 0.0 | 22.5 |
+
+### Visualization
+
+![Average Wait Time Chart](assets/average_wait_time_chart.png)
+
 ## Notes
 
 - Wait time is measured as the gap between the scheduled appointment time and when the encounter actually started (provider began the visit).

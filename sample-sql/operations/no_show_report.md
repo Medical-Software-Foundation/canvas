@@ -48,6 +48,22 @@ ORDER BY month DESC, no_show_rate_pct DESC NULLS LAST;
 | `no_show_count` | Number of no-show appointments |
 | `no_show_rate_pct` | No-show rate as a percentage |
 
+## Sample Output
+
+*Synthetic data for illustration purposes.*
+
+| Provider         | Location       | Month      | Total | No-Shows | Rate   |
+|------------------|----------------|------------|------:|---------:|-------:|
+| Dr. James Wilson | Main Street    | 2026-02-01 |    85 |        4 |  4.71% |
+| Dr. David Park   | North Campus   | 2026-02-01 |    62 |        3 |  4.84% |
+| Dr. Sarah Chen   | Main Street    | 2026-02-01 |    98 |        3 |  3.06% |
+| Dr. Maria Lopez  | Westside       | 2026-02-01 |    72 |        3 |  4.17% |
+| Dr. Amy Foster   | Downtown       | 2026-02-01 |    48 |        2 |  4.17% |
+
+### Visualization
+
+![No-Show Report Chart](assets/no_show_report_chart.png)
+
 ## Notes
 
 - No-shows are identified by the most recent note state change event being `'NSW'` (No-Show).
