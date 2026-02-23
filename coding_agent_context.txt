@@ -4089,7 +4089,7 @@ medication| Medication
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-message/
 # Message
-Last updated: 16 Oct 2025
+Last updated: 18 Feb 2026
 #  Message Models #
 The Canvas SDK defines messaging-related data models for sending, receiving,
 and tracking messages.
@@ -4107,50 +4107,47 @@ Represents an individual message record.
 ###  Fields #
 Name| Type| Description  
 ---|---|---  
-`id`| `UUIDField`| Unique identifier for the message.  
-`dbid`| `BigIntegerField`| Database primary key.  
-`created`| `DateTimeField`| Timestamp when the message was created.  
-`modified`| `DateTimeField`| Timestamp when the message was last modified.  
-`content`| `TextField`| The body text of the message.  
-`sender`| `ForeignKey(CanvasUser)`| The user who sent the message. May be
-null.  
-`recipient`| `ForeignKey(CanvasUser)`| The user who received the message. May
-be null.  
-`note`| `ForeignKey(Note)`| Associated note (if any) for contextual linkage.
+`id`| `UUID`| Unique identifier for the message.  
+`dbid`| `Integer`| Database primary key.  
+`created`| `DateTime`| Timestamp when the message was created.  
+`modified`| `DateTime`| Timestamp when the message was last modified.  
+`content`| `Text`| The body text of the message.  
+`sender`| [CanvasUser](/sdk/data-canvasuser)| The user who sent the message.
 May be null.  
-`read`| `DateTimeField`| Timestamp when the recipient read the message. Null
-if unread.  
+`recipient`| [CanvasUser](/sdk/data-canvasuser)| The user who received the
+message. May be null.  
+`note`| [Note](/sdk/data-note)| Associated note (if any) for contextual
+linkage. May be null.  
+`read`| `DateTime`| Timestamp when the recipient read the message. Null if
+unread.  
 ##  MessageAttachment #
 Represents a file attachment linked to a message.
 ###  Fields #
 Name| Type| Description  
 ---|---|---  
-`id`| `UUIDField`| Unique identifier for the attachment.  
-`dbid`| `BigIntegerField`| Database primary key.  
-`file`| `TextField`| Storage path or identifier for the file.  
-`content_type`| `CharField(max_length=255)`| MIME type of the attachment.  
-`message`| `ForeignKey(Message)`| The parent message to which this belongs.  
+`id`| `UUID`| Unique identifier for the attachment.  
+`dbid`| `Integer`| Database primary key.  
+`file`| `Text`| Storage path or identifier for the file.  
+`content_type`| `String`| MIME type of the attachment.  
+`message`| Message| The parent message to which this belongs.  
 ##  MessageTransmission #
 Tracks delivery attempts and status for a message.
 ###  Fields #
 Name| Type| Description  
 ---|---|---  
-`id`| `UUIDField`| Unique identifier for the transmission record.  
-`dbid`| `BigIntegerField`| Database primary key.  
-`created`| `DateTimeField`| Timestamp when the transmission was created.  
-`modified`| `DateTimeField`| Timestamp when the transmission was last
-modified.  
-`message`| `ForeignKey(Message)`| The message associated with this
-transmission.  
-`delivered`| `BooleanField`| Whether delivery was successful.  
-`failed`| `BooleanField`| Whether delivery failed.  
-`contact_point_system`| `CharField(choices=TransmissionChannel)`| The channel
-used for delivery.  
-`contact_point_value`| `CharField(max_length=255)`| The destination address or
-identifier (e.g., phone, email).  
-`comment`| `TextField`| Optional comments or error details.  
-`delivered_by`| `ForeignKey(Staff)`| The staff member who processed the
-delivery. May be null.
+`id`| `UUID`| Unique identifier for the transmission record.  
+`dbid`| `Integer`| Database primary key.  
+`created`| `DateTime`| Timestamp when the transmission was created.  
+`modified`| `DateTime`| Timestamp when the transmission was last modified.  
+`message`| Message| The message associated with this transmission.  
+`delivered`| `Boolean`| Whether delivery was successful.  
+`failed`| `Boolean`| Whether delivery failed.  
+`contact_point_system`| TransmissionChannel| The channel used for delivery.  
+`contact_point_value`| `String`| The destination address or identifier (e.g.,
+phone, email).  
+`comment`| `Text`| Optional comments or error details.  
+`delivered_by`| [Staff](/sdk/data-staff/#staff)| The staff member who
+processed the delivery. May be null.
 ----- END PAGE https://docs.canvasmedical.com/sdk/data-message/
 
 
@@ -4702,7 +4699,7 @@ state| [ContactPointState](/sdk/data-enumeration-types/#contactpointstate)
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/data-patient/
 # Patient
-Last updated: 13 Nov 2025
+Last updated: 18 Feb 2026
 ##  Introduction #
 The `Patient` model represents an individual receiving care or other health-
 related services.
@@ -4876,7 +4873,7 @@ Field Name| Type
 dbid| Integer  
 patient| Patient  
 key| String  
-value| String  
+value| Text  
     from canvas_sdk.v1.data.patient import Patient
     from logger import log
     patient_id = "d7af3e356368446c85b40a5d6ff7288e"
@@ -5936,13 +5933,15 @@ patient-external-identifier/)[ Patient MetadataInteract with patient metadata.
 ](/sdk/effect-patient-metadata/)[ Patient Metadata Create FormEffect for
 dynamically displaying forms in the Patient profile. ](/sdk/patient-metadata-
 create-form-effect/)[ Patient PortalCustomize your Patient Portal.
-](/sdk/patient-portal/)[ Protocol CardsCalls to action in a patient's chart,
-commonly used for decision support intervention. ](/sdk/effect-protocol-
-cards/)[ QuestionnairesInteract with questionnaires and interviews.
-](/sdk/effect-questionnaires/)[ TasksCreate or update tasks. ](/sdk/effect-
-tasks/)[ Task MetadataInteract with Task metadata. ](/sdk/effect-task-
-metadata/)[ CommandsThe building blocks of many end-user workflows in Canvas,
-including nearly all clinical workflows for documentation. ](/sdk/commands/)
+](/sdk/patient-portal/)[ Patient TimelineConfigure a patient's timeline by
+excluding specific note types. ](/sdk/effect-patient-timeline/)[ Protocol
+CardsCalls to action in a patient's chart, commonly used for decision support
+intervention. ](/sdk/effect-protocol-cards/)[ QuestionnairesInteract with
+questionnaires and interviews. ](/sdk/effect-questionnaires/)[ TasksCreate or
+update tasks. ](/sdk/effect-tasks/)[ Task MetadataInteract with Task metadata.
+](/sdk/effect-task-metadata/)[ CommandsThe building blocks of many end-user
+workflows in Canvas, including nearly all clinical workflows for
+documentation. ](/sdk/commands/)
 ##  Effect Types #
 The following effects are available to be applied in Canvas.
 Effect| Description  
@@ -6211,7 +6210,7 @@ availability when scheduling an appointment
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/effect-protocol-cards/
 # Protocol Card
-Last updated: 7 Nov 2025
+Last updated: 16 Feb 2026
 Protocol cards appear on the right-hand-side of a patientâs chart, and can
 be accessed by clicking on the Protocols filter button in the filter menu.
 ![protocol card](/assets/images/protocol-card.png)
@@ -6220,7 +6219,7 @@ A Protocol card consists of three main parts:
   * A narrative, which appears just below the title to add any additional clarifying information
   * A list of recommendations, which each have a title and optionally a button that can either:
     * open a new tab and navigate to another site
-    * insert a command into a note
+    * insert commands into a note
 Name| Type| Required| Description  
 ---|---|---|---  
 `patient_id`|  _string_| `true` (if `patient_filter` is not included)| The id
@@ -6250,7 +6249,7 @@ Attribute| Type| Required| Description
 `title`|  _string_| `true`| The description of the recommendation  
 `button`|  _string_| `false`| The text to appear on the button  
 `href`|  _string_| `false`| The url for the button to navigate to  
-Â | Â | Â | Â   
+`commands`| list[Command]| `false`| The commands to be inserted  
 ###  Status #
 Enum| Value  
 ---|---  
@@ -6260,7 +6259,9 @@ Enum| Value
 `PENDING`| pending  
 `NOT_RELEVANT`| not_relevant  
 Â | Â   
-To include a command recommendation, we recommend you import the command from the [commands module](/sdk/commands/), instantiate the command with all the values you wish to populate, and then call `.recommend(title: str = "", button: str | None)` on the command to generate the recommendation that you can append to the protocol cardâs recommendations. Keep in mind that, at the moment, not all commands are supported for command insertion. See below for the list of supported commands.
+To include a command recommendation you can:
+  * import the command from the [commands module](/sdk/commands/), instantiate the command with all the values you wish to populate, and then call `.recommend(title: str = "", button: str | None)` on the command to generate the recommendation that you can append to the protocol cardâs recommendations. Keep in mind that, at the moment, not all commands are supported for command insertion. See below for the list of supported commands.
+  * instantiate the command as above, and then pass it in a list to the `commands` attribute of a recommendation.
 </br> </br>
 For non-command recommendations, you can either use the `Recommendation` class, or the `.add_recommendation(title: str = "", button: str = "", href: str | None)` method on the protocol card.
 **Example** :
@@ -6268,28 +6269,35 @@ For non-command recommendations, you can either use the `Recommendation` class, 
     from canvas_sdk.protocols import BaseProtocol
     from datetime import date
     from canvas_sdk.effects.protocol_card import ProtocolCard, Recommendation
-    from canvas_sdk.commands import DiagnoseCommand
+    from canvas_sdk.commands import DiagnoseCommand, PlanCommand
     class Protocol(BaseProtocol):
         RESPONDS_TO = EventType.Name(EventType.PATIENT_UPDATED)
         def compute(self):
-            p = ProtocolCard(
-                patient_id=self.target,
-                key="testing-protocol-cards",
-                title="This is a ProtocolCard title",
-                narrative="this is the narrative",
-                status=ProtocolCard.Status.DUE,
-                recommendations=[Recommendation(title="this recommendation has no action, just words!")]
-            )
-            p.add_recommendation(
-                title="this is a recommendation", button="go here", href="https://canvasmedical.com/"
-            )
             diagnose = DiagnoseCommand(
                 icd10_code="I10",
                 background="feeling bad for many years",
                 approximate_date_of_onset=date(2020, 1, 1),
                 today_assessment="still not great",
             )
+            plan = PlanCommand(
+                narrative="Follow up in 2 weeks",
+            )
+            p = ProtocolCard(
+                patient_id=self.target,
+                key="testing-protocol-cards",
+                title="This is a ProtocolCard title",
+                narrative="this is the narrative",
+                status=ProtocolCard.Status.DUE,
+                recommendations=[
+                  Recommendation(title="this recommendation has no action, just words!"),
+                  Recommendation(title="this recommendation inserts multiple commands", button="add commands", commands=[diagnose, plan])
+                ],
+            )
+            p.add_recommendation(
+                title="this is a recommendation", button="go here", href="https://canvasmedical.com/"
+            )
             p.recommendations.append(diagnose.recommend(title="this inserts a diagnose command"))
+            p.recommendations.append(title="new recommendation", button="start", commands=[diagnose])
             return [p.apply()]
 To apply the effect to all active patients on plugin create and plugin update,
 you would include the plugin create and update events in `RESPONDS_TO`. And
@@ -8160,7 +8168,7 @@ transmission.
 
 ----- BEGIN PAGE https://docs.canvasmedical.com/sdk/events/
 # Events
-Last updated: 11 Feb 2026
+Last updated: 16 Feb 2026
 **What is an Event?**
 An event is an occurrence of an action that happens within Canvas. For
 example, a patient being prescribed a medication, a user searching for a
@@ -19774,6 +19782,17 @@ Target object| Context object
           "code": str
           "system": str
           "display": str  
+###  Patient Timeline Configuration #
+PATIENT_TIMELINE__GET_CONFIGURATION  
+---  
+Occurs when a patient's timeline is loaded. Allows plugins to configure which
+note types are visible on the timeline. See the [Patient Timeline
+effect](/sdk/effect-patient-timeline/) for usage details.  
+Target object| Context object  
+    "id": patient_key
+    "type": [Patient](/sdk/data-patient/)
+|
+    empty  
 ###  Other Events #
 Event| Occurs when| UNKNOWN| Default event type unlikely to ever be emitted.  
 ---|---  
