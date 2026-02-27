@@ -13,10 +13,8 @@ from canvas_sdk.effects import Effect, EffectType
 from canvas_sdk.events import EventType
 from canvas_sdk.protocols import BaseProtocol
 
+from high_risk_medications.helper import parse_patterns
 from logger import log
-
-# Default patterns for handlers without access to secrets
-HIGH_RISK_PATTERNS = ["warfarin", "insulin", "digoxin", "methotrexate"]
 
 
 class Protocol(BaseProtocol):
@@ -46,7 +44,7 @@ class Protocol(BaseProtocol):
             the modified search results.
         """
         # Get search results from event context
-        results = self.context.get("results")
+        results = self.event.context.get("results")
 
         # If results is None, return no modifications
         if results is None:
@@ -59,13 +57,14 @@ class Protocol(BaseProtocol):
 
         log.info(f"Processing {len(results)} medication search results")
 
+        patterns = parse_patterns(self.secrets["HIGH_RISK_PATTERNS"])
+
         # Annotate medications matching high-risk patterns
         annotated_count = 0
         for result in results:
             medication_name = result.get("text", "").lower()
-
             # Check if medication name contains any high-risk pattern
-            if any(pattern in medication_name for pattern in HIGH_RISK_PATTERNS):
+            if any(pattern in medication_name for pattern in patterns):
                 if result.get("annotations") is None:
                     result["annotations"] = []
                 result["annotations"].append("High Risk")

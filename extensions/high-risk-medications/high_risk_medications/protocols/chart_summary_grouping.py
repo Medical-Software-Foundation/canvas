@@ -3,9 +3,8 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.group import Group
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
+from high_risk_medications.helper import get_high_risk_meds
 
-# Default patterns for handlers without access to secrets
-HIGH_RISK_PATTERNS = ["warfarin", "insulin", "digoxin", "methotrexate"]
 
 class Protocol(BaseHandler):
     """
@@ -17,17 +16,13 @@ class Protocol(BaseHandler):
         groups: dict[str, Group] = {}
         groups.setdefault("High Risk Medications", Group(priority=1000, items=[], name="⚠️ High Risk Medications"))
 
-        patterns = HIGH_RISK_PATTERNS
+        patient_id = self.event.target.id
+        high_risk_meds = get_high_risk_meds(patient_id, self.secrets["HIGH_RISK_PATTERNS"])
+        high_risk_names = {med["name"].lower() for med in high_risk_meds}
+
         for medication_context_object in self.event.context:
-            # Context looks like this:
-            # {
-            #   'id': 298,
-            #   'codings': [
-            #     {'code': '449740', 'system': 'http://www.fdbhealth.com/', 'display': 'Monoject Insulin Syringe 1 mL'}
-            #   ]
-            # }
             coding = medication_context_object["codings"][0]
-            if any(pattern in coding["display"].lower() for pattern in patterns):
+            if coding["display"].lower() in high_risk_names:
                 groups["High Risk Medications"].items.append(medication_context_object)
 
         return [PatientChartGroup(items=groups).apply()]

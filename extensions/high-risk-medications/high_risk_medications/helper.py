@@ -9,7 +9,8 @@ from canvas_sdk.v1.data.medication import Medication
 def parse_patterns(patterns_input: str) -> list[str]:
     """Parse patterns from a JSON array or comma-separated string."""
     try:
-        return json.loads(patterns_input)
+        patterns = json.loads(patterns_input)
+        return [pattern.strip().lower() for pattern in patterns]
     except (json.JSONDecodeError, TypeError):
         if patterns_input:
             return [pattern.strip().lower() for pattern in patterns_input.split(",") if pattern.strip()]
