@@ -1,9 +1,12 @@
 from http import HTTPStatus
 from typing import Any
+
+from django.db.models import Prefetch
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyAuthMixin, SimpleAPIRoute
-from canvas_sdk.v1.data.note import Note
+from canvas_sdk.v1.data.note import Note, NoteStateChangeEvent
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.practicelocation import PracticeLocationPOS
 from logger import log
@@ -28,7 +31,28 @@ class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
                 )
             ]
         try:
-            note = Note.objects.get(id=note_id)
+            note = (
+                Note.objects.select_related(
+                    'patient',
+                    'provider',
+                    'note_type_version',
+                    'originator',
+                    'originator__staff',
+                    'originator__patient',
+                    'encounter',
+                )
+                .prefetch_related(
+                    Prefetch(
+                        'state_history',
+                        queryset=NoteStateChangeEvent.objects.select_related(
+                            'originator',
+                            'originator__staff',
+                            'originator__patient',
+                        ),
+                    ),
+                )
+                .get(id=note_id)
+            )
         except Note.DoesNotExist:
             return [
                 JSONResponse(
@@ -51,7 +75,7 @@ class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
             "dbid": note.dbid,
             "created": note.created.isoformat() if note.created else None,
             "modified": note.modified.isoformat() if note.modified else None,
-            "current_state": note.current_state.values_list('state', flat=True)[0],
+            "current_state": note.current_state.state if note.current_state else None,
             "state_history": [
                 {
                     "state": state.state,
@@ -98,32 +122,47 @@ class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
     def _enhance_body_with_commands(self, body: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Loop through the body array and enhance command entries with attributes.
+        Batch-fetches all commands in a single query to avoid N+1.
         """
+        command_uuids = [
+            item.get("data", {}).get("command_uuid")
+            for item in body
+            if item.get("type") == "command" and item.get("data", {}).get("command_uuid")
+        ]
+
+        commands_by_id: dict[str, Command] = {}
+        if command_uuids:
+            commands = Command.objects.select_related(
+                'originator',
+                'originator__staff',
+                'originator__patient',
+                'committer',
+                'committer__staff',
+                'committer__patient',
+                'entered_in_error',
+                'entered_in_error__staff',
+                'entered_in_error__patient',
+            ).filter(id__in=command_uuids)
+            commands_by_id = {str(cmd.id): cmd for cmd in commands}
+
         enhanced_body = []
         for item in body:
             if item.get("type") == "command":
-                enhanced_item = self._enhance_command_item(item)
-                enhanced_body.append(enhanced_item)
+                command_uuid = item.get("data", {}).get("command_uuid")
+                if command_uuid and command_uuid in commands_by_id:
+                    enhanced_item = item.copy()
+                    enhanced_item["data"] = enhanced_item.get("data", {}).copy()
+                    enhanced_item["data"]["attributes"] = self._extract_command_attributes(
+                        commands_by_id[command_uuid]
+                    )
+                    enhanced_body.append(enhanced_item)
+                else:
+                    if command_uuid:
+                        log.warning(f"Command not found: {command_uuid}")
+                    enhanced_body.append(item)
             elif item.get("type") == "text" and item.get("value") != "":
                 enhanced_body.append(item)
         return enhanced_body
-
-    def _enhance_command_item(self, item: dict[str, Any]) -> dict[str, Any]:
-        """
-        Enhance a command item by fetching the command and adding its attributes.
-        """
-        command_uuid = item.get("data", {}).get("command_uuid")
-        if not command_uuid:
-            return item
-        try:
-            command = Command.objects.get(id=command_uuid)
-            enhanced_item = item.copy()
-            enhanced_item["data"] = enhanced_item.get("data", {}).copy()
-            enhanced_item["data"]["attributes"] = self._extract_command_attributes(command)
-            return enhanced_item
-        except Command.DoesNotExist:
-            log.warning(f"Command not found: {command_uuid}")
-            return item
 
 
     def _extract_command_attributes(self, command: Command) -> dict[str, Any]:
@@ -148,11 +187,11 @@ class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
                 "is_staff": command.committer.is_staff,
             } if command.committer else None,
             "entered_in_error_by": {
-                "id": str(command.entered_in_error_by.person_subclass.id),
-                "first_name": command.entered_in_error_by.person_subclass.first_name,
-                "last_name": command.entered_in_error_by.person_subclass.last_name,
-                "is_staff": command.entered_in_error_by.is_staff,
-            } if command.entered_in_error_by else None,
+                "id": str(command.entered_in_error.person_subclass.id),
+                "first_name": command.entered_in_error.person_subclass.first_name,
+                "last_name": command.entered_in_error.person_subclass.last_name,
+                "is_staff": command.entered_in_error.is_staff,
+            } if command.entered_in_error else None,
             "origination_source": command.origination_source,
         }
         if command.data:
