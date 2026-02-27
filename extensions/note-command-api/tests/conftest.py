@@ -1,6 +1,15 @@
 import pytest
 from unittest.mock import MagicMock
 from datetime import datetime
+
+from canvas_sdk.test_utils.factories import (
+    PatientFactory,
+    PracticeLocationFactory,
+    StaffFactory,
+)
+from canvas_sdk.v1.data.note import NoteType
+
+
 @pytest.fixture
 def mock_event():
     """Create a mock event for handler initialization."""
@@ -15,6 +24,46 @@ def mock_request():
     request.headers = {}
     request.json.return_value = {}
     return request
+
+@pytest.fixture
+def note_type():
+    """Create a NoteType via objects.create (no factory in v0.84.0)."""
+    return NoteType.objects.create(
+        name="Progress Note",
+        display="Progress Note",
+        system="canvas",
+        icon="note",
+        category="encounter",
+        rank=1,
+        is_active=True,
+        is_default_appointment_type=False,
+        is_scheduleable=False,
+        is_telehealth=False,
+        is_billable=False,
+        defer_place_of_service_to_practice_location=False,
+        default_place_of_service="11",
+        is_system_managed=False,
+        is_visible=True,
+        is_patient_required=True,
+        allow_custom_title=False,
+        is_scheduleable_via_patient_portal=False,
+        unique_identifier="00000000-0000-0000-0000-000000000001",
+        deprecated_at="2099-01-01 00:00:00",
+        online_duration=0,
+        available_places_of_service=["11"],
+    )
+
+@pytest.fixture
+def patient():
+    return PatientFactory.create()
+
+@pytest.fixture
+def practice_location():
+    return PracticeLocationFactory.create()
+
+@pytest.fixture
+def staff():
+    return StaffFactory.create()
 @pytest.fixture
 def mock_note():
     """Create a mock Note instance with all required fields."""
@@ -102,9 +151,3 @@ def mock_command():
         "refills": 3
     }
     return command
-@pytest.fixture
-def mock_secrets():
-    """Create mock secrets for API key authentication."""
-    return {
-        "simpleapi-api-key": "test-api-key-12345"
-    }

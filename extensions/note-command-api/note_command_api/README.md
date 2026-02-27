@@ -35,18 +35,24 @@ Creates a new note with flexible identifier lookup options.
 
 **Request Body:**
 
+Required field groups
+
+- Note type: exactly one of note_type_id, note_type_name, or note_type_code is required.
+- Practice location: at least one of practice_location_id or practice_location_name is required.
+- Provider: at least one of provider_id or provider_name is required.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `instance_id` | UUID string | No | Custom note ID. If not provided, a UUID will be generated. |
-| `note_type_id` | UUID string | One of three | ID of an existing active NoteType |
-| `note_type_name` | string | One of three | Name of an existing active NoteType |
-| `note_type_code` | string | One of three | Code of an existing active NoteType |
+| `note_type_id` | UUID string | Note type group (1 of 3) | ID of an existing active NoteType |
+| `note_type_name` | string | Note type group (1 of 3) | Name of an existing active NoteType |
+| `note_type_code` | string | Note type group (1 of 3) | Code of an existing active NoteType |
 | `datetime_of_service` | datetime string | Yes | e.g., "2025-02-21 23:31:42" |
 | `patient_id` | UUID string | Yes | ID of an existing Patient |
-| `practice_location_id` | UUID string | One of two | ID of an existing active PracticeLocation |
-| `practice_location_name` | string | One of two | Full name or short name of an active PracticeLocation |
-| `provider_id` | UUID string | One of two | ID of an existing active Staff member |
-| `provider_name` | string | One of two | Full name (first + last) of an active Staff member |
+| `practice_location_id` | UUID string | Practice location group (1 of 2) | ID of an existing active PracticeLocation |
+| `practice_location_name` | string | Practice location group (1 of 2) | Full name or short name of an active PracticeLocation |
+| `provider_id` | UUID string | Provider group (1 of 2) | ID of an existing active Staff member |
+| `provider_name` | string | Provider group (1 of 2) | Full name (first + last) of an active Staff member |
 | `title` | string | No | Custom title for the note |
 
 **Response (202 Accepted):**

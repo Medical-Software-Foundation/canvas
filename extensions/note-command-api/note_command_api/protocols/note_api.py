@@ -164,7 +164,7 @@ class CreateNoteAPI(APIKeyAuthMixin, SimpleAPIRoute):
         if not provider_identifier:
             errors.append("Provider not found")
 
-        title = str(request_body.get("title"))
+        title = request_body.get("title")
 
         if errors:
             return [
@@ -181,7 +181,7 @@ class CreateNoteAPI(APIKeyAuthMixin, SimpleAPIRoute):
             patient_id=patient_id,
             practice_location_id=practice_location_identifier,
             provider_id=provider_identifier,
-            title=title,
+            title=str(title) if title else "",
         )
 
         return [
