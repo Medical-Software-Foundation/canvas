@@ -1,0 +1,42 @@
+{
+    "sdk_version": "0.90.0",
+    "plugin_version": "0.0.72",
+    "name": "health_risk_assessment",
+    "description": "Dynamic Health Risk Assessment for Medicare Annual Wellness Visits",
+    "components": {
+        "protocols": [
+            {
+                "class": "health_risk_assessment.protocols.health_risk_assessment:HealthRiskAssessmentButton",
+                "description": "ActionButton to launch the Health Risk Assessment modal"
+            },
+            {
+                "class": "health_risk_assessment.protocols.submit_assessment:SubmitHealthRiskAssessment",
+                "description": "API endpoint to process HRA form submissions"
+            }
+        ],
+        "commands": [
+            {
+                "name": "HealthRiskAssessmentSummary",
+                "label": "Health Risk Assessment Summary",
+                "schema_key": "healthRiskAssessmentSummary",
+                "section": "subjective"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "questionnaires/health_risk_assessment.yaml"
+            }
+        ]
+    },
+    "secrets": [
+        "OUTPUT_MODE"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

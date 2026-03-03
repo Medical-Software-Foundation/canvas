@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .hra-summary {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #1d1d1f;
+            max-width: 100%;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* General Health - Top Card */
+        .hra-health-card {
+            background: linear-gradient(135deg, #f5f5f7 0%, #ffffff 100%);
+            border: 1px solid #d2d2d7;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hra-health-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #86868b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .hra-health-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .hra-health-value.monitor {
+            color: #a16207;
+        }
+
+        .hra-health-value.attention {
+            color: #dc2626;
+        }
+
+        /* Two-column layout */
+        .hra-columns {
+            display: flex;
+            gap: 16px;
+        }
+
+        .hra-column {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Section styling */
+        .hra-section {
+            background: #ffffff;
+            border: 1px solid #d2d2d7;
+            border-radius: 12px;
+            overflow: hidden;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hra-section-header {
+            font-size: 11px;
+            font-weight: 600;
+            color: #1d1d1f;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            padding: 12px 16px 10px;
+            background: #f5f5f7;
+            border-bottom: 1px solid #e8e8ed;
+        }
+
+        .hra-section-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Physical activities section - fill space evenly */
+        .hra-section-content.hra-physical {
+            justify-content: space-between;
+        }
+
+        .hra-section-content.hra-physical .hra-row {
+            flex: 1;
+        }
+
+        /* Row styling */
+        .hra-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            border-bottom: 1px solid #f5f5f7;
+            min-height: 40px;
+        }
+
+        .hra-row:last-child {
+            border-bottom: none;
+        }
+
+        .hra-row-label {
+            color: #1d1d1f;
+            flex: 1;
+            padding-right: 12px;
+            font-size: 13px;
+        }
+
+        .hra-row-value {
+            font-size: 12px;
+            font-weight: 500;
+            color: #86868b;
+            text-align: right;
+            white-space: nowrap;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: #f5f5f7;
+        }
+
+        /* Risk level indicators */
+        .hra-row-value.monitor {
+            background: #fefce8;
+            color: #a16207;
+        }
+
+        .hra-row-value.attention {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+        /* Daily activities section - fill space evenly */
+        .hra-section-content.hra-adl {
+            justify-content: space-between;
+        }
+
+        .hra-section-content.hra-adl .hra-adl-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* ADL group styling */
+        .hra-adl-group {
+            border-bottom: 1px solid #f5f5f7;
+        }
+
+        .hra-adl-group:last-child {
+            border-bottom: none;
+        }
+
+        .hra-adl-group .hra-row {
+            border-bottom: none;
+            padding-bottom: 4px;
+        }
+
+        /* Follow-up row styling */
+        .hra-followup {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 16px 10px 28px;
+        }
+
+        .hra-followup-label {
+            color: #86868b;
+            font-size: 12px;
+            flex: 1;
+            padding-right: 12px;
+        }
+
+        .hra-followup-value {
+            font-size: 12px;
+            font-weight: 500;
+            color: #86868b;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: #f5f5f7;
+        }
+
+        .hra-followup-value.monitor {
+            background: #fefce8;
+            color: #a16207;
+        }
+
+        .hra-followup-value.attention {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="hra-summary">
+        <!-- General Health - Top Card -->
+        <div class="hra-health-card">
+            <span class="hra-health-label">Self-Rated Health (Compared to Others Your Age)</span>
+            <span class="hra-health-value {% if general_health_class == 'poor' %}attention{% elif general_health_class == 'fair' %}monitor{% endif %}">{{ general_health_label }}</span>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="hra-columns">
+            <!-- Physical Activity Column -->
+            <div class="hra-column">
+                <div class="hra-section">
+                    <div class="hra-section-header">Physical Activities</div>
+                    <div class="hra-section-content hra-physical">
+                        {% for activity in physical_activities %}
+                        <div class="hra-row">
+                            <span class="hra-row-label">{{ activity.label }}</span>
+                            <span class="hra-row-value {% if activity.level_class == 'lot' or activity.level_class == 'unable' %}attention{% elif activity.level_class == 'some' %}monitor{% endif %}">{{ activity.level }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily Activities Column -->
+            <div class="hra-column">
+                <div class="hra-section">
+                    <div class="hra-section-header">Daily Living Activities</div>
+                    <div class="hra-section-content hra-adl">
+                        {% for adl in adl_items %}
+                        <div class="hra-adl-group">
+                            <div class="hra-row">
+                                <span class="hra-row-label">{{ adl.label }}</span>
+                                <span class="hra-row-value {% if adl.status_class == 'has-difficulty' %}attention{% elif adl.status_class == 'uncertain' %}monitor{% endif %}">{{ adl.response_text }}</span>
+                            </div>
+                            {% if adl.show_followup %}
+                            <div class="hra-followup">
+                                <span class="hra-followup-label">{% if adl.followup_type == 'help' %}Do you receive help{% else %}Due to your health?{% endif %}</span>
+                                <span class="hra-followup-value {% if adl.followup_type == 'health' and adl.help_text == 'Yes' %}attention{% elif adl.followup_type == 'help' and adl.help_text == 'No' %}attention{% endif %}">{{ adl.help_text }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

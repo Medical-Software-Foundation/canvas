@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<script>
+    window.providers = {{ providers|safe }};
+    window.loggedInUserId = "{{ loggedInUserId }}";
+</script>
+<html>
+    <head>
+        <title>Schedule Utilization Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="utilization.css">
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script type="text/javascript" src="utilization.js"></script>
+    </head>
+
+    <body>
+        <div id="app"></div>
+    </body>
+</html>
