@@ -1,0 +1,28 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "auto_submit_clean_claims",
+    "description": "Automatically moves claims with no scrub errors from the Coding queue to the Submission queue",
+    "components": {
+        "handlers": [
+            {
+                "class": "auto_submit_clean_claims.handlers.auto_submit:AutoSubmitCleanClaims",
+                "description": "Moves clean claims from Coding to Submission on claim updates"
+            },
+            {
+                "class": "auto_submit_clean_claims.handlers.sweep_coding_queue:SweepCodingQueue",
+                "description": "Sweeps all claims in the Coding queue every 5 minutes and moves clean ones to Submission"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["CANVAS_FHIR_CLIENT_ID", "CANVAS_FHIR_CLIENT_SECRET"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
