@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "claim_pdf_generator",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "handlers": [
+            {
+                "class": "claim_pdf_generator.handlers.event_handlers:NewOfficeVisitNoteHandler",
+                "description": "A handler that listens for an event and sets an inspirational goal."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
