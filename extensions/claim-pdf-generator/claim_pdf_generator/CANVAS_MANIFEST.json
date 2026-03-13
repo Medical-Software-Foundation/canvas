@@ -1,24 +1,19 @@
 {
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
-    "name": "claim_pdf_generator",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "name": "claim-pdf-generator",
+    "description": "Generates superbill and CMS-1500 PDF forms from claim data",
     "components": {
-        "handlers": [
+        "protocols": [
             {
-                "class": "claim_pdf_generator.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "claim_pdf_generator.protocols.claim_pdf_api:ClaimPdfAPI",
+                "description": "API endpoints for generating superbill and HCFA PDFs"
             }
-        ],
-        "commands": [],
-        "content": [],
-        "effects": [],
-        "views": []
+        ]
     },
-    "secrets": [],
+    "secrets": ["simpleapi-api-key"],
     "tags": {},
     "references": [],
     "license": "",
-    "diagram": false,
     "readme": "./README.md"
 }

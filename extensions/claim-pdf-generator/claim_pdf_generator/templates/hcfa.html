@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>CMS-1500 (HCFA) Claim Form</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #000; padding: 8px; }
+  .form-title { text-align: center; font-size: 11px; font-weight: bold; border: 2px solid #000; padding: 4px; margin-bottom: 4px; }
+  .form-subtitle { text-align: center; font-size: 8px; margin-bottom: 6px; }
+  table.form { width: 100%; border-collapse: collapse; }
+  table.form td, table.form th { border: 1px solid #555; padding: 2px 3px; vertical-align: top; font-size: 8px; }
+  .box-label { font-size: 7px; font-weight: bold; color: #333; display: block; }
+  .box-value { font-size: 9px; min-height: 12px; display: block; }
+  .section-header { background: #ccc; font-weight: bold; font-size: 8px; text-align: center; border: 1px solid #555; padding: 2px; }
+  table.service-lines { width: 100%; border-collapse: collapse; }
+  table.service-lines th { border: 1px solid #555; padding: 2px; font-size: 7px; background: #e0e0e0; text-align: center; }
+  table.service-lines td { border: 1px solid #555; padding: 2px; font-size: 8px; text-align: center; vertical-align: top; }
+  .insurance-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 0; }
+  .ins-checkbox { display: inline-block; border: 1px solid #000; width: 8px; height: 8px; margin-right: 2px; vertical-align: middle; }
+  .ins-checked { background: #000; }
+</style>
+</head>
+<body>
+
+<div class="form-title">HEALTH INSURANCE CLAIM FORM</div>
+<div class="form-subtitle">APPROVED BY NATIONAL UNIFORM CLAIM COMMITTEE (NUCC) 02/12 &nbsp;&nbsp; CMS-1500</div>
+
+<table class="form">
+  <!-- Row 1: Box 1 insurance type + Box 1a insured ID -->
+  <tr>
+    <td colspan="3">
+      <span class="box-label">1. MEDICARE &nbsp; MEDICAID &nbsp; TRICARE &nbsp; CHAMPVA &nbsp; GROUP HEALTH PLAN &nbsp; FECA BLK LUNG &nbsp; OTHER</span>
+      <span class="box-value">
+        {% if primary_coverage %}
+          {% with pt=primary_coverage.payer_plan_type %}
+            {% if pt == "MC" %}<span class="ins-checkbox ins-checked"></span> Medicare
+            {% elif pt == "MD" %}<span class="ins-checkbox ins-checked"></span> Medicaid
+            {% elif pt == "CH" %}<span class="ins-checkbox ins-checked"></span> CHAMPVA
+            {% elif pt == "BL" %}<span class="ins-checkbox ins-checked"></span> FECA/BLK LUNG
+            {% else %}<span class="ins-checkbox ins-checked"></span> Other
+            {% endif %}
+          {% endwith %}
+        {% endif %}
+      </span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">1a. INSURED'S I.D. NUMBER</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_number }}{% endif %}</span>
+    </td>
+  </tr>
+
+  <!-- Row 2-3: Patient name / DOB+Sex / Insured's name -->
+  <tr>
+    <td>
+      <span class="box-label">2. PATIENT'S NAME (Last, First, Middle)</span>
+      <span class="box-value">{% if patient %}{{ patient.last_name }}, {{ patient.first_name }} {{ patient.middle_name }}{% endif %}</span>
+    </td>
+    <td>
+      <span class="box-label">3. PATIENT'S BIRTH DATE / SEX</span>
+      <span class="box-value">
+        {% if patient %}{{ patient.dob }} &nbsp;
+          {% if patient.sex == "M" %}M&#9745; F&#9744;
+          {% elif patient.sex == "F" %}M&#9744; F&#9745;
+          {% else %}M&#9744; F&#9744;
+          {% endif %}
+        {% endif %}
+      </span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">4. INSURED'S NAME (Last, First, Middle)</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_last_name }}, {{ primary_coverage.subscriber_first_name }} {{ primary_coverage.subscriber_middle_name }}{% endif %}</span>
+    </td>
+  </tr>
+
+  <!-- Row: Patient Address / Relationship / Insured Address -->
+  <tr>
+    <td>
+      <span class="box-label">5. PATIENT'S ADDRESS (No., Street)</span>
+      <span class="box-value">{% if patient %}{{ patient.addr1 }}{% if patient.addr2 %}, {{ patient.addr2 }}{% endif %}{% endif %}</span>
+      <span class="box-label">CITY</span>
+      <span class="box-value">{% if patient %}{{ patient.city }}{% endif %}</span>
+      <span class="box-label">STATE &nbsp; ZIP CODE</span>
+      <span class="box-value">{% if patient %}{{ patient.state }} &nbsp; {{ patient.zip }}{% endif %}</span>
+      <span class="box-label">TELEPHONE</span>
+      <span class="box-value">{% if patient %}{{ patient.phone }}{% endif %}</span>
+    </td>
+    <td>
+      <span class="box-label">6. PATIENT RELATIONSHIP TO INSURED</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.patient_relationship_to_subscriber }}{% endif %}</span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">7. INSURED'S ADDRESS (No., Street)</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_addr1 }}{% if primary_coverage.subscriber_addr2 %}, {{ primary_coverage.subscriber_addr2 }}{% endif %}{% endif %}</span>
+      <span class="box-label">CITY</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_city }}{% endif %}</span>
+      <span class="box-label">STATE &nbsp; ZIP CODE</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_state }} &nbsp; {{ primary_coverage.subscriber_zip }}{% endif %}</span>
+      <span class="box-label">TELEPHONE</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_phone }}{% endif %}</span>
+    </td>
+  </tr>
+
+  <!-- Row 8: Reserved -->
+  <tr>
+    <td colspan="2">
+      <span class="box-label">8. RESERVED FOR NUCC USE</span>
+      <span class="box-value">&nbsp;</span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">9. OTHER INSURED'S NAME (if secondary coverage)</span>
+      <span class="box-value">{% if secondary_coverage %}{{ secondary_coverage.subscriber_last_name }}, {{ secondary_coverage.subscriber_first_name }}{% endif %}</span>
+      <span class="box-label">9a. OTHER INSURED'S POLICY/GROUP NUMBER</span>
+      <span class="box-value">{% if secondary_coverage %}{{ secondary_coverage.subscriber_number }}{% endif %}</span>
+      <span class="box-label">9d. INSURANCE PLAN NAME OR PROGRAM NAME</span>
+      <span class="box-value">{% if secondary_coverage %}{{ secondary_coverage.payer_name }}{% endif %}</span>
+    </td>
+  </tr>
+
+  <!-- Row 10: Condition related to -->
+  <tr>
+    <td colspan="2">
+      <span class="box-label">10. IS PATIENT'S CONDITION RELATED TO:</span>
+      <span class="box-value">
+        {% if claim %}
+        a. EMPLOYMENT: {% if claim.employment_related %}YES&#9745;{% else %}YES&#9744;{% endif %} NO{% if claim.employment_related %}&#9744;{% else %}&#9745;{% endif %}<br/>
+        b. AUTO ACCIDENT: {% if claim.auto_accident %}YES&#9745;{% else %}YES&#9744;{% endif %} NO{% if claim.auto_accident %}&#9744;{% else %}&#9745;{% endif %}
+          {% if claim.auto_accident and claim.auto_accident_state %} STATE: {{ claim.auto_accident_state }}{% endif %}<br/>
+        c. OTHER ACCIDENT: {% if claim.other_accident %}YES&#9745;{% else %}YES&#9744;{% endif %} NO{% if claim.other_accident %}&#9744;{% else %}&#9745;{% endif %}
+        {% endif %}
+      </span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">11. INSURED'S POLICY GROUP OR FECA NUMBER</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_group }}{% endif %}</span>
+      <span class="box-label">11a. INSURED'S DATE OF BIRTH / SEX</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_dob }}
+        {% if primary_coverage.subscriber_sex == "M" %}&nbsp; M&#9745; F&#9744;
+        {% elif primary_coverage.subscriber_sex == "F" %}&nbsp; M&#9744; F&#9745;
+        {% endif %}
+      {% endif %}</span>
+      <span class="box-label">11b. OTHER CLAIM ID</span>
+      <span class="box-value">&nbsp;</span>
+      <span class="box-label">11c. INSURANCE PLAN NAME OR PROGRAM NAME</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.subscriber_plan }}{% endif %}</span>
+      <span class="box-label">11d. IS THERE ANOTHER HEALTH BENEFIT PLAN?</span>
+      <span class="box-value">{% if secondary_coverage %}YES&#9745; NO&#9744;{% else %}YES&#9744; NO&#9745;{% endif %}</span>
+    </td>
+  </tr>
+
+  <!-- Boxes 12-13: Signatures -->
+  <tr>
+    <td colspan="2">
+      <span class="box-label">12. PATIENT'S OR AUTHORIZED PERSON'S SIGNATURE</span>
+      <span class="box-value">Signature on File &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; DATE: _______________</span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">13. INSURED'S OR AUTHORIZED PERSON'S SIGNATURE</span>
+      <span class="box-value">Signature on File</span>
+    </td>
+  </tr>
+
+  <!-- Boxes 14, 15, 16 -->
+  <tr>
+    <td>
+      <span class="box-label">14. DATE OF CURRENT ILLNESS, INJURY, OR PREGNANCY (LMP)</span>
+      <span class="box-value">{% if claim and claim.illness_date %}{{ claim.illness_date }}{% endif %}</span>
+    </td>
+    <td>
+      <span class="box-label">15. OTHER DATE</span>
+      <span class="box-value">&nbsp;</span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">16. DATES PATIENT UNABLE TO WORK IN CURRENT OCCUPATION</span>
+      <span class="box-value">&nbsp;</span>
+    </td>
+  </tr>
+
+  <!-- Boxes 17, 17a, 17b -->
+  <tr>
+    <td colspan="2">
+      <span class="box-label">17. NAME OF REFERRING PROVIDER OR OTHER SOURCE</span>
+      <span class="box-value">
+        {% if provider and provider.referring_provider_last_name %}
+          {{ provider.referring_provider_last_name }}, {{ provider.referring_provider_first_name }} {{ provider.referring_provider_middle_name }}
+        {% endif %}
+      </span>
+    </td>
+    <td>
+      <span class="box-label">17a. OTHER ID#</span>
+      <span class="box-value">{% if provider %}{{ provider.referring_provider_ptan_identifier }}{% endif %}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">17b. NPI</span>
+      <span class="box-value">{% if provider and provider.referring_provider_npi != "0" %}{{ provider.referring_provider_npi }}{% endif %}</span>
+    </td>
+  </tr>
+
+  <!-- Boxes 18, 19 -->
+  <tr>
+    <td colspan="2">
+      <span class="box-label">18. HOSPITALIZATION DATES RELATED TO CURRENT SERVICES</span>
+      <span class="box-value">
+        {% if provider %}
+          FROM: {{ provider.hosp_from_date }} &nbsp;&nbsp; TO: {{ provider.hosp_to_date }}
+        {% endif %}
+      </span>
+    </td>
+    <td colspan="3">
+      <span class="box-label">19. ADDITIONAL CLAIM INFORMATION</span>
+      <span class="box-value">{% if claim %}{{ claim.narrative }}{% endif %}</span>
+    </td>
+  </tr>
+
+  <!-- Boxes 20, 21 -->
+  <tr>
+    <td>
+      <span class="box-label">20. OUTSIDE LAB?</span>
+      <span class="box-value">YES&#9744; NO&#9745;</span>
+    </td>
+    <td colspan="4">
+      <span class="box-label">21. DIAGNOSIS OR NATURE OF ILLNESS OR INJURY (ICD Ind.: 0)</span>
+      <span class="box-value">
+        {% for dx in diagnosis_codes %}
+          {{ dx.rank }}. {{ dx.code }}{% if dx.display %} &mdash; {{ dx.display }}{% endif %}<br/>
+        {% endfor %}
+      </span>
+    </td>
+  </tr>
+
+  <!-- Boxes 22, 23 -->
+  <tr>
+    <td>
+      <span class="box-label">22. RESUBMISSION CODE</span>
+      <span class="box-value">{% if primary_coverage %}{{ primary_coverage.resubmission_code }}{% endif %}</span>
+    </td>
+    <td colspan="4">
+      <span class="box-label">23. PRIOR AUTHORIZATION NUMBER</span>
+      <span class="box-value">{% if claim %}{{ claim.prior_auth }}{% endif %}</span>
+    </td>
+  </tr>
+</table>
+
+<!-- Box 24: Service Lines -->
+<table class="service-lines" style="margin-top: 4px;">
+  <thead>
+    <tr>
+      <th>24A. DATE(S) OF SERVICE<br/>From &nbsp; To</th>
+      <th>B.<br/>POS</th>
+      <th>C.<br/>EMG</th>
+      <th>D. PROCEDURES, SERVICES, OR SUPPLIES<br/>CPT/HCPCS &nbsp; MODIFIER</th>
+      <th>E. DIAGNOSIS<br/>POINTER</th>
+      <th>F. $CHARGES</th>
+      <th>G. DAYS<br/>OR UNITS</th>
+      <th>H. EPSDT<br/>Family Plan</th>
+      <th>I. ID<br/>QUAL</th>
+      <th>J. RENDERING<br/>PROVIDER ID#</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in line_items %}
+    <tr>
+      <td>{{ item.from_date }} &nbsp; {{ item.thru_date }}</td>
+      <td>{{ item.place_of_service }}</td>
+      <td>&nbsp;</td>
+      <td>
+        {{ item.proc_code }}
+        {% for mod in item.modifiers %}{{ mod }}{% if not forloop.last %} {% endif %}{% endfor %}
+      </td>
+      <td>{% for ptr in item.diag_pointers %}{{ ptr }}{% if not forloop.last %},{% endif %}{% endfor %}</td>
+      <td>${{ item.charge }}</td>
+      <td>{{ item.units }}</td>
+      <td>{{ item.narrative }}</td>
+      <td>NPI</td>
+      <td>{% if provider %}{{ provider.provider_npi }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    <!-- Fill blank service lines up to 6 -->
+    {% for i in "12345"|make_list %}
+    {% if forloop.counter > line_items|length %}
+    <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Boxes 25-33 -->
+<table class="form" style="margin-top: 4px;">
+  <tr>
+    <td colspan="2">
+      <span class="box-label">25. FEDERAL TAX I.D. NUMBER &nbsp; SSN EIN</span>
+      <span class="box-value">{% if provider %}{{ provider.billing_provider_tax_id }}{% if provider.billing_provider_tax_id_type == "E" %} (EIN){% else %} (SSN){% endif %}{% endif %}</span>
+    </td>
+    <td>
+      <span class="box-label">26. PATIENT'S ACCOUNT NO.</span>
+      <span class="box-value">{% if claim %}{{ claim.account_number }}{% endif %}</span>
+    </td>
+    <td>
+      <span class="box-label">27. ACCEPT ASSIGNMENT?</span>
+      <span class="box-value">
+        {% if claim %}
+          {% if claim.accept_assign %}YES&#9745; NO&#9744;{% else %}YES&#9744; NO&#9745;{% endif %}
+        {% endif %}
+      </span>
+    </td>
+    <td>
+      <span class="box-label">28. TOTAL CHARGE</span>
+      <span class="box-value">${{ total_charges }}</span>
+    </td>
+    <td>
+      <span class="box-label">29. AMOUNT PAID</span>
+      <span class="box-value">${{ total_paid }}</span>
+    </td>
+    <td>
+      <span class="box-label">30. Rsvd for NUCC Use</span>
+      <span class="box-value">&nbsp;</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="3">
+      <span class="box-label">31. SIGNATURE OF PHYSICIAN OR SUPPLIER INCLUDING DEGREES OR CREDENTIALS</span>
+      <span class="box-value">
+        {% if provider %}{{ provider.provider_last_name }}, {{ provider.provider_first_name }}{% endif %}
+        &nbsp;&nbsp;&nbsp; DATE: _______________
+      </span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">32. SERVICE FACILITY LOCATION INFORMATION</span>
+      <span class="box-value">
+        {% if provider and provider.facility_name %}
+          {{ provider.facility_name }}<br/>
+          {{ provider.facility_addr1 }}{% if provider.facility_addr2 %}, {{ provider.facility_addr2 }}{% endif %}<br/>
+          {{ provider.facility_city }}, {{ provider.facility_state }} {{ provider.facility_zip }}
+        {% endif %}
+      </span>
+      <span class="box-label">32a. NPI</span>
+      <span class="box-value">{% if provider and provider.facility_npi != "0" %}{{ provider.facility_npi }}{% endif %}</span>
+    </td>
+    <td colspan="2">
+      <span class="box-label">33. BILLING PROVIDER INFO & PH#</span>
+      <span class="box-value">
+        {% if provider %}
+          {{ provider.billing_provider_name }}<br/>
+          {{ provider.billing_provider_addr1 }}{% if provider.billing_provider_addr2 %}, {{ provider.billing_provider_addr2 }}{% endif %}<br/>
+          {{ provider.billing_provider_city }}, {{ provider.billing_provider_state }} {{ provider.billing_provider_zip }}<br/>
+          {% if provider.billing_provider_phone %}Tel: {{ provider.billing_provider_phone }}{% endif %}
+        {% endif %}
+      </span>
+      <span class="box-label">33a. NPI</span>
+      <span class="box-value">{% if provider and provider.billing_provider_npi != "0" %}{{ provider.billing_provider_npi }}{% endif %}</span>
+      <span class="box-label">33b. OTHER ID#</span>
+      <span class="box-value">{% if provider %}{{ provider.billing_provider_id }}{% endif %}</span>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
