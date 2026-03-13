@@ -1,13 +1,21 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.1.0",
     "name": "claim-pdf-generator",
-    "description": "Generates superbill and CMS-1500 PDF forms from claim data",
+    "description": "Generates superbill and CMS-1500 PDF forms from claim data, with note header action buttons",
     "components": {
         "protocols": [
             {
                 "class": "claim_pdf_generator.protocols.claim_pdf_api:ClaimPdfAPI",
                 "description": "API endpoints for generating superbill and HCFA PDFs"
+            },
+            {
+                "class": "claim_pdf_generator.protocols.note_action_buttons:SuperbillButton",
+                "description": "Note header button to generate a superbill PDF"
+            },
+            {
+                "class": "claim_pdf_generator.protocols.note_action_buttons:HcfaButton",
+                "description": "Note header button to generate a CMS-1500 (HCFA) PDF"
             }
         ]
     },
