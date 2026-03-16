@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient CSV Loader</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 24px;
+      color: #1a1a1a;
+      background: #fff;
+      line-height: 1.5;
+    }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+    h2 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    p { font-size: 14px; color: #555; margin-bottom: 16px; }
+    .step { display: none; }
+    .step.active { display: block; }
+    .upload-area {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 40px 24px;
+      text-align: center;
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .upload-area:hover, .upload-area.dragover { border-color: #4a90d9; background: #f0f7ff; }
+    .upload-area input[type="file"] { display: none; }
+    .upload-area .label { font-size: 14px; color: #666; }
+    .upload-area .filename { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-top: 8px; }
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary { background: #4a90d9; color: #fff; }
+    .btn-primary:hover { background: #357abd; }
+    .btn-primary:disabled { background: #a0c4e8; cursor: not-allowed; }
+    .btn-secondary { background: #e8e8e8; color: #333; }
+    .btn-secondary:hover { background: #d0d0d0; }
+    .btn-danger { background: #d9534f; color: #fff; }
+    .btn-danger:hover { background: #c9302c; }
+    .btn-link { background: none; color: #4a90d9; padding: 0; text-decoration: underline; font-size: 14px; }
+    .actions { display: flex; gap: 12px; margin-top: 20px; }
+    .summary-box {
+      background: #f5f7fa;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 24px;
+    }
+    .summary-item { text-align: center; }
+    .summary-item .number { font-size: 28px; font-weight: 700; }
+    .summary-item .label { font-size: 12px; color: #666; text-transform: uppercase; }
+    .summary-item.valid .number { color: #2e7d32; }
+    .summary-item.errors .number { color: #c62828; }
+    .summary-item.total .number { color: #1565c0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    th {
+      background: #f5f7fa;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid #ddd;
+      position: sticky;
+      top: 0;
+    }
+    td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+    tr:hover td { background: #fafafa; }
+    .error-text { color: #c62828; font-size: 12px; }
+    .table-container { max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; }
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #e8e8e8;
+      border-top-color: #4a90d9;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .success-icon { color: #2e7d32; font-size: 48px; margin-bottom: 12px; }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .alert {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .alert-error { background: #fdecea; color: #c62828; border: 1px solid #f5c6cb; }
+    .alert-warning { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+    .alert-info { background: #e8f4fd; color: #1565c0; border: 1px solid #b8daff; }
+  </style>
+</head>
+<body>
+
+  <!-- Step 1: Upload -->
+  <div id="step-upload" class="step active">
+    <h1>Patient CSV Loader</h1>
+    <p>Upload a CSV file to bulk-create patient records. Need the template?
+      <button class="btn-link" onclick="downloadTemplate()">Download CSV Template</button>
+    </p>
+
+    <div class="upload-area" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <input type="file" id="file-input" accept=".csv" onchange="handleFileSelect(event)">
+      <div class="label" id="drop-label">Click to select a CSV file or drag and drop here</div>
+      <div class="filename" id="file-name" style="display:none"></div>
+    </div>
+
+    <div id="upload-error" class="alert alert-error" style="display:none"></div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btn-upload" disabled onclick="uploadCSV()">Upload &amp; Validate</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Preview -->
+  <div id="step-preview" class="step">
+    <h1>Validation Results</h1>
+
+    <div id="warnings-section" style="display:none"></div>
+
+    <div class="summary-box">
+      <div class="summary-item total">
+        <div class="number" id="total-count">0</div>
+        <div class="label">Total Rows</div>
+      </div>
+      <div class="summary-item valid">
+        <div class="number" id="valid-count">0</div>
+        <div class="label">Valid</div>
+      </div>
+      <div class="summary-item errors">
+        <div class="number" id="error-count">0</div>
+        <div class="label">Errors</div>
+      </div>
+    </div>
+
+    <div id="error-section" style="display:none">
+      <div class="section-header">
+        <h2>Rows with Errors</h2>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr><th>Row</th><th>Name</th><th>Errors</th></tr>
+          </thead>
+          <tbody id="error-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="valid-section" style="display:none; margin-top: 16px;">
+      <div class="section-header">
+        <h2>Valid Rows (Preview)</h2>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr><th>Row</th><th>First Name</th><th>Last Name</th><th>DOB</th><th>Sex</th><th>Phone</th></tr>
+          </thead>
+          <tbody id="valid-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="goToUpload()">Back</button>
+      <button class="btn btn-primary" id="btn-confirm" onclick="confirmCreate()">Confirm &amp; Load</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Results -->
+  <div id="step-results" class="step">
+    <div style="text-align: center; padding: 24px 0;">
+      <div class="success-icon">&#10003;</div>
+      <h1>Patients Submitted</h1>
+      <p id="results-message"></p>
+    </div>
+
+    <div class="summary-box" style="justify-content: center;">
+      <div class="summary-item valid">
+        <div class="number" id="submitted-count">0</div>
+        <div class="label">Submitted</div>
+      </div>
+      <div class="summary-item errors">
+        <div class="number" id="failed-count">0</div>
+        <div class="label">Skipped</div>
+      </div>
+    </div>
+
+    <div class="alert alert-info">
+      Patient records have been submitted for creation. Check the Canvas patient list to confirm they were created successfully.
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="resetToUpload()">Upload Another File</button>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="loading" style="display:none; text-align:center; padding: 40px;">
+    <div class="spinner"></div>
+    <span id="loading-text">Processing...</span>
+  </div>
+
+  <script>
+    const API_BASE = '{{ api_base }}';
+    let selectedFile = null;
+    let validationResult = null;
+
+    // Drag and drop
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0 && files[0].name.endsWith('.csv')) {
+        selectedFile = files[0];
+        showFileName(selectedFile.name);
+      }
+    });
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        selectedFile = file;
+        showFileName(file.name);
+      }
+    }
+
+    function showFileName(name) {
+      document.getElementById('drop-label').style.display = 'none';
+      const el = document.getElementById('file-name');
+      el.textContent = name;
+      el.style.display = 'block';
+      document.getElementById('btn-upload').disabled = false;
+      document.getElementById('upload-error').style.display = 'none';
+    }
+
+    function showStep(stepId) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById(stepId).classList.add('active');
+    }
+
+    function showLoading(text) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      const el = document.getElementById('loading');
+      el.style.display = 'block';
+      document.getElementById('loading-text').textContent = text || 'Processing...';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('upload-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function goToUpload() { showStep('step-upload'); }
+
+    function resetToUpload() {
+      selectedFile = null;
+      validationResult = null;
+      document.getElementById('file-input').value = '';
+      document.getElementById('file-name').style.display = 'none';
+      document.getElementById('drop-label').style.display = 'block';
+      document.getElementById('btn-upload').disabled = true;
+      document.getElementById('upload-error').style.display = 'none';
+      showStep('step-upload');
+    }
+
+    function downloadTemplate() {
+      const csvContent = {{ template_csv_json|safe }};
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'patient_load_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    async function uploadCSV() {
+      if (!selectedFile) return;
+      showLoading('Validating CSV...');
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const resp = await fetch(API_BASE + '/csv/validate', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: 'Upload failed' }));
+          showStep('step-upload');
+          showError(err.error || 'Upload failed');
+          return;
+        }
+
+        validationResult = await resp.json();
+        renderPreview(validationResult);
+        showStep('step-preview');
+      } catch (err) {
+        showStep('step-upload');
+        showError('Network error: ' + err.message);
+      }
+    }
+
+    function renderPreview(result) {
+      // Show warnings (e.g. S3 audit trail issues)
+      var warningsSection = document.getElementById('warnings-section');
+      warningsSection.innerHTML = '';
+      if (result.warnings && result.warnings.length > 0) {
+        warningsSection.style.display = 'block';
+        result.warnings.forEach(function(w) {
+          var div = document.createElement('div');
+          div.className = 'alert alert-warning';
+          div.textContent = w;
+          warningsSection.appendChild(div);
+        });
+      } else {
+        warningsSection.style.display = 'none';
+      }
+
+      document.getElementById('total-count').textContent = result.total_rows;
+      document.getElementById('valid-count').textContent = result.valid_count;
+      document.getElementById('error-count').textContent = result.error_count;
+
+      // Error rows
+      const errorSection = document.getElementById('error-section');
+      const errorBody = document.getElementById('error-table-body');
+      errorBody.innerHTML = '';
+      if (result.error_rows.length > 0) {
+        errorSection.style.display = 'block';
+        result.error_rows.forEach(row => {
+          const tr = document.createElement('tr');
+          const name = (row.data.first_name || '') + ' ' + (row.data.last_name || '');
+          tr.innerHTML = '<td>' + row.row_number + '</td>'
+            + '<td>' + escapeHtml(name.trim() || '(empty)') + '</td>'
+            + '<td class="error-text">' + escapeHtml(row.errors.join('; ')) + '</td>';
+          errorBody.appendChild(tr);
+        });
+      } else {
+        errorSection.style.display = 'none';
+      }
+
+      // Valid rows
+      const validSection = document.getElementById('valid-section');
+      const validBody = document.getElementById('valid-table-body');
+      validBody.innerHTML = '';
+      if (result.valid_rows.length > 0) {
+        validSection.style.display = 'block';
+        result.valid_rows.forEach(row => {
+          const d = row.data;
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.row_number + '</td>'
+            + '<td>' + escapeHtml(d.first_name || '') + '</td>'
+            + '<td>' + escapeHtml(d.last_name || '') + '</td>'
+            + '<td>' + escapeHtml(d.birthdate || '') + '</td>'
+            + '<td>' + escapeHtml(d.sex_at_birth || '') + '</td>'
+            + '<td>' + escapeHtml(d.phone || '') + '</td>';
+          validBody.appendChild(tr);
+        });
+      } else {
+        validSection.style.display = 'none';
+      }
+
+      // Disable confirm if no valid rows
+      document.getElementById('btn-confirm').disabled = result.valid_count === 0;
+    }
+
+    async function confirmCreate() {
+      if (!validationResult || validationResult.valid_rows.length === 0) return;
+      showLoading('Creating patients...');
+
+      try {
+        const resp = await fetch(API_BASE + '/csv/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: validationResult.valid_rows }),
+          credentials: 'include',
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: 'Creation failed' }));
+          showStep('step-preview');
+          alert(err.error || 'Creation failed');
+          return;
+        }
+
+        const result = await resp.json();
+        document.getElementById('submitted-count').textContent = result.submitted_count;
+        document.getElementById('failed-count').textContent = validationResult.error_count;
+        document.getElementById('results-message').textContent =
+          result.submitted_count + ' patient record(s) have been submitted for creation.';
+        showStep('step-results');
+      } catch (err) {
+        showStep('step-preview');
+        alert('Network error: ' + err.message);
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

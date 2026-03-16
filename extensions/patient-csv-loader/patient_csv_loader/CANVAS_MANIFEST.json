@@ -1,0 +1,37 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_csv_loader",
+    "description": "Bulk-load patient demographic data from CSV files with validation, preview, and confirmation.",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_csv_loader.apps.api:PatientCSVAPI",
+                "description": "API endpoints for CSV upload, validation, patient creation, and template download"
+            }
+        ],
+        "applications": [
+            {
+                "class": "patient_csv_loader.apps.csv_upload:PatientCSVUpload",
+                "name": "Patient CSV Loader",
+                "description": "Upload a CSV to bulk-create patient records",
+                "icon": "assets/csv-upload-icon.png",
+                "scope": "global"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "S3_BUCKET_NAME"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "../README.md"
+}
