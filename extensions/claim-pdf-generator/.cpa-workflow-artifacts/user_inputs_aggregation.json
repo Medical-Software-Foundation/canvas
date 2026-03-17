@@ -1,0 +1,171 @@
+{
+  "inputs": [
+    {
+      "input": "/cpa:new-plugin",
+      "type": "slash_command"
+    },
+    {
+      "input": "Continue implementation",
+      "type": "question_answer",
+      "question": "What would you like to do with this plugin?"
+    },
+    {
+      "input": "localhost",
+      "type": "free_text"
+    },
+    {
+      "input": "Can we also add action buttons in the note so I can generate these pdf in the UI",
+      "type": "free_text"
+    },
+    {
+      "input": "I dont see the action buttons",
+      "type": "free_text"
+    },
+    {
+      "input": "Can you add logging so I can see why the button isnt there ",
+      "type": "question_answer",
+      "question": "What's the most likely reason the buttons aren't showing?"
+    },
+    {
+      "input": "You should be able to print these documents regardless if the claim is active. It should only be if there is a claim at all",
+      "type": "free_text"
+    },
+    {
+      "input": "can you deploy the plugin again",
+      "type": "free_text"
+    },
+    {
+      "input": "2026-03-13 22:05:35 [128] | plugin-runner [6ef8d78642c6: ?] ERROR 2026-03-13 17:05:35,622 Error importing module 'claim-pdf-generator:claim_pdf_generator.protocols.claim_pdf_api:ClaimPdfAPI'\n\n2026-03-13 22:05:35 [128] | Traceback (most recent call last):\n\n2026-03-13 22:05:35 [128] |   File \"/plugin-runner/plugin_runner/plugin_runner.py\", line 626, in load_or_reload_plugin\n\n2026-03-13 22:05:35 [128] |     sandbox = sandbox_from_module(path.parent, handler_module)\n\n2026-03-13 22:05:35 [128] |   File \"/plugin-runner/plugin_runner/sandbox.py\", line 971, in sandbox_from_module\n\n2026-03-13 22:05:35 [128] |     raise ModuleNotFoundError(f'Could not load module \"{module_name}\"')\n\n2026-03-13 22:05:35 [128] | ModuleNotFoundError: Could not load module \"claim_pdf_generator.protocols.claim_pdf_api\"\n\n2026-03-13 22:05:35 [128] | plugin-runner [6ef8d78642c6: ?] ERROR 2026-03-13 17:05:35,625 Error importing module 'claim-pdf-generator:claim_pdf_generator.protocols.note_action_buttons:SuperbillButton'\n\n2026-03-13 22:05:35 [128] | Traceback (most recent call last):\n\n2026-03-13 22:05:35 [128] |   File \"/plugin-runner/plugin_runner/plugin_runner.py\", line 626, in load_or_reload_plugin\n\n2026-03-13 22:05:35 [128] |     sandbox = sandbox_from_module(path.parent, handler_module)\n\n2026-03-13 22:05:35 [128] |   File \"/plugin-runner/plugin_runner/sandbox.py\", line 971, in sandbox_from_module\n\n2026-03-13 22:05:35 [128] |     raise ModuleNotFoundError(f'Could not load module \"{module_name}\"')\n\n2026-03-13 22:05:35 [128] | ModuleNotFoundError: Could not load module \"claim_pdf_generator.protocols.note_action_buttons\"\n\n2026-03-13 22:05:35 [128] | plugin-runner [6ef8d78642c6: ?] ERROR 2026-03-13 17:05:35,626 Error importing module 'claim-pdf-generator:claim_pdf_generator.protocols.note_action_buttons:HcfaButton'\n\n2026-03-13 22:05:35 [128] | Traceback (most recent call last):\n\n2026-03-13 22:05:35 [128] |   File \"/plugin-runner/plugin_runner/plugin_runner.py\", line 626, in load_or_reload_plugin\n\n2026-03-13 22:05:35 [128] |     sandbox = sandbox_from_module(path.parent, handler_module)\n\n2026-03-13 22:05:35 [128] |   File \"/plugin-runner/plugin_runner/sandbox.py\", line 971, in sandbox_from_module\n\n2026-03-13 22:05:35 [128] |     raise ModuleNotFoundError(f'Could not load module \"{module_name}\"')\n\n2026-03-13 22:05:35 [128] | ModuleNotFoundError: Could not load module \"claim_pdf_generator.protocols.note_action_buttons\"",
+      "type": "free_text"
+    },
+    {
+      "input": "Install the plugin again",
+      "type": "question_answer",
+      "question": "What Canvas SDK version is running on your localhost server? You can check with `pip show canvas` inside the plugin-runner container, or check the server's requirements."
+    },
+    {
+      "input": "I am running this locally with docker. I added auth",
+      "type": "free_text"
+    },
+    {
+      "input": "I added oauth tokens",
+      "type": "free_text"
+    },
+    {
+      "input": "I updated them in both",
+      "type": "free_text"
+    },
+    {
+      "input": "install again",
+      "type": "free_text"
+    },
+    {
+      "input": "2026-03-13 22:32:03 [120] | plugin-runner [25a8428e2096: ?] ERROR 2026-03-13 17:32:03,921 Plugin \"claim-pdf-generator\" declares handler from foreign package \"claim_pdf_generator\" \u2014 skipping\n\n2026-03-13 22:32:03 [120] | plugin-runner [25a8428e2096: ?] ERROR 2026-03-13 17:32:03,921 Plugin \"claim-pdf-generator\" declares handler from foreign package \"claim_pdf_generator\" \u2014 skipping\n\n2026-03-13 22:32:03 [120] | plugin-runner [25a8428e2096: ?] ERROR 2026-03-13 17:32:03,921 Plugin \"claim-pdf-generator\" declares handler from foreign package \"claim_pdf_generator\" \u2014 skipping",
+      "type": "free_text"
+    },
+    {
+      "input": " ImportError: 'pathlib' is not an allowed import.",
+      "type": "free_text"
+    },
+    {
+      "input": "\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500ImportError: 'os' is not an allowed import.",
+      "type": "free_text"
+    },
+    {
+      "input": "2026-03-13 22:44:06 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:44:06,974 [SuperbillButton.visible] note_id=7 has_claim=False\n\n2026-03-13 22:44:06 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:44:06,974 claim_pdf_generator:claim_pdf_generator.protocols.note_action_buttons:SuperbillButton.compute() completed.\n\n2026-03-13 22:44:06 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:44:06,974 [HcfaButton.visible] event.name=SHOW_NOTE_HEADER_BUTTON context={'note_id': 7, 'user': {'type': 'Staff', 'id': '4150cd20de8a470aa570a852859ac87e'}}\n\n2026-03-13 22:44:06 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:44:06,975 [HcfaButton.visible] note_id=7 has_claim=False\n\n2026-03-13 22:44:06 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:44:06,975 claim_pdf_generator:claim_pdf_generator.protocols.note_action_buttons:HcfaButton.compute() completed.\n\n2026-03-13 22:44:06 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:44:06,976 Responded to Event SHOW_NOTE_HEADER_BUTTON.",
+      "type": "free_text"
+    },
+    {
+      "input": "I think the note_id in the context is the dbid not the id",
+      "type": "free_text"
+    },
+    {
+      "input": "2026-03-13 22:46:54 [120] | plugin-runner [25a8428e2096: ?] ERROR 2026-03-13 17:46:54,671 [NoteActionButton] PDF generation failed for claim 52e259e3-26ce-4b18-a196-05aeee4a6e77",
+      "type": "free_text"
+    },
+    {
+      "input": "I have the latest develop on my branch",
+      "type": "free_text"
+    },
+    {
+      "input": "2026-03-13 22:48:57 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:48:57,213 [NoteActionButton] Rendered HTML length=4060 for claim 52e259e3-26ce-4b18-a196-05aeee4a6e77\n\n2026-03-13 22:48:57 [120] | plugin-runner [25a8428e2096: ?] INFO 2026-03-13 17:48:57,235 [NoteActionButton] pdf_response=None url=None\n\n2026-03-13 22:48:57 [120] | plugin-runner [25a8428e2096: ?] ERROR 2026-03-13 17:48:57,236 [NoteActionButton] PDF generation failed for claim 52e259e3-26ce-4b18-a196-05aeee4a6e77",
+      "type": "free_text"
+    },
+    {
+      "input": "reba_magier@Mac home-app % docker ps | grep -i pdf\nb8eed3708b32   web-to-pdf-web   \"docker-entrypoint.s\u2026\"   2 weeks ago      Up 2 days                   127.0.0.1:8055->8055/tcp                                                                                                                         web-to-pdf-web",
+      "type": "free_text"
+    },
+    {
+      "input": "/Users/reba_magier/Downloads/Rz\\ \\(74\\ F\\).pdf This pdf is the one that the instance makes. But the plugin looks like /Users/reba_magier/Downloads/e3a1998a-1d03-49aa-8f94-767c86adce7d.pdf  those are very different",
+      "type": "free_text"
+    },
+    {
+      "input": "You can't do 2 its not possible in a plugin",
+      "type": "free_text"
+    },
+    {
+      "input": "I want this embedded in an iframe not just the download button",
+      "type": "free_text"
+    },
+    {
+      "input": "Can you use the Organization.logo_url",
+      "type": "free_text"
+    },
+    {
+      "input": "I need you to understand the code for /Users/reba_magier/Canvas/repos/canvas/home-app/app/templates/superbill_v2.html and how to replicate it in the plugin",
+      "type": "free_text"
+    },
+    {
+      "input": "The plugin says `Example Organization` but the builtin superbill says `Demo Clinic`",
+      "type": "free_text"
+    },
+    {
+      "input": "yes update",
+      "type": "free_text"
+    },
+    {
+      "input": "Where is the fax number",
+      "type": "free_text"
+    },
+    {
+      "input": "Provider name doesnt have role abbreviation",
+      "type": "free_text"
+    },
+    {
+      "input": "I need the timezone on the date. It should be a plugin secret",
+      "type": "free_text"
+    },
+    {
+      "input": "    def _format_datetime_of_service(dt: object, tz_name: str) -> str:\n                                        ^^^^^^\nNameError: name 'object' is not defined",
+      "type": "free_text"
+    },
+    {
+      "input": "Where is payor address and payor phone",
+      "type": "free_text"
+    },
+    {
+      "input": "None on file is supposed to be the patient's address",
+      "type": "free_text"
+    },
+    {
+      "input": "    addr = patient.addresses.first()\n           ^^^^^^^^^^^^^^^^^\nAttributeError: 'ClaimPatient' object has no attribute 'addresses'",
+      "type": "free_text"
+    },
+    {
+      "input": "The tax ID logic is         <div>\n          Tax ID:\n          <span class=\"header-value\">\n            {% if note.provider.bill_through_organization %}\n              {{ primary_practice_location.organization.tax_id }}\n            {% else %}\n              {{ note.provider.tax_id }}\n            {% endif %}\n          </span>\n        </div>",
+      "type": "free_text"
+    },
+    {
+      "input": "Looks like we dont have access to the staff signature",
+      "type": "free_text"
+    },
+    {
+      "input": "yes",
+      "type": "free_text"
+    },
+    {
+      "input": "For the hcfa form I need you to look at the generate_hcfa function in /Users/reba_magier/Canvas/repos/canvas/home-app/api/views/print.py",
+      "type": "free_text"
+    }
+  ]
+}

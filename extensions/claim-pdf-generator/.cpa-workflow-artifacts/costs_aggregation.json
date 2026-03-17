@@ -1,0 +1,24 @@
+{
+  "created_date": "2026-03-17T16:56:53.469741+00:00",
+  "last_update": "2026-03-17T16:56:53.469741+00:00",
+  "session_count": 1,
+  "total_tokens": {
+    "input": 12451,
+    "output": 94571,
+    "total": 107022
+  },
+  "cache_usage": {
+    "cache_write": 1580738,
+    "cache_read": 85587045
+  },
+  "cost_usd": 165.299,
+  "cost_formatted": "$165.2990",
+  "sessions": [
+    {
+      "session_id": "2ed54e69-aa0e-4f60-9778-4be64a99bab0",
+      "date": "2026-03-17T16:56:53.411210+00:00",
+      "duration": "67h 40m 59s",
+      "cost_usd": 165.298995
+    }
+  ]
+}

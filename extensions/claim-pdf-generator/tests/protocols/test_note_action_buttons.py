@@ -22,6 +22,7 @@ def superbill_handler() -> SuperbillButton:
     handler = SuperbillButton.__new__(SuperbillButton)
     handler.event = MagicMock()
     handler.event.context = {"note_id": "note-abc", "key": "GENERATE_SUPERBILL"}
+    handler.secrets = {"timezone": "US/Eastern"}
     return handler
 
 
@@ -30,6 +31,7 @@ def hcfa_handler() -> HcfaButton:
     handler = HcfaButton.__new__(HcfaButton)
     handler.event = MagicMock()
     handler.event.context = {"note_id": "note-abc", "key": "GENERATE_HCFA"}
+    handler.secrets = {"timezone": "US/Eastern"}
     return handler
 
 
@@ -44,7 +46,7 @@ def test_get_claim_for_note_found() -> None:
     with patch(
         "claim_pdf_generator.protocols.note_action_buttons.Claim"
     ) as mock_claim_cls:
-        mock_claim_cls.objects.active.return_value.filter.return_value.first.return_value = (
+        mock_claim_cls.objects.filter.return_value.first.return_value = (
             mock_claim
         )
 
@@ -52,9 +54,8 @@ def test_get_claim_for_note_found() -> None:
 
     assert result is mock_claim
     assert mock_claim_cls.mock_calls == [
-        call.objects.active(),
-        call.objects.active().filter(note__id="note-abc"),
-        call.objects.active().filter().first(),
+        call.objects.filter(note__dbid="note-abc"),
+        call.objects.filter().first(),
     ]
 
 
@@ -63,15 +64,14 @@ def test_get_claim_for_note_not_found() -> None:
     with patch(
         "claim_pdf_generator.protocols.note_action_buttons.Claim"
     ) as mock_claim_cls:
-        mock_claim_cls.objects.active.return_value.filter.return_value.first.return_value = None
+        mock_claim_cls.objects.filter.return_value.first.return_value = None
 
         result = _get_claim_for_note("note-missing")
 
     assert result is None
     assert mock_claim_cls.mock_calls == [
-        call.objects.active(),
-        call.objects.active().filter(note__id="note-missing"),
-        call.objects.active().filter().first(),
+        call.objects.filter(note__dbid="note-missing"),
+        call.objects.filter().first(),
     ]
 
 
@@ -107,9 +107,7 @@ def test_generate_pdf_modal_html_pdf_failure() -> None:
     ) as mock_claim_cls, patch(
         "claim_pdf_generator.protocols.note_action_buttons._build_claim_context"
     ) as mock_ctx, patch(
-        "claim_pdf_generator.protocols.note_action_buttons._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.note_action_buttons._render_template"
+        "claim_pdf_generator.protocols.note_action_buttons._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.note_action_buttons.pdf_generator"
     ) as mock_pdf_gen, patch(
@@ -117,27 +115,22 @@ def test_generate_pdf_modal_html_pdf_failure() -> None:
     ) as mock_log:
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
         mock_pdf_gen.from_html.return_value = None
 
         result = _generate_pdf_modal_html("claim-xyz", "superbill", "superbill.html")
 
     assert "error" in result.lower() or "failed" in result.lower()
-    assert mock_pdf_gen.mock_calls == [call.from_html(content="<html/>")]
-    assert mock_log.mock_calls == [
-        call.error("[NoteActionButton] PDF generation failed for claim claim-xyz")
-    ]
+    mock_pdf_gen.from_html.assert_called_once_with(content="<html/>")
+    mock_log.error.assert_called_with(
+        "[NoteActionButton] PDF generation failed for claim claim-xyz"
+    )
 
 
 def test_generate_pdf_modal_html_success_superbill() -> None:
-    """Returns HTML with a PDF link when generation succeeds (superbill)."""
+    """Returns HTML with an iframe embedding the PDF when generation succeeds."""
     mock_claim = MagicMock()
     mock_claim.id = "claim-xyz"
-    mock_patient = MagicMock()
-    mock_patient.first_name = "Jane"
-    mock_patient.last_name = "Doe"
-    mock_claim.patient = mock_patient
 
     pdf_resp = MagicMock()
     pdf_resp.url = "https://s3.example.com/superbill.pdf"
@@ -147,38 +140,27 @@ def test_generate_pdf_modal_html_success_superbill() -> None:
     ) as mock_claim_cls, patch(
         "claim_pdf_generator.protocols.note_action_buttons._build_claim_context"
     ) as mock_ctx, patch(
-        "claim_pdf_generator.protocols.note_action_buttons._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.note_action_buttons._render_template"
+        "claim_pdf_generator.protocols.note_action_buttons._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.note_action_buttons.pdf_generator"
     ) as mock_pdf_gen, patch(
         "claim_pdf_generator.protocols.note_action_buttons.log"
-    ) as mock_log:
+    ):
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
         mock_pdf_gen.from_html.return_value = pdf_resp
 
         result = _generate_pdf_modal_html("claim-xyz", "superbill", "superbill.html")
 
     assert "https://s3.example.com/superbill.pdf" in result
-    assert "Superbill" in result
-    assert "Doe, Jane" in result
-    assert mock_pdf_gen.mock_calls == [
-        call.from_html(content="<html/>"),
-        call.from_html().__bool__(),
-    ]
-    assert mock_log.mock_calls == []
+    assert "<iframe" in result
 
 
 def test_generate_pdf_modal_html_success_hcfa() -> None:
-    """Returns HTML with a PDF link when generation succeeds (HCFA)."""
+    """Returns HTML with an iframe embedding the PDF (HCFA)."""
     mock_claim = MagicMock()
     mock_claim.id = "claim-xyz"
-    # No patient set — getattr falls back to MagicMock, which is truthy
-    del mock_claim.patient  # Remove so getattr returns None
 
     pdf_resp = MagicMock()
     pdf_resp.url = "https://s3.example.com/hcfa.pdf"
@@ -188,9 +170,7 @@ def test_generate_pdf_modal_html_success_hcfa() -> None:
     ) as mock_claim_cls, patch(
         "claim_pdf_generator.protocols.note_action_buttons._build_claim_context"
     ) as mock_ctx, patch(
-        "claim_pdf_generator.protocols.note_action_buttons._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.note_action_buttons._render_template"
+        "claim_pdf_generator.protocols.note_action_buttons._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.note_action_buttons.pdf_generator"
     ) as mock_pdf_gen, patch(
@@ -198,19 +178,13 @@ def test_generate_pdf_modal_html_success_hcfa() -> None:
     ) as mock_log:
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
         mock_pdf_gen.from_html.return_value = pdf_resp
 
         result = _generate_pdf_modal_html("claim-xyz", "hcfa", "hcfa.html")
 
     assert "https://s3.example.com/hcfa.pdf" in result
-    assert "CMS-1500" in result
-    assert mock_pdf_gen.mock_calls == [
-        call.from_html(content="<html/>"),
-        call.from_html().__bool__(),
-    ]
-    assert mock_log.mock_calls == []
+    assert "<iframe" in result
 
 
 # ---------------------------------------------------------------------------
@@ -223,15 +197,14 @@ def test_superbill_visible_true_when_claim_exists(superbill_handler: SuperbillBu
     with patch(
         "claim_pdf_generator.protocols.note_action_buttons.Claim"
     ) as mock_claim_cls:
-        mock_claim_cls.objects.active.return_value.filter.return_value.exists.return_value = True
+        mock_claim_cls.objects.filter.return_value.exists.return_value = True
 
         result = superbill_handler.visible()
 
     assert result is True
     assert mock_claim_cls.mock_calls == [
-        call.objects.active(),
-        call.objects.active().filter(note__id="note-abc"),
-        call.objects.active().filter().exists(),
+        call.objects.filter(note__dbid="note-abc"),
+        call.objects.filter().exists(),
     ]
 
 
@@ -240,15 +213,14 @@ def test_superbill_visible_false_when_no_claim(superbill_handler: SuperbillButto
     with patch(
         "claim_pdf_generator.protocols.note_action_buttons.Claim"
     ) as mock_claim_cls:
-        mock_claim_cls.objects.active.return_value.filter.return_value.exists.return_value = False
+        mock_claim_cls.objects.filter.return_value.exists.return_value = False
 
         result = superbill_handler.visible()
 
     assert result is False
     assert mock_claim_cls.mock_calls == [
-        call.objects.active(),
-        call.objects.active().filter(note__id="note-abc"),
-        call.objects.active().filter().exists(),
+        call.objects.filter(note__dbid="note-abc"),
+        call.objects.filter().exists(),
     ]
 
 
@@ -275,15 +247,14 @@ def test_hcfa_visible_true_when_claim_exists(hcfa_handler: HcfaButton) -> None:
     with patch(
         "claim_pdf_generator.protocols.note_action_buttons.Claim"
     ) as mock_claim_cls:
-        mock_claim_cls.objects.active.return_value.filter.return_value.exists.return_value = True
+        mock_claim_cls.objects.filter.return_value.exists.return_value = True
 
         result = hcfa_handler.visible()
 
     assert result is True
     assert mock_claim_cls.mock_calls == [
-        call.objects.active(),
-        call.objects.active().filter(note__id="note-abc"),
-        call.objects.active().filter().exists(),
+        call.objects.filter(note__dbid="note-abc"),
+        call.objects.filter().exists(),
     ]
 
 
@@ -344,7 +315,7 @@ def test_superbill_handle_with_claim(superbill_handler: SuperbillButton) -> None
     # _get_claim_for_note returns a MagicMock, so `if not claim:` calls __bool__()
     assert mock_get_claim.mock_calls == [call("note-abc"), call().__bool__()]
     assert mock_html.mock_calls == [
-        call(claim_id="claim-xyz", form_type="superbill", template="superbill.html")
+        call(claim_id="claim-xyz", form_type="superbill", template="superbill.html", tz_name="US/Eastern")
     ]
     assert mock_log.mock_calls == []
 
@@ -393,7 +364,7 @@ def test_hcfa_handle_with_claim(hcfa_handler: HcfaButton) -> None:
     # _get_claim_for_note returns a MagicMock, so `if not claim:` calls __bool__()
     assert mock_get_claim.mock_calls == [call("note-abc"), call().__bool__()]
     assert mock_html.mock_calls == [
-        call(claim_id="claim-hcfa-001", form_type="hcfa", template="hcfa.html")
+        call(claim_id="claim-hcfa-001", form_type="hcfa", template="hcfa.html", tz_name="US/Eastern")
     ]
     assert mock_log.mock_calls == []
 

@@ -1,7 +1,7 @@
 {
     "sdk_version": "0.1.4",
     "plugin_version": "0.1.0",
-    "name": "claim-pdf-generator",
+    "name": "claim_pdf_generator",
     "description": "Generates superbill and CMS-1500 PDF forms from claim data, with note header action buttons",
     "components": {
         "protocols": [
@@ -19,7 +19,7 @@
             }
         ]
     },
-    "secrets": ["simpleapi-api-key"],
+    "secrets": ["simpleapi-api-key", "timezone"],
     "tags": {},
     "references": [],
     "license": "",

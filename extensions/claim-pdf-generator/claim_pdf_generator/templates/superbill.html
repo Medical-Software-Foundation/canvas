@@ -4,139 +4,167 @@
 <meta charset="UTF-8" />
 <title>Superbill</title>
 <style>
+  @page {
+    size: letter;
+    margin: 25mm 16mm 25mm 16mm;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; padding: 20px; }
-  h1 { font-size: 16px; margin-bottom: 2px; }
-  h2 { font-size: 12px; margin-bottom: 8px; color: #444; }
-  .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
-  .section { margin-bottom: 10px; }
-  .section-title { font-weight: bold; font-size: 10px; border-bottom: 1px solid #ccc; margin-bottom: 4px; padding-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-  .field { margin-bottom: 3px; }
-  .field label { font-weight: bold; margin-right: 3px; }
-  table { width: 100%; border-collapse: collapse; font-size: 9px; }
-  th { background: #e0e0e0; border: 1px solid #aaa; padding: 3px 4px; text-align: left; font-size: 9px; }
-  td { border: 1px solid #ccc; padding: 3px 4px; vertical-align: top; }
-  tr:nth-child(even) td { background: #f9f9f9; }
-  .totals-row td { font-weight: bold; background: #f0f0f0; }
-  .signature-section { margin-top: 16px; border-top: 1px solid #ccc; padding-top: 8px; }
-  .sig-line { border-bottom: 1px solid #000; width: 220px; display: inline-block; margin-right: 30px; }
-  .sig-label { font-size: 9px; color: #555; margin-top: 2px; }
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #000; line-height: 1.4; }
+
+  .header { text-align: center; margin-bottom: 16px; }
+  .header img { max-height: 30px; max-width: 80px; }
+  .header .clinic-name { font-size: 15px; font-weight: bold; }
+  .header .sub { font-size: 12px; color: #444; }
+
+  .info-block { margin-bottom: 10px; }
+  .info-block h3 { font-size: 14px; margin-bottom: 10px; }
+  .info-block .row { margin-bottom: 1px; font-size: 14px; }
+  .info-block .row strong { font-weight: bold; }
+  span.header-value { font-family: Arial, sans-serif; }
+
+  .section { margin-top: 1.5em; }
+  .section h3 { margin-bottom: 0.25em; }
+
+  /* Coverage */
+  .coverage-entry { margin-bottom: 8px; }
+  .coverage-entry .payer-line { font-weight: bold; }
+  .coverage-cols { column-count: 2; word-wrap: break-word; }
+
+  /* Tables */
+  table, th, td { padding: 4px; border: 1px solid black; border-collapse: collapse; font-size: 13px; }
+  thead > tr { background: #ccc; }
+  th { text-align: left; }
+  .empty-msg { text-align: center; font-style: italic; }
+
+  /* Signature */
+  .signature-section { margin-top: 1.5em; }
+  .sig-line { margin-top: 8px; }
+
+  /* Footer */
+  .footer { margin-top: 2em; font-size: 12px; }
+  .footer .privacy { font-size: 12px; margin-top: 8px; line-height: 1.2; }
 </style>
 </head>
 <body>
 
-<!-- Practice / Facility Header -->
-<div class="header">
-  <h1>
-    {% if provider %}{{ provider.billing_provider_name }}{% else %}Practice Name{% endif %}
-  </h1>
-  {% if provider %}
+<!-- Header -->
+<h4 class="header">
   <div>
+    {% if practice_location and practice_location.organization and practice_location.organization.logo_url %}
+    <img src="{{ practice_location.organization.logo_url }}" />
+    {% elif organization and organization.logo_url %}
+    <img src="{{ organization.logo_url }}" />
+    {% endif %}
+  </div>
+  <div class="clinic-name">
+    {% if practice_location %}{{ practice_location.full_name }}{% elif provider %}{{ provider.billing_provider_name }}{% elif organization %}{{ organization.full_name }}{% endif %}
+  </div>
+  <div class="sub">
+    {% if provider %}
     {{ provider.billing_provider_addr1 }}{% if provider.billing_provider_addr2 %}, {{ provider.billing_provider_addr2 }}{% endif %},
     {{ provider.billing_provider_city }}, {{ provider.billing_provider_state }} {{ provider.billing_provider_zip }}
+    {% endif %}
   </div>
-  <div>
-    {% if provider.billing_provider_phone %}Phone: {{ provider.billing_provider_phone }}{% endif %}
-    &nbsp;&nbsp;
-    {% if provider.billing_provider_npi and provider.billing_provider_npi != "0" %}NPI: {{ provider.billing_provider_npi }}{% endif %}
-    &nbsp;&nbsp;
-    {% if provider.billing_provider_tax_id %}Tax ID: {{ provider.billing_provider_tax_id }}{% endif %}
+  <div class="sub">
+    {% if location_phone %}<strong>Phone:</strong> {{ location_phone }}{% endif %}
+    {% if location_fax %} <strong>Fax:</strong> {{ location_fax }}{% endif %}
+  </div>
+</h4>
+
+<!-- Provider & Patient Info -->
+<div class="info-block">
+  <h3>
+    {% if provider %}
+    <div>Provider Name: <span class="header-value">{% if provider_credentialed_name %}{{ provider_credentialed_name }}{% else %}{{ provider.provider_first_name }} {{ provider.provider_last_name }}{% endif %}</span></div>
+    <div>Provider NPI: <span class="header-value">{{ provider.provider_npi }}</span></div>
+    {% endif %}
+    {% if formatted_dos %}
+    <div>Date of Service &amp; Time: <span class="header-value">{{ formatted_dos }}</span></div>
+    {% elif note %}
+    <div>Date of Service &amp; Time: <span class="header-value">{{ note.datetime_of_service }}</span></div>
+    {% endif %}
+    <div>Place of Service: <span class="header-value">{{ note.place_of_service }}</span></div>
+    <div>Tax ID: <span class="header-value">{% if tax_id %}{{ tax_id }}{% else %}None{% endif %}</span></div>
+    {% if patient %}
+    <div>Patient Info:
+      <span class="header-value">
+        {{ patient.last_name }}, {{ patient.first_name }} ({{ patient.sex }}) born {{ patient.dob }}
+        <br/>
+        <span style="margin-left: 114px; color: gray;">
+          {% if patient_address %}{{ patient_address }}{% else %}None on file{% endif %}
+        </span>
+        <br/>
+        <span style="margin-left: 114px; color: gray;">{{ patient_phone }}</span>
+      </span>
+    </div>
+    {% endif %}
+  </h3>
+</div>
+
+<!-- Insurance Coverage -->
+<div class="section">
+  <h3>Insurance Coverage</h3>
+  {% if primary_coverage %}
+  <div class="coverage-entry">
+    <div class="payer-line">PRIMARY: {{ primary_coverage.payer_name }}{% if primary_coverage.payer_id %} ({{ primary_coverage.payer_id }}{% if primary_coverage.line_of_business %} {{ primary_coverage.line_of_business }}{% endif %}){% endif %}</div>
+    <div class="coverage-cols">
+      <div>Subscriber: {{ primary_coverage.subscriber_first_name }} {{ primary_coverage.subscriber_last_name }}{% if primary_coverage.subscriber_sex %} ({{ primary_coverage.subscriber_sex }}){% endif %}{% if primary_coverage.subscriber_dob %} born {{ primary_coverage.subscriber_dob }}{% endif %}</div>
+      <div>Policy ID#: {{ primary_coverage.subscriber_number }}</div>
+      <div>Plan: {{ primary_coverage.subscriber_plan }}</div>
+      <div>Group: {{ primary_coverage.subscriber_group }}</div>
+    </div>
+    {% if primary_coverage.payer_addr1 %}
+    <div>Payer Address: {{ primary_coverage.payer_addr1 }}{% if primary_coverage.payer_addr2 %}, {{ primary_coverage.payer_addr2 }}{% endif %}, {{ primary_coverage.payer_city }}, {{ primary_coverage.payer_state }} {{ primary_coverage.payer_zip }}</div>
+    {% endif %}
+    {% if primary_coverage.coverage and primary_coverage.coverage.issuer_phone %}
+    <div>Payer Phone: {{ primary_coverage.coverage.issuer_phone.use|title }} {{ primary_coverage.coverage.issuer_phone.system }} {{ primary_coverage.coverage.issuer_phone.value }}</div>
+    {% endif %}
   </div>
   {% endif %}
-  <h2>SUPERBILL</h2>
-</div>
 
-<!-- Patient Information -->
-<div class="section">
-  <div class="section-title">Patient Information</div>
-  <div class="grid-2">
-    <div>
-      {% if patient %}
-      <div class="field"><label>Name:</label>{{ patient.last_name }}, {{ patient.first_name }} {% if patient.middle_name %}{{ patient.middle_name }}{% endif %}</div>
-      <div class="field"><label>DOB:</label>{{ patient.dob }}</div>
-      <div class="field"><label>Sex:</label>{{ patient.sex }}</div>
-      <div class="field"><label>SSN:</label>{{ patient.ssn }}</div>
-      {% endif %}
+  {% if secondary_coverage %}
+  <div class="coverage-entry">
+    <div class="payer-line">SECONDARY: {{ secondary_coverage.payer_name }}{% if secondary_coverage.payer_id %} ({{ secondary_coverage.payer_id }}{% if secondary_coverage.line_of_business %} {{ secondary_coverage.line_of_business }}{% endif %}){% endif %}</div>
+    <div class="coverage-cols">
+      <div>Subscriber: {{ secondary_coverage.subscriber_first_name }} {{ secondary_coverage.subscriber_last_name }}{% if secondary_coverage.subscriber_sex %} ({{ secondary_coverage.subscriber_sex }}){% endif %}{% if secondary_coverage.subscriber_dob %} born {{ secondary_coverage.subscriber_dob }}{% endif %}</div>
+      <div>Policy ID#: {{ secondary_coverage.subscriber_number }}</div>
+      <div>Plan: {{ secondary_coverage.subscriber_plan }}</div>
+      <div>Group: {{ secondary_coverage.subscriber_group }}</div>
     </div>
-    <div>
-      {% if patient %}
-      <div class="field"><label>Address:</label>{{ patient.addr1 }}{% if patient.addr2 %}, {{ patient.addr2 }}{% endif %}</div>
-      <div class="field"><label>City/State/Zip:</label>{{ patient.city }}, {{ patient.state }} {{ patient.zip }}</div>
-      <div class="field"><label>Phone:</label>{{ patient.phone }}</div>
-      {% endif %}
-      {% if primary_coverage %}
-      <div class="field"><label>Insurance:</label>{{ primary_coverage.payer_name }}</div>
-      <div class="field"><label>Member ID:</label>{{ primary_coverage.subscriber_number }}</div>
-      {% endif %}
-    </div>
+    {% if secondary_coverage.payer_addr1 %}
+    <div>Payer Address: {{ secondary_coverage.payer_addr1 }}{% if secondary_coverage.payer_addr2 %}, {{ secondary_coverage.payer_addr2 }}{% endif %}, {{ secondary_coverage.payer_city }}, {{ secondary_coverage.payer_state }} {{ secondary_coverage.payer_zip }}</div>
+    {% endif %}
+    {% if secondary_coverage.coverage and secondary_coverage.coverage.issuer_phone %}
+    <div>Payer Phone: {{ secondary_coverage.coverage.issuer_phone.use|title }} {{ secondary_coverage.coverage.issuer_phone.system }} {{ secondary_coverage.coverage.issuer_phone.value }}</div>
+    {% endif %}
   </div>
+  {% endif %}
 </div>
 
-<!-- Provider Information -->
+<!-- Related Diagnosis Codes -->
 <div class="section">
-  <div class="section-title">Provider Information</div>
-  <div class="grid-2">
-    <div>
-      {% if provider %}
-      <div class="field"><label>Rendering Provider:</label>{{ provider.provider_last_name }}, {{ provider.provider_first_name }} {{ provider.provider_middle_name }}</div>
-      <div class="field"><label>NPI:</label>{{ provider.provider_npi }}</div>
-      {% endif %}
-    </div>
-    <div>
-      {% if note %}
-      <div class="field"><label>Date of Service:</label>{{ note.datetime_of_service }}</div>
-      {% endif %}
-      {% if claim %}
-      <div class="field"><label>Claim ID:</label>{{ claim.id }}</div>
-      {% if claim.prior_auth %}
-      <div class="field"><label>Prior Auth:</label>{{ claim.prior_auth }}</div>
-      {% endif %}
-      {% endif %}
-    </div>
+  <h3>Related Diagnosis Codes</h3>
+  {% for dx in diagnosis_codes %}
+  <div>
+    <span>{{ dx.code }}:&nbsp;</span>
+    <span>{{ dx.display }}</span>
   </div>
+  {% endfor %}
 </div>
 
-<!-- Diagnosis Codes -->
-{% if diagnosis_codes %}
+<!-- Charges -->
 <div class="section">
-  <div class="section-title">Diagnosis Codes (ICD-10)</div>
-  <table>
+  <h3>Charges</h3>
+  <table width="100%">
     <thead>
       <tr>
-        <th>#</th>
-        <th>ICD-10 Code</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for dx in diagnosis_codes %}
-      <tr>
-        <td>{{ dx.rank }}</td>
-        <td>{{ dx.code }}</td>
-        <td>{{ dx.display }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-
-<!-- Procedures -->
-<div class="section">
-  <div class="section-title">Procedures</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>CPT</th>
-        <th>Description</th>
-        <th>Modifiers</th>
-        <th>Diag Ptr</th>
-        <th>POS</th>
-        <th>Units</th>
-        <th>Charge</th>
+        <th align="left">Date</th>
+        <th align="left">Service (CPT)</th>
+        <th align="left">DX</th>
+        <th align="left">Description (Info)</th>
+        <th align="left">Units</th>
+        <th align="left">Modifiers</th>
+        <th align="left">Fee</th>
       </tr>
     </thead>
     <tbody>
@@ -144,53 +172,83 @@
       <tr>
         <td>{{ item.from_date }}</td>
         <td>{{ item.proc_code }}</td>
-        <td>{{ item.display }}</td>
-        <td>{% for mod in item.modifiers %}{{ mod }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td>{% for ptr in item.diag_pointers %}{{ ptr }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td>{{ item.place_of_service }}</td>
+        <td>{% for code in item.linked_diag_codes %}{{ code }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td>{{ item.display }}{% if item.narrative %} ({{ item.narrative }}){% endif %}</td>
         <td>{{ item.units }}</td>
-        <td>${{ item.charge }}</td>
+        <td>{% for mod in item.modifiers %}{{ mod }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td align="right"><span style="float:left;">$</span>{{ item.charge|floatformat:2 }}</td>
       </tr>
+      {% if forloop.last %}
+      <tr style="font-weight: bold;">
+        <td colspan="6" align="right" style="padding-right: 1em;">Total</td>
+        <td align="right"><span style="float:left;">$</span>{{ total_charges|floatformat:2 }}</td>
+      </tr>
+      {% endif %}
+      {% empty %}
+      <tr><td colspan="7" class="empty-msg">No charges have been recorded</td></tr>
       {% endfor %}
-      <tr class="totals-row">
-        <td colspan="7" style="text-align:right;">Total Charges:</td>
-        <td>${{ total_charges }}</td>
-      </tr>
     </tbody>
   </table>
 </div>
 
-<!-- Insurance / Coverage -->
-{% if primary_coverage %}
+<!-- Postings -->
 <div class="section">
-  <div class="section-title">Insurance Information</div>
-  <div class="grid-2">
-    <div>
-      <div class="field"><label>Payer:</label>{{ primary_coverage.payer_name }}</div>
-      <div class="field"><label>Subscriber:</label>{{ primary_coverage.subscriber_last_name }}, {{ primary_coverage.subscriber_first_name }}</div>
-      <div class="field"><label>Member ID:</label>{{ primary_coverage.subscriber_number }}</div>
-      <div class="field"><label>Group:</label>{{ primary_coverage.subscriber_group }}</div>
-    </div>
-    <div>
-      <div class="field"><label>Plan:</label>{{ primary_coverage.subscriber_plan }}</div>
-      <div class="field"><label>Subscriber DOB:</label>{{ primary_coverage.subscriber_dob }}</div>
-      <div class="field"><label>Relationship:</label>{{ primary_coverage.patient_relationship_to_subscriber }}</div>
-    </div>
-  </div>
+  <h3>Postings</h3>
+  <table width="100%" cellpadding="3">
+    <thead>
+      <tr>
+        <th align="left">Date</th>
+        <th align="left">Payer</th>
+        <th align="left">Method</th>
+        <th align="left">Paid</th>
+        <th align="left">Adjusted</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for posting in postings %}
+      <tr>
+        <td>{{ posting.created|date:"Y-m-d" }}</td>
+        <td>{% if posting.coverageposting and posting.coverageposting.claim_coverage %}{{ posting.coverageposting.claim_coverage.payer_name }}{% else %}Patient{% endif %}</td>
+        <td>{% if posting.payment_collection %}{{ posting.payment_collection.method }}{% endif %}</td>
+        <td align="right"><span style="float:left;">$</span>{{ posting.paid_amount|floatformat:2 }}</td>
+        <td align="right"><span style="float:left;">$</span>{{ posting.adjusted_and_transferred_amount|floatformat:2 }}</td>
+      </tr>
+      {% if posting.description %}
+      <tr>
+        <td>&nbsp;</td>
+        <td colspan="4"><strong>Comment:</strong> <em>{{ posting.description }}</em></td>
+      </tr>
+      {% endif %}
+      {% if forloop.last %}
+      <tr style="font-weight: bold;">
+        <td colspan="3" align="right" style="padding-right: 1em;">Totals</td>
+        <td align="right"><span style="float:left;">$</span>{{ total_paid|floatformat:2 }}</td>
+        <td align="right"><span style="float:left;">$</span>{{ total_adjusted|floatformat:2 }}</td>
+      </tr>
+      {% endif %}
+      {% empty %}
+      <tr><td colspan="5" class="empty-msg">No postings have been recorded</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
-{% endif %}
 
-<!-- Signature Section -->
+<!-- Provider Signature -->
+<!-- TODO: Display provider signature image once Staff.signature is available in the SDK -->
 <div class="signature-section">
-  <div class="grid-2">
-    <div>
-      <div class="sig-line">&nbsp;</div>
-      <div class="sig-label">Patient/Authorized Signature &nbsp;&nbsp;&nbsp; Date</div>
-    </div>
-    <div>
-      <div class="sig-line">&nbsp;</div>
-      <div class="sig-label">Provider Signature &nbsp;&nbsp;&nbsp; Date</div>
-    </div>
+  <h4>Provider Signature:</h4>
+  <br/><br/>
+  <div>____________________________________________________________</div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <div>Claim Id: {{ claim.account_number }}</div>
+  <div>Document Control Number: {% if claim.document_control_number %}{{ claim.document_control_number }}{% endif %}</div>
+  <div class="privacy">
+    The information contained in this transmission contains privileged and confidential information.
+    If you are not the intended recipient, please destroy this content <strong>immediately</strong>
+    and contact the party who gave it to you.
   </div>
 </div>
 

@@ -11,8 +11,7 @@ from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 from claim_pdf_generator.protocols.claim_pdf_api import (
     ClaimPdfAPI,
     _build_claim_context,
-    _load_template,
-    _render_template,
+    _render_claim_template,
 )
 
 
@@ -47,12 +46,12 @@ def mock_claim():
     patient.dob = "1985-03-15"
     patient.sex = "F"
     patient.ssn = "123-45-6789"
+    patient.phone = "5555555555"
     patient.addr1 = "123 Main St"
     patient.addr2 = ""
     patient.city = "Springfield"
     patient.state = "IL"
     patient.zip = "62701"
-    patient.phone = "555-555-5555"
     claim.patient = patient
 
     # provider OneToOne
@@ -132,19 +131,19 @@ def mock_claim():
     line_item.charge = Decimal("150.00")
     line_item.billing_line_item_id = "bli-001"
     line_item.billing_line_item.modifiers.values_list.return_value = ["25"]
-    line_item.diagnosis_codes.filter.return_value.values_list.return_value = [1]
-    line_item.ndc_code = ""
-    line_item.ndc_dosage = ""
-    line_item.ndc_measure = ""
+    line_item.diagnosis_codes.filter.return_value.values_list.return_value = ["Z0000"]
     line_item.narrative = ""
     claim.get_active_claim_line_items.return_value = [line_item]
 
     # diagnosis codes
     dx = MagicMock()
     dx.rank = 1
-    dx.code = "Z00.00"
+    dx.code = "Z0000"
     dx.display = "Encounter for general adult medical examination"
     claim.diagnosis_codes.order_by.return_value = [dx]
+
+    # postings
+    claim.postings.filter.return_value = []
 
     # note
     note = MagicMock()
@@ -173,45 +172,25 @@ def api_handler(mock_request):
 
 
 # ---------------------------------------------------------------------------
-# _load_template
+# _render_claim_template
 # ---------------------------------------------------------------------------
 
 
-def test_load_template_superbill():
-    """_load_template returns non-empty string for superbill.html."""
-    content = _load_template("superbill.html")
-    assert "superbill" in content.lower() or "SUPERBILL" in content
+def test_render_claim_template_superbill():
+    """_render_claim_template returns non-empty string for superbill.html."""
+    with patch("claim_pdf_generator.protocols.claim_pdf_api.render_to_string") as mock_rts:
+        mock_rts.return_value = "<html>superbill</html>"
+        content = _render_claim_template("superbill.html", {"claim": "test"})
+    assert content == "<html>superbill</html>"
+    mock_rts.assert_called_once_with("templates/superbill.html", {"claim": "test"})
 
 
-def test_load_template_hcfa():
-    """_load_template returns non-empty string for hcfa.html."""
-    content = _load_template("hcfa.html")
-    assert "CMS-1500" in content or "hcfa" in content.lower() or "HCFA" in content
-
-
-def test_load_template_missing_raises():
-    """_load_template raises FileNotFoundError for unknown template."""
-    with pytest.raises(FileNotFoundError):
-        _load_template("nonexistent.html")
-
-
-# ---------------------------------------------------------------------------
-# _render_template
-# ---------------------------------------------------------------------------
-
-
-def test_render_template_interpolates_context():
-    """_render_template substitutes context values into the template."""
-    template_str = "<p>Hello {{ name }}</p>"
-    result = _render_template(template_str, {"name": "World"})
-    assert result == "<p>Hello World</p>"
-
-
-def test_render_template_empty_context():
-    """_render_template handles empty context without error."""
-    template_str = "<p>No vars</p>"
-    result = _render_template(template_str, {})
-    assert result == "<p>No vars</p>"
+def test_render_claim_template_returns_empty_on_none():
+    """_render_claim_template returns empty string when render_to_string returns None."""
+    with patch("claim_pdf_generator.protocols.claim_pdf_api.render_to_string") as mock_rts:
+        mock_rts.return_value = None
+        content = _render_claim_template("superbill.html", {})
+    assert content == ""
 
 
 # ---------------------------------------------------------------------------
@@ -221,26 +200,26 @@ def test_render_template_empty_context():
 
 def test_build_claim_context_keys(mock_claim):
     """_build_claim_context returns all expected top-level keys."""
-    ctx = _build_claim_context(mock_claim)
+    with patch("claim_pdf_generator.protocols.claim_pdf_api.Organization") as mock_org:
+        mock_org.objects.first.return_value = None
+        ctx = _build_claim_context(mock_claim)
 
-    assert set(ctx.keys()) == {
-        "claim",
-        "patient",
-        "provider",
-        "primary_coverage",
-        "secondary_coverage",
-        "line_items",
-        "diagnosis_codes",
-        "note",
-        "total_charges",
-        "total_paid",
-        "balance",
+    expected_keys = {
+        "claim", "organization", "practice_location", "location_phone",
+        "location_fax", "patient", "patient_address", "patient_phone",
+        "provider", "provider_credentialed_name", "tax_id",
+        "primary_coverage", "secondary_coverage", "line_items",
+        "diagnosis_codes", "postings", "note", "formatted_dos", "total_adjusted",
+        "total_charges", "total_paid", "balance", "format_phone",
     }
+    assert set(ctx.keys()) == expected_keys
 
 
 def test_build_claim_context_line_items_enriched(mock_claim):
     """Enriched line items contain expected keys with correct values."""
-    ctx = _build_claim_context(mock_claim)
+    with patch("claim_pdf_generator.protocols.claim_pdf_api.Organization") as mock_org:
+        mock_org.objects.first.return_value = None
+        ctx = _build_claim_context(mock_claim)
 
     items = ctx["line_items"]
     assert len(items) == 1
@@ -248,7 +227,7 @@ def test_build_claim_context_line_items_enriched(mock_claim):
     assert item["proc_code"] == "99213"
     assert item["units"] == 1
     assert item["modifiers"] == ["25"]
-    assert item["diag_pointers"] == [1]
+    assert item["linked_diag_codes"] == ["Z00.00"]
 
 
 def test_build_claim_context_no_billing_line_item(mock_claim):
@@ -256,20 +235,26 @@ def test_build_claim_context_no_billing_line_item(mock_claim):
     line_item = mock_claim.get_active_claim_line_items.return_value[0]
     line_item.billing_line_item_id = None
 
-    ctx = _build_claim_context(mock_claim)
+    with patch("claim_pdf_generator.protocols.claim_pdf_api.Organization") as mock_org:
+        mock_org.objects.first.return_value = None
+        ctx = _build_claim_context(mock_claim)
     assert ctx["line_items"][0]["modifiers"] == []
 
 
 def test_build_claim_context_diagnosis_codes(mock_claim):
-    """Diagnosis codes list is populated from claim.diagnosis_codes."""
-    ctx = _build_claim_context(mock_claim)
+    """Diagnosis codes are formatted with dots."""
+    with patch("claim_pdf_generator.protocols.claim_pdf_api.Organization") as mock_org:
+        mock_org.objects.first.return_value = None
+        ctx = _build_claim_context(mock_claim)
     assert len(ctx["diagnosis_codes"]) == 1
-    assert ctx["diagnosis_codes"][0].code == "Z00.00"
+    assert ctx["diagnosis_codes"][0]["code"] == "Z00.00"
 
 
 def test_build_claim_context_financials(mock_claim):
     """Financial totals are forwarded from claim properties."""
-    ctx = _build_claim_context(mock_claim)
+    with patch("claim_pdf_generator.protocols.claim_pdf_api.Organization") as mock_org:
+        mock_org.objects.first.return_value = None
+        ctx = _build_claim_context(mock_claim)
     assert ctx["total_charges"] == Decimal("150.00")
     assert ctx["total_paid"] == Decimal("0.00")
     assert ctx["balance"] == Decimal("150.00")
@@ -344,15 +329,12 @@ def test_generate_pdf_pdf_service_failure(api_handler, mock_claim):
     ) as mock_pdf_gen, patch(
         "claim_pdf_generator.protocols.claim_pdf_api._build_claim_context"
     ) as mock_build_ctx, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._render_template"
+        "claim_pdf_generator.protocols.claim_pdf_api._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.claim_pdf_api.log"
     ) as mock_log:
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_build_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
         mock_pdf_gen.from_html.return_value = None
 
@@ -378,15 +360,12 @@ def test_generate_pdf_pdf_url_empty(api_handler, mock_claim):
     ) as mock_pdf_gen, patch(
         "claim_pdf_generator.protocols.claim_pdf_api._build_claim_context"
     ) as mock_build_ctx, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._render_template"
+        "claim_pdf_generator.protocols.claim_pdf_api._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.claim_pdf_api.log"
     ) as mock_log:
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_build_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
 
         pdf_resp = MagicMock()
@@ -425,15 +404,12 @@ def test_generate_pdf_format_url_default(api_handler, mock_claim):
     ) as mock_pdf_gen, patch(
         "claim_pdf_generator.protocols.claim_pdf_api._build_claim_context"
     ) as mock_build_ctx, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._render_template"
+        "claim_pdf_generator.protocols.claim_pdf_api._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.claim_pdf_api.log"
     ) as mock_log:
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_build_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
 
         pdf_resp = MagicMock()
@@ -471,15 +447,12 @@ def test_generate_pdf_format_url_explicit(api_handler, mock_claim):
     ) as mock_pdf_gen, patch(
         "claim_pdf_generator.protocols.claim_pdf_api._build_claim_context"
     ) as mock_build_ctx, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._render_template"
+        "claim_pdf_generator.protocols.claim_pdf_api._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.claim_pdf_api.log"
     ) as mock_log:
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_build_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
 
         pdf_resp = MagicMock()
@@ -517,9 +490,7 @@ def test_generate_pdf_format_pdf_returns_bytes(api_handler, mock_claim):
     ) as mock_pdf_gen, patch(
         "claim_pdf_generator.protocols.claim_pdf_api._build_claim_context"
     ) as mock_build_ctx, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._load_template"
-    ) as mock_load, patch(
-        "claim_pdf_generator.protocols.claim_pdf_api._render_template"
+        "claim_pdf_generator.protocols.claim_pdf_api._render_claim_template"
     ) as mock_render, patch(
         "claim_pdf_generator.protocols.claim_pdf_api.Http"
     ) as mock_http_cls, patch(
@@ -527,7 +498,6 @@ def test_generate_pdf_format_pdf_returns_bytes(api_handler, mock_claim):
     ) as mock_log:
         mock_claim_cls.objects.filter.return_value.first.return_value = mock_claim
         mock_build_ctx.return_value = {}
-        mock_load.return_value = "<html/>"
         mock_render.return_value = "<html/>"
 
         pdf_resp = MagicMock()
@@ -594,7 +564,7 @@ def test_hcfa_endpoint_calls_generate_pdf(api_handler):
 
 def _make_template_context() -> dict:
     """Build a real-data context dict suitable for Django template rendering."""
-    dx = SimpleNamespace(rank=1, code="Z00.00", display="General exam")
+    dx = {"rank": 1, "code": "Z00.00", "display": "General exam"}
     line_item = {
         "proc_code": "99213",
         "display": "Office Visit",
@@ -604,10 +574,7 @@ def _make_template_context() -> dict:
         "units": 1,
         "charge": Decimal("150.00"),
         "modifiers": ["25"],
-        "diag_pointers": [1],
-        "ndc_code": "",
-        "ndc_dosage": "",
-        "ndc_measure": "",
+        "linked_diag_codes": ["Z00.00"],
         "narrative": "",
     }
     patient = SimpleNamespace(
@@ -691,34 +658,63 @@ def _make_template_context() -> dict:
     note = SimpleNamespace(datetime_of_service="2024-01-15")
     return {
         "claim": claim,
+        "organization": None,
+        "practice_location": None,
+        "location_phone": "",
+        "location_fax": "",
         "patient": patient,
+        "patient_address": "123 Main St, Springfield, IL 62701",
+        "patient_phone": "(555) 555-5555",
         "provider": provider,
+        "provider_credentialed_name": "Alice Smith MD",
+        "tax_id": "",
         "primary_coverage": primary_coverage,
         "secondary_coverage": None,
         "line_items": [line_item],
         "diagnosis_codes": [dx],
+        "postings": [],
         "note": note,
+        "formatted_dos": "2024-01-15",
         "total_charges": Decimal("150.00"),
         "total_paid": Decimal("0.00"),
+        "total_adjusted": Decimal("0.00"),
         "balance": Decimal("150.00"),
     }
+
+
+def _render_template_directly(template_name: str, context: dict) -> str:
+    """Helper to render templates in tests without plugin context."""
+    import os
+
+    from django.template import Context, Engine
+
+    template_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "claim_pdf_generator",
+        "templates",
+    )
+    with open(os.path.join(template_dir, template_name)) as f:
+        template_str = f.read()
+    engine = Engine()
+    template = engine.from_string(template_str)
+    return template.render(Context(context))
 
 
 def test_superbill_renders_with_real_template():
     """superbill.html renders without exception given a full context."""
     ctx = _make_template_context()
-    template_str = _load_template("superbill.html")
-    html = _render_template(template_str, ctx)
-    assert "SUPERBILL" in html
+    html = _render_template_directly("superbill.html", ctx)
     assert "99213" in html
     assert "Z00.00" in html
+    assert "Insurance Coverage" in html
+    assert "Charges" in html
+    assert "Postings" in html
 
 
 def test_hcfa_renders_with_real_template():
     """hcfa.html renders without exception given a full context."""
     ctx = _make_template_context()
-    template_str = _load_template("hcfa.html")
-    html = _render_template(template_str, ctx)
+    html = _render_template_directly("hcfa.html", ctx)
     assert "CMS-1500" in html
     assert "HEALTH INSURANCE CLAIM FORM" in html
     assert "99213" in html
@@ -754,7 +750,6 @@ def test_superbill_renders_minimal_claim():
     assert ctx["provider"] is None
     assert ctx["line_items"] == []
 
-    template_str = _load_template("superbill.html")
     # Should not raise
-    html = _render_template(template_str, ctx)
+    html = _render_template_directly("superbill.html", ctx)
     assert "<html" in html
