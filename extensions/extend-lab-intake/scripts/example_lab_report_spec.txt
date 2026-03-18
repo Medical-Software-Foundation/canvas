@@ -1,0 +1,55 @@
+Lab Report Extraction Specification
+====================================
+
+This processor should extract data from laboratory test result reports.
+
+Patient Information:
+- Patient's full name (first and last)
+- Date of birth
+- Medical record number (MRN) if present
+- Phone number if present
+
+Lab Information:
+- Name of the laboratory
+- Date the sample was collected
+- Date the report was generated
+- Ordering physician name
+
+Test Results (can be multiple):
+For each test result, extract:
+- Test name (e.g., "Glucose", "Hemoglobin A1c", "TSH")
+- LOINC code if available
+- Result value (numeric)
+- Unit of measurement (e.g., "mg/dL", "%", "mIU/L")
+- Reference range (e.g., "70-100", "<5.7")
+- Flag indicating if the result is abnormal (high, low, or critical)
+
+Additional Notes:
+- Any comments or notes from the lab
+- Specimen type (blood, urine, etc.)
+
+
+Example Structure
+=================
+```
+Regional Reference Laboratories, Inc.
+
+Requisition Number: 38AU9PL412
+Ordering Provider: Ninad Athale
+
+Patient: Qpdiugha Dhqy38la
+DOB: 9/8/1959
+MRN: 760346161
+Lipid Panel
+Specimen Date: 11/19/25
+Collection Date: 11/19/25
+Result Date: 11/19/25
+
+| Analyte        | Value       | Reference Range                | Abnormal? |
+|----------------|-------------|--------------------------------|-----------|
+| Total Cholesterol | 212 mg/dL | < 200 mg/dL                   | High      |
+| LDL-C (calculated) | 142 mg/dL | < 130 mg/dL (optimal <100)    | High      |
+| HDL-C         | 38 mg/dL    | ≥ 40 mg/dL (men)               | Low       |
+| Triglycerides | 168 mg/dL   | < 150 mg/dL                    | High      |
+| Non-HDL-C     | 174 mg/dL   | < 160 mg/dL (optimal <130)     | High      |
+```

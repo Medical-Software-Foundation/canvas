@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab Parser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #333;
+            background: #f8f9fa;
+        }
+
+        .layout {
+            display: flex;
+            height: 100%;
+            gap: 12px;
+            padding: 12px;
+        }
+
+        .left-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .right-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            border-bottom: 1px solid #e9ecef;
+            background: #f8f9fa;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .header .count {
+            font-size: 11px;
+            color: #6c757d;
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .table-container {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* Document rows */
+        .doc-row {
+            border-bottom: 1px solid #e9ecef;
+            transition: all 0.2s ease;
+        }
+
+        .doc-row:last-child {
+            border-bottom: none;
+        }
+
+        .doc-row-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: background 0.1s ease;
+            gap: 12px;
+        }
+
+        .doc-row-header:hover {
+            background: #f0f4f8;
+        }
+
+        .doc-row.selected .doc-row-header {
+            background: #e7f1ff;
+        }
+
+        .doc-row.expanded {
+            background: #fafbfc;
+        }
+
+        .doc-row.expanded .doc-row-header {
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .doc-filename {
+            flex: 1;
+            font-weight: 500;
+            color: #212529;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+
+        .doc-classification {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #e9ecef;
+            color: #495057;
+            white-space: nowrap;
+        }
+
+        .doc-classification.lipid_panel {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .doc-classification.other {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .doc-datetime {
+            font-size: 11px;
+            color: #6c757d;
+            white-space: nowrap;
+        }
+
+        .doc-size {
+            font-size: 11px;
+            color: #6c757d;
+            white-space: nowrap;
+        }
+
+        .doc-status {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .doc-status.classified {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .doc-status.processed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .expand-icon {
+            width: 16px;
+            height: 16px;
+            color: #6c757d;
+            transition: transform 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .doc-row.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        /* Expanded content */
+        .doc-expanded {
+            display: none;
+            max-height: calc(50% - 44px);
+            overflow-y: auto;
+            padding: 12px;
+            background: #fafbfc;
+        }
+
+        .doc-row.expanded .doc-expanded {
+            display: block;
+        }
+
+        .expanded-section {
+            margin-bottom: 12px;
+        }
+
+        .expanded-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .expanded-section h3 {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .expanded-content {
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        .expanded-actions {
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+        }
+
+        .not-processed-msg {
+            color: #6c757d;
+            font-style: italic;
+            margin-right: auto;
+            display: flex;
+            align-items: center;
+        }
+
+        .classification-detail {
+            font-size: 12px;
+        }
+
+        .classification-detail dt {
+            color: #6c757d;
+            font-size: 11px;
+        }
+
+        .classification-detail dd {
+            margin-bottom: 6px;
+        }
+
+        /* Inline classification display */
+        .classification-inline {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .classification-type {
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .classification-confidence {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .classification-toggle-link {
+            font-size: 11px;
+            color: #0d6efd;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .classification-toggle-link:hover {
+            text-decoration: underline;
+        }
+
+        .classification-toggle {
+            font-size: 11px;
+            color: #0d6efd;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        .classification-toggle:hover {
+            text-decoration: underline;
+        }
+
+        /* Inline patient match display */
+        .patient-match-inline {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .patient-display {
+            font-size: 13px;
+        }
+
+        .patient-link {
+            color: #0d6efd;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .patient-link:hover {
+            text-decoration: underline;
+        }
+
+        .patient-confidence {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .classification-raw {
+            display: none;
+            margin-top: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 10px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .classification-raw.visible {
+            display: block;
+        }
+
+        .extraction-summary {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        .patient-match {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+        }
+
+        .patient-match dt {
+            color: #6c757d;
+            font-size: 11px;
+        }
+
+        .patient-match dd {
+            margin-bottom: 4px;
+        }
+
+        .confidence-high { color: #155724; }
+        .confidence-medium { color: #856404; }
+        .confidence-low { color: #721c24; }
+        .confidence-none { color: #6c757d; }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: #fff;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-extract {
+            color: #0d6efd;
+            border-color: #0d6efd;
+        }
+
+        .btn-extract:hover:not(:disabled) {
+            background: #0d6efd;
+            color: #fff;
+        }
+
+        .btn-discard {
+            color: #6c757d;
+            border-color: #ced4da;
+        }
+
+        .btn-discard:hover:not(:disabled) {
+            background: #dc3545;
+            border-color: #dc3545;
+            color: #fff;
+        }
+
+        .btn-save {
+            color: #198754;
+            border-color: #198754;
+        }
+
+        .btn-save:hover:not(:disabled) {
+            background: #198754;
+            color: #fff;
+        }
+
+        .status-message {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .saved-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: #198754;
+            margin-left: 8px;
+        }
+
+        .saved-badge svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Extraction results table - horizontally scrollable with fixed confidence column */
+        .extraction-table-wrapper {
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .extraction-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            line-height: 1.4;
+            table-layout: fixed;
+            min-width: 600px;
+        }
+
+        .extraction-table th {
+            text-align: left;
+            padding: 6px 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: 600;
+            color: #495057;
+            font-size: 11px;
+        }
+
+        .extraction-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Fixed confidence column on the left */
+        .extraction-table th.col-conf,
+        .extraction-table td.col-conf {
+            position: sticky;
+            left: 0;
+            background: #f8f9fa;
+            z-index: 1;
+            width: 60px;
+            min-width: 60px;
+            max-width: 60px;
+            border-right: 1px solid #dee2e6;
+        }
+
+        .extraction-table td.col-conf {
+            background: #fff;
+        }
+
+        .extraction-table tr:hover td.col-conf {
+            background: #f8f9fa;
+        }
+
+        /* Column widths */
+        .extraction-table th.col-field,
+        .extraction-table td.col-field {
+            width: 120px;
+            min-width: 120px;
+        }
+
+        .extraction-table th.col-value,
+        .extraction-table td.col-value {
+            min-width: 100px;
+        }
+
+        .extraction-table th.col-unit,
+        .extraction-table td.col-unit {
+            width: 60px;
+            min-width: 60px;
+        }
+
+        .extraction-table th.col-range,
+        .extraction-table td.col-range {
+            width: 100px;
+            min-width: 100px;
+        }
+
+        .extraction-table th.col-flag,
+        .extraction-table td.col-flag {
+            width: 60px;
+            min-width: 60px;
+        }
+
+        .extraction-table th.col-loinc,
+        .extraction-table td.col-loinc {
+            width: 80px;
+            min-width: 80px;
+        }
+
+        .extraction-table th.col-loinc-src,
+        .extraction-table td.col-loinc-src {
+            width: 70px;
+            min-width: 70px;
+        }
+
+        .extraction-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .extraction-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* Abnormal flag styling */
+        .flag-abnormal {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .flag-normal {
+            color: #198754;
+        }
+
+        /* LOINC source badge */
+        .loinc-source {
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 2px;
+            text-transform: uppercase;
+        }
+
+        .loinc-source.mapped {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .loinc-source.observed {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .field-name {
+            font-weight: 500;
+            color: #495057;
+            font-size: 10px;
+        }
+
+        .field-value {
+            color: #212529;
+        }
+
+        .field-confidence {
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+
+        .field-confidence.high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .field-confidence.medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .field-confidence.low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .extraction-section-title {
+            font-size: 10px;
+            font-weight: 600;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 8px 0 4px 0;
+            padding-bottom: 2px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .extraction-section-title:first-child {
+            margin-top: 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: #6c757d;
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        /* Upload button */
+        .btn-upload {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #0d6efd;
+            background: #fff;
+            border: 1px solid #0d6efd;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-upload:hover {
+            background: #0d6efd;
+            color: #fff;
+        }
+
+        .btn-upload svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Upload modal */
+        .upload-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-modal-overlay.visible {
+            display: flex;
+        }
+
+        .upload-modal {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .upload-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .upload-modal-header h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin: 0;
+        }
+
+        .upload-modal-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: #6c757d;
+        }
+
+        .upload-modal-close:hover {
+            color: #333;
+        }
+
+        .upload-modal-body {
+            padding: 16px;
+        }
+
+        .dropzone {
+            border: 2px dashed #ced4da;
+            border-radius: 6px;
+            padding: 32px 16px;
+            text-align: center;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .dropzone:hover,
+        .dropzone.dragover {
+            border-color: #0d6efd;
+            background: #f0f7ff;
+        }
+
+        .dropzone svg {
+            width: 40px;
+            height: 40px;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+
+        .dropzone p {
+            margin: 0;
+            color: #6c757d;
+            font-size: 13px;
+        }
+
+        .dropzone p strong {
+            color: #0d6efd;
+        }
+
+        .dropzone-hint {
+            font-size: 11px;
+            color: #adb5bd;
+            margin-top: 4px;
+        }
+
+        .upload-file-preview {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
+
+        .upload-file-preview.visible {
+            display: flex;
+        }
+
+        .upload-file-preview svg {
+            width: 24px;
+            height: 24px;
+            color: #dc3545;
+            flex-shrink: 0;
+        }
+
+        .upload-file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .upload-file-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: #333;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .upload-file-size {
+            font-size: 11px;
+            color: #6c757d;
+        }
+
+        .upload-file-remove {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            color: #6c757d;
+        }
+
+        .upload-file-remove:hover {
+            color: #dc3545;
+        }
+
+        .upload-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 12px 16px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .upload-modal-footer .btn {
+            min-width: 80px;
+            justify-content: center;
+        }
+
+        .upload-error {
+            display: none;
+            padding: 10px;
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+
+        .upload-error.visible {
+            display: block;
+        }
+
+        /* PDF Viewer */
+        .pdf-viewer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #525659;
+        }
+
+        .pdf-viewer iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .pdf-placeholder {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #adb5bd;
+            background: #f8f9fa;
+        }
+
+        .pdf-placeholder svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .pdf-placeholder p {
+            font-size: 14px;
+        }
+
+        /* Loading state */
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <!-- Left Panel: Document List -->
+        <div class="left-panel">
+            <div class="header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h1>Received Documents</h1>
+                    <button class="btn-upload" onclick="openUploadModal()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Upload
+                    </button>
+                </div>
+                <span class="count">{{ documents|length }} document{{ documents|length|pluralize }}</span>
+            </div>
+
+            {% if documents %}
+            <div class="table-container">
+                {% for doc in documents %}
+                <div class="doc-row"
+                     data-intake-id="{{ doc.intake_id }}"
+                     data-filename="{{ doc.filename }}"
+                     data-status="{{ doc.status }}"
+                     data-loaded="false">
+
+                    <div class="doc-row-header">
+                        <svg class="expand-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                        <span class="doc-filename" title="{{ doc.filename }}">{{ doc.filename }}</span>
+                        <span class="doc-classification {{ doc.classification_type|default:'unknown' }}">
+                            {{ doc.classification_type|default:"Unknown" }}
+                        </span>
+                        <span class="doc-status {{ doc.status }}">{{ doc.status }}</span>
+                        <span class="doc-datetime">{{ doc.received_at|slice:":10" }}</span>
+                        <span class="doc-size">{{ doc.size_display }}</span>
+                    </div>
+
+                    <div class="doc-expanded">
+                        <!-- Content loaded dynamically on expand -->
+                        <div class="expanded-loading" style="padding: 20px; text-align: center; color: #6c757d;">
+                            <span class="spinner"></span> Loading details...
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p>No documents in queue</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Panel: PDF Viewer -->
+        <div class="right-panel">
+            <div class="header">
+                <h1>Document Preview</h1>
+            </div>
+            <div id="pdf-container" class="pdf-viewer">
+                <div class="pdf-placeholder" id="pdf-placeholder">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <p>Select a document to preview</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="upload-modal-overlay" id="upload-modal">
+        <div class="upload-modal">
+            <div class="upload-modal-header">
+                <h2>Upload Lab Report</h2>
+                <button class="upload-modal-close" onclick="closeUploadModal()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="upload-modal-body">
+                <div class="dropzone" id="dropzone">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p><strong>Click to upload</strong> or drag and drop</p>
+                    <p class="dropzone-hint">PDF files only</p>
+                    <input type="file" id="file-input" accept=".pdf,application/pdf" style="display: none;">
+                </div>
+                <div class="upload-file-preview" id="file-preview">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <div class="upload-file-info">
+                        <div class="upload-file-name" id="file-name"></div>
+                        <div class="upload-file-size" id="file-size"></div>
+                    </div>
+                    <button class="upload-file-remove" onclick="clearSelectedFile()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="upload-error" id="upload-error"></div>
+            </div>
+            <div class="upload-modal-footer">
+                <button class="btn btn-discard" onclick="closeUploadModal()">Cancel</button>
+                <button class="btn btn-save" id="upload-submit-btn" onclick="submitUpload()" disabled>Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Server-generated session token (expires after 5 minutes)
+        // Format: {timestamp}.{hmac_signature}
+        const SESSION_TOKEN = "{{ session_token }}";
+        const INSTANCE = "{{ instance }}";
+        const API_BASE = `https://${INSTANCE}.canvasmedical.com/plugin-io/api/extend_lab_intake/lab-intake`;
+
+        const pdfContainer = document.getElementById('pdf-container');
+        const pdfPlaceholder = document.getElementById('pdf-placeholder');
+        let currentIframe = null;
+        let selectedRow = null;
+
+        // Make authenticated API request using the server-generated session token
+        function authenticatedFetch(path, options = {}) {
+            const headers = {
+                ...options.headers,
+                'Authorization': SESSION_TOKEN,
+            };
+
+            return fetch(`${API_BASE}${path}`, {
+                ...options,
+                headers,
+            });
+        }
+
+        // Row header click handler - toggle expand, load details, and show PDF
+        document.querySelectorAll('.doc-row-header').forEach(header => {
+            header.addEventListener('click', async function(e) {
+                const row = this.parentElement;
+                const intakeId = row.dataset.intakeId;
+                const filename = row.dataset.filename;
+
+                // Toggle expanded state
+                const wasExpanded = row.classList.contains('expanded');
+
+                // Collapse all rows first
+                document.querySelectorAll('.doc-row').forEach(r => {
+                    r.classList.remove('expanded');
+                    r.classList.remove('selected');
+                });
+
+                // If wasn't expanded, expand this one
+                if (!wasExpanded) {
+                    row.classList.add('expanded');
+                    row.classList.add('selected');
+                    selectedRow = row;
+
+                    // Load details if not already loaded
+                    if (row.dataset.loaded !== 'true') {
+                        await loadDocumentDetails(intakeId, row);
+                    } else {
+                        // Already loaded - show PDF from cached URL
+                        const url = row.dataset.url;
+                        if (url) {
+                            showPdf(url, filename);
+                        }
+                    }
+                } else {
+                    selectedRow = null;
+                    hidePdf();
+                }
+            });
+        });
+
+        // Load full document details from API
+        async function loadDocumentDetails(intakeId, row) {
+            try {
+                const response = await authenticatedFetch(`/document?intake_id=${encodeURIComponent(intakeId)}`, {
+                    method: 'GET',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load document details');
+                }
+
+                const data = await response.json();
+
+                // Cache the presigned URL
+                row.dataset.url = data.presigned_url;
+                row.dataset.loaded = 'true';
+
+                // Show PDF
+                if (data.presigned_url) {
+                    showPdf(data.presigned_url, row.dataset.filename);
+                }
+
+                // Render expanded content
+                renderExpandedContent(intakeId, row, data);
+
+            } catch (error) {
+                console.error('Failed to load document details:', error);
+                const expandedDiv = row.querySelector('.doc-expanded');
+                expandedDiv.innerHTML = `<div class="status-message error" style="margin: 12px;">Failed to load details: ${error.message}</div>`;
+            }
+        }
+
+        // Render the expanded row content
+        function renderExpandedContent(intakeId, row, data) {
+            const expandedDiv = row.querySelector('.doc-expanded');
+            const classification = data.classification || {};
+            const extraction = data.extraction;
+            const status = data.status;
+
+            let html = '';
+
+            // Classification section - single line with type, confidence, and toggle
+            const classConfidence = classification.confidence;
+            const classConfidenceDisplay = formatConfidence(classConfidence);
+            html += `
+                <div class="expanded-section">
+                    <h3>Classification</h3>
+                    <div class="expanded-content classification-inline">
+                        <span class="classification-type">${classification.type || 'Unknown'}</span>
+                        <span class="classification-confidence ${classConfidenceDisplay.className}">${classConfidenceDisplay.text}</span>
+                        <a href="#" class="classification-toggle-link" onclick="toggleClassificationDetail(this); return false;">Show raw output</a>
+                        <div class="classification-raw">${JSON.stringify(classification.raw_output, null, 2)}</div>
+                    </div>
+                </div>
+            `;
+
+            // Status message area
+            html += `<div class="expanded-section" id="status-${intakeId}" style="display: none;"></div>`;
+
+            // Extraction section
+            if (extraction && !extraction.skipped) {
+                const patientMatch = extraction.patient_match || {};
+                const patientId = patientMatch.patient_id;
+                const patientName = patientMatch.patient_name;
+                const confidence = patientMatch.confidence || 'none';
+                const matchConfidenceDisplay = formatConfidence(confidence);
+
+                // Build patient display - name with link if available
+                let patientDisplay = 'Not matched';
+                if (patientId) {
+                    const patientUrl = `https://${INSTANCE}.canvasmedical.com/patient/${patientId}`;
+                    patientDisplay = patientName
+                        ? `<a href="${patientUrl}" target="_blank" class="patient-link">${patientName}</a> (${patientId})`
+                        : `<a href="${patientUrl}" target="_blank" class="patient-link">${patientId}</a>`;
+                }
+
+                html += `
+                    <div class="expanded-section" id="extraction-${intakeId}">
+                        <h3>Patient Match</h3>
+                        <div class="expanded-content patient-match-inline">
+                            <span class="patient-display">${patientDisplay}</span>
+                            <span class="patient-confidence ${matchConfidenceDisplay.className}">${matchConfidenceDisplay.text}</span>
+                        </div>
+                    </div>
+
+                    <div class="expanded-section">
+                        <div class="expanded-actions" id="actions-${intakeId}">
+                            ${extraction.diagnostic_report_id ? `
+                                <span class="saved-badge">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Report has been saved to the patient's medical record
+                                </span>
+                            ` : patientId ? `
+                                <button class="btn btn-save" onclick="saveReport('${intakeId}', this)">
+                                    Save Lab Report
+                                </button>
+                                <button class="btn btn-discard" onclick="discardDocument('${intakeId}', this)">
+                                    Discard
+                                </button>
+                            ` : `
+                                <span class="not-processed-msg">No patient matched - cannot save report</span>
+                                <button class="btn btn-discard" onclick="discardDocument('${intakeId}', this)">
+                                    Discard
+                                </button>
+                            `}
+                        </div>
+                    </div>
+
+                    <div class="expanded-section">
+                        <h3>Extracted Fields</h3>
+                        <div class="expanded-content" id="fields-${intakeId}">
+                            <!-- Rendered by renderExtractionFields -->
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Not processed or skipped
+                const skipped = extraction && extraction.skipped;
+                html += `
+                    <div class="expanded-section" id="extraction-${intakeId}">
+                        <div class="expanded-actions">
+                            <span class="not-processed-msg">
+                                ${skipped ? 'No extractor available for this document type' : 'Document has not been extracted yet'}
+                            </span>
+                            ${!extraction ? `
+                                <button class="btn btn-extract" onclick="extractDocument('${intakeId}', this)">
+                                    Extract
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-discard" onclick="discardDocument('${intakeId}', this)">
+                                Discard
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            expandedDiv.innerHTML = html;
+
+            // Render extraction fields if present
+            if (extraction && extraction.output && !extraction.skipped) {
+                renderExtractionFields(intakeId, extraction.output);
+            }
+        }
+
+        function showPdf(url, filename) {
+            pdfPlaceholder.style.display = 'none';
+            if (currentIframe) {
+                currentIframe.remove();
+            }
+            currentIframe = document.createElement('iframe');
+            currentIframe.src = url;
+            currentIframe.title = filename;
+            pdfContainer.appendChild(currentIframe);
+        }
+
+        function hidePdf() {
+            if (currentIframe) {
+                currentIframe.remove();
+                currentIframe = null;
+            }
+            pdfPlaceholder.style.display = 'flex';
+        }
+
+        function toggleClassificationDetail(toggle) {
+            const container = toggle.closest('.expanded-content');
+            const raw = container.querySelector('.classification-raw');
+            const isVisible = raw.classList.contains('visible');
+            raw.classList.toggle('visible');
+            toggle.textContent = isVisible ? 'Show raw output' : 'Hide raw output';
+        }
+
+        // Format confidence value to percentage with appropriate class
+        function formatConfidence(confidence) {
+            if (confidence === null || confidence === undefined) {
+                return { text: 'N/A', className: 'confidence-none' };
+            }
+
+            // Handle numeric confidence (0-1 or 0-100)
+            if (typeof confidence === 'number') {
+                const pct = confidence <= 1 ? Math.round(confidence * 100) : Math.round(confidence);
+                let className = 'confidence-low';
+                if (pct >= 80) className = 'confidence-high';
+                else if (pct >= 50) className = 'confidence-medium';
+                return { text: `${pct}%`, className };
+            }
+
+            // Handle string confidence (high, medium, low)
+            if (typeof confidence === 'string') {
+                const lower = confidence.toLowerCase();
+                if (lower === 'high') return { text: '90%', className: 'confidence-high' };
+                if (lower === 'medium') return { text: '70%', className: 'confidence-medium' };
+                if (lower === 'low') return { text: '40%', className: 'confidence-low' };
+                return { text: confidence, className: 'confidence-none' };
+            }
+
+            return { text: String(confidence), className: 'confidence-none' };
+        }
+
+        // Show status message inline
+        function showStatus(intakeId, message, type = 'info') {
+            const statusEl = document.getElementById(`status-${intakeId}`);
+            if (statusEl) {
+                statusEl.innerHTML = `<div class="status-message ${type}">${message}</div>`;
+                statusEl.style.display = 'block';
+            }
+        }
+
+        function hideStatus(intakeId) {
+            const statusEl = document.getElementById(`status-${intakeId}`);
+            if (statusEl) {
+                statusEl.style.display = 'none';
+            }
+        }
+
+        // Render field-by-field extraction data
+        // Handles Extend AI output structure: { value: {...}, metadata: {...} }
+        function renderExtractionFields(intakeId, extractionOutput) {
+            const fieldsEl = document.getElementById(`fields-${intakeId}`);
+            if (!fieldsEl || !extractionOutput) return;
+
+            // Extend AI wraps extraction in "value" with confidence in "metadata"
+            const values = extractionOutput.value || extractionOutput;
+            const metadata = extractionOutput.metadata || {};
+
+            // Get confidence for a field path from metadata
+            function getConfidence(fieldPath) {
+                const meta = metadata[fieldPath];
+                if (meta && meta.logprobsConfidence !== undefined) {
+                    return meta.logprobsConfidence;
+                }
+                return null;
+            }
+
+            function formatConfidenceHtml(conf) {
+                if (conf === null) return '';
+                const confClass = conf > 0.8 ? 'high' : conf > 0.5 ? 'medium' : 'low';
+                return `<span class="field-confidence ${confClass}">${(conf * 100).toFixed(0)}%</span>`;
+            }
+
+            function formatValue(val) {
+                if (val === null || val === undefined) return '';
+                if (Array.isArray(val)) {
+                    return val.join(', ');
+                }
+                if (typeof val === 'boolean') {
+                    return val ? 'Yes' : 'No';
+                }
+                return String(val);
+            }
+
+            function formatLoincSource(source) {
+                if (!source) return '';
+                const lower = source.toLowerCase();
+                return `<span class="loinc-source ${lower}">${source}</span>`;
+            }
+
+            function formatAbnormalFlag(flag) {
+                if (!flag) return '';
+                const lower = String(flag).toLowerCase();
+                if (lower === 'normal' || lower === 'n') {
+                    return `<span class="flag-normal">${flag}</span>`;
+                }
+                return `<span class="flag-abnormal">${flag}</span>`;
+            }
+
+            let html = '';
+
+            // Check if we have test_results array - render as specialized table
+            const testResults = values.test_results;
+            if (testResults && Array.isArray(testResults) && testResults.length > 0) {
+                // Render header fields first (non-test_results)
+                let headerHtml = '<table class="extraction-table"><thead><tr><th class="col-conf">Conf</th><th class="col-field">Field</th><th class="col-value">Value</th></tr></thead><tbody>';
+                let hasHeaderFields = false;
+
+                for (const [key, value] of Object.entries(values)) {
+                    if (key === 'test_results') continue;
+                    if (value === null || value === undefined) continue;
+
+                    hasHeaderFields = true;
+                    const conf = getConfidence(key);
+                    headerHtml += `<tr>
+                        <td class="col-conf">${formatConfidenceHtml(conf)}</td>
+                        <td class="col-field field-name">${key}</td>
+                        <td class="col-value field-value" title="${formatValue(value)}">${formatValue(value)}</td>
+                    </tr>`;
+                }
+
+                headerHtml += '</tbody></table>';
+
+                if (hasHeaderFields) {
+                    html += '<div class="extraction-table-wrapper">' + headerHtml + '</div>';
+                    html += '<div class="extraction-section-title" style="margin-top: 12px;">Test Results</div>';
+                }
+
+                // Render test results with all columns including LOINC
+                html += '<div class="extraction-table-wrapper"><table class="extraction-table"><thead><tr>';
+                html += '<th class="col-conf">Conf</th>';
+                html += '<th class="col-field">Test Name</th>';
+                html += '<th class="col-value">Value</th>';
+                html += '<th class="col-unit">Unit</th>';
+                html += '<th class="col-range">Ref Range</th>';
+                html += '<th class="col-flag">Flag</th>';
+                html += '<th class="col-loinc">LOINC</th>';
+                html += '<th class="col-loinc-src">Source</th>';
+                html += '</tr></thead><tbody>';
+
+                testResults.forEach((item, idx) => {
+                    const itemPath = `test_results[${idx}]`;
+                    const itemConf = getConfidence(itemPath);
+
+                    html += `<tr>
+                        <td class="col-conf">${formatConfidenceHtml(itemConf)}</td>
+                        <td class="col-field field-name" title="${formatValue(item.test_name)}">${formatValue(item.test_name)}</td>
+                        <td class="col-value field-value">${formatValue(item.result_value)}</td>
+                        <td class="col-unit">${formatValue(item.unit)}</td>
+                        <td class="col-range" title="${formatValue(item.reference_range)}">${formatValue(item.reference_range)}</td>
+                        <td class="col-flag">${formatAbnormalFlag(item.abnormal_flag)}</td>
+                        <td class="col-loinc">${formatValue(item.loinc)}</td>
+                        <td class="col-loinc-src">${formatLoincSource(item.loinc_source)}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div>';
+            } else {
+                // Fallback: render generic key-value table
+                html += '<div class="extraction-table-wrapper"><table class="extraction-table"><thead><tr><th class="col-conf">Conf</th><th class="col-field">Field</th><th class="col-value">Value</th></tr></thead><tbody>';
+
+                // Summarize an object into a single-line string
+                function summarizeObject(obj) {
+                    const parts = [];
+                    for (const [k, v] of Object.entries(obj)) {
+                        if (v === null || v === undefined) continue;
+                        if (typeof v === 'object') continue;
+                        parts.push(`${v}`);
+                    }
+                    return parts.join(' | ');
+                }
+
+                // Recursively render fields
+                function renderFields(obj, prefix = '') {
+                    for (const [key, value] of Object.entries(obj)) {
+                        if (value === null || value === undefined) continue;
+
+                        const displayKey = prefix ? `${prefix}.${key}` : key;
+                        const fieldPath = prefix ? `${prefix}.${key}` : key;
+
+                        if (typeof value === 'object' && !Array.isArray(value)) {
+                            renderFields(value, fieldPath);
+                        } else if (Array.isArray(value)) {
+                            if (value.length > 0 && typeof value[0] === 'object') {
+                                value.forEach((item, idx) => {
+                                    const itemPath = `${fieldPath}[${idx}]`;
+                                    const itemConf = getConfidence(itemPath);
+                                    const summary = summarizeObject(item);
+                                    html += `<tr>
+                                        <td class="col-conf">${formatConfidenceHtml(itemConf)}</td>
+                                        <td class="col-field field-name">${key}[${idx}]</td>
+                                        <td class="col-value field-value" title="${summary}">${summary}</td>
+                                    </tr>`;
+                                });
+                            } else {
+                                html += `<tr>
+                                    <td class="col-conf"></td>
+                                    <td class="col-field field-name">${displayKey}</td>
+                                    <td class="col-value field-value">${formatValue(value)}</td>
+                                </tr>`;
+                            }
+                        } else {
+                            const conf = getConfidence(fieldPath);
+                            html += `<tr>
+                                <td class="col-conf">${formatConfidenceHtml(conf)}</td>
+                                <td class="col-field field-name">${displayKey}</td>
+                                <td class="col-value field-value" title="${formatValue(value)}">${formatValue(value)}</td>
+                            </tr>`;
+                        }
+                    }
+                }
+
+                renderFields(values);
+                html += '</tbody></table></div>';
+            }
+
+            fieldsEl.innerHTML = html;
+        }
+
+        // Update row after extraction completes
+        function updateRowAfterExtraction(intakeId, data) {
+            const row = document.querySelector(`[data-intake-id="${intakeId}"]`);
+            if (!row) return;
+
+            // Update status badge
+            const statusBadge = row.querySelector('.doc-status');
+            if (statusBadge) {
+                statusBadge.className = 'doc-status processed';
+                statusBadge.textContent = 'processed';
+            }
+
+            // Update data attributes
+            row.dataset.status = 'processed';
+
+            const patientMatch = data.patient_match || {};
+            const patientId = patientMatch.patient_id || data.patient_id;
+            const patientName = patientMatch.patient_name;
+            const confidence = patientMatch.confidence || data.confidence || 'none';
+            const matchConfidenceDisplay = formatConfidence(confidence);
+
+            // Build patient display - name with link if available
+            let patientDisplay = 'Not matched';
+            if (patientId) {
+                const patientUrl = `https://${INSTANCE}.canvasmedical.com/patient/${patientId}`;
+                patientDisplay = patientName
+                    ? `<a href="${patientUrl}" target="_blank" class="patient-link">${patientName}</a> (${patientId})`
+                    : `<a href="${patientUrl}" target="_blank" class="patient-link">${patientId}</a>`;
+            }
+
+            // Update the extraction section with inline patient match
+            const extractionSection = document.getElementById(`extraction-${intakeId}`);
+            if (extractionSection) {
+                extractionSection.innerHTML = `
+                    <h3>Patient Match</h3>
+                    <div class="expanded-content patient-match-inline">
+                        <span class="patient-display">${patientDisplay}</span>
+                        <span class="patient-confidence ${matchConfidenceDisplay.className}">${matchConfidenceDisplay.text}</span>
+                    </div>
+                `;
+            }
+
+            // Build actions HTML
+            let actionsHtml;
+            if (patientId) {
+                actionsHtml = `
+                    <button class="btn btn-save" onclick="saveReport('${intakeId}', this)">
+                        Save Lab Report
+                    </button>
+                    <button class="btn btn-discard" onclick="discardDocument('${intakeId}', this)">
+                        Discard
+                    </button>
+                `;
+            } else {
+                actionsHtml = `
+                    <span class="not-processed-msg">No patient matched - cannot save report</span>
+                    <button class="btn btn-discard" onclick="discardDocument('${intakeId}', this)">
+                        Discard
+                    </button>
+                `;
+            }
+
+            // Update or create actions section (should come BEFORE extracted fields)
+            let actionsSection = document.getElementById(`actions-${intakeId}`);
+            if (!actionsSection) {
+                const container = extractionSection.parentElement;
+                const newSection = document.createElement('div');
+                newSection.className = 'expanded-section';
+                newSection.innerHTML = `<div class="expanded-actions" id="actions-${intakeId}"></div>`;
+                // Insert after extraction section (patient match)
+                extractionSection.parentElement.insertBefore(newSection, extractionSection.nextSibling);
+                actionsSection = document.getElementById(`actions-${intakeId}`);
+            }
+            actionsSection.innerHTML = actionsHtml;
+
+            // Render extraction fields (should come AFTER actions)
+            const extractionOutput = data.output || data.extraction?.output;
+            if (extractionOutput) {
+                // Create fields section if it doesn't exist
+                let fieldsSection = document.getElementById(`fields-${intakeId}`);
+                if (!fieldsSection) {
+                    const container = extractionSection.parentElement;
+                    const newSection = document.createElement('div');
+                    newSection.className = 'expanded-section';
+                    newSection.innerHTML = `<h3>Extracted Fields</h3><div class="expanded-content" id="fields-${intakeId}"></div>`;
+                    // Insert after actions section
+                    const actionsSectionParent = actionsSection.parentElement;
+                    container.insertBefore(newSection, actionsSectionParent.nextSibling);
+                    fieldsSection = document.getElementById(`fields-${intakeId}`);
+                }
+                renderExtractionFields(intakeId, extractionOutput);
+            }
+        }
+
+        // Poll for document status
+        async function pollDocumentStatus(intakeId, maxAttempts = 30, interval = 2000) {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                    const response = await authenticatedFetch(`/document/${intakeId}`, {
+                        method: 'GET'
+                    });
+
+                    if (!response.ok) continue;
+
+                    const data = await response.json();
+
+                    if (data.status === 'processed' || data.status === 'no_extractor') {
+                        return data;
+                    }
+                } catch (e) {
+                    console.error('Poll error:', e);
+                }
+
+                await new Promise(resolve => setTimeout(resolve, interval));
+            }
+            return null;
+        }
+
+        async function extractDocument(intakeId, button) {
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span class="spinner"></span> Extracting...';
+            button.disabled = true;
+
+            showStatus(intakeId, 'Extracting... This may take a minute.', 'info');
+
+            try {
+                const requestBody = JSON.stringify({ intake_id: intakeId });
+                const response = await authenticatedFetch('/extract', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: requestBody,
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showStatus(intakeId, 'Extraction complete! Updating view...', 'success');
+
+                    // Use the output from the extract response directly if available
+                    // Otherwise fetch the full document data
+                    let extractionData = data;
+                    if (!data.output) {
+                        const docResponse = await authenticatedFetch(`/document/${intakeId}`, {
+                            method: 'GET'
+                        });
+                        const docData = await docResponse.json();
+                        extractionData = docData.extraction || data;
+                    }
+
+                    updateRowAfterExtraction(intakeId, extractionData);
+                    hideStatus(intakeId);
+                } else {
+                    showStatus(intakeId, `Extraction failed: ${data.error}`, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                showStatus(intakeId, `Error: ${error.message}`, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function saveReport(intakeId, button) {
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span class="spinner"></span> Saving...';
+            button.disabled = true;
+
+            showStatus(intakeId, 'Saving lab report to Canvas...', 'info');
+
+            try {
+                const requestBody = JSON.stringify({ intake_id: intakeId });
+                const response = await authenticatedFetch('/save-report', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: requestBody,
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success' || data.status === 'already_saved') {
+                    showStatus(intakeId, `Lab report saved! DiagnosticReport ID: ${data.diagnostic_report_id}`, 'success');
+
+                    // Update the row status
+                    const row = document.querySelector(`[data-intake-id="${intakeId}"]`);
+                    if (row) {
+                        const statusBadge = row.querySelector('.doc-status');
+                        if (statusBadge) {
+                            statusBadge.className = 'doc-status processed';
+                            statusBadge.textContent = 'saved';
+                        }
+                    }
+
+                    // Replace buttons with saved message (no discard button for saved reports)
+                    const actionsSection = document.getElementById(`actions-${intakeId}`);
+                    if (actionsSection) {
+                        actionsSection.innerHTML = `<span class="saved-badge">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            Report has been saved to the patient's medical record
+                        </span>`;
+                    }
+
+                    setTimeout(() => hideStatus(intakeId), 3000);
+                } else {
+                    showStatus(intakeId, `Save failed: ${data.error}`, 'error');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                showStatus(intakeId, `Error: ${error.message}`, 'error');
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+
+        async function discardDocument(intakeId, button) {
+            if (!confirm('Discard this document? This cannot be undone.')) {
+                return;
+            }
+
+            const originalText = button.innerHTML;
+            button.innerHTML = '<span class="spinner"></span> Discarding...';
+            button.disabled = true;
+
+            try {
+                const requestBody = JSON.stringify({ intake_id: intakeId });
+                const response = await authenticatedFetch('/discard', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: requestBody,
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Remove the row from the UI
+                    const row = button.closest('.doc-row');
+                    row.remove();
+
+                    // Hide PDF if this was the selected document
+                    if (selectedRow === row) {
+                        hidePdf();
+                        selectedRow = null;
+                    }
+
+                    // Update count
+                    const countEl = document.querySelector('.count');
+                    const remaining = document.querySelectorAll('.doc-row').length;
+                    countEl.textContent = `${remaining} document${remaining !== 1 ? 's' : ''}`;
+                } else {
+                    alert(`Discard failed: ${data.error}`);
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        // ========== Upload Modal Functions ==========
+
+        let selectedFile = null;
+        const uploadModal = document.getElementById('upload-modal');
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const filePreview = document.getElementById('file-preview');
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const uploadError = document.getElementById('upload-error');
+        const uploadSubmitBtn = document.getElementById('upload-submit-btn');
+
+        function openUploadModal() {
+            uploadModal.classList.add('visible');
+            clearSelectedFile();
+            hideUploadError();
+        }
+
+        function closeUploadModal() {
+            uploadModal.classList.remove('visible');
+            clearSelectedFile();
+            hideUploadError();
+        }
+
+        function clearSelectedFile() {
+            selectedFile = null;
+            fileInput.value = '';
+            filePreview.classList.remove('visible');
+            uploadSubmitBtn.disabled = true;
+        }
+
+        function showUploadError(message) {
+            uploadError.textContent = message;
+            uploadError.classList.add('visible');
+        }
+
+        function hideUploadError() {
+            uploadError.classList.remove('visible');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function selectFile(file) {
+            hideUploadError();
+
+            // Validate file type
+            if (!file.type.match(/^application\/pdf$/)) {
+                showUploadError('Please select a PDF file.');
+                return;
+            }
+
+            // Validate file size (max 50MB)
+            if (file.size > 50 * 1024 * 1024) {
+                showUploadError('File size exceeds 50MB limit.');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            filePreview.classList.add('visible');
+            uploadSubmitBtn.disabled = false;
+        }
+
+        // Dropzone click handler
+        dropzone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // File input change handler
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                selectFile(e.target.files[0]);
+            }
+        });
+
+        // Drag and drop handlers
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                selectFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Close modal on overlay click
+        uploadModal.addEventListener('click', (e) => {
+            if (e.target === uploadModal) {
+                closeUploadModal();
+            }
+        });
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && uploadModal.classList.contains('visible')) {
+                closeUploadModal();
+            }
+        });
+
+        async function submitUpload() {
+            if (!selectedFile) return;
+
+            const originalText = uploadSubmitBtn.innerHTML;
+            uploadSubmitBtn.innerHTML = '<span class="spinner"></span> Uploading...';
+            uploadSubmitBtn.disabled = true;
+            hideUploadError();
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                const response = await fetch(`${API_BASE}/inbound-fax`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': SESSION_TOKEN,
+                    },
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.status === 'success') {
+                    // Close modal
+                    closeUploadModal();
+
+                    // Add new document row to the table
+                    addDocumentRow(data);
+                } else {
+                    showUploadError(data.error || data.message || 'Upload failed. Please try again.');
+                    uploadSubmitBtn.innerHTML = originalText;
+                    uploadSubmitBtn.disabled = false;
+                }
+            } catch (error) {
+                showUploadError('Network error: ' + error.message);
+                uploadSubmitBtn.innerHTML = originalText;
+                uploadSubmitBtn.disabled = false;
+            }
+        }
+
+        function addDocumentRow(data) {
+            const tableContainer = document.querySelector('.table-container');
+            const emptyState = document.querySelector('.empty-state');
+
+            // If there's an empty state, replace it with table container
+            if (emptyState) {
+                const leftPanel = document.querySelector('.left-panel');
+                const newTableContainer = document.createElement('div');
+                newTableContainer.className = 'table-container';
+                emptyState.replaceWith(newTableContainer);
+            }
+
+            const container = document.querySelector('.table-container');
+            if (!container) return;
+
+            // Format the date
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+
+            // Create the new row HTML
+            const newRow = document.createElement('div');
+            newRow.className = 'doc-row';
+            newRow.dataset.intakeId = data.intake_id;
+            newRow.dataset.filename = data.filename || selectedFile?.name || 'Uploaded document';
+            newRow.dataset.status = 'classified';
+            newRow.dataset.loaded = 'false';
+
+            const sizeDisplay = formatFileSize(data.size_bytes || selectedFile?.size || 0);
+
+            // API returns "classification" (the type string), not "classification_type"
+            const classificationType = data.classification || 'unknown';
+
+            newRow.innerHTML = `
+                <div class="doc-row-header">
+                    <svg class="expand-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span class="doc-filename" title="${newRow.dataset.filename}">${newRow.dataset.filename}</span>
+                    <span class="doc-classification ${classificationType}">
+                        ${classificationType}
+                    </span>
+                    <span class="doc-status classified">classified</span>
+                    <span class="doc-datetime">${dateStr}</span>
+                    <span class="doc-size">${sizeDisplay}</span>
+                </div>
+                <div class="doc-expanded">
+                    <div class="expanded-loading" style="padding: 20px; text-align: center; color: #6c757d;">
+                        <span class="spinner"></span> Loading details...
+                    </div>
+                </div>
+            `;
+
+            // Insert at the top of the table
+            container.insertBefore(newRow, container.firstChild);
+
+            // Attach click handler to the new row header
+            const header = newRow.querySelector('.doc-row-header');
+            header.addEventListener('click', async function(e) {
+                const row = this.parentElement;
+                const intakeId = row.dataset.intakeId;
+                const filename = row.dataset.filename;
+
+                const wasExpanded = row.classList.contains('expanded');
+
+                document.querySelectorAll('.doc-row').forEach(r => {
+                    r.classList.remove('expanded');
+                    r.classList.remove('selected');
+                });
+
+                if (!wasExpanded) {
+                    row.classList.add('expanded');
+                    row.classList.add('selected');
+                    selectedRow = row;
+
+                    if (row.dataset.loaded !== 'true') {
+                        await loadDocumentDetails(intakeId, row);
+                    } else {
+                        const url = row.dataset.url;
+                        if (url) {
+                            showPdf(url, filename);
+                        }
+                    }
+                } else {
+                    selectedRow = null;
+                    hidePdf();
+                }
+            });
+
+            // Update the document count
+            const countEl = document.querySelector('.count');
+            const count = document.querySelectorAll('.doc-row').length;
+            countEl.textContent = `${count} document${count !== 1 ? 's' : ''}`;
+        }
+    </script>
+</body>
+</html>

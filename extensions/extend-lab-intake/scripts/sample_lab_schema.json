@@ -1,0 +1,64 @@
+{
+  "type": "object",
+  "properties": {
+    "patient_name": {
+      "type": ["string", "null"],
+      "description": "Patient's full name (first and last)"
+    },
+    "date_of_birth": {
+      "type": ["string", "null"],
+      "extend:type": "date",
+      "description": "Patient's date of birth"
+    },
+    "medical_record_number": {
+      "type": ["string", "null"],
+      "description": "Medical record number (MRN) if present"
+    },
+    "laboratory_name": {
+      "type": ["string", "null"],
+      "description": "Name of the laboratory"
+    },
+    "collection_date": {
+      "type": ["string", "null"],
+      "extend:type": "date",
+      "description": "Date the sample was collected"
+    },
+    "ordering_physician": {
+      "type": ["string", "null"],
+      "description": "Name of the ordering physician"
+    },
+    "test_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "test_name": {
+            "type": ["string", "null"],
+            "description": "Name of the test"
+          },
+          "result_value": {
+            "type": ["number", "null"],
+            "description": "Numeric result value"
+          },
+          "unit": {
+            "type": ["string", "null"],
+            "description": "Unit of measurement"
+          },
+          "reference_range": {
+            "type": ["string", "null"],
+            "description": "Reference range"
+          },
+          "abnormal_flag": {
+            "type": ["string", "null"],
+            "description": "Flag indicating if result is abnormal"
+          }
+        }
+      },
+      "description": "Array of test results"
+    },
+    "specimen_type": {
+      "type": ["string", "null"],
+      "description": "Type of specimen (blood, urine, etc.)"
+    }
+  }
+}

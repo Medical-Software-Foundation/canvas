@@ -1,0 +1,47 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "1.7.1",
+    "name": "extend_lab_intake",
+    "description": "Automated lab report intake using Extend AI extraction",
+    "components": {
+        "protocols": [
+            {
+                "class": "extend_lab_intake.protocols.task_completion:TaskCompletionHandler",
+                "description": "Notifies configured callback when lab intake task completes"
+            },
+            {
+                "class": "extend_lab_intake.api.inbound_fax:InboundFaxAPI",
+                "description": "API endpoint for receiving lab report PDFs via POST"
+            }
+        ],
+        "applications": [
+            {
+                "class": "extend_lab_intake.applications.document_queue:DocumentQueueApplication",
+                "name": "Lab Parser",
+                "description": "View and manage received lab report PDFs",
+                "scope": "provider_menu_item",
+                "icon": "assets/document-queue-icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "EXTEND_AI_KEY",
+        "EXTEND_AI_PROCESSOR_TREE",
+        "ANTHROPIC_API_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "FHIR_CLIENT_ID",
+        "FHIR_CLIENT_SECRET",
+        "INBOUND_FAX_TOKEN",
+        "CALLBACK_URL"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
