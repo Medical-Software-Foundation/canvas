@@ -9,13 +9,20 @@ Managing Patient's Custom Metadata.
 2. SimpleAPI endpoint for updating a patient's metadata key or a list of keys
 
 
+## Setup: Configuring Metadata Fields
+
+To control which metadata fields appear on the Patient Profile, edit `protocols/patient_metadata_fields.py`. This file defines the fields using `PatientMetadataCreateFormEffect` and a `METADATA_VALIDATION` dictionary used by the API endpoints for validation.
+
+Add, remove, or modify entries in both places to match your desired fields. See the [PatientMetadataCreateFormEffect documentation](https://docs.canvasmedical.com/sdk/patient-metadata-create-form-effect/) for all available field types and options.
+
+
 ### Important Note!
 
 When installing there is a plugin secret to create a `simpleapi-api-key`. 
 To create a key to use, here is some helpful code: `python -c "import secrets; print(secrets.token_hex(16))"`
 
 
-Example Payloads 
+## Example API Payloads
 
 1. Upsert example to update one metadata key for a patient
 ```python
