@@ -10,6 +10,7 @@ from canvas_sdk.effects.simple_api import HTMLResponse, Response
 from canvas_sdk.templates import render_to_string
 
 from canvas_sdk.v1.data.observation import Observation
+from canvas_sdk.v1.data.note import Note
 
 from logger import log
 
@@ -34,20 +35,36 @@ class VisualApp(SimpleAPI):
     def authenticate(self, credentials: Credentials) -> bool:
         return True
 
+    def get_survey_date(self, survey: dict) -> str:
+        """
+
+        Get the date for a survey, using fallbacks
+        Priority: effective_datetime > note.datetime_of_service > created
+        """
+        if effective_datetime := survey['effective_datetime']:
+            return arrow.get(effective_datetime).to("America/New_York").format("M/D/YYYY")
+        
+        if note_id := survey['note_id']:
+            dos = Note.objects.filter(dbid=note_id).values_list('datetime_of_service', flat=True).first()
+            if dos:
+                return arrow.get(dos).to("America/New_York").format("M/D/YYYY")
+        
+        return arrow.get(survey['created']).to("America/New_York").format("M/D/YYYY")
+
     @api.get("/")
     def index(self) -> list[Response | Effect]:
         patient = self.request.query_params.get("patient")
 
         patient_observation_dict = {}
-        patient_surveys = Observation.objects.for_patient(patient).filter(category="survey").exclude(entered_in_error__isnull=False)
+        patient_surveys = Observation.objects.for_patient(patient).filter(category="survey").exclude(entered_in_error__isnull=False).values('note_id', 'value', 'effective_datetime', 'created', 'name')
 
         for survey in patient_surveys:
-            value = survey.value
-            created_date = arrow.get(survey.created).to("America/New_York").format("M/D/YYYY")
-            if created_date in patient_observation_dict:
-                patient_observation_dict[created_date][survey.name] = value
+            value = survey['value']
+            date = self.get_survey_date(survey)
+            if date in patient_observation_dict:
+                patient_observation_dict[date][survey['name']] = value
             else:
-                patient_observation_dict[created_date]= {survey.name: value}
+                patient_observation_dict[date]= {survey['name']: value}
 
         # Step 1: Sort and normalize dates
         sorted_items = sorted(patient_observation_dict.items(), key=lambda x: arrow.get(x[0], 'M/D/YYYY'))
