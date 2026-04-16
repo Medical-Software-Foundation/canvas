@@ -1,0 +1,61 @@
+{
+    "sdk_version": "0.88.0",
+    "plugin_version": "0.5.1",
+    "name": "prescription_favorites",
+    "description": "Quick access to commonly prescribed medications through a searchable catalog with multi-select batch prescribing",
+    "components": {
+        "protocols": [
+            {
+                "class": "prescription_favorites.protocols.prescription_api:FavoritesAPI",
+                "description": "API endpoint to manage prescription favorites (list, create, update, delete)"
+            },
+            {
+                "class": "prescription_favorites.protocols.prescription_api:HideDefaultAPI",
+                "description": "API endpoint to hide/unhide default favorites per user"
+            },
+            {
+                "class": "prescription_favorites.protocols.prescription_api:MedicationSearchAPI",
+                "description": "API endpoint to search medications in FDB database"
+            },
+            {
+                "class": "prescription_favorites.protocols.prescription_api:PharmacySearchAPI",
+                "description": "API endpoint to search pharmacies"
+            },
+            {
+                "class": "prescription_favorites.protocols.prescription_api:PrescribeFavoritesAPI",
+                "description": "API endpoint to add selected medications to most recent open note"
+            },
+            {
+                "class": "prescription_favorites.protocols.prescription_api:MedicationLookupAPI",
+                "description": "Diagnostic API to lookup correct clinical quantities for medications"
+            },
+            {
+                "class": "prescription_favorites.protocols.prescription_api:PharmacyLookupAPI",
+                "description": "Diagnostic API to lookup pharmacy NCPDP IDs"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "applications": [
+            {
+                "class": "prescription_favorites.applications.prescription_favorites_app:PrescriptionFavoritesApp",
+                "name": "Prescribing",
+                "description": "Quick prescribing tool with search and batch prescribing capabilities",
+                "icon": "assets/cart_icon.png",
+                "scope": "patient_specific"
+            }
+        ],
+        "views": []
+    },
+    "secrets": [],
+    "custom_data": {
+        "namespace": "canvas_medical__prescription_favorites",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "../README.md"
+}
