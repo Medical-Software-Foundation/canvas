@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>My Schedule</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css">
+        <script type="text/javascript" src="main.js" defer></script>
+    </head>
+    <body>
+        <header class="app-header">
+            <div class="title" id="view-title">Today</div>
+        </header>
+
+        <nav class="view-switch" role="tablist">
+            <button data-view="day" class="view-btn active" role="tab">Day</button>
+            <button data-view="week" class="view-btn" role="tab">Week</button>
+            <button data-view="month" class="view-btn" role="tab">Month</button>
+        </nav>
+
+        <nav class="date-nav">
+            <button id="prev-btn" class="nav-btn" aria-label="Previous">&#8592;</button>
+            <button id="today-btn" class="nav-btn today">Today</button>
+            <button id="next-btn" class="nav-btn" aria-label="Next">&#8594;</button>
+        </nav>
+
+        <main id="content" class="content" aria-live="polite">
+            <div class="loading">Loading&hellip;</div>
+        </main>
+    </body>
+</html>

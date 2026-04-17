@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Task Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css">
+        <script type="text/javascript" src="main.js" defer></script>
+    </head>
+    <body>
+        <header class="app-header">
+            <div class="title">Tasks</div>
+        </header>
+
+        <section class="filter-bar">
+            <label class="toggle">
+                <input type="checkbox" id="mine-toggle" checked>
+                <span>Assigned to me</span>
+            </label>
+
+            <div class="filter-group">
+                <div class="filter-label">Status</div>
+                <div class="chip-row" id="status-chips"></div>
+            </div>
+
+            <div class="filter-group">
+                <div class="filter-label">Labels</div>
+                <div class="chip-row" id="label-chips">
+                    <span class="chip-empty">Loading labels&hellip;</span>
+                </div>
+            </div>
+        </section>
+
+        <main id="content" class="content" aria-live="polite">
+            <div class="loading">Loading&hellip;</div>
+        </main>
+    </body>
+</html>

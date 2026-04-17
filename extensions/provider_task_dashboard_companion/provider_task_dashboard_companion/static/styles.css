@@ -1,0 +1,337 @@
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #f4f6f8;
+    color: #1d2433;
+    -webkit-font-smoothing: antialiased;
+}
+
+.app-header {
+    padding: 16px;
+    background: #ffffff;
+    border-bottom: 1px solid #e1e5ea;
+}
+
+.app-header .title {
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.filter-bar {
+    background: #ffffff;
+    border-bottom: 1px solid #e1e5ea;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.toggle input { accent-color: #1d4ed8; }
+
+.filter-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7684;
+    margin-bottom: 4px;
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chip-empty {
+    font-size: 13px;
+    color: #8a95a5;
+    font-style: italic;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    border: 1px solid #d6dbe2;
+    background: #ffffff;
+    color: #1d2433;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.filter-chip.active {
+    background: #1d4ed8;
+    color: #ffffff;
+    border-color: #1d4ed8;
+}
+
+.filter-chip .color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #c7d2fe;
+}
+
+.content {
+    padding: 12px;
+}
+
+.loading, .empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: #6b7684;
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.task-row {
+    background: #ffffff;
+    border-radius: 4px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow:
+        0 2px 1px -1px rgba(0, 0, 0, 0.10),
+        0 1px 1px 0 rgba(0, 0, 0, 0.08),
+        0 1px 3px 0 rgba(0, 0, 0, 0.08);
+    transition: box-shadow 150ms ease;
+}
+
+.task-row.expanded {
+    box-shadow:
+        0 3px 3px -2px rgba(0, 0, 0, 0.12),
+        0 3px 4px 0 rgba(0, 0, 0, 0.08),
+        0 1px 8px 0 rgba(0, 0, 0, 0.08);
+}
+
+.task-detail {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px solid #eef0f4;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    cursor: default;
+}
+
+.task-detail[hidden] {
+    display: none;
+}
+
+.comment-summary {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid #eef0f4;
+    font-size: 13px;
+    font-style: italic;
+    color: #8a95a5;
+}
+
+.task-row.expanded .comment-summary {
+    display: none;
+}
+
+.task-detail .loading.small {
+    padding: 8px 0;
+    color: #6b7684;
+    font-size: 13px;
+}
+
+.task-detail .detail-error {
+    color: #b91c1c;
+    font-size: 13px;
+}
+
+.comments {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.no-comments {
+    font-size: 13px;
+    color: #8a95a5;
+    font-style: italic;
+}
+
+.comment {
+    background: #f6f8fb;
+    border-radius: 4px;
+    padding: 8px 10px;
+}
+
+.comment-meta {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+    color: #6b7684;
+    margin-bottom: 2px;
+}
+
+.comment-author { font-weight: 600; color: #1d2433; }
+.comment-time { font-size: 11px; }
+
+.comment-body {
+    font-size: 14px;
+    color: #1d2433;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.comment-composer {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.comment-input {
+    flex: 1;
+    font: inherit;
+    padding: 8px 10px;
+    border: 1px solid #d6dbe2;
+    border-radius: 4px;
+    resize: vertical;
+    min-height: 36px;
+    background: #ffffff;
+}
+
+.comment-input:focus {
+    outline: none;
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.15);
+}
+
+.task-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    font: inherit;
+    font-size: 14px;
+    padding: 8px 14px;
+    border: 1px solid #d6dbe2;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #1d2433;
+    cursor: pointer;
+}
+
+.btn.compact {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.btn.primary {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #ffffff;
+}
+
+.btn.primary:hover { background: #1e40af; border-color: #1e40af; }
+
+.btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.task-row .row-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.expand-caret {
+    width: 20px;
+    height: 20px;
+    color: #6b7684;
+    flex-shrink: 0;
+    margin-top: 2px;
+    transition: transform 150ms ease;
+}
+
+.task-row.expanded .expand-caret {
+    transform: rotate(180deg);
+}
+
+
+.task-row .title {
+    font-size: 15px;
+    font-weight: 500;
+    flex: 1;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.status-pill {
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    text-transform: capitalize;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.status-pill.open      { background: #eef2ff; color: #1d4ed8; }
+.status-pill.completed { background: #e6f9ed; color: #047857; }
+.status-pill.closed    { background: #f1f2f5; color: #6b7684; }
+
+.task-row .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: #6b7684;
+}
+
+.task-row .label-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.label-pill {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #1d4ed8;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.label-pill .color-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #1d4ed8;
+}
+
+.due.overdue { color: #b91c1c; font-weight: 500; }
+
+.patient-link {
+    color: #1d4ed8;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(29, 78, 216, 0.3);
+}
+
+.patient-link:hover { border-bottom-color: #1d4ed8; }

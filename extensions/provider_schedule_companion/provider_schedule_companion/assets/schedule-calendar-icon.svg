@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Card shadow -->
+  <rect x="13" y="23" width="74" height="66" rx="10" fill="#6b82a6" opacity="0.45"/>
+
+  <!-- Card body -->
+  <rect x="11" y="20" width="74" height="66" rx="10" fill="#fafcff"/>
+
+  <!-- Top band -->
+  <path d="M21 20 L75 20 Q85 20 85 30 L85 42 L11 42 L11 30 Q11 20 21 20 Z" fill="#1d4ed8"/>
+
+  <!-- Band inner highlight for paper-cut feel -->
+  <path d="M21 22 L75 22 Q83 22 83 30 L83 32 L13 32 L13 30 Q13 22 21 22 Z" fill="#2563eb"/>
+
+  <!-- Binder rings -->
+  <rect x="25" y="12" width="8" height="16" rx="3" fill="#1e3a8a"/>
+  <rect x="63" y="12" width="8" height="16" rx="3" fill="#1e3a8a"/>
+
+  <!-- Date cells (light gray-blue) -->
+  <g fill="#cbd8ec">
+    <rect x="20" y="52" width="14" height="10" rx="2"/>
+    <rect x="41" y="52" width="14" height="10" rx="2"/>
+    <rect x="62" y="52" width="14" height="10" rx="2"/>
+    <rect x="20" y="68" width="14" height="10" rx="2"/>
+    <rect x="62" y="68" width="14" height="10" rx="2"/>
+  </g>
+
+  <!-- Highlighted today cell -->
+  <rect x="41" y="68" width="14" height="10" rx="2" fill="#1d4ed8"/>
+</svg>
