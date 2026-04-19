@@ -1,29 +1,56 @@
 # provider_schedule_companion
 
-A Canvas plugin demonstrating the **provider companion (global scope)** application type — a mobile-friendly "at-a-glance" surface for the logged-in provider. This plugin shows the provider their **own schedule** with day, week, and month views, launched from the provider companion main page.
+A mobile-friendly "at-a-glance" schedule that lives on the provider companion main page. Opens the logged-in provider's own upcoming visits in a modal with day, week, and month views.
 
-The 3-tier provider companion harness exposes three `ApplicationScope` values:
+## What providers see
 
-| Scope | Surface | Context available |
-|---|---|---|
-| `provider_companion_global` | companion main page | (none) |
-| `provider_companion_patient_specific` | patient detail page | `patient.id` |
-| `provider_companion_note_specific` | inside an expanded note | `patient.id`, `note.id` |
+An icon titled **My Schedule** appears in the provider companion launcher. Tapping it opens a modal with:
 
-This plugin uses `provider_companion_global` — the companion main page, not tied to any patient or note.
+- A header showing the currently-selected date (or date range) and a Day / Week / Month view switcher.
+- Prev / Next arrows that step by one day, week, or month depending on the active view, and a **Today** button that snaps back to today's date in the current view.
+- A scrollable content area that re-renders when you change the view or the date range.
 
-## What it does
+Only appointments where you are the provider are shown.
 
-- Opens in a modal (via `LaunchModalEffect`) from the companion main page.
-- Queries `Appointment.objects.filter(provider__id=<logged-in staff>)` for a date range derived from the current view.
-- Renders three views:
-  - **Day** — the default, centered on today. Lists each appointment as a Material-style card showing time and patient name. Tap a card to reveal full detail (appointment type, reason for visit, duration, status).
-  - **Week** — a vertical stack of seven day sections. Each day has a centered date label (tappable to jump into Day view for that date) and lists the day's appointments as the same tap-to-expand cards. Empty days show an italicized "No appointments". When today falls inside the visible week, the content scrolls today's section into view on render.
-  - **Month** — a six-row calendar grid. Cells with appointments show a count badge; tap a cell to jump into Day view for that date.
-- Prev/Next nav steps by one day, week, or month depending on the active view; the Today button snaps back to today in the current view.
-- Patient names are rendered as links that break out of the modal iframe via `target="_top"` to `/companion/patient/<uuid>/`.
+## How to use it
 
-## Architecture
+**Day view** (the default, centered on today)
+- Each appointment is a card showing its start time and the patient name.
+- Tap a card to expand it and reveal the appointment type, reason for visit, duration, and status. Tap again to collapse.
+- Tap the patient's name (underlined link) to leave the modal and jump to that patient's companion page.
+
+**Week view**
+- Seven stacked day sections, one per day of the week.
+- Each day's header shows the day-of-week and date, centered. Tap the header to jump into Day view for that date.
+- Under each header, the day's appointments appear as the same tap-to-expand cards used in Day view.
+- A day with no appointments shows an italicized "No appointments" note under its header.
+- If the displayed week contains today, today's section scrolls into view automatically when the week renders.
+
+**Month view**
+- A standard calendar grid. Days with appointments show a small count badge.
+- Tap any date to jump into Day view for that date.
+- Today's cell is outlined in the plugin's accent color.
+
+## Installation
+
+No environment variables or secrets are required.
+
+```sh
+canvas install --host <host> \
+    ~/src/plugin-development/msf-canvas/extensions/provider_schedule_companion/provider_schedule_companion
+```
+
+After install, the plugin registers itself against the `provider_companion_global` scope and will appear in the provider companion launcher on next page load.
+
+---
+
+## For developers
+
+### Scope
+
+This plugin uses the `provider_companion_global` `ApplicationScope` — it surfaces on the provider companion main page and does not receive patient or note context.
+
+### Architecture
 
 ```
 provider_schedule_companion/
@@ -67,7 +94,7 @@ provider_schedule_companion/
 
 The client computes view boundaries as local `Date` objects and sends their `.toISOString()` representations (UTC). The server parses those with `datetime.fromisoformat` (`Z` suffix supported) and filters by `start_time__gte` / `start_time__lt`. Appointments come back as ISO strings; the client renders them with `toLocaleTimeString` / `toLocaleDateString` so display follows the device's locale and timezone.
 
-## Endpoints
+### Endpoints
 
 All mounted under `/plugin-io/api/provider_schedule_companion/app/`.
 
@@ -92,14 +119,13 @@ Appointment JSON shape:
 }
 ```
 
-## Deploy
+### Known considerations
 
-```sh
-canvas install --host <host> \
-    ~/src/plugin-development/msf-canvas/extensions/provider_schedule_companion/provider_schedule_companion
-```
+- **Icon scale** — rendered at 256×256 because the 48×48 default for `cpa:icon-generation` looks fuzzy in the launcher.
+- **Browser locale for date math** — the "today" boundary is derived from the browser clock; a user browsing in a timezone far from the practice may see off-by-day edge cases at midnight.
+- **Modal scroll isolation** — `body` is a full-height flex column with `overflow: hidden`; only `#content` scrolls, so the header, view tabs, and date nav stay pinned.
 
-## Test
+## Testing
 
 ```sh
 cd ~/src/canvas-plugins && uv run pytest \
@@ -108,12 +134,6 @@ cd ~/src/canvas-plugins && uv run pytest \
 ```
 
 Current coverage: **100%** (46 stmts, 2 branches).
-
-## Known considerations
-
-- **Icon scale** — rendered at 256×256 because the 48×48 default for `cpa:icon-generation` looks fuzzy in the launcher.
-- **Browser locale for date math** — the "today" boundary is derived from the browser clock; a user browsing in a timezone far from the practice may see off-by-day edge cases at midnight.
-- **Modal scroll isolation** — `body` is a full-height flex column with `overflow: hidden`; only `#content` scrolls, so the header, view tabs, and date nav stay pinned.
 
 ## License
 
