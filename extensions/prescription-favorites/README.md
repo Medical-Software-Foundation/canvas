@@ -2,7 +2,7 @@
 
 Quick-access prescribing tool with a searchable catalog of favorite medications and batch prescribing.
 
-![Prescription Favorites panel in a patient chart](https://images.prismic.io/canvas-website/aeRmiJ1ZCF7ETVbM_rxfav-screenshot.jpg?auto=format,compress)
+![Prescription Favorites panel in a patient chart](https://images.prismic.io/canvas-website/aeRmiJ1ZCF7ETVbM_rxfav-screenshot.jpg)
 
 ## Problem it solves
 
