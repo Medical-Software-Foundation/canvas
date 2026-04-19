@@ -2,6 +2,20 @@
 
 Quick-access prescribing tool with a searchable catalog of favorite medications and batch prescribing.
 
+[![Watch the demo](https://img.youtube.com/vi/DiwKRAWkpyQ/maxresdefault.jpg)](https://youtu.be/DiwKRAWkpyQ)
+
+![Prescription Favorites panel in a patient chart](prescription_favorites/assets/screenshot.png)
+
+## Problem it solves
+
+Prescribing the same medications repeatedly is one of the most common sources of click fatigue in an EHR. Providers treating patients on standard protocols - weight management, GI support, chronic disease maintenance - end up navigating the same medication search, filling in the same sig, selecting the same pharmacy, dozens of times per day. This plugin eliminates that repetition by giving staff a one-click prescribing panel with pre-configured favorites and the ability to add their own.
+
+## Who it's for
+
+- **Providers and clinical staff** who prescribe the same medications frequently
+- **Practices with standardized protocols** (e.g., GLP-1 weight management, chronic disease management)
+- **Any Canvas customer** looking for a working example of Custom Data (CustomModels) and batch prescribing via the Canvas SDK
+
 ## What it does
 
 - Displays a searchable panel of prescription favorites inside a patient chart
@@ -11,9 +25,17 @@ Quick-access prescribing tool with a searchable catalog of favorite medications 
 - Staff can hide/unhide default favorites per user
 - Custom favorites are stored via Canvas Custom Data (CustomModel)
 
-## Triggers
+## Installation
 
-- **Application**: `patient_specific` scope - renders when viewing a patient chart
+```bash
+canvas install prescription-favorites
+```
+
+## Configuration
+
+The plugin uses Canvas Custom Data for storage. The `namespace_read_write_access_key` secret is auto-generated on first install - no manual configuration required.
+
+If another plugin needs to share this namespace, retrieve the key from **Settings > Plugins > prescription_favorites > Secrets** in the Canvas admin UI.
 
 ## API Endpoints
 
@@ -35,18 +57,12 @@ All endpoints require staff session authentication (`StaffSessionAuthMixin`).
 - **HiddenDefault** - Tracks which default favorites a staff member has hidden
 - **CustomStaff** - Proxy model for ForeignKey references to Canvas Staff
 
-## Installation
-
-```bash
-canvas install prescription-favorites
-```
-
-## Configuration
-
-Requires the `namespace_read_write_access_key` secret for custom data access. This key is auto-generated on first install.
-
 ## Running Tests
 
 ```bash
 uv run pytest tests/
 ```
+
+## License
+
+MIT - see [LICENSE](LICENSE) for details.
