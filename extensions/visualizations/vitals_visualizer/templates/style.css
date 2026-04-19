@@ -96,6 +96,53 @@ header h2 {
     gap: 16px;
     padding: 16px;
     background: #f5f6f7;
+    /* Desktop default: two charts side-by-side. */
+    flex-direction: row;
+    overflow: hidden;
+}
+
+/* Below 720px (mobile / narrow-modal viewports), stack the controls
+   and the charts vertically and let the container scroll. */
+@media (max-width: 720px) {
+    html, body { overflow: auto; }
+    body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+    }
+
+    header {
+        height: auto;
+        min-height: 48px;
+        padding: 8px 16px;
+        flex-shrink: 0;
+    }
+
+    .controls {
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 8px;
+    }
+
+    .control-group {
+        flex: 1 1 100%;
+    }
+
+    .controls select {
+        flex: 1;
+    }
+
+    .chart-container {
+        position: static;
+        flex: 1;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .chart-wrapper {
+        min-height: 280px;
+        flex: 0 0 auto;
+    }
 }
 
 .chart-wrapper {
