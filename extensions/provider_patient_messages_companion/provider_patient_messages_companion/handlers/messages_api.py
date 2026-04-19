@@ -131,7 +131,10 @@ class PatientMessagesAPI(StaffSessionAuthMixin, SimpleAPI):
         staff_uuid = self.request.headers["canvas-logged-in-user-id"]
         context = {
             "cache_bust": _CACHE_BUST,
-            "ws_url": f"/plugin-io/ws/{PLUGIN_NAME}/staff-{staff_uuid}",
+            # Server pattern is plugin-io/ws/<plugin_name>/<channel_name>/$ —
+            # the trailing slash is required or the platform rejects with
+            # "No route found for path".
+            "ws_url": f"/plugin-io/ws/{PLUGIN_NAME}/staff-{staff_uuid}/",
         }
         return [
             HTMLResponse(

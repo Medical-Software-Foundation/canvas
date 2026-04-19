@@ -258,7 +258,8 @@ class TestIndex:
         assert response.status_code == HTTPStatus.OK
         ctx = mock_render.mock_calls[0].args[1]
         assert ctx["ws_url"] == (
-            "/plugin-io/ws/provider_patient_messages_companion/staff-" + STAFF_UUID
+            "/plugin-io/ws/provider_patient_messages_companion/staff-"
+            + STAFF_UUID + "/"
         )
         assert ctx["cache_bust"] == messages_api._CACHE_BUST
 

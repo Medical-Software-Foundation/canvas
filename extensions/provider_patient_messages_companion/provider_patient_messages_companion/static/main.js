@@ -18,8 +18,27 @@
     function init() {
         document.getElementById("back-btn").addEventListener("click", showThreads);
         document.getElementById("composer").addEventListener("submit", onComposerSubmit);
+        const input = document.getElementById("composer-input");
+        input.addEventListener("input", () => autoGrowTextarea(input));
         loadThreads();
         connectWebSocket();
+    }
+
+    function autoGrowTextarea(el) {
+        // Temporarily collapse so scrollHeight reflects actual content.
+        el.style.height = "auto";
+        const max = 160;
+        const next = Math.min(el.scrollHeight, max);
+        el.style.height = next + "px";
+        // Show the scrollbar only once we've hit the cap.
+        el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+    }
+
+    function resetComposerHeight() {
+        const input = document.getElementById("composer-input");
+        if (!input) return;
+        input.style.height = "40px";
+        input.style.overflowY = "hidden";
     }
 
     // ---------- View switching ----------
@@ -48,6 +67,7 @@
         document.getElementById("messages").innerHTML =
             '<div class="loading">Loading\u2026</div>';
         document.getElementById("composer-input").value = "";
+        resetComposerHeight();
 
         loadConversation(patientId);
 
@@ -232,6 +252,7 @@
         state.conversationMessages.push(pending);
         renderConversation();
         input.value = "";
+        resetComposerHeight();
 
         sendBtn.disabled = true;
         fetch(

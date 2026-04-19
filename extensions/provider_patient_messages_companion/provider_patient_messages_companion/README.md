@@ -130,7 +130,7 @@ All HTTP endpoints mounted under `/plugin-io/api/provider_patient_messages_compa
 | `POST /threads/<patient_id>/mark-read` | emits `EDIT_MESSAGE` per unread inbound; returns `{marked: N}` |
 | `GET /main.js`, `GET /styles.css` | served static assets (cache-busted) |
 
-WebSocket URL: `/plugin-io/ws/provider_patient_messages_companion/staff-<staff_uuid>`.
+WebSocket URL: `/plugin-io/ws/provider_patient_messages_companion/staff-<staff_uuid>/` (trailing slash is required — the server pattern is `plugin-io/ws/<plugin_name>/<channel_name>/$`).
 
 ### Known considerations
 
