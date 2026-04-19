@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Enter Vitals</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css?v={{cache_bust}}">
+        <script type="text/javascript" src="main.js?v={{cache_bust}}" defer></script>
+    </head>
+    <body>
+        <header class="app-header">
+            <div class="title">Enter Vitals</div>
+        </header>
+
+        <main class="content">
+            <form id="vitals-form" novalidate>
+                <div class="field-row">
+                    <label for="bp-sys">Blood pressure</label>
+                    <div class="bp-inputs">
+                        <input id="bp-sys" class="input-sm" type="number" inputmode="numeric" name="blood_pressure_systole" min="30" max="305" placeholder="Sys" />
+                        <span class="sep">/</span>
+                        <input id="bp-dia" class="input-sm" type="number" inputmode="numeric" name="blood_pressure_diastole" min="20" max="180" placeholder="Dia" />
+                    </div>
+                    <span class="unit">mmHg</span>
+                </div>
+
+                <div class="field-row">
+                    <label for="pulse">Pulse</label>
+                    <input id="pulse" class="input-sm" type="number" inputmode="numeric" name="pulse" min="30" max="250" />
+                    <span class="unit">bpm</span>
+                </div>
+
+                <div class="field-row">
+                    <label for="respiration-rate">Respiration rate</label>
+                    <input id="respiration-rate" class="input-sm" type="number" inputmode="numeric" name="respiration_rate" min="6" max="60" />
+                    <span class="unit">/min</span>
+                </div>
+
+                <div class="field-row">
+                    <label for="body-temperature">Body temp</label>
+                    <input id="body-temperature" class="input-md" type="number" inputmode="decimal" step="0.1" name="body_temperature" min="85" max="107" />
+                    <span class="unit">&deg;F</span>
+                </div>
+
+                <div class="field-row">
+                    <label for="oxygen-saturation">O<sub>2</sub> saturation</label>
+                    <input id="oxygen-saturation" class="input-sm" type="number" inputmode="numeric" name="oxygen_saturation" min="60" max="100" />
+                    <span class="unit">%</span>
+                </div>
+
+                <div class="field-row">
+                    <label for="weight-lbs">Weight</label>
+                    <input id="weight-lbs" class="input-md" type="number" inputmode="numeric" name="weight_lbs" min="1" max="1500" />
+                    <span class="unit">lbs</span>
+                </div>
+
+                <div class="field-row">
+                    <label for="height">Height</label>
+                    <input id="height" class="input-sm" type="number" inputmode="numeric" name="height" min="10" max="108" />
+                    <span class="unit">in</span>
+                </div>
+
+                <div class="field-row">
+                    <label for="waist-circumference">Waist</label>
+                    <input id="waist-circumference" class="input-sm" type="number" inputmode="numeric" name="waist_circumference" min="20" max="200" />
+                    <span class="unit">cm</span>
+                </div>
+
+                <div class="field-row field-row--full">
+                    <label for="note">Note</label>
+                    <textarea id="note" name="note" maxlength="150" rows="2" placeholder="Optional"></textarea>
+                </div>
+
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+
+                <div class="actions">
+                    <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="submit-btn" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </main>
+    </body>
+</html>
