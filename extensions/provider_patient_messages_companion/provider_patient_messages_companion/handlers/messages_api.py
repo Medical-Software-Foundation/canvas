@@ -11,6 +11,7 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.care_team import CareTeamMembership, CareTeamMembershipStatus
 from canvas_sdk.v1.data.message import Message
+from canvas_sdk.v1.data.patient import Patient
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -129,12 +130,22 @@ class PatientMessagesAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/")
     def index(self) -> list[Response | Effect]:
         staff_uuid = self.request.headers["canvas-logged-in-user-id"]
+        patient_uuid = self.request.query_params.get("patient_id", "")
+        patient_name = ""
+        if patient_uuid:
+            patient = Patient.objects.filter(id=patient_uuid).first()
+            if patient is not None:
+                patient_name = (
+                    f"{patient.first_name} {patient.last_name}".strip()
+                )
         context = {
             "cache_bust": _CACHE_BUST,
             # Server pattern is plugin-io/ws/<plugin_name>/<channel_name>/$ —
             # the trailing slash is required or the platform rejects with
             # "No route found for path".
             "ws_url": f"/plugin-io/ws/{PLUGIN_NAME}/staff-{staff_uuid}/",
+            "patient_id": patient_uuid,
+            "patient_name": patient_name,
         }
         return [
             HTMLResponse(
@@ -171,14 +182,10 @@ class PatientMessagesAPI(StaffSessionAuthMixin, SimpleAPI):
         staff_uuid = self.request.headers["canvas-logged-in-user-id"]
         patient_uuid = self.request.path_params["patient_id"]
 
-        panel = _panel_patients(staff_uuid)
-        if patient_uuid not in panel:
-            return [
-                JSONResponse(
-                    {"error": "Patient is not on your panel"},
-                    status_code=HTTPStatus.NOT_FOUND,
-                )
-            ]
+        # Patient is addressable by any staff session here — conversation
+        # visibility is already scoped by the sender/recipient filter below
+        # (the caller must be on one side of the message). The panel list
+        # in GET /threads is a separate "my threads" view.
 
         try:
             limit = min(
@@ -225,15 +232,6 @@ class PatientMessagesAPI(StaffSessionAuthMixin, SimpleAPI):
         staff_uuid = self.request.headers["canvas-logged-in-user-id"]
         patient_uuid = self.request.path_params["patient_id"]
 
-        panel = _panel_patients(staff_uuid)
-        if patient_uuid not in panel:
-            return [
-                JSONResponse(
-                    {"error": "Patient is not on your panel"},
-                    status_code=HTTPStatus.NOT_FOUND,
-                )
-            ]
-
         body = (self.request.json() or {}).get("content", "").strip()
         if not body:
             return [
@@ -274,15 +272,6 @@ class PatientMessagesAPI(StaffSessionAuthMixin, SimpleAPI):
     def mark_read(self) -> list[Response | Effect]:
         staff_uuid = self.request.headers["canvas-logged-in-user-id"]
         patient_uuid = self.request.path_params["patient_id"]
-
-        panel = _panel_patients(staff_uuid)
-        if patient_uuid not in panel:
-            return [
-                JSONResponse(
-                    {"error": "Patient is not on your panel"},
-                    status_code=HTTPStatus.NOT_FOUND,
-                )
-            ]
 
         unread = list(
             Message.objects.filter(

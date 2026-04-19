@@ -9,6 +9,7 @@ from canvas_sdk.effects.task import AddTaskComment, UpdateTask
 from canvas_sdk.effects.task import TaskStatus as EffectTaskStatus
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data.patient import Patient
 from canvas_sdk.v1.data.task import Task, TaskComment, TaskLabel, TaskStatus
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
@@ -78,9 +79,22 @@ class TaskDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/")
     def index(self) -> list[Response | Effect]:
+        patient_uuid = self.request.query_params.get("patient_id", "")
+        patient_name = ""
+        if patient_uuid:
+            patient = Patient.objects.filter(id=patient_uuid).first()
+            if patient is not None:
+                patient_name = (
+                    f"{patient.first_name} {patient.last_name}".strip()
+                )
+        context = {
+            "cache_bust": _CACHE_BUST,
+            "patient_id": patient_uuid,
+            "patient_name": patient_name,
+        }
         return [
             HTMLResponse(
-                render_to_string("static/index.html", {"cache_bust": _CACHE_BUST}),
+                render_to_string("static/index.html", context),
                 status_code=HTTPStatus.OK,
             )
         ]
@@ -112,7 +126,11 @@ class TaskDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             .annotate(comment_count=Count("comments"))
         )
 
-        if params.get("mine", "1") == "1":
+        patient_id = params.get("patient_id")
+        if patient_id:
+            # Patient-scoped view — hard-scope to this patient, ignore `mine`.
+            qs = qs.filter(patient__id=patient_id)
+        elif params.get("mine", "1") == "1":
             qs = qs.filter(assignee__id=staff_id)
 
         statuses = [s for s in _split_csv(params.get("statuses")) if s in ALLOWED_STATUSES]

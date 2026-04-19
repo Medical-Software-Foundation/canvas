@@ -5,6 +5,10 @@
     const STATUSES = ["OPEN", "COMPLETED", "CLOSED"];
     const DEFAULT_STATUSES = new Set(["OPEN"]);
 
+    const PATIENT_ID = metaContent("patient-id");
+    const PATIENT_NAME = metaContent("patient-name");
+    const PATIENT_MODE = !!PATIENT_ID;
+
     const state = {
         mine: true,
         selectedStatuses: new Set(DEFAULT_STATUSES),
@@ -15,12 +19,32 @@
     document.addEventListener("DOMContentLoaded", init);
 
     function init() {
+        applyPatientMode();
         renderStatusChips();
-        document.getElementById("mine-toggle").addEventListener("change", (e) => {
-            state.mine = e.target.checked;
-            loadTasks();
-        });
+        if (!PATIENT_MODE) {
+            document.getElementById("mine-toggle").addEventListener("change", (e) => {
+                state.mine = e.target.checked;
+                loadTasks();
+            });
+        }
         loadFilters().then(loadTasks);
+    }
+
+    function metaContent(name) {
+        const el = document.querySelector('meta[name="' + name + '"]');
+        return (el && el.getAttribute("content")) || "";
+    }
+
+    function applyPatientMode() {
+        if (!PATIENT_MODE) return;
+        document.getElementById("app-title").textContent = "Patient Tasks";
+        const subtitle = document.getElementById("app-subtitle");
+        if (subtitle) {
+            subtitle.textContent = "Tasks for " + (PATIENT_NAME || "this patient");
+            subtitle.removeAttribute("hidden");
+        }
+        const mineLabel = document.getElementById("mine-toggle-label");
+        if (mineLabel) mineLabel.setAttribute("hidden", "");
     }
 
     function loadFilters() {
@@ -91,7 +115,11 @@
         content.innerHTML = '<div class="loading">Loading\u2026</div>';
 
         const params = new URLSearchParams();
-        params.set("mine", state.mine ? "1" : "0");
+        if (PATIENT_MODE) {
+            params.set("patient_id", PATIENT_ID);
+        } else {
+            params.set("mine", state.mine ? "1" : "0");
+        }
         if (state.selectedStatuses.size) {
             params.set("statuses", Array.from(state.selectedStatuses).join(","));
         }
@@ -131,11 +159,13 @@
         const dueClass = t.due && new Date(t.due) < new Date() && t.status === "OPEN" ? " overdue" : "";
 
         const metaParts = ['<span class="due' + dueClass + '">' + escapeHtml(dueText) + '</span>'];
-        if (!state.mine) {
+        if (PATIENT_MODE || !state.mine) {
             const assignee = t.assignee_name || "Unassigned";
             metaParts.push('<span>Assignee: ' + escapeHtml(assignee) + '</span>');
         }
-        if (t.patient_name) {
+        // Suppress the "Patient:" meta in patient-scoped mode (we're already
+        // scoped to a single patient — showing it per row is noise).
+        if (!PATIENT_MODE && t.patient_name) {
             const patientHtml = t.patient_id
                 ? '<a class="patient-link" target="_top" href="/companion/patient/' +
                     encodeURIComponent(t.patient_id) + '/">' + escapeHtml(t.patient_name) + '</a>'

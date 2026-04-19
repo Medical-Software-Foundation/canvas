@@ -250,9 +250,19 @@ class TestAuthenticate:
 
 
 class TestIndex:
-    def test_returns_html_with_ws_url_and_cache_bust(self) -> None:
+    def _bypass_patient_lookup(self, patient=None):
+        queryset = MagicMock()
+        queryset.first.return_value = patient
+        mock_model = MagicMock()
+        mock_model.objects.filter.return_value = queryset
+        return patch.object(messages_api, "Patient", mock_model)
+
+    def test_returns_html_without_patient_context(self) -> None:
         api = _make_api()
-        with patch.object(messages_api, "render_to_string", return_value="<html/>") as mock_render:
+        with (
+            patch.object(messages_api, "render_to_string", return_value="<html/>") as mock_render,
+            self._bypass_patient_lookup(),
+        ):
             response = api.index()[0]
 
         assert response.status_code == HTTPStatus.OK
@@ -262,6 +272,31 @@ class TestIndex:
             + STAFF_UUID + "/"
         )
         assert ctx["cache_bust"] == messages_api._CACHE_BUST
+        assert ctx["patient_id"] == ""
+        assert ctx["patient_name"] == ""
+
+    def test_looks_up_patient_name_when_id_present(self) -> None:
+        api = _make_api(query_params={"patient_id": PATIENT_1})
+        patient = SimpleNamespace(first_name="Jane", last_name="Doe")
+        with (
+            patch.object(messages_api, "render_to_string", return_value="<html/>") as mock_render,
+            self._bypass_patient_lookup(patient=patient),
+        ):
+            api.index()
+        ctx = mock_render.mock_calls[0].args[1]
+        assert ctx["patient_id"] == PATIENT_1
+        assert ctx["patient_name"] == "Jane Doe"
+
+    def test_missing_patient_returns_empty_name(self) -> None:
+        api = _make_api(query_params={"patient_id": "missing"})
+        with (
+            patch.object(messages_api, "render_to_string", return_value="<html/>") as mock_render,
+            self._bypass_patient_lookup(patient=None),
+        ):
+            api.index()
+        ctx = mock_render.mock_calls[0].args[1]
+        assert ctx["patient_id"] == "missing"
+        assert ctx["patient_name"] == ""
 
 
 class TestThreadsEndpoint:
@@ -315,20 +350,12 @@ class TestConversationEndpoint:
         mock_model.objects.filter.return_value = queryset
         return queryset, mock_model
 
-    def test_not_on_panel_returns_404(self) -> None:
-        api = _make_api(path_params={"patient_id": PATIENT_1})
-        with patch.object(messages_api, "_panel_patients", return_value={}):
-            response = api.conversation()[0]
-        assert response.status_code == HTTPStatus.NOT_FOUND
-
     def test_invalid_before_returns_400(self) -> None:
         api = _make_api(
             path_params={"patient_id": PATIENT_1},
             query_params={"before": "not-a-date"},
         )
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
-        with patch.object(messages_api, "_panel_patients", return_value=panel):
-            response = api.conversation()[0]
+        response = api.conversation()[0]
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_success_returns_messages_chronological(self) -> None:
@@ -336,8 +363,6 @@ class TestConversationEndpoint:
             path_params={"patient_id": PATIENT_1},
             query_params={"limit": "5", "before": "2026-04-19T00:00:00Z"},
         )
-        patient = SimpleNamespace(id=PATIENT_1, first_name="Jane", last_name="Doe")
-        panel = {PATIENT_1: patient}
 
         msg_new = SimpleNamespace(
             id="msg-new", content="b", created=datetime(2026, 4, 18, 13, tzinfo=timezone.utc),
@@ -352,10 +377,7 @@ class TestConversationEndpoint:
         descending = [msg_new, msg_old]
         _, mock_model = self._patched_messages(descending)
 
-        with (
-            patch.object(messages_api, "_panel_patients", return_value=panel),
-            patch.object(messages_api, "Message", mock_model),
-        ):
+        with patch.object(messages_api, "Message", mock_model):
             response = api.conversation()[0]
 
         payload = json.loads(response.content)["messages"]
@@ -368,12 +390,8 @@ class TestConversationEndpoint:
             path_params={"patient_id": PATIENT_1},
             query_params={"limit": "0"},
         )
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
         _, mock_model = self._patched_messages([])
-        with (
-            patch.object(messages_api, "_panel_patients", return_value=panel),
-            patch.object(messages_api, "Message", mock_model),
-        ):
+        with patch.object(messages_api, "Message", mock_model):
             response = api.conversation()[0]
         # The branch that resets `limit` runs; endpoint still succeeds.
         assert response.status_code == HTTPStatus.OK
@@ -383,49 +401,30 @@ class TestConversationEndpoint:
             path_params={"patient_id": PATIENT_1},
             query_params={"limit": "not-a-number"},
         )
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
-        queryset, mock_model = self._patched_messages([])
-        with (
-            patch.object(messages_api, "_panel_patients", return_value=panel),
-            patch.object(messages_api, "Message", mock_model),
-        ):
+        _, mock_model = self._patched_messages([])
+        with patch.object(messages_api, "Message", mock_model):
             response = api.conversation()[0]
         assert response.status_code == HTTPStatus.OK
 
 
 class TestSendEndpoint:
-    def test_not_on_panel_returns_404(self) -> None:
-        api = _make_api(
-            path_params={"patient_id": PATIENT_1},
-            json_body={"content": "hi"},
-        )
-        with patch.object(messages_api, "_panel_patients", return_value={}):
-            response = api.send()[0]
-        assert response.status_code == HTTPStatus.NOT_FOUND
-
     def test_empty_content_returns_400(self) -> None:
         api = _make_api(
             path_params={"patient_id": PATIENT_1},
             json_body={"content": "   "},
         )
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
-        with patch.object(messages_api, "_panel_patients", return_value=panel):
-            response = api.send()[0]
+        response = api.send()[0]
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_missing_content_key_returns_400(self) -> None:
         api = _make_api(path_params={"patient_id": PATIENT_1}, json_body={})
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
-        with patch.object(messages_api, "_panel_patients", return_value=panel):
-            response = api.send()[0]
+        response = api.send()[0]
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_null_body_returns_400(self) -> None:
         api = _make_api(path_params={"patient_id": PATIENT_1}, json_body=None)
         api.request.json = lambda: None
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
-        with patch.object(messages_api, "_panel_patients", return_value=panel):
-            response = api.send()[0]
+        response = api.send()[0]
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_success_emits_create_and_send(self) -> None:
@@ -433,11 +432,7 @@ class TestSendEndpoint:
             path_params={"patient_id": PATIENT_1},
             json_body={"content": "reply"},
         )
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
-        with (
-            patch.object(messages_api, "_panel_patients", return_value=panel),
-            _effect_validation_bypass(),
-        ):
+        with _effect_validation_bypass():
             effect, response = api.send()
 
         assert response.status_code == HTTPStatus.ACCEPTED
@@ -449,32 +444,21 @@ class TestSendEndpoint:
 
 
 class TestMarkReadEndpoint:
-    def test_not_on_panel_returns_404(self) -> None:
-        api = _make_api(path_params={"patient_id": PATIENT_1})
-        with patch.object(messages_api, "_panel_patients", return_value={}):
-            response = api.mark_read()[0]
-        assert response.status_code == HTTPStatus.NOT_FOUND
-
     def test_no_unread_returns_zero(self) -> None:
         api = _make_api(path_params={"patient_id": PATIENT_1})
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
 
         queryset = MagicMock()
         queryset.values_list.return_value = []
         mock_model = MagicMock()
         mock_model.objects.filter.return_value = queryset
 
-        with (
-            patch.object(messages_api, "_panel_patients", return_value=panel),
-            patch.object(messages_api, "Message", mock_model),
-        ):
+        with patch.object(messages_api, "Message", mock_model):
             response = api.mark_read()[0]
 
         assert json.loads(response.content) == {"marked": 0}
 
     def test_unread_emits_edit_effects(self) -> None:
         api = _make_api(path_params={"patient_id": PATIENT_1})
-        panel = {PATIENT_1: SimpleNamespace(id=PATIENT_1)}
 
         queryset = MagicMock()
         queryset.values_list.return_value = [
@@ -485,7 +469,6 @@ class TestMarkReadEndpoint:
         mock_model.objects.filter.return_value = queryset
 
         with (
-            patch.object(messages_api, "_panel_patients", return_value=panel),
             patch.object(messages_api, "Message", mock_model),
             _effect_validation_bypass(),
         ):

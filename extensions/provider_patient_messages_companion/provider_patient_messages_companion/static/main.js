@@ -2,8 +2,10 @@
     "use strict";
 
     const API_BASE = "/plugin-io/api/provider_patient_messages_companion/app";
-    const WS_URL_META = document.querySelector('meta[name="ws-url"]');
-    const WS_PATH = WS_URL_META ? WS_URL_META.getAttribute("content") : "";
+    const WS_PATH = metaContent("ws-url");
+    const PATIENT_ID = metaContent("patient-id");
+    const PATIENT_NAME = metaContent("patient-name");
+    const PATIENT_MODE = !!PATIENT_ID;
 
     const state = {
         view: "threads",               // "threads" | "conversation"
@@ -20,8 +22,28 @@
         document.getElementById("composer").addEventListener("submit", onComposerSubmit);
         const input = document.getElementById("composer-input");
         input.addEventListener("input", () => autoGrowTextarea(input));
-        loadThreads();
+
+        if (PATIENT_MODE) {
+            // Seed a minimal thread for name display, then go straight to the
+            // conversation. The back button is hidden — the user closes the
+            // modal via the harness chrome to return to the patient page.
+            state.threadsById.set(PATIENT_ID, {
+                patient_id: PATIENT_ID,
+                patient_name: PATIENT_NAME,
+                unread_count: 0,
+            });
+            const backBtn = document.getElementById("back-btn");
+            if (backBtn) backBtn.setAttribute("hidden", "");
+            showConversation(PATIENT_ID);
+        } else {
+            loadThreads();
+        }
         connectWebSocket();
+    }
+
+    function metaContent(name) {
+        const el = document.querySelector('meta[name="' + name + '"]');
+        return (el && el.getAttribute("content")) || "";
     }
 
     function autoGrowTextarea(el) {
@@ -332,7 +354,9 @@
         const payload = envelope && envelope.message;
         if (!payload || payload.type !== "new_message") return;
 
-        loadThreads();
+        if (!PATIENT_MODE) {
+            loadThreads();
+        }
         if (
             state.view === "conversation" &&
             state.conversationPatientId === payload.patient_id

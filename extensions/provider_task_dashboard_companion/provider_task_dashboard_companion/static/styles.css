@@ -19,6 +19,14 @@ body {
     font-weight: 600;
 }
 
+.app-header .subtitle {
+    font-size: 13px;
+    color: #6b7684;
+    margin-top: 2px;
+}
+
+.app-header .subtitle[hidden] { display: none; }
+
 .filter-bar {
     background: #ffffff;
     border-bottom: 1px solid #e1e5ea;

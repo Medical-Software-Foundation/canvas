@@ -5,14 +5,17 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="styles.css?v={{cache_bust}}">
         <script type="text/javascript" src="main.js?v={{cache_bust}}" defer></script>
+        <meta name="patient-id" content="{{patient_id}}">
+        <meta name="patient-name" content="{{patient_name}}">
     </head>
     <body>
         <header class="app-header">
-            <div class="title">Tasks</div>
+            <div class="title" id="app-title">Tasks</div>
+            <div class="subtitle" id="app-subtitle" hidden></div>
         </header>
 
         <section class="filter-bar">
-            <label class="toggle">
+            <label class="toggle" id="mine-toggle-label">
                 <input type="checkbox" id="mine-toggle" checked>
                 <span>Assigned to me</span>
             </label>

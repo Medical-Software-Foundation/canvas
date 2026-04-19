@@ -12,6 +12,13 @@
                 "description": "Browse tasks with status and label filters. Defaults to tasks assigned to you.",
                 "scope": "provider_companion_global",
                 "icon": "assets/icon.png"
+            },
+            {
+                "class": "provider_task_dashboard_companion.applications.task_dashboard_app:PatientTaskDashboardApp",
+                "name": "Patient Tasks",
+                "description": "Browse tasks associated with the current patient.",
+                "scope": "provider_companion_patient_specific",
+                "icon": "assets/icon.png"
             }
         ],
         "handlers": [

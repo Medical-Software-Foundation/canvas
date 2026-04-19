@@ -195,15 +195,48 @@ class TestAuthenticate:
 
 
 class TestIndex:
-    def test_returns_html(self) -> None:
+    def _bypass_patient_lookup(self, patient=None):
+        queryset = MagicMock()
+        queryset.first.return_value = patient
+        mock_model = MagicMock()
+        mock_model.objects.filter.return_value = queryset
+        return patch.object(task_dashboard_api, "Patient", mock_model)
+
+    def test_returns_html_without_patient_context(self) -> None:
         api = _make_api()
-        with patch.object(task_dashboard_api, "render_to_string", return_value="<html/>") as mock_render:
+        with (
+            patch.object(task_dashboard_api, "render_to_string", return_value="<html/>") as mock_render,
+            self._bypass_patient_lookup(),
+        ):
             response = api.index()[0]
-        assert mock_render.mock_calls == [
-            call("static/index.html", {"cache_bust": task_dashboard_api._CACHE_BUST})
-        ]
+        ctx = mock_render.mock_calls[0].args[1]
+        assert ctx["cache_bust"] == task_dashboard_api._CACHE_BUST
+        assert ctx["patient_id"] == ""
+        assert ctx["patient_name"] == ""
         assert response.status_code == HTTPStatus.OK
-        assert response.content == b"<html/>"
+
+    def test_looks_up_patient_name_when_id_present(self) -> None:
+        api = _make_api(query_params={"patient_id": "pat-1"})
+        patient = SimpleNamespace(first_name="Jane", last_name="Doe")
+        with (
+            patch.object(task_dashboard_api, "render_to_string", return_value="<html/>") as mock_render,
+            self._bypass_patient_lookup(patient=patient),
+        ):
+            api.index()
+        ctx = mock_render.mock_calls[0].args[1]
+        assert ctx["patient_id"] == "pat-1"
+        assert ctx["patient_name"] == "Jane Doe"
+
+    def test_missing_patient_returns_empty_name(self) -> None:
+        api = _make_api(query_params={"patient_id": "missing"})
+        with (
+            patch.object(task_dashboard_api, "render_to_string", return_value="<html/>") as mock_render,
+            self._bypass_patient_lookup(patient=None),
+        ):
+            api.index()
+        ctx = mock_render.mock_calls[0].args[1]
+        assert ctx["patient_id"] == "missing"
+        assert ctx["patient_name"] == ""
 
 
 class TestFilters:
@@ -304,6 +337,24 @@ class TestTasks:
         # no status__in kwargs filter because all were invalid
         assert not any(
             c.kwargs.get("status__in") is not None for c in qs.filter.mock_calls
+        )
+
+    def test_patient_scope_filters_by_patient_ignores_mine(self) -> None:
+        api = _make_api(query_params={"patient_id": "pat-99", "mine": "1"})
+        qs = self._setup_queryset([])
+        with patch.object(task_dashboard_api, "Task") as mock_task:
+            mock_task.objects.all.return_value = qs
+            api.tasks()
+
+        # patient__id filter applied
+        patient_calls = [
+            c for c in qs.filter.mock_calls
+            if c.kwargs.get("patient__id") == "pat-99"
+        ]
+        assert len(patient_calls) == 1
+        # assignee__id filter NOT applied (mine is ignored in patient scope)
+        assert not any(
+            c.kwargs.get("assignee__id") is not None for c in qs.filter.mock_calls
         )
 
     def test_labels_filter_applied_with_distinct(self) -> None:
