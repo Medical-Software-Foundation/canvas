@@ -8,18 +8,17 @@ Quick-access prescribing tool with a searchable catalog of favorite medications 
 
 ## Problem it solves
 
-Prescribing the same medications repeatedly is one of the most common sources of click fatigue in an EHR. Providers treating patients on standard protocols - weight management, GI support, chronic disease maintenance - end up navigating the same medication search, filling in the same sig, selecting the same pharmacy, dozens of times per day. This plugin eliminates that repetition by giving staff a one-click prescribing panel with pre-configured favorites and the ability to add their own.
+Prescribing the same medications repeatedly is one of the most common sources of click fatigue for clinical staff. Providers treating patients on standard protocols - weight management, GI support, chronic disease maintenance - end up navigating the same medication search, filling in the same instructions, selecting the same pharmacy, dozens of times per day. This plugin eliminates that repetition by giving staff a one-click prescribing panel with pre-configured favorites and the ability to add their own.
 
 ## Who it's for
 
 - **Providers and clinical staff** who prescribe the same medications frequently
 - **Practices with standardized protocols** (e.g., GLP-1 weight management, chronic disease management)
-- **Any Canvas customer** looking for a working example of Custom Data (CustomModels) and batch prescribing via the Canvas SDK
 
 ## What it does
 
 - Displays a searchable panel of prescription favorites inside a patient chart
-- Supports both hardcoded default favorites and user-created custom favorites
+- Supports both default favorites and user-created custom favorites
 - Allows staff to add, edit, and delete custom favorites
 - Supports batch prescribing (select multiple medications, add to note at once)
 - Staff can hide/unhide default favorites per user
