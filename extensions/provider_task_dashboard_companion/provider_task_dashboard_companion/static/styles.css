@@ -45,6 +45,8 @@ body {
 
 .toggle input { accent-color: #d97706; }
 
+.toggle[hidden] { display: none; }
+
 .filter-label {
     font-size: 11px;
     text-transform: uppercase;

@@ -37,12 +37,12 @@
 
     function applyPatientMode() {
         if (!PATIENT_MODE) return;
-        document.getElementById("app-title").textContent = "Patient Tasks";
-        const subtitle = document.getElementById("app-subtitle");
-        if (subtitle) {
-            subtitle.textContent = "Tasks for " + (PATIENT_NAME || "this patient");
-            subtitle.removeAttribute("hidden");
-        }
+        // In patient scope the companion harness already shows the patient
+        // name and chrome, so drop our own header entirely — same for the
+        // "Assigned to me" toggle (we hard-scope to all tasks for the
+        // patient regardless of assignee server-side).
+        const header = document.querySelector(".app-header");
+        if (header) header.setAttribute("hidden", "");
         const mineLabel = document.getElementById("mine-toggle-label");
         if (mineLabel) mineLabel.setAttribute("hidden", "");
     }

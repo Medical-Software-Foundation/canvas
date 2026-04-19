@@ -81,11 +81,20 @@
         state.conversationMessages = [];
 
         document.getElementById("threads-header").setAttribute("hidden", "");
-        document.getElementById("conv-header").removeAttribute("hidden");
         document.getElementById("view-threads").setAttribute("hidden", "");
         document.getElementById("view-conversation").removeAttribute("hidden");
 
-        paintConversationHeader(patientId);
+        // In patient-scope the companion harness already shows the patient
+        // chrome, so drop our own conversation header (duplicative) and its
+        // back button (there's no thread list to return to).
+        const convHeader = document.getElementById("conv-header");
+        if (PATIENT_MODE) {
+            convHeader.setAttribute("hidden", "");
+        } else {
+            convHeader.removeAttribute("hidden");
+            paintConversationHeader(patientId);
+        }
+
         document.getElementById("messages").innerHTML =
             '<div class="loading">Loading\u2026</div>';
         document.getElementById("composer-input").value = "";

@@ -1,10 +1,12 @@
 # provider_task_dashboard_companion
 
-A mobile-friendly task triage surface that lives on the provider companion main page. Lets the logged-in provider browse the practice's tasks with filters, read and post comments, assign tasks to themselves, and mark their own tasks complete.
+A mobile-friendly task triage surface that lets the logged-in provider browse tasks with filters, read and post comments, assign tasks to themselves, and mark their own tasks complete. Ships in two surfaces: a global-scope **Task Dashboard** on the provider companion main page and a patient-scope **Patient Tasks** launcher on the patient page.
 
 ## What providers see
 
-An icon titled **Task Dashboard** appears in the provider companion launcher. Tapping it opens a modal with a filter bar at the top and a scrollable list of task cards below.
+### Task Dashboard (global scope)
+
+The **Task Dashboard** icon appears in the provider companion launcher. Tapping it opens a modal with a filter bar at the top and a scrollable list of task cards below.
 
 Each task card shows:
 
@@ -14,6 +16,10 @@ Each task card shows:
 - The task's labels, if any.
 - The assignee's name — only shown when you've turned off "Assigned to me". Tasks with no assignee display as _Unassigned_.
 - An italicized "_N comments_" footer when the task has one or more comments. Tasks with zero comments show no comment indicator.
+
+### Patient Tasks (patient scope)
+
+On a patient's companion page, a **Patient Tasks** launcher opens the same UI hard-scoped to tasks for that patient. The plugin's own header is dropped (the harness already shows the patient chrome), the "Assigned to me" toggle is hidden, and the per-row "Patient:" meta is suppressed as redundant. Status and label filters still work. All tasks for the patient are shown regardless of assignee.
 
 ## How to use it
 
@@ -64,19 +70,24 @@ Labels surface only if they are **active** and include `"tasks"` in their `modul
 
 ## For developers
 
-### Scope
+### Scopes
 
-This plugin uses the `provider_companion_global` `ApplicationScope` — it surfaces on the provider companion main page and does not receive patient or note context.
+This plugin registers two `Application`s:
+
+- `TaskDashboardApp` — scope `provider_companion_global`. Launches `/app/`.
+- `PatientTaskDashboardApp` — scope `provider_companion_patient_specific`. Reads `patient.id` from the event context and launches `/app/?patient_id=<uuid>`.
+
+Both share the same `SimpleAPI` handler and the same static assets; the UI branches on whether `patient_id` is in the URL.
 
 ### Architecture
 
 ```
 provider_task_dashboard_companion/
-├── CANVAS_MANIFEST.json               # plugin manifest (scope: provider_companion_global)
+├── CANVAS_MANIFEST.json               # manifest: two Applications (global + patient scope)
 ├── README.md                          # this file
 ├── LICENSE                            # MIT
 ├── applications/
-│   └── task_dashboard_app.py          # Application subclass; on_open → LaunchModalEffect
+│   └── task_dashboard_app.py          # TaskDashboardApp + PatientTaskDashboardApp
 ├── handlers/
 │   └── task_dashboard_api.py          # SimpleAPI: UI shell + JSON + POST endpoints
 ├── static/
@@ -90,12 +101,12 @@ provider_task_dashboard_companion/
 
 ### Request flow
 
-1. Provider taps the app in the companion launcher.
-2. `TaskDashboardApp.on_open()` returns a `LaunchModalEffect` pointing to `/plugin-io/api/provider_task_dashboard_companion/app/`.
-3. `TaskDashboardAPI.index()` serves `static/index.html`.
-4. `main.js` loads and:
+1. Provider taps one of the Applications in the companion launcher.
+2. `TaskDashboardApp.on_open()` points at `/app/`; `PatientTaskDashboardApp.on_open()` points at `/app/?patient_id=<uuid>`.
+3. `TaskDashboardAPI.index()` serves `static/index.html`, looking up the patient's name if `patient_id` is present and injecting `patient_id`, `patient_name`, and `cache_bust` into the template.
+4. `main.js` reads `<meta name="patient-id">` on load. In patient mode it hides the `.app-header` and the "Assigned to me" toggle. It then:
    - `GET /app/filters` for label + status options.
-   - `GET /app/tasks?mine=…&statuses=…&labels=…` for the filtered list.
+   - `GET /app/tasks?patient_id=<uuid>&statuses=…&labels=…` (patient scope) or `GET /app/tasks?mine=…&statuses=…&labels=…` (global scope) for the filtered list.
 5. Tapping a card triggers `GET /app/tasks/<id>` to load the task detail + comments.
 6. Posting a comment / assigning / completing calls the appropriate `POST` endpoint, which returns the applied effect alongside a `202 Accepted`.
 
@@ -103,12 +114,14 @@ provider_task_dashboard_companion/
 
 - Reads: `Task`, `TaskLabel`, `TaskComment`, `Staff`, `Patient` (via `select_related("assignee", "patient")` + `prefetch_related("labels")` on the task list).
 - The list query uses `.annotate(comment_count=Count("comments"))` so each card can show the comment count without per-row queries.
+- `GET /tasks?patient_id=<uuid>` hard-scopes to `Task.patient__id=<uuid>` and ignores the `mine` parameter. Without `patient_id`, `mine` defaults to `1` and restricts to tasks assigned to the caller.
+- `GET /` (the HTML shell) looks up `Patient.objects.filter(id=<uuid>).first()` when `patient_id` is in the query string to resolve a name for the template.
 - Writes are all effect-based — the plugin never calls `.save()` itself, which is necessary because the plugin sandbox forbids direct ORM writes.
 - No `data_access` declarations required in the manifest; SDK ORM reads and effect emissions are the access surface.
 
 ### Auth
 
-- `SessionCredentials`; the endpoint rejects requests where `credentials.logged_in_user is None`.
+- `StaffSessionAuthMixin` — non-staff sessions are rejected with `InvalidCredentialsError` at the auth layer.
 - The logged-in staff UUID is read from the `canvas-logged-in-user-id` header.
 - Server-side checks enforce that only the task's assignee can mark it complete — the client uses the server-set `can_complete` / `can_assign_to_me` flags to show/hide buttons, but the `POST /complete` handler re-verifies before emitting the effect.
 
@@ -118,9 +131,9 @@ All mounted under `/plugin-io/api/provider_task_dashboard_companion/app/`.
 
 | Method & path | Purpose |
 |---|---|
-| `GET /` | HTML shell |
+| `GET /?patient_id=<uuid>` (query optional) | HTML shell; resolves patient name when a UUID is supplied |
 | `GET /filters` | JSON: `{statuses: […], labels: [{id, name, color}, …]}` |
-| `GET /tasks?mine=0|1&statuses=CSV&labels=CSV` | JSON list of serialized tasks |
+| `GET /tasks?patient_id=<uuid>&statuses=CSV&labels=CSV` or `GET /tasks?mine=0|1&statuses=CSV&labels=CSV` | JSON list of serialized tasks. `patient_id` wins over `mine`. |
 | `GET /tasks/<task_id>` | JSON: `{task: {…}, comments: [{…}, …]}` |
 | `POST /tasks/<task_id>/comments` | body `{body: "…"}`; emits `AddTaskComment` |
 | `POST /tasks/<task_id>/complete` | 403 unless caller is the assignee; emits `UpdateTask(status=COMPLETED)` |
@@ -159,8 +172,9 @@ Comment JSON shape:
 ### Known considerations
 
 - **Eventual consistency** — effects are applied asynchronously by the platform, so the `GET /tasks` refetch that runs after "Assign to me" or "Mark complete" may briefly still show the pre-change state. The optimistic UX (append comments client-side; refetch on action) papers over the gap in practice but isn't a strong consistency guarantee.
-- **FK filter by UUID** — `Task.assignee_id` targets the integer `dbid` primary key, not the public UUID. The filters here use the double-underscore traversal form (`assignee__id=<uuid>`) to hit the UUID field instead.
+- **FK filter by UUID** — `Task.assignee_id` / `Task.patient_id` target the integer `dbid` primary key, not the public UUID. The filters here use the double-underscore traversal form (`assignee__id=<uuid>`, `patient__id=<uuid>`) to hit the UUID field instead.
 - **Staff-only** — all endpoints assume `logged_in_user` is a staff UUID. Patient-side sessions are not supported (nor relevant for a provider companion surface).
+- **Patient-scope chrome** — in patient mode the plugin's own `.app-header` is hidden (the harness renders patient chrome). The "Assigned to me" toggle has a `.toggle[hidden] { display: none }` rule because the `.toggle` class's `display: inline-flex` would otherwise override the `hidden` attribute's user-agent `display: none`.
 
 ## Testing
 

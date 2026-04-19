@@ -87,8 +87,12 @@ provider_schedule_companion/
 
 ### Auth
 
-- `SessionCredentials`; the endpoint rejects requests where `credentials.logged_in_user is None`.
+- `StaffSessionAuthMixin` — non-staff sessions are rejected with `InvalidCredentialsError` at the auth layer.
 - The logged-in staff UUID is read from the `canvas-logged-in-user-id` header (set by the platform on every request into `/plugin-io/`).
+
+### Cache-busting
+
+`_CACHE_BUST` is a module-level UTC timestamp generated when the plugin process starts. It's passed into the rendered HTML as `cache_bust`, and the HTML shell appends `?v={{cache_bust}}` to its `main.js` / `styles.css` references. A plugin redeploy or process restart gives a new token, so stale JS/CSS never gets served to users.
 
 ### Timezone handling
 

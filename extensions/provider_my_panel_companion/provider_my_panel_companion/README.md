@@ -84,7 +84,7 @@ Total DB round-trips per load: 4 (one care-team, two appointments, one task-coun
 
 ### Auth
 
-- `SessionCredentials`; the endpoint rejects requests where `credentials.logged_in_user is None`.
+- `StaffSessionAuthMixin` — non-staff sessions are rejected with `InvalidCredentialsError` at the auth layer.
 - The logged-in staff UUID is read from the `canvas-logged-in-user-id` header (set by the platform on every request into `/plugin-io/`).
 
 ### Cache-busting
