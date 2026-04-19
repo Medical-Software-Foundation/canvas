@@ -4,9 +4,6 @@ Quick-access prescribing tool with a searchable catalog of favorite medications 
 
 ![Prescription Favorites panel in a patient chart](https://images.prismic.io/canvas-website/aeRmiJ1ZCF7ETVbM_rxfav-screenshot.jpg?auto=format,compress)
 
-[![Watch the demo](https://img.youtube.com/vi/DiwKRAWkpyQ/maxresdefault.jpg)](https://youtu.be/DiwKRAWkpyQ)
-
-
 ## Problem it solves
 
 Prescribing the same medications repeatedly is one of the most common sources of click fatigue for clinical staff. Providers treating patients on standard protocols - weight management, GI support, chronic disease maintenance - end up navigating the same medication search, filling in the same instructions, selecting the same pharmacy, dozens of times per day. This plugin eliminates that repetition by giving staff a one-click prescribing panel with pre-configured favorites and the ability to add their own.
