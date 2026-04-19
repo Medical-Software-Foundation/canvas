@@ -8,7 +8,8 @@
         <meta name="ws-url" content="{{ws_url}}">
     </head>
     <body>
-        <header class="app-header">
+        <!-- Thread-list header -->
+        <header class="app-header" id="threads-header">
             <div class="title-row">
                 <div class="title">My Messages</div>
                 <div class="ws-indicator" id="ws-indicator" title="Live connection status">
@@ -19,8 +20,34 @@
             <div class="subtitle" id="panel-summary">Loading&hellip;</div>
         </header>
 
-        <main id="content" class="content" aria-live="polite">
+        <!-- Conversation header -->
+        <header class="app-header conv-header" id="conv-header" hidden>
+            <button type="button" class="back-btn" id="back-btn" aria-label="Back to thread list">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor"
+                          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <div class="conv-head-text">
+                <div class="conv-patient" id="conv-patient">&nbsp;</div>
+                <div class="conv-sub" id="conv-sub">&nbsp;</div>
+            </div>
+        </header>
+
+        <!-- Thread-list view -->
+        <main class="view view-threads" id="view-threads" aria-live="polite">
             <div class="loading">Loading&hellip;</div>
         </main>
+
+        <!-- Conversation view -->
+        <section class="view view-conversation" id="view-conversation" hidden>
+            <div class="messages" id="messages" aria-live="polite">
+                <div class="loading">Loading&hellip;</div>
+            </div>
+            <form class="composer" id="composer">
+                <textarea id="composer-input" rows="1" placeholder="Reply&hellip;"></textarea>
+                <button type="submit" class="btn primary" id="composer-send">Send</button>
+            </form>
+        </section>
     </body>
 </html>

@@ -6,40 +6,100 @@
     const WS_PATH = WS_URL_META ? WS_URL_META.getAttribute("content") : "";
 
     const state = {
+        view: "threads",               // "threads" | "conversation"
         threads: [],
-        expandedPatientId: null,
-        loadedConversations: new Set(), // patient ids whose messages have been fetched
+        threadsById: new Map(),
+        conversationPatientId: null,
+        conversationMessages: [],
     };
 
     document.addEventListener("DOMContentLoaded", init);
 
     function init() {
+        document.getElementById("back-btn").addEventListener("click", showThreads);
+        document.getElementById("composer").addEventListener("submit", onComposerSubmit);
         loadThreads();
         connectWebSocket();
+    }
+
+    // ---------- View switching ----------
+
+    function showThreads() {
+        state.view = "threads";
+        state.conversationPatientId = null;
+        state.conversationMessages = [];
+        document.getElementById("threads-header").removeAttribute("hidden");
+        document.getElementById("conv-header").setAttribute("hidden", "");
+        document.getElementById("view-threads").removeAttribute("hidden");
+        document.getElementById("view-conversation").setAttribute("hidden", "");
+    }
+
+    function showConversation(patientId) {
+        state.view = "conversation";
+        state.conversationPatientId = patientId;
+        state.conversationMessages = [];
+
+        document.getElementById("threads-header").setAttribute("hidden", "");
+        document.getElementById("conv-header").removeAttribute("hidden");
+        document.getElementById("view-threads").setAttribute("hidden", "");
+        document.getElementById("view-conversation").removeAttribute("hidden");
+
+        paintConversationHeader(patientId);
+        document.getElementById("messages").innerHTML =
+            '<div class="loading">Loading\u2026</div>';
+        document.getElementById("composer-input").value = "";
+
+        loadConversation(patientId);
+
+        const thread = state.threadsById.get(patientId);
+        if (thread && thread.unread_count > 0) {
+            markRead(patientId);
+        }
+    }
+
+    function paintConversationHeader(patientId) {
+        const thread = state.threadsById.get(patientId);
+        const name = (thread && thread.patient_name) || "Patient";
+        document.getElementById("conv-patient").textContent = name;
+        const subEl = document.getElementById("conv-sub");
+        subEl.innerHTML =
+            '<a target="_top" href="/companion/patient/' +
+            encodeURIComponent(patientId) + '/">Open patient page</a>';
     }
 
     // ---------- Threads ----------
 
     function loadThreads() {
-        const content = document.getElementById("content");
+        const view = document.getElementById("view-threads");
         const summary = document.getElementById("panel-summary");
-        content.innerHTML = '<div class="loading">Loading\u2026</div>';
+        if (state.view === "threads") {
+            view.innerHTML = '<div class="loading">Loading\u2026</div>';
+        }
 
-        fetch(API_BASE + "/threads", { credentials: "same-origin" })
+        return fetch(API_BASE + "/threads", { credentials: "same-origin" })
             .then((r) => {
                 if (!r.ok) throw new Error("HTTP " + r.status);
                 return r.json();
             })
             .then((data) => {
                 state.threads = data.threads || [];
+                state.threadsById = new Map(
+                    state.threads.map((t) => [t.patient_id, t])
+                );
                 summary.textContent = summaryText(state.threads.length);
-                renderThreads();
+                if (state.view === "threads") {
+                    renderThreads();
+                } else if (state.view === "conversation") {
+                    paintConversationHeader(state.conversationPatientId);
+                }
             })
             .catch((err) => {
                 summary.textContent = "Panel unavailable";
-                content.innerHTML =
-                    '<div class="empty">Failed to load: ' +
-                    escapeHtml(String(err)) + "</div>";
+                if (state.view === "threads") {
+                    view.innerHTML =
+                        '<div class="empty">Failed to load: ' +
+                        escapeHtml(String(err)) + '</div>';
+                }
             });
     }
 
@@ -50,31 +110,14 @@
     }
 
     function renderThreads() {
-        const content = document.getElementById("content");
+        const view = document.getElementById("view-threads");
         if (!state.threads.length) {
-            content.innerHTML =
+            view.innerHTML =
                 '<div class="empty">You don\u2019t have any patients on your panel yet.</div>';
             return;
         }
-        const list = document.createElement("div");
-        list.className = "thread-list";
-        state.threads.forEach((t) => list.appendChild(threadRow(t)));
-        content.innerHTML = "";
-        content.appendChild(list);
-
-        // Restore expanded state if a thread was open before a re-render.
-        if (state.expandedPatientId) {
-            const expandedRow = list.querySelector(
-                '.thread-row[data-patient-id="' + cssEscape(state.expandedPatientId) + '"]'
-            );
-            if (expandedRow) {
-                expandedRow.classList.add("expanded");
-                const drawer = expandedRow.querySelector(".conversation");
-                drawer.removeAttribute("hidden");
-                state.loadedConversations.delete(state.expandedPatientId);
-                renderConversation(state.expandedPatientId, drawer, { reload: true });
-            }
-        }
+        view.innerHTML = "";
+        state.threads.forEach((t) => view.appendChild(threadRow(t)));
     }
 
     function threadRow(thread) {
@@ -85,11 +128,6 @@
         const unreadBadge = thread.unread_count > 0
             ? '<span class="unread-badge">' + thread.unread_count + '</span>'
             : "";
-
-        const link =
-            '<a class="patient-link" target="_top" href="/companion/patient/' +
-            encodeURIComponent(thread.patient_id) + '/">' +
-            escapeHtml(thread.patient_name || "(unnamed)") + '</a>';
 
         const preview = thread.last_message
             ? '<div class="preview">' +
@@ -107,54 +145,21 @@
 
         row.innerHTML =
             '<div class="row-head">' +
-                '<div class="patient-name">' + link + '</div>' +
+                '<div class="patient-name">' +
+                    escapeHtml(thread.patient_name || "(unnamed)") +
+                '</div>' +
                 unreadBadge +
-                '<svg class="expand-caret" viewBox="0 0 24 24" aria-hidden="true">' +
-                    '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" ' +
-                    'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>' +
             '</div>' +
-            preview +
-            '<div class="conversation" hidden></div>';
+            preview;
 
-        const drawer = row.querySelector(".conversation");
-        drawer.addEventListener("click", (e) => e.stopPropagation());
-        row.querySelectorAll(".patient-link").forEach((a) => {
-            a.addEventListener("click", (e) => e.stopPropagation());
-        });
-
-        row.addEventListener("click", () => toggleExpand(row, thread, drawer));
+        row.addEventListener("click", () => showConversation(thread.patient_id));
         return row;
-    }
-
-    function toggleExpand(row, thread, drawer) {
-        const willOpen = drawer.hasAttribute("hidden");
-        if (willOpen) {
-            drawer.removeAttribute("hidden");
-            row.classList.add("expanded");
-            state.expandedPatientId = thread.patient_id;
-            renderConversation(thread.patient_id, drawer);
-            if (thread.unread_count > 0) {
-                markRead(thread.patient_id, row);
-            }
-        } else {
-            drawer.setAttribute("hidden", "");
-            row.classList.remove("expanded");
-            if (state.expandedPatientId === thread.patient_id) {
-                state.expandedPatientId = null;
-            }
-        }
     }
 
     // ---------- Conversation ----------
 
-    function renderConversation(patientId, drawer, opts) {
-        opts = opts || {};
-        if (state.loadedConversations.has(patientId) && !opts.reload) {
-            return;
-        }
-        drawer.innerHTML = '<div class="loading small">Loading messages\u2026</div>';
-        fetch(
+    function loadConversation(patientId) {
+        return fetch(
             API_BASE + "/threads/" + encodeURIComponent(patientId) + "/messages",
             { credentials: "same-origin" }
         )
@@ -163,57 +168,43 @@
                 return r.json();
             })
             .then((data) => {
-                state.loadedConversations.add(patientId);
-                paintConversation(drawer, patientId, data.messages || []);
+                if (state.conversationPatientId !== patientId) return;
+                state.conversationMessages = data.messages || [];
+                renderConversation();
             })
             .catch((err) => {
-                drawer.innerHTML =
-                    '<div class="loading small">Failed to load: ' +
+                const messagesEl = document.getElementById("messages");
+                messagesEl.innerHTML =
+                    '<div class="no-messages">Failed to load: ' +
                     escapeHtml(String(err)) + '</div>';
             });
     }
 
-    function paintConversation(drawer, patientId, messages) {
-        drawer.innerHTML = "";
-        const messagesEl = document.createElement("div");
-        messagesEl.className = "messages";
-        renderMessages(messagesEl, messages);
-        drawer.appendChild(messagesEl);
-
-        const composer = document.createElement("form");
-        composer.className = "composer";
-        composer.innerHTML =
-            '<textarea rows="1" placeholder="Reply\u2026"></textarea>' +
-            '<button type="submit" class="btn primary">Send</button>';
-        const textarea = composer.querySelector("textarea");
-        const button = composer.querySelector("button");
-        composer.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const content = textarea.value.trim();
-            if (!content) return;
-            button.disabled = true;
-            sendMessage(patientId, content, messagesEl)
-                .then(() => {
-                    textarea.value = "";
-                })
-                .catch((err) => alert("Send failed: " + err.message))
-                .finally(() => {
-                    button.disabled = false;
-                });
-        });
-        drawer.appendChild(composer);
-
-        scrollMessagesToBottom(messagesEl);
-    }
-
-    function renderMessages(container, messages) {
-        if (!messages.length) {
-            container.innerHTML =
-                '<div class="no-messages">No messages yet. Start the conversation.</div>';
+    function renderConversation() {
+        const messagesEl = document.getElementById("messages");
+        messagesEl.innerHTML = "";
+        if (!state.conversationMessages.length) {
+            const empty = document.createElement("div");
+            empty.className = "no-messages";
+            empty.textContent = "No messages yet. Start the conversation.";
+            messagesEl.appendChild(empty);
             return;
         }
-        container.innerHTML = "";
-        messages.forEach((m) => container.appendChild(messageBubble(m)));
+
+        let lastDay = "";
+        state.conversationMessages.forEach((m) => {
+            const day = dayKey(m.created);
+            if (day && day !== lastDay) {
+                const divider = document.createElement("div");
+                divider.className = "day-divider";
+                divider.textContent = formatDayLabel(m.created);
+                messagesEl.appendChild(divider);
+                lastDay = day;
+            }
+            messagesEl.appendChild(messageBubble(m));
+        });
+
+        scrollMessagesToBottom();
     }
 
     function messageBubble(m) {
@@ -225,18 +216,25 @@
         return wrapper;
     }
 
-    function sendMessage(patientId, content, messagesEl) {
-        // Optimistic append.
-        const nowIso = new Date().toISOString();
-        const pending = messageBubble({
-            content, sent_by_me: true, created: nowIso,
-        });
-        const empty = messagesEl.querySelector(".no-messages");
-        if (empty) empty.remove();
-        messagesEl.appendChild(pending);
-        scrollMessagesToBottom(messagesEl);
+    function onComposerSubmit(e) {
+        e.preventDefault();
+        const input = document.getElementById("composer-input");
+        const sendBtn = document.getElementById("composer-send");
+        const content = input.value.trim();
+        if (!content || !state.conversationPatientId) return;
+        const patientId = state.conversationPatientId;
 
-        return fetch(
+        const pending = {
+            content,
+            sent_by_me: true,
+            created: new Date().toISOString(),
+        };
+        state.conversationMessages.push(pending);
+        renderConversation();
+        input.value = "";
+
+        sendBtn.disabled = true;
+        fetch(
             API_BASE + "/threads/" + encodeURIComponent(patientId) + "/messages",
             {
                 method: "POST",
@@ -248,27 +246,29 @@
             .then((r) => r.json().then((d) => ({ ok: r.ok, data: d })))
             .then(({ ok, data }) => {
                 if (!ok) {
-                    pending.remove();
-                    throw new Error(data.error || "Request failed");
+                    const idx = state.conversationMessages.indexOf(pending);
+                    if (idx >= 0) state.conversationMessages.splice(idx, 1);
+                    renderConversation();
+                    alert("Send failed: " + (data.error || "Request failed"));
                 }
+            })
+            .catch((err) => {
+                alert("Send failed: " + err.message);
+            })
+            .finally(() => {
+                sendBtn.disabled = false;
             });
     }
 
-    function markRead(patientId, row) {
+    function markRead(patientId) {
         fetch(
             API_BASE + "/threads/" + encodeURIComponent(patientId) + "/mark-read",
             { method: "POST", credentials: "same-origin" }
         )
             .then((r) => {
                 if (!r.ok) return;
-                const thread = state.threads.find(
-                    (t) => t.patient_id === patientId
-                );
-                if (thread) {
-                    thread.unread_count = 0;
-                }
-                const badge = row.querySelector(".unread-badge");
-                if (badge) badge.remove();
+                const thread = state.threadsById.get(patientId);
+                if (thread) thread.unread_count = 0;
             })
             .catch(() => {});
     }
@@ -295,10 +295,8 @@
             setWsStatus("error", "Reconnecting\u2026");
             setTimeout(connectWebSocket, 4000);
         });
-        socket.addEventListener("error", () => {
-            setWsStatus("error", "Error");
-        });
-        socket.addEventListener("message", (event) => handleWsMessage(event));
+        socket.addEventListener("error", () => setWsStatus("error", "Error"));
+        socket.addEventListener("message", handleWsMessage);
     }
 
     function handleWsMessage(event) {
@@ -309,8 +307,18 @@
             return;
         }
         if (!payload || payload.type !== "new_message") return;
-        // Refresh the thread list so previews + unread badges update.
+
         loadThreads();
+        if (
+            state.view === "conversation" &&
+            state.conversationPatientId === payload.patient_id
+        ) {
+            loadConversation(state.conversationPatientId);
+            const thread = state.threadsById.get(payload.patient_id);
+            if (thread && thread.unread_count > 0) {
+                markRead(payload.patient_id);
+            }
+        }
     }
 
     function setWsStatus(classSuffix, label) {
@@ -343,23 +351,36 @@
     function formatMessageTime(iso) {
         if (!iso) return "";
         const d = new Date(iso);
-        const now = new Date();
-        const same = d.toDateString() === now.toDateString();
-        if (same) {
-            return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+        return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+
+    function formatDayLabel(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const mid = new Date(d);
+        mid.setHours(0, 0, 0, 0);
+        const diffDays = Math.round((today - mid) / 86400000);
+        if (diffDays === 0) return "Today";
+        if (diffDays === 1) return "Yesterday";
+        if (diffDays > 0 && diffDays < 7) {
+            return d.toLocaleDateString(undefined, { weekday: "long" });
         }
         return d.toLocaleDateString(undefined, {
-            month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+            month: "short", day: "numeric", year: "numeric",
         });
     }
 
-    function scrollMessagesToBottom(el) {
-        el.scrollTop = el.scrollHeight;
+    function dayKey(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
     }
 
-    function cssEscape(str) {
-        if (window.CSS && CSS.escape) return CSS.escape(str);
-        return String(str).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+    function scrollMessagesToBottom() {
+        const messagesEl = document.getElementById("messages");
+        messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     function escapeHtml(s) {

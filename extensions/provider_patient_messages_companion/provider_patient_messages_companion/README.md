@@ -4,35 +4,39 @@ A mobile-friendly messaging surface that lets the logged-in provider read and re
 
 ## What providers see
 
-An icon titled **My Messages** appears in the provider companion launcher. Tapping it opens a modal with:
+An icon titled **My Messages** appears in the provider companion launcher. Tapping it opens a modal in two routes:
 
-- A header showing the title **My Messages**, a subtitle with the panel size (e.g., "42 patients on your panel"), and a live-status pill ("Live" when connected; "Reconnecting…" if the WebSocket drops).
-- A scrollable list of patient threads, one card per patient on the provider's active care-team panel, sorted alphabetically by last name, then first name.
+### Thread list (the default)
+
+A header with **My Messages**, a subtitle showing the panel size (e.g., "42 patients on your panel"), and a live-status pill ("Live" when connected; "Reconnecting…" if the WebSocket drops). Below is a scrollable list of thread cards — one per patient on the provider's active care-team panel, sorted alphabetically by last name, then first name.
 
 Each thread card shows:
 
-- The patient's name as a link that leaves the modal to open their patient companion page.
+- The patient's name.
 - A preview of the most recent message (with a "You:" prefix if the provider sent it) and a relative timestamp ("now", "15m", "3h", "2d", or a date for older).
-- A teal unread badge in the top-right with the count of inbound messages that haven't been read yet. Threads with no unread messages show no badge.
-- A chevron that rotates 180° when the card is expanded.
+- A teal unread badge with the count of inbound messages that haven't been read yet. Threads with no unread messages show no badge.
+
+### Conversation (SMS-style)
+
+Tapping a thread card navigates to a dedicated conversation screen. The header becomes a back arrow + the patient's name + a "Open patient page" link that breaks out of the modal to the patient companion page. Below the header is the full-height message scroll area; below that, pinned to the bottom, is the composer.
+
+Messages are grouped by day with "Today / Yesterday / <weekday> / <date>" dividers. Inbound messages from the patient appear as white bubbles on the left; outbound messages appear as teal bubbles on the right. Each bubble has a time-of-day timestamp underneath.
+
+Tap the back arrow to return to the thread list.
 
 ## How to use it
 
-### Reading a thread
+### Opening a conversation
 
-Tap any thread card to expand it. The drawer reveals the message history (oldest at top, newest at bottom; paginated to the most recent 100). Inbound messages from the patient appear as light gray bubbles on the left; your outbound messages appear as teal bubbles on the right. Each bubble has a small timestamp.
-
-Tapping an expanded card also auto-marks any unread inbound messages in that thread as read — the unread badge clears immediately on the UI side, and the server records the read timestamp on each inbound message.
-
-Tap the card header again (outside the conversation drawer) to collapse it.
+Tap any thread card in the list. The conversation view slides in with the most recent 100 messages (oldest at top, newest at bottom; auto-scrolled to the bottom). Any unread inbound messages are automatically marked as read when the conversation opens — the badge on the thread card clears immediately on the UI side, and the server records the read timestamp on each message.
 
 ### Sending a message
 
-In an expanded thread, type into the composer at the bottom and tap **Send**. Your message appears immediately in the conversation as an optimistic teal bubble, and the server processes the send asynchronously. If the send fails, the optimistic bubble is removed and an error is surfaced.
+In the conversation view, type into the composer at the bottom and tap **Send**. Your message appears immediately as an optimistic teal bubble, and the server processes the send asynchronously. If the send fails, the optimistic bubble is removed and an error is surfaced.
 
 ### Live updates
 
-While the modal is open, the plugin holds a WebSocket to the Canvas platform. When anyone sends a new message that involves the logged-in provider and a patient on their panel — whether the patient replies, the provider sends from another surface, or the conversation updates from elsewhere — the thread list refreshes within a second. The live-status pill reflects the WebSocket state.
+While the modal is open, the plugin holds a WebSocket to the Canvas platform. When anyone sends a new message that involves the logged-in provider and a patient on their panel, the thread list refreshes within a second; if the conversation view is currently open to that patient, its message list also refreshes and unread messages are auto-marked read. The live-status pill reflects the WebSocket state.
 
 ### Attachments
 
