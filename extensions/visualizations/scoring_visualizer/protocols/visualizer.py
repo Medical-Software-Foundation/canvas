@@ -3,7 +3,7 @@ import arrow, json
 from http import HTTPStatus
 
 from canvas_sdk.handlers.action_button import ActionButton
-from canvas_sdk.handlers.simple_api import SimpleAPI, api, Credentials
+from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.effects.simple_api import HTMLResponse, Response
@@ -31,10 +31,7 @@ class ScoringVisualizerButton(ActionButton):
             ).apply()
         ]
 
-class VisualApp(SimpleAPI):
-    def authenticate(self, credentials: Credentials) -> bool:
-        return True
-
+class VisualApp(StaffSessionAuthMixin, SimpleAPI):
     def get_survey_date(self, survey: dict) -> str:
         """
 
