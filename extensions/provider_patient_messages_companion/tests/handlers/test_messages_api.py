@@ -427,7 +427,7 @@ class TestSendEndpoint:
             response = api.send()[0]
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_success_emits_create_and_send(self) -> None:
+    def test_success_emits_create_message(self) -> None:
         api = _make_api(
             path_params={"patient_id": PATIENT_1},
             json_body={"content": "reply"},
@@ -440,6 +440,7 @@ class TestSendEndpoint:
             effect, response = api.send()
 
         assert response.status_code == HTTPStatus.ACCEPTED
+        assert effect.type == EffectType.CREATE_MESSAGE
         data = json.loads(effect.payload)["data"]
         assert data["sender_id"] == STAFF_UUID
         assert data["recipient_id"] == PATIENT_1

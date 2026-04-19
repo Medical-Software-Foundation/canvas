@@ -240,11 +240,17 @@ class PatientMessagesAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        # Use .create() rather than .create_and_send(): the patient may not have
+        # a transmission channel (SMS/email) configured, in which case
+        # CREATE_AND_SEND_MESSAGE fails server-side with "Channel not
+        # supported". Creating the message stores it in Canvas and the patient
+        # sees it on their next portal visit, which is the right behavior for
+        # a reference plugin that doesn't assume transmission config.
         effect = MessageEffect(
             sender_id=staff_uuid,
             recipient_id=patient_uuid,
             content=body,
-        ).create_and_send()
+        ).create()
         return [
             effect,
             JSONResponse(
