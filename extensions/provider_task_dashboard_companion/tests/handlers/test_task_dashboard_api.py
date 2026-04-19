@@ -5,7 +5,9 @@ from http import HTTPStatus
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
+import pytest
 from canvas_sdk.effects import EffectType
+from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 from canvas_sdk.v1.data.task import Task
 
 from provider_task_dashboard_companion.handlers import task_dashboard_api
@@ -180,15 +182,16 @@ class TestSerializeComment:
 
 
 class TestAuthenticate:
-    def test_logged_in(self) -> None:
+    def test_staff_session_passes(self) -> None:
         api = _make_api()
-        creds = MagicMock(logged_in_user={"id": STAFF_UUID})
+        creds = MagicMock(logged_in_user={"id": STAFF_UUID, "type": "Staff"})
         assert api.authenticate(creds) is True
 
-    def test_not_logged_in(self) -> None:
+    def test_patient_session_rejected(self) -> None:
         api = _make_api()
-        creds = MagicMock(logged_in_user=None)
-        assert api.authenticate(creds) is False
+        creds = MagicMock(logged_in_user={"id": STAFF_UUID, "type": "Patient"})
+        with pytest.raises(InvalidCredentialsError):
+            api.authenticate(creds)
 
 
 class TestIndex:

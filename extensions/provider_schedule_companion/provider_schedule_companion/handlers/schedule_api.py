@@ -3,7 +3,7 @@ from http import HTTPStatus
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
-from canvas_sdk.handlers.simple_api import SessionCredentials, SimpleAPI, api
+from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.appointment import Appointment
 
@@ -30,13 +30,10 @@ def _serialize_appointment(appt: Appointment) -> dict:
     }
 
 
-class ScheduleAPI(SimpleAPI):
+class ScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
     """Serves the schedule companion UI and JSON data."""
 
     PREFIX = "/app"
-
-    def authenticate(self, credentials: SessionCredentials) -> bool:
-        return credentials.logged_in_user is not None
 
     @api.get("/")
     def index(self) -> list[Response | Effect]:

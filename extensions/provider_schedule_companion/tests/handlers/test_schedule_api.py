@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 
 from provider_schedule_companion.handlers import schedule_api
 from provider_schedule_companion.handlers.schedule_api import (
@@ -98,15 +99,16 @@ class TestSerializeAppointment:
 
 
 class TestAuthenticate:
-    def test_logged_in_user_passes(self) -> None:
+    def test_staff_session_passes(self) -> None:
         api = _make_api()
-        credentials = MagicMock(logged_in_user={"id": STAFF_UUID})
+        credentials = MagicMock(logged_in_user={"id": STAFF_UUID, "type": "Staff"})
         assert api.authenticate(credentials) is True
 
-    def test_no_logged_in_user_rejected(self) -> None:
+    def test_patient_session_rejected(self) -> None:
         api = _make_api()
-        credentials = MagicMock(logged_in_user=None)
-        assert api.authenticate(credentials) is False
+        credentials = MagicMock(logged_in_user={"id": STAFF_UUID, "type": "Patient"})
+        with pytest.raises(InvalidCredentialsError):
+            api.authenticate(credentials)
 
 
 class TestIndex:

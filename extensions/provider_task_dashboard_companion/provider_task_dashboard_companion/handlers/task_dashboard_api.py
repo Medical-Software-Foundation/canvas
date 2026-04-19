@@ -6,7 +6,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.effects.task import AddTaskComment, UpdateTask
 from canvas_sdk.effects.task import TaskStatus as EffectTaskStatus
-from canvas_sdk.handlers.simple_api import SessionCredentials, SimpleAPI, api
+from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.task import Task, TaskComment, TaskLabel, TaskStatus
 
@@ -68,13 +68,10 @@ def _serialize_comment(comment: TaskComment) -> dict:
     }
 
 
-class TaskDashboardAPI(SimpleAPI):
+class TaskDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
     """Serves the task dashboard companion UI and JSON data."""
 
     PREFIX = "/app"
-
-    def authenticate(self, credentials: SessionCredentials) -> bool:
-        return credentials.logged_in_user is not None
 
     @api.get("/")
     def index(self) -> list[Response | Effect]:
