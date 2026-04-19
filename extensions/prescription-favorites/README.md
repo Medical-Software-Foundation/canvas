@@ -1,8 +1,6 @@
-# prescription-favorites
+# Prescription Favorites
 
 Quick-access prescribing tool with a searchable catalog of favorite medications and batch prescribing.
-
-![Prescription Favorites panel in a patient chart](https://images.prismic.io/canvas-website/aeRmiJ1ZCF7ETVbM_rxfav-screenshot.jpg)
 
 ## Problem it solves
 
@@ -63,3 +61,7 @@ uv run pytest tests/
 ## License
 
 MIT - see [LICENSE](LICENSE) for details.
+
+
+![Prescription Favorites panel in a patient chart](https://images.prismic.io/canvas-website/aeRmiJ1ZCF7ETVbM_rxfav-screenshot.jpg)
+
