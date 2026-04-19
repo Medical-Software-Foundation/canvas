@@ -1,0 +1,57 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "provider_patient_messages_companion",
+    "description": "Provider companion app surfacing live patient-message threads for every patient on the logged-in provider's panel.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "provider_patient_messages_companion.applications.messages_app:MessagesApp",
+                "name": "My Messages",
+                "description": "Chat with the patients on your panel. Messages update live via WebSocket.",
+                "scope": "provider_companion_global",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "provider_patient_messages_companion.handlers.messages_api:PatientMessagesAPI",
+                "description": "HTTP endpoints: shell, thread list, conversation, send, mark-read.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "provider_patient_messages_companion.handlers.messages_websocket:PatientMessagesWebSocket",
+                "description": "WebSocket handshake; accepts staff-<uuid> channels for the logged-in staff.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "provider_patient_messages_companion.handlers.new_message_notifier:NewMessageNotifier",
+                "description": "Listens for MESSAGE_CREATED and broadcasts to the staff side of any patient<->staff message.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

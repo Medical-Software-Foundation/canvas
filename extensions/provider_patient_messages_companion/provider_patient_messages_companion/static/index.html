@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>My Messages</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css?v={{cache_bust}}">
+        <script type="text/javascript" src="main.js?v={{cache_bust}}" defer></script>
+        <meta name="ws-url" content="{{ws_url}}">
+    </head>
+    <body>
+        <header class="app-header">
+            <div class="title-row">
+                <div class="title">My Messages</div>
+                <div class="ws-indicator" id="ws-indicator" title="Live connection status">
+                    <span class="dot"></span>
+                    <span class="label" id="ws-label">Connecting&hellip;</span>
+                </div>
+            </div>
+            <div class="subtitle" id="panel-summary">Loading&hellip;</div>
+        </header>
+
+        <main id="content" class="content" aria-live="polite">
+            <div class="loading">Loading&hellip;</div>
+        </main>
+    </body>
+</html>
