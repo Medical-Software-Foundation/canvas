@@ -1,0 +1,39 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "provider_my_panel_companion",
+    "description": "Provider companion app that surfaces the logged-in provider's patient panel with last/next appointment and open-task counts.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "provider_my_panel_companion.applications.my_panel_app:MyPanelApp",
+                "name": "My Panel",
+                "description": "Browse the patients on your panel with last/next visit and open task counts.",
+                "scope": "provider_companion_global",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "provider_my_panel_companion.handlers.my_panel_api:MyPanelAPI",
+                "description": "Serves the My Panel UI and JSON endpoints.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
