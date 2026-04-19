@@ -321,12 +321,15 @@
     }
 
     function handleWsMessage(event) {
-        let payload;
+        let envelope;
         try {
-            payload = JSON.parse(event.data);
+            envelope = JSON.parse(event.data);
         } catch (e) {
             return;
         }
+        // Canvas wraps the Broadcast `message` dict under a top-level "message"
+        // key on the wire, so the payload we care about is nested.
+        const payload = envelope && envelope.message;
         if (!payload || payload.type !== "new_message") return;
 
         loadThreads();

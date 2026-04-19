@@ -117,7 +117,9 @@ class TestIndex:
         with patch.object(schedule_api, "render_to_string", return_value="<html>x</html>") as mock_render:
             result = api.index()
 
-        assert mock_render.mock_calls == [call("static/index.html", {})]
+        assert mock_render.mock_calls == [
+            call("static/index.html", {"cache_bust": schedule_api._CACHE_BUST})
+        ]
         response = result[0]
         assert response.status_code == HTTPStatus.OK
         assert response.content == b"<html>x</html>"

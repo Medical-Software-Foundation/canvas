@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from http import HTTPStatus
 
 from django.db.models import Count
@@ -9,6 +10,8 @@ from canvas_sdk.effects.task import TaskStatus as EffectTaskStatus
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.task import Task, TaskComment, TaskLabel, TaskStatus
+
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 ALLOWED_STATUSES = {s.value for s in TaskStatus}
 
@@ -77,7 +80,7 @@ class TaskDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
     def index(self) -> list[Response | Effect]:
         return [
             HTMLResponse(
-                render_to_string("static/index.html", {}),
+                render_to_string("static/index.html", {"cache_bust": _CACHE_BUST}),
                 status_code=HTTPStatus.OK,
             )
         ]

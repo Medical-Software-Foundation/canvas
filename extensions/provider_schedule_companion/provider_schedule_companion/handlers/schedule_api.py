@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from http import HTTPStatus
 
 from canvas_sdk.effects import Effect
@@ -6,6 +6,8 @@ from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.appointment import Appointment
+
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 def _parse_iso(value: str) -> datetime:
@@ -39,7 +41,7 @@ class ScheduleAPI(StaffSessionAuthMixin, SimpleAPI):
     def index(self) -> list[Response | Effect]:
         return [
             HTMLResponse(
-                render_to_string("static/index.html", {}),
+                render_to_string("static/index.html", {"cache_bust": _CACHE_BUST}),
                 status_code=HTTPStatus.OK,
             )
         ]
