@@ -71,7 +71,7 @@
             chip.className = "filter-chip" +
                 (state.selectedLabels.has(label.id) ? " active" : "");
             const dot = '<span class="color-dot" style="background:' +
-                (colorHex(label.color) || "#c7d2fe") + '"></span>';
+                (colorHex(label.color) || "#fde68a") + '"></span>';
             chip.innerHTML = dot + escapeHtml(label.name);
             chip.addEventListener("click", () => {
                 if (state.selectedLabels.has(label.id)) {
@@ -144,7 +144,7 @@
         }
 
         const labelHtml = (t.labels || []).map((lbl) => {
-            const color = colorHex(lbl.color) || "#1d4ed8";
+            const color = colorHex(lbl.color) || "#d97706";
             return '<span class="label-pill"><span class="color-dot" style="background:' +
                 color + '"></span>' + escapeHtml(lbl.name) + '</span>';
         }).join("");

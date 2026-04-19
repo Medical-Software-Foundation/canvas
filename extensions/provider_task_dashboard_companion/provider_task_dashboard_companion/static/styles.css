@@ -35,7 +35,7 @@ body {
     font-size: 14px;
 }
 
-.toggle input { accent-color: #1d4ed8; }
+.toggle input { accent-color: #d97706; }
 
 .filter-label {
     font-size: 11px;
@@ -71,16 +71,16 @@ body {
 }
 
 .filter-chip.active {
-    background: #1d4ed8;
+    background: #d97706;
     color: #ffffff;
-    border-color: #1d4ed8;
+    border-color: #d97706;
 }
 
 .filter-chip .color-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #c7d2fe;
+    background: #fde68a;
 }
 
 .content {
@@ -215,8 +215,8 @@ body {
 
 .comment-input:focus {
     outline: none;
-    border-color: #1d4ed8;
-    box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.15);
+    border-color: #d97706;
+    box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
 }
 
 .task-actions {
@@ -242,12 +242,12 @@ body {
 }
 
 .btn.primary {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: #d97706;
+    border-color: #d97706;
     color: #ffffff;
 }
 
-.btn.primary:hover { background: #1e40af; border-color: #1e40af; }
+.btn.primary:hover { background: #b45309; border-color: #b45309; }
 
 .btn:disabled {
     opacity: 0.55;
@@ -290,7 +290,7 @@ body {
     font-weight: 600;
     flex-shrink: 0;
 }
-.status-pill.open      { background: #eef2ff; color: #1d4ed8; }
+.status-pill.open      { background: #fef3c7; color: #b45309; }
 .status-pill.completed { background: #e6f9ed; color: #047857; }
 .status-pill.closed    { background: #f1f2f5; color: #6b7684; }
 
@@ -312,8 +312,8 @@ body {
     font-size: 11px;
     padding: 2px 8px;
     border-radius: 999px;
-    background: #eef2ff;
-    color: #1d4ed8;
+    background: #fef3c7;
+    color: #b45309;
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -323,15 +323,15 @@ body {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #1d4ed8;
+    background: #d97706;
 }
 
 .due.overdue { color: #b91c1c; font-weight: 500; }
 
 .patient-link {
-    color: #1d4ed8;
+    color: #b45309;
     text-decoration: none;
-    border-bottom: 1px solid rgba(29, 78, 216, 0.3);
+    border-bottom: 1px solid rgba(217, 119, 6, 0.35);
 }
 
-.patient-link:hover { border-bottom-color: #1d4ed8; }
+.patient-link:hover { border-bottom-color: #b45309; }
