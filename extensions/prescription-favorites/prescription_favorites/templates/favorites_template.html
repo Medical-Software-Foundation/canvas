@@ -1,0 +1,2158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prescription Favorites</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <style>
+        :root {
+            /* Primary palette - refined, slightly desaturated blue */
+            --primary: #4F7DF3;
+            --primary-light: #EEF2FF;
+            --primary-dark: #3D62C9;
+            --primary-subtle: #E0E7FF;
+
+            /* Semantic colors */
+            --success: #10B981;
+            --success-light: #ECFDF5;
+            --error: #EF4444;
+            --error-light: #FEF2F2;
+            --warning: #F59E0B;
+            --warning-light: #FFFBEB;
+
+            /* Custom accent for personal items */
+            --accent-custom: #10B981;
+            --accent-custom-light: #ECFDF5;
+            --accent-default: #6B7280;
+
+            /* Text hierarchy */
+            --text-primary: #1E293B;
+            --text-secondary: #64748B;
+            --text-tertiary: #94A3B8;
+            --text-muted: #CBD5E1;
+
+            /* Surfaces - warmer whites */
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F8FAFC;
+            --bg-tertiary: #F1F5F9;
+            --bg-hover: #F1F5F9;
+
+            /* Borders */
+            --border: #E2E8F0;
+            --border-light: #F1F5F9;
+            --border-selected: var(--primary);
+
+            /* Shadows - softer, more diffuse */
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.03);
+            --shadow-lg: 0 12px 28px rgba(0,0,0,0.06), 0 6px 12px rgba(0,0,0,0.03);
+            --shadow-toast: 0 12px 32px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+
+            /* Radii */
+            --radius-sm: 8px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-full: 9999px;
+
+            /* Animation */
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 0;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Header - Compact */
+        .header {
+            padding: 14px 20px 12px;
+            background: var(--bg-primary);
+            flex-shrink: 0;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+            letter-spacing: -0.2px;
+        }
+        .mode-toggle {
+            background: var(--bg-tertiary);
+            border: none;
+            color: var(--text-secondary);
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .mode-toggle:hover {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+        .mode-toggle.manage-mode {
+            background: var(--primary);
+            color: white;
+        }
+        .mode-toggle.manage-mode:hover {
+            background: var(--primary-dark);
+        }
+        .header-text {
+            display: none;
+        }
+
+        /* Search - Compact, integrated with header */
+        .search-section {
+            padding: 0 20px 12px;
+            background: var(--bg-primary);
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .search-wrapper {
+            position: relative;
+        }
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-tertiary);
+            font-size: 18px;
+            pointer-events: none;
+        }
+        .search-input {
+            width: 100%;
+            padding: 10px 12px 10px 38px;
+            font-size: 14px;
+            font-family: inherit;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-secondary);
+            transition: var(--transition);
+        }
+        .search-input::placeholder {
+            color: var(--text-tertiary);
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-primary);
+            box-shadow: 0 0 0 2px var(--primary-subtle);
+        }
+
+        /* Medication List */
+        .medication-section {
+            padding: 12px 20px;
+            padding-bottom: 80px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+        }
+        .medication-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .medication-option {
+            display: flex;
+            align-items: stretch;
+            padding: 0;
+            border: 1.5px solid transparent;
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            cursor: pointer;
+            transition: var(--transition);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            opacity: 0;
+            animation: cardFadeIn 0.3s ease forwards;
+        }
+        @keyframes cardFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        /* Staggered animation delays - applied via nth-child */
+        .medication-option:nth-child(1) { animation-delay: 0ms; }
+        .medication-option:nth-child(2) { animation-delay: 30ms; }
+        .medication-option:nth-child(3) { animation-delay: 60ms; }
+        .medication-option:nth-child(4) { animation-delay: 90ms; }
+        .medication-option:nth-child(5) { animation-delay: 120ms; }
+        .medication-option:nth-child(6) { animation-delay: 150ms; }
+        .medication-option:nth-child(7) { animation-delay: 180ms; }
+        .medication-option:nth-child(8) { animation-delay: 210ms; }
+        .medication-option:nth-child(9) { animation-delay: 240ms; }
+        .medication-option:nth-child(10) { animation-delay: 270ms; }
+        .medication-option:nth-child(n+11) { animation-delay: 300ms; }
+        .medication-option:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+            border-color: var(--border);
+        }
+        .medication-option.selected {
+            background: var(--primary-light);
+            border-color: var(--primary);
+        }
+        .medication-option.selected:hover {
+            background: var(--primary-light);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+            border-color: var(--primary);
+        }
+
+        /* Checkbox column */
+        .medication-checkbox-area {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 12px;
+        }
+        .medication-option input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 1.5px solid var(--border);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            flex-shrink: 0;
+            background: var(--bg-primary);
+        }
+        .medication-option:hover input[type="checkbox"] {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+        .medication-option input[type="checkbox"]:checked {
+            background: var(--primary);
+            border-color: var(--primary);
+            animation: checkPop 0.2s ease;
+        }
+        .medication-option input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 2px;
+            width: 4px;
+            height: 8px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            animation: checkDraw 0.15s ease-out 0.05s both;
+        }
+        @keyframes checkPop {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.9); }
+            100% { transform: scale(1); }
+        }
+        @keyframes checkDraw {
+            from { opacity: 0; transform: rotate(45deg) scale(0.5); }
+            to { opacity: 1; transform: rotate(45deg) scale(1); }
+        }
+
+        /* Info area */
+        .medication-info {
+            flex: 1;
+            padding: 10px 14px 10px 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .medication-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 6px 8px;
+        }
+        .medication-label {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+        .medication-label.starting,
+        .medication-label.titration,
+        .medication-label.maintenance,
+        .medication-label.green {
+            background: #DCFCE7;
+            color: #166534;
+        }
+        .medication-label.nausea,
+        .medication-label.reflux,
+        .medication-label.purple {
+            background: #F3E8FF;
+            color: #7C3AED;
+        }
+        .medication-label.blue {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+        .medication-label.amber {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+        .medication-label.rose {
+            background: #FFE4E6;
+            color: #BE123C;
+        }
+        .medication-label.gray {
+            background: #F3F4F6;
+            color: #4B5563;
+        }
+        .medication-sig {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.35;
+            margin-bottom: 6px;
+        }
+        .medication-meta {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            font-weight: 400;
+        }
+        .medication-meta-item {
+            display: inline-flex;
+            align-items: center;
+        }
+        .medication-meta-divider {
+            margin: 0 6px;
+            color: var(--text-muted);
+            font-weight: 300;
+        }
+        .medication-meta-divider::before {
+            content: '·';
+            font-size: 14px;
+        }
+        .medication-pharmacy {
+            font-size: 11.5px;
+            color: var(--text-tertiary);
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .medication-pharmacy .material-icons-round {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+
+        /* Legacy support for medication-details */
+        .medication-details {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* Error Section */
+        .error-section {
+            padding: 40px 24px;
+            text-align: center;
+            background: var(--bg-primary);
+            margin: 24px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+        }
+        .error-icon {
+            font-size: 56px;
+            color: var(--warning);
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .error-section h3 {
+            margin: 0 0 8px;
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .error-section p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Buttons */
+        .button-section {
+            padding: 12px 20px;
+            background: var(--bg-primary);
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .add-button, .submit-btn {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: var(--shadow-sm);
+        }
+        .add-button:hover:not(:disabled), .submit-btn:hover:not(:disabled) {
+            background: var(--primary-dark);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+        .add-button:active:not(:disabled), .submit-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        .add-button:disabled, .submit-btn:disabled {
+            background: var(--bg-tertiary);
+            color: var(--text-tertiary);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* Toast Messages - Bottom Center */
+        .message {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 280px;
+            max-width: calc(100% - 48px);
+            padding: 14px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            display: none;
+            z-index: 1000;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-toast);
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-align: center;
+        }
+        .message.show {
+            display: flex;
+            animation: toastSlideUp 0.35s cubic-bezier(0.21, 1.02, 0.73, 1);
+        }
+        .message.hide {
+            animation: toastSlideDown 0.25s cubic-bezier(0.06, 0.71, 0.55, 1) forwards;
+        }
+        .message.success {
+            background: var(--success);
+            color: white;
+            border: none;
+        }
+        .message.success::before {
+            content: '✓';
+            font-weight: 700;
+            margin-right: 2px;
+        }
+        .message.error {
+            background: var(--error);
+            color: white;
+            border: none;
+        }
+        .message.error::before {
+            content: '!';
+            font-weight: 700;
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            font-size: 12px;
+            margin-right: 2px;
+        }
+
+        @keyframes toastSlideUp {
+            from {
+                transform: translateX(-50%) translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+        @keyframes toastSlideDown {
+            from {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(-50%) translateY(20px);
+                opacity: 0;
+            }
+        }
+
+        .no-results {
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 15px;
+        }
+        .loading { opacity: 0.6; pointer-events: none; }
+
+        /* Mode visibility */
+        .prescribe-mode-only { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+        .manage-mode-only { display: none; flex-direction: column; flex: 1; min-height: 0; }
+        body.manage-mode .prescribe-mode-only { display: none; }
+        body.manage-mode .manage-mode-only { display: flex; }
+
+        /* Manage Mode */
+        .manage-section {
+            padding: 12px 20px;
+            padding-bottom: 80px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+        }
+        .manage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 4px 0;
+        }
+        .manage-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .add-favorite-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .add-favorite-btn:hover {
+            background: var(--primary-dark);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+
+        .favorite-card {
+            padding: 14px 16px;
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            margin-bottom: 8px;
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            border: 1.5px solid transparent;
+            opacity: 0;
+            animation: cardFadeIn 0.3s ease forwards;
+        }
+        .favorite-card:nth-child(1) { animation-delay: 0ms; }
+        .favorite-card:nth-child(2) { animation-delay: 30ms; }
+        .favorite-card:nth-child(3) { animation-delay: 60ms; }
+        .favorite-card:nth-child(4) { animation-delay: 90ms; }
+        .favorite-card:nth-child(5) { animation-delay: 120ms; }
+        .favorite-card:nth-child(6) { animation-delay: 150ms; }
+        .favorite-card:nth-child(7) { animation-delay: 180ms; }
+        .favorite-card:nth-child(8) { animation-delay: 210ms; }
+        .favorite-card:nth-child(n+9) { animation-delay: 240ms; }
+        .favorite-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+            border-color: var(--border);
+        }
+        .favorite-card.is-default {
+            background: var(--bg-secondary);
+            border-color: var(--border-light);
+        }
+        .favorite-card.is-default:hover {
+            border-color: var(--border);
+        }
+        .favorite-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+        .favorite-card-name {
+            font-size: 14px;
+            font-weight: 600;
+            flex: 1;
+            color: var(--text-primary);
+            letter-spacing: -0.2px;
+            display: flex;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 6px 8px;
+        }
+        .favorite-card-badge {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            margin-left: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            flex-shrink: 0;
+        }
+        .favorite-card-badge.default {
+            background: var(--bg-tertiary);
+            color: var(--text-tertiary);
+        }
+        .favorite-card-badge.custom {
+            background: var(--accent-custom-light);
+            color: var(--accent-custom);
+        }
+        .favorite-card-badge.private {
+            background: var(--warning-light);
+            color: #B45309;
+        }
+        .favorite-card.is-hidden {
+            opacity: 0.5;
+        }
+        .hide-btn, .unhide-btn {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 500;
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+        }
+        .hide-btn:hover {
+            border-color: var(--warning);
+            color: #B45309;
+        }
+        .unhide-btn {
+            border-color: var(--success);
+            color: var(--success);
+        }
+        .unhide-btn:hover {
+            background: var(--success-light);
+        }
+        .favorite-card-details {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .favorite-card-sig {
+            margin-bottom: 6px;
+        }
+        .favorite-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            font-weight: 400;
+            margin-top: 4px;
+        }
+        .favorite-card-meta-item {
+            display: inline-flex;
+            align-items: center;
+        }
+        .favorite-card.is-default .favorite-card-meta-item {
+            /* No special styling needed */
+        }
+        .favorite-card-pharmacy {
+            font-size: 11.5px;
+            color: var(--text-tertiary);
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .favorite-card-pharmacy .material-icons-round {
+            font-size: 13px;
+            opacity: 0.7;
+        }
+        .favorite-card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-light);
+        }
+        .edit-btn, .delete-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+        .edit-btn {
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+        .edit-btn:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+        }
+        .delete-btn {
+            background: var(--error-light);
+            color: var(--error);
+        }
+        .delete-btn:hover:not(:disabled) {
+            background: var(--error);
+            color: white;
+        }
+        .edit-btn:disabled, .delete-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .loading-spinner {
+            text-align: center;
+            padding: 48px;
+            color: var(--text-tertiary);
+            font-size: 15px;
+        }
+
+        /* Form Styles */
+        .form-view {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            background: var(--bg-secondary);
+        }
+        body.form-mode .manage-section { display: none; }
+        body.form-mode .form-view { display: flex; }
+
+        .form-container {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+        }
+        .form-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .back-btn {
+            background: var(--bg-tertiary);
+            border: none;
+            cursor: pointer;
+            padding: 10px;
+            margin-right: 16px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            border-radius: var(--radius-sm);
+            transition: var(--transition);
+        }
+        .back-btn:hover {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+        .form-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.3px;
+        }
+
+        /* Visibility Toggle */
+        .visibility-toggle {
+            display: flex;
+            gap: 8px;
+        }
+        .visibility-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 12px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .visibility-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .visibility-btn.active {
+            border-color: var(--primary);
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+
+        /* Filter Chips */
+        .filter-bar {
+            display: flex;
+            gap: 6px;
+            padding: 8px 20px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .filter-bar::-webkit-scrollbar {
+            display: none;
+        }
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 12px;
+            border: 1.5px solid var(--border);
+            border-radius: 20px;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+        }
+        .filter-chip:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .filter-chip.active {
+            border-color: var(--primary);
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+        .filter-chip .material-icons-round {
+            font-size: 14px;
+        }
+
+        .form-group { margin-bottom: 20px; }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .form-label .required { color: var(--error); }
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 14px 16px;
+            font-size: 15px;
+            font-family: inherit;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-primary);
+            transition: var(--transition);
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-light);
+        }
+        .form-input::placeholder, .form-textarea::placeholder {
+            color: var(--text-tertiary);
+        }
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .form-row {
+            display: flex;
+            gap: 16px;
+        }
+        .form-row .form-group { flex: 1; }
+        .form-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 6px;
+        }
+
+        /* Autocomplete */
+        .autocomplete-wrapper { position: relative; }
+        .autocomplete-results {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: var(--shadow-lg);
+        }
+        .autocomplete-results.show { display: block; }
+        .autocomplete-item {
+            padding: 14px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-light);
+            transition: var(--transition);
+        }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover { background: var(--bg-secondary); }
+        .autocomplete-item-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        .autocomplete-item-detail {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+        }
+        .autocomplete-loading {
+            padding: 16px;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 14px;
+        }
+
+        .form-actions {
+            padding: 20px 24px;
+            padding-bottom: 80px;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-light);
+        }
+        .selected-med-info {
+            background: var(--primary-light);
+            border: 2px solid var(--primary);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-top: 10px;
+        }
+        .selected-med-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        .selected-med-detail {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        .clear-selection {
+            background: none;
+            border: none;
+            color: var(--error);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 10px;
+            padding: 0;
+            transition: var(--transition);
+        }
+        .clear-selection:hover {
+            text-decoration: underline;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-tertiary);
+        }
+    </style>
+</head>
+<body>
+    <div id="message" class="message"></div>
+
+    <div class="header">
+        <div class="header-top">
+            <h1 class="header-title">Prescription Favorites</h1>
+            <button id="mode-toggle" class="mode-toggle">
+                <span class="material-icons-round" style="font-size: 15px;">settings</span>
+                Manage
+            </button>
+        </div>
+        <p class="header-text prescribe-mode-only">Select medications to add to the patient's note</p>
+        <p class="header-text manage-mode-only">Create and manage your custom prescription favorites</p>
+    </div>
+
+    {% if not has_open_notes %}
+        <div class="error-section prescribe-mode-only">
+            <span class="material-icons-round error-icon">warning</span>
+            <h3>No Open Notes Found</h3>
+            <p>Please create a new note to add prescriptions.</p>
+        </div>
+    {% endif %}
+
+    <!-- PRESCRIBE MODE -->
+    <div class="prescribe-mode-only">
+        {% if has_open_notes %}
+            <div class="search-section">
+                <div class="search-wrapper">
+                    <span class="material-icons-round search-icon">search</span>
+                    <input type="text" id="med-search" class="search-input" placeholder="Search medications..." autocomplete="off">
+                </div>
+            </div>
+            <div class="filter-bar" id="prescribe-filter-bar">
+                <button class="filter-chip active" data-filter="all" onclick="setPrescribeFilter('all')">
+                    <span class="material-icons-round">apps</span> All
+                </button>
+                <button class="filter-chip" data-filter="mine" onclick="setPrescribeFilter('mine')">
+                    <span class="material-icons-round">person</span> My Favorites
+                </button>
+                <button class="filter-chip" data-filter="shared" onclick="setPrescribeFilter('shared')">
+                    <span class="material-icons-round">group</span> Shared
+                </button>
+            </div>
+            <div class="button-section">
+                <button id="add-button" class="add-button" disabled>Select Medications</button>
+            </div>
+            <div class="medication-section">
+                <div class="medication-options" id="medication-list">
+                    {% for med in medications %}
+                        <label class="medication-option" for="med-{{ med.id }}" data-search-terms="{{ med.search_terms|join:' ' }}" data-is-custom="{{ med.is_custom|lower }}" data-is-mine="{{ med.is_mine|default:'false'|lower }}" data-is-shared="{{ med.is_shared|default:'true'|lower }}">
+                            <div class="medication-checkbox-area">
+                                <input type="checkbox" id="med-{{ med.id }}" name="medication" value="{{ med.id }}">
+                            </div>
+                            <div class="medication-info">
+                                <div class="medication-name">{{ med.display_name }}{% if med.label %}<span class="medication-label {{ med.label_color|default:'gray' }}">{{ med.label }}</span>{% endif %}</div>
+                                <div class="medication-sig">{{ med.sig }}</div>
+                                <div class="medication-meta">
+                                    <span class="medication-meta-item">{{ med.days_supply }}d</span>
+                                    <span class="medication-meta-divider"></span>
+                                    <span class="medication-meta-item">{{ med.quantity_to_dispense|floatformat:0 }} {% if med.unit.0 in "0123456789" %}x {% endif %}{{ med.unit|lower }}s</span>
+                                    <span class="medication-meta-divider"></span>
+                                    <span class="medication-meta-item">{{ med.refills|default:0 }} refill{{ med.refills|default:0|pluralize }}</span>
+                                </div>
+                                {% if med.default_pharmacy_name %}<div class="medication-pharmacy"><span class="material-icons-round">local_pharmacy</span> {{ med.default_pharmacy_name }}</div>{% endif %}
+                            </div>
+                        </label>
+                    {% endfor %}
+                </div>
+                <div class="no-results" id="no-results" style="display: none;">No medications match your search.</div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- MANAGE MODE -->
+    <div class="manage-mode-only">
+        <!-- List View -->
+        <div class="manage-section">
+            <div class="manage-header">
+                <span class="manage-title">All Favorites</span>
+                <button id="add-favorite-btn" class="add-favorite-btn">
+                    <span class="material-icons-round" style="font-size: 15px;">add</span>
+                    Add New
+                </button>
+            </div>
+            <div class="filter-bar" id="manage-filter-bar">
+                <button class="filter-chip active" data-filter="all" onclick="setManageFilter('all')">
+                    <span class="material-icons-round">apps</span> All
+                </button>
+                <button class="filter-chip" data-filter="mine" onclick="setManageFilter('mine')">
+                    <span class="material-icons-round">person</span> Mine
+                </button>
+                <button class="filter-chip" data-filter="shared" onclick="setManageFilter('shared')">
+                    <span class="material-icons-round">group</span> Shared
+                </button>
+                <span style="flex: 1;"></span>
+                <select id="manage-sort" class="filter-chip" style="border: 1.5px solid var(--border); padding: 5px 8px; cursor: pointer; appearance: auto;" onchange="setManageSort(this.value)">
+                    <option value="name">A-Z</option>
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                </select>
+            </div>
+            <div id="favorites-list" class="favorites-list">
+                <div class="loading-spinner">Loading favorites...</div>
+            </div>
+        </div>
+
+        <!-- Form View -->
+        <div class="form-view">
+            <div class="form-container">
+                <div class="form-header">
+                    <button class="back-btn" onclick="hideForm()">
+                        <span class="material-icons-round">arrow_back</span>
+                    </button>
+                    <h2 class="form-title" id="form-title">Add New Favorite</h2>
+                </div>
+
+                <form id="favorite-form">
+                    <input type="hidden" id="form-favorite-id">
+                    <input type="hidden" id="form-fdb-code">
+                    <input type="hidden" id="form-representative-ndc">
+                    <input type="hidden" id="form-ncpdp-qualifier">
+
+                    <!-- Medication Search -->
+                    <div class="form-group">
+                        <label class="form-label">Medication <span class="required">*</span></label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="med-search-input" class="form-input" placeholder="Search for a medication..." autocomplete="off">
+                            <div id="med-search-results" class="autocomplete-results"></div>
+                        </div>
+                        <div id="selected-med" class="selected-med-info" style="display: none;">
+                            <div class="selected-med-name" id="selected-med-name"></div>
+                            <div class="selected-med-detail" id="selected-med-detail"></div>
+                            <button type="button" class="clear-selection" onclick="clearMedSelection()">Clear selection</button>
+                        </div>
+                    </div>
+
+                    <!-- Display Name -->
+                    <div class="form-group">
+                        <label class="form-label">Display Name <span class="required">*</span></label>
+                        <input type="text" id="form-display-name" class="form-input" placeholder="e.g., Tylenol 500mg 14 day" required>
+                        <div class="form-hint">This is the name shown in your favorites list</div>
+                    </div>
+
+                    <!-- Label (Optional) -->
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label class="form-label">Label (Optional)</label>
+                            <input type="text" id="form-label" class="form-input" placeholder="e.g., Starting, PRN, Nausea" maxlength="20">
+                            <div class="form-hint">Short badge shown next to the name</div>
+                        </div>
+                        <div class="form-group" id="label-color-group" style="flex: 1; display: none;">
+                            <label class="form-label">Label Color</label>
+                            <select id="form-label-color" class="form-select">
+                                <option value="gray" selected>Gray</option>
+                                <option value="green">Green</option>
+                                <option value="purple">Purple</option>
+                                <option value="blue">Blue</option>
+                                <option value="amber">Amber</option>
+                                <option value="rose">Rose</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- SIG -->
+                    <div class="form-group">
+                        <label class="form-label">SIG (Instructions) <span class="required">*</span></label>
+                        <textarea id="form-sig" class="form-textarea" placeholder="e.g., Take 1 tablet by mouth every 6 hours as needed" required></textarea>
+                    </div>
+
+                    <!-- Days Supply & Quantity -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Days Supply <span class="required">*</span></label>
+                            <input type="number" id="form-days-supply" class="form-input" min="1" max="365" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Quantity <span class="required">*</span></label>
+                            <input type="number" id="form-quantity" class="form-input" min="1" step="0.5" required>
+                        </div>
+                    </div>
+
+                    <!-- Unit & Refills -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Unit <span class="required">*</span></label>
+                            <select id="form-unit" class="form-select" required>
+                                <option value="">Select unit...</option>
+                            </select>
+                            <div class="form-hint" id="unit-hint">Units will populate after selecting a medication</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Refills</label>
+                            <input type="number" id="form-refills" class="form-input" min="0" max="99" value="0">
+                        </div>
+                    </div>
+
+                    <!-- Visibility -->
+                    <div class="form-group">
+                        <label class="form-label">Visibility</label>
+                        <div class="visibility-toggle">
+                            <button type="button" class="visibility-btn active" id="btn-shared" onclick="setVisibility(true)">
+                                <span class="material-icons-round" style="font-size: 16px;">group</span>
+                                Shared
+                            </button>
+                            <button type="button" class="visibility-btn" id="btn-private" onclick="setVisibility(false)">
+                                <span class="material-icons-round" style="font-size: 16px;">lock</span>
+                                Private
+                            </button>
+                        </div>
+                        <input type="hidden" id="form-is-shared" value="true">
+                        <div class="form-hint">Shared favorites are visible to all staff. Private favorites are only visible to you.</div>
+                    </div>
+
+                    <!-- Pharmacy Search -->
+                    <div class="form-group">
+                        <label class="form-label">Default Pharmacy (Optional)</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="pharmacy-search-input" class="form-input" placeholder="Search for a pharmacy..." autocomplete="off">
+                            <div id="pharmacy-search-results" class="autocomplete-results"></div>
+                        </div>
+                        <input type="hidden" id="form-pharmacy-ncpdp">
+                        <input type="hidden" id="form-pharmacy-name">
+                        <div id="selected-pharmacy" class="selected-med-info" style="display: none;">
+                            <div class="selected-med-name" id="selected-pharmacy-name"></div>
+                            <div class="selected-med-detail" id="selected-pharmacy-detail"></div>
+                            <button type="button" class="clear-selection" onclick="clearPharmacySelection()">Clear selection</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" id="form-submit-btn" class="submit-btn" form="favorite-form">SAVE FAVORITE</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const patientId = "{{ patient_id }}";
+        const hasOpenNotes = {{ has_open_notes|lower }};
+        let currentMode = 'prescribe';
+        let favoritesData = [];
+        let editingFavoriteId = null;
+        let selectedMedication = null;
+        let medSearchTimeout = null;
+        let pharmacySearchTimeout = null;
+        let currentPrescribeFilter = 'all';
+        let currentManageFilter = 'all';
+        let currentManageSort = 'name';
+
+        // Visibility toggle in form
+        function setVisibility(isShared) {
+            document.getElementById('form-is-shared').value = isShared ? 'true' : 'false';
+            document.getElementById('btn-shared').classList.toggle('active', isShared);
+            document.getElementById('btn-private').classList.toggle('active', !isShared);
+        }
+
+        // Filter functions
+        function setPrescribeFilter(filter) {
+            currentPrescribeFilter = filter;
+            document.querySelectorAll('#prescribe-filter-bar .filter-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.filter === filter);
+            });
+            // Reload from API with filter, then re-render the prescribe list
+            reloadPrescribeList(filter);
+        }
+
+        function reloadPrescribeList(filter) {
+            const listEl = document.getElementById('medication-list');
+            if (!listEl) return;
+            listEl.innerHTML = '<div class="loading-spinner">Loading...</div>';
+
+            fetch(`/plugin-io/api/prescription_favorites/routes/favorites?filter=${filter}`, { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) return;
+                    const searchTerm = (document.getElementById('med-search').value || '').toLowerCase().trim();
+                    const meds = data.favorites;
+                    listEl.innerHTML = meds.map(med => {
+                        const terms = (med.search_terms || []).join(' ');
+                        const labelHtml = med.label
+                            ? `<span class="medication-label ${med.label_color || 'gray'}">${escapeHtml(med.label)}</span>`
+                            : '';
+                        const qty = parseFloat(med.quantity_to_dispense) || 0;
+                        const qtyDisplay = qty % 1 === 0 ? qty.toFixed(0) : qty;
+                        const unit = (med.unit || '').toLowerCase();
+                        const unitPrefix = unit.charAt(0) >= '0' && unit.charAt(0) <= '9' ? 'x ' : '';
+                        const refills = med.refills || 0;
+                        const pharmacyHtml = med.default_pharmacy_name
+                            ? `<div class="medication-pharmacy"><span class="material-icons-round">local_pharmacy</span> ${escapeHtml(med.default_pharmacy_name)}</div>`
+                            : '';
+                        return `
+                            <label class="medication-option" for="med-${med.id}" data-search-terms="${escapeHtml(terms)}" data-is-custom="${med.is_custom}" data-is-mine="${med.is_mine || false}" data-is-shared="${med.is_shared !== false}">
+                                <div class="medication-checkbox-area">
+                                    <input type="checkbox" id="med-${med.id}" name="medication" value="${med.id}">
+                                </div>
+                                <div class="medication-info">
+                                    <div class="medication-name">${escapeHtml(med.display_name)}${labelHtml}</div>
+                                    <div class="medication-sig">${escapeHtml(med.sig)}</div>
+                                    <div class="medication-meta">
+                                        <span class="medication-meta-item">${med.days_supply}d</span>
+                                        <span class="medication-meta-divider"></span>
+                                        <span class="medication-meta-item">${qtyDisplay} ${unitPrefix}${unit}s</span>
+                                        <span class="medication-meta-divider"></span>
+                                        <span class="medication-meta-item">${refills} refill${refills === 1 ? '' : 's'}</span>
+                                    </div>
+                                    ${pharmacyHtml}
+                                </div>
+                            </label>`;
+                    }).join('');
+                    // Re-attach checkbox handlers
+                    listEl.querySelectorAll('input[name="medication"]').forEach(cb => {
+                        cb.addEventListener('change', function() {
+                            this.closest('.medication-option').classList.toggle('selected', this.checked);
+                            updateButtonState();
+                        });
+                    });
+                    // Apply text search if active
+                    if (searchTerm) filterPrescribeList();
+                    // Show no results if empty
+                    const noRes = document.getElementById('no-results');
+                    if (noRes) noRes.style.display = meds.length === 0 ? 'block' : 'none';
+                });
+        }
+
+        function setManageFilter(filter) {
+            currentManageFilter = filter;
+            document.querySelectorAll('#manage-filter-bar .filter-chip[data-filter]').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.filter === filter);
+            });
+            renderFavoritesList();
+        }
+
+        function setManageSort(sort) {
+            currentManageSort = sort;
+            renderFavoritesList();
+        }
+
+
+        function filterPrescribeList() {
+            const searchTerm = document.getElementById('med-search').value.toLowerCase();
+            const items = document.querySelectorAll('.medication-option');
+            let visibleCount = 0;
+
+            items.forEach(item => {
+                const name = item.querySelector('.medication-name').textContent.toLowerCase();
+                const sig = item.querySelector('.medication-sig').textContent.toLowerCase();
+                const terms = (item.dataset.searchTerms || '').toLowerCase();
+                const isCustom = item.dataset.isCustom === 'true';
+                const isMine = item.dataset.isMine === 'true';
+                const isShared = item.dataset.isShared === 'true';
+
+                // Text search filter
+                const matchesSearch = !searchTerm || name.includes(searchTerm) || sig.includes(searchTerm) || terms.includes(searchTerm);
+
+                // Visibility filter
+                let matchesFilter = true;
+                if (currentPrescribeFilter === 'mine') {
+                    matchesFilter = isMine;
+                } else if (currentPrescribeFilter === 'shared') {
+                    matchesFilter = isShared || !isCustom;
+                }
+
+                const visible = matchesSearch && matchesFilter;
+                item.style.display = visible ? '' : 'none';
+                if (visible) visibleCount++;
+            });
+
+            const noResults = document.getElementById('no-results');
+            if (noResults) noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+
+        // Mode Toggle
+        document.getElementById('mode-toggle').addEventListener('click', function() {
+            if (currentMode === 'prescribe') {
+                currentMode = 'manage';
+                document.body.classList.add('manage-mode');
+                this.innerHTML = '<span class="material-icons-round" style="font-size: 15px;">arrow_back</span> Back';
+                this.classList.add('manage-mode');
+                loadFavorites();
+            } else {
+                currentMode = 'prescribe';
+                document.body.classList.remove('manage-mode');
+                document.body.classList.remove('form-mode');
+                this.innerHTML = '<span class="material-icons-round" style="font-size: 15px;">settings</span> Manage';
+                this.classList.remove('manage-mode');
+                // Reset prescribe filter to "All" and reload
+                setPrescribeFilter('all');
+            }
+        });
+
+        // Load and render medications for prescribe mode
+        function loadPrescribeMedications() {
+            const listEl = document.getElementById('medication-list');
+            if (!listEl) return;
+
+            listEl.innerHTML = '<div class="loading-spinner" style="padding: 20px; text-align: center; color: #6C757D;">Loading medications...</div>';
+
+            fetch('/plugin-io/api/prescription_favorites/routes/favorites', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        renderPrescribeMedications(data.favorites);
+                    } else {
+                        listEl.innerHTML = '<div class="loading-spinner">Error loading medications</div>';
+                    }
+                })
+                .catch(() => {
+                    listEl.innerHTML = '<div class="loading-spinner">Error loading medications</div>';
+                });
+        }
+
+        // Render medications in prescribe mode
+        function renderPrescribeMedications(medications) {
+            const listEl = document.getElementById('medication-list');
+            if (!listEl) return;
+
+            if (medications.length === 0) {
+                listEl.innerHTML = '<div class="no-results">No medications available</div>';
+                return;
+            }
+
+            listEl.innerHTML = medications.map(med => {
+                const refillCount = med.refills || 0;
+                const refillsText = refillCount === 1 ? '1 refill' : `${refillCount} refills`;
+                const pharmacyHtml = med.default_pharmacy_name
+                    ? `<div class="medication-pharmacy"><span class="material-icons-round">local_pharmacy</span> ${escapeHtml(med.default_pharmacy_name)}</div>`
+                    : '';
+                const labelClass = med.label_color || 'gray';
+                const labelHtml = med.label
+                    ? `<span class="medication-label ${labelClass}">${escapeHtml(med.label)}</span>`
+                    : '';
+                return `
+                <label class="medication-option" for="med-${med.id}" data-search-terms="${(med.search_terms || []).join(' ')}">
+                    <div class="medication-checkbox-area">
+                        <input type="checkbox" id="med-${med.id}" name="medication" value="${med.id}">
+                    </div>
+                    <div class="medication-info">
+                        <div class="medication-name">${escapeHtml(med.display_name)}${labelHtml}</div>
+                        <div class="medication-sig">${escapeHtml(med.sig)}</div>
+                        <div class="medication-meta">
+                            <span class="medication-meta-item">${med.days_supply}d</span>
+                            <span class="medication-meta-divider"></span>
+                            <span class="medication-meta-item">${formatQuantityUnit(med.quantity_to_dispense, med.unit)}</span>
+                            <span class="medication-meta-divider"></span>
+                            <span class="medication-meta-item">${refillsText}</span>
+                        </div>
+                        ${pharmacyHtml}
+                    </div>
+                </label>
+            `}).join('');
+
+            // Re-attach event listeners to new checkboxes
+            document.querySelectorAll('#medication-list input[name="medication"]').forEach(cb => {
+                cb.addEventListener('change', function() {
+                    this.closest('.medication-option').classList.toggle('selected', this.checked);
+                    updateButtonState();
+                });
+            });
+
+            // Reset button state
+            updateButtonState();
+
+            // Clear search
+            const searchInput = document.getElementById('med-search');
+            if (searchInput) searchInput.value = '';
+        }
+
+        // Load favorites
+        function loadFavorites() {
+            const listEl = document.getElementById('favorites-list');
+            listEl.innerHTML = '<div class="loading-spinner">Loading favorites...</div>';
+
+            fetch('/plugin-io/api/prescription_favorites/routes/favorites?include_hidden=true', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        favoritesData = data.favorites;
+                        renderFavoritesList();
+                    } else {
+                        listEl.innerHTML = '<div class="loading-spinner">Error loading favorites</div>';
+                    }
+                })
+                .catch(() => {
+                    listEl.innerHTML = '<div class="loading-spinner">Error loading favorites</div>';
+                });
+        }
+
+        // Render list
+        function renderFavoritesList() {
+            const listEl = document.getElementById('favorites-list');
+            if (favoritesData.length === 0) {
+                listEl.innerHTML = '<div class="loading-spinner">No favorites found</div>';
+                return;
+            }
+
+            let filtered = [...favoritesData];
+
+            // Apply manage filter
+            if (currentManageFilter === 'mine') {
+                // "Mine" = everything I created (shared or private)
+                filtered = filtered.filter(f => f.is_mine);
+            } else if (currentManageFilter === 'shared') {
+                filtered = filtered.filter(f => f.is_shared || !f.is_custom);
+            }
+
+            const sorted = filtered.sort((a, b) => {
+                if (currentManageSort === 'newest') {
+                    const aDate = a.created_at || '0';
+                    const bDate = b.created_at || '0';
+                    return bDate.localeCompare(aDate);
+                }
+                if (currentManageSort === 'oldest') {
+                    const aDate = a.created_at || '9';
+                    const bDate = b.created_at || '9';
+                    return aDate.localeCompare(bDate);
+                }
+                // Default: name (A-Z), custom first
+                if (a.is_custom && !b.is_custom) return -1;
+                if (!a.is_custom && b.is_custom) return 1;
+                return a.display_name.localeCompare(b.display_name);
+            });
+
+            if (sorted.length === 0) {
+                listEl.innerHTML = '<div class="loading-spinner">No favorites match this filter</div>';
+                return;
+            }
+
+            listEl.innerHTML = sorted.map(fav => {
+                const refillCount = fav.refills || 0;
+                const refillsText = refillCount === 1 ? '1 refill' : `${refillCount} refills`;
+                const pharmacyHtml = fav.default_pharmacy_name
+                    ? `<div class="favorite-card-pharmacy"><span class="material-icons-round">local_pharmacy</span> ${escapeHtml(fav.default_pharmacy_name)}</div>`
+                    : '';
+                const favLabelClass = fav.label_color || 'gray';
+                const labelHtml = fav.label
+                    ? `<span class="medication-label ${favLabelClass}">${escapeHtml(fav.label)}</span>`
+                    : '';
+                return `
+                <div class="favorite-card ${fav.is_custom ? '' : 'is-default'} ${fav.is_hidden ? 'is-hidden' : ''}">
+                    <div class="favorite-card-header">
+                        <span class="favorite-card-name">${escapeHtml(fav.display_name)}${labelHtml}</span>
+                        <span class="favorite-card-badge ${fav.is_custom ? (fav.is_shared ? 'custom' : 'private') : 'default'}">${fav.is_custom ? (fav.is_shared ? 'Shared' : 'Private') : (fav.is_hidden ? 'Hidden' : 'Default')}</span>
+                    </div>
+                    <div class="favorite-card-details">
+                        <div class="favorite-card-sig">${escapeHtml(fav.sig)}</div>
+                        <div class="favorite-card-meta">
+                            <span class="favorite-card-meta-item">${fav.days_supply}d</span>
+                            <span class="medication-meta-divider"></span>
+                            <span class="favorite-card-meta-item">${formatQuantityUnit(fav.quantity_to_dispense, fav.unit)}</span>
+                            <span class="medication-meta-divider"></span>
+                            <span class="favorite-card-meta-item">${refillsText}</span>
+                        </div>
+                        ${pharmacyHtml}
+                        ${fav.is_custom ? `<div class="favorite-card-meta" style="margin-top: 4px; gap: 8px;">
+                            ${fav.created_by_name ? `<span class="favorite-card-meta-item" style="color: var(--text-tertiary); font-size: 11px;"><span class="material-icons-round" style="font-size: 12px; vertical-align: -2px;">person</span> ${escapeHtml(fav.created_by_name)}</span>` : ''}
+                            ${fav.created_at ? `<span class="favorite-card-meta-item" style="color: var(--text-tertiary); font-size: 11px;">${new Date(fav.created_at).toLocaleDateString()}</span>` : ''}
+                        </div>` : ''}
+                        ${fav.is_hidden && fav.hidden_by_name ? `<div class="favorite-card-meta" style="margin-top: 4px; gap: 8px;">
+                            <span class="favorite-card-meta-item" style="color: var(--text-tertiary); font-size: 11px;"><span class="material-icons-round" style="font-size: 12px; vertical-align: -2px;">person</span> Hidden by ${escapeHtml(fav.hidden_by_name)}</span>
+                        </div>` : ''}
+                    </div>
+                    <div class="favorite-card-actions">
+                        ${fav.is_custom ? `
+                            <button class="edit-btn" onclick="editFavorite('${fav.id}')">Edit</button>
+                            <button class="delete-btn" onclick="deleteFavorite('${fav.id}')">Delete</button>
+                        ` : `
+                            ${fav.is_hidden
+                                ? `<button class="unhide-btn" onclick="unhideDefault('${fav.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: -2px;">visibility</span> Show</button>`
+                                : `<button class="hide-btn" onclick="hideDefault('${fav.id}')"><span class="material-icons-round" style="font-size: 14px; vertical-align: -2px;">visibility_off</span> Hide</button>`
+                            }
+                        `}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        // Show form for new favorite
+        document.getElementById('add-favorite-btn').addEventListener('click', () => showForm(null));
+
+        function showForm(favoriteId) {
+            editingFavoriteId = favoriteId;
+            document.body.classList.add('form-mode');
+            resetForm();
+
+            if (favoriteId) {
+                document.getElementById('form-title').textContent = 'Edit Favorite';
+                const fav = favoritesData.find(f => f.id === favoriteId);
+                if (fav) populateForm(fav);
+            } else {
+                document.getElementById('form-title').textContent = 'Add New Favorite';
+            }
+        }
+
+        function hideForm() {
+            document.body.classList.remove('form-mode');
+            editingFavoriteId = null;
+            resetForm();
+        }
+
+        function resetForm() {
+            document.getElementById('favorite-form').reset();
+            document.getElementById('form-favorite-id').value = '';
+            document.getElementById('form-fdb-code').value = '';
+            document.getElementById('form-representative-ndc').value = '';
+            document.getElementById('form-ncpdp-qualifier').value = '';
+            document.getElementById('form-pharmacy-ncpdp').value = '';
+            document.getElementById('form-pharmacy-name').value = '';
+            document.getElementById('selected-med').style.display = 'none';
+            document.getElementById('selected-pharmacy').style.display = 'none';
+            // Bug fix: Ensure medication search input is visible after reset
+            document.getElementById('med-search-input').style.display = 'block';
+            document.getElementById('med-search-input').value = '';
+            // Bug fix: Ensure pharmacy search input is visible after reset
+            document.getElementById('pharmacy-search-input').style.display = 'block';
+            document.getElementById('pharmacy-search-input').value = '';
+            selectedMedication = null;
+            // Reset unit dropdown to initial state
+            document.getElementById('form-unit').innerHTML = '<option value="">Select unit...</option>';
+            document.getElementById('unit-hint').textContent = 'Units will populate after selecting a medication';
+            // Reset label and color
+            document.getElementById('form-label').value = '';
+            document.getElementById('form-label-color').value = 'gray';
+            document.getElementById('label-color-group').style.display = 'none';
+            // Reset visibility to shared
+            setVisibility(true);
+        }
+
+        // Show/hide label color field based on label input
+        document.getElementById('form-label').addEventListener('input', function() {
+            const colorGroup = document.getElementById('label-color-group');
+            colorGroup.style.display = this.value.trim() ? 'block' : 'none';
+        });
+
+        function populateForm(fav) {
+            document.getElementById('form-favorite-id').value = fav.id;
+            document.getElementById('form-fdb-code').value = fav.fdb_code;
+            document.getElementById('form-representative-ndc').value = fav.representative_ndc;
+            document.getElementById('form-ncpdp-qualifier').value = fav.ncpdp_quantity_qualifier_code;
+            document.getElementById('form-display-name').value = fav.display_name;
+            document.getElementById('form-sig').value = fav.sig;
+            document.getElementById('form-days-supply').value = fav.days_supply;
+            document.getElementById('form-quantity').value = fav.quantity_to_dispense;
+            document.getElementById('form-refills').value = fav.refills || 0;
+
+            // Populate unit dropdown with the existing unit value
+            const unitSelect = document.getElementById('form-unit');
+            const unitHint = document.getElementById('unit-hint');
+            const unitValue = JSON.stringify({
+                representative_ndc: fav.representative_ndc,
+                ncpdp_quantity_qualifier_code: fav.ncpdp_quantity_qualifier_code,
+                quantity_description: fav.unit
+            });
+            unitSelect.innerHTML = `<option value='${unitValue.replace(/'/g, "&#39;")}'>${fav.unit}</option>`;
+            unitSelect.selectedIndex = 0;
+            unitHint.textContent = 'Unit from existing favorite';
+
+            // Show selected medication info
+            document.getElementById('med-search-input').style.display = 'none';
+            document.getElementById('selected-med').style.display = 'block';
+            document.getElementById('selected-med-name').textContent = fav.medication_name || fav.display_name;
+            document.getElementById('selected-med-detail').textContent = `FDB: ${fav.fdb_code}`;
+            selectedMedication = { fdb_code: fav.fdb_code, representative_ndc: fav.representative_ndc, ncpdp_quantity_qualifier_code: fav.ncpdp_quantity_qualifier_code };
+
+            if (fav.default_pharmacy_ncpdp_id) {
+                document.getElementById('form-pharmacy-ncpdp').value = fav.default_pharmacy_ncpdp_id;
+                document.getElementById('form-pharmacy-name').value = fav.default_pharmacy_name || '';
+                document.getElementById('pharmacy-search-input').style.display = 'none';
+                document.getElementById('selected-pharmacy').style.display = 'block';
+                // Display pharmacy name if available, otherwise show NCPDP ID
+                const pharmacyName = fav.default_pharmacy_name || `Pharmacy (NCPDP: ${fav.default_pharmacy_ncpdp_id})`;
+                document.getElementById('selected-pharmacy-name').textContent = pharmacyName;
+                document.getElementById('selected-pharmacy-detail').textContent = `NCPDP: ${fav.default_pharmacy_ncpdp_id}`;
+            }
+
+            // Populate label and color
+            document.getElementById('form-label').value = fav.label || '';
+            document.getElementById('form-label-color').value = fav.label_color || 'gray';
+            document.getElementById('label-color-group').style.display = fav.label ? 'block' : 'none';
+
+            // Populate visibility
+            setVisibility(fav.is_shared !== false);
+        }
+
+        // Medication Search
+        const medSearchInput = document.getElementById('med-search-input');
+        const medSearchResults = document.getElementById('med-search-results');
+
+        medSearchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            clearTimeout(medSearchTimeout);
+            if (query.length < 2) {
+                medSearchResults.classList.remove('show');
+                return;
+            }
+            medSearchResults.innerHTML = '<div class="autocomplete-loading">Searching...</div>';
+            medSearchResults.classList.add('show');
+
+            medSearchTimeout = setTimeout(() => {
+                fetch(`/plugin-io/api/prescription_favorites/routes/medications/search?query=${encodeURIComponent(query)}`, { credentials: 'include' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success && data.medications.length > 0) {
+                            medSearchResults.innerHTML = data.medications.map(med => `
+                                <div class="autocomplete-item" onclick='selectMedication(${JSON.stringify(med).replace(/'/g, "&#39;")})'>
+                                    <div class="autocomplete-item-name">${escapeHtml(med.display_name)}</div>
+                                    <div class="autocomplete-item-detail">FDB: ${med.fdb_code}</div>
+                                </div>
+                            `).join('');
+                        } else {
+                            medSearchResults.innerHTML = '<div class="autocomplete-loading">No medications found</div>';
+                        }
+                    })
+                    .catch(() => {
+                        medSearchResults.innerHTML = '<div class="autocomplete-loading">Search error</div>';
+                    });
+            }, 300);
+        });
+
+        function selectMedication(med) {
+            selectedMedication = med;
+            document.getElementById('form-fdb-code').value = med.fdb_code;
+
+            // Populate unit dropdown with clinical quantities
+            const unitSelect = document.getElementById('form-unit');
+            const unitHint = document.getElementById('unit-hint');
+            unitSelect.innerHTML = '<option value="">Select unit...</option>';
+
+            if (med.clinical_quantities && med.clinical_quantities.length > 0) {
+                med.clinical_quantities.forEach((cq, index) => {
+                    const option = document.createElement('option');
+                    option.value = JSON.stringify({
+                        representative_ndc: cq.representative_ndc,
+                        ncpdp_quantity_qualifier_code: cq.ncpdp_quantity_qualifier_code,
+                        quantity_description: cq.quantity_description
+                    });
+                    option.textContent = cq.quantity_description || `Unit ${index + 1}`;
+                    unitSelect.appendChild(option);
+                });
+                unitHint.textContent = `${med.clinical_quantities.length} unit option(s) available`;
+
+                // Auto-select first option if only one
+                if (med.clinical_quantities.length === 1) {
+                    unitSelect.selectedIndex = 1;
+                    updateUnitHiddenFields();
+                }
+            } else {
+                unitHint.textContent = 'No unit options available for this medication';
+            }
+
+            document.getElementById('med-search-input').style.display = 'none';
+            document.getElementById('selected-med').style.display = 'block';
+            document.getElementById('selected-med-name').textContent = med.display_name;
+            document.getElementById('selected-med-detail').textContent = `FDB: ${med.fdb_code}`;
+            medSearchResults.classList.remove('show');
+
+            // Auto-fill display name if empty
+            if (!document.getElementById('form-display-name').value) {
+                document.getElementById('form-display-name').value = med.display_name;
+            }
+        }
+
+        function updateUnitHiddenFields() {
+            const unitSelect = document.getElementById('form-unit');
+            if (unitSelect.value) {
+                try {
+                    const unitData = JSON.parse(unitSelect.value);
+                    document.getElementById('form-representative-ndc').value = unitData.representative_ndc;
+                    document.getElementById('form-ncpdp-qualifier').value = unitData.ncpdp_quantity_qualifier_code;
+                } catch (e) {
+                    console.error('Error parsing unit data:', e);
+                }
+            }
+        }
+
+        // Add change listener for unit dropdown
+        document.getElementById('form-unit').addEventListener('change', updateUnitHiddenFields);
+
+        function clearMedSelection() {
+            selectedMedication = null;
+            document.getElementById('form-fdb-code').value = '';
+            document.getElementById('form-representative-ndc').value = '';
+            document.getElementById('form-ncpdp-qualifier').value = '';
+            document.getElementById('med-search-input').style.display = 'block';
+            document.getElementById('med-search-input').value = '';
+            document.getElementById('selected-med').style.display = 'none';
+            // Reset unit dropdown
+            document.getElementById('form-unit').innerHTML = '<option value="">Select unit...</option>';
+            document.getElementById('unit-hint').textContent = 'Units will populate after selecting a medication';
+        }
+
+        // Pharmacy Search
+        const pharmacySearchInput = document.getElementById('pharmacy-search-input');
+        const pharmacySearchResults = document.getElementById('pharmacy-search-results');
+
+        pharmacySearchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            clearTimeout(pharmacySearchTimeout);
+            if (query.length < 2) {
+                pharmacySearchResults.classList.remove('show');
+                return;
+            }
+            pharmacySearchResults.innerHTML = '<div class="autocomplete-loading">Searching...</div>';
+            pharmacySearchResults.classList.add('show');
+
+            pharmacySearchTimeout = setTimeout(() => {
+                fetch(`/plugin-io/api/prescription_favorites/routes/pharmacies/search?query=${encodeURIComponent(query)}`, { credentials: 'include' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success && data.pharmacies.length > 0) {
+                            pharmacySearchResults.innerHTML = data.pharmacies.map(ph => `
+                                <div class="autocomplete-item" onclick='selectPharmacy(${JSON.stringify(ph).replace(/'/g, "&#39;")})'>
+                                    <div class="autocomplete-item-name">${escapeHtml(ph.organization_name)}</div>
+                                    <div class="autocomplete-item-detail">${escapeHtml(ph.address)}</div>
+                                </div>
+                            `).join('');
+                        } else {
+                            pharmacySearchResults.innerHTML = '<div class="autocomplete-loading">No pharmacies found</div>';
+                        }
+                    })
+                    .catch(() => {
+                        pharmacySearchResults.innerHTML = '<div class="autocomplete-loading">Search error</div>';
+                    });
+            }, 300);
+        });
+
+        function selectPharmacy(ph) {
+            document.getElementById('form-pharmacy-ncpdp').value = ph.ncpdp_id;
+            document.getElementById('form-pharmacy-name').value = ph.organization_name;
+            document.getElementById('pharmacy-search-input').style.display = 'none';
+            document.getElementById('selected-pharmacy').style.display = 'block';
+            document.getElementById('selected-pharmacy-name').textContent = ph.organization_name;
+            document.getElementById('selected-pharmacy-detail').textContent = ph.address;
+            pharmacySearchResults.classList.remove('show');
+        }
+
+        function clearPharmacySelection() {
+            document.getElementById('form-pharmacy-ncpdp').value = '';
+            document.getElementById('form-pharmacy-name').value = '';
+            document.getElementById('pharmacy-search-input').style.display = 'block';
+            document.getElementById('pharmacy-search-input').value = '';
+            document.getElementById('selected-pharmacy').style.display = 'none';
+        }
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.autocomplete-wrapper')) {
+                medSearchResults.classList.remove('show');
+                pharmacySearchResults.classList.remove('show');
+            }
+        });
+
+        // Form Submit Handler
+        function handleFormSubmit(e) {
+            if (e) e.preventDefault();
+            console.log('Form submit triggered');
+
+            const fdbCode = document.getElementById('form-fdb-code').value;
+            console.log('fdbCode:', fdbCode);
+            const displayName = document.getElementById('form-display-name').value.trim();
+            const sig = document.getElementById('form-sig').value.trim();
+            const daysSupply = document.getElementById('form-days-supply').value;
+            const quantity = document.getElementById('form-quantity').value;
+            const unitSelectValue = document.getElementById('form-unit').value;
+            const refills = document.getElementById('form-refills').value || 0;
+            const representativeNdc = document.getElementById('form-representative-ndc').value;
+            const ncpdpQualifier = document.getElementById('form-ncpdp-qualifier').value;
+            const pharmacyNcpdp = document.getElementById('form-pharmacy-ncpdp').value;
+            const pharmacyName = document.getElementById('form-pharmacy-name').value;
+
+            // Parse unit from JSON select value
+            let unitDescription = '';
+            if (unitSelectValue) {
+                try {
+                    const unitData = JSON.parse(unitSelectValue);
+                    unitDescription = unitData.quantity_description || 'Each';
+                } catch (e) {
+                    unitDescription = unitSelectValue; // Fallback to raw value
+                }
+            }
+
+            // Validation
+            console.log('Validating form...', { fdbCode, displayName, sig, daysSupply, quantity, unitSelectValue, representativeNdc, ncpdpQualifier });
+            if (!fdbCode) {
+                console.log('Validation failed: no fdbCode');
+                showMessage('Please select a medication', 'error');
+                return;
+            }
+            if (!displayName || !sig || !daysSupply || !quantity || !unitSelectValue) {
+                console.log('Validation failed: missing required fields');
+                showMessage('Please fill in all required fields', 'error');
+                return;
+            }
+            if (!representativeNdc || !ncpdpQualifier) {
+                console.log('Validation failed: incomplete medication data');
+                showMessage('Medication data incomplete. Please select a unit.', 'error');
+                return;
+            }
+            console.log('Validation passed');
+
+            const labelText = document.getElementById('form-label').value.trim();
+            const labelColor = document.getElementById('form-label-color').value;
+
+            const payload = {
+                display_name: displayName,
+                medication_name: document.getElementById('selected-med-name').textContent || displayName,
+                fdb_code: fdbCode,
+                sig: sig,
+                days_supply: parseInt(daysSupply),
+                quantity_to_dispense: parseFloat(quantity),
+                unit: unitDescription,
+                refills: parseInt(refills),
+                representative_ndc: representativeNdc,
+                ncpdp_quantity_qualifier_code: ncpdpQualifier,
+                generic_substitution_allowed: true,
+                search_terms: [],
+                default_pharmacy_ncpdp_id: pharmacyNcpdp || null,
+                default_pharmacy_name: pharmacyName || null,
+                label: labelText || null,
+                label_color: labelText ? (labelColor || 'gray') : null,
+                is_shared: document.getElementById('form-is-shared').value === 'true'
+            };
+
+            const submitBtn = document.getElementById('form-submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'SAVING...';
+
+            const isEdit = !!editingFavoriteId;
+            const url = '/plugin-io/api/prescription_favorites/routes/favorites';
+            const method = isEdit ? 'PUT' : 'POST';
+
+            if (isEdit) {
+                payload.id = editingFavoriteId;
+            }
+
+            console.log('Sending request:', method, url, payload);
+
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload)
+            })
+            .then(r => {
+                console.log('Response status:', r.status);
+                return r.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    showMessage(isEdit ? 'Favorite saved! Refresh the page to see changes in prescribe mode.' : 'Favorite created! Refresh the page to see it in prescribe mode.', 'success');
+                    hideForm();
+                    loadFavorites();
+                } else {
+                    showMessage(data.error || 'Failed to save favorite', 'error');
+                }
+            })
+            .catch((err) => {
+                console.error('Fetch error:', err);
+                showMessage('Error saving favorite: ' + (err.message || err), 'error');
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'SAVE FAVORITE';
+            });
+        }
+
+        // Attach submit handler to form
+        document.getElementById('favorite-form').addEventListener('submit', handleFormSubmit);
+
+        // Also attach click handler directly to button as backup
+        document.getElementById('form-submit-btn').addEventListener('click', (e) => {
+            console.log('Submit button clicked directly');
+            handleFormSubmit(e);
+        });
+
+        function editFavorite(id) {
+            showForm(id);
+        }
+
+        function deleteFavorite(id) {
+            if (!confirm('Are you sure you want to delete this favorite?')) return;
+
+            fetch(`/plugin-io/api/prescription_favorites/routes/favorites?id=${encodeURIComponent(id)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('Favorite deleted. Refresh the page to update prescribe mode.', 'success');
+                    loadFavorites();
+                } else {
+                    showMessage(data.error || 'Failed to delete favorite', 'error');
+                }
+            })
+            .catch(() => showMessage('Error deleting favorite', 'error'));
+        }
+
+        function hideDefault(defaultId) {
+            fetch('/plugin-io/api/prescription_favorites/routes/favorites/hide-default', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ default_id: defaultId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('Default hidden. Refresh the page to update prescribe mode.', 'success');
+                    loadFavorites();
+                } else {
+                    showMessage(data.error || 'Failed to hide default', 'error');
+                }
+            })
+            .catch(() => showMessage('Error hiding default', 'error'));
+        }
+
+        function unhideDefault(defaultId) {
+            fetch(`/plugin-io/api/prescription_favorites/routes/favorites/hide-default?default_id=${encodeURIComponent(defaultId)}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('Default restored. Refresh the page to update prescribe mode.', 'success');
+                    loadFavorites();
+                } else {
+                    showMessage(data.error || 'Failed to restore default', 'error');
+                }
+            })
+            .catch(() => showMessage('Error restoring default', 'error'));
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatQuantityUnit(quantity, unit) {
+            // Add "x " before unit if it starts with a digit for clarity
+            const unitLower = unit.toLowerCase();
+            const prefix = /^\d/.test(unit) ? 'x ' : '';
+            return `${Math.floor(quantity)} ${prefix}${unitLower}s`;
+        }
+
+        // Prescribe mode functionality
+        document.querySelectorAll('input[name="medication"]').forEach(cb => {
+            cb.addEventListener('change', function() {
+                this.closest('.medication-option').classList.toggle('selected', this.checked);
+                updateButtonState();
+            });
+        });
+
+        function updateButtonState() {
+            const count = document.querySelectorAll('input[name="medication"]:checked').length;
+            const btn = document.getElementById('add-button');
+            if (btn) {
+                btn.disabled = count === 0;
+                btn.textContent = count === 0 ? 'Select Medications' : `Add ${count} to Note`;
+            }
+        }
+
+        const searchInput = document.getElementById('med-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => filterPrescribeList());
+        }
+
+        const addButton = document.getElementById('add-button');
+        if (addButton) {
+            addButton.addEventListener('click', function() {
+                const selected = Array.from(document.querySelectorAll('input[name="medication"]:checked')).map(cb => cb.value);
+                if (selected.length === 0) {
+                    showMessage('Please select at least one medication.', 'error');
+                    return;
+                }
+
+                addButton.disabled = true;
+                addButton.textContent = 'ADDING...';
+
+                fetch('/plugin-io/api/prescription_favorites/routes/prescribe-favorites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ patient_id: patientId, selected_medications: selected })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showMessage(`${data.count} prescription(s) added successfully!`, 'success');
+                        document.querySelectorAll('input[name="medication"]:checked').forEach(cb => {
+                            cb.checked = false;
+                            cb.closest('.medication-option').classList.remove('selected');
+                        });
+                        updateButtonState();
+                    } else {
+                        showMessage(data.error || 'Failed to add prescriptions.', 'error');
+                    }
+                })
+                .catch(() => showMessage('An error occurred.', 'error'))
+                .finally(() => updateButtonState());
+            });
+        }
+
+        let messageTimeout = null;
+        function showMessage(text, type) {
+            const msg = document.getElementById('message');
+
+            // Clear any existing timeout to prevent conflicts
+            if (messageTimeout) {
+                clearTimeout(messageTimeout);
+                messageTimeout = null;
+            }
+
+            // Reset display and classes before showing
+            msg.style.display = '';
+            msg.className = 'message';
+
+            // Force reflow to restart animation
+            void msg.offsetWidth;
+
+            msg.textContent = text;
+            msg.className = `message ${type} show`;
+
+            // Success messages stay 5s (longer to read refresh prompt), errors 5s
+            const duration = 5000;
+
+            messageTimeout = setTimeout(() => {
+                msg.classList.remove('show');
+                msg.classList.add('hide');
+                setTimeout(() => {
+                    msg.style.display = 'none';
+                    msg.classList.remove('hide');
+                }, 250);
+            }, duration);
+        }
+    </script>
+</body>
+</html>
