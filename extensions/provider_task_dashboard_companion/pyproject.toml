@@ -1,0 +1,28 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Provider companion app for browsing tasks with label and status filters."
+license = "MIT"
+name = "provider_task_dashboard_companion"
+readme = "provider_task_dashboard_companion/README.md"
+requires-python = ">=3.11"
+version = "0.0.1"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
+
+[tool.coverage.run]
+source = ["provider_task_dashboard_companion"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]

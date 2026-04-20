@@ -1,0 +1,28 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Provider companion app that surfaces the logged-in staff member's schedule with day, week, and month views."
+license = "MIT"
+name = "provider_schedule_companion"
+readme = "provider_schedule_companion/README.md"
+requires-python = ">=3.11"
+version = "0.0.1"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
+
+[tool.coverage.run]
+source = ["provider_schedule_companion"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
