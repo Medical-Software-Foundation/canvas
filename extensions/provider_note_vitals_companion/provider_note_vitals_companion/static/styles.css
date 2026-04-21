@@ -43,15 +43,12 @@ body {
     grid-template-columns: 1fr auto 36px;
     align-items: center;
     gap: 8px;
-    background: #ffffff;
-    border: 1px solid #e1e5ea;
-    border-radius: 8px;
-    padding: 6px 10px;
+    padding: 2px 0;
 }
 
 .field-row--full {
     grid-template-columns: 1fr;
-    padding: 8px 10px;
+    padding: 6px 0;
 }
 
 .field-row label {
@@ -174,7 +171,6 @@ body {
 @media (max-width: 420px) {
     .field-row {
         grid-template-columns: 1fr auto 32px;
-        padding: 6px 8px;
         gap: 6px;
     }
     .app-header {
