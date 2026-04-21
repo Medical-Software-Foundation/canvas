@@ -1,0 +1,57 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "provider_clinical_summary_companion",
+    "description": "Provider companion app (patient scope) rendering a live, read-only clinical summary — social determinants, conditions, medications, allergies, vitals, immunizations, surgical history — with WebSocket-driven refresh on domain events.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "provider_clinical_summary_companion.applications.summary_app:ClinicalSummaryApp",
+                "name": "Summary",
+                "description": "A mobile-first clinical overview of the open patient that keeps itself fresh on chart changes.",
+                "scope": "provider_companion_patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "provider_clinical_summary_companion.handlers.summary_api:SummaryAPI",
+                "description": "Serves the summary HTML shell, static assets, and the JSON data bundle (all sections or a named subset).",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "provider_clinical_summary_companion.handlers.chart_event_publisher:ChartEventPublisher",
+                "description": "Listens for chart-change events and broadcasts per-section refresh pings on the patient's WebSocket channel.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "provider_clinical_summary_companion.handlers.chart_subscription_auth:ChartSubscriptionAuth",
+                "description": "Authenticates iframe WebSocket subscribers for the patient channel.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
