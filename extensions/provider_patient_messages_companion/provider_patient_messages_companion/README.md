@@ -1,8 +1,10 @@
 # provider_patient_messages_companion
 
-A mobile-friendly messaging surface with live WebSocket updates. Ships in two surfaces: a global-scope **My Messages** thread list on the provider companion main page and a patient-scope **Patient Messages** launcher on the patient page.
+A mobile-friendly messaging surface with live WebSocket updates. Ships in two surfaces: a global-scope **My Messages** thread list on the provider companion main page and a patient-scope **Messages** launcher on the patient page.
 
 ## What providers see
+
+![Patient messaging in the provider companion](screenshots/patient-messaging.png)
 
 ### My Messages — thread list (global scope)
 
@@ -22,9 +24,9 @@ Messages are grouped by day with "Today / Yesterday / <weekday> / <date>" divide
 
 Tap the back arrow to return to the thread list.
 
-### Patient Messages (patient scope)
+### Messages (patient scope)
 
-On a patient's companion page, a **Patient Messages** launcher opens the conversation with that patient directly — no thread list to go through, no plugin-rendered header (the harness already shows the patient chrome), and no back button (there's nothing to go back to — closing the modal returns to the patient page). The composer, SMS-style bubbles, and day dividers are the same as in global scope. Live updates via the same WebSocket still apply.
+On a patient's companion page, a **Messages** launcher opens the conversation with that patient directly — no thread list to go through, no plugin-rendered header (the harness already shows the patient chrome), and no back button (there's nothing to go back to — closing the modal returns to the patient page). The composer, SMS-style bubbles, and day dividers are the same as in global scope. Live updates via the same WebSocket still apply.
 
 The plugin does not restrict this surface to the provider's panel: any staff session on any patient's companion page can open and see the conversation thread between themselves and that patient.
 

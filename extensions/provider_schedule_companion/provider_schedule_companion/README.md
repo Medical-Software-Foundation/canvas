@@ -4,6 +4,8 @@ A mobile-friendly "at-a-glance" schedule that lives on the provider companion ma
 
 ## What providers see
 
+![My Schedule in the provider companion](screenshots/my-schedule.png)
+
 An icon titled **My Schedule** appears in the provider companion launcher. Tapping it opens a modal with:
 
 - A header showing the currently-selected date (or date range) and a Day / Week / Month view switcher.

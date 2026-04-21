@@ -1,8 +1,10 @@
 # provider_task_dashboard_companion
 
-A mobile-friendly task triage surface that lets the logged-in provider browse tasks with filters, read and post comments, assign tasks to themselves, and mark their own tasks complete. Ships in two surfaces: a global-scope **Task Dashboard** on the provider companion main page and a patient-scope **Patient Tasks** launcher on the patient page.
+A mobile-friendly task triage surface that lets the logged-in provider browse tasks with filters, read and post comments, assign tasks to themselves, and mark their own tasks complete. Ships in two surfaces: a global-scope **Task Dashboard** on the provider companion main page and a patient-scope **Tasks** launcher on the patient page.
 
 ## What providers see
+
+![Task Dashboard in the provider companion](screenshots/task-dashboard.png)
 
 ### Task Dashboard (global scope)
 
@@ -17,9 +19,9 @@ Each task card shows:
 - The assignee's name — only shown when you've turned off "Assigned to me". Tasks with no assignee display as _Unassigned_.
 - An italicized "_N comments_" footer when the task has one or more comments. Tasks with zero comments show no comment indicator.
 
-### Patient Tasks (patient scope)
+### Tasks (patient scope)
 
-On a patient's companion page, a **Patient Tasks** launcher opens the same UI hard-scoped to tasks for that patient. The plugin's own header is dropped (the harness already shows the patient chrome), the "Assigned to me" toggle is hidden, and the per-row "Patient:" meta is suppressed as redundant. Status and label filters still work. All tasks for the patient are shown regardless of assignee.
+On a patient's companion page, a **Tasks** launcher opens the same UI hard-scoped to tasks for that patient. The plugin's own header is dropped (the harness already shows the patient chrome), the "Assigned to me" toggle is hidden, and the per-row "Patient:" meta is suppressed as redundant. Status and label filters still work. All tasks for the patient are shown regardless of assignee.
 
 ## How to use it
 

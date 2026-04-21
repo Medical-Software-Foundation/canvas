@@ -4,6 +4,8 @@ A global companion tool for registering a new patient from the provider companio
 
 ## What providers see
 
+![Register Patient form in the provider companion](screenshots/register-patient.png)
+
 An icon titled **Register Patient** appears in the provider companion launcher. Tapping it opens a modal with a five-field form.
 
 On submit:

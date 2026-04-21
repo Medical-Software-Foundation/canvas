@@ -4,6 +4,8 @@ A mobile-friendly vitals entry form that lives on the provider companion view of
 
 ## What providers see
 
+![Vitals entry form in the provider companion](screenshots/vitals-collection.png)
+
 An icon titled **Enter Vitals** appears on the companion view of an expanded note. Tapping it opens a modal with:
 
 - A list of vital-sign fields (BP, pulse, respiration rate, body temp, O₂ sat, weight, height, waist, and an optional short note).

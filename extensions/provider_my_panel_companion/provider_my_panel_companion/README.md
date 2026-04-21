@@ -4,6 +4,8 @@ A mobile-friendly patient panel that lives on the provider companion main page. 
 
 ## What providers see
 
+![My Panel in the provider companion](screenshots/my-panel.png)
+
 An icon titled **My Panel** appears in the provider companion launcher. Tapping it opens a modal with:
 
 - A header showing the title **My Panel** and a running count (e.g., "42 patients on your panel").
