@@ -272,7 +272,7 @@ def build_social_determinants(patient_id: str) -> list[dict]:
     return rows
 
 
-SECTION_BUILDERS: dict[str, callable] = {
+SECTION_BUILDERS = {
     "conditions": build_conditions,
     "surgicalHistory": build_surgical_history,
     "medications": build_medications,

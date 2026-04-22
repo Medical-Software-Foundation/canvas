@@ -17,7 +17,7 @@ def patient_channel(patient_id: str) -> str:
 
 
 # Map each event type to (model class, [section keys to refresh]).
-EVENT_MAP: dict[str, tuple[type, list[str]]] = {
+EVENT_MAP = {
     "CONDITION_CREATED": (Condition, ["conditions", "surgicalHistory"]),
     "CONDITION_UPDATED": (Condition, ["conditions", "surgicalHistory"]),
     "CONDITION_RESOLVED": (Condition, ["conditions", "surgicalHistory"]),
@@ -37,7 +37,7 @@ EVENT_MAP: dict[str, tuple[type, list[str]]] = {
 }
 
 
-def _patient_id_from_target(model: type, target_id: str) -> str | None:
+def _patient_id_from_target(model, target_id: str) -> str | None:
     if not target_id:
         return None
     record = model.objects.filter(id=target_id).select_related("patient").first()
