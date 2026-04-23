@@ -1,0 +1,72 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "canvas-1.0.0",
+    "name": "chronic_care_management_activity_tracker",
+    "description": "The Chronic Care Management (CCM) Activity Tracker plugin automates tracking, documentation, and billing for chronic care management services. This plugin provides a comprehensive workflow for managing CCM activities including session tracking, patient banner alerts, and automated monthly billing.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "chronic_care_management_activity_tracker.applications.ccmat_app:CcmatApp",
+                "name": "CCM",
+                "description": "Chronic Care Management Activity Tracker Application",
+                "scope": "patient_specific",
+                "icon": "chronic_care_management_activity_tracker/assets/CCM.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "chronic_care_management_activity_tracker.handlers.ccmat_api:CcmatApi",
+                "description": "API that serves the Chronic Care Management Activity Tracker application.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "chronic_care_management_activity_tracker.handlers.ccmat_monthly_banner_protocol:CcmatMonthlyBannerProtocol",
+                "description": "Handler to add custom patient metadata fields for CCM Monthly Counter.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "chronic_care_management_activity_tracker.handlers.ccmat_diagnosis_protocol:CcmatDiagnosisProtocol",
+                "description": "Handler to add custom patient metadata fields for CCM Diagnosis.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "chronic_care_management_activity_tracker.handlers.ccmat_monthly_cron:CcmatMonthlyCron",
+                "description": "A cron task that runs monthly for Chronic Care Management Activity Tracker.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+
+        ],
+        "questionnaires": [
+            {
+                "template": "chronic_care_management_activity_tracker/assets/ccmat_questionnaire.yml"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "../README.md"
+}

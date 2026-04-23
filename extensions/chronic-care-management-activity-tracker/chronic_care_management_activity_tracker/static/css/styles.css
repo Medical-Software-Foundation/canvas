@@ -1,0 +1,244 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Lato, "Helvetica Neue", Arial, Helvetica, sans-serif;
+    color: #333;
+    background-color: #fff;
+    line-height: 1.6;
+}
+
+.container {
+    padding: 24px;
+    max-width: 100%;
+}
+
+/* Header */
+header {
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+}
+
+header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1a1a1a;
+}
+
+.header-info {
+    display: flex;
+    flex-direction: column;
+    /* gap: 4px; */
+    font-size: 0.875rem;
+    color: #666;
+}
+
+/* Timer Section */
+.timer-section {
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.timer-display {
+    font-size: 64px;
+    font-weight: 300;
+    color: #333;
+    margin-bottom: 24px;
+    letter-spacing: 2px;
+}
+
+/* Buttons */
+.btn-primary,
+.btn-secondary,
+.btn-success {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background-color: #2563eb;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #1d4ed8;
+}
+
+.btn-primary.stop {
+    background-color: #dc2626;
+}
+
+.btn-primary.stop:hover {
+    background-color: #b91c1c;
+}
+
+.btn-primary.resume {
+    background-color: #16a34a;
+}
+
+.btn-primary.resume:hover {
+    background-color: #15803d;
+}
+
+.btn-secondary {
+    background-color: #6b7280;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #4b5563;
+}
+
+.btn-success {
+    background-color: #16a34a;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #15803d;
+}
+
+/* Activities Section */
+.activities-section {
+    margin-bottom: 24px;
+}
+
+.activities-section h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #1a1a1a;
+}
+
+.checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background-color: #f9fafb;
+    transition: background-color 0.2s ease;
+}
+
+.checkbox-item:hover {
+    background-color: #f3f4f6;
+}
+
+.checkbox-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #2563eb;
+}
+
+.checkbox-item span {
+    font-size: 15px;
+    color: #333;
+}
+
+/* Notes Section */
+.notes-section {
+    margin-bottom: 24px;
+}
+
+.notes-section h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #1a1a1a;
+}
+
+#notes {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+#notes:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Session Log */
+.log-section {
+    margin-bottom: 24px;
+}
+
+.log-section h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #1a1a1a;
+}
+
+.log-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 100px;
+}
+
+.log-entry {
+    padding: 8px 12px;
+    background-color: #f9fafb;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.log-entry .timestamp {
+    color: #2563eb;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+.log-entry .message {
+    color: #333;
+}
+
+/* Footer Actions */
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 1rem;
+    border-top: 1px solid #e0e0e0;
+    padding-bottom: 2rem;
+}
+
+/* Empty state */
+.log-entries:empty::after {
+    content: "No session activity yet";
+    display: block;
+    color: #9ca3af;
+    font-size: 14px;
+    font-style: italic;
+    padding: 16px;
+    text-align: center;
+}
