@@ -11,7 +11,7 @@
                 "name": "CCM",
                 "description": "Chronic Care Management Activity Tracker Application",
                 "scope": "patient_specific",
-                "icon": "chronic_care_management_activity_tracker/assets/CCM.png"
+                "icon": "assets/CCM.png"
             }
         ],
         "protocols": [
@@ -55,7 +55,7 @@
         ],
         "questionnaires": [
             {
-                "template": "chronic_care_management_activity_tracker/assets/ccmat_questionnaire.yml"
+                "template": "assets/ccmat_questionnaire.yml"
             }
         ],
         "commands": [],
