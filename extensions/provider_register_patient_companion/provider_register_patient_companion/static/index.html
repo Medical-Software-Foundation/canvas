@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Register Patient</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css?v={{cache_bust}}">
+        <script type="text/javascript" src="main.js?v={{cache_bust}}" defer></script>
+    </head>
+    <body>
+        <header class="app-header">
+            <div class="title">Register Patient</div>
+        </header>
+
+        <main class="content">
+            <form id="register-form" novalidate>
+                <div class="field-pair">
+                    <div class="field-row">
+                        <label for="first-name">First name</label>
+                        <input id="first-name" type="text" name="first_name" autocomplete="given-name" required maxlength="255" />
+                        <div class="field-error" data-for="first_name"></div>
+                    </div>
+
+                    <div class="field-row">
+                        <label for="last-name">Last name</label>
+                        <input id="last-name" type="text" name="last_name" autocomplete="family-name" required maxlength="255" />
+                        <div class="field-error" data-for="last_name"></div>
+                    </div>
+                </div>
+
+                <div class="field-pair">
+                    <div class="field-row">
+                        <label for="birth-date">Date of birth</label>
+                        <input id="birth-date" type="date" name="birth_date" required />
+                        <div class="field-error" data-for="birth_date"></div>
+                    </div>
+
+                    <div class="field-row">
+                        <label for="sex-at-birth">Sex at birth</label>
+                        <select id="sex-at-birth" name="sex_at_birth" required>
+                            <option value="">Select&hellip;</option>
+                            <option value="F">Female</option>
+                            <option value="M">Male</option>
+                            <option value="O">Other</option>
+                            <option value="UNK">Unknown</option>
+                        </select>
+                        <div class="field-error" data-for="sex_at_birth"></div>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <label for="phone">Phone number</label>
+                    <input id="phone" type="tel" name="phone" autocomplete="tel" required inputmode="tel" />
+                    <div class="field-error" data-for="phone"></div>
+                </div>
+
+                <div id="duplicate-callout" class="callout" role="alert" hidden>
+                    <div class="callout-title">Possible duplicate patients</div>
+                    <p class="callout-body">
+                        These existing patients matched on name + date of birth or phone number.
+                        Review them carefully before continuing.
+                    </p>
+                    <ul id="duplicate-list" class="duplicate-list"></ul>
+                    <label class="ack-line">
+                        <input type="checkbox" id="acknowledge" />
+                        <span>I've reviewed these and want to register a new patient.</span>
+                    </label>
+                </div>
+
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+
+                <div class="actions">
+                    <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" id="submit-btn" class="btn btn-primary">
+                        <span class="btn-spinner" aria-hidden="true"></span>
+                        <span class="btn-label">Register</span>
+                    </button>
+                </div>
+            </form>
+        </main>
+    </body>
+</html>

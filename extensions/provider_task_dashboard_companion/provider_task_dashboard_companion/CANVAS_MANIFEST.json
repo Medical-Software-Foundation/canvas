@@ -1,0 +1,46 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "provider_task_dashboard_companion",
+    "description": "Provider companion app for browsing tasks with label and status filters.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "provider_task_dashboard_companion.applications.task_dashboard_app:TaskDashboardApp",
+                "name": "Task Dashboard",
+                "description": "Browse tasks with status and label filters. Defaults to tasks assigned to you.",
+                "scope": "provider_companion_global",
+                "icon": "assets/icon.png"
+            },
+            {
+                "class": "provider_task_dashboard_companion.applications.task_dashboard_app:PatientTaskDashboardApp",
+                "name": "Tasks",
+                "description": "Browse tasks associated with the current patient.",
+                "scope": "provider_companion_patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "provider_task_dashboard_companion.handlers.task_dashboard_api:TaskDashboardAPI",
+                "description": "Serves the task dashboard UI and JSON endpoints.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

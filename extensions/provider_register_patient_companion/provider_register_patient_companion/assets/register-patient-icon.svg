@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="0.8" in="SourceAlpha"/>
+      <feOffset dx="0" dy="1"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softshadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="0.5" in="SourceAlpha"/>
+      <feOffset dx="0" dy="0.6"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded square card background (papercraft) -->
+  <rect x="8" y="8" width="84" height="84" rx="14" fill="#dcfce7" filter="url(#shadow)"/>
+  <rect x="8" y="8" width="84" height="12" rx="14" fill="#a7f3d0"/>
+  <rect x="8" y="15" width="84" height="5" fill="#a7f3d0"/>
+
+  <!-- Person silhouette: head -->
+  <circle cx="42" cy="40" r="10" fill="#047857" filter="url(#softshadow)"/>
+  <!-- Person silhouette: shoulders/body -->
+  <path d="M24 76 C 24 62, 32 56, 42 56 C 52 56, 60 62, 60 76 Z" fill="#047857" filter="url(#softshadow)"/>
+
+  <!-- Soft highlight on shoulder -->
+  <path d="M30 64 C 30 68, 32 72, 36 74" stroke="#6ee7b7" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.7"/>
+
+  <!-- Plus badge -->
+  <circle cx="74" cy="34" r="12" fill="#ffffff" filter="url(#softshadow)"/>
+  <circle cx="74" cy="34" r="11" fill="#059669"/>
+  <rect x="72" y="27" width="4" height="14" rx="1.5" fill="#ffffff"/>
+  <rect x="67" y="32" width="14" height="4" rx="1.5" fill="#ffffff"/>
+</svg>

@@ -1,0 +1,28 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Provider companion app scoped to the current note: mobile-friendly vitals entry form that originates a Vitals command on submit."
+license = "MIT"
+name = "provider_note_vitals_companion"
+readme = "provider_note_vitals_companion/README.md"
+requires-python = ">=3.11"
+version = "0.0.1"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
+
+[tool.coverage.run]
+source = ["provider_note_vitals_companion"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]

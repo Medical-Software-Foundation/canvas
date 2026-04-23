@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="0.8" in="SourceAlpha"/>
+      <feOffset dx="0" dy="1"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softshadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="0.5" in="SourceAlpha"/>
+      <feOffset dx="0" dy="0.6"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded square card background -->
+  <rect x="8" y="8" width="84" height="84" rx="14" fill="#fde4e4" filter="url(#shadow)"/>
+  <rect x="8" y="8" width="84" height="12" rx="14" fill="#f5b9b9"/>
+  <rect x="8" y="15" width="84" height="5" fill="#f5b9b9"/>
+
+  <!-- Heart shape (papercraft) -->
+  <path d="M50 72 C 28 58, 22 44, 32 36 C 40 30, 48 34, 50 40 C 52 34, 60 30, 68 36 C 78 44, 72 58, 50 72 Z"
+        fill="#dc2626" filter="url(#softshadow)"/>
+  <!-- Inner paper highlight on heart -->
+  <path d="M38 40 C 36 42, 36 46, 40 50" stroke="#fecaca" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.8"/>
+
+  <!-- Pulse line crossing the heart -->
+  <polyline points="18,54 30,54 36,46 42,62 48,50 54,54 82,54"
+            fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="18,54 30,54 36,46 42,62 48,50 54,54 82,54"
+            fill="none" stroke="#991b1b" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+</svg>

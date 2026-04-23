@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Card shadow -->
+  <rect x="13" y="23" width="74" height="66" rx="10" fill="#3f5f3f" opacity="0.4"/>
+
+  <!-- Card body -->
+  <rect x="11" y="20" width="74" height="66" rx="10" fill="#fafcff"/>
+
+  <!-- Top band (green accent) with rounded top corners only -->
+  <path d="M21 20 L75 20 Q85 20 85 30 L85 42 L11 42 L11 30 Q11 20 21 20 Z" fill="#15803d"/>
+
+  <!-- Inner highlight for paper-cut feel -->
+  <path d="M21 22 L75 22 Q83 22 83 30 L83 32 L13 32 L13 30 Q13 22 21 22 Z" fill="#16a34a"/>
+
+  <!-- Row 1: avatar + name bar -->
+  <circle cx="25" cy="52" r="6" fill="#15803d"/>
+  <rect x="36" y="48" width="42" height="7" rx="2" fill="#cde3d6"/>
+
+  <!-- Row 2 -->
+  <circle cx="25" cy="66" r="6" fill="#15803d"/>
+  <rect x="36" y="62" width="42" height="7" rx="2" fill="#cde3d6"/>
+
+  <!-- Row 3 -->
+  <circle cx="25" cy="80" r="6" fill="#15803d"/>
+  <rect x="36" y="76" width="34" height="7" rx="2" fill="#cde3d6"/>
+</svg>

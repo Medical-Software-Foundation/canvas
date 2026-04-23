@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="0.8" in="SourceAlpha"/>
+      <feOffset dx="0" dy="1"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softshadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="0.5" in="SourceAlpha"/>
+      <feOffset dx="0" dy="0.6"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Rounded square card background (papercraft, teal family for clinical overview) -->
+  <rect x="8" y="8" width="84" height="84" rx="14" fill="#ccfbf1" filter="url(#shadow)"/>
+  <rect x="8" y="8" width="84" height="12" rx="14" fill="#99f6e4"/>
+  <rect x="8" y="15" width="84" height="5" fill="#99f6e4"/>
+
+  <!-- Clipboard body (outer, cut-paper look) -->
+  <rect x="22" y="26" width="56" height="58" rx="6" fill="#ffffff" filter="url(#softshadow)"/>
+  <rect x="22" y="26" width="56" height="58" rx="6" fill="none" stroke="#0f766e" stroke-width="2"/>
+
+  <!-- Clip at the top of the clipboard -->
+  <rect x="38" y="21" width="24" height="10" rx="3" fill="#0f766e"/>
+
+  <!-- Summary list lines (items) -->
+  <rect x="30" y="40" width="34" height="3" rx="1.5" fill="#0d9488"/>
+  <rect x="30" y="49" width="28" height="3" rx="1.5" fill="#0d9488"/>
+  <rect x="30" y="58" width="38" height="3" rx="1.5" fill="#0d9488"/>
+
+  <!-- Heartbeat waveform (vitals pulse at bottom of clipboard) -->
+  <polyline points="28,74 36,74 40,66 44,82 48,70 52,74 72,74"
+            fill="none" stroke="#dc2626" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

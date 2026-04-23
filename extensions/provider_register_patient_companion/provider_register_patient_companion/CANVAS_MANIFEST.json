@@ -1,0 +1,39 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "provider_register_patient_companion",
+    "description": "Provider companion app for registering a new patient from the global companion surface, with duplicate detection on similar name + DOB and matching phone number.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "provider_register_patient_companion.applications.register_patient_app:RegisterPatientApp",
+                "name": "Register Patient",
+                "description": "Register a new patient from the provider companion launcher, with duplicate-patient detection before create.",
+                "scope": "provider_companion_global",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "provider_register_patient_companion.handlers.register_patient_api:RegisterPatientAPI",
+                "description": "Serves the register patient UI, runs duplicate detection, emits the CreatePatient effect, and serves a poll endpoint that resolves the new patient's UUID.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
