@@ -1,0 +1,28 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "chronic-care-management-activity-tracker"
+version = "0.0.0"
+description = "The Chronic Care Management (CCM) Activity Tracker plugin automates tracking, documentation, and billing for chronic care management services. This plugin provides a comprehensive workflow for managing CCM activities including session tracking, patient banner alerts, and automated monthly billing."
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "arrow>=1.3.0",
+    "django>=4.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]

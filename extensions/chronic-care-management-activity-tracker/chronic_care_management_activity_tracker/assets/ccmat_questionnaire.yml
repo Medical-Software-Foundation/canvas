@@ -1,0 +1,90 @@
+name: Chronic Care Management Activity
+form_type: QUES
+code_system: INTERNAL
+code: ccm_session_questionnaire
+can_originate_in_charting: true
+questions:
+  - content: Patient Name
+    code_system: INTERNAL
+    code: ccm_session_pt_name_question
+    code_description: ''
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: TXT
+        code: ccm_session_pt_name_response
+        code_description: ''
+        value: ''
+  - content: Staff Name
+    code_system: INTERNAL
+    code: ccm_session_staff_name_question
+    code_description: ''
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: TXT
+        code: ccm_session_staff_name_response
+        code_description: ''
+        value: ''
+  - content: Activities Performed
+    code_system: INTERNAL
+    code: ccm_session_activities_question
+    code_description: ''
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: TXT
+        code: ccm_session_activities_response
+        code_description: ''
+        value: ''
+  - content: Notes
+    code_system: INTERNAL
+    code: ccm_session_notes_question
+    code_description: ''
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: TXT
+        code: ccm_session_notes_response
+        code_description: ''
+        value: ''
+  - content: Time Log
+    code_system: INTERNAL
+    code: ccm_session_time_log_question
+    code_description: ''
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: TXT
+        code: ccm_session_time_log_response
+        code_description: ''
+        value: ''
+  - content: Minutes Logged this Session
+    code_system: INTERNAL
+    code: ccm_session_duration_question
+    code_description: ''
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: TXT
+        code: ccm_session_duration_response
+        code_description: ''
+        value: ''
+  - content: Minutes Logged this Month Including this Session
+    code_system: INTERNAL
+    code: ccm_month_minutes_question
+    code_description: ''
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: TXT
+        code: ccm_month_minutes_response
+        code_description: ''
+        value: ''

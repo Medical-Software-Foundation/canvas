@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronic Care Management Activity Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Chronic Care Management Activity Tracker</h1>
+            <div class="header-info">
+                <span id="patient-info">Patient: {{ patient_name }} | Date: {{ current_date }}</span>
+                <span id="user-info">Logged in as: {{ staff_name }}</span>
+            </div>
+        </header>
+
+        <div class="timer-section">
+            <div class="timer-display" id="timer-display">00:00</div>
+            <button class="btn-primary" id="timer-btn">Start</button>
+        </div>
+
+        <section class="activities-section">
+            <h2>Activities Performed</h2>
+            <div class="checkbox-list">
+                {% for activity, code in activities %}
+                <label class="checkbox-item">
+                    <input type="checkbox" name="activity" value="{{ code }}">
+                    <span>{{ activity }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="notes-section">
+            <h2>Additional Notes</h2>
+            <textarea id="notes" placeholder="Here are my notes."></textarea>
+        </section>
+
+        <section class="log-section">
+            <h2>Session Log</h2>
+            <div class="log-entries" id="log-entries">
+                <!-- Log entries will be dynamically added here -->
+            </div>
+        </section>
+
+        <footer class="actions">
+            <button class="btn-secondary" id="clear-btn">Clear</button>
+            <button class="btn-success" id="save-btn">Save Session</button>
+        </footer>
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
