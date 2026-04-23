@@ -5,7 +5,6 @@ chronic_care_management_activity_tracker
 
 The Chronic Care Management (CCM) Activity Tracker plugin automates tracking, documentation, and billing for chronic care management services. This plugin provides a comprehensive workflow for managing CCM activities including session tracking, patient banner alerts, and automated monthly billing.
 
-[![](https://images.prismic.io/canvas-website/aep20cBOoF08xQuq_screenshot-JA-35M-04232026013360.jpg?auto=format,compress)](https://app.arcade.software/flows/pA2VYmIKWmgj7U58WIGL/view)
 
 ## Installation
 
@@ -108,3 +107,5 @@ uv run pytest tests/
 ## See it in action
 
 [Click Here to See a Demo](https://app.arcade.software/flows/pA2VYmIKWmgj7U58WIGL/view)
+
+[![](https://images.prismic.io/canvas-website/aep20cBOoF08xQuq_screenshot-JA-35M-04232026013360.jpg?auto=format,compress)](https://app.arcade.software/flows/pA2VYmIKWmgj7U58WIGL/view)
