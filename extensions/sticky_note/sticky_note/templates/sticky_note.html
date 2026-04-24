@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sticky Note</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #fff;
+      padding: 20px;
+      color: #333;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+    }
+
+    .note-section {
+      margin-bottom: 20px;
+    }
+
+    .note-section label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .note-section textarea {
+      width: 100%;
+      min-height: 140px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.5;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+
+    .note-section textarea:focus {
+      outline: none;
+      border-color: #7c7c7c;
+    }
+
+    .note-section .shared-textarea { background: #feffd6; }
+    .note-section .user-textarea { background: #e8f4fd; }
+
+    .note-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    .save-status {
+      font-size: 12px;
+      color: transparent;
+      transition: color 0.3s;
+    }
+    .save-status.saving { color: #999; }
+    .save-status.saved { color: #4caf50; }
+    .save-status.error { color: #c62828; }
+    .save-status.conflict { color: #e65100; }
+
+    .char-count { font-size: 11px; color: #aaa; }
+    .char-count.warn { color: #c59000; }
+    .char-count.over { color: #c62828; font-weight: 600; }
+
+    .shared-meta {
+      font-size: 11px;
+      color: #999;
+      margin-top: 2px;
+      font-style: italic;
+    }
+
+    /* Conflict banner */
+    .conflict-banner {
+      background: #fff3e0;
+      border: 1px solid #ffb74d;
+      border-radius: 4px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .conflict-banner.visible { display: flex; }
+    .conflict-text { flex: 1; color: #e65100; }
+    .conflict-btn {
+      background: #ff9800; color: #fff; border: none;
+      border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 11px;
+    }
+    .conflict-btn:hover { background: #f57c00; }
+    .conflict-dismiss {
+      background: none; border: 1px solid #ccc; color: #555;
+      border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 11px;
+    }
+    .conflict-dismiss:hover { background: #f5f5f5; }
+
+    /* Draft restore banner */
+    .draft-banner {
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      border-radius: 4px;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .draft-banner.visible { display: flex; }
+    .draft-text { flex: 1; color: #1565c0; }
+    .draft-btn {
+      background: #1976d2; color: #fff; border: none;
+      border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 11px;
+    }
+    .draft-btn:hover { background: #1565c0; }
+    .draft-dismiss {
+      background: none; border: 1px solid #ccc; color: #555;
+      border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 11px;
+    }
+    .draft-dismiss:hover { background: #f5f5f5; }
+
+    /* History */
+    .history-link {
+      font-size: 11px;
+      color: #4A6FA5;
+      cursor: pointer;
+      border: none;
+      background: none;
+      padding: 0;
+      text-decoration: underline;
+      margin-top: 4px;
+      display: inline-block;
+    }
+    .history-link:hover { color: #3d5f8f; }
+
+    .history-panel {
+      display: none;
+      margin-top: 8px;
+      border: 1px solid #e0e4ea;
+      border-radius: 6px;
+      background: #fafbfc;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .history-panel.open { display: block; }
+
+    .history-entry {
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 12px;
+    }
+    .history-entry:last-child { border-bottom: none; }
+
+    .history-entry-meta {
+      font-size: 10px;
+      color: #999;
+      margin-bottom: 3px;
+    }
+
+    .history-action {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 1px 4px;
+      border-radius: 2px;
+      margin-left: 4px;
+    }
+    .history-action.created { background: #e8f5e9; color: #2e7d32; }
+    .history-action.edited { background: #fff3e0; color: #e65100; }
+    .history-action.cleared { background: #fce4ec; color: #c62828; }
+
+    .history-entry-content {
+      white-space: pre-wrap;
+      color: #555;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .history-empty {
+      padding: 12px;
+      font-size: 12px;
+      color: #aaa;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <span id="cfg-patient-id" hidden>{{ patient_id }}</span>
+  <span id="cfg-staff-id" hidden>{{ staff_id }}</span>
+  <span id="cfg-auth-token" hidden>{{ auth_token }}</span>
+
+  <h2>Sticky Note</h2>
+
+  <div class="note-section">
+    <label>Shared Note (visible to all users)</label>
+    <div id="shared-draft" class="draft-banner">
+      <span class="draft-text">Unsaved draft found.</span>
+      <button class="draft-btn" onclick="restoreDraft('shared')">Restore</button>
+      <button class="draft-dismiss" onclick="discardDraft('shared')">Discard</button>
+    </div>
+    <div id="shared-conflict" class="conflict-banner">
+      <span class="conflict-text"></span>
+      <button class="conflict-btn" onclick="resolveConflict('shared')">Load latest</button>
+      <button class="conflict-dismiss" onclick="dismissConflict('shared')">Keep mine</button>
+    </div>
+    <textarea id="shared-note" class="shared-textarea" placeholder="Write a shared note for this patient..." maxlength="4096"></textarea>
+    <div id="shared-meta" class="shared-meta"></div>
+    <div class="note-footer">
+      <div id="shared-status" class="save-status"></div>
+      <div id="shared-count" class="char-count">0 / 4096</div>
+    </div>
+    <button class="history-link" onclick="toggleHistory('shared')">View history</button>
+    <div id="shared-history" class="history-panel"></div>
+  </div>
+
+  <div class="note-section">
+    <label>My Note (only visible to you)</label>
+    <div id="user-draft" class="draft-banner">
+      <span class="draft-text">Unsaved draft found.</span>
+      <button class="draft-btn" onclick="restoreDraft('user')">Restore</button>
+      <button class="draft-dismiss" onclick="discardDraft('user')">Discard</button>
+    </div>
+    <div id="user-conflict" class="conflict-banner">
+      <span class="conflict-text"></span>
+      <button class="conflict-btn" onclick="resolveConflict('user')">Load latest</button>
+      <button class="conflict-dismiss" onclick="dismissConflict('user')">Keep mine</button>
+    </div>
+    <textarea id="user-note" class="user-textarea" placeholder="Write a personal note..." maxlength="4096"></textarea>
+    <div class="note-footer">
+      <div id="user-status" class="save-status"></div>
+      <div id="user-count" class="char-count">0 / 4096</div>
+    </div>
+    <button class="history-link" onclick="toggleHistory('user')">View history</button>
+    <div id="user-history" class="history-panel"></div>
+  </div>
+
+  <script>
+    var patientId = document.getElementById('cfg-patient-id').textContent;
+    var staffId = document.getElementById('cfg-staff-id').textContent;
+    var authToken = document.getElementById('cfg-auth-token').textContent;
+    var BASE_URL = '/plugin-io/api/sticky_note/sticky-note/notes';
+    var HISTORY_URL = '/plugin-io/api/sticky_note/sticky-note/history';
+    var CHAR_LIMIT = 4096;
+    var DRAFT_KEY_PREFIX = 'sticky_note_draft_';
+
+    var messagePort = null;
+    var pending = { shared: null, user: null };
+    var lastSaved = { shared: '', user: '' };
+    var versions = { shared: 0, user: 0 };
+    var conflictData = { shared: null, user: null };
+    var draftContent = { shared: null, user: null };
+    var debounceTimers = { shared: null, user: null };
+    var dirty = { shared: false, user: false };
+
+    // --- Modal resize via MessageChannel ---
+    window.addEventListener('message', function(event) {
+      if (event.origin !== window.location.origin) return;
+      if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+        messagePort = event.ports[0];
+        messagePort.start();
+        messagePort.postMessage({ type: 'RESIZE', width: 480, height: 560 });
+      }
+    });
+
+    // --- Auth headers ---
+    function authHeaders() {
+      return { 'Authorization': 'Bearer ' + authToken };
+    }
+
+    // --- Character counter ---
+    function updateCharCount(textareaId, countId) {
+      var len = document.getElementById(textareaId).value.length;
+      var el = document.getElementById(countId);
+      el.textContent = len + ' / ' + CHAR_LIMIT;
+      if (len >= CHAR_LIMIT) {
+        el.className = 'char-count over';
+      } else if (len >= CHAR_LIMIT * 0.9) {
+        el.className = 'char-count warn';
+      } else {
+        el.className = 'char-count';
+      }
+    }
+
+    // --- Save state indicator ---
+    function showSaveState(statusId, state) {
+      var el = document.getElementById(statusId);
+      var labels = {
+        saving: 'Saving...',
+        saved: 'Saved',
+        error: 'Save failed',
+        conflict: 'Updated by someone else',
+      };
+      el.textContent = labels[state] || '';
+      el.className = 'save-status ' + (state || '');
+
+      if (state === 'saved') {
+        setTimeout(function() {
+          if (el.className === 'save-status saved') {
+            el.textContent = '';
+            el.className = 'save-status';
+          }
+        }, 2000);
+      }
+    }
+
+    // --- localStorage draft management ---
+    function draftKey(noteType) {
+      return DRAFT_KEY_PREFIX + patientId + '_' + staffId + '_' + noteType;
+    }
+
+    function saveDraft(noteType, content) {
+      try { sessionStorage.setItem(draftKey(noteType), content); }
+      catch (e) { /* storage full — silently ignore */ }
+    }
+
+    function clearDraft(noteType) {
+      try { sessionStorage.removeItem(draftKey(noteType)); }
+      catch (e) {}
+    }
+
+    function getDraft(noteType) {
+      try { return sessionStorage.getItem(draftKey(noteType)); }
+      catch (e) { return null; }
+    }
+
+    function showDraftRestore(noteType, content) {
+      draftContent[noteType] = content;
+      var banner = document.getElementById(noteType + '-draft');
+      banner.classList.add('visible');
+    }
+
+    function restoreDraft(noteType) {
+      var content = draftContent[noteType];
+      if (content !== null) {
+        document.getElementById(noteType + '-note').value = content;
+        pending[noteType] = content;
+        dirty[noteType] = true;
+        updateCharCount(noteType + '-note', noteType + '-count');
+      }
+      draftContent[noteType] = null;
+      document.getElementById(noteType + '-draft').classList.remove('visible');
+    }
+
+    function discardDraft(noteType) {
+      draftContent[noteType] = null;
+      clearDraft(noteType);
+      document.getElementById(noteType + '-draft').classList.remove('visible');
+    }
+
+    // --- Conflict resolution ---
+    function showConflict(noteType, data) {
+      // Cancel any pending debounce to avoid re-saving stale content
+      if (debounceTimers[noteType]) {
+        clearTimeout(debounceTimers[noteType]);
+        debounceTimers[noteType] = null;
+      }
+      conflictData[noteType] = data;
+      var banner = document.getElementById(noteType + '-conflict');
+      var text = banner.querySelector('.conflict-text');
+      text.textContent = 'Updated by ' + (data.updated_by || 'someone') + '. Your change was not saved.';
+      banner.classList.add('visible');
+      showSaveState(noteType + '-status', 'conflict');
+    }
+
+    function resolveConflict(noteType) {
+      var data = conflictData[noteType];
+      if (!data) return;
+
+      var textarea = document.getElementById(noteType + '-note');
+      textarea.value = data.content;
+      versions[noteType] = data.version;
+      lastSaved[noteType] = data.content;
+      pending[noteType] = null;
+      dirty[noteType] = false;
+      clearDraft(noteType);
+      conflictData[noteType] = null;
+
+      document.getElementById(noteType + '-conflict').classList.remove('visible');
+      showSaveState(noteType + '-status', '');
+      updateCharCount(noteType + '-note', noteType + '-count');
+
+      if (noteType === 'shared') {
+        updateSharedMeta({
+          updated_by: data.updated_by,
+          updated_at: data.updated_at,
+        });
+      }
+    }
+
+    function dismissConflict(noteType) {
+      var data = conflictData[noteType];
+      if (data) {
+        versions[noteType] = data.version;
+      }
+      conflictData[noteType] = null;
+      document.getElementById(noteType + '-conflict').classList.remove('visible');
+
+      var textarea = document.getElementById(noteType + '-note');
+      var content = textarea.value;
+      pending[noteType] = content;
+      showSaveState(noteType + '-status', 'saving');
+
+      saveNote(noteType, content).then(function(resp) {
+        if (resp.status === 'ok') {
+          versions[noteType] = resp.version;
+          lastSaved[noteType] = content;
+          pending[noteType] = null;
+          clearDraft(noteType);
+          showSaveState(noteType + '-status', 'saved');
+        } else if (resp.status === 'conflict') {
+          showConflict(noteType, resp);
+        } else {
+          showSaveState(noteType + '-status', 'error');
+        }
+      }).catch(function() {
+        showSaveState(noteType + '-status', 'error');
+      });
+    }
+
+    // --- Save function ---
+    function saveNote(noteType, content, audit) {
+      var headers = authHeaders();
+      headers['Content-Type'] = 'application/json';
+
+      var payload = {
+        patient_id: patientId,
+        staff_id: staffId,
+        type: noteType,
+        content: content,
+        version: versions[noteType],
+      };
+      if (audit) { payload.audit = true; }
+
+      return fetch(BASE_URL, {
+        method: 'POST',
+        headers: headers,
+        keepalive: true,
+        body: JSON.stringify(payload),
+      }).then(function(r) { return r.json(); });
+    }
+
+    // --- End session: flush pending saves + write single audit entry ---
+    function endSession() {
+      var types = ['shared', 'user'];
+      for (var i = 0; i < types.length; i++) {
+        var nt = types[i];
+        if (!dirty[nt]) continue;
+
+        // Cancel any pending debounce timer
+        if (debounceTimers[nt]) {
+          clearTimeout(debounceTimers[nt]);
+          debounceTimers[nt] = null;
+        }
+
+        // Determine content to send: pending (unsaved) or lastSaved
+        var content = pending[nt] !== null ? pending[nt] : lastSaved[nt];
+        saveNote(nt, content, true);
+        pending[nt] = null;
+        dirty[nt] = false;
+      }
+    }
+
+    window.addEventListener('beforeunload', function() { endSession(); });
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'hidden') { endSession(); }
+    });
+    window.addEventListener('pagehide', function() { endSession(); });
+
+    // --- History ---
+    var historyLoaded = { shared: false, user: false };
+
+    function toggleHistory(noteType) {
+      var panel = document.getElementById(noteType + '-history');
+      var isOpen = panel.classList.contains('open');
+      if (isOpen) {
+        panel.classList.remove('open');
+        return;
+      }
+      panel.classList.add('open');
+
+      if (historyLoaded[noteType]) return;
+      historyLoaded[noteType] = true;
+
+      panel.innerHTML = '<div class="history-empty">Loading...</div>';
+
+      var url = HISTORY_URL + '?patient_id=' + encodeURIComponent(patientId)
+        + '&staff_id=' + encodeURIComponent(staffId)
+        + '&type=' + noteType;
+
+      fetch(url, { headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var entries = data.history || [];
+          if (entries.length === 0) {
+            panel.innerHTML = '<div class="history-empty">No edit history</div>';
+            return;
+          }
+          var html = '';
+          for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            var when = '';
+            try {
+              var d = new Date(e.edited_at);
+              when = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+            } catch(err) { when = e.edited_at || ''; }
+
+            var actionBadge = '';
+            if (e.action) {
+              actionBadge = '<span class="history-action ' + escapeHtml(e.action) + '">'
+                + escapeHtml(e.action) + '</span>';
+            }
+
+            html += '<div class="history-entry">'
+              + '<div class="history-entry-meta">'
+              + escapeHtml(e.edited_by || 'Unknown')
+              + ' &middot; ' + escapeHtml(when)
+              + actionBadge
+              + '</div>'
+              + '<div class="history-entry-content">' + escapeHtml(e.content || '') + '</div>'
+              + '</div>';
+          }
+          panel.innerHTML = html;
+        })
+        .catch(function() {
+          panel.innerHTML = '<div class="history-empty">Failed to load history</div>';
+        });
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = s || '';
+      return d.innerHTML;
+    }
+
+    // --- Shared note metadata ---
+    function updateSharedMeta(meta) {
+      var el = document.getElementById('shared-meta');
+      if (meta && meta.updated_by) {
+        var when = '';
+        if (meta.updated_at) {
+          try {
+            var d = new Date(meta.updated_at);
+            when = ' on ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+          } catch(e) {}
+        }
+        el.textContent = 'Last edited by ' + meta.updated_by + when;
+      } else {
+        el.textContent = '';
+      }
+    }
+
+    // --- Load existing notes ---
+    function loadNotes() {
+      var url = BASE_URL + '?patient_id=' + encodeURIComponent(patientId)
+        + '&staff_id=' + encodeURIComponent(staffId);
+
+      fetch(url, { headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.status === 'ok') {
+            var serverShared = data.shared_note || '';
+            var serverUser = data.user_note || '';
+
+            document.getElementById('shared-note').value = serverShared;
+            document.getElementById('user-note').value = serverUser;
+            lastSaved.shared = serverShared;
+            lastSaved.user = serverUser;
+            versions.shared = data.shared_version || 0;
+            versions.user = data.user_version || 0;
+
+            updateCharCount('shared-note', 'shared-count');
+            updateCharCount('user-note', 'user-count');
+            updateSharedMeta(data.shared_meta || {});
+
+            // Check for orphaned drafts
+            var draftShared = getDraft('shared');
+            var draftUser = getDraft('user');
+
+            if (draftShared && draftShared !== serverShared) {
+              showDraftRestore('shared', draftShared);
+            } else {
+              clearDraft('shared');
+            }
+
+            if (draftUser && draftUser !== serverUser) {
+              showDraftRestore('user', draftUser);
+            } else {
+              clearDraft('user');
+            }
+          }
+        })
+        .catch(function(e) {
+          console.error('Failed to load notes:', e);
+        });
+    }
+
+    // --- Debounced saver per textarea ---
+    function createSaver(textareaId, statusId, countId, noteType) {
+      var textarea = document.getElementById(textareaId);
+
+      textarea.addEventListener('input', function() {
+        if (debounceTimers[noteType]) clearTimeout(debounceTimers[noteType]);
+        updateCharCount(textareaId, countId);
+
+        var content = textarea.value;
+        if (content !== lastSaved[noteType]) {
+          pending[noteType] = content;
+          dirty[noteType] = true;
+          saveDraft(noteType, content);
+        }
+
+        // Clear previous error/conflict on new input
+        var statusEl = document.getElementById(statusId);
+        if (statusEl.className !== 'save-status saving') {
+          statusEl.textContent = '';
+          statusEl.className = 'save-status';
+        }
+
+        debounceTimers[noteType] = setTimeout(function() {
+          debounceTimers[noteType] = null;
+          var saveContent = textarea.value;
+          if (saveContent === lastSaved[noteType]) {
+            pending[noteType] = null;
+            return;
+          }
+
+          showSaveState(statusId, 'saving');
+
+          saveNote(noteType, saveContent).then(function(data) {
+            if (data.status === 'ok') {
+              versions[noteType] = data.version;
+              lastSaved[noteType] = saveContent;
+              pending[noteType] = null;
+              clearDraft(noteType);
+              showSaveState(statusId, 'saved');
+            } else if (data.status === 'conflict') {
+              versions[noteType] = data.version;
+              pending[noteType] = saveContent;
+              showConflict(noteType, data);
+            } else {
+              showSaveState(statusId, 'error');
+            }
+          }).catch(function() {
+            showSaveState(statusId, 'error');
+          });
+        }, 800);
+      });
+    }
+
+    createSaver('shared-note', 'shared-status', 'shared-count', 'shared');
+    createSaver('user-note', 'user-status', 'user-count', 'user');
+
+    loadNotes();
+  </script>
+</body>
+</html>
