@@ -1,0 +1,52 @@
+{
+    "sdk_version": "0.112.0",
+    "plugin_version": "0.1.0",
+    "name": "sticky_note",
+    "description": "Sticky note action button in patient chart header with shared and user-specific notes",
+    "url_permissions": [],
+    "components": {
+        "protocols": [
+            {
+                "class": "sticky_note.protocols.sticky_note_button:StickyNoteButton",
+                "description": "Action button in patient chart header that opens a sticky note modal",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "sticky_note.protocols.sticky_note_api:StickyNoteAPI",
+                "description": "API endpoints for saving and loading sticky notes",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "sticky_note.protocols.sticky_note_api:StickyNoteHistoryAPI",
+                "description": "View edit history for sticky notes",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["namespace_read_write_access_key"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md",
+    "custom_data": {
+        "namespace": "canvas_medical__sticky_note",
+        "access": "read_write"
+    }
+}
