@@ -1,0 +1,45 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.12",
+    "name": "staff_directory",
+    "description": "Structured staff professional profiles: education, clinical training, NUCC-coded specialties, and board certifications with expiration tracking.",
+    "custom_data": {
+        "namespace": "staff_directory__staff_profiles",
+        "access": "read_write"
+    },
+    "url_permissions": [],
+    "components": {
+        "protocols": [
+            {
+                "class": "staff_directory.routes.staff_api:StaffProfileAPI",
+                "description": "CRUD for staff profile entries (education, training, specialties, certifications) and directory HTML"
+            },
+            {
+                "class": "staff_directory.routes.nucc_api:NuccAPI",
+                "description": "NUCC taxonomy code typeahead search"
+            }
+        ],
+        "applications": [
+            {
+                "class": "staff_directory.applications.staff_directory:StaffDirectoryApp",
+                "name": "Staff Directory",
+                "description": "View and manage extended staff professional profiles",
+                "icon": "assets/icon.png",
+                "scope": "global",
+                "menu_position": "top"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "ADMIN_ROLE_CODES"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

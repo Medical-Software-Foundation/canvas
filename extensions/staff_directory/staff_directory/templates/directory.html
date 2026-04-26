@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Staff Directory</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ api_base }}/styles.css" />
+</head>
+<body>
+  <div id="staff_directory-app">
+    <header class="dp-header">
+      <div class="dp-header-title">
+        <h1>Staff Directory</h1>
+        <p class="dp-subtitle">Education, training, specialties and certifications</p>
+      </div>
+      <div class="dp-header-controls">
+        <input
+          type="search"
+          id="dp-search"
+          class="dp-search"
+          placeholder="Search name, specialty, or board…"
+          autocomplete="off"
+        />
+        <label class="dp-filter-checkbox">
+          <input type="checkbox" id="dp-expiring-toggle" />
+          <span>Expiring certifications only</span>
+        </label>
+        <span id="dp-admin-badge" class="dp-admin-badge" hidden>Admin mode</span>
+      </div>
+    </header>
+
+    <main class="dp-main">
+      <aside class="dp-list-pane">
+        <div class="dp-list-header">
+          <span id="dp-list-count" class="dp-list-count">Loading…</span>
+        </div>
+        <ul id="dp-staff-list" class="dp-staff-list" aria-label="Staff"></ul>
+      </aside>
+
+      <section id="dp-detail-pane" class="dp-detail-pane" aria-live="polite">
+        <div class="dp-empty-state">
+          <p>Select a staff member on the left to view their profile.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Bootstrapped server-rendered data -->
+  <script id="dp-boot" type="application/json">
+    {
+      "staff": {{ staff_json|safe }},
+      "is_admin": {{ is_admin|safe }},
+      "api_base": "{{ api_base }}",
+      "nucc_base": "{{ nucc_base }}"
+    }
+  </script>
+
+  <script src="{{ api_base }}/directory.js"></script>
+</body>
+</html>
