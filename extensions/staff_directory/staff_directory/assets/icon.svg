@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b6fd6"/>
+      <stop offset="1" stop-color="#1a5fd4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="4" y="4" width="92" height="92" rx="18" fill="url(#bgGrad)"/>
+
+  <!-- Diploma ribbon bar across bottom -->
+  <rect x="14" y="68" width="72" height="10" rx="3" fill="#ffffff" opacity="0.92"/>
+  <rect x="14" y="74" width="72" height="4" rx="2" fill="#c9d8f0"/>
+
+  <!-- Small medal on the diploma -->
+  <circle cx="50" cy="73" r="5.5" fill="#f2b544" stroke="#ffffff" stroke-width="1.2"/>
+  <path d="M47.5 74.8 L50 77 L52.5 74.8" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- Center figure (taller) -->
+  <circle cx="50" cy="30" r="10" fill="#ffffff"/>
+  <path d="M30 62 Q30 48 50 48 Q70 48 70 62 L70 66 L30 66 Z" fill="#ffffff"/>
+
+  <!-- Left figure -->
+  <circle cx="24" cy="36" r="8" fill="#ffffff" opacity="0.88"/>
+  <path d="M10 62 Q10 52 24 52 Q32 52 34 56 L34 66 L10 66 Z" fill="#ffffff" opacity="0.88"/>
+
+  <!-- Right figure -->
+  <circle cx="76" cy="36" r="8" fill="#ffffff" opacity="0.88"/>
+  <path d="M66 56 Q68 52 76 52 Q90 52 90 62 L90 66 L66 66 Z" fill="#ffffff" opacity="0.88"/>
+</svg>

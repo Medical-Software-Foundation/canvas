@@ -1,0 +1,27 @@
+[project]
+authors = [
+  {email = "andrew@canvasmedical.com", name = "Andrew Hines"}
+]
+description = "Structured staff professional profiles: education, clinical training, NUCC-coded specialties, and board certifications with expiration tracking."
+license = "MIT"
+name = "staff_directory"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["staff_directory"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*", "staff_directory/data/nucc_taxonomy.json"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
