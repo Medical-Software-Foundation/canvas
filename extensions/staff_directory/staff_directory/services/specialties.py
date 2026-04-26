@@ -80,5 +80,5 @@ def serialize(entry: StaffSpecialty) -> dict:
     return {
         "id": entry.dbid,
         "is_primary": entry.is_primary,
-        "nucc": serialize_nucc(entry.nucc_code),
+        **serialize_nucc(entry.nucc_code),
     }

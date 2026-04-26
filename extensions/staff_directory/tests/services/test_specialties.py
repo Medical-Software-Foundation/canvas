@@ -77,4 +77,4 @@ class TestSerialize:
         data = spec.serialize(entry)
         assert data["id"] == 7
         assert data["is_primary"] is True
-        assert data["nucc"]["code"] == "207R00000X"
+        assert data["code"] == "207R00000X"

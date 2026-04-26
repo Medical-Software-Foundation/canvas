@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.1.8",
+    "plugin_version": "0.1.12",
     "name": "staff_directory",
     "description": "Structured staff professional profiles: education, clinical training, NUCC-coded specialties, and board certifications with expiration tracking.",
     "custom_data": {

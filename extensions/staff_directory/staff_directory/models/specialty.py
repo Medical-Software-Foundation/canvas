@@ -4,11 +4,36 @@ from django.db.models import (
     BooleanField,
     DateTimeField,
     ForeignKey,
+    Index,
+    TextField,
     UniqueConstraint,
 )
 
 from staff_directory.models.extensions import CustomStaff
-from staff_directory.models.nucc import NuccTaxonomyCode
+
+
+class NuccTaxonomyCode(CustomModel):
+    """A row from the NUCC Healthcare Provider Taxonomy Code Set."""
+
+    code = TextField()
+    grouping = TextField()
+    classification = TextField()
+    specialization = TextField(default="")
+    definition = TextField(default="")
+    display_name = TextField()
+
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=["code"], name="unique_nucc_code"),
+        ]
+        indexes = [
+            Index(fields=["classification"]),
+            Index(fields=["specialization"]),
+            Index(fields=["display_name"]),
+        ]
 
 
 class StaffSpecialty(CustomModel):
@@ -22,6 +47,7 @@ class StaffSpecialty(CustomModel):
     )
     nucc_code = ForeignKey(
         NuccTaxonomyCode,
+        to_field="dbid",
         on_delete=DO_NOTHING,
         related_name="staff_specialties",
     )
