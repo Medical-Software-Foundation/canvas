@@ -1,0 +1,65 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "canvas-1.0.0",
+    "name": "conversational_messaging",
+    "description": "A unified conversational messaging view between providers and patients.",
+    "components": {
+        "protocols": [
+            {
+                "class": "conversational_messaging.routes.conversation:StaffPatientConversation",
+                "description": "Returns staff/patient conversations for the given patient.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "conversational_messaging.routes.conversation:MessageCreationNotification",
+                "description": "Handles notifications for websocket broadcasting when a new message is received.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "conversational_messaging.routes.conversation:WebSocketConversation",
+                "description": "Authenticate websocket connections for live conversation updates.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "conversational_messaging.protocols.message_creation:MessageCreateProtocol",
+                "description": "Handles notifications for websocket broadcasting when a message is created.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "conversational_messaging.apps.conversational_view:ConversationalViewApp",
+                "name": "Patient messages",
+                "description": "A unified conversational messaging view between providers and patients.",
+                "icon" : "assets/c.png",
+                "scope": "patient_specific"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["simpleapi-api-key", "MESSAGING_CONVERSATION_PAGE_LIMIT"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

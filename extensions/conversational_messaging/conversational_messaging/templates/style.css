@@ -1,0 +1,147 @@
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: Lato, "Helvetica Neue", Arial, Helvetica, sans-serif;
+    display: flex;
+    flex-direction: column;
+}
+
+#chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#chat-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background: #f9f9f9;
+    display: flex;
+    flex-direction: column;
+}
+
+#conversation-view {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex-grow: 1;
+}
+
+.chat-message {
+    display: flex;
+    align-items: flex-end;
+}
+
+#load-more-btn {
+    align-self: center;
+    margin-bottom: 1rem;
+}
+
+.message-bubble {
+    max-width: 450px;
+    padding: 15px;
+    border-radius: 15px;
+    background: #e0e1e2;
+    flex-grow: 1;
+}
+
+.left-message {
+    margin-right: 15px;
+}
+
+.left-message .message-bubble {
+    border-bottom-left-radius: 0;
+}
+
+.right-message {
+    flex-direction: row-reverse;
+    margin-left: 15px;
+}
+
+.right-message .message-bubble {
+    background: #2185d0;
+    color: white;
+    border-bottom-right-radius: 0;
+}
+
+.message-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.message-text-content {
+    font-size: 15px;
+}
+
+.attachment-count {
+    font-style: italic;
+    opacity: 0.8;
+}
+
+.canvas-message-input {
+    background: white;
+    padding: 1rem;
+    border-top: 1px solid #ddd;
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
+    margin-bottom: 50px;
+    margin-top: 25px;
+}
+
+.send-message-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+textarea[name="message"] {
+    flex-grow: 1;
+    resize: none;
+    font-size: 16px;
+    min-height: 60px;
+}
+
+button.ui.button {
+    flex-shrink: 0;
+}
+
+#contact-point-msg {
+    font-style: italic;
+    color: orange;
+    margin-bottom: 15px;
+}
+
+.unread-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 20px 0;
+    color: #2185d0;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.unread-divider::before,
+.unread-divider::after {
+    content: "";
+    flex: 1;
+    border-bottom: 2px solid #2185d0;
+}
+
+.unread-divider span {
+    padding: 0 15px;
+}
+
+#mark-all-read-btn {
+    margin: 20px auto;
+    display: block;
+    background: #2185d0 !important;
+    color: white !important;
+}
+

@@ -1,0 +1,13 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "conversational_messaging"
+version = "0.0.0"
+description = "A unified conversational messaging view between providers and patients."
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Reba Magier", email = "reba.magier@canvasmedical.com" },
+]
+requires-python = ">=3.12"

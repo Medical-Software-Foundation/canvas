@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Chat Conversation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui@2.4.2/dist/semantic.min.css">
+    <link rel="stylesheet" href="/plugin-io/api/conversational_messaging/style.css">
+  </head>
+
+  <body>
+    <div
+      id="chat-container"
+      data-patient-id="{{ patient_id }}"
+      data-customer-identifier="{{ customer_identifier }}"
+      data-limit="{{ limit }}"
+      data-offset="{{ offset }}"
+      data-total="{{ total_messages }}"
+    >
+      <div id="chat-scroll-container">
+        <div id="conversation-view">
+          {% if total_messages > offset|add:limit %}
+            <button id="load-more-btn" class="ui basic button">Load Older Messages</button>
+          {% endif %}
+          {% for msg in conversation %}
+            {% if msg.unread %}
+              <div class="unread-divider">
+                <span>UNREAD MESSAGES</span>
+              </div>
+            {% endif %}
+            <div class="chat-message {% if msg.type == 'Practitioner' %}right-message{% else %}left-message{% endif %}">
+              <div class="message-bubble">
+                <div class="message-info">
+                  <div>{{ msg.name }}</div>
+                  <div>{{ msg.sent_description }}</div>
+                </div>
+                <span class="message-text-content">{{ msg.text|safe }}</span>
+                {% if msg.attachment_count %}
+                  <div class="attachment-count">
+                    <br>
+                    <span>Message contains {{ msg.attachment_count }} attachment(s), see timeline to view attachments</span>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        {% if has_unread_messages %}
+          <button id="mark-all-read-btn" class="ui primary mini button">
+            Mark All as Read
+          </button>
+        {% endif %}
+
+        <div class="canvas-message-input">
+          {% if not has_eligible_contact_point %}
+            <div id="contact-point-msg">PLEASE NOTE: This patient does not have a phone number or email set up to receive message notifications.</div>
+          {% endif %}
+          <form class="ui form send-message-form" action="/plugin-io/api/conversational_messaging/send-sms" method="POST">
+            <textarea name="message" id="msg-input" rows="2"></textarea>
+            <input type="hidden" name="staff_id" value="{{ staff_id }}">
+            <input type="hidden" name="patient_id" value="{{ patient_id }}">
+            <button type="submit" class="ui circular icon primary button">
+              <i class="send icon"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script src="/plugin-io/api/conversational_messaging/script.js"></script>
+  </body>
+</html>
