@@ -1,10 +1,11 @@
 """Tests for the NoteProductionDashboardApp Application handler."""
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from note_production_dashboard.applications.dashboard_app import (
     NoteProductionDashboardApp,
+    _CACHE_BUST,
 )
 
 
@@ -22,14 +23,14 @@ def test_on_open_returns_launch_modal_page_effect() -> None:
         app = NoteProductionDashboardApp(event=MagicMock(), secrets={})
         result = app.on_open()
 
-        # Verify LaunchModalEffect was constructed with correct args.
-        assert mock_launch_modal.mock_calls == [
-            call(
-                url="/plugin-io/api/note_production_dashboard/dashboard",
-                target="PAGE",
-            ),
-            call().apply(),
-        ]
+        # LaunchModalEffect must be invoked with PAGE target, the dashboard URL,
+        # and the cache-bust query param so deploys invalidate browser-cached HTML.
+        assert mock_launch_modal.call_count == 1
+        kwargs = mock_launch_modal.call_args.kwargs
+        assert kwargs["target"] == "PAGE"
+        assert kwargs["url"] == (
+            f"/plugin-io/api/note_production_dashboard/dashboard?v={_CACHE_BUST}"
+        )
+        mock_launch_modal.return_value.apply.assert_called_once_with()
 
-        # Verify result is the applied effect.
         assert result is mock_effect
