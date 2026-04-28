@@ -207,20 +207,6 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             f"week_start={week_start} window=[{start}, {end})"
         )
 
-        # DIAGNOSTIC: report state distribution of all notes whose DOS falls in
-        # the window, regardless of state. Helps identify notes that are present
-        # but excluded by the LKD/RLK filter. Remove once troubleshooting is done.
-        all_in_window = CurrentNoteStateEvent.objects.filter(
-            note__datetime_of_service__gte=start,
-            note__datetime_of_service__lt=end,
-        ).values_list("state", flat=True)
-        state_counts: dict[str, int] = {}
-        for s in all_in_window:
-            state_counts[s] = state_counts.get(s, 0) + 1
-        log.info(
-            f"[NoteProductionDashboardAPI] DIAG state distribution in window: {state_counts}"
-        )
-
         events = _fetch_locked_state_events(start, end)
 
         # Aggregate counts by provider.
@@ -293,22 +279,20 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             else:
                 rfv = "—"
 
+            dt = note.datetime_of_service
             rows.append({
                 "note_id": str(note.id),
                 "patient": patient_name,
-                "datetime_of_service": _format_dos(note.datetime_of_service),
+                "datetime_of_service": _format_dos(dt),
+                "sort_dt": dt.isoformat() if dt else "",
                 "cpt": cpts,
                 "note_type": note_type,
                 "rfv": rfv,
             })
 
-        # Sort by datetime_of_service descending (the formatted string is MM/DD HH:mm
-        # which sorts correctly within a single year; sort on the raw datetime instead).
-        rows_with_dt = []
-        for event, row in zip(events, rows):
-            rows_with_dt.append((event.note.datetime_of_service, row))
-        rows_with_dt.sort(key=lambda x: x[0], reverse=True)
-        rows = [r for _, r in rows_with_dt]
+        # Server-side default: datetime descending. The client may resort by
+        # patient or datetime in either direction without a refetch.
+        rows.sort(key=lambda r: r["sort_dt"], reverse=True)
 
         return [JSONResponse(rows, status_code=HTTPStatus.OK)]
 
@@ -495,6 +479,17 @@ def _render_dashboard_html(period: str, week_start: str, cache_bust: str) -> str
       border-bottom: 1px solid #edf0f5;
       vertical-align: top;
     }}
+    th.sortable {{
+      cursor: pointer;
+      user-select: none;
+    }}
+    th.sortable:hover {{ background: #eef2f7; }}
+    th .sort-arrow {{
+      display: inline-block;
+      margin-left: 4px;
+      color: #1a6fa8;
+      font-size: 10px;
+    }}
     .spinner {{
       padding: 24px 16px;
       color: #8a9ab5;
@@ -546,6 +541,9 @@ def _render_dashboard_html(period: str, week_start: str, cache_bust: str) -> str
   let weekStart = localStorage.getItem("npd_week_start") || "{week_start}";
   let selectedProviderId = null;
   let selectedProviderName = "";
+  let currentNotes = [];
+  let sortKey = "datetime";  // "datetime" | "patient"
+  let sortDir = "desc";       // "asc" | "desc"
 
   // ── boot ───────────────────────────────────────────────────────────────────
   function init() {{
@@ -667,42 +665,97 @@ def _render_dashboard_html(period: str, week_start: str, cache_bust: str) -> str
     fetch(url, {{ credentials: "same-origin" }})
       .then(function (r) {{ return r.json(); }})
       .then(function (notes) {{
-        if (!notes || notes.length === 0) {{
-          wrapper.innerHTML = '<p class="state-msg">No locked notes in this period.</p>';
-          return;
-        }}
-        const table = document.createElement("table");
-        const thead = document.createElement("thead");
-        thead.innerHTML =
-          "<tr><th>Patient</th><th>Date / Time</th><th>CPT</th>" +
-          "<th>Type</th><th>Reason for Visit</th></tr>";
-        table.appendChild(thead);
-
-        const tbody = document.createElement("tbody");
-        notes.forEach(function (note) {{
-          const tr = document.createElement("tr");
-
-          function cell(text) {{
-            const td = document.createElement("td");
-            td.textContent = text || "";
-            return td;
-          }}
-
-          tr.appendChild(cell(note.patient));
-          tr.appendChild(cell(note.datetime_of_service));
-          tr.appendChild(cell(note.cpt));
-          tr.appendChild(cell(note.note_type));
-          tr.appendChild(cell(note.rfv));
-          tbody.appendChild(tr);
-        }});
-        table.appendChild(tbody);
-        wrapper.innerHTML = "";
-        wrapper.appendChild(table);
+        currentNotes = Array.isArray(notes) ? notes : [];
+        renderNotesTable();
       }})
       .catch(function (err) {{
+        currentNotes = [];
         wrapper.innerHTML = '<p class="state-msg">Error loading notes.</p>';
         console.error("notes fetch error", err);
       }});
+  }}
+
+  // ── sort + render the notes table ──────────────────────────────────────────
+  function sortedNotes() {{
+    const sign = sortDir === "asc" ? 1 : -1;
+    return currentNotes.slice().sort(function (a, b) {{
+      let cmp;
+      if (sortKey === "patient") {{
+        cmp = (a.patient || "").localeCompare(b.patient || "");
+      }} else {{
+        // datetime: ISO strings sort lexicographically across years.
+        cmp = (a.sort_dt || "").localeCompare(b.sort_dt || "");
+      }}
+      return cmp * sign;
+    }});
+  }}
+
+  function arrowFor(key) {{
+    if (key !== sortKey) return "";
+    return sortDir === "asc" ? "▲" : "▼";
+  }}
+
+  function renderNotesTable() {{
+    const wrapper = document.getElementById("notes-table-wrapper");
+    if (!currentNotes.length) {{
+      wrapper.innerHTML = '<p class="state-msg">No locked notes in this period.</p>';
+      return;
+    }}
+
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+
+    function makeHeader(label, sortable, sortableKey) {{
+      const th = document.createElement("th");
+      th.textContent = label;
+      if (sortable) {{
+        th.className = "sortable";
+        const arrow = document.createElement("span");
+        arrow.className = "sort-arrow";
+        arrow.textContent = arrowFor(sortableKey);
+        th.appendChild(arrow);
+        th.addEventListener("click", function () {{
+          if (sortKey === sortableKey) {{
+            sortDir = sortDir === "asc" ? "desc" : "asc";
+          }} else {{
+            sortKey = sortableKey;
+            sortDir = sortableKey === "patient" ? "asc" : "desc";
+          }}
+          renderNotesTable();
+        }});
+      }}
+      return th;
+    }}
+
+    headerRow.appendChild(makeHeader("Patient", true, "patient"));
+    headerRow.appendChild(makeHeader("Date / Time", true, "datetime"));
+    headerRow.appendChild(makeHeader("CPT", false));
+    headerRow.appendChild(makeHeader("Type", false));
+    headerRow.appendChild(makeHeader("Reason for Visit", false));
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    sortedNotes().forEach(function (note) {{
+      const tr = document.createElement("tr");
+
+      function cell(text) {{
+        const td = document.createElement("td");
+        td.textContent = text || "";
+        return td;
+      }}
+
+      tr.appendChild(cell(note.patient));
+      tr.appendChild(cell(note.datetime_of_service));
+      tr.appendChild(cell(note.cpt));
+      tr.appendChild(cell(note.note_type));
+      tr.appendChild(cell(note.rfv));
+      tbody.appendChild(tr);
+    }});
+    table.appendChild(tbody);
+    wrapper.innerHTML = "";
+    wrapper.appendChild(table);
   }}
 
   // ── start ──────────────────────────────────────────────────────────────────
