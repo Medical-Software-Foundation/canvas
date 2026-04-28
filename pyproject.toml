@@ -6,6 +6,7 @@ name = "note-production-dashboard"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
+    "arrow>=1.3.0",
     "django>=4.2.0",
     "canvas[test-utils]",
 ]
@@ -19,5 +20,20 @@ dev = [
     "pytest-mock>=3.12.0",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+DJANGO_SETTINGS_MODULE = "canvas_sdk.tests.settings"
+addopts = "-v"
+
 [tool.coverage.run]
-omit = ["tests/*"]
+source = ["note_production_dashboard"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
