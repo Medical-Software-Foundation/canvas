@@ -20,6 +20,7 @@ from note_production_dashboard.handlers.dashboard_api import (
     NoteProductionDashboardAPI,
     SimpleAPI,
     StaffSessionAuthMixin,
+    _build_provider_counts_result,
     _format_dos,
     _patient_display_name,
     _provider_display_name,
@@ -387,63 +388,49 @@ class TestProvidersEndpoint:
             dt.datetime(2025, 4, 28, 0, 0, tzinfo=dt.timezone.utc),
         )
 
-    def test_returns_providers_sorted_by_count_desc(self) -> None:
-        """Providers are sorted by count desc, then name asc."""
-        prov_a = make_staff("p-a", "Alice", "Adams")
-        prov_b = make_staff("p-b", "Bob", "Baker")
-
-        dos = dt.datetime(2025, 4, 27, 10, 0, tzinfo=dt.timezone.utc)
-        events = [
-            make_state_event(make_note("n1", provider_id="p-b", datetime_of_service=dos)),
-            make_state_event(make_note("n2", provider_id="p-b", datetime_of_service=dos)),
-            make_state_event(make_note("n3", provider_id="p-b", datetime_of_service=dos)),
-            make_state_event(make_note("n4", provider_id="p-a", datetime_of_service=dos)),
-        ]
-        for ev in events[:3]:
-            ev.note.provider = prov_b
-        events[3].note.provider = prov_a
-
+    def test_calls_helper_with_validated_window_and_returns_result(self) -> None:
+        """The endpoint passes the validated window to _fetch_provider_counts and serializes its return value."""
         api = self._make_api({"period": "daily", "week_start": "sunday"})
         fw = self._fixed_window()
+        helper_result = [
+            {"provider_id": "p-b", "name": "Bob Baker", "count": 3},
+            {"provider_id": "p-a", "name": "Alice Adams", "count": 1},
+        ]
 
         with patch(
             "note_production_dashboard.handlers.dashboard_api._window"
         ) as mock_window, patch(
-            "note_production_dashboard.handlers.dashboard_api._fetch_locked_state_events"
-        ) as mock_fetch:
+            "note_production_dashboard.handlers.dashboard_api._fetch_provider_counts"
+        ) as mock_counts:
             mock_window.return_value = fw
-            mock_fetch.return_value = events
+            mock_counts.return_value = helper_result
 
             responses = api.providers_list()
 
             assert mock_window.mock_calls == [call("daily", "sunday")]
-            assert mock_fetch.mock_calls == [call(fw[0], fw[1])]
+            assert mock_counts.mock_calls == [call(fw[0], fw[1])]
 
         import json
 
-        rows = json.loads(responses[0].content)
-        assert rows[0]["provider_id"] == "p-b"
-        assert rows[0]["count"] == 3
-        assert rows[1]["provider_id"] == "p-a"
-        assert rows[1]["count"] == 1
+        assert json.loads(responses[0].content) == helper_result
 
     def test_empty_period_returns_empty_list(self) -> None:
-        """When no locked notes exist, the endpoint returns []."""
+        """When the helper returns [], the endpoint returns []."""
         api = self._make_api({"period": "daily", "week_start": "sunday"})
         fw = self._fixed_window()
 
         with patch(
             "note_production_dashboard.handlers.dashboard_api._window"
         ) as mock_window, patch(
-            "note_production_dashboard.handlers.dashboard_api._fetch_locked_state_events"
-        ) as mock_fetch:
+            "note_production_dashboard.handlers.dashboard_api._fetch_provider_counts"
+        ) as mock_counts:
             mock_window.return_value = fw
-            mock_fetch.return_value = []
+            mock_counts.return_value = []
 
             responses = api.providers_list()
 
             assert mock_window.mock_calls == [call("daily", "sunday")]
-            assert mock_fetch.mock_calls == [call(fw[0], fw[1])]
+            assert mock_counts.mock_calls == [call(fw[0], fw[1])]
 
         import json
 
@@ -457,16 +444,15 @@ class TestProvidersEndpoint:
         with patch(
             "note_production_dashboard.handlers.dashboard_api._window"
         ) as mock_window, patch(
-            "note_production_dashboard.handlers.dashboard_api._fetch_locked_state_events"
-        ) as mock_fetch:
+            "note_production_dashboard.handlers.dashboard_api._fetch_provider_counts"
+        ) as mock_counts:
             mock_window.return_value = fw
-            mock_fetch.return_value = []
+            mock_counts.return_value = []
 
             api.providers_list()
 
-            # _window must be called with "daily", not "yearly"
             assert mock_window.mock_calls == [call("daily", "sunday")]
-            assert mock_fetch.mock_calls == [call(fw[0], fw[1])]
+            assert mock_counts.mock_calls == [call(fw[0], fw[1])]
 
     def test_invalid_week_start_coerced_to_sunday(self) -> None:
         """Unknown week_start param is rejected; sunday is used instead."""
@@ -476,107 +462,57 @@ class TestProvidersEndpoint:
         with patch(
             "note_production_dashboard.handlers.dashboard_api._window"
         ) as mock_window, patch(
-            "note_production_dashboard.handlers.dashboard_api._fetch_locked_state_events"
-        ) as mock_fetch:
+            "note_production_dashboard.handlers.dashboard_api._fetch_provider_counts"
+        ) as mock_counts:
             mock_window.return_value = fw
-            mock_fetch.return_value = []
+            mock_counts.return_value = []
 
             api.providers_list()
 
             assert mock_window.mock_calls == [call("weekly", "sunday")]
-            assert mock_fetch.mock_calls == [call(fw[0], fw[1])]
+            assert mock_counts.mock_calls == [call(fw[0], fw[1])]
 
-    def test_notes_without_provider_are_skipped(self) -> None:
-        """Notes whose provider is None do not appear in provider counts."""
-        dos = dt.datetime(2025, 4, 27, 10, 0, tzinfo=dt.timezone.utc)
-        note = make_note("n1", provider_id="p-1", datetime_of_service=dos)
-        note.provider = None
-        events = [make_state_event(note)]
 
-        api = self._make_api({"period": "daily", "week_start": "sunday"})
-        fw = self._fixed_window()
+class TestBuildProviderCountsResult:
+    """Tests for the pure result-building helper used by _fetch_provider_counts."""
 
-        with patch(
-            "note_production_dashboard.handlers.dashboard_api._window"
-        ) as mock_window, patch(
-            "note_production_dashboard.handlers.dashboard_api._fetch_locked_state_events"
-        ) as mock_fetch:
-            mock_window.return_value = fw
-            mock_fetch.return_value = events
+    def test_empty_inputs_return_empty_list(self) -> None:
+        assert _build_provider_counts_result({}, {}) == []
 
-            responses = api.providers_list()
+    def test_sort_by_count_desc(self) -> None:
+        counts = {"p-b": 3, "p-a": 1}
+        staff = {
+            "p-a": make_staff("p-a", "Alice", "Adams"),
+            "p-b": make_staff("p-b", "Bob", "Baker"),
+        }
+        result = _build_provider_counts_result(counts, staff)
+        assert [r["provider_id"] for r in result] == ["p-b", "p-a"]
+        assert [r["count"] for r in result] == [3, 1]
 
-            assert mock_window.mock_calls == [call("daily", "sunday")]
-            assert mock_fetch.mock_calls == [call(fw[0], fw[1])]
+    def test_sort_tie_breaks_by_name_asc(self) -> None:
+        counts = {"p-z": 2, "p-a": 2}
+        staff = {
+            "p-z": make_staff("p-z", "Zara", "Zoller"),
+            "p-a": make_staff("p-a", "Aaron", "Able"),
+        }
+        result = _build_provider_counts_result(counts, staff)
+        assert [r["name"] for r in result] == ["Aaron Able", "Zara Zoller"]
 
-        import json
+    def test_credentialed_name_used_when_present(self) -> None:
+        counts = {"p-1": 5}
+        staff = {"p-1": make_staff("p-1", "Jane", "Smith", credentialed_name="Jane Smith, MD")}
+        result = _build_provider_counts_result(counts, staff)
+        assert result[0]["name"] == "Jane Smith, MD"
 
-        assert json.loads(responses[0].content) == []
-
-    def test_sorting_tie_breaks_by_name_alphabetically(self) -> None:
-        """Providers with equal counts are sorted by name asc."""
-        prov_z = make_staff("p-z", "Zara", "Zoller")
-        prov_a = make_staff("p-a", "Aaron", "Able")
-
-        dos = dt.datetime(2025, 4, 27, 10, 0, tzinfo=dt.timezone.utc)
-        events = [
-            make_state_event(make_note("n1", provider_id="p-z", datetime_of_service=dos)),
-            make_state_event(make_note("n2", provider_id="p-a", datetime_of_service=dos)),
-        ]
-        events[0].note.provider = prov_z
-        events[1].note.provider = prov_a
-
-        api = self._make_api({"period": "daily", "week_start": "sunday"})
-        fw = self._fixed_window()
-
-        with patch(
-            "note_production_dashboard.handlers.dashboard_api._window"
-        ) as mock_window, patch(
-            "note_production_dashboard.handlers.dashboard_api._fetch_locked_state_events"
-        ) as mock_fetch:
-            mock_window.return_value = fw
-            mock_fetch.return_value = events
-
-            responses = api.providers_list()
-
-            assert mock_window.mock_calls == [call("daily", "sunday")]
-            assert mock_fetch.mock_calls == [call(fw[0], fw[1])]
-
-        import json
-
-        rows = json.loads(responses[0].content)
-        assert rows[0]["name"] == "Aaron Able"
-        assert rows[1]["name"] == "Zara Zoller"
-
-    def test_provider_name_includes_credentials(self) -> None:
-        """Provider name includes credentials suffix when credentialed_name differs."""
-        prov = make_staff("p-1", "Jane", "Smith", credentialed_name="Jane Smith, MD")
-
-        dos = dt.datetime(2025, 4, 27, 10, 0, tzinfo=dt.timezone.utc)
-        note = make_note("n1", provider_id="p-1", datetime_of_service=dos)
-        note.provider = prov
-        events = [make_state_event(note)]
-
-        api = self._make_api({"period": "daily", "week_start": "sunday"})
-        fw = self._fixed_window()
-
-        with patch(
-            "note_production_dashboard.handlers.dashboard_api._window"
-        ) as mock_window, patch(
-            "note_production_dashboard.handlers.dashboard_api._fetch_locked_state_events"
-        ) as mock_fetch:
-            mock_window.return_value = fw
-            mock_fetch.return_value = events
-
-            responses = api.providers_list()
-
-            assert mock_window.mock_calls == [call("daily", "sunday")]
-            assert mock_fetch.mock_calls == [call(fw[0], fw[1])]
-
-        import json
-
-        rows = json.loads(responses[0].content)
-        assert rows[0]["name"] == "Jane Smith, MD"
+    def test_missing_staff_record_yields_empty_name(self) -> None:
+        """If a provider_id from the count query has no matching Staff row,
+        the result row still appears with an empty name (defensive — should
+        be rare since the count query already filters provider__isnull=False).
+        """
+        counts = {"p-orphan": 4}
+        staff: dict[str, object] = {}
+        result = _build_provider_counts_result(counts, staff)
+        assert result == [{"provider_id": "p-orphan", "name": "", "count": 4}]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

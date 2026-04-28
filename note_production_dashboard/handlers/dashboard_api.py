@@ -17,7 +17,8 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.v1.data.billing import BillingLineItem, BillingLineItemStatus
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
-from django.db.models import Prefetch
+from canvas_sdk.v1.data.staff import Staff
+from django.db.models import Count, Prefetch
 from logger import log
 
 
@@ -187,6 +188,56 @@ def _fetch_locked_state_events(start: datetime, end: datetime, provider_id: str 
     return qs
 
 
+def _build_provider_counts_result(
+    counts_by_provider_id: dict[str, int],
+    staff_by_id: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Combine aggregated counts with Staff records into the response shape.
+
+    Pure function — extracted so the sort/tie-break/credentialed-name behavior
+    can be unit-tested without mocking the ORM.
+    """
+    result: list[dict[str, Any]] = []
+    for pid, count in counts_by_provider_id.items():
+        staff = staff_by_id.get(pid)
+        name = _provider_display_name(staff) if staff is not None else ""
+        result.append({"provider_id": pid, "name": name, "count": count})
+    result.sort(key=lambda x: (-x["count"], x["name"]))
+    return result
+
+
+def _fetch_provider_counts(start: datetime, end: datetime) -> list[dict[str, Any]]:
+    """Return [{provider_id, name, count}, ...] for locked notes in [start, end).
+
+    Uses a SQL GROUP BY to count notes per provider, then a single follow-up
+    query to load the Staff records so credentialed names can be resolved
+    (credentialed_name is a Python @cached_property and cannot be pulled via
+    .values()). Two queries total, regardless of note count.
+    """
+    aggregated = (
+        CurrentNoteStateEvent.objects.filter(
+            state__in=_LOCKED_STATES,
+            note__datetime_of_service__gte=start,
+            note__datetime_of_service__lt=end,
+            note__provider__isnull=False,
+        )
+        .values("note__provider_id")
+        .annotate(count=Count("id"))
+    )
+
+    counts_by_provider_id: dict[str, int] = {}
+    for row in aggregated:
+        counts_by_provider_id[str(row["note__provider_id"])] = row["count"]
+
+    if not counts_by_provider_id:
+        return []
+
+    staff_qs = Staff.objects.filter(id__in=list(counts_by_provider_id.keys())).prefetch_related("roles")
+    staff_by_id = {str(s.id): s for s in staff_qs}
+
+    return _build_provider_counts_result(counts_by_provider_id, staff_by_id)
+
+
 # ─── SimpleAPI ────────────────────────────────────────────────────────────────
 
 
@@ -222,28 +273,7 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             f"week_start={week_start} window=[{start}, {end})"
         )
 
-        events = _fetch_locked_state_events(start, end)
-
-        # Aggregate counts by provider.
-        provider_counts: dict[str, dict] = {}
-        for event in events:
-            provider = event.note.provider
-            if provider is None:
-                continue
-            pid = str(provider.id)
-            if pid not in provider_counts:
-                provider_counts[pid] = {
-                    "provider_id": pid,
-                    "name": _provider_display_name(provider),
-                    "count": 0,
-                }
-            entry = provider_counts[pid]
-            entry["count"] = entry["count"] + 1
-
-        result = sorted(
-            provider_counts.values(),
-            key=lambda x: (-x["count"], x["name"]),
-        )
+        result = _fetch_provider_counts(start, end)
         return [JSONResponse(result, status_code=HTTPStatus.OK)]
 
     @api.get("/providers/<provider_id>/notes")
