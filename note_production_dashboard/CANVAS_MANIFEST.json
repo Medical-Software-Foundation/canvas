@@ -1,13 +1,23 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.1.0",
     "name": "note_production_dashboard",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Provider-menu dashboard showing locked-note counts per provider for daily, weekly, and monthly windows with drill-in to individual note details.",
     "components": {
         "handlers": [
             {
-                "class": "note_production_dashboard.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "note_production_dashboard.handlers.dashboard_api:NoteProductionDashboardAPI",
+                "description": "SimpleAPI serving the dashboard HTML page and JSON data endpoints."
+            }
+        ],
+        "applications": [
+            {
+                "class": "note_production_dashboard.applications.dashboard_app:NoteProductionDashboardApp",
+                "name": "Note Production Dashboard",
+                "description": "Opens the note production dashboard as a full-page view from the provider menu.",
+                "scope": "provider_menu_item",
+                "icon": "assets/note-production-dashboard-icon.png",
+                "menu_position": "top"
             }
         ],
         "commands": [],
