@@ -200,7 +200,8 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
                     "name": _provider_display_name(provider),
                     "count": 0,
                 }
-            provider_counts[pid]["count"] += 1
+            entry = provider_counts[pid]
+            entry["count"] = entry["count"] + 1
 
         result = sorted(
             provider_counts.values(),
