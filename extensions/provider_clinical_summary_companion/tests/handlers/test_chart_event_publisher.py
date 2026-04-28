@@ -104,3 +104,15 @@ class TestCompute:
 
         assert len(effects) == 1
         assert mock_lookup.call_args[0][1] == "ctx-target"
+
+    def test_target_dataclass_id_is_extracted(self) -> None:
+        # In production self.event.target is a TargetType dataclass with .id/.type,
+        # not a string. Verify we extract .id rather than stringifying the whole object.
+        target_obj = SimpleNamespace(id=TARGET_UUID, type=object)
+        handler = _make("INTERVIEW_CREATED", target=target_obj)
+        with patch.object(publisher.EventType, "Name", return_value="INTERVIEW_CREATED"), \
+             patch.object(publisher, "_patient_id_from_target", return_value=PATIENT_UUID) as mock_lookup:
+            effects = handler.compute()
+
+        assert len(effects) == 1
+        assert mock_lookup.call_args[0][1] == TARGET_UUID
