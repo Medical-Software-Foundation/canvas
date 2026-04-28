@@ -197,6 +197,20 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             f"week_start={week_start} window=[{start}, {end})"
         )
 
+        # DIAGNOSTIC: report state distribution of all notes whose DOS falls in
+        # the window, regardless of state. Helps identify notes that are present
+        # but excluded by the LKD/RLK filter. Remove once troubleshooting is done.
+        all_in_window = CurrentNoteStateEvent.objects.filter(
+            note__datetime_of_service__gte=start,
+            note__datetime_of_service__lt=end,
+        ).values_list("state", flat=True)
+        state_counts: dict[str, int] = {}
+        for s in all_in_window:
+            state_counts[s] = state_counts.get(s, 0) + 1
+        log.info(
+            f"[NoteProductionDashboardAPI] DIAG state distribution in window: {state_counts}"
+        )
+
         events = _fetch_locked_state_events(start, end)
 
         # Aggregate counts by provider.
