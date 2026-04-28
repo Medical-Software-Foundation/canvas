@@ -13,12 +13,26 @@ import arrow
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
-from canvas_sdk.v1.data.billing import BillingLineItemStatus
+from canvas_sdk.v1.data.billing import BillingLineItem, BillingLineItemStatus
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
-from django.conf import settings
 from django.db.models import Prefetch
 from logger import log
+
+
+class _SettingsShim:
+    """Stand-in for django.conf.settings — the plugin sandbox forbids that import.
+
+    Tests monkeypatch the module-level ``settings`` name to inject a timezone.
+    Production runs always see ``TIME_ZONE = "UTC"``. If per-instance localized
+    times are needed later, swap this for a plugin secret read inside the
+    handler (the helpers below already accept tz only via this shim).
+    """
+
+    TIME_ZONE = "UTC"
+
+
+settings = _SettingsShim()
 
 # Cache-bust token: generated once at module load so every deploy gets a fresh value.
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
@@ -27,7 +41,7 @@ _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 def _instance_tz() -> str:
-    """Return the Django TIME_ZONE setting (falls back to UTC)."""
+    """Return the configured TIME_ZONE (falls back to UTC)."""
     return getattr(settings, "TIME_ZONE", "UTC")
 
 
@@ -131,10 +145,7 @@ def _fetch_locked_state_events(start: datetime, end: datetime, provider_id: str 
     ).prefetch_related(
         Prefetch(
             "note__billing_line_items",
-            queryset=__import__(
-                "canvas_sdk.v1.data.billing",
-                fromlist=["BillingLineItem"],
-            ).BillingLineItem.objects.filter(status=BillingLineItemStatus.ACTIVE),
+            queryset=BillingLineItem.objects.filter(status=BillingLineItemStatus.ACTIVE),
             to_attr="active_billing_items",
         ),
         Prefetch(
