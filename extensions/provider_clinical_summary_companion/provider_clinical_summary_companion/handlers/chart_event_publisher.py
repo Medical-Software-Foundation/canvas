@@ -59,10 +59,11 @@ class ChartEventPublisher(BaseHandler):
             return []
         model, sections = mapping
 
-        target_id = getattr(self.event, "target", None)
-        if target_id is None:
+        target = getattr(self.event, "target", None)
+        target_id = getattr(target, "id", None) if not isinstance(target, str) else target
+        if not target_id:
             target_id = self.event.context.get("target") if hasattr(self.event, "context") else None
-        patient_id = _patient_id_from_target(model, str(target_id) if target_id else "")
+        patient_id = _patient_id_from_target(model, target_id or "")
         if not patient_id:
             return []
 
