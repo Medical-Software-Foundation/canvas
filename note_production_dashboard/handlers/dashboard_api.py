@@ -214,6 +214,10 @@ def _fetch_provider_counts(start: datetime, end: datetime) -> list[dict[str, Any
     (credentialed_name is a Python @cached_property and cannot be pulled via
     .values()). Two queries total, regardless of note count.
     """
+    # Note: Staff.id is a CharField (db_column="key"); the FK column on Note
+    # (provider_id) actually references Staff.dbid (the BigAutoField PK), so
+    # we must traverse the relation with note__provider__id to retrieve the
+    # human-facing string id used everywhere else in the dashboard.
     aggregated = (
         CurrentNoteStateEvent.objects.filter(
             state__in=_LOCKED_STATES,
@@ -221,13 +225,13 @@ def _fetch_provider_counts(start: datetime, end: datetime) -> list[dict[str, Any
             note__datetime_of_service__lt=end,
             note__provider__isnull=False,
         )
-        .values("note__provider_id")
+        .values("note__provider__id")
         .annotate(count=Count("id"))
     )
 
     counts_by_provider_id: dict[str, int] = {}
     for row in aggregated:
-        counts_by_provider_id[str(row["note__provider_id"])] = row["count"]
+        counts_by_provider_id[str(row["note__provider__id"])] = row["count"]
 
     if not counts_by_provider_id:
         return []
