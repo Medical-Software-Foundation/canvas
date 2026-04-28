@@ -8,6 +8,7 @@ Endpoints:
 
 from datetime import datetime, timezone
 from http import HTTPStatus
+from typing import Any
 
 import arrow
 from canvas_sdk.effects import Effect
@@ -83,7 +84,7 @@ def _format_dos(dt: datetime) -> str:
     return local.format("MM/DD HH:mm")
 
 
-def _provider_display_name(staff: object) -> str:
+def _provider_display_name(staff: Any) -> str:
     """Return 'First Last' or 'First Last, Credentials' for a Staff record."""
     name = f"{getattr(staff, 'first_name', '')} {getattr(staff, 'last_name', '')}".strip()
     # Staff.credentialed_name is a property that appends credentials if set;
@@ -94,7 +95,7 @@ def _provider_display_name(staff: object) -> str:
     return name
 
 
-def _rfv_text(note: object) -> str:
+def _rfv_text(note: Any) -> str:
     """Return the reason-for-visit text for the first RFV command on a note.
 
     Priority:
@@ -112,9 +113,9 @@ def _rfv_text(note: object) -> str:
 
     # Sort by dbid ascending to get the earliest-added command.
     rfv_commands.sort(key=lambda c: getattr(c, "dbid", 0))
-    data: dict[str, object] = getattr(rfv_commands[0], "data", None) or {}
+    data: dict[str, Any] = getattr(rfv_commands[0], "data", None) or {}
 
-    coding: dict[str, object] = (data.get("coding") or {})  # type: ignore[assignment]
+    coding: dict[str, Any] = (data.get("coding") or {})
     # Structured RFV has a 'text' key inside coding (display/text field).
     structured_text = str(coding.get("display") or coding.get("text") or "")
     if structured_text:

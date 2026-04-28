@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.139.0",
-    "plugin_version": "0.1.2",
+    "plugin_version": "0.1.3",
     "name": "note_production_dashboard",
     "description": "Provider-menu dashboard showing locked-note counts per provider for daily, weekly, and monthly windows with drill-in to individual note details.",
     "components": {
