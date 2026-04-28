@@ -128,6 +128,16 @@ def _rfv_text(note: Any) -> str:
     return "—"
 
 
+_LOCKED_STATES = [NoteStates.LOCKED, NoteStates.RELOCKED, NoteStates.SIGNED]
+"""States that count as 'locked' for the dashboard.
+
+The enum members above hold the wire values "LKD", "RLK", "SGN".
+Empirically, locking a note in Canvas auto-progresses LKD → SGN, so the
+``CurrentNoteStateEvent.state`` for a locked note typically reads SGN, not LKD.
+RELOCKED covers the relocked case.
+"""
+
+
 def _fetch_locked_state_events(start: datetime, end: datetime, provider_id: str | None = None):  # type: ignore[no-untyped-def]
     """Return a queryset of CurrentNoteStateEvent for locked notes in [start, end).
 
@@ -136,7 +146,7 @@ def _fetch_locked_state_events(start: datetime, end: datetime, provider_id: str 
       - prefetch_related: note__billing_line_items (filtered to ACTIVE), note__commands
     """
     qs = CurrentNoteStateEvent.objects.filter(
-        state__in=[NoteStates.LKD, NoteStates.RLK],
+        state__in=_LOCKED_STATES,
         note__datetime_of_service__gte=start,
         note__datetime_of_service__lt=end,
     ).select_related(
