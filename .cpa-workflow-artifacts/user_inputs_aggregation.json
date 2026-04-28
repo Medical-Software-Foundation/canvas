@@ -1,0 +1,77 @@
+{
+  "inputs": [
+    {
+      "input": "/cpa:new-plugin",
+      "type": "slash_command"
+    },
+    {
+      "input": "Continue implementation",
+      "type": "question_answer",
+      "question": "What would you like to do with this plugin?"
+    },
+    {
+      "input": "/cpa:deploy",
+      "type": "slash_command"
+    },
+    {
+      "input": "ive locked a note for a patient, but it is not showing up in the note production dashboard. can we troubleshoot this?",
+      "type": "free_text"
+    },
+    {
+      "input": "1. the date-time and timezone of the note is: 4/28/26 at 11:23 AM PDT. 2. it was first locked, then signed, with its most recent state being 'signed' rather than 'locked'.",
+      "type": "free_text"
+    },
+    {
+      "input": "the fix appears to have worked. i can now see note counts. let's add the ability to sort the notes in ascending/descending order using the patient's name, or the date/time",
+      "type": "free_text"
+    },
+    {
+      "input": "let's also display patient names in a \"Last Name, First Name\" format",
+      "type": "free_text"
+    },
+    {
+      "input": "it is functioning as intended. however, i can not figure out how to add a reason for visit to a note. where do i put the reason for visit?",
+      "type": "free_text"
+    },
+    {
+      "input": "no need to make that change. the dashboard seems perfectly functional now",
+      "type": "free_text"
+    },
+    {
+      "input": "/cpa:coverage",
+      "type": "slash_command"
+    },
+    {
+      "input": "what is meant by 'uncovered lines'",
+      "type": "free_text"
+    },
+    {
+      "input": "what is uat",
+      "type": "free_text"
+    },
+    {
+      "input": "/cpa:security-review",
+      "type": "slash_command"
+    },
+    {
+      "input": "/cpa:database-performance-review",
+      "type": "slash_command"
+    },
+    {
+      "input": "yes apply the SQL GROUP BY approach",
+      "type": "free_text"
+    },
+    {
+      "input": "i am able to view note counts, but i no longer see providers or notes.",
+      "type": "free_text"
+    },
+    {
+      "input": "you can check the logs. everything looks good again.",
+      "type": "free_text"
+    },
+    {
+      "input": "/cpa:wrap-up",
+      "type": "slash_command"
+    }
+  ]
+}
