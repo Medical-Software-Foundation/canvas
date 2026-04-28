@@ -21,6 +21,7 @@ from note_production_dashboard.handlers.dashboard_api import (
     SimpleAPI,
     StaffSessionAuthMixin,
     _format_dos,
+    _patient_display_name,
     _provider_display_name,
     _render_dashboard_html,
     _rfv_text,
@@ -248,6 +249,31 @@ class TestProviderDisplayName:
         """Falls back gracefully when credentialed_name attribute is absent."""
         staff = SimpleNamespace(first_name="Bob", last_name="Jones")
         assert _provider_display_name(staff) == "Bob Jones"
+
+
+class TestPatientDisplayName:
+    def test_last_first_format(self) -> None:
+        patient = SimpleNamespace(first_name="John", last_name="Doe")
+        assert _patient_display_name(patient) == "Doe, John"
+
+    def test_only_last_name(self) -> None:
+        patient = SimpleNamespace(first_name="", last_name="Doe")
+        assert _patient_display_name(patient) == "Doe"
+
+    def test_only_first_name(self) -> None:
+        patient = SimpleNamespace(first_name="John", last_name="")
+        assert _patient_display_name(patient) == "John"
+
+    def test_neither_name(self) -> None:
+        patient = SimpleNamespace(first_name="", last_name="")
+        assert _patient_display_name(patient) == ""
+
+    def test_none_patient(self) -> None:
+        assert _patient_display_name(None) == ""
+
+    def test_strips_whitespace(self) -> None:
+        patient = SimpleNamespace(first_name="  John  ", last_name="  Doe  ")
+        assert _patient_display_name(patient) == "Doe, John"
 
 
 class TestRfvText:
@@ -625,7 +651,7 @@ class TestProviderNotesEndpoint:
         rows = json.loads(responses[0].content)
         assert len(rows) == 1
         row = rows[0]
-        assert row["patient"] == "John Doe"
+        assert row["patient"] == "Doe, John"
         assert row["datetime_of_service"] == "04/27 09:30"
         assert row["cpt"] == "99213"
         assert row["note_type"] == "Office Visit"

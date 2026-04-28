@@ -84,6 +84,21 @@ def _format_dos(dt: datetime) -> str:
     return local.format("MM/DD HH:mm")
 
 
+def _patient_display_name(patient: Any) -> str:
+    """Format a Patient as 'Last, First'.
+
+    Falls back gracefully when only one name is set, and returns "" if the
+    patient is missing entirely.
+    """
+    if patient is None:
+        return ""
+    first = (getattr(patient, "first_name", "") or "").strip()
+    last = (getattr(patient, "last_name", "") or "").strip()
+    if last and first:
+        return f"{last}, {first}"
+    return last or first
+
+
 def _provider_display_name(staff: Any) -> str:
     """Return 'First Last' or 'First Last, Credentials' for a Staff record."""
     name = f"{getattr(staff, 'first_name', '')} {getattr(staff, 'last_name', '')}".strip()
@@ -250,11 +265,7 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         for event in events:
             note = event.note
             patient = note.patient
-            patient_name = (
-                f"{patient.first_name} {patient.last_name}".strip()
-                if patient
-                else ""
-            )
+            patient_name = _patient_display_name(patient)
 
             # CPT codes from prefetched active billing items.
             active_items = getattr(note, "active_billing_items", [])
