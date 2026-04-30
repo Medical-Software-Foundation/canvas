@@ -1,0 +1,36 @@
+{
+  "sdk_version": "0.141.0",
+  "plugin_version": "0.0.5",
+  "name": "alert_facility_fields",
+  "description": "Adds a required Alert facility Yes/No form field to the Medication Statement and Stop Medication commands. Persists the choice as command metadata under the key 'alert_facility' and blocks commit until a value is selected.",
+  "components": {
+    "protocols": [
+      {
+        "class": "alert_facility_fields.protocols.alert_facility_form:AlertFacilityFormHandler",
+        "description": "Adds the Alert facility form field to Medication Statement and Stop Medication commands in the chart UI and the note printout.",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      },
+      {
+        "class": "alert_facility_fields.protocols.alert_facility_form:AlertFacilityRequiredValidator",
+        "description": "Blocks commit of Medication Statement and Stop Medication commands until the Alert facility field is set.",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      }
+    ]
+  },
+  "secrets": [],
+  "tags": {},
+  "references": [
+    "https://docs.canvasmedical.com/sdk/command-metadata-create-form-effect/"
+  ],
+  "license": "",
+  "diagram": false,
+  "readme": "./README.md"
+}
