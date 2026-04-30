@@ -1,22 +1,23 @@
-# LOINC codes for averaged vital signs
-VITAL_SIGNS = {
-    "hr": {"code": "103205-1", "display": "Mean heart rate", "units": "{beats}/min"},
-    "resp": {"code": "103217-6", "display": "Mean respiratory rate", "units": "/min"},
-    "spo2": {"code": "103209-3", "display": "Mean oxygen saturation", "units": "%"},
-}
+# Treatment intervals for timed vitals capture.
+# Labels must match the Spravato charting app's DEFAULT_ROWS exactly
+# so that vitals saved from VitalStream prepopulate the edit form.
+TREATMENT_INTERVALS = ["Pre-administration", "40-min post", "Pre-discharge"]
 
-# Blood pressure panel with components
-BP_PANEL = {
-    "code": "96607-7",
-    "display": "Blood pressure panel mean systolic and mean diastolic",
-}
-BP_COMPONENTS = {
-    "sys": {"code": "96608-5", "display": "Systolic blood pressure mean", "units": "mm[Hg]"},
-    "dia": {"code": "96609-3", "display": "Diastolic blood pressure mean", "units": "mm[Hg]"},
-}
+# Standard LOINC codes for per-interval vital sign observations
+LOINC_HR = "8867-4"
+LOINC_BP_PANEL = "85354-9"
+LOINC_BP_SYS = "8480-6"
+LOINC_BP_DIA = "8462-4"
+LOINC_SPO2 = "2708-6"
+LOINC_RR = "9279-1"
+
+# Mean LOINC codes for summary (averaged) vital sign observations
+LOINC_HR_MEAN = "103205-1"
+LOINC_BP_PANEL_MEAN = "96607-7"
+LOINC_BP_SYS_MEAN = "96608-5"
+LOINC_BP_DIA_MEAN = "96609-3"
+LOINC_SPO2_MEAN = "103209-3"
+LOINC_RR_MEAN = "103217-6"
 
 # All LOINC codes for filtering observations
-ALL_VITAL_CODES = (
-    {info["code"] for info in VITAL_SIGNS.values()} |
-    {BP_PANEL["code"]}
-)
+ALL_VITAL_CODES = {LOINC_HR, LOINC_BP_PANEL, LOINC_SPO2, LOINC_RR}

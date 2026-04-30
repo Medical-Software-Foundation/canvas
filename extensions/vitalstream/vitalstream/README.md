@@ -7,7 +7,7 @@ This plugin provides an integration for the VitalStream device by Caretaker Medi
 
 - **Real-time Vital Signs Display**: Receives continuous vital sign measurements from VitalStream devices via WebSocket, displaying them in a live feed within the patient chart.
 
-- **User-Controlled Averaging**: When ready, the user selects the desired number of readings (1-50, default 10) and clicks "Save to Chart". The measurements are averaged into evenly-distributed time buckets across the session duration.
+- **Windowed Averaging at Increments**: When the user clicks "Save Summary to Chart", the plugin computes averages in a 1-minute window (30 seconds before and after) around each increment mark. The user chooses a 5 or 10 minute increment for the summary regardless of treatment type.
 
 - **Observation Recording**: Averaged measurements are saved to the patient's chart as Observations with appropriate LOINC codes for:
   - Mean heart rate (103205-1)
@@ -50,8 +50,9 @@ In the VitalStream app on the tablet:
 - Start a session on the caretaker tablet, click the camera icon to scan the code
   - Data starts flowing in and is displayed in real-time
   - Data is not persisted until the user clicks "Save to Chart"
-- When finished recording, select the desired number of readings (1-50) and click "Save to Chart"
-  - The raw measurements are averaged into the selected number of time buckets
+- Choose a summary increment (5 or 10 minutes)
+- When finished recording, click "Save Summary to Chart"
+  - For each increment mark (0, N, 2N, ... minutes from session start), readings in the 1-minute window around that mark (±30 seconds) are averaged
   - Averaged readings are saved as Observations
   - A command is inserted into the note summarizing the measurements
 
