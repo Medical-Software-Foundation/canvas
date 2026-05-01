@@ -31,7 +31,7 @@
     "https://docs.canvasmedical.com/sdk/command-metadata-create-form-effect/",
     "https://docs.canvasmedical.com/sdk/commands/"
   ],
-  "license": "",
+  "license": "MIT",
   "diagram": false,
   "readme": "../README.md"
 }
