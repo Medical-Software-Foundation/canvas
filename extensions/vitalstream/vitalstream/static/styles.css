@@ -158,8 +158,8 @@ details[open] summary {
   cursor: not-allowed;
 }
 
-/* Feed bucket groups */
-.feed-bucket {
+/* Live readings — single collapsible feed */
+#live-readings {
   margin: 6px 0;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -167,7 +167,7 @@ details[open] summary {
   background: #d2edff;
 }
 
-.feed-bucket summary {
+#live-readings > summary {
   cursor: pointer;
   padding: 6px 10px;
   background: #d2edff;
@@ -180,64 +180,84 @@ details[open] summary {
   list-style: none;
 }
 
-.feed-bucket summary::-webkit-details-marker {
+#live-readings > summary::-webkit-details-marker {
   display: none;
 }
 
-.feed-bucket summary::before {
+#live-readings > summary::before {
   content: '\25B6';
   font-size: 9px;
   transition: transform 0.15s;
 }
 
-.feed-bucket[open] summary::before {
+#live-readings[open] > summary::before {
   transform: rotate(90deg);
 }
 
-.bucket-label {
-  min-width: 70px;
+.live-readings-label {
+  min-width: 90px;
 }
 
-.bucket-count {
-  color: #888;
-  font-weight: 400;
-}
-
-.bucket-latest {
+.live-readings-count {
   color: #555;
   font-weight: 400;
   margin-left: auto;
   font-size: 11px;
 }
 
-.bucket-avg {
-  color: #555;
-  font-weight: 400;
-  margin-left: auto;
-  font-size: 11px;
+.live-readings-toolbar {
+  padding: 6px 10px;
+  background: #fff;
+  border-top: 1px solid #cde6f5;
 }
 
-.feed-bucket .timeseries-table {
+#live-readings-filter {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+#live-readings .table-scroll {
+  background: #fff;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+#live-readings-table {
   margin: 0;
 }
 
-/* Clickable feed rows — light blue base, darker on hover/select */
-#feed-buckets tbody tr {
+/* Clickable live readings rows — light blue base, darker on hover/select */
+#live-readings-table tbody tr {
   cursor: pointer;
   background: rgba(46, 187, 227, 0.06);
   color: #555;
 }
 
-#feed-buckets tbody tr:hover {
+#live-readings-table tbody tr:hover {
   background: rgba(46, 187, 227, 0.35);
 }
 
-#feed-buckets tbody tr.selected {
+#live-readings-table tbody tr.selected {
   background: #d2edff;
   color: #222;
   font-weight: 700;
   outline: 3px solid rgb(20, 140, 180);
   outline-offset: -3px;
+}
+
+/* Increment averages section */
+.averages-section {
+  margin: 0 0 12px;
+}
+
+.live-readings-heading {
+  margin: 12px 0 4px;
+  font-size: 15px;
+  color: #333;
 }
 
 /* Mode toggle — treatment dropdown */
@@ -251,7 +271,9 @@ details[open] summary {
 }
 
 .treatment-select-label,
-.increment-select-label {
+.increment-select-label,
+.treatment-time-label,
+#mode-toggle .wrist-select-label {
   font-size: 13px;
   font-weight: 600;
   color: #333;
@@ -260,8 +282,17 @@ details[open] summary {
   gap: 8px;
 }
 
+.treatment-times-row,
+.increment-wrist-row {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .treatment-select-label select,
-.increment-select-label select {
+.increment-select-label select,
+.treatment-time-label input[type="time"] {
   padding: 4px 8px;
   border: 1px solid #ccc;
   border-radius: 4px;

@@ -232,7 +232,12 @@ def _create_interval_observations(
     return effects
 
 
-def _build_summary_html_table(buckets: list[dict[str, str]], bp_placement: str = "left_wrist") -> str:
+def _build_summary_html_table(
+    buckets: list[dict[str, str]],
+    bp_placement: str = "left_wrist",
+    treatment_start: str = "",
+    treatment_end: str = "",
+) -> str:
     """Build an inline-styled HTML table for the summary CustomCommand."""
     cell = "padding:3px 5px;text-align:left;white-space:nowrap;"
     header = (
@@ -240,7 +245,8 @@ def _build_summary_html_table(buckets: list[dict[str, str]], bp_placement: str =
         'font-family:sans-serif;width:100%;">'
         "<thead>"
         f'<tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">'
-        f'<th style="{cell}">Period</th>'
+        f'<th style="{cell}">Phase</th>'
+        f'<th style="{cell}">Time</th>'
         f'<th style="{cell}"># Readings</th>'
         f'<th style="{cell}">HR (avg)</th>'
         f'<th style="{cell}">BP (avg)</th>'
@@ -252,7 +258,8 @@ def _build_summary_html_table(buckets: list[dict[str, str]], bp_placement: str =
 
     body_rows = ""
     for bucket in buckets:
-        label = html.escape(str(bucket.get("label", "")))
+        phase = html.escape(str(bucket.get("phase", "")))
+        time_val = html.escape(str(bucket.get("time", "")))
         count = html.escape(str(bucket.get("count", "")))
         hr = html.escape(str(bucket.get("hr", "")))
         bp_sys = html.escape(str(bucket.get("bp_sys", "")))
@@ -263,7 +270,8 @@ def _build_summary_html_table(buckets: list[dict[str, str]], bp_placement: str =
 
         body_rows += (
             '<tr style="border-bottom:1px solid #eee;">'
-            f'<td style="{cell}">{label}</td>'
+            f'<td style="{cell}">{phase}</td>'
+            f'<td style="{cell}">{time_val}</td>'
             f'<td style="{cell}">{count}</td>'
             f'<td style="{cell}">{hr}</td>'
             f'<td style="{cell}">{bp_display}</td>'
@@ -272,7 +280,24 @@ def _build_summary_html_table(buckets: list[dict[str, str]], bp_placement: str =
             "</tr>"
         )
 
-    raw_data = json.dumps({"buckets": buckets, "bp_placement": bp_placement})
+    if treatment_start or treatment_end:
+        ts = html.escape(treatment_start) if treatment_start else "&mdash;"
+        te = html.escape(treatment_end) if treatment_end else "&mdash;"
+        body_rows = (
+            '<tr style="border-bottom:1px solid #eee;background:#fafafa;">'
+            f'<td colspan="7" style="{cell};font-style:italic;color:#555;">'
+            f"Treatment window: {ts} &ndash; {te}"
+            "</td></tr>"
+        ) + body_rows
+
+    raw_data = json.dumps(
+        {
+            "buckets": buckets,
+            "bp_placement": bp_placement,
+            "treatment_start": treatment_start,
+            "treatment_end": treatment_end,
+        }
+    )
     escaped_data = (
         raw_data
         .replace("&", "&amp;")
@@ -628,7 +653,11 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
         patient_id = note.patient.id
 
         bp_placement = data.get("bp_placement", "left_wrist")
-        html_content = _build_summary_html_table(buckets, bp_placement)
+        treatment_start = data.get("treatment_start", "") or ""
+        treatment_end = data.get("treatment_end", "") or ""
+        html_content = _build_summary_html_table(
+            buckets, bp_placement, treatment_start, treatment_end
+        )
 
         custom_command = CustomCommand(
             schema_key="vitalstreamSummary",

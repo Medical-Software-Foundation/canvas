@@ -147,7 +147,7 @@ def test_build_summary_html_table_renders_buckets() -> None:
         }
     ]
     html = _build_summary_html_table(buckets)
-    assert "0 min" in html
+    assert "09:00" in html
     assert "120/80" in html
     payload = _extract_embedded_json(html)
     assert payload["buckets"] == buckets
@@ -179,9 +179,9 @@ def test_build_interval_html_table_escapes_html_in_cell_values() -> None:
 def test_build_summary_html_table_escapes_html_in_cell_values() -> None:
     buckets = [
         {
-            "label": "<b>bold</b>",
+            "label": "Discharge",
             "count": "5<script>x</script>",
-            "time": "09:00",
+            "time": "<b>09:00</b>",
             "hr": "72",
             "bp_sys": "120",
             "bp_dia": "80",
@@ -190,8 +190,8 @@ def test_build_summary_html_table_escapes_html_in_cell_values() -> None:
         }
     ]
     html = _build_summary_html_table(buckets)
-    assert "<b>bold</b>" not in html
-    assert "&lt;b&gt;bold&lt;/b&gt;" in html
+    assert "<b>09:00</b>" not in html
+    assert "&lt;b&gt;09:00&lt;/b&gt;" in html
     assert "<script>x</script>" not in html
 
 

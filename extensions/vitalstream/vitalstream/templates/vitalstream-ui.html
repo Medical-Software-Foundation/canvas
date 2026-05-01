@@ -45,13 +45,34 @@
                     <option value="other">Other</option>
                 </select>
             </label>
-            <label id="increment-size-label" class="increment-select-label">
-                Summary increment
-                <select id="increment-size">
-                    <option value="5">5 min</option>
-                    <option value="10" selected>10 min</option>
-                </select>
-            </label>
+            <div class="increment-wrist-row">
+                <label id="increment-size-label" class="increment-select-label">
+                    Summary increment
+                    <select id="increment-size">
+                        <option value="5">5 min</option>
+                        <option value="10" selected>10 min</option>
+                        <option value="15">15 min</option>
+                        <option value="30">30 min</option>
+                    </select>
+                </label>
+                <label class="wrist-select-label">
+                    Wrist
+                    <select id="wrist-placement">
+                        <option value="left_wrist">Left</option>
+                        <option value="right_wrist">Right</option>
+                    </select>
+                </label>
+            </div>
+            <div class="treatment-times-row">
+                <label class="treatment-time-label">
+                    Treatment start
+                    <input type="time" id="treatment-start" step="60" />
+                </label>
+                <label class="treatment-time-label">
+                    Treatment end
+                    <input type="time" id="treatment-end" step="60" />
+                </label>
+            </div>
         </div>
         <div id="interval-selection" {% if not is_spravato %}style="display:none"{% endif %}>
             <div class="interval-header">
@@ -59,13 +80,6 @@
                 <button id="save-intervals-btn" type="button" style="display:none">Save Intervals to Chart</button>
             </div>
             <div class="interval-body">
-            <label class="wrist-select-label">
-                Wrist
-                <select id="wrist-placement">
-                    <option value="left_wrist">Left</option>
-                    <option value="right_wrist">Right</option>
-                </select>
-            </label>
             <div class="table-scroll">
             <table class="timeseries-table compact" id="interval-table">
                 <thead>
@@ -98,10 +112,50 @@
         </div>
         <div id="session">
             <div class="session-header">
-                <h3>Live Readings</h3>
+                <h3>Averages by increment</h3>
                 <button id="save-summary-btn" type="button" style="display:none">Save Summary to Chart</button>
             </div>
-            <div id="feed-buckets"></div>
+            <div class="averages-section">
+                <div class="table-scroll">
+                    <table class="timeseries-table compact" id="averages-table">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th># Readings</th>
+                                <th>HR (avg)</th>
+                                <th>BP (avg)</th>
+                                <th>RR (avg)</th>
+                                <th>SpO2 (avg)</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <h3 class="live-readings-heading">Live Readings</h3>
+            <details id="live-readings" open>
+                <summary class="live-readings-summary">
+                    <span class="live-readings-label">All readings</span>
+                    <span id="live-readings-count" class="live-readings-count">0 readings</span>
+                </summary>
+                <div class="live-readings-toolbar">
+                    <input type="search" id="live-readings-filter" placeholder="Search by time (e.g. 14:30)" />
+                </div>
+                <div class="table-scroll">
+                    <table class="timeseries-table compact" id="live-readings-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>HR</th>
+                                <th>BP</th>
+                                <th>RR</th>
+                                <th>SpO2</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </details>
         </div>
     </body>
 </html>

@@ -11,10 +11,7 @@ var INTERVAL_ROW_IDS = {
   'Pre-discharge': '2',
 };
 
-// 10-minute bucket state: bucketKey -> { el, detailsEl, tbodyEl, readings[] }
-var buckets = {};
-
-// Raw reading log used to compute windowed averages at save time.
+// Raw reading log used to render the live table and compute averages.
 // Each entry: { elapsedMin, time, displayTime, hr, sys, dia, rr, spo2 }
 var allReadings = [];
 
@@ -47,6 +44,18 @@ window.addEventListener("load", () => {{
     mockBtn.addEventListener('click', () => {
       toggleMockVitals(window._caretaker.session_id, subdomain);
     });
+  }
+
+  // Live filter for the readings feed.
+  var filterInput = document.getElementById('live-readings-filter');
+  if (filterInput) {
+    filterInput.addEventListener('input', applyLiveFilter);
+  }
+
+  // Recompute the increment averages when the size dropdown changes.
+  var incrementSelect = document.getElementById('increment-size');
+  if (incrementSelect) {
+    incrementSelect.addEventListener('change', recomputeAverages);
   }
 
   // TODO: convert hyphens in UUID to underscores
@@ -99,93 +108,10 @@ function toHHMM(date) {
   return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
 }
 
-function getBucketStart(elapsedMin) {
-  return Math.floor(elapsedMin / 10) * 10;
-}
-
-function getBucketKey(elapsedMin) {
-  var start = getBucketStart(elapsedMin);
-  return start + '-' + (start + 10);
-}
-
-function ensureBucket(bucketKey) {
-  if (buckets[bucketKey]) return buckets[bucketKey];
-
-  var container = document.getElementById('feed-buckets');
-  var details = document.createElement('details');
-  details.className = 'feed-bucket';
-  var start = parseInt(bucketKey.split('-')[0], 10);
-  details.dataset.start = start;
-  // Auto-expand buckets spanning the 40-min mark
-  if (start === 30 || start === 40) {
-    details.setAttribute('open', '');
-  }
-
-  var summary = document.createElement('summary');
-  summary.className = 'bucket-summary';
-  summary.innerHTML = '<span class="bucket-label">' + bucketKey + ' min</span>' +
-    '<span class="bucket-count">0 readings</span>' +
-    '<span class="bucket-avg"></span>';
-  details.appendChild(summary);
-
-  var table = document.createElement('table');
-  table.className = 'timeseries-table compact';
-  table.innerHTML = '<thead><tr><th>Time</th><th>HR</th><th>BP</th><th>RR</th><th>SpO2</th></tr></thead>';
-  var tbody = document.createElement('tbody');
-  table.appendChild(tbody);
-  details.appendChild(table);
-
-  // Insert in reverse order (most recent bucket at top)
-  var existingBuckets = container.querySelectorAll('.feed-bucket');
-  var inserted = false;
-  for (var i = 0; i < existingBuckets.length; i++) {
-    if (parseInt(existingBuckets[i].dataset.start, 10) < start) {
-      container.insertBefore(details, existingBuckets[i]);
-      inserted = true;
-      break;
-    }
-  }
-  if (!inserted) container.appendChild(details);
-
-  buckets[bucketKey] = {
-    el: details, tbodyEl: tbody, summaryEl: summary,
-    count: 0, totals: { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 },
-    counts: { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 },
-  };
-  return buckets[bucketKey];
-}
-
-function updateBucketSummary(bucket, data) {
-  bucket.count++;
-
-  // Accumulate totals for averaging
-  if (data.hr !== undefined) { bucket.totals.hr += Number(data.hr); bucket.counts.hr++; }
-  if (data.sys !== undefined) { bucket.totals.sys += Number(data.sys); bucket.counts.sys++; }
-  if (data.dia !== undefined) { bucket.totals.dia += Number(data.dia); bucket.counts.dia++; }
-  if (data.resp !== undefined) { bucket.totals.rr += Number(data.resp); bucket.counts.rr++; }
-  if (data.spo2 !== undefined) { bucket.totals.spo2 += Number(data.spo2); bucket.counts.spo2++; }
-
-  var countEl = bucket.summaryEl.querySelector('.bucket-count');
-  countEl.textContent = bucket.count + (bucket.count === 1 ? ' reading' : ' readings');
-
-  // Show running averages in summary
-  var avgEl = bucket.summaryEl.querySelector('.bucket-avg');
-  var parts = [];
-  if (bucket.counts.hr) parts.push('HR:' + Math.round(bucket.totals.hr / bucket.counts.hr));
-  if (bucket.counts.sys && bucket.counts.dia)
-    parts.push('BP:' + Math.round(bucket.totals.sys / bucket.counts.sys) + '/' + Math.round(bucket.totals.dia / bucket.counts.dia));
-  if (bucket.counts.spo2) parts.push('O2:' + Math.round(bucket.totals.spo2 / bucket.counts.spo2) + '%');
-  avgEl.textContent = parts.length ? 'Avg ' + parts.join('  ') : '';
-}
-
 function handleNewDiscreteMeasurement(timestamp, data) {
   var dt = new Date(timestamp);
-
   if (!sessionStartTime) sessionStartTime = dt.getTime();
   var elapsedMin = (dt.getTime() - sessionStartTime) / 60000;
-  var bucketKey = getBucketKey(elapsedMin);
-  var bucket = ensureBucket(bucketKey);
-
   var displayTime = dt.toLocaleTimeString("en-US");
   var hhmmTime = toHHMM(dt);
 
@@ -200,26 +126,29 @@ function handleNewDiscreteMeasurement(timestamp, data) {
     spo2: data.spo2,
   });
 
-  // Format BP display
-  var bpDisplay;
-  if (typeof data.sys === 'undefined' && typeof data.dia === 'undefined') {
-    bpDisplay = undefined;
-  } else if (typeof data.sys === 'undefined') {
-    bpDisplay = "???/" + data.dia;
-  } else if (typeof data.dia === 'undefined') {
-    bpDisplay = data.sys + "/???";
-  } else {
-    bpDisplay = data.sys + "/" + data.dia;
-  }
+  appendLiveRow(displayTime, hhmmTime, data);
+  updateLiveCount();
+  recomputeAverages();
+}
 
-  var row = document.createElement("tr");
+function formatBPDisplay(sys, dia) {
+  if (typeof sys === 'undefined' && typeof dia === 'undefined') return undefined;
+  if (typeof sys === 'undefined') return '???/' + dia;
+  if (typeof dia === 'undefined') return sys + '/???';
+  return sys + '/' + dia;
+}
+
+function appendLiveRow(displayTime, hhmmTime, data) {
+  var tbody = document.querySelector('#live-readings-table tbody');
+  if (!tbody) return;
+
+  var row = document.createElement('tr');
   row.appendChild(createTableCell(displayTime));
   row.appendChild(createTableCell(data.hr));
-  row.appendChild(createTableCell(bpDisplay));
+  row.appendChild(createTableCell(formatBPDisplay(data.sys, data.dia)));
   row.appendChild(createTableCell(data.resp));
   row.appendChild(createTableCell(data.spo2));
 
-  // Store data for selection
   row.dataset.time = hhmmTime;
   row.dataset.displayTime = displayTime;
   row.dataset.hr = data.hr !== undefined ? data.hr : '';
@@ -228,9 +157,8 @@ function handleNewDiscreteMeasurement(timestamp, data) {
   row.dataset.rr = data.resp !== undefined ? data.resp : '';
   row.dataset.spo2 = data.spo2 !== undefined ? data.spo2 : '';
 
-  // Click handler to select this row
   row.addEventListener('click', () => {
-    var prev = document.querySelector('#feed-buckets tr.selected');
+    var prev = document.querySelector('#live-readings-table tr.selected');
     if (prev) prev.classList.remove('selected');
     row.classList.add('selected');
     selectedRow = {
@@ -244,9 +172,162 @@ function handleNewDiscreteMeasurement(timestamp, data) {
     };
   });
 
-  // Prepend so most recent reading is at top within the bucket
-  bucket.tbodyEl.prepend(row);
-  updateBucketSummary(bucket, data);
+  tbody.prepend(row);
+
+  // Hide immediately if there's an active filter that excludes this row.
+  var filter = currentFilterValue();
+  if (filter && !rowMatchesFilter(row, filter)) row.style.display = 'none';
+}
+
+function updateLiveCount() {
+  var el = document.getElementById('live-readings-count');
+  if (!el) return;
+  el.textContent = allReadings.length + (allReadings.length === 1 ? ' reading' : ' readings');
+}
+
+function currentFilterValue() {
+  var input = document.getElementById('live-readings-filter');
+  return input ? (input.value || '').trim().toLowerCase() : '';
+}
+
+function rowMatchesFilter(row, filter) {
+  var time = (row.dataset.displayTime || '').toLowerCase();
+  var hhmm = (row.dataset.time || '').toLowerCase();
+  return time.indexOf(filter) !== -1 || hhmm.indexOf(filter) !== -1;
+}
+
+function applyLiveFilter() {
+  var filter = currentFilterValue();
+  var rows = document.querySelectorAll('#live-readings-table tbody tr');
+  rows.forEach(function (row) {
+    row.style.display = (!filter || rowMatchesFilter(row, filter)) ? '' : 'none';
+  });
+}
+
+function computeIncrementBuckets() {
+  if (allReadings.length === 0) return [];
+  var incrementMin = getIncrementSizeMinutes();
+  // Average the 30 seconds before and after each increment mark.
+  var windowMin = 0.5;
+
+  var maxElapsedMin = 0;
+  for (var i = 0; i < allReadings.length; i++) {
+    if (allReadings[i].elapsedMin > maxElapsedMin) maxElapsedMin = allReadings[i].elapsedMin;
+  }
+
+  var buckets = [];
+  for (var t = 0; t <= maxElapsedMin + windowMin; t += incrementMin) {
+    var lo = t - windowMin;
+    var hi = t + windowMin;
+
+    var totals = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+    var counts = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+    var windowCount = 0;
+    var firstReading = null;
+
+    for (var j = 0; j < allReadings.length; j++) {
+      var r = allReadings[j];
+      if (r.elapsedMin < lo || r.elapsedMin > hi) continue;
+      windowCount++;
+      if (firstReading === null) firstReading = r;
+      if (r.hr !== undefined) { totals.hr += Number(r.hr); counts.hr++; }
+      if (r.sys !== undefined) { totals.sys += Number(r.sys); counts.sys++; }
+      if (r.dia !== undefined) { totals.dia += Number(r.dia); counts.dia++; }
+      if (r.rr !== undefined) { totals.rr += Number(r.rr); counts.rr++; }
+      if (r.spo2 !== undefined) { totals.spo2 += Number(r.spo2); counts.spo2++; }
+    }
+
+    if (windowCount === 0) continue;
+
+    var timeStr = '';
+    if (sessionStartTime) {
+      timeStr = toHHMM(new Date(sessionStartTime + t * 60 * 1000));
+    } else if (firstReading) {
+      timeStr = firstReading.time || '';
+    }
+
+    buckets.push({
+      label: t + ' min',
+      count: String(windowCount),
+      time: timeStr,
+      hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
+      bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
+      bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
+      rr: counts.rr ? String(Math.round(totals.rr / counts.rr)) : '',
+      spo2: counts.spo2 ? String(Math.round(totals.spo2 / counts.spo2)) : '',
+    });
+  }
+  return buckets;
+}
+
+function recomputeAverages() {
+  var tbody = document.querySelector('#averages-table tbody');
+  if (!tbody) return;
+  var rows = computeIncrementBuckets();
+  tbody.innerHTML = '';
+  rows.forEach(function (b) {
+    var tr = document.createElement('tr');
+    tr.appendChild(createTableCell(b.label));
+    tr.appendChild(createTableCell(b.count));
+    tr.appendChild(createTableCell(b.hr || '--'));
+    var bp = (b.bp_sys && b.bp_dia) ? b.bp_sys + '/' + b.bp_dia : '--';
+    tr.appendChild(createTableCell(bp));
+    tr.appendChild(createTableCell(b.rr || '--'));
+    tr.appendChild(createTableCell(b.spo2 || '--'));
+    tbody.appendChild(tr);
+  });
+}
+
+// Bucket time string is 'HH:MM' (24-hr); treatment-start/end inputs are also
+// 24-hr 'HH:MM', so direct lexicographic comparison gives correct ordering.
+function classifyPhase(bucketTime, treatmentStart, treatmentEnd) {
+  if (!treatmentStart && !treatmentEnd) return '';
+  if (!bucketTime) return '';
+  if (treatmentStart && bucketTime < treatmentStart) return 'pre';
+  if (treatmentEnd && bucketTime > treatmentEnd) return 'post';
+  return 'during';
+}
+
+// Average over the trailing 30 seconds of `allReadings`. Returns null if no
+// readings are within that window.
+function computeDischargeAverage() {
+  if (allReadings.length === 0) return null;
+
+  var maxElapsedMin = 0;
+  for (var i = 0; i < allReadings.length; i++) {
+    if (allReadings[i].elapsedMin > maxElapsedMin) maxElapsedMin = allReadings[i].elapsedMin;
+  }
+  var cutoff = maxElapsedMin - 0.5;
+
+  var totals = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+  var counts = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+  var n = 0;
+  var lastReading = null;
+
+  for (var j = 0; j < allReadings.length; j++) {
+    var r = allReadings[j];
+    if (r.elapsedMin < cutoff) continue;
+    n++;
+    lastReading = r;
+    if (r.hr !== undefined) { totals.hr += Number(r.hr); counts.hr++; }
+    if (r.sys !== undefined) { totals.sys += Number(r.sys); counts.sys++; }
+    if (r.dia !== undefined) { totals.dia += Number(r.dia); counts.dia++; }
+    if (r.rr !== undefined) { totals.rr += Number(r.rr); counts.rr++; }
+    if (r.spo2 !== undefined) { totals.spo2 += Number(r.spo2); counts.spo2++; }
+  }
+
+  if (n === 0) return null;
+
+  return {
+    label: 'Discharge',
+    count: String(n),
+    time: lastReading ? lastReading.time : '',
+    hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
+    bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
+    bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
+    rr: counts.rr ? String(Math.round(totals.rr / counts.rr)) : '',
+    spo2: counts.spo2 ? String(Math.round(totals.spo2 / counts.spo2)) : '',
+  };
 }
 
 function assignToInterval(intervalName) {
@@ -325,7 +406,7 @@ function toggleMode() {
 function getIncrementSizeMinutes() {
   var el = document.getElementById('increment-size');
   var val = el ? parseInt(el.value, 10) : 10;
-  return (val === 5 || val === 10) ? val : 10;
+  return [5, 10, 15, 30].includes(val) ? val : 10;
 }
 
 async function saveSummaryToChart(session_id, subdomain) {
@@ -334,65 +415,27 @@ async function saveSummaryToChart(session_id, subdomain) {
     return;
   }
 
-  var incrementMin = getIncrementSizeMinutes();
-  // Average the 30 seconds before and after each increment mark.
-  var windowMin = 0.5;
-
-  var maxElapsedMin = 0;
-  for (var i = 0; i < allReadings.length; i++) {
-    if (allReadings[i].elapsedMin > maxElapsedMin) {
-      maxElapsedMin = allReadings[i].elapsedMin;
-    }
-  }
-
-  var summaryBuckets = [];
-  for (var t = 0; t <= maxElapsedMin + windowMin; t += incrementMin) {
-    var lo = t - windowMin;
-    var hi = t + windowMin;
-
-    var totals = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
-    var counts = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
-    var windowCount = 0;
-    var firstReading = null;
-
-    for (var j = 0; j < allReadings.length; j++) {
-      var r = allReadings[j];
-      if (r.elapsedMin < lo || r.elapsedMin > hi) continue;
-      windowCount++;
-      if (firstReading === null) firstReading = r;
-      if (r.hr !== undefined) { totals.hr += Number(r.hr); counts.hr++; }
-      if (r.sys !== undefined) { totals.sys += Number(r.sys); counts.sys++; }
-      if (r.dia !== undefined) { totals.dia += Number(r.dia); counts.dia++; }
-      if (r.rr !== undefined) { totals.rr += Number(r.rr); counts.rr++; }
-      if (r.spo2 !== undefined) { totals.spo2 += Number(r.spo2); counts.spo2++; }
-    }
-
-    if (windowCount === 0) continue;
-
-    // Use the increment's nominal wall-clock time when available; otherwise
-    // fall back to the first reading's time in the window.
-    var timeStr = '';
-    if (sessionStartTime) {
-      timeStr = toHHMM(new Date(sessionStartTime + t * 60 * 1000));
-    } else if (firstReading) {
-      timeStr = firstReading.time || '';
-    }
-
-    summaryBuckets.push({
-      label: t + ' min',
-      count: String(windowCount),
-      time: timeStr,
-      hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
-      bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
-      bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
-      rr: counts.rr ? String(Math.round(totals.rr / counts.rr)) : '',
-      spo2: counts.spo2 ? String(Math.round(totals.spo2 / counts.spo2)) : '',
-    });
-  }
-
+  var summaryBuckets = computeIncrementBuckets();
   if (summaryBuckets.length === 0) {
     alert('No readings near the selected increment marks.');
     return;
+  }
+
+  var treatmentStart = (document.getElementById('treatment-start').value || '').trim();
+  var treatmentEnd = (document.getElementById('treatment-end').value || '').trim();
+
+  summaryBuckets.forEach(function (b) {
+    b.phase = classifyPhase(b.time, treatmentStart, treatmentEnd);
+  });
+
+  // Append a discharge row averaging the last 30 seconds of readings — only
+  // when treatment end is set and there are readings recorded after it.
+  if (treatmentEnd) {
+    var discharge = computeDischargeAverage();
+    if (discharge && discharge.time && discharge.time > treatmentEnd) {
+      discharge.phase = 'discharge';
+      summaryBuckets.push(discharge);
+    }
   }
 
   var btn = document.getElementById('save-summary-btn');
@@ -409,6 +452,8 @@ async function saveSummaryToChart(session_id, subdomain) {
         body: JSON.stringify({
           buckets: summaryBuckets,
           bp_placement: document.getElementById('wrist-placement').value,
+          treatment_start: treatmentStart,
+          treatment_end: treatmentEnd,
         }),
       }
     );

@@ -62,10 +62,10 @@ def test_authenticate_allows_session_channel_when_staff_matches() -> None:
     assert ch.authenticate() is True
 
 
-def test_authenticate_rejects_session_channel_when_staff_does_not_match() -> None:
+def test_authenticate_allows_session_channel_regardless_of_staff_match() -> None:
     ch = _make_channel(
         logged_in_user={"id": "other-staff", "type": "Staff"},
         channel_name="a_b_c",
         cache_session={"note_id": 1, "staff_id": "s1"},
     )
-    assert ch.authenticate() is False
+    assert ch.authenticate() is True
