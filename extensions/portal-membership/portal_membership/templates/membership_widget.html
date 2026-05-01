@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Roboto", "Helvetica", "Arial", sans-serif;
+      font-size: 14px;
+      color: #333;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .widget {
+      display: flex;
+      flex-direction: column;
+      height: 300px;
+    }
+
+    /* ---- header ---- */
+    .widget-header {
+      padding: 10px 14px;
+      background: #E5E5E5;
+      color: #2185D0;
+      font-weight: 500;
+      font-size: 16px;
+      line-height: 1.5;
+      flex-shrink: 0;
+    }
+
+    /* ---- body ---- */
+    .widget-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 16px 14px;
+      gap: 8px;
+      overflow: hidden;
+    }
+
+    /* ---- status badge ---- */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .badge-active     { background: #d4edda; color: #155724; }
+    .badge-cancelled  { background: #f8d7da; color: #721c24; }
+    .badge-none       { background: #e2e3e5; color: #383d41; }
+
+    /* ---- detail rows ---- */
+    .detail {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.4;
+    }
+    .detail strong { color: #222; }
+
+    /* ---- CTA area ---- */
+    .cta-area {
+      margin-top: auto;
+      padding: 10px 14px 14px;
+      flex-shrink: 0;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary  { background: #2185D0; color: #fff; }
+    .btn-secondary { background: #fff; color: #2185D0; border: 1px solid #2185D0; }
+    .btn-success  { background: #28a745; color: #fff; }
+    .btn-warning  { background: #fd7e14; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="widget">
+    <div class="widget-header">Membership</div>
+
+    <div class="widget-body">
+      {% if status == "active" %}
+        <span class="badge badge-active">Active</span>
+        {% if plan_name %}
+          <div class="detail"><strong>Plan:</strong> {{ plan_name }}</div>
+        {% endif %}
+        {% if amount_display %}
+          <div class="detail"><strong>Monthly:</strong> {{ amount_display }}</div>
+        {% endif %}
+        {% if next_billing %}
+          <div class="detail"><strong>Next billing:</strong> {{ next_billing }}</div>
+        {% endif %}
+
+      {% elif status == "cancelled" %}
+        <span class="badge badge-cancelled">Cancelled</span>
+        {% if plan_name %}
+          <div class="detail"><strong>Plan:</strong> {{ plan_name }}</div>
+        {% endif %}
+        {% if next_billing %}
+          <div class="detail"><strong>Access until:</strong> {{ next_billing }}</div>
+        {% endif %}
+        <div class="detail">Restart your membership to keep access to exclusive benefits.</div>
+
+      {% else %}
+        <span class="badge badge-none">Not enrolled</span>
+        <div class="detail">Join our membership program for exclusive care benefits and savings.</div>
+      {% endif %}
+    </div>
+
+    <div class="cta-area">
+      {% if status == "active" %}
+        <a class="btn btn-primary" href="{{ membership_page_url }}">Manage Membership</a>
+        <a class="btn btn-secondary" href="{{ charges_page_url }}">View Charges</a>
+      {% elif status == "cancelled" %}
+        <a class="btn btn-warning" href="{{ membership_page_url }}">Restart Membership</a>
+      {% else %}
+        <a class="btn btn-success" href="{{ membership_page_url }}">View Plans</a>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
