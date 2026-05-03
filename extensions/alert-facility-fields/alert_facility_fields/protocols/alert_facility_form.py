@@ -25,6 +25,17 @@ class AlertFacilityFormHandler(BaseHandler):
         if self.event.context.get("schema_key") not in SUPPORTED_SCHEMA_KEYS:
             return []
 
+        # Pass the previously-stored value through so reopening a committed
+        # command shows the saved choice instead of a blank dropdown.
+        existing_value = (
+            CommandMetadata.objects.filter(
+                command__id=self.event.target.id,
+                key=ALERT_FACILITY_KEY,
+            )
+            .values_list("value", flat=True)
+            .first()
+        )
+
         return [
             CommandMetadataCreateFormEffect(
                 command_uuid=self.event.target.id,
@@ -36,6 +47,7 @@ class AlertFacilityFormHandler(BaseHandler):
                         options=ALERT_FACILITY_OPTIONS,
                         required=True,
                         editable=True,
+                        value=existing_value,
                     ),
                 ],
             ).apply()

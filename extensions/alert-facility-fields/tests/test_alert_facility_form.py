@@ -35,8 +35,24 @@ def _payload(effect: Any) -> dict[str, Any]:
 # --- AlertFacilityFormHandler -------------------------------------------------
 
 
+@pytest.fixture
+def patched_form_metadata():  # type: ignore[no-untyped-def]
+    """Mock CommandMetadata used by AlertFacilityFormHandler. Defaults to no stored value."""
+    with patch(
+        "alert_facility_fields.protocols.alert_facility_form.CommandMetadata"
+    ) as mock:
+        mock.objects.filter.return_value.values_list.return_value.first.return_value = None
+        yield mock
+
+
+def _set_form_value(mock_metadata: Any, value: str | None) -> None:
+    mock_metadata.objects.filter.return_value.values_list.return_value.first.return_value = value
+
+
 @pytest.mark.parametrize("schema_key", ["medicationStatement", "stopMedication"])
-def test_emits_alert_facility_field_for_supported_commands(schema_key: str) -> None:
+def test_emits_alert_facility_field_for_supported_commands(
+    patched_form_metadata: Any, schema_key: str
+) -> None:
     handler = AlertFacilityFormHandler(_make_event(schema_key, command_uuid="abc-123"))
 
     effects = handler.compute()
@@ -52,6 +68,7 @@ def test_emits_alert_facility_field_for_supported_commands(schema_key: str) -> N
     assert field["options"] == ["Yes", "No"]
     assert field["required"] is True
     assert field["editable"] is True
+    assert field["value"] is None
 
 
 @pytest.mark.parametrize(
@@ -67,14 +84,19 @@ def test_emits_alert_facility_field_for_supported_commands(schema_key: str) -> N
         None,
     ],
 )
-def test_no_op_for_other_schema_keys(schema_key: str | None) -> None:
+def test_no_op_for_other_schema_keys(
+    patched_form_metadata: Any, schema_key: str | None
+) -> None:
     handler = AlertFacilityFormHandler(_make_event(schema_key))
 
     assert handler.compute() == []
+    patched_form_metadata.objects.filter.assert_not_called()
 
 
 @pytest.mark.parametrize("purpose", ["form", "print"])
-def test_same_field_emitted_for_form_and_print_purposes(purpose: str) -> None:
+def test_same_field_emitted_for_form_and_print_purposes(
+    patched_form_metadata: Any, purpose: str
+) -> None:
     handler = AlertFacilityFormHandler(_make_event("medicationStatement", purpose=purpose))
 
     effects = handler.compute()
@@ -84,12 +106,41 @@ def test_same_field_emitted_for_form_and_print_purposes(purpose: str) -> None:
     assert [f["key"] for f in data["form"]] == ["alert_facility"]
 
 
-def test_command_uuid_is_propagated_from_event_target() -> None:
+def test_command_uuid_is_propagated_from_event_target(patched_form_metadata: Any) -> None:
     handler = AlertFacilityFormHandler(_make_event("stopMedication", command_uuid="xyz-789"))
 
     effects = handler.compute()
 
     assert _payload(effects[0])["command"] == "xyz-789"
+
+
+@pytest.mark.parametrize("stored_value", ["Yes", "No"])
+def test_field_is_prepopulated_with_existing_metadata_value(
+    patched_form_metadata: Any, stored_value: str
+) -> None:
+    """Reopening a command with stored alert_facility metadata shows the saved choice."""
+    _set_form_value(patched_form_metadata, stored_value)
+    handler = AlertFacilityFormHandler(_make_event("medicationStatement", command_uuid="abc-123"))
+
+    effects = handler.compute()
+
+    assert len(effects) == 1
+    field = _payload(effects[0])["form"][0]
+    assert field["value"] == stored_value
+    patched_form_metadata.objects.filter.assert_called_once_with(
+        command__id="abc-123", key="alert_facility"
+    )
+
+
+def test_field_value_is_none_when_no_metadata_stored(patched_form_metadata: Any) -> None:
+    """First-open: no stored value → field renders empty."""
+    _set_form_value(patched_form_metadata, None)
+    handler = AlertFacilityFormHandler(_make_event("stopMedication"))
+
+    effects = handler.compute()
+
+    field = _payload(effects[0])["form"][0]
+    assert field["value"] is None
 
 
 # --- AlertFacilityRequiredValidator -------------------------------------------
