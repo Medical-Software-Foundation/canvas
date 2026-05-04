@@ -1,0 +1,193 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  background: #f4f6f9;
+  color: #1a2333;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* ── top bar ── */
+#topbar {
+  background: #1a6fa8;
+  color: #fff;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#topbar h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-right: auto;
+}
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.toggle-group label {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-right: 4px;
+}
+.toggle-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.35);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.toggle-btn.active {
+  background: #fff;
+  color: #1a6fa8;
+  font-weight: 600;
+  border-color: #fff;
+}
+.toggle-btn:hover:not(.active) {
+  background: rgba(255,255,255,0.25);
+}
+/* ── two-pane layout ── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+#left-pane {
+  width: 240px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid #dde3ec;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#left-pane h2 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5a6a82;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid #edf0f5;
+  flex-shrink: 0;
+}
+#provider-list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  padding: 6px 0;
+}
+.provider-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+.provider-item:hover { background: #f0f5fa; }
+.provider-item.selected {
+  background: #e8f1f9;
+  border-left-color: #1a6fa8;
+}
+.provider-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.count-badge {
+  background: #1a6fa8;
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+.empty-msg {
+  padding: 18px 14px;
+  color: #8a9ab5;
+  font-style: italic;
+  font-size: 13px;
+}
+/* ── right pane ── */
+#right-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+#right-pane h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2a3d54;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid #edf0f5;
+  flex-shrink: 0;
+}
+#notes-table-wrapper {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+thead th {
+  background: #f8f9fb;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5a6a82;
+  border-bottom: 1px solid #dde3ec;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+tbody tr:nth-child(even) { background: #fafbfd; }
+tbody tr:hover { background: #eef4fb; }
+tbody td {
+  padding: 7px 12px;
+  border-bottom: 1px solid #edf0f5;
+  vertical-align: top;
+}
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover { background: #eef2f7; }
+th .sort-arrow {
+  display: inline-block;
+  margin-left: 4px;
+  color: #1a6fa8;
+  font-size: 10px;
+}
+.spinner {
+  padding: 24px 16px;
+  color: #8a9ab5;
+  font-style: italic;
+}
+/* ── loading/error states ── */
+.state-msg {
+  padding: 18px 16px;
+  color: #8a9ab5;
+  font-style: italic;
+  font-size: 13px;
+}

@@ -10,6 +10,7 @@ Covers:
 """
 
 import datetime as dt
+from http import HTTPStatus
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
@@ -24,7 +25,6 @@ from note_production_dashboard.handlers.dashboard_api import (
     _format_dos,
     _patient_display_name,
     _provider_display_name,
-    _render_dashboard_html,
     _rfv_text,
     _window,
 )
@@ -798,6 +798,12 @@ class TestProviderNotesEndpoint:
 
 
 class TestDashboardHtmlEndpoint:
+    """Tests the /dashboard endpoint wiring.
+
+    ``render_to_string`` is patched because it requires plugin runtime context
+    that is not set up in unit tests; we assert the call shape instead.
+    """
+
     def _make_api(self, query_params: dict[str, str]) -> NoteProductionDashboardAPI:
         api: NoteProductionDashboardAPI = NoteProductionDashboardAPI.__new__(
             NoteProductionDashboardAPI
@@ -809,54 +815,172 @@ class TestDashboardHtmlEndpoint:
         )
         return api
 
+    def _render(
+        self, query_params: dict[str, str], stub_html: str = "<html/>"
+    ) -> tuple[object, MagicMock]:
+        from note_production_dashboard.handlers import dashboard_api
+
+        api = self._make_api(query_params)
+        with patch.object(
+            dashboard_api, "render_to_string", return_value=stub_html
+        ) as mock_render:
+            response = api.dashboard_page()[0]
+        return response, mock_render
+
     def test_returns_200(self) -> None:
         """GET /dashboard returns HTTP 200."""
         from http import HTTPStatus
 
-        api = self._make_api({"period": "daily", "week_start": "sunday"})
-        responses = api.dashboard_page()
-        assert len(responses) == 1
-        assert responses[0].status_code == HTTPStatus.OK
+        response, _ = self._render({"period": "daily", "week_start": "sunday"})
+        assert response.status_code == HTTPStatus.OK
 
-    def test_html_contains_period_toggles(self) -> None:
-        """HTML page contains Daily / Weekly / Monthly toggle buttons."""
-        api = self._make_api({})
-        html = api.dashboard_page()[0].content.decode("utf-8")
-        assert "Daily" in html
-        assert "Weekly" in html
-        assert "Monthly" in html
+    def test_renders_dashboard_template_with_context(self) -> None:
+        """Handler calls render_to_string with the dashboard template and full context."""
+        from note_production_dashboard.handlers import dashboard_api
 
-    def test_html_contains_week_start_toggles(self) -> None:
-        """HTML page contains Sun / Mon week-start toggles."""
-        api = self._make_api({})
-        html = api.dashboard_page()[0].content.decode("utf-8")
+        _, mock_render = self._render({"period": "monthly", "week_start": "monday"})
+        assert mock_render.mock_calls == [
+            call(
+                "static/dashboard.html",
+                {
+                    "period": "monthly",
+                    "week_start": "monday",
+                    "cache_bust": dashboard_api._CACHE_BUST,
+                },
+            )
+        ]
+
+    def test_invalid_query_params_default_gracefully(self) -> None:
+        """Unknown query params fall back to daily/sunday."""
+        _, mock_render = self._render({"period": "century", "week_start": "friday"})
+        ctx = mock_render.mock_calls[0].args[1]
+        assert ctx["period"] == "daily"
+        assert ctx["week_start"] == "sunday"
+
+    def test_response_body_is_template_output(self) -> None:
+        """The HTMLResponse content is exactly what render_to_string returned."""
+        response, _ = self._render({}, stub_html="<html>stub</html>")
+        assert response.content == b"<html>stub</html>"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /dashboard template (static contents)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _read_static(name: str) -> str:
+    from pathlib import Path
+
+    import note_production_dashboard
+
+    return (Path(note_production_dashboard.__file__).parent / "static" / name).read_text()
+
+
+class TestDashboardTemplate:
+    """Read the dashboard.html template directly; needs no plugin context."""
+
+    @pytest.fixture(scope="class")
+    def html(self) -> str:
+        return _read_static("dashboard.html")
+
+    def test_period_toggles_present(self, html: str) -> None:
+        for label in ("Daily", "Weekly", "Monthly"):
+            assert label in html
+
+    def test_week_start_toggles_present(self, html: str) -> None:
         assert "Sun" in html
         assert "Mon" in html
 
-    def test_html_contains_plugin_api_url(self) -> None:
-        """HTML embeds the correct API base path for data fetches."""
-        api = self._make_api({})
-        html = api.dashboard_page()[0].content.decode("utf-8")
-        assert "/plugin-io/api/note_production_dashboard/" in html
+    def test_links_external_stylesheet_with_cache_bust(self, html: str) -> None:
+        assert 'href="styles.css?v={{ cache_bust }}"' in html
 
-    def test_invalid_query_params_default_gracefully(self) -> None:
-        """Unknown query params are safely ignored (no 500)."""
-        from http import HTTPStatus
+    def test_links_external_script_with_cache_bust(self, html: str) -> None:
+        assert 'src="main.js?v={{ cache_bust }}"' in html
 
-        api = self._make_api({"period": "century", "week_start": "friday"})
-        assert api.dashboard_page()[0].status_code == HTTPStatus.OK
+    def test_body_seeds_state_via_data_attributes(self, html: str) -> None:
+        """The handler-bound variables flow into <body data-*> for the JS to read."""
+        assert 'data-period="{{ period }}"' in html
+        assert 'data-week-start="{{ week_start }}"' in html
+        assert 'data-cache-bust="{{ cache_bust }}"' in html
 
-    def test_credentials_same_origin_in_js(self) -> None:
-        """JS fetch calls use 'same-origin' so the session cookie travels."""
-        api = self._make_api({})
-        html = api.dashboard_page()[0].content.decode("utf-8")
-        assert "same-origin" in html
 
-    def test_empty_state_text_in_html(self) -> None:
-        """HTML contains the empty-state message path that JS injects."""
-        api = self._make_api({})
-        html = api.dashboard_page()[0].content.decode("utf-8")
-        assert "No locked notes in this period" in html
+# ─────────────────────────────────────────────────────────────────────────────
+# /main.js endpoint and template
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestMainJsEndpoint:
+    def _make_api(self) -> NoteProductionDashboardAPI:
+        api: NoteProductionDashboardAPI = NoteProductionDashboardAPI.__new__(
+            NoteProductionDashboardAPI
+        )
+        api.request = SimpleNamespace(query_params={}, path_params={}, headers={})
+        return api
+
+    def test_returns_javascript_response(self) -> None:
+        from note_production_dashboard.handlers import dashboard_api
+
+        api = self._make_api()
+        with patch.object(
+            dashboard_api, "render_to_string", return_value="// js"
+        ) as mock_render:
+            response = api.main_js()[0]
+        assert mock_render.mock_calls == [call("static/main.js")]
+        assert response.status_code == HTTPStatus.OK
+        assert response.content == b"// js"
+        assert response.headers["Content-Type"] == "text/javascript"
+
+
+class TestMainJsTemplate:
+    @pytest.fixture(scope="class")
+    def js(self) -> str:
+        return _read_static("main.js")
+
+    def test_reads_state_from_body_dataset(self, js: str) -> None:
+        assert "document.body.dataset.period" in js
+        assert "document.body.dataset.weekStart" in js
+        assert "document.body.dataset.cacheBust" in js
+
+    def test_data_endpoints_called(self, js: str) -> None:
+        assert "/plugin-io/api/note_production_dashboard/providers" in js
+
+    def test_credentials_same_origin(self, js: str) -> None:
+        """Fetch calls use 'same-origin' so the session cookie travels."""
+        assert "same-origin" in js
+
+    def test_empty_state_text(self, js: str) -> None:
+        assert "No locked notes in this period" in js
+
+    def test_no_unrendered_template_placeholders(self, js: str) -> None:
+        """main.js is a static asset — Django {{ ... }} placeholders must not remain."""
+        assert "{{" not in js
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /styles.css endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestStylesCssEndpoint:
+    def _make_api(self) -> NoteProductionDashboardAPI:
+        api: NoteProductionDashboardAPI = NoteProductionDashboardAPI.__new__(
+            NoteProductionDashboardAPI
+        )
+        api.request = SimpleNamespace(query_params={}, path_params={}, headers={})
+        return api
+
+    def test_returns_css_response(self) -> None:
+        from note_production_dashboard.handlers import dashboard_api
+
+        api = self._make_api()
+        with patch.object(
+            dashboard_api, "render_to_string", return_value="body{}"
+        ) as mock_render:
+            response = api.styles_css()[0]
+        assert mock_render.mock_calls == [call("static/styles.css")]
+        assert response.status_code == HTTPStatus.OK
+        assert response.content == b"body{}"
+        assert response.headers["Content-Type"] == "text/css"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -879,31 +1003,3 @@ class TestAuthConfiguration:
         )
 
         assert issubclass(NoteProductionDashboardApp, Application)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# _render_dashboard_html (unit)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class TestRenderDashboardHtml:
-    def test_cache_bust_token_in_output(self) -> None:
-        """Cache-bust token appears in the rendered HTML."""
-        html = _render_dashboard_html("daily", "sunday", "12345")
-        assert "12345" in html
-
-    def test_week_start_seeded_in_js(self) -> None:
-        """The JS init seeds weekStart from the server-rendered value."""
-        html = _render_dashboard_html("weekly", "monday", "99")
-        assert "monday" in html
-
-    def test_period_seeded_in_js(self) -> None:
-        """The JS init seeds period from the server-rendered value."""
-        html = _render_dashboard_html("monthly", "sunday", "99")
-        assert "monthly" in html
-
-    def test_html_is_a_string(self) -> None:
-        """Function returns a non-empty string."""
-        result = _render_dashboard_html("daily", "sunday", "tok")
-        assert isinstance(result, str)
-        assert len(result) > 100

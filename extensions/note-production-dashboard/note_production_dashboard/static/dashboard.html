@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Note Production Dashboard</title>
+  <link rel="stylesheet" href="styles.css?v={{ cache_bust }}"/>
+</head>
+<body data-period="{{ period }}" data-week-start="{{ week_start }}" data-cache-bust="{{ cache_bust }}">
+  <div id="topbar">
+    <h1>Note Production Dashboard</h1>
+
+    <div class="toggle-group">
+      <button class="toggle-btn" id="btn-daily" onclick="setPeriod('daily')">Daily</button>
+      <button class="toggle-btn" id="btn-weekly" onclick="setPeriod('weekly')">Weekly</button>
+      <button class="toggle-btn" id="btn-monthly" onclick="setPeriod('monthly')">Monthly</button>
+    </div>
+
+    <div class="toggle-group">
+      <label>Week starts:</label>
+      <button class="toggle-btn" id="btn-sunday" onclick="setWeekStart('sunday')">Sun</button>
+      <button class="toggle-btn" id="btn-monday" onclick="setWeekStart('monday')">Mon</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="left-pane">
+      <h2>Providers</h2>
+      <ul id="provider-list"><li class="state-msg">Loading&hellip;</li></ul>
+    </div>
+    <div id="right-pane">
+      <h2 id="notes-header">Notes</h2>
+      <div id="notes-table-wrapper"><p class="state-msg">Select a provider.</p></div>
+    </div>
+  </div>
+
+<script src="main.js?v={{ cache_bust }}" defer></script>
+</body>
+</html>

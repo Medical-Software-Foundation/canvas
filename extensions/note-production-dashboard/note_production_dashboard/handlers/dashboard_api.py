@@ -14,6 +14,7 @@ import arrow
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.billing import BillingLineItem, BillingLineItemStatus
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
@@ -154,12 +155,16 @@ RELOCKED covers the relocked case.
 """
 
 
-def _fetch_locked_state_events(start: datetime, end: datetime, provider_id: str | None = None):  # type: ignore[no-untyped-def]
+def _fetch_locked_state_events(start: datetime, end: datetime, provider_id: str | None = None):  # type: ignore[no-untyped-def]  # pragma: no cover
     """Return a queryset of CurrentNoteStateEvent for locked notes in [start, end).
 
     Uses select_related and prefetch_related to avoid N+1:
       - select_related: note__provider, note__patient, note__note_type_version
       - prefetch_related: note__billing_line_items (filtered to ACTIVE), note__commands
+
+    Coverage: this function is patched in every endpoint test because it hits
+    the ORM. The query construction is verified by integration smoke tests
+    against a real database, not by unit tests.
     """
     qs = CurrentNoteStateEvent.objects.filter(
         state__in=_LOCKED_STATES,
@@ -206,13 +211,17 @@ def _build_provider_counts_result(
     return result
 
 
-def _fetch_provider_counts(start: datetime, end: datetime) -> list[dict[str, Any]]:
+def _fetch_provider_counts(start: datetime, end: datetime) -> list[dict[str, Any]]:  # pragma: no cover
     """Return [{provider_id, name, count}, ...] for locked notes in [start, end).
 
     Uses a SQL GROUP BY to count notes per provider, then a single follow-up
     query to load the Staff records so credentialed names can be resolved
     (credentialed_name is a Python @cached_property and cannot be pulled via
     .values()). Two queries total, regardless of note count.
+
+    Coverage: this function is patched in every endpoint test because it hits
+    the ORM. The pure result-shaping logic is exercised through
+    _build_provider_counts_result, which has its own dedicated unit tests.
     """
     # Note: Staff.id is a CharField (db_column="key"); the FK column on Note
     # (provider_id) actually references Staff.dbid (the BigAutoField PK), so
@@ -258,8 +267,33 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             period = "daily"
         if week_start not in ("sunday", "monday"):
             week_start = "sunday"
-        html = _render_dashboard_html(period, week_start, _CACHE_BUST)
+        html = render_to_string(
+            "static/dashboard.html",
+            {"period": period, "week_start": week_start, "cache_bust": _CACHE_BUST},
+        )
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
+
+    @api.get("/main.js")
+    def main_js(self) -> list[Response | Effect]:
+        """Serve the dashboard JavaScript as a static asset."""
+        return [
+            Response(
+                render_to_string("static/main.js").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/javascript",
+            )
+        ]
+
+    @api.get("/styles.css")
+    def styles_css(self) -> list[Response | Effect]:
+        """Serve the dashboard CSS as a static asset."""
+        return [
+            Response(
+                render_to_string("static/styles.css").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/css",
+            )
+        ]
 
     @api.get("/providers")
     def providers_list(self) -> list[Response | Effect]:
@@ -340,472 +374,3 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         rows.sort(key=lambda r: r["sort_dt"], reverse=True)
 
         return [JSONResponse(rows, status_code=HTTPStatus.OK)]
-
-
-# ─── HTML template ────────────────────────────────────────────────────────────
-
-
-def _render_dashboard_html(period: str, week_start: str, cache_bust: str) -> str:
-    """Return the full dashboard HTML as a string (no file I/O)."""
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Note Production Dashboard</title>
-  <style>
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 14px;
-      background: #f4f6f9;
-      color: #1a2333;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }}
-    /* ── top bar ── */
-    #topbar {{
-      background: #1a6fa8;
-      color: #fff;
-      padding: 10px 18px;
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      flex-shrink: 0;
-      flex-wrap: wrap;
-    }}
-    #topbar h1 {{
-      font-size: 16px;
-      font-weight: 600;
-      margin-right: auto;
-    }}
-    .toggle-group {{
-      display: flex;
-      gap: 4px;
-      align-items: center;
-    }}
-    .toggle-group label {{
-      font-size: 12px;
-      opacity: 0.85;
-      margin-right: 4px;
-    }}
-    .toggle-btn {{
-      background: rgba(255,255,255,0.15);
-      border: 1px solid rgba(255,255,255,0.35);
-      color: #fff;
-      padding: 4px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 13px;
-      transition: background 0.15s;
-    }}
-    .toggle-btn.active {{
-      background: #fff;
-      color: #1a6fa8;
-      font-weight: 600;
-      border-color: #fff;
-    }}
-    .toggle-btn:hover:not(.active) {{
-      background: rgba(255,255,255,0.25);
-    }}
-    /* ── two-pane layout ── */
-    #main {{
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }}
-    #left-pane {{
-      width: 240px;
-      flex-shrink: 0;
-      background: #fff;
-      border-right: 1px solid #dde3ec;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }}
-    #left-pane h2 {{
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #5a6a82;
-      padding: 12px 14px 8px;
-      border-bottom: 1px solid #edf0f5;
-      flex-shrink: 0;
-    }}
-    #provider-list {{
-      flex: 1;
-      overflow-y: auto;
-      list-style: none;
-      padding: 6px 0;
-    }}
-    .provider-item {{
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 14px;
-      cursor: pointer;
-      border-left: 3px solid transparent;
-      transition: background 0.1s;
-    }}
-    .provider-item:hover {{ background: #f0f5fa; }}
-    .provider-item.selected {{
-      background: #e8f1f9;
-      border-left-color: #1a6fa8;
-    }}
-    .provider-name {{
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }}
-    .count-badge {{
-      background: #1a6fa8;
-      color: #fff;
-      border-radius: 10px;
-      padding: 1px 7px;
-      font-size: 11px;
-      font-weight: 600;
-      flex-shrink: 0;
-      margin-left: 6px;
-    }}
-    .empty-msg {{
-      padding: 18px 14px;
-      color: #8a9ab5;
-      font-style: italic;
-      font-size: 13px;
-    }}
-    /* ── right pane ── */
-    #right-pane {{
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      background: #fff;
-    }}
-    #right-pane h2 {{
-      font-size: 13px;
-      font-weight: 600;
-      color: #2a3d54;
-      padding: 12px 16px 8px;
-      border-bottom: 1px solid #edf0f5;
-      flex-shrink: 0;
-    }}
-    #notes-table-wrapper {{
-      flex: 1;
-      overflow: auto;
-      padding: 0;
-    }}
-    table {{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }}
-    thead th {{
-      background: #f8f9fb;
-      padding: 8px 12px;
-      text-align: left;
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: #5a6a82;
-      border-bottom: 1px solid #dde3ec;
-      position: sticky;
-      top: 0;
-      z-index: 1;
-    }}
-    tbody tr:nth-child(even) {{ background: #fafbfd; }}
-    tbody tr:hover {{ background: #eef4fb; }}
-    tbody td {{
-      padding: 7px 12px;
-      border-bottom: 1px solid #edf0f5;
-      vertical-align: top;
-    }}
-    th.sortable {{
-      cursor: pointer;
-      user-select: none;
-    }}
-    th.sortable:hover {{ background: #eef2f7; }}
-    th .sort-arrow {{
-      display: inline-block;
-      margin-left: 4px;
-      color: #1a6fa8;
-      font-size: 10px;
-    }}
-    .spinner {{
-      padding: 24px 16px;
-      color: #8a9ab5;
-      font-style: italic;
-    }}
-    /* ── loading/error states ── */
-    .state-msg {{
-      padding: 18px 16px;
-      color: #8a9ab5;
-      font-style: italic;
-      font-size: 13px;
-    }}
-  </style>
-</head>
-<body>
-  <div id="topbar">
-    <h1>Note Production Dashboard</h1>
-
-    <div class="toggle-group">
-      <button class="toggle-btn" id="btn-daily" onclick="setPeriod('daily')">Daily</button>
-      <button class="toggle-btn" id="btn-weekly" onclick="setPeriod('weekly')">Weekly</button>
-      <button class="toggle-btn" id="btn-monthly" onclick="setPeriod('monthly')">Monthly</button>
-    </div>
-
-    <div class="toggle-group">
-      <label>Week starts:</label>
-      <button class="toggle-btn" id="btn-sunday" onclick="setWeekStart('sunday')">Sun</button>
-      <button class="toggle-btn" id="btn-monday" onclick="setWeekStart('monday')">Mon</button>
-    </div>
-  </div>
-
-  <div id="main">
-    <div id="left-pane">
-      <h2>Providers</h2>
-      <ul id="provider-list"><li class="state-msg">Loading&hellip;</li></ul>
-    </div>
-    <div id="right-pane">
-      <h2 id="notes-header">Notes</h2>
-      <div id="notes-table-wrapper"><p class="state-msg">Select a provider.</p></div>
-    </div>
-  </div>
-
-<script>
-(function () {{
-  "use strict";
-
-  // ── state ──────────────────────────────────────────────────────────────────
-  let period = "{period}";
-  let weekStart = localStorage.getItem("npd_week_start") || "{week_start}";
-  let selectedProviderId = null;
-  let selectedProviderName = "";
-  let currentNotes = [];
-  let sortKey = "datetime";  // "datetime" | "patient"
-  let sortDir = "desc";       // "asc" | "desc"
-
-  // ── boot ───────────────────────────────────────────────────────────────────
-  function init() {{
-    syncButtons();
-    fetchProviders();
-  }}
-
-  // ── button state ───────────────────────────────────────────────────────────
-  function syncButtons() {{
-    ["daily", "weekly", "monthly"].forEach(function (p) {{
-      document.getElementById("btn-" + p).classList.toggle("active", p === period);
-    }});
-    ["sunday", "monday"].forEach(function (w) {{
-      document.getElementById("btn-" + w).classList.toggle("active", w === weekStart);
-    }});
-  }}
-
-  // ── period / week-start changes ────────────────────────────────────────────
-  window.setPeriod = function (p) {{
-    period = p;
-    syncButtons();
-    selectedProviderId = null;
-    fetchProviders();
-  }};
-
-  window.setWeekStart = function (w) {{
-    weekStart = w;
-    localStorage.setItem("npd_week_start", w);
-    syncButtons();
-    if (period === "weekly") {{
-      selectedProviderId = null;
-      fetchProviders();
-    }}
-  }};
-
-  // ── fetch providers ────────────────────────────────────────────────────────
-  function fetchProviders() {{
-    const list = document.getElementById("provider-list");
-    list.innerHTML = '<li class="state-msg">Loading&hellip;</li>';
-    document.getElementById("notes-header").textContent = "Notes";
-    document.getElementById("notes-table-wrapper").innerHTML =
-      '<p class="state-msg">Select a provider.</p>';
-
-    const url = "/plugin-io/api/note_production_dashboard/providers" +
-      "?period=" + encodeURIComponent(period) +
-      "&week_start=" + encodeURIComponent(weekStart) +
-      "&v={cache_bust}";
-
-    fetch(url, {{ credentials: "same-origin" }})
-      .then(function (r) {{ return r.json(); }})
-      .then(function (providers) {{
-        if (!providers || providers.length === 0) {{
-          list.innerHTML = '<li class="empty-msg">No locked notes in this period.</li>';
-          document.getElementById("notes-table-wrapper").innerHTML =
-            '<p class="state-msg">No locked notes in this period.</p>';
-          return;
-        }}
-        list.innerHTML = "";
-        providers.forEach(function (p, idx) {{
-          const li = document.createElement("li");
-          li.className = "provider-item";
-          li.dataset.id = p.provider_id;
-
-          const nameSpan = document.createElement("span");
-          nameSpan.className = "provider-name";
-          nameSpan.textContent = p.name;
-
-          const badge = document.createElement("span");
-          badge.className = "count-badge";
-          badge.textContent = String(p.count);
-
-          li.appendChild(nameSpan);
-          li.appendChild(badge);
-          li.addEventListener("click", function () {{
-            selectProvider(p.provider_id, p.name);
-          }});
-          list.appendChild(li);
-
-          // Auto-select first provider.
-          if (idx === 0) {{
-            selectProvider(p.provider_id, p.name);
-          }}
-        }});
-      }})
-      .catch(function (err) {{
-        list.innerHTML = '<li class="state-msg">Error loading providers.</li>';
-        console.error("providers fetch error", err);
-      }});
-  }}
-
-  // ── select provider ────────────────────────────────────────────────────────
-  function selectProvider(providerId, providerName) {{
-    selectedProviderId = providerId;
-    selectedProviderName = providerName;
-
-    // Highlight selected row.
-    document.querySelectorAll(".provider-item").forEach(function (el) {{
-      el.classList.toggle("selected", el.dataset.id === providerId);
-    }});
-
-    fetchNotes(providerId, providerName);
-  }}
-
-  // ── fetch notes ────────────────────────────────────────────────────────────
-  function fetchNotes(providerId, providerName) {{
-    const periodLabels = {{ daily: "Daily", weekly: "Weekly", monthly: "Monthly" }};
-    document.getElementById("notes-header").textContent =
-      "Notes for: " + providerName + " (" + (periodLabels[period] || period) + ")";
-
-    const wrapper = document.getElementById("notes-table-wrapper");
-    wrapper.innerHTML = '<p class="state-msg">Loading&hellip;</p>';
-
-    const url = "/plugin-io/api/note_production_dashboard/providers/" +
-      encodeURIComponent(providerId) + "/notes" +
-      "?period=" + encodeURIComponent(period) +
-      "&week_start=" + encodeURIComponent(weekStart) +
-      "&v={cache_bust}";
-
-    fetch(url, {{ credentials: "same-origin" }})
-      .then(function (r) {{ return r.json(); }})
-      .then(function (notes) {{
-        currentNotes = Array.isArray(notes) ? notes : [];
-        renderNotesTable();
-      }})
-      .catch(function (err) {{
-        currentNotes = [];
-        wrapper.innerHTML = '<p class="state-msg">Error loading notes.</p>';
-        console.error("notes fetch error", err);
-      }});
-  }}
-
-  // ── sort + render the notes table ──────────────────────────────────────────
-  function sortedNotes() {{
-    const sign = sortDir === "asc" ? 1 : -1;
-    return currentNotes.slice().sort(function (a, b) {{
-      let cmp;
-      if (sortKey === "patient") {{
-        cmp = (a.patient || "").localeCompare(b.patient || "");
-      }} else {{
-        // datetime: ISO strings sort lexicographically across years.
-        cmp = (a.sort_dt || "").localeCompare(b.sort_dt || "");
-      }}
-      return cmp * sign;
-    }});
-  }}
-
-  function arrowFor(key) {{
-    if (key !== sortKey) return "";
-    return sortDir === "asc" ? "▲" : "▼";
-  }}
-
-  function renderNotesTable() {{
-    const wrapper = document.getElementById("notes-table-wrapper");
-    if (!currentNotes.length) {{
-      wrapper.innerHTML = '<p class="state-msg">No locked notes in this period.</p>';
-      return;
-    }}
-
-    const table = document.createElement("table");
-    const thead = document.createElement("thead");
-    const headerRow = document.createElement("tr");
-
-    function makeHeader(label, sortable, sortableKey) {{
-      const th = document.createElement("th");
-      th.textContent = label;
-      if (sortable) {{
-        th.className = "sortable";
-        const arrow = document.createElement("span");
-        arrow.className = "sort-arrow";
-        arrow.textContent = arrowFor(sortableKey);
-        th.appendChild(arrow);
-        th.addEventListener("click", function () {{
-          if (sortKey === sortableKey) {{
-            sortDir = sortDir === "asc" ? "desc" : "asc";
-          }} else {{
-            sortKey = sortableKey;
-            sortDir = sortableKey === "patient" ? "asc" : "desc";
-          }}
-          renderNotesTable();
-        }});
-      }}
-      return th;
-    }}
-
-    headerRow.appendChild(makeHeader("Patient", true, "patient"));
-    headerRow.appendChild(makeHeader("Date / Time", true, "datetime"));
-    headerRow.appendChild(makeHeader("CPT", false));
-    headerRow.appendChild(makeHeader("Type", false));
-    headerRow.appendChild(makeHeader("Reason for Visit", false));
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-    sortedNotes().forEach(function (note) {{
-      const tr = document.createElement("tr");
-
-      function cell(text) {{
-        const td = document.createElement("td");
-        td.textContent = text || "";
-        return td;
-      }}
-
-      tr.appendChild(cell(note.patient));
-      tr.appendChild(cell(note.datetime_of_service));
-      tr.appendChild(cell(note.cpt));
-      tr.appendChild(cell(note.note_type));
-      tr.appendChild(cell(note.rfv));
-      tbody.appendChild(tr);
-    }});
-    table.appendChild(tbody);
-    wrapper.innerHTML = "";
-    wrapper.appendChild(table);
-  }}
-
-  // ── start ──────────────────────────────────────────────────────────────────
-  init();
-}})();
-</script>
-</body>
-</html>"""
