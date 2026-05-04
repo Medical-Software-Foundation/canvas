@@ -12,6 +12,7 @@ Covers:
 import datetime as dt
 from http import HTTPStatus
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -817,7 +818,7 @@ class TestDashboardHtmlEndpoint:
 
     def _render(
         self, query_params: dict[str, str], stub_html: str = "<html/>"
-    ) -> tuple[object, MagicMock]:
+    ) -> tuple[Any, MagicMock]:
         from note_production_dashboard.handlers import dashboard_api
 
         api = self._make_api(query_params)

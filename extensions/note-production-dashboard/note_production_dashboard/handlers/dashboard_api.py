@@ -20,7 +20,6 @@ from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
 from canvas_sdk.v1.data.staff import Staff
 from django.db.models import Count, Prefetch
-from logger import log
 
 
 class _SettingsShim:
@@ -306,11 +305,6 @@ class NoteProductionDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
             week_start = "sunday"
 
         start, end = _window(period, week_start)
-        log.info(
-            f"[NoteProductionDashboardAPI] providers list: period={period} "
-            f"week_start={week_start} window=[{start}, {end})"
-        )
-
         result = _fetch_provider_counts(start, end)
         return [JSONResponse(result, status_code=HTTPStatus.OK)]
 
