@@ -1,16 +1,49 @@
 <style>
-  .lr-wrap { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #222; }
+  .lr-wrap { padding: 0; margin: 0; }
+  .lr-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 6px;
+  }
+  .lr-header-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    width: 1em;
+    height: 1em;
+  }
+  .lr-header-icon svg { width: 100%; height: 100%; display: block; }
+  .lr-header-title { font-weight: 600; letter-spacing: 0.02em; }
   .lr-list { list-style: none; padding: 0; margin: 0; }
-  .lr-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #eee; gap: 12px; }
-  .lr-row:last-child { border-bottom: none; }
-  .lr-section-name { font-weight: 500; flex: 0 0 auto; }
-  .lr-meta { font-size: 0.9em; text-align: right; color: #444; line-height: 1.3; }
+  .lr-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 4px 0;
+    gap: 12px;
+  }
+  .lr-row + .lr-row { border-top: 1px solid #eee; }
+  .lr-section-name { flex: 0 0 auto; }
+  .lr-meta { text-align: right; line-height: 1.3; }
   .lr-when { font-weight: 500; }
-  .lr-by { display: block; color: #777; font-size: 0.9em; margin-top: 1px; }
+  .lr-by { display: block; opacity: 0.65; }
   .lr-never { color: #b66; font-style: italic; }
-  .lr-footer { margin-top: 8px; font-size: 0.75em; color: #999; text-align: right; }
+  .lr-footer { margin-top: 6px; font-size: 0.85em; opacity: 0.55; text-align: right; }
 </style>
 <div class="lr-wrap">
+  <div class="lr-header">
+    <span class="lr-header-icon" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="8" width="30" height="34" rx="3"/>
+        <rect x="18" y="4" width="12" height="6" rx="1.5" fill="currentColor"/>
+        <path d="M16 24 l5 5 l11 -11"/>
+        <path d="M16 36 h12"/>
+      </svg>
+    </span>
+    <span class="lr-header-title">Last Reviewed</span>
+  </div>
   <ul class="lr-list">
     {% for row in rows %}
     <li class="lr-row">
