@@ -1,0 +1,34 @@
+{
+    "sdk_version": "0.139.0",
+    "plugin_version": "0.3.0",
+    "name": "note_production_dashboard",
+    "description": "Provider-menu dashboard showing locked-note counts per provider for daily, weekly, and monthly windows with drill-in to individual note details.",
+    "components": {
+        "handlers": [
+            {
+                "class": "note_production_dashboard.handlers.dashboard_api:NoteProductionDashboardAPI",
+                "description": "SimpleAPI serving the dashboard HTML page and JSON data endpoints."
+            }
+        ],
+        "applications": [
+            {
+                "class": "note_production_dashboard.applications.dashboard_app:NoteProductionDashboardApp",
+                "name": "Note Production Dashboard",
+                "description": "Opens the note production dashboard as a full-page view from the provider menu.",
+                "scope": "provider_menu_item",
+                "icon": "assets/note-production-dashboard-icon.png",
+                "menu_position": "top"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
