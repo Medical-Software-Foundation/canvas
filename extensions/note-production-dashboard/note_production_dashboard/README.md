@@ -2,6 +2,8 @@
 
 A staff-facing dashboard that surfaces locked-note counts per provider over a selectable Daily / Weekly / Monthly window, with drill-in to the per-provider note list (patient, date-time of service, CPT codes, note type, reason for visit).
 
+![Note Production Dashboard — monthly view with the selected provider's notes on the right](assets/screenshot.png)
+
 ## The problem this solves
 
 Practice operations need an at-a-glance answer to *"how many notes did each provider lock today / this week / this month, and what were they?"*. Without a dedicated view, that question normally requires either an ad-hoc database query or a brittle export-and-spreadsheet workflow — neither of which is fast, repeatable, or available to non-engineers.
