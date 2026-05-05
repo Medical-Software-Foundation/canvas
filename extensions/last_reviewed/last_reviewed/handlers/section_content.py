@@ -101,12 +101,8 @@ class LastReviewedSectionContent(PatientChartSummaryCustomSectionHandler):
                 break
 
         rows = [_format_row(label, latest.get(value)) for label, value in _SECTIONS]
-        generated_at = arrow.utcnow().format("YYYY-MM-DD HH:mm UTC")
 
-        html = render_to_string(
-            "static/section.html",
-            {"rows": rows, "generated_at": generated_at},
-        )
+        html = render_to_string("static/section.html", {"rows": rows})
 
         return [
             PatientChartSummaryCustomSection(

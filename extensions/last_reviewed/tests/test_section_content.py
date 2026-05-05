@@ -212,23 +212,6 @@ class TestHandle:
 
     @patch("last_reviewed.handlers.section_content.render_to_string")
     @patch("last_reviewed.handlers.section_content.Command")
-    def test_passes_generated_at_string_to_template(
-        self, mock_command, mock_render, mock_event, mock_command_queryset
-    ) -> None:
-        mock_command_queryset(mock_command, commands=[])
-        mock_render.return_value = ""
-
-        handler = _make_handler(mock_event)
-        handler.handle()
-
-        ctx = mock_render.call_args.args[1]
-        assert "generated_at" in ctx
-        # Format is "YYYY-MM-DD HH:MM UTC"
-        assert ctx["generated_at"].endswith("UTC")
-        assert len(ctx["generated_at"].split()) == 3
-
-    @patch("last_reviewed.handlers.section_content.render_to_string")
-    @patch("last_reviewed.handlers.section_content.Command")
     def test_template_path_is_static_section_html(
         self, mock_command, mock_render, mock_event, mock_command_queryset
     ) -> None:
