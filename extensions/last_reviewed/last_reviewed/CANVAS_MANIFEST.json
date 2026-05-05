@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.139.0",
+    "plugin_version": "0.1.0",
+    "name": "last_reviewed",
+    "description": "Adds a 'Last Reviewed' patient summary section showing when each chart section was last marked as reviewed and by whom.",
+    "components": {
+        "handlers": [
+            {
+                "class": "last_reviewed.handlers.section_config:LastReviewedSectionConfig",
+                "description": "Registers the 'Last Reviewed' custom section in the patient chart summary."
+            },
+            {
+                "class": "last_reviewed.handlers.section_content:LastReviewedSectionContent",
+                "description": "Renders the 'Last Reviewed' summary table from committed chartSectionReview commands."
+            }
+        ],
+        "applications": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

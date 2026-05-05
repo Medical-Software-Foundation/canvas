@@ -1,0 +1,30 @@
+<style>
+  .lr-wrap { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #222; }
+  .lr-list { list-style: none; padding: 0; margin: 0; }
+  .lr-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #eee; gap: 12px; }
+  .lr-row:last-child { border-bottom: none; }
+  .lr-section-name { font-weight: 500; flex: 0 0 auto; }
+  .lr-meta { font-size: 0.9em; text-align: right; color: #444; line-height: 1.3; }
+  .lr-when { font-weight: 500; }
+  .lr-by { display: block; color: #777; font-size: 0.9em; margin-top: 1px; }
+  .lr-never { color: #b66; font-style: italic; }
+  .lr-footer { margin-top: 8px; font-size: 0.75em; color: #999; text-align: right; }
+</style>
+<div class="lr-wrap">
+  <ul class="lr-list">
+    {% for row in rows %}
+    <li class="lr-row">
+      <span class="lr-section-name">{{ row.label }}</span>
+      <span class="lr-meta">
+        {% if row.reviewed %}
+          <span class="lr-when" title="{{ row.absolute }}">{{ row.relative }}</span>
+          {% if row.reviewer %}<span class="lr-by">by {{ row.reviewer }}</span>{% endif %}
+        {% else %}
+          <span class="lr-never">Never reviewed</span>
+        {% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="lr-footer">As of {{ generated_at }}</div>
+</div>
