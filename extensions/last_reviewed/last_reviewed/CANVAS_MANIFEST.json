@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.142.0",
-    "plugin_version": "0.1.6",
+    "plugin_version": "0.1.7",
     "name": "last_reviewed",
     "description": "Adds a 'Last Reviewed' patient summary section showing when each chart section was last marked as reviewed and by whom.",
     "components": {
