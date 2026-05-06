@@ -117,10 +117,14 @@ class OnPatientPaymentProcessed(BaseHandler):
                         value=json.dumps(merged),
                     )
                 )
-                SyncLog.objects.create(
-                    canvas_claim_id=claim_ext_id,
-                    log_type=LOG_TYPE_PAYMENT_REPORTED,
-                    detail=f"${total_cents / 100:.2f} | payment_id={payment_id}",
-                )
-
+                try:
+                    SyncLog.objects.create(
+                        canvas_claim_id=claim_ext_id,
+                        log_type=LOG_TYPE_PAYMENT_REPORTED,
+                        detail=f"${total_cents / 100:.2f} | payment_id={payment_id}",
+                    )
+                except Exception:
+                    log.warning(
+                        f"Candid: failed to write SyncLog for claim {claim_ext_id}"
+                    )
         return effects

@@ -174,8 +174,6 @@ The home-app `candid_integration/signals.py` module checks whether this plugin i
 ## Testing
 
 ```sh
-cd ~/my-plugins/candid
+cd ~/candid
 uv run pytest tests/ -v
 ```
-
-For end-to-end testing, install the `mock_candid` plugin alongside this one and set `CANDID_BASE_URL` to point at it (e.g. `https://<instance>/plugin-io/api/mock_candid`). See the `mock_candid` plugin README for scenario configuration.

@@ -46,7 +46,6 @@ ERA_DESC_PREFIX = "Candid ERA "
 PATIENT_PAYMENT_DESC_PREFIX = "Candid patient payment "
 
 
-
 def _cents_to_dollars(cents: int | None) -> Decimal | None:
     if cents is None or cents == 0:
         return None
@@ -287,7 +286,6 @@ def _determine_target_queue(encounter_data: dict) -> str:
     return ClaimQueues.ADJUDICATED_OPEN_BALANCE.label
 
 
-
 # ---------------------------------------------------------------------------
 # Main sync functions
 # ---------------------------------------------------------------------------
@@ -386,7 +384,9 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
 
                 # Insurance payment (primary)
                 insurance_txns = _build_insurance_transactions(
-                    service_lines, line_items, canvas_claim_id,
+                    service_lines,
+                    line_items,
+                    canvas_claim_id,
                     transfer_to_patient=transfer_to_patient,
                 )
                 if insurance_txns and primary_id:
@@ -524,13 +524,16 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     era_details = [
         f"{eid}: ${era_totals.get(eid, 0) / 100:.2f}" for eid in attempted_era_ids
     ]
-    SyncLog.objects.create(
-        canvas_claim_id=canvas_claim_id,
-        candid_claim_status=claim_status,
-        payment_effects_count=payment_effect_count,
-        era_ids=",".join(attempted_era_ids),
-        detail=" | ".join(era_details) if era_details else "",
-    )
+    try:
+        SyncLog.objects.create(
+            canvas_claim_id=canvas_claim_id,
+            candid_claim_status=claim_status,
+            payment_effects_count=payment_effect_count,
+            era_ids=",".join(attempted_era_ids),
+            detail=" | ".join(era_details) if era_details else "",
+        )
+    except Exception:
+        log.warning(f"Candid sync: failed to write SyncLog for claim {canvas_claim_id}")
 
     return effects
 
