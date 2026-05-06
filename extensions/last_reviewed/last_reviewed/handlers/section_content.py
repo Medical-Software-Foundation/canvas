@@ -88,17 +88,26 @@ class LastReviewedSectionContent(PatientChartSummaryCustomSectionHandler):
             diag = list(
                 Command.objects.filter(
                     patient__id=patient_id, schema_key="chartSectionReview"
-                ).order_by("-created")[:30]
+                )
+                .select_related("note__current_state")
+                .order_by("-created")[:30]
             )
             log.info(
                 f"[last_reviewed] patient={patient_id} chartSectionReview rows={len(diag)}"
             )
             for c in diag:
+                note_state = None
+                try:
+                    note_state = c.note.current_state.state
+                except Exception:
+                    note_state = "<no-current-state>"
                 log.info(
                     f"[last_reviewed]   id={c.id} state={c.state!r} "
-                    f"eie={c.entered_in_error_id!r} created={c.created.isoformat()} "
-                    f"section={(c.data or {}).get('section')!r} note={c.note_id} "
-                    f"data_keys={sorted((c.data or {}).keys())}"
+                    f"eie={c.entered_in_error_id!r} "
+                    f"created={c.created.isoformat()} "
+                    f"modified={c.modified.isoformat()} "
+                    f"section={(c.data or {}).get('section')!r} "
+                    f"note={c.note_id} note_state={note_state!r}"
                 )
         except Exception as exc:
             log.info(f"[last_reviewed] diagnostic failed: {exc!r}")
