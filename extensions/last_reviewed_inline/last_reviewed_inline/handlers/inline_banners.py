@@ -21,6 +21,7 @@ from canvas_sdk.events import EventType
 from canvas_sdk.handlers.base import BaseHandler
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.note import NoteStates
+from logger import log
 
 
 # Pinning the banner above any sibling grouping plugin's contributions
@@ -83,12 +84,35 @@ class _InlineLastReviewedBase(BaseHandler):
     def compute(self) -> list[Effect]:
         patient_id = self.event.target.id
         command = _latest_review(patient_id, self.SECTION_VALUE)
+        text = _banner_text(command)
         banner = Group(
-            name=_banner_text(command),
+            name=text,
             priority=_BANNER_PRIORITY,
             items=[],
         )
-        return [PatientChartGroup(items={"last_reviewed": banner}).apply()]
+        effect = PatientChartGroup(items={"last_reviewed": banner}).apply()
+
+        # TEMPORARY DIAGNOSTIC -- the empty-group banner isn't rendering on
+        # xpc-dev. Log enough to tell whether the handler is firing, what
+        # the event context looks like, and what we're emitting. Removed
+        # once we know why nothing shows up.
+        try:
+            ctx = self.event.context
+            ctx_len = len(ctx) if ctx is not None else None
+            ctx_sample = ctx[:1] if isinstance(ctx, list) and ctx else ctx
+            log.info(
+                f"[last_reviewed_inline] section={self.SECTION_VALUE} "
+                f"patient={patient_id} command_found={command is not None} "
+                f"banner_text={text!r} ctx_len={ctx_len} ctx_sample={ctx_sample!r}"
+            )
+            log.info(
+                f"[last_reviewed_inline]   effect.type={effect.type!r} "
+                f"effect.payload={effect.payload!r}"
+            )
+        except Exception as exc:
+            log.info(f"[last_reviewed_inline] diagnostic failed: {exc!r}")
+
+        return [effect]
 
 
 class ConditionsLastReviewed(_InlineLastReviewedBase):
