@@ -185,13 +185,32 @@ class TestHandle:
         handler = _make_handler(mock_event, patient_id="patient-42")
         handler.handle()
 
-        # The handler may issue additional diagnostic queries; assert that the
-        # production filter call is present, not that it is the only one.
-        mock_command.objects.filter.assert_any_call(
+        mock_command.objects.filter.assert_called_once_with(
             patient__id="patient-42",
             schema_key="chartSectionReview",
             state="committed",
             entered_in_error__isnull=True,
+        )
+
+    @patch("last_reviewed.handlers.section_content.render_to_string")
+    @patch("last_reviewed.handlers.section_content.Command")
+    def test_excludes_reviews_whose_parent_note_is_deleted(
+        self, mock_command, mock_render, mock_event, mock_command_queryset
+    ) -> None:
+        """A 'deleted' chart-section review is realized by Canvas as the
+        parent note transitioning to NoteStates.DELETED, not by mutating the
+        Command row. The handler must exclude these so the section rolls back
+        to the prior valid review."""
+        from canvas_sdk.v1.data.note import NoteStates
+
+        chain = mock_command_queryset(mock_command, commands=[])
+        mock_render.return_value = "<div/>"
+
+        handler = _make_handler(mock_event)
+        handler.handle()
+
+        chain.filter_result.exclude.assert_called_once_with(
+            note__current_state__state=NoteStates.DELETED
         )
 
     @patch("last_reviewed.handlers.section_content.render_to_string")

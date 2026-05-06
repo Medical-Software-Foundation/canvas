@@ -81,12 +81,16 @@ def mock_command_queryset():
         select_related_result = Mock()
         select_related_result.order_by.return_value = ordered
 
+        exclude_result = Mock()
+        exclude_result.select_related.return_value = select_related_result
+
         filter_result = Mock()
-        filter_result.select_related.return_value = select_related_result
+        filter_result.exclude.return_value = exclude_result
 
         mock_command_module_attr.objects.filter.return_value = filter_result
         return SimpleNamespace(
             filter_result=filter_result,
+            exclude_result=exclude_result,
             select_related_result=select_related_result,
             ordered=ordered,
         )

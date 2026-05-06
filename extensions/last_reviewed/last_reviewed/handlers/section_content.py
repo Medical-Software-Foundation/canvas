@@ -18,7 +18,7 @@ from canvas_sdk.handlers.patient_chart_summary_custom_section_handler import (
 )
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.command import Command
-from logger import log
+from canvas_sdk.v1.data.note import NoteStates
 
 from last_reviewed.handlers.section_config import SECTION_KEY
 
@@ -81,37 +81,12 @@ class LastReviewedSectionContent(PatientChartSummaryCustomSectionHandler):
     def handle(self):
         patient_id = self.event.target.id
 
-        # TEMPORARY DIAGNOSTIC — figuring out how Canvas marks a chart-section
-        # review as "deleted" so we can filter the ghost out. Remove once we
-        # know what to filter on. Wrapped so it can't break rendering.
-        try:
-            diag = list(
-                Command.objects.filter(
-                    patient__id=patient_id, schema_key="chartSectionReview"
-                )
-                .select_related("note__current_state")
-                .order_by("-created")[:30]
-            )
-            log.info(
-                f"[last_reviewed] patient={patient_id} chartSectionReview rows={len(diag)}"
-            )
-            for c in diag:
-                note_state = None
-                try:
-                    note_state = c.note.current_state.state
-                except Exception:
-                    note_state = "<no-current-state>"
-                log.info(
-                    f"[last_reviewed]   id={c.id} state={c.state!r} "
-                    f"eie={c.entered_in_error_id!r} "
-                    f"created={c.created.isoformat()} "
-                    f"modified={c.modified.isoformat()} "
-                    f"section={(c.data or {}).get('section')!r} "
-                    f"note={c.note_id} note_state={note_state!r}"
-                )
-        except Exception as exc:
-            log.info(f"[last_reviewed] diagnostic failed: {exc!r}")
-
+        # Canvas's "Mark as reviewed" workflow commits the chartSectionReview
+        # command into a small standalone note. When a clinician deletes the
+        # review, the Command row is left untouched (state stays 'committed',
+        # entered_in_error stays null) and the parent note is moved to the
+        # DELETED state instead. To honor "rolled back" reviews we have to
+        # exclude commands whose note is currently deleted.
         commands = (
             Command.objects.filter(
                 patient__id=patient_id,
@@ -119,6 +94,7 @@ class LastReviewedSectionContent(PatientChartSummaryCustomSectionHandler):
                 state="committed",
                 entered_in_error__isnull=True,
             )
+            .exclude(note__current_state__state=NoteStates.DELETED)
             .select_related("committer")
             .order_by("-created")
         )
