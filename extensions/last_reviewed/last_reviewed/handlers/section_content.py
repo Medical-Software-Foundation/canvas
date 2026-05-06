@@ -7,7 +7,7 @@ explicitly so missing reviews are obvious.
 """
 
 import base64
-from datetime import datetime, timezone
+from datetime import datetime
 
 import arrow
 from canvas_sdk.effects.patient_chart_summary_custom_section import (
@@ -74,7 +74,7 @@ def _format_row(label: str, command: Command | None) -> dict:
 
 
 class LastReviewedSectionContent(PatientChartSummaryCustomSectionHandler):
-    """Renders the 'Last Reviewed' table for the current patient."""
+    """Renders the 'Last Reviewed' section for the current patient."""
 
     SECTION_KEY = SECTION_KEY
 
