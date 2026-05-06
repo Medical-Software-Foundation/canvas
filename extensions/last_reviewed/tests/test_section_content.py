@@ -2,7 +2,7 @@
 
 import json
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from canvas_sdk.effects.base import EffectType
@@ -59,6 +59,13 @@ class TestCommitterName:
     def test_returns_none_if_staff_lookup_raises(self) -> None:
         """A user marked is_staff but missing the related Staff row should not crash."""
         user = make_staff_user(raises_on_staff_access=True)
+        assert _committer_name(user) is None
+
+    def test_returns_none_when_staff_attribute_is_none(self) -> None:
+        """SDK access path that returns None instead of raising must also be handled."""
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(is_staff=True, staff=None)
         assert _committer_name(user) is None
 
 
@@ -191,6 +198,42 @@ class TestHandle:
             state="committed",
             entered_in_error__isnull=True,
         )
+
+    @patch("last_reviewed.handlers.section_content.render_to_string")
+    @patch("last_reviewed.handlers.section_content.Command")
+    def test_breaks_early_after_finding_all_sections(
+        self, mock_command, mock_render, mock_event, utc_now
+    ) -> None:
+        """Once a review has been found for every covered section, the handler
+        should stop iterating the queryset instead of scanning every remaining
+        chart-section review on the patient."""
+        six = [
+            make_review_command(value, created=utc_now - timedelta(seconds=i))
+            for i, (_, value) in enumerate(_SECTIONS)
+        ]
+        poison = make_review_command(
+            "conditions", created=utc_now - timedelta(days=1)
+        )
+        iter_obj = iter(six + [poison])
+
+        # Build the queryset chain by hand so we can keep a reference to the
+        # iterator and assert that it was not exhausted.
+        ordered = Mock()
+        ordered.iterator.return_value = iter_obj
+        select_related_result = Mock()
+        select_related_result.order_by.return_value = ordered
+        exclude_result = Mock()
+        exclude_result.select_related.return_value = select_related_result
+        filter_result = Mock()
+        filter_result.exclude.return_value = exclude_result
+        mock_command.objects.filter.return_value = filter_result
+        mock_render.return_value = "<div/>"
+
+        _make_handler(mock_event).handle()
+
+        # If the loop broke after the 6th command, the poison still sits at
+        # the head of the iterator.
+        assert next(iter_obj, None) is poison
 
     @patch("last_reviewed.handlers.section_content.render_to_string")
     @patch("last_reviewed.handlers.section_content.Command")
