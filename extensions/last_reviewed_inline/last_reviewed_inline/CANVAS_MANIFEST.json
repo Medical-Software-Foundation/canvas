@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.142.0",
+    "plugin_version": "0.1.0",
+    "name": "last_reviewed_inline",
+    "description": "Adds an inline 'Last reviewed ... by ...' banner to the Conditions and Medications sections of the patient chart, sourced from committed chartSectionReview commands.",
+    "components": {
+        "handlers": [
+            {
+                "class": "last_reviewed_inline.handlers.inline_banners:ConditionsLastReviewed",
+                "description": "Renders the last-reviewed banner inside the Conditions chart section."
+            },
+            {
+                "class": "last_reviewed_inline.handlers.inline_banners:MedicationsLastReviewed",
+                "description": "Renders the last-reviewed banner inside the Medications chart section."
+            }
+        ],
+        "applications": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
