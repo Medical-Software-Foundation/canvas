@@ -1,0 +1,67 @@
+.lr-section {
+  font-family: Lato, "Helvetica Neue", Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.4285em;
+  color: rgba(0, 0, 0, 0.87);
+  box-sizing: border-box;
+}
+.lr-section *,
+.lr-section *::before,
+.lr-section *::after {
+  box-sizing: inherit;
+}
+
+.lr-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 0.8em 0;
+  font-size: 1.07142857em;
+  font-weight: 700;
+  line-height: 1.28571429em;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.lr-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: inherit;
+}
+.lr-icon svg { width: 100%; height: 100%; display: block; }
+
+.lr-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.lr-item {
+  padding: 0.5em 1rem;
+  margin: 0;
+  border-radius: 0.5em;
+  line-height: 1.14285714em;
+}
+
+.lr-name {
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.87);
+  line-height: 1.14285714em;
+}
+
+.lr-detail {
+  color: rgba(0, 0, 0, 0.7);
+  line-height: 1.14285714em;
+}
+
+.lr-detail-by {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.lr-never {
+  font-style: italic;
+  color: rgba(0, 0, 0, 0.4);
+}
