@@ -144,6 +144,36 @@ def test_payment_multiple_claims() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_payment_failure_creates_task() -> None:
+    """When Candid rejects the payment, an AddTask effect is returned."""
+    with (
+        patch("candid.handlers.on_patient_payment.CandidClient") as MockClient,
+        patch("candid.handlers.on_patient_payment.AddTask") as MockAddTask,
+        patch("candid.handlers.on_patient_payment.SyncLog"),
+    ):
+        client = MockClient.from_secrets.return_value
+        client.submit_payment.return_value = (False, "<422 HttpRequestValidationError> bad data")
+
+        handler = OnPatientPaymentProcessed.__new__(OnPatientPaymentProcessed)
+        handler.event = MagicMock()
+        handler.event.context = _payment_context(
+            total_cents="5000.00",
+            claim_payments=[{"claim_id": "claim-1", "allocated_cents": "5000.00"}],
+        )
+        handler.secrets = MOCK_SECRETS
+
+        effects = handler.compute()
+
+    # Should return exactly one effect (the task)
+    assert len(effects) == 1
+    MockAddTask.assert_called_once()
+    call_kwargs = MockAddTask.call_args.kwargs
+    assert call_kwargs["patient_id"] == "patient-key-123"
+    assert "Payment Notification Failed" in call_kwargs["title"]
+    assert "bad data" in call_kwargs["title"]
+    assert "Candid Integration" in call_kwargs["labels"]
+
+
 def test_reported_payment_ids_merged_with_existing() -> None:
     """New payment_id is merged into existing reported IDs, not overwriting them."""
     _, MockClaimEffect = _run_handler(

@@ -69,19 +69,22 @@ class CandidClaimDetailAPI(SimpleAPIRoute):
 
         posting_timestamps = _get_posting_timestamps(claim)
 
-        sync_history = [
-            {
-                "synced_at": s.synced_at.isoformat() if s.synced_at else None,
-                "log_type": s.log_type,
-                "status": s.candid_claim_status,
-                "effects": s.payment_effects_count,
-                "era_ids": s.era_ids.split(",") if s.era_ids else [],
-                "detail": s.detail,
-            }
-            for s in SyncLog.objects.filter(canvas_claim_id=canvas_claim_id).order_by(
-                "-synced_at"
-            )[:MAX_SYNC_HISTORY]
-        ]
+        try:
+            sync_history = [
+                {
+                    "synced_at": s.synced_at.isoformat() if s.synced_at else None,
+                    "log_type": s.log_type,
+                    "status": s.candid_claim_status,
+                    "effects": s.payment_effects_count,
+                    "era_ids": s.era_ids.split(",") if s.era_ids else [],
+                    "detail": s.detail,
+                }
+                for s in SyncLog.objects.filter(
+                    canvas_claim_id=canvas_claim_id
+                ).order_by("-synced_at")[:MAX_SYNC_HISTORY]
+            ]
+        except Exception:
+            sync_history = []
 
         banner_alert = claim.banner_alerts.filter(
             key=BANNER_KEY, status="active"

@@ -81,10 +81,11 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 
 When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSED` event), the plugin reports it to Candid's `POST /api/patient-payments/v4` endpoint.
 
-- Maps Canvas claim allocations to Candid encounter external IDs using stored metadata
+- Maps Canvas claim allocations to Candid encounter external IDs using `canvas:{claim_id}` (matching the `external_id` set at submission time)
 - Handles partial allocations (allocated amounts go to specific encounters, remainder goes as unattributed)
 - Supports payments across multiple claims
 - Stores the returned `patient_payment_id` on each allocated claim's metadata so the sync knows not to re-post it
+- On failure, creates a Canvas Task labeled "Candid Integration" with the error details to notify clinicians
 
 ### Claim Banners
 
@@ -174,6 +175,7 @@ The home-app `candid_integration/signals.py` module checks whether this plugin i
 ## Testing
 
 ```sh
-cd ~/candid
+cd candid
 uv run pytest tests/ -v
 ```
+

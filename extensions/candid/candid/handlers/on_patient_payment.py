@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect
+from canvas_sdk.effects.task.task import AddTask
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Claim
@@ -80,14 +81,21 @@ class OnPatientPaymentProcessed(BaseHandler):
             "allocations": allocations,
         }
 
-        success, payment_id = client.submit_payment(payload)
+        success, result_msg = client.submit_payment(payload)
         if not success:
             log.warning(
                 f"Candid: failed to report patient payment for patient "
-                f"{patient_id}: {payment_id}"
+                f"{patient_id}: {result_msg}"
             )
-            return []
+            return [
+                AddTask(
+                    patient_id=patient_id,
+                    title=f"Candid: Payment Notification Failed — {result_msg}",
+                    labels=["Candid Integration"],
+                ).apply()
+            ]
 
+        payment_id = result_msg
         log.info(
             f"Candid: patient payment reported for patient {patient_id} "
             f"(patient_payment_id={payment_id})"
@@ -127,4 +135,5 @@ class OnPatientPaymentProcessed(BaseHandler):
                     log.warning(
                         f"Candid: failed to write SyncLog for claim {claim_ext_id}"
                     )
+
         return effects
