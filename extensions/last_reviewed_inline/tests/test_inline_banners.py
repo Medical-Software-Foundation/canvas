@@ -158,7 +158,7 @@ class TestCompute:
         assert effects[0].type == EffectType.PATIENT_CHART__GROUP_ITEMS
 
     @patch("last_reviewed_inline.handlers.inline_banners.Command")
-    def test_group_uses_pinned_priority_and_empty_items(
+    def test_group_uses_pinned_priority(
         self, mock_command, mock_command_chain, mock_event
     ) -> None:
         mock_command_chain(mock_command, command=None)
@@ -167,8 +167,42 @@ class TestCompute:
 
         groups = self._payload(effect)["data"]["items"]
         assert len(groups) == 1
-        group = groups[0]
-        assert group["priority"] == _BANNER_PRIORITY
+        assert groups[0]["priority"] == _BANNER_PRIORITY
+
+    @patch("last_reviewed_inline.handlers.inline_banners.Command")
+    def test_group_passes_through_event_context_items(
+        self, mock_command, mock_command_chain, mock_event
+    ) -> None:
+        """Empty groups are silently dropped by the renderer, so the handler
+        forwards the section's existing items into our group; the banner
+        (Group.name) then renders as a header above them."""
+        mock_command_chain(mock_command, command=None)
+        ctx_items = [
+            {"id": 1, "codings": [{"code": "K219", "system": "ICD-10"}]},
+            {"id": 2, "codings": [{"code": "I10", "system": "ICD-10"}]},
+        ]
+        event = mock_event()
+        event.context = ctx_items
+
+        [effect] = ConditionsLastReviewed(event=event).compute()
+
+        [group] = self._payload(effect)["data"]["items"]
+        assert group["items"] == ctx_items
+
+    @patch("last_reviewed_inline.handlers.inline_banners.Command")
+    def test_group_falls_back_to_empty_items_when_context_is_missing(
+        self, mock_command, mock_command_chain, mock_event
+    ) -> None:
+        """Defensive: if the event has no context (e.g. patient with zero
+        conditions), the handler still emits a well-formed group rather
+        than blowing up."""
+        mock_command_chain(mock_command, command=None)
+        event = mock_event()
+        event.context = None
+
+        [effect] = ConditionsLastReviewed(event=event).compute()
+
+        [group] = self._payload(effect)["data"]["items"]
         assert group["items"] == []
 
     @patch("last_reviewed_inline.handlers.inline_banners.Command")

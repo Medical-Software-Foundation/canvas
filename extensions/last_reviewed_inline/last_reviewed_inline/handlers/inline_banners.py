@@ -85,10 +85,16 @@ class _InlineLastReviewedBase(BaseHandler):
         patient_id = self.event.target.id
         command = _latest_review(patient_id, self.SECTION_VALUE)
         text = _banner_text(command)
+        # The renderer drops empty groups, so to make the banner visible we
+        # have to put items in it. Pass through the section's existing
+        # context items unchanged -- the banner ends up rendering as a
+        # header above the same conditions/medications the section was
+        # already showing.
+        items = list(self.event.context) if self.event.context else []
         banner = Group(
             name=text,
             priority=_BANNER_PRIORITY,
-            items=[],
+            items=items,
         )
         effect = PatientChartGroup(items={"last_reviewed": banner}).apply()
 
