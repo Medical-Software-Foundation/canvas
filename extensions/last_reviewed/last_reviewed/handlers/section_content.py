@@ -18,6 +18,7 @@ from canvas_sdk.handlers.patient_chart_summary_custom_section_handler import (
 )
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.command import Command
+from logger import log
 
 from last_reviewed.handlers.section_config import SECTION_KEY
 
@@ -79,6 +80,28 @@ class LastReviewedSectionContent(PatientChartSummaryCustomSectionHandler):
 
     def handle(self):
         patient_id = self.event.target.id
+
+        # TEMPORARY DIAGNOSTIC — figuring out how Canvas marks a chart-section
+        # review as "deleted" so we can filter the ghost out. Remove once we
+        # know what to filter on. Wrapped so it can't break rendering.
+        try:
+            diag = list(
+                Command.objects.filter(
+                    patient__id=patient_id, schema_key="chartSectionReview"
+                ).order_by("-created")[:30]
+            )
+            log.info(
+                f"[last_reviewed] patient={patient_id} chartSectionReview rows={len(diag)}"
+            )
+            for c in diag:
+                log.info(
+                    f"[last_reviewed]   id={c.id} state={c.state!r} "
+                    f"eie={c.entered_in_error_id!r} created={c.created.isoformat()} "
+                    f"section={(c.data or {}).get('section')!r} note={c.note_id} "
+                    f"data_keys={sorted((c.data or {}).keys())}"
+                )
+        except Exception as exc:
+            log.info(f"[last_reviewed] diagnostic failed: {exc!r}")
 
         commands = (
             Command.objects.filter(

@@ -185,7 +185,9 @@ class TestHandle:
         handler = _make_handler(mock_event, patient_id="patient-42")
         handler.handle()
 
-        mock_command.objects.filter.assert_called_once_with(
+        # The handler may issue additional diagnostic queries; assert that the
+        # production filter call is present, not that it is the only one.
+        mock_command.objects.filter.assert_any_call(
             patient__id="patient-42",
             schema_key="chartSectionReview",
             state="committed",
