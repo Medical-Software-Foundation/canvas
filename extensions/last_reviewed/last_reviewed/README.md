@@ -3,6 +3,8 @@
 A patient chart summary section that shows, at a glance, when each chart
 section was last marked as reviewed and by whom.
 
+![Last Reviewed section in the patient chart summary](./Screenshot.png)
+
 ## What it does
 
 Adds a custom **Last Reviewed** section pinned to the top of the patient
