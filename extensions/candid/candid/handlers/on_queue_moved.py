@@ -42,8 +42,6 @@ class OnClaimQueueMoved(BaseHandler):
 
     def _get_instance_url(self) -> str:
         customer_id = self.environment.get("CUSTOMER_IDENTIFIER", "")
-        if customer_id == "local":
-            return "http://home-app-web:8000"
         return f"https://{customer_id}.canvasmedical.com"
 
     def _schedule_submission(self) -> list[Effect]:

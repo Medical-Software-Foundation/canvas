@@ -49,7 +49,7 @@ PATIENT_PAYMENT_DESC_PREFIX = "Candid patient payment "
 def _cents_to_dollars(cents: int | None) -> Decimal | None:
     if cents is None or cents == 0:
         return None
-    return Decimal(cents) / Decimal(100)
+    return (Decimal(cents) / Decimal(100)).quantize(Decimal("0.01"))
 
 
 def _match_line_item(
@@ -57,22 +57,27 @@ def _match_line_item(
 ) -> str | None:
     """Match a Candid service_line to a Canvas ClaimLineItem on proc_code, date, charge."""
     candid_proc = candid_line.get("procedure_code", "")
-    candid_charge_cents = candid_line.get("charge_amount_cents")
-    candid_dos = candid_line.get("date_of_service_range", {})
-    candid_from_date = candid_dos.get("start_date") or candid_dos.get("date_of_service")
-
     if not candid_proc:
         return None
 
-    candid_charge_dollars = _cents_to_dollars(candid_charge_cents)
+    # First pass: match on procedure code alone
+    matches = [li for li in line_items if li.proc_code == candid_proc]
 
-    matches = [
-        li
-        for li in line_items
-        if li.proc_code == candid_proc
-        and (not candid_from_date or li.from_date == candid_from_date)
-        and (candid_charge_dollars is None or li.charge == candid_charge_dollars)
-    ]
+    # If ambiguous, narrow by date and charge
+    if len(matches) > 1:
+        candid_charge_cents = candid_line.get("charge_amount_cents")
+        candid_dos = candid_line.get("date_of_service_range", {})
+        candid_from_date = candid_dos.get("start_date") or candid_dos.get("date_of_service")
+        candid_charge_dollars = _cents_to_dollars(candid_charge_cents)
+
+        narrowed = [
+            li
+            for li in matches
+            if (not candid_from_date or str(li.from_date) == str(candid_from_date))
+            and (candid_charge_dollars is None or li.charge == candid_charge_dollars)
+        ]
+        if narrowed:
+            matches = narrowed
 
     if len(matches) == 1:
         return str(matches[0].id)
@@ -85,7 +90,6 @@ def _match_line_item(
     else:
         log.warning(
             f"Candid sync: no match for procedure {candid_proc} "
-            f"(charge={candid_charge_cents}c, date={candid_from_date}) "
             f"on claim {canvas_claim_id}"
         )
     return None
