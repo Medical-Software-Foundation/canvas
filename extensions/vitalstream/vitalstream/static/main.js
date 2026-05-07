@@ -3,6 +3,8 @@ let selectedRow = null;
 let intervalSelections = {};
 let mockInterval = null;
 let sessionStartTime = null; // timestamp of first reading
+let activeSocket = null;
+let sessionEndedByUser = false;
 
 // Map interval labels to Spravato charting app's row_id values (0, 1, 2).
 var INTERVAL_ROW_IDS = {
@@ -46,6 +48,12 @@ window.addEventListener("load", () => {{
     });
   }
 
+  // Set up end session button — provider clicks when device feed is done.
+  var endBtn = document.getElementById('end-session-btn');
+  if (endBtn) {
+    endBtn.addEventListener('click', endSession);
+  }
+
   // Live filter for the readings feed.
   var filterInput = document.getElementById('live-readings-filter');
   if (filterInput) {
@@ -65,6 +73,7 @@ window.addEventListener("load", () => {{
 
 function connectToWebsocket(session_id, subdomain) {
   const socket = new WebSocket("wss://" + subdomain + ".canvasmedical.com/plugin-io/ws/vitalstream/" + session_id + "/");
+  activeSocket = socket;
 
   socket.addEventListener("open", (event) => {
     setSessionStatus("Waiting for data...");
@@ -74,6 +83,7 @@ function connectToWebsocket(session_id, subdomain) {
   socket.addEventListener("message", (event) => {
     ensureInstructionsAreClosed();
     setSessionStatus("Receiving data...", true);
+    setEndSessionVisible(true);
 
     data = JSON.parse(event.data).message
 
@@ -85,6 +95,11 @@ function connectToWebsocket(session_id, subdomain) {
   });
 
   socket.addEventListener("close", (event) => {
+    if (sessionEndedByUser) {
+      setSessionStatus("Session ended");
+      setSaveSummaryVisible(true);
+      return;
+    }
     setSessionStatus("Disconnected. Attempting to reconnect.");
     setSaveSummaryVisible(true);
     setTimeout(() => connectToWebsocket(session_id, subdomain), 3000);
@@ -93,6 +108,38 @@ function connectToWebsocket(session_id, subdomain) {
   socket.addEventListener("error", (event) => {
     setSessionStatus("Connection error");
   });
+}
+
+function endSession() {
+  if (!confirm('End this VitalStream session? You will no longer receive readings, and the summary can then be saved to the chart.')) {
+    return;
+  }
+
+  sessionEndedByUser = true;
+
+  if (mockInterval) {
+    clearInterval(mockInterval);
+    mockInterval = null;
+    var mockBtn = document.getElementById('mock-vitals-btn');
+    if (mockBtn) {
+      mockBtn.textContent = 'Mock Vitals';
+      mockBtn.classList.remove('mock-active');
+    }
+  }
+
+  if (activeSocket && activeSocket.readyState <= WebSocket.OPEN) {
+    activeSocket.close();
+  } else {
+    setSessionStatus("Session ended");
+    setSaveSummaryVisible(true);
+  }
+
+  setEndSessionVisible(false);
+}
+
+function setEndSessionVisible(visible) {
+  var btn = document.getElementById('end-session-btn');
+  if (btn) btn.style.display = visible ? '' : 'none';
 }
 
 function createTableCell(content) {
