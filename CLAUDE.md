@@ -22,7 +22,7 @@ Consult these for correct patterns:
 
 The single most dangerous pattern. A handler that subscribes to `PLUGIN_CREATED` or `PLUGIN_UPDATED` and iterates every patient turns any plugin reinstall — even an unrelated config tweak — into a potentially instance-killing batch. `PATIENT_UPDATED` is similarly broad: it fires on every attribute change.
 
-Use a global-scope `Application` with a `SimpleAPI` endpoint to let a user intentionally trigger the batch. See `vineyard/vineyard-note-automations/` for the pattern: a global app provides a button, clicking it calls an API that starts the work.
+Use a global-scope `Application` with a `SimpleAPI` endpoint to let a user intentionally trigger the batch — the app provides a button, clicking it calls an API that starts the work.
 
 ### Fail closed, never fail open
 
@@ -178,7 +178,7 @@ When rendering patient data, handle `None`. "None oz" or "None mg" is a poor use
 - Description is not the boilerplate "Edit the description in CANVAS_MANIFEST.json"
 - Handler classes listed in the manifest match actual class paths
 - `data_access.event`, `read`, `write` populated correctly
-- `README.md` includes a demo video link ([video drive](https://drive.google.com/drive/folders/1YaFaXr5x47_t2J_xtSViKeoNwm14vucX))
+- `README.md` describes what the plugin does and how to install it
 - `pyproject.toml` declares `canvas[test-utils]` and test config
 - Tests in `tests/` are meaningful (not just stubs)
 - No leftover `canvas init` boilerplate
