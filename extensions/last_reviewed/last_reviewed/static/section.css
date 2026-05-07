@@ -13,7 +13,16 @@
   height: 36px;
   margin-top: -36px;
   pointer-events: none;
-  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.28));
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.22));
+  /* The script in static/section.js toggles the modifier class below
+     once the user has scrolled to the end of the section. Default to
+     visible so charts that load without JS (or before it runs) still
+     get the affordance. */
+  opacity: 1;
+  transition: opacity 150ms ease-out;
+}
+.lr-section--at-bottom::after {
+  opacity: 0;
 }
 .lr-section *,
 .lr-section *::before,
