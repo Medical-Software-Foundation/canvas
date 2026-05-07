@@ -1,0 +1,128 @@
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #ffffff;
+    color: #1d2433;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+main {
+    flex: 1;
+    overflow-y: auto;
+    /* No bottom padding: the sticky .actions footer must sit flush against
+       the viewport bottom. With bottom padding here, content scrolls through
+       the gap between the footer and the actual bottom edge. */
+    padding: 14px 14px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.loading {
+    color: #64748b;
+    font-size: 14px;
+    padding: 16px 4px;
+}
+
+.banner {
+    background: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.banner.error {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+}
+
+.form-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 480px) {
+    .field-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+label {
+    font-size: 12px;
+    color: #475569;
+    font-weight: 500;
+}
+
+input[type="text"],
+input[type="date"],
+select {
+    font: inherit;
+    font-size: 14px;
+    padding: 7px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #0f172a;
+    width: 100%;
+}
+
+input:focus,
+select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.btn {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.btn-primary:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+}
+
+.actions {
+    position: sticky;
+    bottom: 0;
+    background: #ffffff;
+    padding: 10px 0 14px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #e1e5ea;
+}
