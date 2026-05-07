@@ -19,11 +19,11 @@ When a clinician opens the Prescribe command, the plugin contributes one extra f
 
 Behavior:
 
-- **Documentation only = Yes** → `sign_send_action`, `send_action`, and `print_action` are filtered out of the available actions in every command state. `sign_action` is retained so the entry can still be signed into the chart, but it cannot be transmitted to a pharmacy or printed — even after it has been signed.
+- **Documentation only = Yes** → `sign_send_action`, `send_action`, `print_action`, and `print` are filtered out of the available actions in every command state. `sign_action` is retained so the entry can still be signed into the chart, but it cannot be transmitted to a pharmacy or printed — even after it has been signed.
 - **Documentation only = blank** *(implicit "No")* → all default actions remain available, including sign, sign & send, send, and print.
 
 
-The selected value is persisted as command metadata under the key `documentation_only` (value `"Yes"` or `"No"`). Downstream consumers can read it via:
+The selected value is persisted as command metadata under the key `documentation_only` (value `"Yes"` when set; the entry is absent or empty otherwise). Downstream consumers can read it via:
 
 ```python
 from canvas_sdk.v1.data.command import CommandMetadata
@@ -44,7 +44,7 @@ Subscribes to `EventType.COMMAND__FORM__GET_ADDITIONAL_FIELDS`. When the event's
 
 ### `DocumentationOnlyActionFilter`
 
-Subscribes to `EventType.PRESCRIBE_COMMAND__AVAILABLE_ACTIONS`. On each render of the command's action menu — both pre- and post-commit — it reads the stored `documentation_only` metadata. If the value equals `"Yes"`, it emits a `COMMAND_AVAILABLE_ACTIONS_RESULTS` effect with `sign_send_action`, `send_action`, and `print_action` removed (sign is retained). Otherwise it returns no effect, leaving default actions in place.
+Subscribes to `EventType.PRESCRIBE_COMMAND__AVAILABLE_ACTIONS`. On each render of the command's action menu — both pre- and post-commit — it reads the stored `documentation_only` metadata. If the value equals `"Yes"`, it emits a `COMMAND_AVAILABLE_ACTIONS_RESULTS` effect with `sign_send_action`, `send_action`, `print_action`, and `print` removed (sign is retained). Otherwise it returns no effect, leaving default actions in place.
 
 ## Project layout
 

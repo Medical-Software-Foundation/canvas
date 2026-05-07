@@ -59,7 +59,7 @@ class DocumentationOnlyFormHandler(BaseHandler):
 
 
 class DocumentationOnlyActionFilter(BaseHandler):
-    """Filter sign / sign-and-send actions when documentation_only == Yes."""
+    """Filter sign-and-send, send, and print actions when documentation_only == Yes; sign is retained."""
 
     RESPONDS_TO = EventType.Name(EventType.PRESCRIBE_COMMAND__AVAILABLE_ACTIONS)
 
