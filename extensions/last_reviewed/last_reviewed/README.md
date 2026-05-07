@@ -39,15 +39,30 @@ Two handlers, both responding to chart-summary events:
   `PatientChartSummaryCustomSection` effect with HTML rendered from
   `static/section.html` and styles loaded from `static/section.css`.
 
-Markup and styling live as separate files under `static/`:
+Markup, styling, and a small client-side script live as separate files
+under `static/`:
 
 - `static/section.html` — Django template for the section body
 - `static/section.css` — visual styles (font, weight, color hierarchy,
   icon size) tuned to match native chart sections
+- `static/section.js` — toggles a `.lr-section--at-bottom` modifier
+  class once the user has scrolled to the end of the section so the
+  bottom-fade overflow affordance can drop out
 
-The custom section ships as a single inline content blob, so the CSS is
-loaded via `render_to_string` and inlined into the HTML at render time
-rather than referenced by URL.
+The custom section ships as a single inline content blob, so the CSS
+and JS are loaded via `render_to_string` and inlined into the HTML at
+render time rather than referenced by URL.
+
+## Bottom-fade overflow affordance
+
+When the section's contents extend below the host's chart-summary slot,
+a sticky `::after` overlay on `.lr-section` paints a soft fade at the
+bottom edge as a "more below" hint. Because the host owns the scroll
+container (not us), the fade is implemented in two pieces: a CSS-only
+sticky pseudo that always sits at the visible viewport bottom, and the
+small `static/section.js` listener that finds the nearest scrolling
+ancestor and toggles a modifier class so the fade goes away once the
+section's bottom edge is fully in view.
 
 ## Filtering deleted reviews
 
