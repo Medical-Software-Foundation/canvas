@@ -17,17 +17,20 @@ from candid.handlers.on_queue_moved import GRACE_PERIOD_SECONDS, OnClaimQueueMov
 
 
 SECRETS = {
-    "CANVAS_INSTANCE_URL": "https://canvas.test/",
-    "CANDID_API_KEY": "test-api-key",
     "CANDID_BASE_URL": "https://api.candid.test",
     "CANDID_CLIENT_ID": "client-id",
     "CANDID_CLIENT_SECRET": "client-secret",
+}
+
+ENVIRONMENT = {
+    "CUSTOMER_IDENTIFIER": "canvas-test",
 }
 
 
 def _build_handler(queue_entered_id: str | None, claim_id: str = "claim-1") -> OnClaimQueueMoved:
     handler = OnClaimQueueMoved.__new__(OnClaimQueueMoved)
     handler.secrets = SECRETS
+    handler.environment = ENVIRONMENT
     handler.event = MagicMock()
     handler.event.context = {
         "queue_entered": {"id": queue_entered_id} if queue_entered_id else {},
@@ -84,9 +87,9 @@ def test_submission_queue_schedules_delayed_http_request() -> None:
         assert result == ["scheduled-effect"]
         MockHttp.assert_called_once()
         kwargs = MockHttp.call_args.kwargs
-        assert kwargs["url"] == "https://canvas.test/plugin-io/api/candid/submit"
+        assert kwargs["url"] == "https://canvas-test.canvasmedical.com/plugin-io/api/candid/submit"
         assert kwargs["method"] == "POST"
-        assert kwargs["headers"]["Authorization"] == "test-api-key"
+        assert kwargs["headers"]["Authorization"] == "client-secret"
         assert '"claim_id": "claim-99"' in kwargs["body"]
         applied.set_async.assert_called_once_with(delay_seconds=GRACE_PERIOD_SECONDS)
 

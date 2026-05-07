@@ -19,7 +19,7 @@ class CandidSyncAPI(SimpleAPIRoute):
     PATH = "/sync"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        return credentials.key == self.secrets["CANDID_API_KEY"]
+        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
 
     def post(self) -> list[Response | Effect]:
         body = self.request.json()

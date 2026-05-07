@@ -136,8 +136,8 @@ candid/
 | `CANDID_CLIENT_ID` | Candid OAuth2 client ID |
 | `CANDID_CLIENT_SECRET` | Candid OAuth2 client secret |
 | `CANDID_BASE_URL` | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
-| `CANVAS_INSTANCE_URL` | Public URL of this Canvas instance (for delayed self-call to `/submit`) |
-| `CANDID_API_KEY` | Shared secret for authenticating the SimpleAPI endpoints |
+
+The instance URL for self-calls (e.g. delayed `/submit`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no secret needed. The SimpleAPI endpoints (`/submit`, `/sync`) authenticate using a Candid OAuth bearer token, so no separate API key is required.
 
 ## Claim Metadata Keys
 

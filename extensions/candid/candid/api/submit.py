@@ -27,7 +27,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
     PATH = "/submit"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        return credentials.key == self.secrets["CANDID_API_KEY"]
+        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
 
     def _get_claim(self) -> Claim | None:
         body = self.request.json()

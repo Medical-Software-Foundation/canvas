@@ -53,8 +53,6 @@
         "CANDID_CLIENT_ID",
         "CANDID_CLIENT_SECRET",
         "CANDID_BASE_URL",
-        "CANVAS_INSTANCE_URL",
-        "CANDID_API_KEY",
         "namespace_read_write_access_key"
     ],
     "tags": {},

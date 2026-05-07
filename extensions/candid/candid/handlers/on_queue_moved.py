@@ -40,10 +40,16 @@ class OnClaimQueueMoved(BaseHandler):
 
         return []
 
+    def _get_instance_url(self) -> str:
+        customer_id = self.environment.get("CUSTOMER_IDENTIFIER", "")
+        if customer_id == "local":
+            return "http://home-app-web:8000"
+        return f"https://{customer_id}.canvasmedical.com"
+
     def _schedule_submission(self) -> list[Effect]:
         """Schedule a delayed claim submission to Candid."""
         claim_id = str(self.event.target.id)
-        instance_url = self.secrets["CANVAS_INSTANCE_URL"].rstrip("/")
+        instance_url = self._get_instance_url()
 
         log.info(
             f"Candid plugin: scheduling submission check for claim {claim_id} "
@@ -56,7 +62,7 @@ class OnClaimQueueMoved(BaseHandler):
                 method="POST",
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": self.secrets["CANDID_API_KEY"],
+                    "Authorization": self.secrets["CANDID_CLIENT_SECRET"],
                 },
                 body=json.dumps({"claim_id": claim_id}),
             )
