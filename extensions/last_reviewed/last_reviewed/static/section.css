@@ -4,32 +4,35 @@
   line-height: 1.4285em;
   color: rgba(0, 0, 0, 0.87);
   box-sizing: border-box;
-  /* Force our element to be the scroll container (rather than letting
-     the host's outer wrapper own the scroll), so our scrollbar styling
-     below actually applies. The pixel cap is arbitrary -- just tall
-     enough to show a few rows comfortably while ensuring overflow when
-     all six are populated. */
   max-height: 280px;
-  overflow-y: auto;
-  /* Firefox: persistent thin scrollbar instead of the OS overlay default. */
+  overflow-y: scroll; /* always reserve the gutter, not just when overflowing */
+  /* Firefox: persistent thin scrollbar with explicit colors. */
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+  scrollbar-color: #d35400 #fde9d8;
 }
-/* WebKit/Blink: defining ::-webkit-scrollbar opts out of the OS overlay
-   scrollbar (macOS Safari/Chrome) so the bar stays visible whenever
-   there is overflow, instead of only during active scroll. */
+/* DIAGNOSTIC: bright, unmistakable colors to verify the rules are being
+   applied at all. If the scrollbar shows orange-on-cream during scroll,
+   our CSS is loading and the only remaining fight is the macOS overlay
+   "fade when idle" behavior. If it shows the macOS default translucent
+   pill instead, our pseudo-element rules are being filtered somewhere
+   and we need a different approach. Revert to neutral colors after we
+   have an answer. */
 .lr-section::-webkit-scrollbar {
-  width: 8px;
+  width: 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: #fde9d8;
 }
 .lr-section::-webkit-scrollbar-track {
-  background: transparent;
+  background-color: #fde9d8;
 }
 .lr-section::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
+  background-color: #d35400;
+  border-radius: 6px;
+  border: 2px solid #fde9d8;
 }
 .lr-section::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.5);
+  background-color: #a04000;
 }
 .lr-section *,
 .lr-section *::before,
