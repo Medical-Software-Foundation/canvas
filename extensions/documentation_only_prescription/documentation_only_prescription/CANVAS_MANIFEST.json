@@ -1,0 +1,37 @@
+{
+  "sdk_version": "0.141.0",
+  "plugin_version": "0.0.1",
+  "name": "documentation_only_prescription",
+  "description": "Adds an optional 'Documentation only' Yes/No field to the Prescribe command. When set to Yes, the sign-and-send, send, and print actions are removed (in both pre- and post-commit states) so the prescription can be signed but never transmitted or printed.",
+  "components": {
+    "protocols": [
+      {
+        "class": "documentation_only_prescription.protocols.documentation_only_form:DocumentationOnlyFormHandler",
+        "description": "Adds the 'Documentation only' form field to the Prescribe command in the chart UI and the note printout.",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      },
+      {
+        "class": "documentation_only_prescription.protocols.documentation_only_form:DocumentationOnlyActionFilter",
+        "description": "Removes sign-and-send, send, and print actions from the Prescribe command when 'Documentation only' is set to Yes.",
+        "data_access": {
+          "event": "",
+          "read": [],
+          "write": []
+        }
+      }
+    ]
+  },
+  "secrets": [],
+  "tags": {},
+  "references": [
+    "https://docs.canvasmedical.com/sdk/command-metadata-create-form-effect/",
+    "https://docs.canvasmedical.com/sdk/commands/"
+  ],
+  "license": "MIT",
+  "diagram": false,
+  "readme": "../README.md"
+}
