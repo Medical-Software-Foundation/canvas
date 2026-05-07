@@ -14,7 +14,6 @@ Consult these for correct patterns:
   - `canvas_sdk/utils/http.py` — the SDK's HTTP client with metrics and timeout enforcement
   - `canvas_sdk/caching/` — `Cache` wrapper with `get_or_set()`, TTLs
 - **canvas-plugins/example-plugins/** — 40+ reference implementations
-- **Medical-Software-Foundation/canvas** (`protocols/`, `extensions/`) — production-quality open-source plugins
 
 ## Critical anti-patterns
 
