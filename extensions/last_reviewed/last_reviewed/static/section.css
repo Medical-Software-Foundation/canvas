@@ -4,16 +4,7 @@
   line-height: 1.4285em;
   color: rgba(0, 0, 0, 0.87);
   box-sizing: border-box;
-  max-height: 280px;
-  overflow-y: auto;
-  /* Firefox: still ask for the thin native scrollbar where supported. */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
 }
-/* Always-visible "more below" overlay. Lives on top of the content (an
-   inset box-shadow is painted behind content and was only visible at
-   the very bottom of scroll). Sticky to bottom: 0 keeps it at the
-   bottom edge of the visible scroll viewport at every scroll position. */
 .lr-section::after {
   content: "";
   display: block;
@@ -23,19 +14,6 @@
   margin-top: -36px;
   pointer-events: none;
   background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.28));
-}
-.lr-section::-webkit-scrollbar {
-  width: 8px;
-}
-.lr-section::-webkit-scrollbar-track {
-  background: transparent;
-}
-.lr-section::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-}
-.lr-section::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.5);
 }
 .lr-section *,
 .lr-section *::before,
