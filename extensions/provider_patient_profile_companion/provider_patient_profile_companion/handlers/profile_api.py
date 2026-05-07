@@ -33,7 +33,7 @@ _SEX_AT_BIRTH_CHOICES = [
 def _serialize_patient(patient: Patient) -> dict[str, Any]:
     """Build the form's initial state from a Patient row."""
     return {
-        "patient_id": patient.id,
+        "patient_id": str(patient.id),
         "fields": {
             "first_name": patient.first_name or "",
             "middle_name": patient.middle_name or "",

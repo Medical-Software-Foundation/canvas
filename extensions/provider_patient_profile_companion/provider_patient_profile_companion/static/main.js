@@ -155,8 +155,8 @@
     function onSave() {
         if (state.saving) return;
         state.saving = true;
-        var btn = document.getElementById('save_button');
-        if (btn) btn.disabled = true;
+        var initialBtn = document.getElementById('save_button');
+        if (initialBtn) initialBtn.disabled = true;
 
         var payload = { patient_id: state.patientId, fields: collectFields() };
         postSave(payload).then(function (result) {
@@ -164,13 +164,25 @@
                 showSaveError((result.body && result.body.error) || 'Save failed.');
                 return;
             }
-            showSaveSuccess();
-            return fetchData().then(applyServerData).then(renderAll);
+            // Save succeeded. Refresh the form from the server, then show
+            // "Saved." *after* the re-render — otherwise renderAll wipes the
+            // banner. If the refetch itself fails, the save was still applied
+            // server-side, so still show success rather than a misleading
+            // failure banner.
+            return fetchData()
+                .then(applyServerData)
+                .then(renderAll)
+                .then(showSaveSuccess, showSaveSuccess);
         }).catch(function () {
+            // Reached only if postSave itself rejected (network drop). The
+            // refetch chain above swallows its own errors, so this can't
+            // mistakenly fire on a successful save with a flaky GET.
             showSaveError('Save failed — network error.');
         }).finally(function () {
             state.saving = false;
-            if (btn) btn.disabled = false;
+            // renderAll may have replaced the original button — re-resolve.
+            var liveBtn = document.getElementById('save_button');
+            if (liveBtn) liveBtn.disabled = false;
         });
     }
 

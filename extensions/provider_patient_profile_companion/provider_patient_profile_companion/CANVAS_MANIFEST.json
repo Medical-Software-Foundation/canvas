@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.4",
+    "plugin_version": "0.0.5",
     "name": "provider_patient_profile_companion",
     "description": "Provider companion app (patient scope) that edits the writable identity fields of the patient profile (name, DOB, sex at birth, SSN).",
     "url_permissions": [],

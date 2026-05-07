@@ -73,7 +73,18 @@ class TestSerializePatient:
     def test_minimal(self) -> None:
         out = _serialize_patient(_make_patient())
         assert out["patient_id"] == PATIENT_UUID
+        assert isinstance(out["patient_id"], str)
         assert out["fields"]["first_name"] == "Ada"
+
+    def test_patient_id_is_stringified(self) -> None:
+        # Defensive: matches the convention used by every sibling companion
+        # plugin (str() wrap on patient.id) so the response stays JSON-safe
+        # if the SDK ever migrates `Patient.id` from CharField to UUIDField.
+        import uuid
+        uid = uuid.uuid4()
+        out = _serialize_patient(_make_patient(id=uid))
+        assert out["patient_id"] == str(uid)
+        assert isinstance(out["patient_id"], str)
         assert out["fields"]["birthdate"] == "1980-01-02"
         assert out["fields"]["sex_at_birth"] == "F"
         # No fields the SDK can't write through. Pharmacies and provider/location
