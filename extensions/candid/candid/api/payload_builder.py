@@ -247,13 +247,11 @@ def _add_service_lines(claim: Claim, payload: dict) -> None:
         d["code"]: i for i, d in enumerate(payload.get("diagnoses", []))
     }
 
-    for line_item in claim.line_items.all():
-        if line_item.proc_code == "COPAY":
-            continue
-
+    for line_item in claim.get_active_claim_line_items():
         service_line: dict[str, Any] = {
             "procedure_code": line_item.proc_code,
             "units": "UN",
+            "external_id": str(line_item.id),
         }
         if line_item.units is not None:
             service_line["quantity"] = str(line_item.units)

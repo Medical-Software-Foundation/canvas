@@ -55,19 +55,27 @@ def _cents_to_dollars(cents: int | None) -> Decimal | None:
 def _match_line_item(
     candid_line: dict, line_items: list, canvas_claim_id: str
 ) -> str | None:
-    """Match a Candid service_line to a Canvas ClaimLineItem on proc_code, date, charge."""
+    """Match a Candid service_line to a Canvas ClaimLineItem by external_id, then on proc_code, date, charge."""
+    # First pass: match on external_id
+    if external_id := candid_line.get("external_id"):
+        match = next((li for li in line_items if str(li.id) == external_id), None)
+        if match:
+            return str(match.id)
+
+    # Second pass: match on procedure code alone
     candid_proc = candid_line.get("procedure_code", "")
     if not candid_proc:
         return None
 
-    # First pass: match on procedure code alone
     matches = [li for li in line_items if li.proc_code == candid_proc]
 
     # If ambiguous, narrow by date and charge
     if len(matches) > 1:
         candid_charge_cents = candid_line.get("charge_amount_cents")
         candid_dos = candid_line.get("date_of_service_range", {})
-        candid_from_date = candid_dos.get("start_date") or candid_dos.get("date_of_service")
+        candid_from_date = candid_dos.get("start_date") or candid_dos.get(
+            "date_of_service"
+        )
         candid_charge_dollars = _cents_to_dollars(candid_charge_cents)
 
         narrowed = [
@@ -324,7 +332,7 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
 
     client = CandidClient.from_secrets(secrets)
 
-    line_items = list(claim.line_items.all())
+    line_items = list(claim.get_active_claim_line_items())
     first_line = line_items[0] if line_items else None
     coverages_ordered = active_coverages_ordered(claim)
     primary_id = _coverage_id_at(coverages_ordered, 0)

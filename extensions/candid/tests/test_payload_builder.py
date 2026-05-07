@@ -181,15 +181,16 @@ def _fake_line_item(proc_code: str, charge: int, linked_dx_codes: list[str]) -> 
     li.proc_code = proc_code
     li.charge = charge
     li.units = 1
+    li.id = f"li-{proc_code}"
     li.diagnosis_codes.filter.return_value = [_fake_dx(code) for code in linked_dx_codes]
     li.modifiers.values_list.return_value = []
     return li
 
 
 def _fake_claim(line_items: list[MagicMock]) -> MagicMock:
-    """Build a mock Claim whose line_items.all() returns the given list."""
+    """Build a mock Claim whose get_active_claim_line_items() returns the given list."""
     claim = MagicMock()
-    claim.line_items.all.return_value = line_items
+    claim.get_active_claim_line_items.return_value = line_items
     return claim
 
 
@@ -316,6 +317,7 @@ def _full_line_item() -> MagicMock:
     li.proc_code = "99213"
     li.charge = Decimal("100.00")
     li.units = 1
+    li.id = "li-99213"
     li.from_date = date(2026, 1, 15)
     li.place_of_service = "11"
     linked = MagicMock()
@@ -338,6 +340,7 @@ def _full_claim_for_payload() -> MagicMock:
     line = _full_line_item()
     claim.line_items.all.return_value = [line]
     claim.line_items.first.return_value = line
+    claim.get_active_claim_line_items.return_value = [line]
 
     dx = MagicMock()
     dx.code = "Z00.00"

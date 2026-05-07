@@ -54,6 +54,7 @@ def _fake_claim(
     claim.id = "00000000-0000-0000-0000-000000000001"
     claim.line_items.all.return_value = line_items
     claim.line_items.first.return_value = line_items[0] if line_items else None
+    claim.get_active_claim_line_items.return_value = line_items
 
     if coverages is None:
         coverages = [_fake_coverage("cov-primary", 0)]
