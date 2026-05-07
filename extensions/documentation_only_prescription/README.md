@@ -4,7 +4,7 @@ A Canvas SDK plugin that adds a **Documentation only** opt-in field to the **Pre
 
 ## Why
 
-Clinicians sometimes need to record a prescription that already exists or was issued elsewhere (e.g., a medication a patient is bringing in from another prescriber, a sample, or a historical Rx) without electronically transmitting it. Surfacing a single explicit toggle on the Prescribe command — and gating sign / sign-and-send on it — prevents accidental transmission of documentation-only entries.
+Clinicians sometimes need to record a prescription that was ordered outside of canvas (e.g., a medication called into the pharmacy) without electronically transmitting it. Surfacing a single explicit toggle on the Prescribe command — and gating sign-and-send / send / print on it — prevents accidental transmission of documentation-only entries.
 
 ## What it does
 
