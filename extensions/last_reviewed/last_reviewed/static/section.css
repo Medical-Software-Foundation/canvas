@@ -5,34 +5,29 @@
   color: rgba(0, 0, 0, 0.87);
   box-sizing: border-box;
   max-height: 280px;
-  overflow-y: scroll; /* always reserve the gutter, not just when overflowing */
-  /* Firefox: persistent thin scrollbar with explicit colors. */
+  overflow-y: auto;
+  /* Static "there's more below" hint: an inset shadow at the bottom edge
+     of the visible area. Doesn't depend on the host's background color
+     and never has to fight macOS's hide-when-idle scrollbar behavior --
+     the native scrollbar still works during scroll, this just gives an
+     idle-time affordance that the section is scrollable. */
+  box-shadow: inset 0 -16px 16px -16px rgba(0, 0, 0, 0.18);
+  /* Firefox: still ask for the thin native scrollbar where supported. */
   scrollbar-width: thin;
-  scrollbar-color: #d35400 #fde9d8;
+  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
 }
-/* DIAGNOSTIC: bright, unmistakable colors to verify the rules are being
-   applied at all. If the scrollbar shows orange-on-cream during scroll,
-   our CSS is loading and the only remaining fight is the macOS overlay
-   "fade when idle" behavior. If it shows the macOS default translucent
-   pill instead, our pseudo-element rules are being filtered somewhere
-   and we need a different approach. Revert to neutral colors after we
-   have an answer. */
 .lr-section::-webkit-scrollbar {
-  width: 12px;
-  -webkit-appearance: none;
-  appearance: none;
-  background-color: #fde9d8;
+  width: 8px;
 }
 .lr-section::-webkit-scrollbar-track {
-  background-color: #fde9d8;
+  background: transparent;
 }
 .lr-section::-webkit-scrollbar-thumb {
-  background-color: #d35400;
-  border-radius: 6px;
-  border: 2px solid #fde9d8;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
 }
 .lr-section::-webkit-scrollbar-thumb:hover {
-  background-color: #a04000;
+  background: rgba(0, 0, 0, 0.5);
 }
 .lr-section *,
 .lr-section *::before,
