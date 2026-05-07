@@ -4,9 +4,12 @@
   line-height: 1.4285em;
   color: rgba(0, 0, 0, 0.87);
   box-sizing: border-box;
-  /* If the host's container is shorter than our six rows, scroll inside
-     our content rather than letting the host clip rows silently. */
-  max-height: 100%;
+  /* Force our element to be the scroll container (rather than letting
+     the host's outer wrapper own the scroll), so our scrollbar styling
+     below actually applies. The pixel cap is arbitrary -- just tall
+     enough to show a few rows comfortably while ensuring overflow when
+     all six are populated. */
+  max-height: 280px;
   overflow-y: auto;
   /* Firefox: persistent thin scrollbar instead of the OS overlay default. */
   scrollbar-width: thin;
