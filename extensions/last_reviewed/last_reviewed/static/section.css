@@ -19,7 +19,6 @@
      visible so charts that load without JS (or before it runs) still
      get the affordance. */
   opacity: 1;
-  transition: opacity 150ms ease-out;
 }
 .lr-section--at-bottom::after {
   opacity: 0;

@@ -18,7 +18,6 @@
 
   function init(sectionEl) {
     var scroller = findScrollContainer(sectionEl);
-    var scrollTarget = scroller === window ? window : scroller;
 
     function update() {
       var rect = sectionEl.getBoundingClientRect();
@@ -31,7 +30,7 @@
       sectionEl.classList.toggle("lr-section--at-bottom", !hasMoreBelow);
     }
 
-    scrollTarget.addEventListener("scroll", update, { passive: true });
+    scroller.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
     update();
     // Re-check after layout settles (e.g., font loading shifts heights).
