@@ -6,15 +6,23 @@
   box-sizing: border-box;
   max-height: 280px;
   overflow-y: auto;
-  /* Static "there's more below" hint: an inset shadow at the bottom edge
-     of the visible area. Doesn't depend on the host's background color
-     and never has to fight macOS's hide-when-idle scrollbar behavior --
-     the native scrollbar still works during scroll, this just gives an
-     idle-time affordance that the section is scrollable. */
-  box-shadow: inset 0 -16px 16px -16px rgba(0, 0, 0, 0.18);
   /* Firefox: still ask for the thin native scrollbar where supported. */
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+}
+/* Always-visible "more below" overlay. Lives on top of the content (an
+   inset box-shadow is painted behind content and was only visible at
+   the very bottom of scroll). Sticky to bottom: 0 keeps it at the
+   bottom edge of the visible scroll viewport at every scroll position. */
+.lr-section::after {
+  content: "";
+  display: block;
+  position: sticky;
+  bottom: 0;
+  height: 36px;
+  margin-top: -36px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.28));
 }
 .lr-section::-webkit-scrollbar {
   width: 8px;
