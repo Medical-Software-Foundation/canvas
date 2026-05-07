@@ -2,6 +2,8 @@
 
 A Canvas SDK plugin that adds a **Documentation only** opt-in field to the **Prescribe** command. The field renders as a single-option dropdown (`Yes`); leaving it unset is the implicit "No". When the user selects **Yes**, all electronic-transmission and print actions are removed from the command — both before signing (*sign and send*, *print*) and after (*send*, *print*) — so the prescription can be signed for the chart record but cannot be transmitted electronically or printed.
 
+![Documentation Only Prescription](./documentation_only.png)
+
 ## Why
 
 Clinicians sometimes need to record a prescription that was ordered outside of canvas (e.g., a medication called into the pharmacy) without electronically transmitting it. Surfacing a single explicit toggle on the Prescribe command — and gating sign-and-send / send / print on it — prevents accidental transmission of documentation-only entries.
