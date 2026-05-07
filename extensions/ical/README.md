@@ -72,5 +72,8 @@ their calendar app's "Add by URL / subscribe to calendar" flow.
 
 ## Screenshots
 
-_Coming soon - add a screenshot of the Calendar Links modal here before
-publishing._
+The Calendar Links modal lists the logged-in staff member's personal
+calendar URL and a URL for each active practice location, with a Copy
+button next to each.
+
+![Calendar Links modal](ical/static/screenshot.jpg)

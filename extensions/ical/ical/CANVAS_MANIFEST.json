@@ -41,7 +41,7 @@
     "secrets": ["CALENDAR_LINK_SALT__EXISTING_LINKS_BECOME_INVALID_IF_CHANGED"],
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
-    "readme": "./README.md"
+    "readme": "../README.md"
 }

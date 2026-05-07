@@ -187,11 +187,13 @@
             button.addEventListener("click", function () {
                 var url = button.getAttribute("data-copy");
                 navigator.clipboard.writeText(url).then(function () {
-                    var original = button.textContent;
                     button.textContent = "Copied";
                     button.classList.add("copied");
+                    // Hardcode the reset label so a rapid second click within
+                    // the 1500 ms window does not capture "Copied" as the
+                    // restore value and leave the button stuck on it.
                     setTimeout(function () {
-                        button.textContent = original;
+                        button.textContent = "Copy";
                         button.classList.remove("copied");
                     }, 1500);
                 });
