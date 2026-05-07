@@ -1,0 +1,10 @@
+[project]
+name = "ical"
+version = "0.0.2"
+description = "Provides calendar integration for appointments and events"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "arrow>=1.3.0",
+]
