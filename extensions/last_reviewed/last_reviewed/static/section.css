@@ -4,9 +4,8 @@
   line-height: 1.4285em;
   color: rgba(0, 0, 0, 0.87);
   box-sizing: border-box;
-  /* Safety net: if the host's container is shorter than our six rows
-     after the compact layout, scroll inside our content rather than
-     letting the host clip rows silently. */
+  /* If the host's container is shorter than our six rows, scroll inside
+     our content rather than letting the host clip rows silently. */
   max-height: 100%;
   overflow-y: auto;
 }
@@ -45,11 +44,7 @@
 }
 
 .lr-item {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75em;
-  padding: 0.25em 1rem;
+  padding: 0.5em 1rem;
   margin: 0;
   border-radius: 0.5em;
   line-height: 1.14285714em;
@@ -59,20 +54,11 @@
   font-weight: 700;
   color: rgba(0, 0, 0, 0.87);
   line-height: 1.14285714em;
-  flex: 0 0 auto;
 }
 
 .lr-detail {
   color: rgba(0, 0, 0, 0.7);
   line-height: 1.14285714em;
-  text-align: right;
-  /* Truncate long reviewer names instead of wrapping them onto a second
-     line, which would defeat the compact-row goal. */
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .lr-detail-by {
