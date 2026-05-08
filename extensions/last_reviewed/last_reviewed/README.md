@@ -25,6 +25,47 @@ review, the section automatically rolls back to whatever the previous
 valid review was (or "Never reviewed" if none) — see *Filtering deleted
 reviews* below.
 
+## The problem this solves
+
+Clinicians rely on the patient chart summary to make care decisions, but
+the rows inside each section do not reflect whether the information is
+considered current. Canvas exposes a *Mark as reviewed* button on each
+section, but the history of those reviews is buried inside individual
+notes — there's no single place to see when each section was last
+reviewed and by whom. This plugin surfaces that history as a
+top-of-summary section so the review status of every chart section is
+visible at a glance.
+
+## Who it's for
+
+- Clinicians who own a panel of patients and need to know which
+  sections have been reviewed recently before relying on them in a
+  visit.
+- Visiting or covering providers who are seeing a chart for the first
+  time and want a quick read on how stale each section's contents
+  might be.
+- Ops or quality teams auditing review compliance across patients.
+
+## How to install
+
+Standard Canvas plugin install, run from the repository's `extensions/`
+directory:
+
+```bash
+canvas install --host <your-instance> last_reviewed
+```
+
+No secrets, environment variables, or external API keys are required —
+the plugin only reads internal Canvas chart-section-review commands.
+
+The only configurable surface is **section ordering**. The plugin pins
+its custom section to the top of the chart summary and lists the
+default chart sections underneath in their default order; if another
+plugin also emits a `PatientChartSummaryConfiguration` for the same
+patient, the last-applied configuration wins (see *Caveat: section
+ordering* below). To change the order, edit the `sections` list in
+`handlers/section_config.py`.
+
 ## How it works
 
 Two handlers, both responding to chart-summary events:
@@ -39,15 +80,30 @@ Two handlers, both responding to chart-summary events:
   `PatientChartSummaryCustomSection` effect with HTML rendered from
   `static/section.html` and styles loaded from `static/section.css`.
 
-Markup and styling live as separate files under `static/`:
+Markup, styling, and a small client-side script live as separate files
+under `static/`:
 
 - `static/section.html` — Django template for the section body
 - `static/section.css` — visual styles (font, weight, color hierarchy,
   icon size) tuned to match native chart sections
+- `static/section.js` — toggles a `.lr-section--at-bottom` modifier
+  class once the user has scrolled to the end of the section so the
+  bottom-fade overflow affordance can drop out
 
-The custom section ships as a single inline content blob, so the CSS is
-loaded via `render_to_string` and inlined into the HTML at render time
-rather than referenced by URL.
+The custom section ships as a single inline content blob, so the CSS
+and JS are loaded via `render_to_string` and inlined into the HTML at
+render time rather than referenced by URL.
+
+## Bottom-fade overflow affordance
+
+When the section's contents extend below the host's chart-summary slot,
+a sticky `::after` overlay on `.lr-section` paints a soft fade at the
+bottom edge as a "more below" hint. Because the host owns the scroll
+container (not us), the fade is implemented in two pieces: a CSS-only
+sticky pseudo that always sits at the visible viewport bottom, and the
+small `static/section.js` listener that finds the nearest scrolling
+ancestor and toggles a modifier class so the fade goes away once the
+section's bottom edge is fully in view.
 
 ## Filtering deleted reviews
 

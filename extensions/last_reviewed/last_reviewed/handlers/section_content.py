@@ -110,8 +110,10 @@ class LastReviewedSectionContent(PatientChartSummaryCustomSectionHandler):
 
         rows = [_format_row(label, latest.get(value)) for label, value in _SECTIONS]
         styles = render_to_string("static/section.css")
+        script = render_to_string("static/section.js")
         html = render_to_string(
-            "static/section.html", {"rows": rows, "styles": styles}
+            "static/section.html",
+            {"rows": rows, "styles": styles, "script": script},
         )
 
         return [
