@@ -741,14 +741,18 @@ def _render_membership_page(
     current_plan_name = record.get("plan_name", "") if record else ""
     next_billing = record.get("next_billing_date", "") if record else ""
     amount_cents = record.get("amount_cents", 0) if record else 0
-    amount_display = f"${amount_cents / 100:.2f}" if amount_cents else ""
+    currency = (record.get("currency") if record else None) or "usd"
+    # Same idiom as portal_widget / membership_card / admin_api: USD shows
+    # a leading "$"; non-USD currencies render the bare amount.
+    currency_symbol = "$" if currency.lower() == "usd" else ""
+    amount_display = f"{currency_symbol}{amount_cents / 100:.2f}" if amount_cents else ""
     record_cadence_suffix = cadence_suffix(record.get("cadence") if record else None)
 
     plan_options = [
         {
             "key": str(p.get("key", "")),
             "name": str(p.get("name", "")),
-            "price_display": f"{p['price_cents'] / 100:.2f}",
+            "price_display": f"{currency_symbol}{p['price_cents'] / 100:.2f}",
             "cadence_suffix": cadence_suffix(p.get("cadence")),
         }
         for p in plans
@@ -774,5 +778,6 @@ def _render_membership_page(
             "plan_descriptions_json": plan_descriptions_json,
             "api_base": api_base,
             "stripe_publishable_key": stripe_publishable_key,
+            "currency_symbol": currency_symbol,
         },
     )

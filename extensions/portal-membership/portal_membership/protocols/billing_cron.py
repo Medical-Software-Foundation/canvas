@@ -66,10 +66,18 @@ class MonthlyBillingCron(CronTask):
     SCHEDULE = "0 9 * * *"
 
     def execute(self) -> list[Effect]:
-        """Charge all active members whose billing or retry date is today."""
+        """Charge all active members whose billing or retry date is due.
+
+        We match ``__lte=today`` (not ``=today``) so a missed cron run —
+        deploy outage, infra incident, mid-loop exception — doesn't
+        permanently strand members whose date matched the missed day.
+        Success advances ``next_billing_date`` by exactly one cycle, so
+        a member missed for N days catches up on the next run with one
+        charge, not N.
+        """
         today = date.today()
         due = Membership.objects.filter(status="active").filter(
-            Q(next_billing_date=today) | Q(retry_date=today)
+            Q(next_billing_date__lte=today) | Q(retry_date__lte=today)
         )
         log.info(
             f"portal_membership billing_cron: running for {today.isoformat()}, "

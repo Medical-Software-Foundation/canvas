@@ -88,6 +88,35 @@ class TestExecuteNoMembers:
         first_filter = mock_membership_cls.objects.filter.call_args_list[0]
         assert first_filter.kwargs == {"status": "active"}
 
+    @patch("portal_membership.protocols.billing_cron.Membership")
+    def test_due_query_uses_lte_so_missed_days_self_heal(
+        self, mock_membership_cls: MagicMock, secrets: dict[str, str]
+    ) -> None:
+        """A missed cron day must not permanently strand members.
+
+        The chained date filter must compare with ``__lte=today`` so a
+        member whose next_billing_date / retry_date matched the missed
+        day still gets picked up on the next successful run.
+        """
+        from datetime import date
+
+        from django.db.models import Q
+
+        _set_due(mock_membership_cls, [])
+        cron = _make_cron(secrets)
+        cron.execute()
+
+        # Second filter call carries the date predicate.
+        date_filter = mock_membership_cls.objects.filter.return_value.filter.call_args
+        # The single positional arg is a Q object; introspect its children.
+        q_arg = date_filter.args[0]
+        assert isinstance(q_arg, Q)
+        today = date.today()
+        # Q.children is a list of (field, value) tuples for leaf nodes.
+        flat = [child for child in q_arg.children]
+        assert ("next_billing_date__lte", today) in flat
+        assert ("retry_date__lte", today) in flat
+
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     def test_skips_none_record(

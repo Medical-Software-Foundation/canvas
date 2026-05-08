@@ -340,7 +340,7 @@
           <select id="planSelect">
             <option value="">-- choose a plan --</option>
             {% for plan in plan_options %}
-            <option value="{{ plan.key }}">${{ plan.price_display }}{{ plan.cadence_suffix }} — {{ plan.name }}</option>
+            <option value="{{ plan.key }}">{{ plan.price_display }}{{ plan.cadence_suffix }} — {{ plan.name }}</option>
             {% endfor %}
           </select>
           <div class="plan-desc" id="planDesc">Select a plan to see what's included</div>
@@ -422,6 +422,7 @@
     var PLUGIN_PREFIX = API_BASE + "/plugin-io/api/portal_membership/membership";
     var STRIPE_PK = "{{ stripe_publishable_key|escapejs }}";
     var PLAN_DESCRIPTIONS = {{ plan_descriptions_json|safe }};
+    var CURRENCY_SYMBOL = "{{ currency_symbol|escapejs }}";
 
     /* Show plan description on selection change */
     (function() {
@@ -470,7 +471,7 @@
     var appliedCode = null;
 
     function formatCents(cents) {
-      return "$" + (cents / 100).toFixed(2);
+      return CURRENCY_SYMBOL + (cents / 100).toFixed(2);
     }
 
     document.getElementById("promoApplyBtn").addEventListener("click", function() {

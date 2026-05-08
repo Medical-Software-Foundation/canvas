@@ -1068,3 +1068,25 @@ class TestRenderMembershipPage:
         for option in ctx["plan_options"]:
             assert "price_display" in option
             assert "cadence_suffix" in option
+
+    def test_usd_renders_dollar_sign(
+        self, membership_plans: list[dict[str, Any]], active_record: dict[str, Any]
+    ) -> None:
+        active_record["currency"] = "usd"
+        ctx = self._context(plans=membership_plans, record=active_record)
+        assert ctx["currency_symbol"] == "$"
+        assert ctx["amount_display"].startswith("$")
+        for option in ctx["plan_options"]:
+            assert option["price_display"].startswith("$")
+
+    def test_non_usd_omits_dollar_sign(
+        self, membership_plans: list[dict[str, Any]], active_record: dict[str, Any]
+    ) -> None:
+        """Match the behaviour of portal_widget / membership_card / admin_api:
+        EUR/GBP/etc. render the bare amount, no leading ``$``."""
+        active_record["currency"] = "eur"
+        ctx = self._context(plans=membership_plans, record=active_record)
+        assert ctx["currency_symbol"] == ""
+        assert "$" not in ctx["amount_display"]
+        for option in ctx["plan_options"]:
+            assert "$" not in option["price_display"]
