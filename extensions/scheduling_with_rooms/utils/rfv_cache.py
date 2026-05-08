@@ -12,7 +12,6 @@ from __future__ import annotations
 import datetime
 
 from canvas_sdk.caching.plugins import get_cache
-from logger import log
 
 _TTL_SECONDS = 600  # 10 minutes — APPOINTMENT_CREATED fires nearly instantly
 
@@ -34,7 +33,6 @@ def stash(patient_id: str, provider_id: str, start_time: datetime.datetime, text
         return
     key = make_key(patient_id, provider_id, start_time)
     get_cache().set(key, text, timeout_seconds=_TTL_SECONDS)
-    log.info("rfv-cache: stash key=%r start_time=%r text=%r", key, start_time, text)
 
 
 def pop(patient_id: str, provider_id: str, start_time: datetime.datetime) -> str:
@@ -42,10 +40,6 @@ def pop(patient_id: str, provider_id: str, start_time: datetime.datetime) -> str
     key = make_key(patient_id, provider_id, start_time)
     cache = get_cache()
     value = cache.get(key)
-    log.info(
-        "rfv-cache: pop key=%r start_time=%r found=%s",
-        key, start_time, value is not None,
-    )
     if value is None:
         return ""
     cache.delete(key)

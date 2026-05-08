@@ -18,8 +18,10 @@ import datetime
 from http import HTTPStatus
 from zoneinfo import ZoneInfo
 
+import requests
+
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.note.appointment import Appointment, ScheduleEvent
+from canvas_sdk.effects.note.appointment import Appointment
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
@@ -35,6 +37,7 @@ from scheduling_with_rooms.models import (
     get_room_event_code_for,
 )
 from scheduling_with_rooms.utils.rfv_cache import stash as stash_rfv
+from scheduling_with_rooms.utils.rr_event_cache import stash as stash_rr_event
 from scheduling_with_rooms.utils.calendar_availability import (
     _fetch_clinic_calendars,
     _fetch_schedulable_staff,
@@ -179,7 +182,7 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                     fhir_tz = tz_map.get(p["id"])
                     if fhir_tz:
                         p["timezone"] = fhir_tz
-            except Exception as exc:
+            except requests.RequestException as exc:
                 log.warning("patients: FHIR timezone lookup failed: %s", exc)
 
         return [JSONResponse(patients_data, status_code=HTTPStatus.OK)]
@@ -317,26 +320,23 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         # 1. Check secret override.
         raw = self.secrets.get("SCHEDULE_DURATIONS", "").strip()
         if raw:
+            import json
             try:
-                import json
-                try:
-                    parsed = json.loads(raw)
-                    if isinstance(parsed, list):
-                        minutes_list = sorted(set(int(m) for m in parsed if int(m) > 0))
-                    else:
-                        raise ValueError("not a list")
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    minutes_list = sorted(set(
-                        int(v.strip()) for v in raw.split(",") if v.strip().isdigit() and int(v.strip()) > 0
-                    ))
-                if minutes_list:
-                    log.info("durations: loaded %d from SCHEDULE_DURATIONS secret: %s", len(minutes_list), minutes_list)
-                    return [JSONResponse(
-                        [{"minutes": m} for m in minutes_list],
-                        status_code=HTTPStatus.OK,
-                    )]
-            except Exception as exc:
-                log.warning("durations: failed to parse SCHEDULE_DURATIONS: %s", exc)
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    minutes_list = sorted(set(int(m) for m in parsed if int(m) > 0))
+                else:
+                    raise ValueError("not a list")
+            except (json.JSONDecodeError, TypeError, ValueError):
+                minutes_list = sorted(set(
+                    int(v.strip()) for v in raw.split(",") if v.strip().isdigit() and int(v.strip()) > 0
+                ))
+            if minutes_list:
+                log.info("durations: loaded %d from SCHEDULE_DURATIONS secret: %s", len(minutes_list), minutes_list)
+                return [JSONResponse(
+                    [{"minutes": m} for m in minutes_list],
+                    status_code=HTTPStatus.OK,
+                )]
 
         # 2. Fallback defaults.
         log.info("durations: using hardcoded defaults")
@@ -403,22 +403,15 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         # so day colors match what the day view will actually render.
         allowed_room_keys = _allowed_room_keys_for(note_type_code)
 
-        try:
-            counts = build_month_slot_counts(
-                provider_list=provider_list,
-                year=year,
-                month=month,
-                duration_minutes=duration_minutes,
-                location_name=location_name,
-                calendar_tz=timezone,
-                allowed_room_keys=allowed_room_keys,
-            )
-        except Exception as exc:
-            log.error("month-summary failed: %s", exc, exc_info=True)
-            return [JSONResponse(
-                {"error": f"Failed to compute summary: {exc}"},
-                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            )]
+        counts = build_month_slot_counts(
+            provider_list=provider_list,
+            year=year,
+            month=month,
+            duration_minutes=duration_minutes,
+            location_name=location_name,
+            calendar_tz=timezone,
+            allowed_room_keys=allowed_room_keys,
+        )
 
         return [JSONResponse({"days": counts}, status_code=HTTPStatus.OK)]
 
@@ -479,37 +472,26 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
         else:
             timezone = "UTC"
 
-        try:
-            providers_data = build_all_provider_slots(
-                provider_list=provider_list,
-                location_id=location_id,
-                date=date,
-                duration_minutes=duration_minutes,
-                location_name=location_name,
-                calendar_tz=timezone,
-            )
-        except Exception as exc:
-            log.error("all-slots: provider slot generation failed: %s", exc, exc_info=True)
-            return [JSONResponse(
-                {"error": f"Failed to fetch provider availability: {exc}"},
-                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            )]
+        providers_data = build_all_provider_slots(
+            provider_list=provider_list,
+            location_id=location_id,
+            date=date,
+            duration_minutes=duration_minutes,
+            location_name=location_name,
+            calendar_tz=timezone,
+        )
 
         # Only fetch room slots if the appointment type requires them.
         rooms_data: list[dict] = []
         allowed_room_keys = _allowed_room_keys_for(note_type_code)
         if allowed_room_keys:
-            try:
-                rooms_data = build_all_room_slots(
-                    date=date,
-                    duration_minutes=duration_minutes,
-                    location_name=location_name,
-                    calendar_tz=timezone,
-                    allowed_room_keys=allowed_room_keys,
-                )
-            except Exception as exc:
-                log.error("all-slots: room slot generation failed: %s", exc, exc_info=True)
-                rooms_data = []
+            rooms_data = build_all_room_slots(
+                date=date,
+                duration_minutes=duration_minutes,
+                location_name=location_name,
+                calendar_tz=timezone,
+                allowed_room_keys=allowed_room_keys,
+            )
 
         return [JSONResponse(
             {"providers": providers_data, "rooms": rooms_data, "timezone": timezone},
@@ -565,32 +547,25 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
 
         timezone = get_location_timezone(provider_id, location_name)
 
-        try:
-            if allowed_room_keys:
-                slot_data = build_slots_with_resource_availability(
-                    provider_id=provider_id,
-                    location_id=location_id,
-                    date=date,
-                    duration_minutes=duration_minutes,
-                    location_name=location_name,
-                    calendar_tz=timezone,
-                    allowed_room_keys=allowed_room_keys,
-                )
-            else:
-                slot_data = build_plain_slots(
-                    provider_id=provider_id,
-                    location_id=location_id,
-                    date=date,
-                    duration_minutes=duration_minutes,
-                    location_name=location_name,
-                    calendar_tz=timezone,
-                )
-        except Exception as exc:
-            log.error("slots: slot generation failed: %s", exc, exc_info=True)
-            return [JSONResponse(
-                {"error": f"Failed to fetch availability: {exc}"},
-                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            )]
+        if allowed_room_keys:
+            slot_data = build_slots_with_resource_availability(
+                provider_id=provider_id,
+                location_id=location_id,
+                date=date,
+                duration_minutes=duration_minutes,
+                location_name=location_name,
+                calendar_tz=timezone,
+                allowed_room_keys=allowed_room_keys,
+            )
+        else:
+            slot_data = build_plain_slots(
+                provider_id=provider_id,
+                location_id=location_id,
+                date=date,
+                duration_minutes=duration_minutes,
+                location_name=location_name,
+                calendar_tz=timezone,
+            )
         return [JSONResponse({"slots": slot_data, "timezone": timezone}, status_code=HTTPStatus.OK)]
 
     @api.post("/book")
@@ -653,12 +628,8 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                 start_time_str, start_time.isoformat(),
             )
         else:
-            try:
-                cal_tz = ZoneInfo(calendar_tz_str)
-                start_time = parsed_start.replace(tzinfo=cal_tz).astimezone(datetime.timezone.utc)
-            except Exception:
-                # If timezone lookup fails, send as-is (legacy behaviour).
-                start_time = parsed_start
+            cal_tz = ZoneInfo(calendar_tz_str)
+            start_time = parsed_start.replace(tzinfo=cal_tz).astimezone(datetime.timezone.utc)
             log.info(
                 "book: naive=%s, calendar_tz=%s, utc=%s",
                 parsed_start.isoformat(), calendar_tz_str, start_time.isoformat(),
@@ -692,12 +663,12 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
             effects.append(appt_result)
 
         # 2. If this is a resource-required appointment and an RR staff member
-        #    was selected, also create a ScheduleEvent for them.
+        #    was selected, stash the booking intent. The APPOINTMENT_CREATED
+        #    handler will create the ScheduleEvent with parent_appointment_id
+        #    pointing at the just-created patient Appointment, so cancellation
+        #    can cascade via the children relationship instead of via FHIR.
         allowed_room_keys = _allowed_room_keys_for(note_type_code)
         if rr_staff_id and allowed_room_keys:
-            # The "room is booked" NoteType code is configured per visit type
-            # in the admin app, since different visit types may use different
-            # schedule_event NoteTypes (and instances name them differently).
             room_event_code = get_room_event_code_for(note_type_code)
             resource_event_nt = (
                 NoteType.objects.filter(
@@ -717,50 +688,25 @@ class SchedulingAPI(StaffSessionAuthMixin, SimpleAPI):
                     note_type_code, room_event_code,
                 )
             else:
-                # When the room NoteType has allow_custom_title=True we mirror
-                # the RFV onto the ScheduleEvent's description so it shows on
-                # the room calendar. The SDK rejects description on NoteTypes
-                # without that flag — try with it, fall back without.
-                base_kwargs = {
-                    "note_type_id": str(resource_event_nt.id),
-                    "patient_id": patient_id,
-                    "start_time": start_time,
-                    "duration_minutes": int(duration_minutes),
-                    "practice_location_id": location_id,
-                    "provider_id": rr_staff_id,
-                }
-                log.info(
-                    "book: room NoteType code=%r allow_custom_title=%r rfv_text=%r",
-                    resource_event_nt.code,
-                    resource_event_nt.allow_custom_title,
-                    reason_for_visit_text,
+                # The room NoteType only accepts a description when its
+                # allow_custom_title flag is on; mirror the RFV there only
+                # in that case. The RFV always lands on the patient note via
+                # the RFV command regardless.
+                description = (
+                    reason_for_visit_text
+                    if resource_event_nt.allow_custom_title
+                    else ""
                 )
-
-                def _create_schedule_event(include_description):
-                    kwargs = dict(base_kwargs)
-                    if include_description and reason_for_visit_text:
-                        kwargs["description"] = reason_for_visit_text
-                    return ScheduleEvent(**kwargs).create()
-
-                se_result = None
-                try:
-                    se_result = _create_schedule_event(include_description=True)
-                except Exception as exc:
-                    msg = str(exc)
-                    if "Description is not allowed" in msg and reason_for_visit_text:
-                        log.info(
-                            "book: room NoteType %r rejected description; "
-                            "retrying without (RFV still lands on the "
-                            "patient's note via the RFV command)",
-                            resource_event_nt.code,
-                        )
-                        se_result = _create_schedule_event(include_description=False)
-                    else:
-                        raise
-                if isinstance(se_result, list):
-                    effects.extend(se_result)
-                else:
-                    effects.append(se_result)
+                stash_rr_event(
+                    patient_id,
+                    provider_id,
+                    start_time,
+                    rr_staff_id=rr_staff_id,
+                    note_type_id=str(resource_event_nt.id),
+                    duration_minutes=int(duration_minutes),
+                    location_id=location_id,
+                    description=description,
+                )
 
         log.info(
             "Booking appointment: patient=%s, provider=%s, start=%s, reason=%s",

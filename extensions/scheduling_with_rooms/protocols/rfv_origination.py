@@ -66,14 +66,14 @@ class ReasonForVisitOrigination(BaseProtocol):
         if not appointment.note:
             log.warning(
                 "rfv: appointment %s has no note yet; skipping RFV origination "
-                "(text=%r)", appointment_id, text,
+                "(text_len=%d)", appointment_id, len(text),
             )
             return []
 
         note_uuid = str(appointment.note.id)
         log.info(
-            "rfv: originating RFV command on note %s for appointment %s (text=%r)",
-            note_uuid, appointment_id, text,
+            "rfv: originating RFV command on note %s for appointment %s (text_len=%d)",
+            note_uuid, appointment_id, len(text),
         )
         return [
             ReasonForVisitCommand(note_uuid=note_uuid, comment=text).originate(),

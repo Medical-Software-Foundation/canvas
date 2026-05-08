@@ -4,6 +4,8 @@ import datetime
 from typing import Any
 from urllib.parse import quote, urlencode
 
+import requests
+
 from canvas_sdk.utils import Http
 from logger import log
 
@@ -113,7 +115,7 @@ class FHIRClient:
         """
         try:
             patient = self._get(f"/Patient/{patient_id}")
-        except Exception as exc:
+        except requests.RequestException as exc:
             log.warning("get_patient_timezone: FHIR read failed for %s: %s", patient_id, exc)
             return ""
 
@@ -230,7 +232,7 @@ class FHIRClient:
                 "/Appointment",
                 params={"patient": f"Patient/{patient_id}", "date": date},
             )
-        except Exception as exc:
+        except requests.RequestException as exc:
             log.warning(
                 "get_patient_appointments: FHIR search failed for patient %s on %s: %s",
                 patient_id,

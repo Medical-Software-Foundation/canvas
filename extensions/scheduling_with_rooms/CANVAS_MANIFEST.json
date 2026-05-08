@@ -26,10 +26,10 @@
             },
             {
                 "class": "scheduling_with_rooms.protocols.appointment_cascade:AppointmentCascadeHandler",
-                "description": "Cancels or reschedules RR staff ScheduleEvents when a patient appointment is cancelled or rescheduled",
+                "description": "Deletes the linked RR ScheduleEvent when its parent patient appointment is cancelled",
                 "data_access": {
                     "event": "APPOINTMENT_CANCELED",
-                    "read": ["Appointment", "Staff"],
+                    "read": ["Appointment", "NoteType"],
                     "write": ["ScheduleEvent"]
                 }
             },
@@ -40,6 +40,15 @@
                     "event": "APPOINTMENT_CREATED",
                     "read": ["Appointment", "Note", "Patient", "Staff"],
                     "write": ["Command"]
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.protocols.rr_event_origination:RREventOrigination",
+                "description": "Creates the RR room ScheduleEvent linked to a freshly-created patient appointment via parent_appointment_id",
+                "data_access": {
+                    "event": "APPOINTMENT_CREATED",
+                    "read": ["Appointment", "Patient", "Staff"],
+                    "write": ["ScheduleEvent"]
                 }
             },
             {

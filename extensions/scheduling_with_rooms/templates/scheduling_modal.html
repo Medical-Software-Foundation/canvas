@@ -930,7 +930,16 @@ document.getElementById('btn-cancel').addEventListener('click', function () {
   }
 
   function fetchMonthSummary() {
-    if (!state.locationId || !state.durationMinutes) return;
+    if (!state.locationId || !state.durationMinutes) {
+      // /month-summary requires a specific location and a duration. In
+      // "All locations" mode (or before a duration is picked) we drop any
+      // stale counts from a previous single-location fetch so the calendar
+      // shows uncolored days instead of lying with yesterday's colors.
+      state.monthSummary = {};
+      state.monthSummaryKey = null;
+      applyMonthSummary();
+      return;
+    }
     var key = monthSummaryCacheKey();
     if (key === state.monthSummaryKey) {
       // Already have this data, just re-apply.
