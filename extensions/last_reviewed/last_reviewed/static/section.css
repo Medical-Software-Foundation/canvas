@@ -10,10 +10,11 @@
   display: block;
   position: sticky;
   bottom: 0;
-  height: 36px;
-  margin-top: -36px;
+  height: 14px;
+  margin-top: -14px;
+  border-radius: 14px;
   pointer-events: none;
-  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.22));
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.1));
   /* The script in static/section.js toggles the modifier class below
      once the user has scrolled to the end of the section. Default to
      visible so charts that load without JS (or before it runs) still
