@@ -1,7 +1,7 @@
 {
     "sdk_version": "0.136.0",
-    "plugin_version": "0.9.2",
-    "name": "Patient Portal Membership",
+    "plugin_version": "0.9.3",
+    "name": "portal_membership",
     "description": "Patient portal membership sign-up, recurring billing, and cancellation management.",
     "components": {
         "protocols": [
