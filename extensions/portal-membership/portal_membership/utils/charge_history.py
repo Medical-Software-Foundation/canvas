@@ -3,14 +3,13 @@
 Replaces the ``record["charges"]`` list that used to live on the cached
 membership dict. Each entry is now a row in the ``ChargeRecord`` table.
 
-``patient_id`` is normalised to its bare hex form here (matching
-``membership_store``) so charges written under one UUID shape are still
-visible when the portal session sends the other shape.
+``patient`` is a ``ForeignKey`` to ``PatientProxy``; the public API still
+takes UUID strings and resolves them to a Patient ``dbid`` for FK writes.
 """
 from typing import Any
 
 from portal_membership.models import ChargeRecord
-from portal_membership.utils.membership_store import _normalise_patient_id
+from portal_membership.utils.membership_store import _resolve_patient_dbid
 
 DEFAULT_LIMIT = 50
 
@@ -24,8 +23,11 @@ def append_charge(
     discount_code: str | None = None,
 ) -> None:
     """Persist a charge attempt for *patient_id*."""
+    dbid = _resolve_patient_dbid(patient_id)
+    if dbid is None:
+        return
     ChargeRecord.objects.create(
-        patient_id=_normalise_patient_id(patient_id),
+        patient_id=dbid,
         amount_cents=int(amount_cents),
         status=status,
         description=description,
@@ -39,11 +41,13 @@ def get_charges(patient_id: str, limit: int = DEFAULT_LIMIT) -> list[dict[str, A
     Returns an empty list for any lookup failure — malformed id, DB error,
     namespace not yet provisioned.
     """
-    pid = _normalise_patient_id(patient_id)
-    if not pid:
+    if not patient_id:
         return []
     try:
-        qs = ChargeRecord.objects.filter(patient_id=pid).order_by("-charged_at")[:limit]
+        qs = (
+            ChargeRecord.objects.filter(patient__id=patient_id)
+            .order_by("-charged_at")[:limit]
+        )
         return [_to_dict(c) for c in qs]
     except Exception:  # noqa: BLE001 — history panel should degrade to empty, never crash
         return []

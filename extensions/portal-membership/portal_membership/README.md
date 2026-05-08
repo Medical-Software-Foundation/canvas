@@ -1,6 +1,54 @@
-# Portal Membership
+# Patient Portal Membership
 
-A Canvas plugin that manages patient membership sign-up, recurring monthly billing via Stripe, and cancellation — all driven from the patient portal.
+A Canvas plugin that manages patient membership sign-up, recurring billing via Stripe, and cancellation — all driven from the patient portal.
+
+## Problem it solves
+
+Membership-based primary care practices (DPC, concierge, weight-management, behavioral-health subscription models) need a way to charge a recurring fee that lives inside the patient's Canvas chart and the patient portal — not in a separate billing tool that staff have to reconcile by hand.
+
+Without this plugin, practices typically:
+
+- Run subscription billing in Stripe Dashboard or a third-party tool, then manually flag membership status on each chart so providers see it at the point of care.
+- Reconcile failed charges by hand from Stripe emails, decide who to off-board, and create the off-boarding task themselves.
+- Reach out to patients off-platform when a card is declined, since the EMR has no view of payment state.
+- Run signup/cancellation flows over the phone or via email, because the portal can't accept a card or surface plan status.
+
+This plugin collapses that workflow into the chart and the portal: patients self-serve signup, plan management, card updates, and cancellation; staff see membership state on the chart banner and a directory of all members in the provider menu; the daily billing cron handles recurring charges, retries, auto-cancellation, and off-boarding tasks without leaving Canvas.
+
+## Who it's for
+
+Practices that bill patients on a recurring cadence and want that workflow inside Canvas:
+
+- **Direct primary care (DPC)** — monthly or annual membership fees in lieu of fee-for-service
+- **Concierge primary care** — annual retainers with portal-driven enrollment
+- **Membership-based specialty practices** — weight management, hormone replacement, behavioral health, longevity / preventive medicine
+- **Cash-pay / hybrid practices** running a paid membership tier alongside insurance
+
+Built for the staff and providers in those practices: front-desk and patient-coordination teams who own off-boarding, providers who want membership status visible at the point of care, and patients who want to manage signup, card updates, and cancellation from the portal without calling the office.
+
+## Screenshots
+
+> Screenshots are captured against a Canvas test instance with the plugin installed. Replace the placeholder image references below with GitHub-uploaded captures of each surface.
+
+**Patient portal landing-page widget**
+
+<!-- Replace with screenshot of the membership widget at the top of the patient portal home page -->
+![Patient portal membership widget](screenshots/portal-widget.png)
+
+**Membership management page (Overview tab)**
+
+<!-- Replace with screenshot of /membership/page Overview tab showing plan, next billing date, and Update Payment / Cancel CTAs -->
+![Membership management page](screenshots/membership-page.png)
+
+**Chart status banner**
+
+<!-- Replace with screenshot of the chart header showing the membership banner under the patient name -->
+![Chart membership banner](screenshots/chart-banner.png)
+
+**Staff Memberships directory**
+
+<!-- Replace with screenshot of the staff Memberships application showing the directory table with filter pills -->
+![Staff Memberships directory](screenshots/admin-directory.png)
 
 ## Features
 
@@ -127,7 +175,7 @@ Stored as a row in the `Membership` custom model (one per patient):
 
 | Field | Type | Notes |
 |---|---|---|
-| `patient_id` | UUID | Canvas patient identifier, indexed |
+| `patient` | OneToOne FK to Patient | One membership per Canvas patient (FK on `Patient.dbid`) |
 | `plan` / `plan_name` | text | Plan key and display name |
 | `status` | text | `"active"` or `"cancelled"` |
 | `stripe_customer_id`, `payment_method_id` | text | Stripe identifiers |
@@ -137,9 +185,9 @@ Stored as a row in the `Membership` custom model (one per patient):
 | `discount_code`, `discount_type`, `discount_value`, `discount_cycles_remaining` | text / text / int / int | Zero / empty when no active discount; cycles follow the plan cadence |
 | `created_at`, `updated_at` | datetime | Auto-managed |
 
-Charge attempts are stored in the `ChargeRecord` custom model keyed by
-`patient_id` — one row per billing attempt (success or failure), surfaced
-via `GET /history`.
+Charge attempts are stored in the `ChargeRecord` custom model with a
+`patient` FK (also on `Patient.dbid`) — one row per billing attempt
+(success or failure), surfaced via `GET /history`.
 
 ## Billing Retry Policy
 

@@ -9,17 +9,20 @@ pattern. A field missing from the dict on write is interpreted as "reset to
 default", matching the pre-ORM behaviour where ``record.pop(field, None)``
 would drop it from the cached record entirely.
 
-All public functions normalise *patient_id* to its bare 32-char hex form
-(no hyphens). Canvas sometimes hands the plugin a UUID with hyphens (widget
-event context) and sometimes without (SimpleAPI session header) — we collapse
-both shapes to one canonical form so the row written at signup matches the
-row looked up on subsequent reads.
+Patient identity is a ``ForeignKey`` to ``PatientProxy`` (see
+``models/proxy.py``), but the public API still accepts the patient UUID
+string callers already hold (from ``event.target.id`` in widget/banner
+events, and from the SimpleAPI session header on portal endpoints). The
+store resolves the UUID to a Patient ``dbid`` for FK reads/writes; the UUID
+form (hyphenated or bare hex) is normalised by Django's ``UUIDField``
+during the lookup.
 """
 from datetime import date
 from typing import Any
 
 from django.db import IntegrityError
 
+from canvas_sdk.v1.data.patient import Patient
 from logger import log
 
 from portal_membership.models import Membership
@@ -62,11 +65,18 @@ _SCALAR_DEFAULTS: dict[str, Any] = {
 }
 
 
-def _normalise_patient_id(patient_id: str | None) -> str:
-    """Return *patient_id* without hyphens — the canonical storage form."""
+def _resolve_patient_dbid(patient_id: str | None) -> int | None:
+    """Resolve a patient UUID string to its integer ``dbid`` for FK lookups.
+
+    Returns ``None`` for missing/unknown patients. ``Patient.id`` is a UUID
+    field, so Django accepts hyphenated or bare-hex input transparently.
+    """
     if not patient_id:
-        return ""
-    return patient_id.replace("-", "")
+        return None
+    try:
+        return Patient.objects.values_list("dbid", flat=True).get(id=patient_id)
+    except Patient.DoesNotExist:
+        return None
 
 
 def get_membership(patient_id: str) -> dict[str, Any] | None:
@@ -76,11 +86,10 @@ def get_membership(patient_id: str) -> dict[str, Any] | None:
     error, namespace not yet provisioned. Callers treat "no record" as "not
     enrolled", which is the correct user-facing fall-back.
     """
-    pid = _normalise_patient_id(patient_id)
-    if not pid:
+    if not patient_id:
         return None
     try:
-        instance = Membership.objects.get(patient_id=pid)
+        instance = Membership.objects.get(patient__id=patient_id)
     except Membership.DoesNotExist:
         return None
     except Exception as exc:  # noqa: BLE001 — log and fall back for widget safety
@@ -94,18 +103,24 @@ def get_membership(patient_id: str) -> dict[str, Any] | None:
 
 def set_membership(patient_id: str, data: dict[str, Any]) -> None:
     """Upsert the membership record for *patient_id* from a dict."""
+    dbid = _resolve_patient_dbid(patient_id)
+    if dbid is None:
+        log.warning(
+            f"portal_membership: set_membership skipped — patient_id={patient_id!r} "
+            "did not resolve to a known patient"
+        )
+        return
     Membership.objects.update_or_create(
-        patient_id=_normalise_patient_id(patient_id),
+        patient_id=dbid,
         defaults=_from_dict(data),
     )
 
 
 def delete_membership(patient_id: str) -> None:
     """Remove the membership record for *patient_id* (idempotent)."""
-    pid = _normalise_patient_id(patient_id)
-    if not pid:
+    if not patient_id:
         return
-    Membership.objects.filter(patient_id=pid).delete()
+    Membership.objects.filter(patient__id=patient_id).delete()
 
 
 def try_claim_signup(patient_id: str) -> tuple[str, str | None]:
@@ -127,12 +142,12 @@ def try_claim_signup(patient_id: str) -> tuple[str, str | None]:
     a newly-created pending row is deleted on rollback while a transitioned
     row is reverted to its original state.
     """
-    pid = _normalise_patient_id(patient_id)
-    if not pid:
+    dbid = _resolve_patient_dbid(patient_id)
+    if dbid is None:
         return ("in_progress", None)
 
     try:
-        existing = Membership.objects.get(patient_id=pid)
+        existing = Membership.objects.get(patient_id=dbid)
     except Membership.DoesNotExist:
         existing = None
     except Exception as exc:  # noqa: BLE001 — fail closed on DB errors
@@ -151,19 +166,19 @@ def try_claim_signup(patient_id: str) -> tuple[str, str | None]:
         # to observe that status wins — PostgreSQL serializes the match.
         prior_status = existing.status
         updated = Membership.objects.filter(
-            patient_id=pid,
+            patient_id=dbid,
             status=prior_status,
         ).update(status=PENDING_SIGNUP_STATUS)
         if updated == 0:
             return ("in_progress", None)
         return ("claimed", prior_status)
 
-    # No row yet — insert. The UniqueConstraint on patient_id makes the second
+    # No row yet — insert. The UniqueConstraint on patient makes the second
     # concurrent insert raise IntegrityError.
     today = date.today()
     try:
         Membership.objects.create(
-            patient_id=pid,
+            patient_id=dbid,
             plan="",
             plan_name="",
             status=PENDING_SIGNUP_STATUS,
@@ -185,11 +200,11 @@ def release_claim(patient_id: str, prior_status: str | None) -> None:
     ``prior_status``. Both operations are scoped to rows still in the
     pending_signup state, so a concurrent finalize won't be stomped on.
     """
-    pid = _normalise_patient_id(patient_id)
-    if not pid:
+    dbid = _resolve_patient_dbid(patient_id)
+    if dbid is None:
         return
     qs = Membership.objects.filter(
-        patient_id=pid,
+        patient_id=dbid,
         status=PENDING_SIGNUP_STATUS,
     )
     if prior_status is None:

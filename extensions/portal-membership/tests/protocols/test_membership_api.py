@@ -192,14 +192,24 @@ class TestGetStatus:
 # ---------------------------------------------------------------------------
 
 class TestGetPage:
+    @patch("portal_membership.protocols.membership_api.render_to_string")
     @patch("portal_membership.protocols.membership_api.get_membership")
-    def test_returns_html(self, mock_get: MagicMock, mock_event: MagicMock, secrets: dict[str, str]) -> None:
+    def test_returns_html(
+        self,
+        mock_get: MagicMock,
+        mock_render: MagicMock,
+        mock_event: MagicMock,
+        secrets: dict[str, str],
+    ) -> None:
         mock_get.return_value = None
+        mock_render.return_value = "<html>rendered</html>"
         handler = _make_handler(mock_event, secrets, environment={"CUSTOMER_IDENTIFIER": "testclinic"})
         results = handler.get_page()
         assert results[0].status_code == HTTPStatus.OK
-        html = results[0].content.decode() if isinstance(results[0].content, bytes) else results[0].content
-        assert "Membership" in html
+        template, context = mock_render.call_args.args
+        assert template == "templates/membership_page.html"
+        assert context["api_base"] == "https://testclinic.canvasmedical.com"
+        assert context["status"] == "none"
 
 
 # ---------------------------------------------------------------------------
@@ -723,19 +733,18 @@ class TestPostCancel:
         results = handler.post_cancel()
         assert results[0].status_code == HTTPStatus.NOT_FOUND
 
-    @patch("portal_membership.protocols.membership_api.Team")
+    @patch("portal_membership.protocols.membership_api.resolve_team_id", return_value="team-uuid")
     @patch("portal_membership.protocols.membership_api.set_membership")
     @patch("portal_membership.protocols.membership_api.get_membership")
     def test_successful_cancel_returns_expected_effects(
         self,
         mock_get: MagicMock,
         mock_set: MagicMock,
-        mock_team_cls: MagicMock,
+        _mock_resolve_team: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
-        mock_team_cls.objects.filter.return_value.exists.return_value = True
         mock_get.return_value = active_record
         handler = _make_handler(mock_event, secrets)
         handler.request.json.return_value = {}
@@ -752,21 +761,20 @@ class TestPostCancel:
         payloads = [str(getattr(r, "payload", "")) for r in results[:-1]]
         assert any("(Cancelled)" in p and "Effective:" in p for p in payloads)
 
-    @patch("portal_membership.protocols.membership_api.Team")
+    @patch("portal_membership.protocols.membership_api.resolve_team_id", return_value="team-uuid")
     @patch("portal_membership.protocols.membership_api.set_membership")
     @patch("portal_membership.protocols.membership_api.get_membership")
     def test_does_not_emit_legacy_cancelled_banner(
         self,
         mock_get: MagicMock,
         mock_set: MagicMock,
-        mock_team_cls: MagicMock,
+        _mock_resolve_team: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
         """Regression: the separate 'Cancelled Membership' banner was removed —
         the status banner alone conveys the cancellation."""
-        mock_team_cls.objects.filter.return_value.exists.return_value = True
         mock_get.return_value = active_record
         handler = _make_handler(mock_event, secrets)
         handler.request.json.return_value = {}
@@ -999,48 +1007,52 @@ class TestPostUpdatePaymentMethod:
 # ---------------------------------------------------------------------------
 
 class TestRenderMembershipPage:
+    """The function delegates rendering to a Django template — the test
+    surface is the context dict passed to ``render_to_string``."""
+
+    @patch("portal_membership.protocols.membership_api.render_to_string")
+    def _context(
+        self,
+        mock_render: MagicMock,
+        plans: list[dict[str, Any]],
+        record: dict[str, Any] | None,
+        api_base: str = "",
+    ) -> dict[str, Any]:
+        mock_render.return_value = "<html />"
+        _render_membership_page(plans=plans, record=record, api_base=api_base)
+        _, ctx = mock_render.call_args.args
+        return ctx
+
     def test_no_enrollment(self, membership_plans: list[dict[str, Any]]) -> None:
-        html = _render_membership_page(plans=membership_plans, record=None, api_base="https://test.canvasmedical.com")
-        assert "Membership" in html
-        assert "basic" in html
+        ctx = self._context(plans=membership_plans, record=None, api_base="https://test.canvasmedical.com")
+        assert ctx["status"] == "none"
+        assert ctx["api_base"] == "https://test.canvasmedical.com"
+        assert any(p["key"] == "basic" for p in ctx["plan_options"])
 
-    def test_active_shows_cancel(self, membership_plans: list[dict[str, Any]], active_record: dict[str, Any]) -> None:
-        html = _render_membership_page(plans=membership_plans, record=active_record, api_base="")
-        assert "Cancel Membership" in html
-
-    def test_active_shows_update_payment_method(
+    def test_active_status(
         self, membership_plans: list[dict[str, Any]], active_record: dict[str, Any]
     ) -> None:
-        html = _render_membership_page(plans=membership_plans, record=active_record, api_base="")
-        assert "Update payment method" in html
+        ctx = self._context(plans=membership_plans, record=active_record)
+        assert ctx["status"] == "active"
 
-    def test_cancelled_shows_restart(self, membership_plans: list[dict[str, Any]], cancelled_record: dict[str, Any]) -> None:
-        html = _render_membership_page(plans=membership_plans, record=cancelled_record, api_base="")
-        assert "Restart Membership" in html
-
-    def test_cancelled_hides_cancel_and_update_sections(
+    def test_cancelled_status(
         self, membership_plans: list[dict[str, Any]], cancelled_record: dict[str, Any]
     ) -> None:
-        """Regression: duplicate `class=` attributes used to leave these sections visible."""
-        html = _render_membership_page(plans=membership_plans, record=cancelled_record, api_base="")
+        ctx = self._context(plans=membership_plans, record=cancelled_record)
+        assert ctx["status"] == "cancelled"
 
-        # The cancelled-state page must hide the active-only sections.
-        assert '<div class="section hidden" id="updateCardSection">' in html
-        assert '<div class="section hidden" id="cancelSection">' in html
-        # And the enroll (Restart) section must remain visible.
-        assert '<div class="section" id="enrollSection">' in html
-
-    def test_none_hides_cancel_and_update_sections(
+    def test_plan_descriptions_json_keyed_by_plan_key(
         self, membership_plans: list[dict[str, Any]]
     ) -> None:
-        html = _render_membership_page(plans=membership_plans, record=None, api_base="")
-        assert '<div class="section hidden" id="updateCardSection">' in html
-        assert '<div class="section hidden" id="cancelSection">' in html
+        ctx = self._context(plans=membership_plans, record=None)
+        descriptions = json.loads(ctx["plan_descriptions_json"])
+        for plan in membership_plans:
+            assert plan["key"] in descriptions
 
-    def test_active_hides_enroll_section(
-        self, membership_plans: list[dict[str, Any]], active_record: dict[str, Any]
+    def test_plan_options_include_price_display_and_cadence(
+        self, membership_plans: list[dict[str, Any]]
     ) -> None:
-        html = _render_membership_page(plans=membership_plans, record=active_record, api_base="")
-        assert '<div class="section hidden" id="enrollSection">' in html
-        assert '<div class="section" id="updateCardSection">' in html
-        assert '<div class="section" id="cancelSection">' in html
+        ctx = self._context(plans=membership_plans, record=None)
+        for option in ctx["plan_options"]:
+            assert "price_display" in option
+            assert "cadence_suffix" in option

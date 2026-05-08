@@ -6,5 +6,6 @@ the plugin's own tables, managed by Canvas.
 """
 from portal_membership.models.charge_record import ChargeRecord
 from portal_membership.models.membership import Membership
+from portal_membership.models.proxy import PatientProxy
 
-__all__ = ["Membership", "ChargeRecord"]
+__all__ = ["Membership", "ChargeRecord", "PatientProxy"]

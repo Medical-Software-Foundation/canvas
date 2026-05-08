@@ -4,11 +4,13 @@ from unittest.mock import MagicMock, patch
 
 
 def _set_members(mock_membership_cls: MagicMock, patient_ids: list[str]) -> None:
-    """Arrange `Membership.objects.exclude(status='')` to yield patients."""
+    """Arrange ``Membership.objects.exclude(status='').select_related('patient')`` to yield patients."""
     from types import SimpleNamespace
-    mock_membership_cls.objects.exclude.return_value = [
-        SimpleNamespace(patient_id=pid) for pid in patient_ids
+    instances = [
+        SimpleNamespace(patient=SimpleNamespace(id=pid))
+        for pid in patient_ids
     ]
+    mock_membership_cls.objects.exclude.return_value.select_related.return_value = instances
 
 
 # Backwards-compatible alias used by existing tests.

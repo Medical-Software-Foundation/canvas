@@ -14,7 +14,7 @@ from portal_membership.utils.billing_cycle import next_billing_iso
 
 
 class _DueQs:
-    """Mimics the QuerySet returned by `Membership.objects.filter(...).filter(...)`."""
+    """Mimics the QuerySet returned by ``filter(...).filter(...).select_related(...)``."""
 
     def __init__(self, instances: list) -> None:
         self._instances = list(instances)
@@ -22,14 +22,24 @@ class _DueQs:
     def count(self) -> int:
         return len(self._instances)
 
+    def select_related(self, *_args, **_kwargs) -> "_DueQs":
+        return self
+
     def __iter__(self):
         return iter(self._instances)
 
 
 def _set_due(mock_membership_cls: MagicMock, patient_ids: list[str]) -> None:
-    """Arrange the Membership mock so that its chained filter returns patients."""
+    """Arrange the Membership mock so that its chained filter returns patients.
+
+    Each instance exposes ``.patient.id`` so the cron can extract the UUID from
+    the FK without a real DB lookup.
+    """
     from types import SimpleNamespace
-    instances = [SimpleNamespace(patient_id=pid) for pid in patient_ids]
+    instances = [
+        SimpleNamespace(patient=SimpleNamespace(id=pid))
+        for pid in patient_ids
+    ]
     mock_membership_cls.objects.filter.return_value.filter.return_value = _DueQs(instances)
 
 
@@ -283,7 +293,9 @@ class TestExecuteFirstFailure:
         saved = mock_set_membership.call_args[0][1]
         assert saved["consecutive_failures"] == 1
         assert "retry_date" in saved
-        assert saved["next_billing_date"] == saved["retry_date"]
+        # Anchor preserved: a later retry success advances from the original
+        # billing day, not from the retry date (PR #243 review).
+        assert saved["next_billing_date"] == today_str
 
     @patch("portal_membership.protocols.billing_cron.set_membership")
     @patch("portal_membership.protocols.billing_cron.get_membership")
@@ -320,7 +332,8 @@ class TestExecuteFirstFailure:
         assert saved["status"] == "active"
         assert saved["consecutive_failures"] == 2
         assert "retry_date" in saved
-        assert saved["next_billing_date"] == saved["retry_date"]
+        # Anchor preserved across retries — see PR #243 review.
+        assert saved["next_billing_date"] == today_str
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +341,7 @@ class TestExecuteFirstFailure:
 # ---------------------------------------------------------------------------
 
 class TestExecuteAutoCancel:
-    @patch("portal_membership.protocols.billing_cron.Team")
+    @patch("portal_membership.protocols.billing_cron.resolve_team_id", return_value="team-uuid")
     @patch("portal_membership.protocols.billing_cron.set_membership")
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
@@ -339,11 +352,10 @@ class TestExecuteAutoCancel:
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
         mock_set_membership: MagicMock,
-        mock_team_cls: MagicMock,
+        _mock_resolve_team: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
-        mock_team_cls.objects.filter.return_value.exists.return_value = True
         today_str = date.today().isoformat()
         active_record["next_billing_date"] = today_str
         # Two prior failures recorded — this is attempt 3 of 3.

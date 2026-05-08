@@ -137,8 +137,8 @@ class MembershipBanner(BaseProtocol):
         plugin versions used to emit.
         """
         effects: list[Effect] = []
-        for instance in Membership.objects.exclude(status=""):
-            patient_id = str(instance.patient_id)
+        for instance in Membership.objects.exclude(status="").select_related("patient"):
+            patient_id = str(instance.patient.id)
             record = get_membership(patient_id)
             if record is None:
                 continue

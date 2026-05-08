@@ -12,8 +12,8 @@ Retry policy (3 total attempts, 1-day spacing between retries):
   Attempt 1 (on billing day):
     success  → advance next_billing_date, reset consecutive_failures = 0
     failure  → consecutive_failures becomes 1, schedule retry_date = today + 1 day.
-               next_billing_date is moved to retry_date so normal billing
-               doesn't re-trigger before the retry attempt.
+               next_billing_date is preserved so the next successful charge
+               advances from the patient's original billing anchor.
 
   Attempt 2 (on retry_date):
     success  → advance next_billing_date, reset consecutive_failures = 0
@@ -24,8 +24,8 @@ Retry policy (3 total attempts, 1-day spacing between retries):
     failure  → auto-cancel: status = "cancelled"; status banner refreshes
                via membership_card, plus an off-boarding AddTask.
 
-The retry_date approach means the daily cron handles both normal billing
-and the retry grace period with a single code path.
+The cron query matches ``Q(next_billing_date=today) | Q(retry_date=today)``,
+so a single code path handles both normal billing and the retry grace period.
 """
 from datetime import date
 
@@ -34,7 +34,6 @@ import arrow
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.task import AddTask, TaskStatus
 from canvas_sdk.handlers.cron_task import CronTask
-from canvas_sdk.v1.data.team import Team
 from logger import log
 
 from django.db.models import Q
@@ -51,6 +50,7 @@ from portal_membership.utils.membership_store import (
     get_membership,
     set_membership,
 )
+from portal_membership.utils.team_resolver import resolve_team_id
 
 # Number of days to wait between retry attempts.
 RETRY_DELAY_DAYS = 1
@@ -77,8 +77,8 @@ class MonthlyBillingCron(CronTask):
         )
 
         effects: list[Effect] = []
-        for instance in due:
-            patient_id = str(instance.patient_id)
+        for instance in due.select_related("patient"):
+            patient_id = str(instance.patient.id)
             record = get_membership(patient_id)
             if record is None:
                 # Shouldn't happen — we just queried it — but guard defensively.
@@ -196,7 +196,7 @@ class MonthlyBillingCron(CronTask):
             patient_id,
             amount_cents=charge_amount,
             status="succeeded",
-            description=f"Monthly charge: {plan_name}",
+            description=f"Recurring charge: {plan_name}",
             discount_code=history_discount_code,
         )
         log.info(
@@ -212,21 +212,24 @@ class MonthlyBillingCron(CronTask):
         consecutive_failures: int,
         charge_amount: int,
     ) -> list[Effect]:
-        """Schedule the next retry and retain the current billing period."""
+        """Schedule the next retry and retain the current billing period.
+
+        ``next_billing_date`` is preserved as-is so that when a retry succeeds
+        ``_handle_success`` advances the cadence from the patient's original
+        billing anchor — without this the anchor would drift forward by one
+        day per retried recovery (see PR #243 review).
+        """
         retry_date = arrow.utcnow().shift(days=RETRY_DELAY_DAYS).date().isoformat()
         plan_name = record.get("plan_name", record.get("plan", "membership"))
         record["consecutive_failures"] = consecutive_failures
         record["retry_date"] = retry_date
-        # Clear next_billing_date so normal billing logic doesn't re-trigger
-        # until after the retry attempt.
-        record["next_billing_date"] = retry_date
         set_membership(patient_id, record)
         append_charge(
             patient_id,
             amount_cents=charge_amount,
             status="failed",
             description=(
-                f"Monthly charge failed: {plan_name} "
+                f"Recurring charge failed: {plan_name} "
                 f"(attempt {consecutive_failures} of {MAX_ATTEMPTS}, retry scheduled)"
             ),
             discount_code=record.get("discount_code"),
@@ -249,7 +252,7 @@ class MonthlyBillingCron(CronTask):
             patient_id,
             amount_cents=charge_amount,
             status="failed",
-            description=f"Monthly charge failed: {plan_name} (auto-cancelled)",
+            description=f"Recurring charge failed: {plan_name} (auto-cancelled)",
             discount_code=record.get("discount_code"),
         )
         log.warning(
@@ -257,19 +260,7 @@ class MonthlyBillingCron(CronTask):
             f"after {MAX_ATTEMPTS} consecutive charge failures"
         )
 
-        team_id = self.secrets.get("STAFF_OFFBOARDING_TEAM_ID", "")
-        if team_id:
-            # Validate team exists, trying both hyphenated and bare UUID formats.
-            if Team.objects.filter(id=team_id).exists():
-                pass
-            elif Team.objects.filter(id=team_id.replace("-", "")).exists():
-                team_id = team_id.replace("-", "")
-            else:
-                log.warning(
-                    f"portal_membership billing_cron: STAFF_OFFBOARDING_TEAM_ID={team_id} "
-                    "not found, creating task without team assignment"
-                )
-                team_id = ""
+        team_id = resolve_team_id(self.secrets.get("STAFF_OFFBOARDING_TEAM_ID", ""))
 
         due = arrow.utcnow().shift(days=5).datetime
         task_kwargs: dict = {

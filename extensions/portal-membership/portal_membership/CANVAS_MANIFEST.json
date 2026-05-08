@@ -1,7 +1,7 @@
 {
     "sdk_version": "0.136.0",
-    "plugin_version": "0.8.3",
-    "name": "portal_membership",
+    "plugin_version": "0.9.0",
+    "name": "Patient Portal Membership",
     "description": "Patient portal membership sign-up, recurring billing, and cancellation management.",
     "components": {
         "protocols": [
@@ -87,7 +87,7 @@
     },
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }

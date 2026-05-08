@@ -1,13 +1,19 @@
 """Charge history entries — one row per charge attempt (success or failure)."""
-from django.db.models import DateTimeField, IntegerField, TextField
+from django.db.models import DO_NOTHING, DateTimeField, ForeignKey, IntegerField, TextField
 
 from canvas_sdk.v1.data.base import CustomModel
+from portal_membership.models.proxy import PatientProxy
 
 
 class ChargeRecord(CustomModel):
     """A single billing attempt for a patient."""
 
-    patient_id = TextField(db_index=True)
+    patient = ForeignKey(
+        PatientProxy,
+        to_field="dbid",
+        on_delete=DO_NOTHING,
+        related_name="%(app_label)s__charge_records",
+    )
     charged_at = DateTimeField(auto_now_add=True)
     amount_cents = IntegerField()
     status = TextField()  # "succeeded" | "failed"

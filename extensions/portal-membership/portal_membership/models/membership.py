@@ -3,20 +3,27 @@
 One row per patient. Replaces the ``membership:<patient_id>`` cache entry.
 """
 from django.db.models import (
+    DO_NOTHING,
     DateField,
     DateTimeField,
     IntegerField,
+    OneToOneField,
     TextField,
-    UniqueConstraint,
 )
 
 from canvas_sdk.v1.data.base import CustomModel
+from portal_membership.models.proxy import PatientProxy
 
 
 class Membership(CustomModel):
     """Membership state for a single patient."""
 
-    patient_id = TextField(db_index=True)
+    patient = OneToOneField(
+        PatientProxy,
+        to_field="dbid",
+        on_delete=DO_NOTHING,
+        related_name="%(app_label)s__membership",
+    )
 
     # Plan / status
     plan = TextField()
@@ -46,8 +53,3 @@ class Membership(CustomModel):
 
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
-
-    class Meta:
-        constraints = [
-            UniqueConstraint(fields=["patient_id"], name="uq_membership_patient"),
-        ]
