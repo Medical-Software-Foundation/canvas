@@ -160,10 +160,15 @@ def _staff_calendars(staff, type_keyword: str = "Clinic"):
 
     staff_id_str = str(staff.id)
     staff_id_hex = staff_id_str.replace("-", "")
+    # Anchor the type keyword to the ": " that parse_calendar_title expects
+    # before the type. Plain icontains would substring-match the keyword
+    # anywhere in the title — including inside a staff name (e.g. "Padmini"
+    # contains "admin"), pulling the staff's Clinic calendar into the
+    # admin-block lookup and silently zeroing out availability.
     qs = Calendar.objects.filter(
         (
             (Q(description__icontains=staff_id_str) | Q(description__icontains=staff_id_hex))
-            & Q(title__icontains=type_keyword)
+            & Q(title__icontains=f": {type_keyword}")
         )
         | Q(title__istartswith=f"{staff.full_name}: {type_keyword}")
     ).distinct()

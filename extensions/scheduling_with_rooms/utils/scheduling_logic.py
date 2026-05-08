@@ -6,7 +6,7 @@ import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
@@ -23,8 +23,14 @@ DEFAULT_DURATION_MINUTES = 20
 DEFAULT_START_HOUR = 8
 DEFAULT_END_HOUR = 17
 
-# Appointment statuses that should NOT block a time slot.
-_NON_BLOCKING_STATUSES = ("cancelled", "noshow", "entered-in-error")
+# Appointment statuses that should NOT block a time slot. Use the SDK
+# enum so the canonical strings stay in one place — Canvas's column stores
+# "noshowed" (not "noshow"), and "entered-in-error" is a FHIR-spec value
+# the internal column never produces.
+_NON_BLOCKING_STATUSES = (
+    AppointmentProgressStatus.CANCELLED,
+    AppointmentProgressStatus.NOSHOWED,
+)
 
 
 def _count_overlaps(
@@ -136,7 +142,7 @@ def _get_blocking_appointments(
     checks work correctly.
 
     Uses a blacklist approach: all appointments block EXCEPT explicitly
-    non-blocking statuses (cancelled, noshow, entered-in-error).
+    non-blocking statuses (cancelled, noshowed).
     """
     # Widen the query window to cover any UTC offset (up to ±14 h).
     buffer = datetime.timedelta(hours=16)

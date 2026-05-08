@@ -74,7 +74,7 @@
                 "description": "Create, update, or delete calendar events used to express provider availability",
                 "data_access": {
                     "event": "",
-                    "read": [],
+                    "read": ["Calendar", "Event", "Staff", "PracticeLocation", "NoteType"],
                     "write": ["Event"]
                 }
             }
