@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduling Admin</title>
+    {{ theme_style|safe }}
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: var(--font-stack);
+            margin: 0;
+            padding: 24px;
+            background: var(--surface-page);
+            color: var(--text-strong);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 1px 4px rgba(26,35,50,0.06), 0 0 0 1px rgba(26,35,50,0.04);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1.5px solid var(--border-default);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-strong);
+        }
+        .header .subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .btn {
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 7px;
+            border: 1.5px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-primary {
+            background: var(--brand-primary);
+            color: #fff;
+        }
+        .btn-primary:hover { background: var(--brand-primary-hover); }
+        .btn-primary:disabled {
+            background: var(--border-strong);
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #fff;
+            color: var(--brand-primary);
+            border-color: var(--brand-primary);
+        }
+        .btn-secondary:hover { background: rgba(74,111,165,0.06); }
+        .save-status {
+            font-size: 13px;
+            color: var(--text-muted);
+            min-width: 140px;
+            text-align: right;
+        }
+        .save-status.success { color: var(--success-fg); }
+        .save-status.error { color: var(--danger-fg); }
+        .body {
+            padding: 24px;
+        }
+        .empty {
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        .matrix-wrap {
+            overflow-x: auto;
+            border: 1.5px solid var(--border-default);
+            border-radius: 10px;
+        }
+        table.matrix {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 13.5px;
+        }
+        table.matrix th, table.matrix td {
+            border-bottom: 1px solid var(--border-default);
+            border-right: 1px solid var(--border-default);
+            padding: 10px 12px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        table.matrix th {
+            background: var(--surface-page);
+            font-weight: 600;
+            color: var(--text-strong);
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        table.matrix th.row-header,
+        table.matrix td.row-header {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: var(--surface-page);
+            z-index: 1;
+            font-weight: 600;
+            min-width: 220px;
+        }
+        table.matrix th.corner {
+            z-index: 3;
+        }
+        table.matrix tr:last-child td { border-bottom: none; }
+        table.matrix th:last-child, table.matrix td:last-child { border-right: none; }
+        table.matrix tbody tr:hover td { background: rgba(74,111,165,0.04); }
+        table.matrix tbody tr:hover td.row-header { background: var(--surface-hover); }
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--brand-primary);
+        }
+        .code-hint {
+            font-size: 11px;
+            color: var(--text-soft);
+            font-weight: 400;
+            margin-left: 6px;
+        }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            gap: 12px;
+        }
+        .filter-input {
+            flex: 1;
+            max-width: 320px;
+            padding: 7px 10px;
+            border: 1.5px solid var(--border-default);
+            border-radius: 7px;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 13.5px;
+            background: var(--surface-page);
+            outline: none;
+        }
+        .filter-input:focus { border-color: var(--brand-primary); }
+        .legend {
+            font-size: 12.5px;
+            color: var(--text-muted);
+        }
+        select.row-select {
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 13px;
+            padding: 5px 8px;
+            border: 1.5px solid var(--border-default);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--text-strong);
+            min-width: 180px;
+            outline: none;
+        }
+        select.row-select:focus { border-color: var(--brand-primary); }
+        select.row-select.unset {
+            background: var(--danger-bg);
+            border-color: var(--danger-bg);
+            color: var(--danger-fg);
+        }
+        td.event-cell, td.duration-cell { text-align: left; }
+        th.event-col, td.event-cell { min-width: 200px; }
+        th.duration-col, td.duration-cell { min-width: 140px; }
+        .staff-card {
+            background: var(--surface-page);
+            border: 1.5px solid var(--border-default);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+        .staff-card h2 {
+            margin: 0 0 4px 0;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-strong);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .staff-card .desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        .staff-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 8px 16px;
+        }
+        .staff-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            background: #fff;
+            border: 1.5px solid var(--border-default);
+            border-radius: 7px;
+            font-size: 13.5px;
+        }
+        .staff-row .meta {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            flex: 1;
+        }
+        .staff-row .name {
+            font-weight: 600;
+            color: var(--text-strong);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .staff-row .role {
+            font-size: 11.5px;
+            color: var(--text-soft);
+            text-transform: capitalize;
+        }
+        input.limit-input {
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 13px;
+            padding: 4px 6px;
+            border: 1.5px solid var(--border-default);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--text-strong);
+            width: 56px;
+            text-align: center;
+            outline: none;
+        }
+        input.limit-input:focus { border-color: var(--brand-primary); }
+        input.limit-input.invalid {
+            background: var(--danger-bg);
+            border-color: var(--danger-bg);
+            color: var(--danger-fg);
+        }
+        input.duration-input {
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 13px;
+            padding: 5px 8px;
+            border: 1.5px solid var(--border-default);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--text-strong);
+            width: 130px;
+            outline: none;
+        }
+        input.duration-input:focus { border-color: var(--brand-primary); }
+        input.duration-input.invalid {
+            background: var(--danger-bg);
+            border-color: var(--danger-bg);
+            color: var(--danger-fg);
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1.5px solid var(--border-default);
+            background: #fff;
+        }
+        .tab {
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            border-bottom: 2.5px solid transparent;
+            transition: all 0.15s ease;
+        }
+        .tab:hover { color: var(--text-strong); }
+        .tab.active {
+            color: var(--brand-primary);
+            border-bottom-color: var(--brand-primary);
+        }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        .tab-pane iframe.availability-frame {
+            width: 100%;
+            height: calc(100vh - 220px);
+            min-height: 600px;
+            border: none;
+            display: block;
+            border-radius: 0 0 14px 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Scheduling Admin</h1>
+                <div class="subtitle" id="header-subtitle">Map which rooms are eligible for each visit type. Visit types with no rooms checked require no room.</div>
+            </div>
+            <div class="header-actions" id="matrix-actions">
+                <span class="save-status" id="save-status"></span>
+                <button class="btn btn-secondary" id="reload-btn" type="button">Reload</button>
+                <button class="btn btn-primary" id="save-btn" type="button" disabled>Save changes</button>
+            </div>
+        </div>
+        <div class="tabs">
+            <button class="tab active" data-tab="matrix" type="button">Visit Type Configuration</button>
+            <button class="tab" data-tab="availability" type="button">Manage Availability</button>
+        </div>
+        <div class="tab-pane active" id="tab-matrix">
+            <div class="body" id="body">
+                <div class="empty" id="loading">Loading…</div>
+            </div>
+        </div>
+        <div class="tab-pane" id="tab-availability">
+            <iframe
+                class="availability-frame"
+                id="availability-frame"
+                title="Manage Availability"
+                src="about:blank"
+            ></iframe>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            visitTypes: [],
+            rooms: [],
+            mappings: {},                // { code: Set<roomKey> }
+            originalMappings: {},        // for dirty tracking
+            roomEventCodes: {},          // { visit_type_code: room_event_code }
+            originalRoomEventCodes: {},  // for dirty tracking
+            durations: {},               // { visit_type_code: [minutes, ...] }
+            originalDurations: {},       // for dirty tracking
+            schedulableStaff: [],        // [{id, name, role}]
+            concurrentLimits: {},        // { staff_id: int }
+            originalConcurrentLimits: {},// for dirty tracking
+            scheduleEventNoteTypes: [],
+            dirty: false,
+        };
+
+        const elBody = document.getElementById("body");
+        const elStatus = document.getElementById("save-status");
+        const elSaveBtn = document.getElementById("save-btn");
+        const elReloadBtn = document.getElementById("reload-btn");
+
+        function setStatus(text, kind) {
+            elStatus.textContent = text || "";
+            elStatus.className = "save-status" + (kind ? " " + kind : "");
+        }
+
+        function markDirty() {
+            state.dirty = true;
+            elSaveBtn.disabled = false;
+            setStatus("Unsaved changes", "");
+        }
+
+        function cloneMappings(src) {
+            const out = {};
+            for (const code of Object.keys(src)) {
+                out[code] = new Set(src[code]);
+            }
+            return out;
+        }
+
+        function cloneDurations(src) {
+            const out = {};
+            for (const code of Object.keys(src)) {
+                out[code] = (src[code] || []).slice();
+            }
+            return out;
+        }
+
+        function parseDurationsInput(text) {
+            // Returns { ok: bool, minutes: [int] } — accepts comma- or space-separated integers > 0.
+            const cleaned = String(text || "").trim();
+            if (!cleaned) return { ok: true, minutes: [] };
+            const parts = cleaned.split(/[\s,]+/).filter(Boolean);
+            const minutes = [];
+            for (const p of parts) {
+                if (!/^\d+$/.test(p)) return { ok: false, minutes: [] };
+                const n = parseInt(p, 10);
+                if (!(n > 0)) return { ok: false, minutes: [] };
+                minutes.push(n);
+            }
+            // Dedupe + sort.
+            return { ok: true, minutes: Array.from(new Set(minutes)).sort((a, b) => a - b) };
+        }
+
+        function formatDurations(minutes) {
+            return (minutes || []).join(", ");
+        }
+
+        async function loadData() {
+            setStatus("Loading…", "");
+            elSaveBtn.disabled = true;
+            try {
+                const res = await fetch("/plugin-io/api/scheduling_with_rooms/admin/data", {
+                    credentials: "same-origin",
+                });
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const data = await res.json();
+                state.visitTypes = data.visit_types || [];
+                state.rooms = data.rooms || [];
+                const mappings = {};
+                for (const code of Object.keys(data.mappings || {})) {
+                    mappings[code] = new Set(data.mappings[code]);
+                }
+                state.mappings = mappings;
+                state.originalMappings = cloneMappings(mappings);
+                state.roomEventCodes = Object.assign({}, data.room_event_codes || {});
+                state.originalRoomEventCodes = Object.assign({}, state.roomEventCodes);
+                state.durations = {};
+                for (const code of Object.keys(data.durations || {})) {
+                    state.durations[code] = (data.durations[code] || []).slice();
+                }
+                state.originalDurations = cloneDurations(state.durations);
+                state.schedulableStaff = data.schedulable_staff || [];
+                state.concurrentLimits = Object.assign({}, data.concurrent_limits || {});
+                state.originalConcurrentLimits = Object.assign({}, state.concurrentLimits);
+                state.scheduleEventNoteTypes = data.schedule_event_note_types || [];
+                state.dirty = false;
+                renderMatrix();
+                renderStaffCapacity();
+                setStatus("", "");
+            } catch (err) {
+                console.error(err);
+                elBody.innerHTML = '<div class="empty">Failed to load admin data: ' + err.message + '</div>';
+                setStatus("Load failed", "error");
+            }
+        }
+
+        function renderStaffCapacity() {
+            const prior = document.getElementById("staff-card");
+            if (prior) prior.remove();
+
+            if (!state.schedulableStaff.length) return;
+
+            const card = document.createElement("div");
+            card.id = "staff-card";
+            card.className = "staff-card";
+
+            const grid = document.createElement("div");
+            grid.className = "staff-grid";
+
+            for (const s of state.schedulableStaff) {
+                const row = document.createElement("div");
+                row.className = "staff-row";
+
+                const meta = document.createElement("div");
+                meta.className = "meta";
+                const name = document.createElement("span");
+                name.className = "name";
+                name.textContent = s.name;
+                const role = document.createElement("span");
+                role.className = "role";
+                role.textContent = s.role || "";
+                meta.appendChild(name);
+                meta.appendChild(role);
+
+                const input = document.createElement("input");
+                input.type = "text";
+                input.inputMode = "numeric";
+                input.className = "limit-input";
+                input.dataset.staffId = s.id;
+                input.value = state.concurrentLimits[s.id] != null
+                    ? String(state.concurrentLimits[s.id])
+                    : "1";
+                input.addEventListener("input", onLimitInput);
+                input.addEventListener("blur", onLimitBlur);
+
+                row.appendChild(meta);
+                row.appendChild(input);
+                grid.appendChild(row);
+            }
+
+            card.innerHTML = `
+                <h2>Staff capacity</h2>
+                <div class="desc">Maximum concurrent bookings allowed per provider or room. Default is 1 (no overbooking).</div>
+            `;
+            card.appendChild(grid);
+
+            elBody.insertBefore(card, elBody.firstChild);
+        }
+
+        function onLimitInput(ev) {
+            const input = ev.target;
+            const raw = String(input.value || "").trim();
+            const n = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+            if (Number.isInteger(n) && n > 0) {
+                input.classList.remove("invalid");
+                state.concurrentLimits[input.dataset.staffId] = n;
+            } else {
+                input.classList.add("invalid");
+            }
+            markDirty();
+        }
+
+        function onLimitBlur(ev) {
+            const input = ev.target;
+            const raw = String(input.value || "").trim();
+            const n = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+            if (Number.isInteger(n) && n > 0) {
+                input.value = String(n);
+                input.classList.remove("invalid");
+                state.concurrentLimits[input.dataset.staffId] = n;
+            }
+        }
+
+        function buildEventSelect(visitTypeCode) {
+            const select = document.createElement("select");
+            select.className = "row-select";
+            select.dataset.code = visitTypeCode;
+
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = state.scheduleEventNoteTypes.length
+                ? "— None —"
+                : "No schedule_event NoteTypes found";
+            select.appendChild(placeholder);
+
+            const currentValue = state.roomEventCodes[visitTypeCode] || "";
+            for (const nt of state.scheduleEventNoteTypes) {
+                const opt = document.createElement("option");
+                opt.value = nt.code;
+                opt.textContent = `${nt.name} (${nt.code})`;
+                if (nt.code === currentValue) opt.selected = true;
+                select.appendChild(opt);
+            }
+            if (!state.scheduleEventNoteTypes.length) select.disabled = true;
+            if (!currentValue) select.classList.add("unset");
+
+            select.addEventListener("change", onEventSelectChange);
+            return select;
+        }
+
+        function renderMatrix() {
+            if (!state.visitTypes.length) {
+                elBody.innerHTML = '<div class="empty">No active scheduleable visit types found.</div>';
+                return;
+            }
+            if (!state.rooms.length) {
+                elBody.innerHTML = '<div class="empty">No active staff members with the RR role were found. Add at least one room (Staff with role RR) to use this matrix.</div>';
+                return;
+            }
+
+            const toolbar = document.createElement("div");
+            toolbar.className = "toolbar";
+            toolbar.innerHTML = `
+                <input type="text" class="filter-input" id="filter-input" placeholder="Filter visit types…">
+                <span class="legend">${state.visitTypes.length} visit types × ${state.rooms.length} rooms</span>
+            `;
+
+            const wrap = document.createElement("div");
+            wrap.className = "matrix-wrap";
+
+            const table = document.createElement("table");
+            table.className = "matrix";
+
+            const thead = document.createElement("thead");
+            const headerRow = document.createElement("tr");
+            const corner = document.createElement("th");
+            corner.className = "row-header corner";
+            corner.textContent = "Visit type";
+            headerRow.appendChild(corner);
+            const eventTh = document.createElement("th");
+            eventTh.className = "event-col";
+            eventTh.textContent = "Room event type";
+            headerRow.appendChild(eventTh);
+            const durationTh = document.createElement("th");
+            durationTh.className = "duration-col";
+            durationTh.textContent = "Durations (min)";
+            durationTh.title = "Comma-separated minutes, e.g. 30, 60";
+            headerRow.appendChild(durationTh);
+            for (const room of state.rooms) {
+                const th = document.createElement("th");
+                th.textContent = room.name;
+                headerRow.appendChild(th);
+            }
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement("tbody");
+            for (const vt of state.visitTypes) {
+                const tr = document.createElement("tr");
+                tr.dataset.code = vt.code;
+                tr.dataset.name = vt.name.toLowerCase();
+
+                const labelCell = document.createElement("td");
+                labelCell.className = "row-header";
+                labelCell.innerHTML = `${escapeHtml(vt.name)}<span class="code-hint">${escapeHtml(vt.code)}</span>`;
+                tr.appendChild(labelCell);
+
+                const eventTd = document.createElement("td");
+                eventTd.className = "event-cell";
+                eventTd.appendChild(buildEventSelect(vt.code));
+                tr.appendChild(eventTd);
+
+                const durationTd = document.createElement("td");
+                durationTd.className = "duration-cell";
+                const durationInput = document.createElement("input");
+                durationInput.type = "text";
+                durationInput.className = "duration-input";
+                durationInput.dataset.code = vt.code;
+                durationInput.placeholder = "e.g. 30, 60";
+                durationInput.value = formatDurations(state.durations[vt.code]);
+                durationInput.addEventListener("input", onDurationInput);
+                durationInput.addEventListener("blur", onDurationBlur);
+                durationTd.appendChild(durationInput);
+                tr.appendChild(durationTd);
+
+                for (const room of state.rooms) {
+                    const td = document.createElement("td");
+                    const cb = document.createElement("input");
+                    cb.type = "checkbox";
+                    cb.dataset.code = vt.code;
+                    cb.dataset.roomId = room.id;
+                    const allowed = state.mappings[vt.code];
+                    cb.checked = !!(allowed && allowed.has(room.id));
+                    cb.addEventListener("change", onCellChange);
+                    td.appendChild(cb);
+                    tr.appendChild(td);
+                }
+
+                tbody.appendChild(tr);
+            }
+            table.appendChild(tbody);
+            wrap.appendChild(table);
+
+            elBody.innerHTML = "";
+            elBody.appendChild(toolbar);
+            elBody.appendChild(wrap);
+
+            document.getElementById("filter-input").addEventListener("input", onFilter);
+        }
+
+        function onCellChange(ev) {
+            const cb = ev.target;
+            const code = cb.dataset.code;
+            const roomId = cb.dataset.roomId;
+            if (!state.mappings[code]) state.mappings[code] = new Set();
+            if (cb.checked) {
+                state.mappings[code].add(roomId);
+            } else {
+                state.mappings[code].delete(roomId);
+            }
+            markDirty();
+        }
+
+        function onDurationInput(ev) {
+            const input = ev.target;
+            const parsed = parseDurationsInput(input.value);
+            if (parsed.ok) {
+                input.classList.remove("invalid");
+                state.durations[input.dataset.code] = parsed.minutes;
+            } else {
+                input.classList.add("invalid");
+            }
+            markDirty();
+        }
+
+        function onDurationBlur(ev) {
+            const input = ev.target;
+            const parsed = parseDurationsInput(input.value);
+            if (parsed.ok) {
+                input.value = formatDurations(parsed.minutes);
+                input.classList.remove("invalid");
+                state.durations[input.dataset.code] = parsed.minutes;
+            }
+        }
+
+        function onEventSelectChange(ev) {
+            const select = ev.target;
+            const code = select.dataset.code;
+            const value = select.value;
+            if (value) {
+                state.roomEventCodes[code] = value;
+                select.classList.remove("unset");
+            } else {
+                delete state.roomEventCodes[code];
+                select.classList.add("unset");
+            }
+            markDirty();
+        }
+
+        function onFilter(ev) {
+            const q = ev.target.value.trim().toLowerCase();
+            const rows = document.querySelectorAll("table.matrix tbody tr");
+            for (const tr of rows) {
+                const haystack = (tr.dataset.name || "") + " " + (tr.dataset.code || "");
+                tr.style.display = !q || haystack.includes(q) ? "" : "none";
+            }
+        }
+
+        async function saveMappings() {
+            // Block save when any input is malformed.
+            const invalid = document.querySelector("input.duration-input.invalid, input.limit-input.invalid");
+            if (invalid) {
+                setStatus("Fix invalid inputs", "error");
+                invalid.focus();
+                return;
+            }
+
+            elSaveBtn.disabled = true;
+            setStatus("Saving…", "");
+
+            // Send all visit-type codes (replace-all per code) so deselects persist.
+            const payload = {
+                mappings: {},
+                room_event_codes: {},
+                durations: {},
+                concurrent_limits: {},
+            };
+            for (const vt of state.visitTypes) {
+                const set = state.mappings[vt.code] || new Set();
+                payload.mappings[vt.code] = Array.from(set);
+                payload.room_event_codes[vt.code] = state.roomEventCodes[vt.code] || "";
+                payload.durations[vt.code] = (state.durations[vt.code] || []).slice();
+            }
+            for (const s of state.schedulableStaff) {
+                const v = state.concurrentLimits[s.id];
+                payload.concurrent_limits[s.id] = (Number.isInteger(v) && v > 0) ? v : 1;
+            }
+
+            try {
+                const res = await fetch("/plugin-io/api/scheduling_with_rooms/admin/mappings", {
+                    method: "POST",
+                    credentials: "same-origin",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) {
+                    const errBody = await res.text();
+                    throw new Error("HTTP " + res.status + ": " + errBody);
+                }
+                state.originalMappings = cloneMappings(state.mappings);
+                state.originalRoomEventCodes = Object.assign({}, state.roomEventCodes);
+                state.originalDurations = cloneDurations(state.durations);
+                state.originalConcurrentLimits = Object.assign({}, state.concurrentLimits);
+                state.dirty = false;
+                setStatus("Saved", "success");
+            } catch (err) {
+                console.error(err);
+                setStatus("Save failed", "error");
+                elSaveBtn.disabled = false;
+            }
+        }
+
+        function escapeHtml(s) {
+            return String(s)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        elSaveBtn.addEventListener("click", saveMappings);
+        elReloadBtn.addEventListener("click", () => {
+            if (state.dirty && !confirm("Discard unsaved changes?")) return;
+            loadData();
+        });
+
+        window.addEventListener("beforeunload", (ev) => {
+            if (state.dirty) {
+                ev.preventDefault();
+                ev.returnValue = "";
+            }
+        });
+
+        // ---- Tab switching ----
+        const matrixActions = document.getElementById("matrix-actions");
+        const headerSubtitle = document.getElementById("header-subtitle");
+        const availabilityFrame = document.getElementById("availability-frame");
+        const tabPaneMatrix = document.getElementById("tab-matrix");
+        const tabPaneAvailability = document.getElementById("tab-availability");
+        const tabButtons = document.querySelectorAll(".tabs .tab");
+        const SUBTITLES = {
+            matrix: "Map which rooms are eligible for each visit type. Visit types with no rooms checked require no room.",
+            availability: "Manage provider clinic and admin calendars used by the scheduler.",
+        };
+        let availabilityLoaded = false;
+
+        function switchTab(tabName) {
+            tabButtons.forEach((btn) => {
+                btn.classList.toggle("active", btn.dataset.tab === tabName);
+            });
+            tabPaneMatrix.classList.toggle("active", tabName === "matrix");
+            tabPaneAvailability.classList.toggle("active", tabName === "availability");
+            // Save/Reload actions only apply to the matrix tab.
+            matrixActions.style.display = tabName === "matrix" ? "" : "none";
+            headerSubtitle.textContent = SUBTITLES[tabName] || "";
+            // Lazy-load the iframe the first time the tab is shown.
+            if (tabName === "availability" && !availabilityLoaded) {
+                availabilityFrame.src = "/plugin-io/api/scheduling_with_rooms/app/availability-app";
+                availabilityLoaded = true;
+            }
+        }
+
+        tabButtons.forEach((btn) => {
+            btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+        });
+
+        loadData();
+    </script>
+</body>
+</html>

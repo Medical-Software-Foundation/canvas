@@ -1,0 +1,1934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Schedule Appointment</title>
+  {{ theme_style|safe }}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body, html {
+      height: 100%;
+      width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 14px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+      background: #fff;
+    }
+
+    /* -- Body: two columns -- */
+    .body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* -- Left panel: form fields -- */
+    .panel-left {
+      width: 280px;
+      min-width: 240px;
+      border-right: 1px solid #e5e7eb;
+      padding: 24px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-left-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+
+    /* -- Right panel: calendar + slots -- */
+    .panel-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Calendar section */
+    .cal-section {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    /* Manual override toggle row */
+    .manual-toggle-row {
+      display: flex;
+      justify-content: flex-end;
+      padding: 8px 24px 0;
+    }
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--brand-primary);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .link-btn:hover { background: rgba(74,111,165,0.08); }
+    .link-btn.active { background: var(--brand-primary); color: #fff; }
+
+    /* Manual override form */
+    .manual-section {
+      padding: 16px 24px 24px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .manual-help {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+    .manual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .manual-section .form-group input,
+    .manual-section .form-group select {
+      width: 100%;
+    }
+
+    /* Slots section */
+    .slots-section {
+      flex: 1;
+      padding: 16px 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* -- Form fields -- */
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .req { color: #dc2626; }
+    .form-group input,
+    .form-group select {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #111827;
+      background: #fff;
+      width: 100%;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #111827;
+      box-shadow: 0 0 0 1px #111827;
+    }
+
+    /* Patient search autocomplete */
+    .patient-search-wrap { position: relative; }
+    #patient-results {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      border: 1px solid #d1d5db;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      background: #fff;
+      max-height: 170px;
+      overflow-y: auto;
+      display: none;
+      z-index: 20;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .patient-result-item {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .patient-result-item:last-child { border-bottom: none; }
+    .patient-result-item:hover { background: #f3f4f6; }
+    .patient-result-item .pt-name { font-weight: 600; color: #1f2937; }
+    .patient-result-item .pt-meta { font-size: 11px; color: #6b7280; margin-top: 1px; }
+
+    /* Selected patient chip */
+    #selected-patient-chip {
+      display: none;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 13px;
+      color: #111827;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #selected-patient-chip.visible { display: flex; }
+    .chip-clear {
+      background: none; border: none; cursor: pointer; color: #9ca3af;
+      font-size: 16px; line-height: 1; padding: 0 2px;
+    }
+    .chip-clear:hover { color: #111827; }
+
+    /* -- Mini Calendar -- */
+    .cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .cal-month-label {
+      font-size: 16px;
+      font-weight: 700;
+      color: #111827;
+    }
+    .cal-month-label span {
+      font-weight: 400;
+      color: #6b7280;
+    }
+    .cal-nav {
+      display: flex;
+      gap: 4px;
+    }
+    .cal-nav button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      color: #9ca3af;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 0.12s, background 0.12s;
+    }
+    .cal-nav button:hover { color: #111827; background: #f3f4f6; }
+    #cal-today {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      margin-right: 4px;
+    }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      text-align: center;
+    }
+    .cal-dow {
+      font-size: 11px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      padding: 4px 0 8px;
+    }
+    .cal-day {
+      padding: 7px 0;
+      font-size: 13px;
+      color: #374151;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.12s;
+      font-weight: 500;
+    }
+    .cal-day:hover { background: #f3f4f6; }
+    .cal-day.other-month { color: #d1d5db; }
+    .cal-day.today {
+      background: #f3f4f6;
+      color: #111827;
+      font-weight: 700;
+      border: 2px solid #9ca3af;
+    }
+    .cal-day.selected {
+      background: #111827;
+      color: #fff;
+      font-weight: 700;
+    }
+    .cal-day.avail-none:not(.selected):not(.other-month) {
+      color: #d1d5db;
+    }
+    .cal-day.avail-some:not(.selected):not(.other-month) {
+      color: #f59e0b;
+      font-weight: 700;
+    }
+    .cal-day.avail-many:not(.selected):not(.other-month) {
+      color: #16a34a;
+      font-weight: 700;
+    }
+
+    /* -- Provider / Room column grid -- */
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .provider-columns, .room-columns {
+      display: flex;
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+      overflow-x: auto;
+    }
+
+    /* Multi-location: stack location groups vertically. */
+    .provider-columns.grouped {
+      display: block;
+      overflow-x: visible;
+    }
+    .location-group { margin-bottom: 18px; }
+    .location-group:last-child { margin-bottom: 0; }
+    .location-group-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--brand-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .group-section-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 8px 0 4px 0;
+    }
+    .location-group .provider-columns,
+    .location-group .room-columns {
+      display: flex;
+      overflow-x: auto;
+    }
+
+    .prov-col, .room-col {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Provider columns get a hard minimum width so names/times don't wrap or
+       collide. The parent .provider-columns has overflow-x:auto, so adding
+       enough providers will produce a horizontal scrollbar instead. */
+    .prov-col {
+      flex: 0 0 130px;
+      min-width: 130px;
+    }
+    .prov-col + .prov-col,
+    .room-col + .room-col {
+      border-left: 1px solid #e5e7eb;
+    }
+
+    .col-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+      padding: 6px 8px;
+      text-align: center;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f9fafb;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .col-slots {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 4px;
+      padding: 6px 4px;
+    }
+
+    .slot-btn {
+      border: 1.5px solid #d1d5db;
+      border-radius: 20px;
+      padding: 6px 4px;
+      cursor: pointer;
+      background: #fff;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: #374151;
+      transition: all 0.15s;
+      width: 100%;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .slot-btn:hover {
+      border-color: #111827;
+      background: #f9fafb;
+    }
+    .slot-btn.selected {
+      background: #111827;
+      border-color: #111827;
+      color: #fff;
+      font-weight: 600;
+    }
+    .load-more-btn {
+      grid-column: 1 / -1;
+      background: none;
+      border: 1px dashed #d1d5db;
+      border-radius: 8px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.12s;
+    }
+    .load-more-btn:hover {
+      border-color: #111827;
+      color: #111827;
+    }
+
+    .col-slots .no-slots-msg {
+      grid-column: 1 / -1;
+    }
+
+    .slot-time-patient { font-weight: 600; color: #1f2937; }
+    .slot-time-user { font-size: 10px; color: #9ca3af; margin-top: 1px; }
+    .slot-btn.selected .slot-time-patient,
+    .slot-btn.selected .slot-time-user { color: #fff; }
+
+    .slots-placeholder {
+      color: #9ca3af;
+      font-size: 13px;
+      padding: 12px 0;
+    }
+
+    .no-slots-msg {
+      color: #9ca3af;
+      font-size: 13px;
+      padding: 12px 0;
+    }
+
+    #room-slots-section {
+      border-top: 1px solid #e5e7eb;
+      padding-top: 10px;
+      margin-top: 6px;
+    }
+
+    /* -- Loading spinner -- */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #111827;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* -- Footer -- */
+    .footer {
+      padding: 12px 20px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+    }
+    #status-msg {
+      font-size: 12px;
+      color: #6b7280;
+      min-height: 16px;
+    }
+    #status-msg.error { color: #dc2626; }
+    #status-msg.success { color: #16a34a; }
+
+    .btn-cancel {
+      background: #fff;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      color: #374151;
+      transition: all 0.12s;
+    }
+    .btn-cancel:hover { border-color: #111827; }
+    .btn-book {
+      background: #111827;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 22px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .btn-book:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .btn-book:not(:disabled):hover { background: #374151; }
+  </style>
+</head>
+<body>
+
+{% if prefill_patient %}
+{{ prefill_patient|json_script:"prefill-patient-data" }}
+<script>window.PREFILL_PATIENT = JSON.parse(document.getElementById('prefill-patient-data').textContent);</script>
+{% endif %}
+
+<div class="app">
+  <div class="body">
+
+    <!-- LEFT: form fields (Patient, Appt Type, Duration, Location, Provider) -->
+    <div class="panel-left">
+      <div class="panel-left-title">Schedule Appointment</div>
+
+      <div class="form-group">
+        <label for="patient-search">Patient <span class="req">*</span></label>
+        <div id="selected-patient-chip">
+          <span id="selected-patient-label"></span>
+          <button class="chip-clear" id="btn-clear-patient" title="Clear">&times;</button>
+        </div>
+        <div class="patient-search-wrap">
+          <input type="text" id="patient-search" placeholder="Search by name..." autocomplete="off" />
+          <div id="patient-results"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="select-note-type">Appointment Type <span class="req">*</span></label>
+        <select id="select-note-type"><option value="">Loading...</option></select>
+      </div>
+
+      <div class="form-group">
+        <label for="input-rfv">Reason for visit</label>
+        <input type="text" id="input-rfv" placeholder="Briefly describe the reason for visit" autocomplete="off" />
+      </div>
+
+      <div class="form-group">
+        <label for="select-duration">Duration</label>
+        <select id="select-duration"><option value="">Loading...</option></select>
+      </div>
+
+      <div class="form-group">
+        <label for="select-location">Location</label>
+        <select id="select-location"><option value="">Loading...</option></select>
+      </div>
+
+      <div class="form-group">
+        <label for="select-provider">Provider</label>
+        <select id="select-provider" disabled><option value="">Select a location first</option></select>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: calendar + slots stacked -->
+    <div class="panel-right">
+
+      <!-- Manual override toggle -->
+      <div class="manual-toggle-row">
+        <button type="button" id="btn-manual-toggle" class="link-btn" title="Override the slot search and pick any date/time">Manual override</button>
+      </div>
+
+      <!-- Calendar -->
+      <div class="cal-section" id="cal-section">
+        <div class="cal-header">
+          <div class="cal-month-label" id="cal-month-label"></div>
+          <div class="cal-nav">
+            <button id="cal-today" title="Go to today">Today</button>
+            <button id="cal-prev" title="Previous month">&#8249;</button>
+            <button id="cal-next" title="Next month">&#8250;</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+
+      <!-- Slots -->
+      <div class="slots-section" id="slots-section">
+        <div id="slots-loading" style="display:none; padding:8px 0;">
+          <span class="spinner"></span> <span style="font-size:12px;color:#6b7280;">Loading...</span>
+        </div>
+
+        <!-- Provider slots -->
+        <div id="provider-slots-section" style="display:none;">
+          <div class="section-label">Providers</div>
+          <div id="provider-slots-list" class="provider-columns"></div>
+        </div>
+
+        <!-- Room slots (only shown when appointment type requires rooms) -->
+        <div id="room-slots-section" style="display:none;">
+          <div class="section-label">Rooms</div>
+          <div id="room-slots-list" class="room-columns"></div>
+        </div>
+
+        <div class="slots-placeholder" id="slots-placeholder">
+          Select a location to view available slots
+        </div>
+
+      </div>
+
+      <!-- Manual override form (hidden until enabled) -->
+      <div class="manual-section" id="manual-section" style="display:none;">
+        <div class="section-label">Manual override</div>
+        <div class="manual-help">Skip availability checks and book at a specific time. The form fields above (patient, type, location, provider) still apply. Duration here overrides the value above.</div>
+        <div class="manual-grid">
+          <div class="form-group">
+            <label for="manual-date">Date</label>
+            <input type="date" id="manual-date" />
+          </div>
+          <div class="form-group">
+            <label for="manual-time">Start time</label>
+            <input type="time" id="manual-time" step="300" />
+          </div>
+          <div class="form-group">
+            <label for="manual-duration">Duration (min)</label>
+            <input type="number" id="manual-duration" min="5" max="1440" step="5" placeholder="180" />
+          </div>
+          <div class="form-group" id="manual-room-group" style="display:none;">
+            <label for="manual-room">Room</label>
+            <select id="manual-room"><option value="">— Select —</option></select>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div id="status-msg"></div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-cancel" id="btn-cancel">Cancel</button>
+      <button class="btn-book" id="btn-book" disabled>Book Appointment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// -- Canvas MessageChannel API --
+var messagePort = null;
+
+window.addEventListener('message', function (event) {
+  if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+    messagePort = event.ports[0];
+    messagePort.start();
+  }
+});
+
+window.closeModal = function () {
+  if (messagePort) {
+    messagePort.postMessage({ type: 'CLOSE_MODAL' });
+  }
+};
+
+document.getElementById('btn-cancel').addEventListener('click', function () {
+  closeModal();
+});
+
+(function () {
+  'use strict';
+
+  var state = {
+    patientId: null,
+    patientLabel: null,
+    patientTimezone: null,
+    locationId: null,
+    providerId: null,       // dropdown filter (null = all providers)
+    noteTypeId: null,
+    noteTypeCode: null,
+    durationMinutes: null,
+    slotTimezone: null,
+    locations: [],          // [{id, name}] — full list, used for multi-location fan-out
+    // Provider/room column data from /all-slots
+    allProviderSlots: [],   // [{id, name, slots: [{start, end}]}]
+    allRoomSlots: [],       // [{id, name, slots: [{start, end}]}]
+    locationGroups: null,   // [{location_id, location_name, timezone, providers, rooms}] in multi-location mode
+    roomsRequired: false,
+    // Selected slot state
+    selectedProviderSlot: null, // {providerId, providerName, start, end}
+    selectedRoomSlot: null,     // {roomId, roomName, start, end}
+    selectedDate: null,
+    calViewYear: null,
+    calViewMonth: null,
+    noteTypes: [],
+    userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // Manual override
+    manualMode: false,
+    manualDate: '',
+    manualTime: '',
+    manualRoomId: '',
+    manualDurationMinutes: null, // overrides state.durationMinutes when set
+    monthSummary: {},        // {"2026-03-01": 12, ...}
+    monthSummaryKey: null,   // cache key to avoid redundant fetches
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var patientSearch       = $('patient-search');
+  var patientResults      = $('patient-results');
+  var selectedChip        = $('selected-patient-chip');
+  var selectedLabel       = $('selected-patient-label');
+  var btnClearPatient     = $('btn-clear-patient');
+  var selectLocation      = $('select-location');
+  var selectProvider      = $('select-provider');
+  var selectNoteType      = $('select-note-type');
+  var selectDuration      = $('select-duration');
+  var calMonthLabel       = $('cal-month-label');
+  var calGrid             = $('cal-grid');
+  var calToday            = $('cal-today');
+  var calPrev             = $('cal-prev');
+  var calNext             = $('cal-next');
+  var slotsLoading        = $('slots-loading');
+  var providerSlotsSection = $('provider-slots-section');
+  var providerSlotsList   = $('provider-slots-list');
+  var roomSlotsSection    = $('room-slots-section');
+  var roomSlotsList       = $('room-slots-list');
+  var slotsPlaceholder    = $('slots-placeholder');
+  var statusMsg           = $('status-msg');
+  var btnBook             = $('btn-book');
+
+  var API_BASE = '/plugin-io/api/scheduling_with_rooms';
+  var MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+  var DOW_LABELS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+
+  function apiFetch(path, options) {
+    options = options || {};
+    return fetch(API_BASE + path, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    });
+  }
+
+  function fmtDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function setStatus(msg, type) {
+    statusMsg.textContent = msg;
+    statusMsg.className = type || '';
+  }
+
+  function updateBookButton() {
+    var ok;
+    if (state.manualMode) {
+      // Manual override needs all the form fields (patient, visit type,
+      // duration — either inherited or overridden), a specific location and
+      // provider (no "All ..."), a date + time, and a room when the visit
+      // type has rooms mapped.
+      var manualHasRoom = !state.roomsRequired || !!state.manualRoomId;
+      var effectiveDuration = state.manualDurationMinutes || state.durationMinutes;
+      ok = !!(
+        state.patientId &&
+        state.noteTypeId &&
+        effectiveDuration &&
+        state.locationId &&
+        state.providerId &&
+        state.manualDate &&
+        state.manualTime &&
+        manualHasRoom
+      );
+    } else {
+      var hasProvider = !!(state.selectedProviderSlot);
+      var hasTime = hasProvider;
+      var hasRoom = !state.roomsRequired || !!(state.selectedRoomSlot);
+      ok = !!(
+        state.patientId &&
+        hasProvider &&
+        hasTime &&
+        state.noteTypeId &&
+        state.durationMinutes &&
+        hasRoom
+      );
+    }
+    btnBook.disabled = !ok;
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // -- Timezone helpers --
+
+  function toUtcDate(naiveIso, sourceTz) {
+    var parts = naiveIso.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (!parts) return new Date(naiveIso);
+    var fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: sourceTz, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    });
+    var guess = new Date(naiveIso + 'Z');
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var p = {};
+      fmt.formatToParts(guess).forEach(function (x) { p[x.type] = x.value; });
+      var localStr = p.year + '-' + p.month + '-' + p.day + 'T' +
+        (p.hour === '24' ? '00' : p.hour) + ':' + p.minute + ':' + p.second + 'Z';
+      var localMs = new Date(localStr).getTime();
+      var targetMs = new Date(naiveIso + 'Z').getTime();
+      guess = new Date(guess.getTime() + (targetMs - localMs));
+    }
+    return guess;
+  }
+
+  function fmtTimeInTz(utcDate, tz) {
+    return utcDate.toLocaleTimeString('en-US', {
+      timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true,
+    });
+  }
+
+  function tzAbbr(utcDate, tz) {
+    try {
+      var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, timeZoneName: 'short',
+      }).formatToParts(utcDate);
+      var found = parts.find(function (p) { return p.type === 'timeZoneName'; });
+      return found ? found.value : '';
+    } catch (e) { return ''; }
+  }
+
+  function slotTimeHtml(startIso, sourceTzOverride) {
+    var sourceTz = sourceTzOverride || state.slotTimezone;
+    if (!sourceTz) return esc(startIso.slice(11, 16));
+    var showDual = state.patientTimezone && sourceTz &&
+      state.patientTimezone !== state.userTimezone;
+    var utcDate = toUtcDate(startIso, sourceTz);
+    if (showDual) {
+      var ptTime = fmtTimeInTz(utcDate, state.patientTimezone) + ' ' + tzAbbr(utcDate, state.patientTimezone);
+      var userTime = fmtTimeInTz(utcDate, state.userTimezone) + ' ' + tzAbbr(utcDate, state.userTimezone);
+      return '<div class="slot-time-patient">' + esc(ptTime) + '</div>' +
+        '<div class="slot-time-user">' + esc(userTime) + '</div>';
+    }
+    return esc(fmtTimeInTz(utcDate, state.userTimezone) + ' ' + tzAbbr(utcDate, state.userTimezone));
+  }
+
+  // -- Calendar --
+
+  function renderCalendar() {
+    var year = state.calViewYear;
+    var month = state.calViewMonth;
+    calMonthLabel.innerHTML = MONTH_NAMES[month] + ' <span>' + year + '</span>';
+
+    calGrid.innerHTML = '';
+    DOW_LABELS.forEach(function (d) {
+      var el = document.createElement('div');
+      el.className = 'cal-dow';
+      el.textContent = d;
+      calGrid.appendChild(el);
+    });
+
+    var firstDay = new Date(year, month, 1).getDay();
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var daysInPrevMonth = new Date(year, month, 0).getDate();
+    var todayStr = fmtDate(new Date());
+    var selectedStr = state.selectedDate ? fmtDate(state.selectedDate) : '';
+
+    for (var i = firstDay - 1; i >= 0; i--) {
+      var el = document.createElement('div');
+      el.className = 'cal-day other-month';
+      el.textContent = daysInPrevMonth - i;
+      calGrid.appendChild(el);
+    }
+
+    for (var d = 1; d <= daysInMonth; d++) {
+      var el = document.createElement('div');
+      el.className = 'cal-day';
+      el.textContent = d;
+      var dateStr = fmtDate(new Date(year, month, d));
+      el.setAttribute('data-date', dateStr);
+      if (dateStr === selectedStr) {
+        el.classList.add('selected');
+      } else if (dateStr === todayStr) {
+        el.classList.add('today');
+      }
+      // Apply cached availability coloring
+      if (state.monthSummary[dateStr] !== undefined) {
+        var count = state.monthSummary[dateStr];
+        if (count === 0) el.classList.add('avail-none');
+        else if (count <= 5) el.classList.add('avail-some');
+        else el.classList.add('avail-many');
+      }
+      (function (day) {
+        el.addEventListener('click', function () {
+          selectDate(new Date(year, month, day));
+        });
+      })(d);
+      calGrid.appendChild(el);
+    }
+
+    var totalCells = firstDay + daysInMonth;
+    var remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (var n = 1; n <= remaining; n++) {
+      var el = document.createElement('div');
+      el.className = 'cal-day other-month';
+      el.textContent = n;
+      calGrid.appendChild(el);
+    }
+  }
+
+  function selectDate(d) {
+    state.selectedDate = d;
+    state.calViewYear = d.getFullYear();
+    state.calViewMonth = d.getMonth();
+    renderCalendar();
+    resetSlots();
+    maybeFetchSlots();
+  }
+
+  calToday.addEventListener('click', function () {
+    selectDate(new Date());
+  });
+  calPrev.addEventListener('click', function () {
+    state.calViewMonth--;
+    if (state.calViewMonth < 0) { state.calViewMonth = 11; state.calViewYear--; }
+    renderCalendar();
+    fetchMonthSummary();
+  });
+  calNext.addEventListener('click', function () {
+    state.calViewMonth++;
+    if (state.calViewMonth > 11) { state.calViewMonth = 0; state.calViewYear++; }
+    renderCalendar();
+    fetchMonthSummary();
+  });
+
+  // -- Month availability summary --
+
+  function monthSummaryCacheKey() {
+    return [state.locationId, state.calViewYear, state.calViewMonth,
+            state.durationMinutes, state.providerId || '',
+            state.noteTypeCode || ''].join('|');
+  }
+
+  function fetchMonthSummary() {
+    if (!state.locationId || !state.durationMinutes) {
+      // /month-summary requires a specific location and a duration. In
+      // "All locations" mode (or before a duration is picked) we drop any
+      // stale counts from a previous single-location fetch so the calendar
+      // shows uncolored days instead of lying with yesterday's colors.
+      state.monthSummary = {};
+      state.monthSummaryKey = null;
+      applyMonthSummary();
+      return;
+    }
+    var key = monthSummaryCacheKey();
+    if (key === state.monthSummaryKey) {
+      // Already have this data, just re-apply.
+      applyMonthSummary();
+      return;
+    }
+    var ym = state.calViewYear + '-' + String(state.calViewMonth + 1).padStart(2, '0');
+    var params = new URLSearchParams({
+      location_id: state.locationId,
+      year_month: ym,
+      duration: String(state.durationMinutes),
+    });
+    if (state.providerId) params.set('provider_id', state.providerId);
+    // Pass the visit type so the server can intersect with room availability
+    // when the type maps to rooms — keeps the calendar colors honest.
+    if (state.noteTypeCode) params.set('note_type_code', state.noteTypeCode);
+
+    apiFetch('/month-summary?' + params).then(function (result) {
+      state.monthSummary = result.days || {};
+      state.monthSummaryKey = key;
+      applyMonthSummary();
+    }).catch(function () {
+      // Silently fail — calendar just won't have colors.
+    });
+  }
+
+  function applyMonthSummary() {
+    var days = calGrid.querySelectorAll('.cal-day[data-date]');
+    days.forEach(function (el) {
+      el.classList.remove('avail-none', 'avail-some', 'avail-many');
+      var dateStr = el.getAttribute('data-date');
+      var count = state.monthSummary[dateStr];
+      if (count === undefined) return;
+      if (count === 0) el.classList.add('avail-none');
+      else if (count <= 5) el.classList.add('avail-some');
+      else el.classList.add('avail-many');
+    });
+  }
+
+  // -- Patient search --
+
+  var patientSearchTimer = null;
+
+  patientSearch.addEventListener('input', function () {
+    clearTimeout(patientSearchTimer);
+    var q = patientSearch.value.trim();
+    if (q.length < 1) { patientResults.style.display = 'none'; return; }
+    patientSearchTimer = setTimeout(function () {
+      apiFetch('/patients?q=' + encodeURIComponent(q)).then(function (data) {
+        renderPatientResults(data);
+      }).catch(function () {});
+    }, 250);
+  });
+
+  function renderPatientResults(patients) {
+    patientResults.innerHTML = '';
+    if (!patients.length) {
+      patientResults.innerHTML = '<div class="patient-result-item" style="color:#6b7280;">No patients found.</div>';
+      patientResults.style.display = 'block';
+      return;
+    }
+    patients.forEach(function (pt) {
+      var item = document.createElement('div');
+      item.className = 'patient-result-item';
+      var metaParts = 'DOB: ' + esc(pt.dob || '\u2014');
+      if (pt.timezone) {
+        var abbr = tzAbbr(new Date(), pt.timezone);
+        if (abbr) metaParts += ' \u00B7 ' + esc(abbr);
+      }
+      item.innerHTML = '<div class="pt-name">' + esc(pt.full_name) + '</div>' +
+        '<div class="pt-meta">' + metaParts + '</div>';
+      item.addEventListener('click', function () { selectPatient(pt); });
+      patientResults.appendChild(item);
+    });
+    patientResults.style.display = 'block';
+  }
+
+  function selectPatient(pt) {
+    state.patientId = pt.id;
+    state.patientTimezone = pt.timezone || null;
+    selectedLabel.textContent = pt.full_name + (pt.dob ? ' \u00B7 ' + pt.dob : '');
+    selectedChip.classList.add('visible');
+    patientSearch.parentElement.style.display = 'none';
+    patientResults.style.display = 'none';
+    renderAllSlots();
+    updateBookButton();
+    apiFetch('/patient-timezone?patient_id=' + encodeURIComponent(pt.id)).then(function (result) {
+      if (result.timezone) {
+        state.patientTimezone = result.timezone;
+        renderAllSlots();
+      }
+    }).catch(function () {});
+  }
+
+  btnClearPatient.addEventListener('click', function () {
+    state.patientId = null;
+    state.patientTimezone = null;
+    patientSearch.value = '';
+    patientSearch.parentElement.style.display = '';
+    selectedChip.classList.remove('visible');
+    renderAllSlots();
+    updateBookButton();
+  });
+
+  // -- Locations --
+
+  function loadLocations() {
+    return apiFetch('/locations').then(function (locs) {
+      state.locations = locs || [];
+      if (locs.length === 1) {
+        // Single location — auto-select.
+        selectLocation.innerHTML =
+          '<option value="' + esc(locs[0].id) + '">' + esc(locs[0].name) + '</option>';
+        state.locationId = locs[0].id;
+        loadProviders(locs[0].id);
+        maybeFetchSlots();
+        fetchMonthSummary();
+      } else if (locs.length > 1) {
+        // Multiple locations — default to "All locations".
+        selectLocation.innerHTML =
+          '<option value="" selected>All locations</option>' +
+          locs.map(function (l) {
+            return '<option value="' + esc(l.id) + '">' + esc(l.name) + '</option>';
+          }).join('');
+        state.locationId = '';
+        // Populate the provider dropdown with the union of providers across
+        // all active locations.
+        loadProviders('');
+      }
+    }).catch(function () {
+      selectLocation.innerHTML = '<option value="">Failed to load</option>';
+    });
+  }
+
+  selectLocation.addEventListener('change', function () {
+    state.locationId = selectLocation.value;
+    state.providerId = null;
+    resetSlots();
+    // loadProviders accepts '' to mean "all locations" (server returns the
+    // union of providers across every active practice location).
+    loadProviders(state.locationId);
+    maybeFetchSlots();
+    fetchMonthSummary();
+    updateBookButton();
+  });
+
+  // -- Providers --
+
+  function loadProviders(locationId) {
+    selectProvider.innerHTML = '<option value="">Loading...</option>';
+    selectProvider.disabled = true;
+    apiFetch('/providers?location_id=' + encodeURIComponent(locationId)).then(function (providers) {
+      selectProvider.innerHTML = '<option value="">All providers</option>' +
+        providers.map(function (p) {
+          return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>';
+        }).join('');
+      selectProvider.disabled = false;
+    }).catch(function () {
+      selectProvider.innerHTML = '<option value="">Failed to load</option>';
+    });
+  }
+
+  selectProvider.addEventListener('change', function () {
+    state.providerId = selectProvider.value || null;
+    resetSlots();
+    maybeFetchSlots();
+    fetchMonthSummary();
+    updateBookButton();
+  });
+
+  // -- Note types --
+
+  function loadNoteTypes() {
+    return apiFetch('/note-types').then(function (types) {
+      state.noteTypes = types;
+      selectNoteType.innerHTML = '<option value="">Select type...</option>' +
+        types.map(function (nt) {
+          return '<option value="' + esc(nt.id) + '" data-code="' + esc(nt.code) + '">' + esc(nt.name) + '</option>';
+        }).join('');
+    }).catch(function () {
+      selectNoteType.innerHTML = '<option value="">Failed to load</option>';
+    });
+  }
+
+  selectNoteType.addEventListener('change', function () {
+    var opt = selectNoteType.selectedOptions[0];
+    state.noteTypeId = selectNoteType.value || null;
+    state.noteTypeCode = opt ? (opt.dataset.code || '') : null;
+    resetSlots();
+    // Re-fetch durations filtered to the chosen visit type, then refresh slots.
+    loadDurations().then(function () {
+      maybeFetchSlots();
+      fetchMonthSummary();
+      updateBookButton();
+    });
+  });
+
+  // -- Duration --
+
+  function loadDurations() {
+    var path = '/durations';
+    if (state.noteTypeCode) {
+      path += '?note_type_code=' + encodeURIComponent(state.noteTypeCode);
+    }
+    return apiFetch(path).then(function (items) {
+      if (items.length === 1) {
+        // Auto-select when there's only one choice.
+        selectDuration.innerHTML =
+          '<option value="' + items[0].minutes + '" selected>' + items[0].minutes + ' min</option>';
+        state.durationMinutes = items[0].minutes;
+      } else if (items.length > 1) {
+        // Otherwise force the user to pick.
+        var current = state.durationMinutes;
+        var stillValid = items.some(function (d) { return d.minutes === current; });
+        selectDuration.innerHTML =
+          '<option value="">Select duration…</option>' +
+          items.map(function (d) {
+            var sel = (stillValid && d.minutes === current) ? ' selected' : '';
+            return '<option value="' + d.minutes + '"' + sel + '>' + d.minutes + ' min</option>';
+          }).join('');
+        state.durationMinutes = stillValid ? current : null;
+      } else {
+        selectDuration.innerHTML = '<option value="">No durations configured</option>';
+        state.durationMinutes = null;
+      }
+    }).catch(function () {
+      selectDuration.innerHTML = '<option value="">Failed to load</option>';
+      state.durationMinutes = null;
+    });
+  }
+
+  selectDuration.addEventListener('change', function () {
+    var raw = selectDuration.value;
+    state.durationMinutes = raw ? parseInt(raw, 10) : null;
+    resetSlots();
+    maybeFetchSlots();
+    fetchMonthSummary();
+  });
+
+  // -- Slots --
+
+  function resetSlots() {
+    providerSlotsList.innerHTML = '';
+    roomSlotsList.innerHTML = '';
+    providerSlotsSection.style.display = 'none';
+    roomSlotsSection.style.display = 'none';
+    state.selectedProviderSlot = null;
+    state.selectedRoomSlot = null;
+    state.slotTimezone = null;
+    state.allProviderSlots = [];
+    state.allRoomSlots = [];
+    state.locationGroups = null;
+    state.roomsRequired = false;
+    slotsPlaceholder.style.display = !state.locationId ? 'block' : 'none';
+    // Keep the manual-mode room dropdown in sync when slot data is cleared
+    // (e.g., the user changed visit type or location while manual is on).
+    if (state.manualMode && typeof syncManualRoomOptions === 'function') {
+      syncManualRoomOptions();
+    }
+    updateBookButton();
+  }
+
+  function maybeFetchSlots() {
+    // Wait until we have everything we need: visit type, duration, date,
+    // and either a specific location or "All locations" mode.
+    if (!state.noteTypeId || !state.durationMinutes) {
+      providerSlotsSection.style.display = 'none';
+      roomSlotsSection.style.display = 'none';
+      slotsLoading.style.display = 'none';
+      slotsPlaceholder.textContent = !state.noteTypeId
+        ? 'Select an appointment type to view available slots'
+        : 'Select a duration to view available slots';
+      slotsPlaceholder.style.display = 'block';
+      return;
+    }
+    if (state.locationId === null || !state.selectedDate) return;
+    fetchSlots();
+  }
+
+  function fetchSlots() {
+    slotsPlaceholder.style.display = 'none';
+    slotsLoading.style.display = 'block';
+    providerSlotsSection.style.display = 'none';
+    roomSlotsSection.style.display = 'none';
+    providerSlotsList.innerHTML = '';
+    roomSlotsList.innerHTML = '';
+
+    if (state.locationId) {
+      fetchSlotsForLocation(state.locationId);
+    } else {
+      fetchSlotsForAllLocations();
+    }
+  }
+
+  function buildAllSlotsParams(locationId) {
+    var params = new URLSearchParams({
+      location_id: locationId,
+      date: fmtDate(state.selectedDate),
+      duration: String(state.durationMinutes),
+      note_type_code: state.noteTypeCode || '',
+    });
+    if (state.providerId) params.set('provider_id', state.providerId);
+    return params;
+  }
+
+  function applySlotsResult(providers, rooms, timezone) {
+    state.slotTimezone = timezone || state.slotTimezone || null;
+    state.allProviderSlots = providers;
+    state.allRoomSlots = rooms;
+    state.roomsRequired = rooms.length > 0;
+
+    if (state.manualMode && typeof syncManualRoomOptions === 'function') {
+      syncManualRoomOptions();
+    }
+
+    if (state.selectedProviderSlot) {
+      var stillValid = state.allProviderSlots.some(function (p) {
+        return p.id === state.selectedProviderSlot.providerId &&
+          p.slots.some(function (s) { return s.start === state.selectedProviderSlot.start; });
+      });
+      if (!stillValid) state.selectedProviderSlot = null;
+    }
+    if (state.selectedRoomSlot) {
+      var stillValid2 = state.allRoomSlots.some(function (r) {
+        return r.id === state.selectedRoomSlot.roomId &&
+          r.slots.some(function (s) { return s.start === state.selectedRoomSlot.start; });
+      });
+      if (!stillValid2) state.selectedRoomSlot = null;
+    }
+
+    renderAllSlots();
+  }
+
+  function fetchSlotsForLocation(locationId) {
+    state.locationGroups = null;
+    apiFetch('/all-slots?' + buildAllSlotsParams(locationId)).then(function (result) {
+      var tz = result.timezone || null;
+      var providers = (result.providers || []).map(function (p) {
+        return Object.assign({}, p, { location_id: locationId, timezone: tz });
+      });
+      applySlotsResult(providers, result.rooms || [], tz);
+    }).catch(function () {
+      providerSlotsList.innerHTML = '<p class="no-slots-msg">Failed to load availability.</p>';
+      providerSlotsSection.style.display = 'block';
+    }).finally(function () {
+      slotsLoading.style.display = 'none';
+    });
+  }
+
+  function fetchSlotsForAllLocations() {
+    var locs = state.locations || [];
+    if (!locs.length) {
+      slotsLoading.style.display = 'none';
+      return;
+    }
+    Promise.all(locs.map(function (l) {
+      return apiFetch('/all-slots?' + buildAllSlotsParams(l.id))
+        .then(function (result) { return { loc: l, result: result }; })
+        .catch(function () { return null; });
+    })).then(function (results) {
+      var providers = [];
+      var roomsById = {};
+      var groups = [];
+      var firstTz = null;
+      results.forEach(function (entry) {
+        if (!entry || !entry.result) return;
+        var locTz = entry.result.timezone || null;
+        if (!firstTz) firstTz = locTz;
+        var locProvs = (entry.result.providers || []).map(function (p) {
+          return Object.assign({}, p, {
+            location_id: entry.loc.id,
+            location_name: entry.loc.name,
+            timezone: locTz,
+          });
+        });
+        var locRooms = (entry.result.rooms || []).map(function (r) {
+          return Object.assign({}, r, {
+            location_id: entry.loc.id,
+            location_name: entry.loc.name,
+            timezone: locTz,
+          });
+        });
+        providers.push.apply(providers, locProvs);
+        // Keep one entry per room id in the flat list (used by the manual
+        // override room dropdown). Per-location rendering uses `groups`.
+        locRooms.forEach(function (r) {
+          if (!roomsById[r.id]) {
+            roomsById[r.id] = { id: r.id, name: r.name, slots: (r.slots || []).slice() };
+          }
+        });
+        groups.push({
+          location_id: entry.loc.id,
+          location_name: entry.loc.name,
+          timezone: locTz,
+          providers: locProvs,
+          rooms: locRooms,
+        });
+      });
+      state.locationGroups = groups;
+      applySlotsResult(providers, Object.values(roomsById), firstTz);
+    }).finally(function () {
+      slotsLoading.style.display = 'none';
+    });
+  }
+
+  // -- Compute which start times are available (intersection logic) --
+
+  function getProviderStartTimes() {
+    var times = {};
+    state.allProviderSlots.forEach(function (p) {
+      p.slots.forEach(function (s) { times[s.start] = true; });
+    });
+    return times;
+  }
+
+  function getRoomStartTimes() {
+    var times = {};
+    state.allRoomSlots.forEach(function (r) {
+      r.slots.forEach(function (s) { times[s.start] = true; });
+    });
+    return times;
+  }
+
+  // -- Render all slots --
+
+  function renderAllSlots() {
+    renderProviderSlots();
+    renderRoomSlots();
+    updateBookButton();
+  }
+
+  var INITIAL_VISIBLE = 14; // 7 rows x 2 columns
+
+  function filterAvailableSlots(slots, allowedTimes) {
+    // If no constraint, all slots pass through.
+    if (!allowedTimes) return slots;
+    return slots.filter(function (s) { return allowedTimes[s.start]; });
+  }
+
+  function buildProviderColumn(prov, allowedTimes) {
+    var visible = filterAvailableSlots(prov.slots, allowedTimes);
+    if (!visible.length) return null;
+
+    var provTz = prov.timezone || state.slotTimezone || null;
+
+    var col = document.createElement('div');
+    col.className = 'prov-col';
+    var header = document.createElement('div');
+    header.className = 'col-header';
+    header.textContent = prov.name;
+    header.title = prov.name;
+    col.appendChild(header);
+
+    var slotsDiv = document.createElement('div');
+    slotsDiv.className = 'col-slots';
+
+    var showCount = INITIAL_VISIBLE;
+    var showing = visible.slice(0, showCount);
+
+    showing.forEach(function (slot) {
+      var btn = document.createElement('button');
+      btn.className = 'slot-btn';
+      btn.innerHTML = slotTimeHtml(slot.start, provTz);
+      if (state.selectedProviderSlot &&
+          state.selectedProviderSlot.providerId === prov.id &&
+          state.selectedProviderSlot.start === slot.start) {
+        btn.classList.add('selected');
+      }
+      (function (p, s) {
+        btn.addEventListener('click', function () { selectProviderSlot(p, s); });
+      })(prov, slot);
+      slotsDiv.appendChild(btn);
+    });
+
+    if (visible.length > showCount) {
+      var moreBtn = document.createElement('button');
+      moreBtn.className = 'load-more-btn';
+      moreBtn.textContent = (visible.length - showCount) + ' more...';
+      (function (provRef, allVisible, container, tz) {
+        moreBtn.addEventListener('click', function () {
+          this.remove();
+          allVisible.slice(INITIAL_VISIBLE).forEach(function (slot) {
+            var btn = document.createElement('button');
+            btn.className = 'slot-btn';
+            btn.innerHTML = slotTimeHtml(slot.start, tz);
+            if (state.selectedProviderSlot &&
+                state.selectedProviderSlot.providerId === provRef.id &&
+                state.selectedProviderSlot.start === slot.start) {
+              btn.classList.add('selected');
+            }
+            (function (p, s) {
+              btn.addEventListener('click', function () { selectProviderSlot(p, s); });
+            })(provRef, slot);
+            container.appendChild(btn);
+          });
+        });
+      })(prov, visible, slotsDiv, provTz);
+      slotsDiv.appendChild(moreBtn);
+    }
+
+    col.appendChild(slotsDiv);
+    return col;
+  }
+
+  function renderProviderSlots() {
+    providerSlotsList.innerHTML = '';
+    var providers = state.allProviderSlots;
+    if (!providers.length) {
+      providerSlotsSection.style.display = 'none';
+      slotsPlaceholder.textContent = 'No providers available for this date.';
+      slotsPlaceholder.style.display = 'block';
+      return;
+    }
+    slotsPlaceholder.style.display = 'none';
+    providerSlotsSection.style.display = 'block';
+
+    // Build the set of allowed start times based on room constraints.
+    var roomTimes = state.roomsRequired ? getRoomStartTimes() : null;
+    var selectedRoomTime = state.selectedRoomSlot ? state.selectedRoomSlot.start : null;
+    var allowedTimes = null;
+    if (selectedRoomTime) {
+      allowedTimes = {};
+      allowedTimes[selectedRoomTime] = true;
+    } else if (roomTimes) {
+      allowedTimes = roomTimes;
+    }
+
+    var multiLocation = !state.locationId; // "All locations" mode
+    providerSlotsList.classList.toggle('grouped', !!multiLocation);
+    var anyShown = false;
+
+    if (multiLocation) {
+      var groups = state.locationGroups || [];
+      groups.forEach(function (g) {
+        // Per-group intersection: each location's providers and rooms only
+        // see times that appear in that same location's other column.
+        var groupProvSlots = g.providers || [];
+        var groupRoomSlots = g.rooms || [];
+        var hasRooms = groupRoomSlots.length > 0;
+
+        var roomTimesG = null;
+        if (hasRooms) {
+          roomTimesG = {};
+          groupRoomSlots.forEach(function (r) {
+            (r.slots || []).forEach(function (s) { roomTimesG[s.start] = true; });
+          });
+        }
+        var selectedRoomTimeG = state.selectedRoomSlot ? state.selectedRoomSlot.start : null;
+        var provAllowed = null;
+        if (selectedRoomTimeG) {
+          provAllowed = {};
+          provAllowed[selectedRoomTimeG] = true;
+        } else if (roomTimesG) {
+          provAllowed = roomTimesG;
+        }
+
+        var provTimesG = {};
+        groupProvSlots.forEach(function (p) {
+          (p.slots || []).forEach(function (s) { provTimesG[s.start] = true; });
+        });
+        var selectedProvTimeG = state.selectedProviderSlot ? state.selectedProviderSlot.start : null;
+        var roomAllowed;
+        if (selectedProvTimeG) {
+          roomAllowed = {};
+          roomAllowed[selectedProvTimeG] = true;
+        } else {
+          roomAllowed = provTimesG;
+        }
+
+        var provCols = [];
+        groupProvSlots.forEach(function (prov) {
+          var col = buildProviderColumn(prov, provAllowed);
+          if (col) provCols.push(col);
+        });
+
+        var roomCols = [];
+        groupRoomSlots.forEach(function (room) {
+          var col = buildRoomColumn(room, roomAllowed, g.timezone);
+          if (col) roomCols.push(col);
+        });
+
+        if (!provCols.length && !roomCols.length) return;
+        anyShown = true;
+
+        var groupWrap = document.createElement('div');
+        groupWrap.className = 'location-group';
+        var groupLabel = document.createElement('div');
+        groupLabel.className = 'location-group-label';
+        groupLabel.textContent = g.location_name;
+        groupWrap.appendChild(groupLabel);
+
+        if (provCols.length) {
+          var provLbl = document.createElement('div');
+          provLbl.className = 'group-section-label';
+          provLbl.textContent = 'Providers';
+          groupWrap.appendChild(provLbl);
+          var provGrid = document.createElement('div');
+          provGrid.className = 'provider-columns';
+          provCols.forEach(function (c) { provGrid.appendChild(c); });
+          groupWrap.appendChild(provGrid);
+        }
+
+        if (roomCols.length) {
+          var roomLbl = document.createElement('div');
+          roomLbl.className = 'group-section-label';
+          roomLbl.textContent = 'Rooms';
+          groupWrap.appendChild(roomLbl);
+          var roomGrid = document.createElement('div');
+          roomGrid.className = 'room-columns';
+          roomCols.forEach(function (c) { roomGrid.appendChild(c); });
+          groupWrap.appendChild(roomGrid);
+        }
+
+        providerSlotsList.appendChild(groupWrap);
+      });
+    } else {
+      providers.forEach(function (prov) {
+        var col = buildProviderColumn(prov, allowedTimes);
+        if (col) {
+          anyShown = true;
+          providerSlotsList.appendChild(col);
+        }
+      });
+    }
+
+    if (!anyShown) {
+      slotsPlaceholder.textContent = 'No availability for this date.';
+      slotsPlaceholder.style.display = 'block';
+      providerSlotsSection.style.display = 'none';
+    }
+  }
+
+  function buildRoomColumn(room, allowedTimes, sourceTz) {
+    var visible = filterAvailableSlots(room.slots, allowedTimes);
+    if (!visible.length) return null;
+
+    var roomTz = sourceTz || room.timezone || state.slotTimezone || null;
+
+    var col = document.createElement('div');
+    col.className = 'room-col';
+    var header = document.createElement('div');
+    header.className = 'col-header';
+    header.textContent = room.name;
+    header.title = room.name;
+    col.appendChild(header);
+
+    var slotsDiv = document.createElement('div');
+    slotsDiv.className = 'col-slots';
+
+    var showCount = INITIAL_VISIBLE;
+    var showing = visible.slice(0, showCount);
+
+    showing.forEach(function (slot) {
+      var btn = document.createElement('button');
+      btn.className = 'slot-btn';
+      btn.innerHTML = slotTimeHtml(slot.start, roomTz);
+      if (state.selectedRoomSlot &&
+          state.selectedRoomSlot.roomId === room.id &&
+          state.selectedRoomSlot.start === slot.start) {
+        btn.classList.add('selected');
+      }
+      (function (r, s) {
+        btn.addEventListener('click', function () { selectRoomSlot(r, s); });
+      })(room, slot);
+      slotsDiv.appendChild(btn);
+    });
+
+    if (visible.length > showCount) {
+      var moreBtn = document.createElement('button');
+      moreBtn.className = 'load-more-btn';
+      moreBtn.textContent = (visible.length - showCount) + ' more...';
+      (function (roomRef, allVisible, container, tz) {
+        moreBtn.addEventListener('click', function () {
+          this.remove();
+          allVisible.slice(INITIAL_VISIBLE).forEach(function (slot) {
+            var btn = document.createElement('button');
+            btn.className = 'slot-btn';
+            btn.innerHTML = slotTimeHtml(slot.start, tz);
+            if (state.selectedRoomSlot &&
+                state.selectedRoomSlot.roomId === roomRef.id &&
+                state.selectedRoomSlot.start === slot.start) {
+              btn.classList.add('selected');
+            }
+            (function (r, s) {
+              btn.addEventListener('click', function () { selectRoomSlot(r, s); });
+            })(roomRef, slot);
+            container.appendChild(btn);
+          });
+        });
+      })(room, visible, slotsDiv, roomTz);
+      slotsDiv.appendChild(moreBtn);
+    }
+
+    col.appendChild(slotsDiv);
+    return col;
+  }
+
+  function renderRoomSlots() {
+    roomSlotsList.innerHTML = '';
+    // In multi-location mode, rooms are rendered inside each location group
+    // via renderProviderSlots; the global rooms section is hidden.
+    if (!state.locationId || !state.roomsRequired || !state.allRoomSlots.length) {
+      roomSlotsSection.style.display = 'none';
+      return;
+    }
+    roomSlotsSection.style.display = 'block';
+
+    // Build the set of allowed start times based on provider constraints.
+    var provTimes = getProviderStartTimes();
+    var selectedProvTime = state.selectedProviderSlot ? state.selectedProviderSlot.start : null;
+    var allowedTimes;
+    if (selectedProvTime) {
+      allowedTimes = {};
+      allowedTimes[selectedProvTime] = true;
+    } else {
+      allowedTimes = provTimes;
+    }
+
+    var anyRoomShown = false;
+    state.allRoomSlots.forEach(function (room) {
+      var col = buildRoomColumn(room, allowedTimes);
+      if (col) {
+        anyRoomShown = true;
+        roomSlotsList.appendChild(col);
+      }
+    });
+
+    if (!anyRoomShown) {
+      roomSlotsSection.style.display = 'none';
+    }
+  }
+
+  // -- Selection logic --
+
+  function selectProviderSlot(provider, slot) {
+    state.selectedProviderSlot = {
+      providerId: provider.id,
+      providerName: provider.name,
+      start: slot.start,
+      end: slot.end,
+      // In multi-location mode, the picked slot belongs to a specific
+      // location; carry it through so booking knows which location to use.
+      locationId: provider.location_id || state.locationId || '',
+    };
+
+    // If room was selected at a different time, clear it.
+    // If room was selected at same time, keep it.
+    if (state.selectedRoomSlot && state.selectedRoomSlot.start !== slot.start) {
+      // Try to find same room at the new time
+      var kept = false;
+      state.allRoomSlots.forEach(function (r) {
+        if (r.id === state.selectedRoomSlot.roomId) {
+          r.slots.forEach(function (s) {
+            if (s.start === slot.start) {
+              state.selectedRoomSlot = {
+                roomId: r.id,
+                roomName: r.name,
+                start: s.start,
+                end: s.end,
+              };
+              kept = true;
+            }
+          });
+        }
+      });
+      if (!kept) state.selectedRoomSlot = null;
+    }
+
+    renderAllSlots();
+  }
+
+  function selectRoomSlot(room, slot) {
+    state.selectedRoomSlot = {
+      roomId: room.id,
+      roomName: room.name,
+      start: slot.start,
+      end: slot.end,
+      // In multi-location mode each room column is rendered per location;
+      // carry the location through so booking targets the right clinic.
+      locationId: room.location_id || state.locationId || '',
+    };
+
+    // If provider was selected at a different time, clear it.
+    // If provider was selected at same time, keep it.
+    if (state.selectedProviderSlot && state.selectedProviderSlot.start !== slot.start) {
+      // Try to find same provider at the new time
+      var kept = false;
+      state.allProviderSlots.forEach(function (p) {
+        if (p.id === state.selectedProviderSlot.providerId) {
+          p.slots.forEach(function (s) {
+            if (s.start === slot.start) {
+              state.selectedProviderSlot = {
+                providerId: p.id,
+                providerName: p.name,
+                start: s.start,
+                end: s.end,
+              };
+              kept = true;
+            }
+          });
+        }
+      });
+      if (!kept) state.selectedProviderSlot = null;
+    }
+
+    renderAllSlots();
+  }
+
+  // -- Book --
+
+  btnBook.addEventListener('click', function () {
+    btnBook.disabled = true;
+    setStatus('Booking appointment...', '');
+    var rfvInput = $('input-rfv');
+    var reasonForVisit = rfvInput ? (rfvInput.value || '').trim() : '';
+
+    var providerId, startTime, rrStaffId, locationId;
+    if (state.manualMode) {
+      providerId = state.providerId || '';
+      // Interpret the manual date+time in the browser's local timezone and
+      // send a UTC ISO string with offset, so the server uses it as-is
+      // (instead of re-interpreting it as the instance's calendar timezone).
+      var dParts = state.manualDate.split('-').map(Number);
+      var tParts = state.manualTime.split(':').map(Number);
+      var localDate = new Date(
+        dParts[0], dParts[1] - 1, dParts[2],
+        tParts[0] || 0, tParts[1] || 0, 0, 0
+      );
+      startTime = localDate.toISOString();
+      rrStaffId = state.manualRoomId || '';
+      locationId = state.locationId || '';
+    } else {
+      providerId = state.selectedProviderSlot ? state.selectedProviderSlot.providerId : '';
+      startTime = state.selectedProviderSlot ? state.selectedProviderSlot.start : '';
+      rrStaffId = state.selectedRoomSlot ? state.selectedRoomSlot.roomId : '';
+      // The slot's own location takes precedence so multi-location mode
+      // books against the correct clinic.
+      locationId = (state.selectedProviderSlot && state.selectedProviderSlot.locationId)
+        || state.locationId || '';
+    }
+
+    var bookingDuration = state.manualMode && state.manualDurationMinutes
+      ? state.manualDurationMinutes
+      : state.durationMinutes;
+
+    apiFetch('/book', {
+      method: 'POST',
+      body: JSON.stringify({
+        patient_id:       state.patientId,
+        provider_id:      providerId,
+        location_id:      locationId,
+        note_type_id:     state.noteTypeId,
+        note_type_code:   state.noteTypeCode || '',
+        start_time:       startTime,
+        duration_minutes: bookingDuration,
+        rr_staff_id:      rrStaffId,
+        reason_for_visit: reasonForVisit,
+      }),
+    }).then(function () {
+      setStatus('Appointment booked!', 'success');
+      if (rfvInput) rfvInput.value = '';
+      state.selectedProviderSlot = null;
+      state.selectedRoomSlot = null;
+      if (state.manualMode) {
+        state.manualDate = '';
+        state.manualTime = '';
+        state.manualRoomId = '';
+        state.manualDurationMinutes = null;
+        $('manual-date').value = '';
+        $('manual-time').value = '';
+        if ($('manual-duration')) $('manual-duration').value = '';
+        if ($('manual-room')) $('manual-room').value = '';
+      }
+      updateBookButton();
+      setTimeout(function () { fetchSlots(); }, 1500);
+    }).catch(function () {
+      setStatus('Failed to book. Please try again.', 'error');
+      btnBook.disabled = false;
+    });
+  });
+
+  // -- Manual override --
+
+  var btnManualToggle = $('btn-manual-toggle');
+  var manualSection = $('manual-section');
+  var calSection = $('cal-section');
+  var slotsSectionEl = $('slots-section');
+  var manualDateInput = $('manual-date');
+  var manualTimeInput = $('manual-time');
+  var manualDurationInput = $('manual-duration');
+  var manualRoomGroup = $('manual-room-group');
+  var manualRoomSelect = $('manual-room');
+
+  function syncManualRoomOptions() {
+    // Populate the room dropdown from /all-slots data already in state.
+    if (!manualRoomSelect) return;
+    var rooms = state.allRoomSlots || [];
+    // Drop any previously-selected room that's no longer eligible.
+    if (state.manualRoomId && !rooms.some(function (r) { return r.id === state.manualRoomId; })) {
+      state.manualRoomId = '';
+    }
+    var current = state.manualRoomId;
+    var html = '<option value="">— Select —</option>';
+    for (var i = 0; i < rooms.length; i++) {
+      var r = rooms[i];
+      html += '<option value="' + esc(r.id) + '"' +
+        (r.id === current ? ' selected' : '') + '>' + esc(r.name) + '</option>';
+    }
+    manualRoomSelect.innerHTML = html;
+    manualRoomGroup.style.display = state.roomsRequired ? '' : 'none';
+    updateBookButton();
+  }
+
+  function applyManualMode() {
+    btnManualToggle.classList.toggle('active', state.manualMode);
+    btnManualToggle.textContent = state.manualMode ? 'Exit manual override' : 'Manual override';
+    if (state.manualMode) {
+      calSection.style.display = 'none';
+      slotsSectionEl.style.display = 'none';
+      manualSection.style.display = '';
+      // Default the date input to the calendar's selected date.
+      if (state.selectedDate && !manualDateInput.value) {
+        var d = state.selectedDate;
+        var iso = d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0');
+        manualDateInput.value = iso;
+        state.manualDate = iso;
+      }
+      // Default the duration override to whatever's in the main dropdown so
+      // the user only has to tweak it if they want a different length.
+      if (manualDurationInput && !manualDurationInput.value && state.durationMinutes) {
+        manualDurationInput.value = String(state.durationMinutes);
+      }
+      syncManualRoomOptions();
+    } else {
+      calSection.style.display = '';
+      slotsSectionEl.style.display = '';
+      manualSection.style.display = 'none';
+    }
+    updateBookButton();
+  }
+
+  btnManualToggle.addEventListener('click', function () {
+    state.manualMode = !state.manualMode;
+    applyManualMode();
+  });
+
+  manualDateInput.addEventListener('change', function () {
+    state.manualDate = manualDateInput.value || '';
+    updateBookButton();
+  });
+
+  manualTimeInput.addEventListener('change', function () {
+    state.manualTime = manualTimeInput.value || '';
+    updateBookButton();
+  });
+
+  if (manualDurationInput) {
+    manualDurationInput.addEventListener('input', function () {
+      var raw = manualDurationInput.value || '';
+      var n = parseInt(raw, 10);
+      state.manualDurationMinutes = (Number.isInteger(n) && n > 0) ? n : null;
+      updateBookButton();
+    });
+  }
+
+  manualRoomSelect.addEventListener('change', function () {
+    state.manualRoomId = manualRoomSelect.value || '';
+    updateBookButton();
+  });
+
+  // -- Init --
+
+  var now = new Date();
+  state.selectedDate = now;
+  state.calViewYear = now.getFullYear();
+  state.calViewMonth = now.getMonth();
+  renderCalendar();
+  slotsPlaceholder.style.display = 'block';
+  Promise.all([loadLocations(), loadNoteTypes(), loadDurations()]);
+
+  // Pre-populate patient when launched from a patient chart.
+  if (window.PREFILL_PATIENT && window.PREFILL_PATIENT.id) {
+    selectPatient(window.PREFILL_PATIENT);
+    btnClearPatient.style.display = 'none';
+  }
+
+})();
+</script>
+</body>
+</html>

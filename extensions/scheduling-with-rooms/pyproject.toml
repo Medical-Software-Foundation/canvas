@@ -1,0 +1,21 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Custom scheduling modal with provider and resource (room) availability coordination."
+license = "MIT"
+name = "scheduling_with_rooms"
+readme = "scheduling_with_rooms/README.md"
+requires-python = ">=3.11"
+version = "0.1.120"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]

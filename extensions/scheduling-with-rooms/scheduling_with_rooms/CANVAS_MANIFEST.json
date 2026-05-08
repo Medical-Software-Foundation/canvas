@@ -1,0 +1,138 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.2.0",
+    "name": "scheduling_with_rooms",
+    "description": "Custom scheduling modal with provider and resource (room) availability coordination",
+    "url_permissions": [],
+    "components": {
+        "protocols": [
+            {
+                "class": "scheduling_with_rooms.api.scheduling_api:SchedulingAPI",
+                "description": "REST endpoints for patient search, provider list, slot availability, and booking",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "PracticeLocation", "Staff", "NoteType", "Appointment", "Calendar", "Event"],
+                    "write": ["Appointment", "ScheduleEvent"]
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.api.scheduling_admin_api:SchedulingAdminAPI",
+                "description": "Admin REST endpoints for the visit-type → room mapping matrix",
+                "data_access": {
+                    "event": "",
+                    "read": ["NoteType", "Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.protocols.appointment_cascade:AppointmentCascadeHandler",
+                "description": "Deletes the linked RR ScheduleEvent when its parent patient appointment is cancelled",
+                "data_access": {
+                    "event": "APPOINTMENT_CANCELED",
+                    "read": ["Appointment", "NoteType"],
+                    "write": ["ScheduleEvent"]
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.protocols.rfv_origination:ReasonForVisitOrigination",
+                "description": "Originates the Reason for Visit command on the appointment's note when an appointment is created",
+                "data_access": {
+                    "event": "APPOINTMENT_CREATED",
+                    "read": ["Appointment", "Note", "Patient", "Staff"],
+                    "write": ["Command"]
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.protocols.rr_event_origination:RREventOrigination",
+                "description": "Creates the RR room ScheduleEvent linked to a freshly-created patient appointment via parent_appointment_id",
+                "data_access": {
+                    "event": "APPOINTMENT_CREATED",
+                    "read": ["Appointment", "Patient", "Staff"],
+                    "write": ["ScheduleEvent"]
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.handlers.availability_web_app:AvailabilityWebApp",
+                "description": "Serves the availability manager UI (HTML/CSS/JS)",
+                "data_access": {
+                    "event": "",
+                    "read": ["Staff", "PracticeLocation", "NoteType", "Calendar", "Event"],
+                    "write": []
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.api.calendar:CalendarAPI",
+                "description": "Create or retrieve provider Clinic/Admin calendars",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar"],
+                    "write": ["Calendar"]
+                }
+            },
+            {
+                "class": "scheduling_with_rooms.api.events:CalendarEventsAPI",
+                "description": "Create, update, or delete calendar events used to express provider availability",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "Staff", "PracticeLocation", "NoteType"],
+                    "write": ["Event"]
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "scheduling_with_rooms.applications.scheduling_with_rooms_app:SchedulingWithRoomsApp",
+                "name": "Scheduling with Rooms",
+                "description": "Open the scheduling modal",
+                "scope": "global",
+                "icon": "assets/calendar-icon.png",
+                "show_in_panel": true,
+                "panel_priority": 1
+            },
+            {
+                "class": "scheduling_with_rooms.applications.patient_chart_app:PatientChartSchedulingWithRoomsApp",
+                "name": "Schedule Appointment",
+                "description": "Open the scheduling modal pre-populated with the current patient",
+                "scope": "patient_specific",
+                "icon": "assets/calendar-icon.png",
+                "show_in_panel": true,
+                "panel_priority": 2
+            },
+            {
+                "class": "scheduling_with_rooms.applications.scheduling_admin_app:SchedulingAdminApp",
+                "name": "Scheduling Admin",
+                "description": "Configure which rooms are eligible for each visit type",
+                "icon": "assets/admin-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 110
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "FHIR_BASE_URL",
+        "FHIR_CLIENT_ID",
+        "FHIR_CLIENT_SECRET",
+        "SCHEDULABLE_STAFF_ROLES",
+        "SCHEDULE_DURATIONS",
+        "BRAND_PRIMARY",
+        "BRAND_PRIMARY_HOVER",
+        "BRAND_PRIMARY_TINT_BG",
+        "BRAND_PRIMARY_TINT_TEXT",
+        "BRAND_FONT_STACK",
+        "BRAND_FONT_URL"
+    ],
+    "custom_data": {
+        "namespace": "canvas__scheduling_with_rooms",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
