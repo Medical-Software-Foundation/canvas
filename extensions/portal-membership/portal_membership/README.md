@@ -59,7 +59,7 @@ Built for the staff and providers in those practices: front-desk and patient-coo
 - Patients can restart from the portal; the banner is cleared and billing resumes
 - Membership tiers and pricing are fully configurable via plugin secrets
 - Discount codes with percentage or fixed-cents off, for a configurable number of billing cycles
-- Patient-facing charge history (Charges tab on the membership page), capped at the last 24 entries
+- Patient-facing charge history (Charges tab on the membership page), capped at the last 50 entries
 - Staff-facing **Memberships** application (provider top menu) with a read-only directory of all memberships
 
 ## Architecture
@@ -181,7 +181,7 @@ Stored as a row in the `Membership` custom model (one per patient):
 | `stripe_customer_id`, `payment_method_id` | text | Stripe identifiers |
 | `amount_cents`, `currency`, `cadence`, `billing_day` | int / text / text / int | Base billing config; `cadence` is captured from the plan at signup |
 | `next_billing_date`, `retry_date` | date | Retry is nullable |
-| `consecutive_failures` | int | 0, 1, or 2 (auto-cancel at 2) |
+| `consecutive_failures` | int | 0, 1, or 2 (auto-cancel after the 3rd consecutive failure) |
 | `discount_code`, `discount_type`, `discount_value`, `discount_cycles_remaining` | text / text / int / int | Zero / empty when no active discount; cycles follow the plan cadence |
 | `created_at`, `updated_at` | datetime | Auto-managed |
 

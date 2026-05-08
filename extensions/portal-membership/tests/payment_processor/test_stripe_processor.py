@@ -2,6 +2,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from portal_membership.payment_processor.stripe_processor import StripeError, StripeProcessor
 
@@ -146,3 +147,43 @@ class TestCharge:
                 currency="usd",
                 description="test",
             )
+
+
+class TestStripePostNetworkFailures:
+    """A network blip must surface as ``StripeError`` so callers'
+    ``except StripeError`` clauses run ``release_claim`` and don't leak
+    the ``pending_signup`` mutex row."""
+
+    @patch("portal_membership.payment_processor.stripe_processor.requests.post")
+    def test_timeout_becomes_stripe_error(
+        self, mock_post: MagicMock, processor: StripeProcessor
+    ) -> None:
+        mock_post.side_effect = requests.exceptions.Timeout("read timed out")
+        with pytest.raises(StripeError):
+            processor.create_customer(patient_id="p1", payment_method_id="pm_1")
+
+    @patch("portal_membership.payment_processor.stripe_processor.requests.post")
+    def test_connection_error_becomes_stripe_error(
+        self, mock_post: MagicMock, processor: StripeProcessor
+    ) -> None:
+        mock_post.side_effect = requests.exceptions.ConnectionError("dns failure")
+        with pytest.raises(StripeError):
+            processor.charge(
+                customer_id="cus_abc",
+                amount_cents=100,
+                currency="usd",
+                description="test",
+            )
+
+    @patch("portal_membership.payment_processor.stripe_processor.requests.post")
+    def test_non_json_response_becomes_stripe_error(
+        self, mock_post: MagicMock, processor: StripeProcessor
+    ) -> None:
+        # Upstream proxy returns an HTML 502 page instead of JSON.
+        resp = MagicMock()
+        resp.status_code = 502
+        resp.json.side_effect = ValueError("not json")
+        resp.text = "<html>bad gateway</html>"
+        mock_post.return_value = resp
+        with pytest.raises(StripeError):
+            processor.create_customer(patient_id="p1", payment_method_id="pm_1")

@@ -40,17 +40,28 @@ def _stripe_post(api_key: str, path: str, data: dict[str, Any]) -> dict[str, Any
         Parsed JSON response body.
 
     Raises:
-        StripeError: If the response status is not 2xx or the body contains
-            an ``error`` key.
+        StripeError: For any failure — non-2xx response, error body, network
+            timeout, connection/TLS error, or non-JSON response. Wrapping
+            non-Stripe failures here keeps callers' ``except StripeError``
+            handlers complete, so ``release_claim`` always runs and the
+            ``pending_signup`` mutex row is never leaked on a transient
+            Stripe blip.
     """
     url = f"{_STRIPE_API_BASE}{path}"
-    response = requests.post(
-        url,
-        auth=(api_key, ""),
-        data=data,
-        timeout=_STRIPE_TIMEOUT,
-    )
-    body: dict[str, Any] = response.json()
+    try:
+        response = requests.post(
+            url,
+            auth=(api_key, ""),
+            data=data,
+            timeout=_STRIPE_TIMEOUT,
+        )
+        body: dict[str, Any] = response.json()
+    except requests.RequestException as exc:
+        raise StripeError(f"Stripe request failed: {exc}") from exc
+    except ValueError as exc:
+        # JSONDecodeError subclasses ValueError — happens when an upstream
+        # proxy/CDN returns an HTML 502/503 page instead of JSON.
+        raise StripeError(f"Stripe response was not valid JSON: {exc}") from exc
     if response.status_code >= 400 or "error" in body:
         error_msg = body.get("error", {}).get("message", response.text)
         raise StripeError(error_msg, http_status=response.status_code)

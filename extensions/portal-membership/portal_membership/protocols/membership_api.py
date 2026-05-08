@@ -344,13 +344,26 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
             # Signup is cycle 1 — decrement remaining by one up front.
             fields["discount_cycles_remaining"] = max(0, fields["discount_cycles_remaining"] - 1)
             record.update(fields)
+        # Snapshot the code for charge history before any cleanup below.
+        applied_discount_code = record.get("discount_code")
+        # If the discount is exhausted after this signup cycle, drop the
+        # fields entirely so /status / widget / page don't surface a
+        # phantom code with cycles_remaining=0 forever.
+        if record.get("discount_cycles_remaining", 0) <= 0:
+            for key in (
+                "discount_code",
+                "discount_type",
+                "discount_value",
+                "discount_cycles_remaining",
+            ):
+                record.pop(key, None)
         set_membership(patient_id, record)
         append_charge(
             patient_id,
             amount_cents=charge_amount,
             status="succeeded",
             description=f"Membership signup: {plan['name']}",
-            discount_code=record.get("discount_code"),
+            discount_code=applied_discount_code,
         )
 
         return [
@@ -569,13 +582,22 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
             fields = build_discount_fields(discount_entry)
             fields["discount_cycles_remaining"] = max(0, fields["discount_cycles_remaining"] - 1)
             record.update(fields)
+        applied_discount_code = record.get("discount_code")
+        if record.get("discount_cycles_remaining", 0) <= 0:
+            for key in (
+                "discount_code",
+                "discount_type",
+                "discount_value",
+                "discount_cycles_remaining",
+            ):
+                record.pop(key, None)
         set_membership(patient_id, record)
         append_charge(
             patient_id,
             amount_cents=charge_amount,
             status="succeeded",
             description=f"Membership restart: {plan['name']}",
-            discount_code=record.get("discount_code"),
+            discount_code=applied_discount_code,
         )
 
         # Clear any stale "Cancelled Membership" banner left over from older

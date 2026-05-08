@@ -463,6 +463,7 @@ class TestPostSignupWithDiscount:
         assert saved_record["discount_value"] == 10
         assert saved_record["discount_cycles_remaining"] == 2  # 3 - signup
 
+    @patch("portal_membership.protocols.membership_api.append_charge")
     @patch("portal_membership.protocols.membership_api.set_membership")
     @patch("portal_membership.protocols.membership_api.try_claim_signup")
     @patch("portal_membership.protocols.membership_api.StripeProcessor")
@@ -471,6 +472,7 @@ class TestPostSignupWithDiscount:
         mock_stripe_cls: MagicMock,
         mock_claim: MagicMock,
         mock_set: MagicMock,
+        mock_append_charge: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
     ) -> None:
@@ -489,8 +491,18 @@ class TestPostSignupWithDiscount:
         # $20 off $99 = $79 (7900 cents)
         assert mock_processor.charge.call_args.kwargs["amount_cents"] == 7900
         saved = mock_set.call_args.args[1]
-        assert saved["discount_code"] == "SAVE20"
-        assert saved["discount_cycles_remaining"] == 0  # months=1, signup consumes it
+        # months=1: signup consumes the only cycle, so the persisted record
+        # should not retain the discount fields — otherwise /status, the
+        # widget, and the page would surface a phantom code forever.
+        for key in (
+            "discount_code",
+            "discount_type",
+            "discount_value",
+            "discount_cycles_remaining",
+        ):
+            assert key not in saved
+        # The signup charge entry in history still attributes the discount.
+        assert mock_append_charge.call_args.kwargs["discount_code"] == "SAVE20"
 
     @patch("portal_membership.protocols.membership_api.set_membership")
     @patch("portal_membership.protocols.membership_api.try_claim_signup")
