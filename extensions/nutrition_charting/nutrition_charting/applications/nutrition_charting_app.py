@@ -145,6 +145,22 @@ def _safe_chart_review(
 # Rendering helpers — kept small and pure so the page can be unit-tested.
 # ---------------------------------------------------------------------------
 
+def _json_for_script(value: Any) -> str:
+    """`json.dumps` for content embedded inside an inline `<script>` block.
+
+    `json.dumps` doesn't escape `<`, so an attacker-controlled string
+    containing `</script>` (e.g. a Condition `coding.display` planted via
+    FHIR/HL7 import) would terminate the script element when interpolated
+    raw — breaking out of the JS context into HTML and executing
+    attacker-controlled code in the dietician's authenticated session.
+    Escaping `<` as the JSON unicode escape `\\u003c` defeats this: the
+    HTML tokenizer never sees a `</script` byte sequence, but the JS
+    engine decodes `\\u003c` back to `<` when parsing the JSON literal,
+    so the original string round-trips intact.
+    """
+    return json.dumps(value).replace("<", "\\u003c")
+
+
 def _bullet_list(items: list[str]) -> str:
     if not items:
         return '<p class="nc-empty">None on record.</p>'
@@ -489,7 +505,7 @@ def _render_page(*, note_uuid: str, patient_id: str, note_type_name: str, chart:
             {"id": fid, "kind": fkind}
             for fid, _label, fkind in SINGLE_COMMAND_SECTIONS[section_id]["fields"]
         ]
-    flat_fields_js = json.dumps(flat_field_sections)
+    flat_fields_js = _json_for_script(flat_field_sections)
 
     # Build a per-patient ICD-10 option list from the chart's active PMH —
     # used as the `multiselect` options for the referrals row's
@@ -533,7 +549,7 @@ def _render_page(*, note_uuid: str, patient_id: str, note_type_name: str, chart:
             "row_fields": descriptor_fields,
             "required_fields": list(section.get("required_fields", [])),
         }
-    multi_sections_js = json.dumps(multi_section_descriptors)
+    multi_sections_js = _json_for_script(multi_section_descriptors)
     note_uuid_js = repr(note_uuid)  # safely-quoted JS string literal
     return f"""<!DOCTYPE html>
 <html>

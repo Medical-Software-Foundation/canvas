@@ -9,6 +9,7 @@ from django.db import DatabaseError
 from nutrition_charting.applications.nutrition_charting_app import (
     NutritionChartingApp,
     _render_chart_review_section,
+    _render_page,
     is_nutrition_note,
 )
 
@@ -315,3 +316,39 @@ def test_render_chart_review_escapes_html_in_user_data() -> None:
 
     assert "<script>alert(1)</script>" not in out
     assert "&lt;script&gt;" in out
+
+
+def test_render_page_escapes_script_close_in_pmh_for_js_context() -> None:
+    """A Condition `display` containing `</script>` (plantable via FHIR /
+    HL7 import) flows into `pmh_options[*].label` which gets serialized
+    into the inline `<script>` block as part of `MULTI_SECTIONS`.
+    `json.dumps` alone doesn't escape `<`, so the HTML tokenizer would
+    see a literal `</script>` and terminate the script tag — letting the
+    attacker's follow-on `<script>` execute. Verify the `<` is encoded
+    as `\\u003c` instead, so the HTML parser never sees a script-close
+    sequence while the JS engine still decodes the original text."""
+    payload = "Hypertension</script><script>alert(1)</script>"
+    chart = {
+        "missing": False,
+        "patient_id": "pat-1",
+        "age": 36, "sex": "F",
+        "anthropometrics": {"height": None, "weight": None},
+        "pmh": [{"display": payload, "code": "I10", "system": "icd-10"}],
+        "allergies": [], "medications": [], "labs": [],
+    }
+
+    html = _render_page(
+        note_uuid="n-1",
+        patient_id="pat-1",
+        note_type_name="Nutrition Initial",
+        chart=chart,
+    )
+
+    # The attacker's literal `</script><script>alert(1)` must not appear
+    # anywhere in the rendered HTML — that's the byte sequence the HTML
+    # tokenizer terminates the script element on.
+    assert "</script><script>alert(1)" not in html
+    # And the original `<` characters in the payload must have been
+    # encoded — proves the escape was applied (not just the test data
+    # being missing for some unrelated reason).
+    assert "Hypertension\\u003c/script>\\u003cscript>alert(1)" in html
