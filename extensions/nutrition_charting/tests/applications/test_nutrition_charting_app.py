@@ -96,6 +96,42 @@ def test_is_nutrition_note_returns_false_for_blank_id() -> None:
     assert is_nutrition_note(0) is False
 
 
+@patch("nutrition_charting.applications.nutrition_charting_app.Note")
+def test_visible_false_when_note_type_version_is_null(mock_note_cls: MagicMock) -> None:
+    """`note_type_version` is a nullable FK — admin-created or partially-
+    migrated Notes can land in the DB with it set to None. Reading
+    `.name` off of None raised AttributeError, surfacing as a recurring
+    Sentry alert on every chart open of an affected note. Visibility
+    should resolve to False (this isn't a Nutrition note) instead."""
+    note = MagicMock()
+    note.note_type_version = None
+    mock_note_cls.objects.select_related.return_value.get.return_value = note
+
+    assert NutritionChartingApp(event=_mock_event()).visible() is False
+
+
+@patch("nutrition_charting.applications.nutrition_charting_app.build_chart_review")
+@patch("nutrition_charting.applications.nutrition_charting_app.Note")
+def test_handle_tolerates_note_type_version_null(
+    mock_note_cls: MagicMock, mock_build: MagicMock,
+) -> None:
+    """If `handle()` is somehow invoked on a Note whose
+    `note_type_version` is null (race condition / direct API call /
+    misrouted event), the render should still produce a modal with a
+    blank note-type header rather than raising AttributeError out of
+    the handler."""
+    note = MagicMock()
+    note.id = "note-uuid-xyz"
+    note.note_type_version = None
+    mock_note_cls.objects.select_related.return_value.get.return_value = note
+    mock_build.return_value = {"missing": True, "patient_id": "pat-1"}
+
+    effects = NutritionChartingApp(event=_mock_event(patient_id="pat-1")).handle()
+
+    assert len(effects) == 1
+    assert "Nutrition" in effects[0].payload
+
+
 # ---- handle() / page rendering ----
 
 @patch("nutrition_charting.applications.nutrition_charting_app.build_chart_review")

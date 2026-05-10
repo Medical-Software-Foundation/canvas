@@ -68,7 +68,15 @@ def _note_type_name(note_dbid: str | int | None) -> str:
         note = Note.objects.select_related("note_type_version").get(dbid=note_dbid)
     except Note.DoesNotExist:
         return ""
-    return (note.note_type_version.name or "").lower()
+    # `note_type_version` is a nullable FK — admin-created notes,
+    # partially-migrated FHIR imports, and other edge cases can leave
+    # it null even when the Note row itself exists. Treat missing
+    # version as "not a nutrition note" rather than raising
+    # AttributeError out of the visibility check (which would surface
+    # as a recurring Sentry alert on every chart open of an affected
+    # note). Matches the guard in `data/print_payload.py`.
+    ntv = note.note_type_version
+    return ((ntv.name if ntv else "") or "").lower()
 
 
 def is_nutrition_note(note_dbid: str | int | None) -> bool:
@@ -97,7 +105,9 @@ class NutritionChartingApp(NoteApplication):
             try:
                 note = Note.objects.select_related("note_type_version").get(dbid=note_dbid)
                 note_uuid = str(note.id)
-                note_type_name = note.note_type_version.name or ""
+                # Nullable FK — see `_note_type_name` for the rationale.
+                ntv = note.note_type_version
+                note_type_name = (ntv.name if ntv else "") or ""
             except Note.DoesNotExist:
                 log.warning(f"[NutritionChartingApp] Note dbid={note_dbid} not found")
 
