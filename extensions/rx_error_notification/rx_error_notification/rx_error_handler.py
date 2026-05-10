@@ -15,12 +15,9 @@ class RxErrorNotificationHandler(BaseHandler):
         """Get the medication display name from codings."""
         if not prescription.medication:
             return "Unknown Medication"
-        try:
-            coding = prescription.medication.codings.first()
-            if coding and coding.display:
-                return coding.display
-        except Exception:
-            pass
+        coding = prescription.medication.codings.first()
+        if coding and coding.display:
+            return coding.display
         return "Unknown Medication"
 
     def compute(self) -> list:
@@ -92,7 +89,4 @@ class RxErrorNotificationHandler(BaseHandler):
 
         except Prescription.DoesNotExist:
             log.error(f"Prescription {self.target} not found")
-            return []
-        except Exception as e:
-            log.error(f"Error handling prescription error event: {e}")
             return []

@@ -9,6 +9,10 @@ requires-python = ">=3.12"
 dependencies = [
     "canvas-sdk",
     "arrow",
+]
+
+[dependency-groups]
+dev = [
     "pytest",
     "pytest-cov",
 ]

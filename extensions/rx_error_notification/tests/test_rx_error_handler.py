@@ -289,27 +289,20 @@ class TestRxErrorNotificationHandler:
 
             assert len(effects) == 2
 
-    def test_generic_exception_returns_empty(self, mock_event):
+    def test_unexpected_exception_propagates(self, mock_event):
+        """Non-DoesNotExist errors must propagate so they reach Sentry,
+        rather than being swallowed by a blanket except Exception."""
         handler = _create_handler(mock_event)
 
         with patch(
             "rx_error_notification.rx_error_handler.Prescription.objects"
-        ) as mock_objects, patch(
-            "rx_error_notification.rx_error_handler.log"
-        ) as mock_log:
+        ) as mock_objects:
             mock_objects.select_related.return_value.get.side_effect = (
                 RuntimeError("DB connection lost")
             )
 
-            effects = handler.compute()
-
-            assert mock_log.mock_calls == [
-                call.error(
-                    "Error handling prescription error event: DB connection lost"
-                )
-            ]
-
-            assert effects == []
+            with pytest.raises(RuntimeError, match="DB connection lost"):
+                handler.compute()
 
     def test_medication_coding_display_used_for_name(
         self, mock_event, mock_patient, mock_prescriber
