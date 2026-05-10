@@ -31,10 +31,20 @@ from canvas_sdk.handlers.simple_api import (
 from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 from canvas_sdk.v1.data import ServiceProvider as ServiceProviderRecord
 from canvas_sdk.v1.data.note import Note
-from django.db import DatabaseError
 from django.db.models import Q
 from logger import log
 from pydantic import ValidationError
+
+
+def _is_db_error(exc: BaseException) -> bool:
+    """Match `django.db.DatabaseError` (and its subclasses) without
+    importing it. The plugin sandbox's RestrictedPython allowlist
+    permits `django.db.models` for ORM access but blocks
+    `from django.db import DatabaseError` at module load. Walking the
+    exception's MRO for any class named `DatabaseError` recognises
+    transient DB issues (OperationalError, IntegrityError, etc.)
+    without the blocked import."""
+    return any(c.__name__ == "DatabaseError" for c in type(exc).__mro__)
 
 # Cap typeahead results so the dropdown stays bounded and the query stays cheap.
 _REFER_SEARCH_LIMIT = 20
@@ -408,11 +418,16 @@ class NutritionChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         # `Patient.DoesNotExist` is handled inside `build_chart_review`;
         # this catch is narrowed to ORM-level errors so AttributeError /
         # TypeError / ImportError after a refactor reach Sentry instead of
-        # being swallowed as a generic "auto_populate_failed".
+        # being swallowed as a generic "auto_populate_failed". The sandbox
+        # blocks `from django.db import DatabaseError`, so we catch the
+        # base `Exception` and re-raise via `_is_db_error` for the narrow
+        # graceful-degradation case.
         try:
             cache: dict[str, Any] = {}
             data = build_chart_review(patient_id, cache=cache)
-        except DatabaseError as exc:
+        except Exception as exc:
+            if not _is_db_error(exc):
+                raise
             log.error(
                 f"[NutritionChartingAPI] auto-populate failed: {exc!r}",
                 exc_info=True,
@@ -576,10 +591,13 @@ class PrintNutritionNoteAPI(SimpleAPI):
         # Narrow to ORM-level errors so AttributeError / TypeError /
         # ImportError after a refactor surface in Sentry instead of being
         # rendered as a "render failed" page indistinguishable from a
-        # transient DB hiccup.
+        # transient DB hiccup. See `_is_db_error` for why the catch is
+        # broad-then-filter rather than `except DatabaseError`.
         try:
             payload = build_print_payload(note_id, patient_id)
-        except DatabaseError as exc:
+        except Exception as exc:
+            if not _is_db_error(exc):
+                raise
             log.error(
                 f"[PrintNutritionNoteAPI] payload assembly failed: {exc!r}",
                 exc_info=True,

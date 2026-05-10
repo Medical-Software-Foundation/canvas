@@ -20,8 +20,14 @@ from typing import Any
 
 from canvas_sdk.v1.data.note import Note
 from canvas_sdk.v1.data.patient import Patient
-from django.db import DatabaseError
 from logger import log
+
+
+def _is_db_error(exc: BaseException) -> bool:
+    """Match `django.db.DatabaseError` (and its subclasses) without
+    importing it — the plugin sandbox blocks the import. See
+    `api/nutrition_api.py:_is_db_error` for the longer rationale."""
+    return any(c.__name__ == "DatabaseError" for c in type(exc).__mro__)
 
 from nutrition_charting.data.form_state import get_form_state
 from nutrition_charting.data.medical_chart_review import build_chart_review
@@ -228,7 +234,9 @@ def _safe_chart_review(
         return {"missing": True}
     try:
         return build_chart_review(patient_id, cache=cache)
-    except DatabaseError as exc:
+    except Exception as exc:
+        if not _is_db_error(exc):
+            raise
         log.error(
             f"[print_payload] chart review failed: {exc!r}",
             exc_info=True,

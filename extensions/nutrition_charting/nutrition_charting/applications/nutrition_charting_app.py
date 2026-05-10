@@ -13,8 +13,14 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import NoteApplication
 from canvas_sdk.v1.data.note import Note
-from django.db import DatabaseError
 from logger import log
+
+
+def _is_db_error(exc: BaseException) -> bool:
+    """Match `django.db.DatabaseError` (and its subclasses) without
+    importing it — the plugin sandbox blocks the import. See
+    `api/nutrition_api.py:_is_db_error` for the longer rationale."""
+    return any(c.__name__ == "DatabaseError" for c in type(exc).__mro__)
 
 from nutrition_charting.data.medical_chart_review import build_chart_review
 from nutrition_charting.data.multi_command_sections import MULTI_COMMAND_SECTIONS
@@ -133,7 +139,9 @@ def _safe_chart_review(
         return {"missing": True, "patient_id": ""}
     try:
         return build_chart_review(patient_id, cache=cache)
-    except DatabaseError as exc:
+    except Exception as exc:
+        if not _is_db_error(exc):
+            raise
         log.error(
             f"[NutritionChartingApp] chart review failed: {exc!r}",
             exc_info=True,
