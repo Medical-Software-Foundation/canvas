@@ -1,0 +1,28 @@
+[project]
+name = "rx-error-notification"
+version = "0.0.1"
+description = "Creates a task assigned to the prescriber when a prescription returns an error status"
+authors = [{ name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "canvas-sdk",
+    "arrow",
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+pythonpath = ["."]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
