@@ -1,0 +1,16 @@
+name: "Nutrition: Focused Physical Exam"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "NUTRITION_NFPE"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+questions:
+- content: "NFPE Narrative"
+  code_system: "INTERNAL"
+  code: "NUT_NFPE_NARRATIVE"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "NFPE Narrative"
+    code: "NUT_NFPE_NARRATIVE_RESP"
+    value: ''

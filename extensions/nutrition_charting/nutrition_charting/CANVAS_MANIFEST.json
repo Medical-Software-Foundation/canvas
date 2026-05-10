@@ -1,0 +1,69 @@
+{
+    "sdk_version": "0.142.0",
+    "plugin_version": "0.1.8",
+    "name": "nutrition_charting",
+    "description": "Structured ADIME charting tab for Nutrition note types, plus a printable nutrition note matching the dietician template.",
+    "components": {
+        "applications": [
+            {
+                "class": "nutrition_charting.applications.nutrition_charting_app:NutritionChartingApp",
+                "name": "Nutrition",
+                "description": "Structured ADIME charting tab — visible only on Nutrition note types",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "nutrition_charting.protocols.print_button:PrintNutritionNoteButton",
+                "description": "Note-header button that opens the printable Nutrition Note modal",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "nutrition_charting.api.nutrition_api:NutritionChartingAPI",
+                "description": "Charting tab back-end: form state, auto-populate, section saves",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "nutrition_charting.api.nutrition_api:PrintNutritionNoteAPI",
+                "description": "Renders the printable Nutrition Note HTML",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "nutrition_charting.protocols.note_lifecycle:NutritionChartingNoteLifecycle",
+                "description": "Cleans up plugin AttributeHub rows when a Note is deleted",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": ["NoteStateChangeEvent"],
+                    "write": ["AttributeHub"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            { "template": "questionnaires/social_diet_history.yaml" },
+            { "template": "questionnaires/dietary_intake.yaml" },
+            { "template": "questionnaires/nutrition_diagnosis_pes.yaml" },
+            { "template": "questionnaires/nfpe.yaml" }
+        ]
+    },
+    "secrets": [
+        "simple-api-key",
+        "practice-name",
+        "practice-address",
+        "practice-phone",
+        "practice-fax"
+    ],
+    "tags": {},
+    "references": [],
+    "custom_data": {
+        "namespace": "canvas__nutrition_charting",
+        "access": "read_write"
+    },
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
