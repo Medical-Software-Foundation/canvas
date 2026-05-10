@@ -1,0 +1,62 @@
+{
+    "sdk_version": "0.146.0",
+    "plugin_version": "0.1.0",
+    "name": "patient_tags",
+    "description": "User-defined patient labels with optional grouped banner alerts; per-context assignability",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_tags.handlers.tag_button:PatientTagButton",
+                "description": "Button in patient chart header to open the tag management modal",
+                "data_access": {
+                    "event": "",
+                    "read": ["v1.Patient"],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_tags.handlers.tag_api:TagAPI",
+                "description": "API endpoints for labels, banner groups, and patient assignments",
+                "data_access": {
+                    "event": "",
+                    "read": ["v1.Patient"],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_tags.handlers.external_api:TagExternalAPI",
+                "description": "External bearer-token API for setting patient tags programmatically",
+                "data_access": {
+                    "event": "",
+                    "read": ["v1.Patient"],
+                    "write": []
+                }
+            }
+        ],
+        "handlers": [
+            {
+                "class": "patient_tags.handlers.banner_sync:BannerSyncHandler",
+                "description": "Reconciles banner alerts when patient data is updated",
+                "data_access": {
+                    "event": "PATIENT_UPDATED",
+                    "read": ["v1.Patient"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["MANAGE_TABS_ROLES", "API_TOKEN"],
+    "custom_data": {
+        "namespace": "custom__patient_tags",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
