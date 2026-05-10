@@ -43,7 +43,7 @@ Before posting a 🔴 Important finding, read the code path and cite `file:line`
 - Suggestions to refactor working code into a different pattern
 - Naming preferences for variables, functions, classes, files
 - Docstring or comment wording
-- Generated files (`*.lock`, `__pycache__/`, anything under a path containing `generated`)
+- Generated files (`*.lock`, `__pycache__/`, anything under a path containing `generated`, anything under `.cpa-workflow-artifacts/`)
 - Test-only code that intentionally violates production rules
 
 ## Always check
