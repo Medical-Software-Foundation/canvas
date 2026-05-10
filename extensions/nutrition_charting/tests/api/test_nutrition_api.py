@@ -658,6 +658,33 @@ def test_vitals_effects_skips_when_both_height_and_weight_missing() -> None:
     assert _vitals_effects("note-1", {"height": "", "weight": None}) == []
 
 
+@patch("nutrition_charting.api.nutrition_api._clear_originated_command")
+@patch(
+    "nutrition_charting.api.nutrition_api._get_originated_command",
+    return_value="cmd-uuid-existing",
+)
+def test_vitals_effects_deletes_when_cleared_after_originate(
+    mock_get: MagicMock, mock_clear: MagicMock,
+) -> None:
+    """If the dietician cleared the height/weight inputs on a section that
+    previously emitted a VitalsCommand (e.g. the auto-populated prefill
+    was stale or wrong-patient), the next save must emit a delete()
+    rather than silently leaving the original VitalsCommand committed
+    to the signed note. Mirrors the not-emit-ready handling in
+    `_single_command_effects` and `_multi_command_effects`."""
+    effects = _vitals_effects("note-uuid-1", {"height": "", "weight": ""})
+
+    assert len(effects) == 1
+    # The effect carries the previously-originated UUID so Canvas knows
+    # which command to retract.
+    assert "cmd-uuid-existing" in effects[0].payload
+    # And the stashed UUID has been cleared from AttributeHub so the
+    # next save (if the dietician re-enters values) originates a fresh
+    # command instead of trying to edit the now-deleted one.
+    mock_clear.assert_called_once_with("note-uuid-1", "medical_chart_review")
+    mock_get.assert_called_once_with("note-uuid-1", "medical_chart_review")
+
+
 @patch("nutrition_charting.api.nutrition_api._record_originated_command")
 @patch("nutrition_charting.api.nutrition_api._get_originated_command", return_value=None)
 def test_vitals_effects_originates_on_first_save(

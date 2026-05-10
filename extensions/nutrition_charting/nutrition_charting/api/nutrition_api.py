@@ -161,7 +161,17 @@ def _coerce_int(value: Any) -> int | None:
 
 
 def _vitals_effects(note_uuid: str, payload: dict) -> list[Effect]:
-    """Originate (or edit, on resave) a VitalsCommand for this section."""
+    """Originate (or edit, on resave) a VitalsCommand for this section.
+
+    If the dietician clears the height and weight inputs on a section
+    that previously emitted a VitalsCommand (e.g. the auto-populated
+    prefill turned out to be stale or wrong-patient), delete the
+    previously-originated command rather than silently leaving it on
+    the note. Mirrors the not-emit-ready handling in
+    `_single_command_effects` and `_multi_command_effects` so the
+    section can't quietly retain anthropometrics the dietician believed
+    they removed before signing the note.
+    """
     if not note_uuid or not isinstance(payload, dict):
         return []
 
@@ -170,7 +180,17 @@ def _vitals_effects(note_uuid: str, payload: dict) -> list[Effect]:
 
     height = _coerce_int(source.get("height"))
     weight = _coerce_int(source.get("weight"))
+    existing_uuid = _get_originated_command(note_uuid, MEDICAL_CHART_REVIEW_SECTION)
+
     if height is None and weight is None:
+        if existing_uuid:
+            log.info(
+                f"[NutritionChartingAPI] section={MEDICAL_CHART_REVIEW_SECTION} "
+                "cleared; deleting previously-emitted VitalsCommand"
+            )
+            cmd = VitalsCommand(command_uuid=existing_uuid)
+            _clear_originated_command(note_uuid, MEDICAL_CHART_REVIEW_SECTION)
+            return [cmd.delete()]
         return []
 
     fields: dict[str, Any] = {}

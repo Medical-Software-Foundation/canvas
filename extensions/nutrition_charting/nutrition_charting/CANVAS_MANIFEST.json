@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.142.0",
-    "plugin_version": "0.1.10",
+    "plugin_version": "0.1.11",
     "name": "nutrition_charting",
     "description": "Structured ADIME charting tab for Nutrition note types, plus a printable nutrition note matching the dietician template.",
     "components": {
