@@ -117,11 +117,22 @@ Possible future work, roughly in the order it would make the most product-impact
 
 ## Screenshots
 
-> Drop UAT screenshots into a `screenshots/` directory next to this README before publication. Suggested coverage:
->
-> - The Nutrition tab on a fresh Initial visit (top-of-form view)
-> - The auto-populated Medical Chart Review section
-> - A multi-row section after add / edit / remove (Goals or Referrals)
-> - The Indications PMH multiselect on a Referral row
-> - The print modal on an Initial visit, fully populated
-> - The print modal on a Follow-up showing the tighter follow-up layout
+**Auto-populated Medical Chart Review.** Age, sex, anthropometrics, active PMH, allergies, currently-taking nutrition-relevant medications, and recent nutrition-relevant labs pulled from the patient's chart.
+
+![Medical Chart Review section auto-populated from the patient's chart](screenshots/chart-review.png)
+
+**Initial / Follow-up visit toggle.** Visit type switches which sections are pre-expanded — Initial visits expand the full ADIME assessment; Follow-up visits collapse to the sections that change between visits.
+
+![Initial / Follow-up visit type toggle](screenshots/follow-up-toggle.png)
+
+**Section save status.** Each section shows a green "Saved" indicator once persisted, and the dietician can collapse / expand any section to keep the form tractable on a long note.
+
+![Saved-section status indicators along the ADIME form](screenshots/saved-sections.png)
+
+**Required-fields validation on a Referrals row.** Multi-row sections (Goals, Referrals, Educational Materials) validate per-row before emitting the underlying Canvas command; missing required fields are flagged inline.
+
+![Required-fields validation on a Referrals row](screenshots/required-fields-referral.png)
+
+**Printable Nutrition Note.** Opened via the Print button in the note header. Styled to match Canvas's home-app print convention; pulls from saved form state plus chart-review data so the printout always reflects the most current values.
+
+![Printable Nutrition Note rendered from the saved form state](screenshots/print-nutrition-note.png)
