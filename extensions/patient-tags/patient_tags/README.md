@@ -1,9 +1,21 @@
 patient-tags
 =======================
 
-## Description
+## What it does
 
-User-defined patient labels with optional grouped banner alerts and per-context (chart vs profile) assignability. Adds a "Tags" action button to the patient chart header that opens a right-pane modal for assigning, managing labels, and managing banners. Includes a per-patient audit history of every assignment change and an external bearer-token API for setting tags programmatically from third-party systems.
+Adds a "Tags" action button to the patient chart header that opens a right-pane modal for assigning user-defined labels (e.g. "Do not contact", "Treatment contract", "VIP", "Banned") to the patient. Labels can optionally be grouped into shared banner alerts that surface as colored banners on the chart, timeline, profile, scheduling card, or appointment card. Every assignment change is recorded in a per-patient audit history, and an external bearer-token API lets third-party systems (Zapier, custom integrations, automation rules) set patient tags programmatically.
+
+## Problem it solves
+
+Clinic operations teams need a lightweight way to flag patients with operational metadata that isn't captured by clinical structured data — things like "do not contact", "do not schedule until provider sign-off", "treatment contract on file", "high-no-show risk", "VIP", or per-clinic workflow stages. Without this plugin, that metadata typically lives in chart notes, sticky notes, ad-hoc lists in spreadsheets, or staff memory — none of which surface on the chart automatically, none of which audit who set what when, and none of which integrate with downstream automation. This plugin gives clinic-ops a first-class place to define and assign those tags, with banner alerts for the high-priority ones and a programmatic API for systems that need to react to them.
+
+## Who it's for
+
+Designed for clinic operations, intake, scheduling, billing, and care-management staff who need to triage patients on operational criteria. Useful across any specialty where staff handle non-clinical patient flags — including primary care, behavioral health, specialty practices, and DTC clinics. Administrators define the labels and banner groups; front-desk and ops staff assign them per patient.
+
+## Screenshots
+
+<!-- TODO: add screenshots before merge — at minimum the chart header with Tags button + modal open with assigned pills. -->
 
 ## Installation
 

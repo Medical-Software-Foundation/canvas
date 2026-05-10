@@ -2,7 +2,7 @@
     "sdk_version": "0.146.0",
     "plugin_version": "0.1.0",
     "name": "patient_tags",
-    "description": "User-defined patient labels with optional grouped banner alerts; per-context assignability",
+    "description": "User-defined patient labels with optional grouped banner alerts for clinic operations, intake, scheduling, billing, and care-management staff.",
     "components": {
         "protocols": [
             {
