@@ -1,0 +1,1697 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --neutral-50: #fafafa;
+    --neutral-100: #f5f5f5;
+    --neutral-200: #e5e7eb;
+    --neutral-300: #d1d5db;
+    --neutral-400: #9ca3af;
+    --neutral-500: #6b7280;
+    --neutral-600: #4b5563;
+    --neutral-700: #374151;
+    --neutral-800: #1f2937;
+    --neutral-900: #111827;
+    --accent: #1678C2;
+    --accent-hover: #125a99;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+    --success: #16a34a;
+    --info: #1e40af;
+    --info-bg: #dbeafe;
+    --warning: #92400e;
+    --warning-bg: #fef3c7;
+    --alert: #991b1b;
+    --alert-bg: #fee2e2;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-pill: 999px;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--neutral-900);
+    background: #fff;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .modal {
+    padding: 0;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px 0;
+  }
+  .modal-title { font-size: 18px; font-weight: 600; }
+
+  /* ---- tabs ---- */
+  .tabs {
+    display: flex; gap: 4px; padding: 0 24px;
+    border-bottom: 1px solid var(--neutral-200);
+    margin-top: 16px;
+  }
+  .tab {
+    padding: 8px 12px; cursor: pointer; font-size: 12px;
+    font-weight: 400; color: var(--neutral-500);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--neutral-800); }
+  .tab.active {
+    color: var(--neutral-900); font-weight: 500;
+    border-bottom-color: var(--neutral-900);
+  }
+  .panel { padding: 20px 24px; display: none; }
+  .panel.active { display: block; }
+
+  /* ---- shared section header (used in Manage tabs) ---- */
+  .section-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-bar-title {
+    font-size: 14px; font-weight: 700; color: var(--neutral-900);
+  }
+
+  /* ---- sub-tabs (e.g. Chart / Profile inside Manage Labels) ---- */
+  .subtabs {
+    display: flex; gap: 2px; padding: 2px;
+    background: var(--neutral-100); border-radius: var(--radius-sm);
+    margin-bottom: 14px;
+    width: fit-content;
+  }
+  .subtab {
+    padding: 5px 14px; font-size: 12px; font-weight: 500;
+    color: var(--neutral-500); cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background 0.12s, color 0.12s;
+    user-select: none;
+  }
+  .subtab:hover { color: var(--neutral-800); }
+  .subtab.active {
+    background: #fff; color: var(--neutral-900);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  /* ---- history view ---- */
+  .history-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--neutral-200);
+    font-size: 9px;
+    min-width: 0;
+  }
+  .history-row:last-child { border-bottom: none; }
+  .history-row .h-action {
+    font-weight: 600; min-width: 44px; flex-shrink: 0; font-size: 9px;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .history-row .h-action.assigned { color: var(--success); }
+  .history-row .h-action.removed { color: var(--danger); }
+  .history-row .pill-preview-mini {
+    flex-shrink: 0;
+    padding: 1px 6px; height: 17px;
+    font-size: 9.5px; border-width: 1px;
+  }
+  .history-row .h-meta {
+    color: var(--neutral-500); font-size: 9px;
+    margin-left: auto; flex-shrink: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-align: right;
+  }
+  .history-row .h-via {
+    font-size: 8px; padding: 1px 4px; border-radius: var(--radius-pill);
+    background: var(--neutral-100); color: var(--neutral-600);
+    text-transform: uppercase; letter-spacing: 0.4px;
+    flex-shrink: 0;
+  }
+  .history-link {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: var(--accent); font-size: 11px; font-weight: 500;
+    text-decoration: underline; letter-spacing: 0;
+    text-transform: none;
+  }
+  .history-link:hover { color: var(--accent-hover); }
+
+  /* ---- search input (Tab 1) ---- */
+  .search-input {
+    width: 100%; padding: 8px 12px; margin-bottom: 14px;
+    border: 1px solid var(--neutral-300); border-radius: var(--radius-sm);
+    font: inherit; font-size: 13px; background: #fff;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { outline: none; border-color: var(--neutral-900); }
+
+  /* ---- pill grid (Tab 1) ---- */
+  .pill-grid {
+    display: flex; flex-direction: column; gap: 14px;
+    min-height: 60px; margin-bottom: 16px;
+  }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill-section { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: var(--radius-md); }
+  .pill-section.assigned {
+    background: #eaecef;
+    border: 1.5px dashed var(--neutral-300);
+    border-left: 3px solid var(--accent);
+  }
+  .pill-section.available {
+    padding: 0;
+  }
+  .section-heading {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: var(--neutral-700);
+    margin-bottom: 6px;
+  }
+  .pill-section.assigned .section-heading { color: var(--neutral-900); }
+  .section-heading .count {
+    background: var(--info-bg); color: var(--info);
+    padding: 1px 7px; border-radius: var(--radius-pill);
+    font-size: 10px; font-weight: 700; letter-spacing: 0;
+  }
+
+  /* ---- pill (chip) ---- */
+  .pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px;
+    height: 22px; line-height: 1;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid;
+    background: transparent;
+    font-size: 11.5px; font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s, transform 0.05s;
+    white-space: nowrap;
+  }
+  .pill.available:hover { background: rgba(0,0,0,0.04); }
+  .pill.assigned { cursor: default; font-weight: 600; }
+  .pill .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 11px; height: 11px; border-radius: 50%;
+    border: 1px solid currentColor;
+    font-size: 8px; font-weight: 700; line-height: 1;
+    font-style: italic; font-family: Georgia, serif;
+    cursor: help; opacity: 0.65;
+    flex-shrink: 0;
+  }
+  .pill .info-icon:hover { opacity: 1; }
+  .pill .pill-prefix, .pill .pill-suffix {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 12px; height: 12px;
+  }
+  .pill .pill-suffix { cursor: pointer; opacity: 0.6; }
+  .pill .pill-suffix:hover { opacity: 1; }
+
+  /* tooltip */
+  #tagTooltip {
+    position: fixed; background: var(--neutral-900); color: #fff;
+    padding: 7px 10px; border-radius: var(--radius-sm);
+    font-size: 11.5px; font-weight: 400; line-height: 1.45;
+    width: 220px; max-width: calc(100vw - 24px);
+    word-wrap: break-word; overflow-wrap: break-word;
+    pointer-events: none; opacity: 0;
+    transition: opacity 0.12s; z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  }
+  #tagTooltip.visible { opacity: 1; }
+  #tagTooltip::after {
+    content: ""; position: absolute;
+    border: 5px solid transparent;
+    left: var(--arrow-x, 50%); margin-left: -5px;
+  }
+  #tagTooltip[data-pos="above"]::after { top: 100%; border-top-color: var(--neutral-900); }
+  #tagTooltip[data-pos="below"]::after { bottom: 100%; border-bottom-color: var(--neutral-900); }
+
+  .empty-state {
+    text-align: center; color: var(--neutral-500);
+    padding: 36px 16px; border: 1.5px dashed var(--neutral-200);
+    border-radius: var(--radius-md); font-size: 13px;
+  }
+  .empty-state a { color: var(--neutral-900); text-decoration: underline; cursor: pointer; }
+
+  /* ---- location chip (used in Manage tabs) ---- */
+  .loc-chip {
+    display: inline-flex; align-items: center;
+    padding: 1px 8px; border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-pill);
+    font-size: 11px; font-weight: 400; color: var(--neutral-600);
+    background: #fff;
+  }
+  .loc-chips {
+    display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  }
+
+  /* ---- intent badge ---- */
+  .intent-badge {
+    display: inline-flex; align-items: center;
+    padding: 1px 8px; border-radius: var(--radius-pill);
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .intent-badge.warning {
+    background: transparent; color: var(--alert);
+    border: 1px solid var(--alert);
+    /* Compensate for the border so warning + alert badges align in height. */
+    padding: 0 7px;
+  }
+  .intent-badge.info { background: var(--info-bg); color: var(--info); }
+  .intent-badge.alert { background: var(--alert-bg); color: var(--alert); }
+
+  /* ---- card (Manage Labels groups, Manage Banners list) ---- */
+  .card {
+    border: 1px solid var(--neutral-200); border-radius: var(--radius-md);
+    background: #fff; overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .card-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--neutral-200);
+    font-size: 12px;
+  }
+  .card-row:last-child { border-bottom: none; }
+  .card-row .row-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .card-row .row-actions { display: flex; gap: 2px; flex-shrink: 0; }
+  .card-row-title { font-size: 13px; font-weight: 600; color: var(--neutral-900); }
+  .card-row-meta { font-size: 12px; color: var(--neutral-500); display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .card-row-meta strong { color: var(--neutral-700); font-weight: 500; }
+
+  /* Banner row: 2-col × 2-row grid so title↔intent badge are aligned at top
+     and label count↔action icons are aligned at bottom. */
+  .banner-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 12px; row-gap: 4px;
+    align-items: center;
+  }
+  .banner-row .b-title  { grid-row: 1; grid-column: 1; }
+  .banner-row .b-intent { grid-row: 1; grid-column: 2; justify-self: end; }
+  .banner-row .b-meta   { grid-row: 2; grid-column: 1; }
+  .banner-row .b-actions { grid-row: 2; grid-column: 2; justify-self: end; }
+
+  .label-group-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; background: var(--neutral-50);
+    border-bottom: 1px solid var(--neutral-200);
+    font-size: 13px;
+  }
+  .label-group-header .group-name { font-weight: 700; color: var(--neutral-900); }
+  .label-group-header .no-banner { color: var(--neutral-500); font-style: italic; font-weight: 600; }
+
+  /* ---- icon-only buttons ---- */
+  .icon-btn {
+    background: none; border: none; cursor: pointer; padding: 6px;
+    border-radius: var(--radius-sm); color: var(--neutral-500);
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background 0.12s, color 0.12s;
+  }
+  .icon-btn:hover { background: var(--neutral-100); color: var(--neutral-900); }
+  .icon-btn.danger { color: var(--neutral-500); }
+  .icon-btn.danger:hover { background: var(--danger-bg); color: var(--danger); }
+  .icon-btn svg { display: block; }
+
+  /* ---- form ---- */
+  .form-card {
+    border: 1px solid var(--neutral-200); border-left: 3px solid var(--accent);
+    border-radius: var(--radius-md);
+    padding: 16px; background: var(--neutral-50);
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .form-card-title {
+    font-size: 15px; font-weight: 700; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 10px;
+    color: var(--neutral-900);
+  }
+  .form-card-title .preview-pill {
+    display: inline-flex; align-items: center;
+    padding: 3px 10px; border-radius: var(--radius-pill);
+    border: 1.5px solid; font-size: 12px; font-weight: 500;
+  }
+  .form-row { margin-bottom: 12px; }
+  .form-row label.field-label {
+    display: block; font-size: 12px; font-weight: 500;
+    color: var(--neutral-700); margin-bottom: 4px;
+  }
+  .form-row .optional-hint { color: var(--neutral-400); font-weight: 400; }
+  .form-row .field-hint { font-size: 11px; color: var(--neutral-400); margin-top: 4px; }
+  .form-row input[type="text"],
+  .form-row textarea,
+  .form-row select {
+    width: 100%; padding: 7px 10px;
+    border: 1px solid var(--neutral-300); border-radius: var(--radius-sm);
+    font-family: inherit; font-size: 13px; background: #fff;
+    transition: border-color 0.15s;
+  }
+  .form-row input:focus, .form-row textarea:focus, .form-row select:focus {
+    outline: none; border-color: var(--neutral-900);
+  }
+  .form-row textarea { min-height: 36px; resize: vertical; }
+  .char-counter { font-size: 11px; color: var(--neutral-500); text-align: right; margin-top: 2px; }
+  .char-counter.over { color: var(--danger); }
+
+  /* color picker */
+  .swatch-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch {
+    width: 30px; height: 30px; border-radius: 50%;
+    cursor: pointer; border: 2px solid transparent;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+    transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch.selected {
+    border-color: var(--neutral-900);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08), 0 0 0 2px #fff, 0 0 0 4px var(--neutral-900);
+  }
+  .swatch.selected::after {
+    content: ""; width: 8px; height: 4px;
+    border-left: 2px solid var(--neutral-900); border-bottom: 2px solid var(--neutral-900);
+    transform: rotate(-45deg) translate(0, -1px);
+  }
+
+  /* toggle pills (assignable from) */
+  .toggle-pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toggle-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 14px; border-radius: var(--radius-pill);
+    border: 1.5px solid var(--neutral-300);
+    background: transparent; color: var(--neutral-500);
+    font-size: 12.5px; font-weight: 500;
+    cursor: pointer; user-select: none;
+    transition: all 0.12s;
+  }
+  .toggle-pill:hover { border-color: var(--neutral-500); color: var(--neutral-700); }
+  .toggle-pill.active {
+    background: var(--neutral-900); color: #fff; border-color: var(--neutral-900);
+  }
+
+  /* checkbox / radio rows (still used in banner subforms) */
+  .checkbox-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .checkbox-row label {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; cursor: pointer; user-select: none;
+  }
+  .checkbox-row input[type="checkbox"], .checkbox-row input[type="radio"] {
+    width: 14px; height: 14px; cursor: pointer;
+  }
+
+  .group-subform {
+    margin-top: 8px; padding: 12px;
+    background: #fff; border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-sm);
+  }
+  .group-subform .form-card-title { font-size: 13px; margin-bottom: 8px; }
+
+  /* rules section */
+  .rules-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0; font-size: 12px;
+  }
+  .rules-row:not(:first-child) { border-top: 1px solid var(--neutral-200); }
+  .rules-row .rule-text { flex: 1; }
+  .rules-add {
+    display: flex; gap: 6px; align-items: center; margin-top: 8px;
+    padding-top: 8px; border-top: 1px solid var(--neutral-200);
+  }
+  .rules-add select { padding: 5px 8px; font-size: 12px; }
+
+  /* ---- footer / buttons ---- */
+  .footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px;
+    border-top: 1px solid var(--neutral-200);
+    background: var(--neutral-50);
+  }
+  .footer-left { font-size: 12px; color: var(--neutral-500); min-height: 16px; }
+  .footer-right { display: flex; gap: 8px; }
+  .btn {
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--neutral-300);
+    background: #fff; color: var(--neutral-800);
+    transition: background 0.15s, border-color 0.15s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn:hover { background: var(--neutral-50); }
+  .btn-primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-primary:disabled { background: var(--neutral-400); border-color: var(--neutral-400); cursor: not-allowed; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-secondary {
+    background: #fff; color: var(--neutral-800); border-color: var(--neutral-300);
+  }
+  .btn-secondary:hover { background: var(--neutral-50); }
+  .btn svg { display: block; }
+  .status { font-size: 12px; }
+  .status.success { color: var(--success); }
+  .status.error { color: var(--danger); }
+
+  .pill-preview-mini {
+    display: inline-flex; align-items: center;
+    padding: 3px 8px;
+    height: 22px; line-height: 1;
+    border-radius: var(--radius-pill); border: 1.5px solid;
+    font-size: 11.5px; font-weight: 500;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="modal">
+  <div class="modal-header">
+    <div class="modal-title">Patient Tags</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="assign">Patient Tags</div>
+    <div class="tab" data-tab="manage">Manage Labels</div>
+    <div class="tab" data-tab="banners">Manage Banners</div>
+  </div>
+
+  <div class="panel active" id="panel-assign">
+    <div id="assignMain">
+      <input type="text" id="searchInput" class="search-input" placeholder="Search tags…" />
+      <div class="pill-grid" id="pillGrid"></div>
+    </div>
+    <div id="historyView" style="display:none;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div class="section-bar-title">Tag History</div>
+        <button type="button" class="btn btn-sm" id="historyBackBtn">← Back</button>
+      </div>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-manage">
+    <div class="section-bar">
+      <div class="section-bar-title">Labels</div>
+      <button class="btn btn-primary btn-sm" id="newLabelBtn"></button>
+    </div>
+    <div class="subtabs" id="manageSubtabs">
+      <div class="subtab active" data-subtab="chart">Chart</div>
+      <div class="subtab" data-subtab="profile">Profile</div>
+    </div>
+    <div id="labelFormWrap"></div>
+    <div id="manageList"></div>
+  </div>
+
+  <div class="panel" id="panel-banners">
+    <div class="section-bar">
+      <div class="section-bar-title">Banners</div>
+      <button class="btn btn-primary btn-sm" id="newBannerBtn"></button>
+    </div>
+    <div id="bannerFormWrap"></div>
+    <div id="bannersList"></div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left" id="status"></div>
+    <div class="footer-right" id="footerActions"></div>
+  </div>
+</div>
+
+<script>
+  var PATIENT_ID = "{{ patient_id }}";
+  var LABELS = {{ labels_json|safe }};
+  var GROUPS = {{ groups_json|safe }};
+  var ASSIGNED_IDS = new Set({{ assigned_ids_json|safe }});
+  var PALETTE = {{ palette_json|safe }};
+  var VALID_INTENTS = {{ valid_intents_json|safe }};
+  var VALID_PLACEMENTS = {{ valid_placements_json|safe }};
+  var VALID_RULE_ACTIONS = {{ valid_rule_actions_json|safe }};
+  var RULE_ACTION_LABELS = { auto_assign: "Auto-assign", auto_remove: "Auto-remove" };
+  var DEFAULT_SEPARATOR = "{{ default_separator|escapejs }}" || " • ";
+  var DESCRIPTION_MAX = {{ description_max_chars }};
+  var BANNER_MAX = {{ banner_narrative_max_chars }};
+  var API = "{{ api_base }}";
+
+  var activeTab = "assign";
+  var manageSubTab = "chart";  // "chart" | "profile" — filters Manage Labels list
+  var editingLabelId = null;
+  var formState = newLabelForm();
+  var editingBannerId = null;
+  var bannerFormState = newBannerForm();
+  var searchQuery = "";
+
+  function detectProfileContext() {
+    var candidates = [];
+    try { candidates.push(window.top.location.pathname); } catch (e) {}
+    try { candidates.push(window.parent.location.pathname); } catch (e) {}
+    try { candidates.push(window.location.pathname); } catch (e) {}
+    candidates.push(document.referrer || "");
+    return candidates.some(function (p) { return p && p.indexOf("/edit") >= 0; });
+  }
+  var IS_PROFILE_CONTEXT = detectProfileContext();
+  var CONTEXT_FLAG, CONTEXT_LABEL, OTHER_CONTEXT_LABEL;
+  function applyContext() {
+    CONTEXT_FLAG = IS_PROFILE_CONTEXT ? "assignable_in_profile" : "assignable_in_chart";
+    CONTEXT_LABEL = IS_PROFILE_CONTEXT ? "Profile" : "Chart";
+    OTHER_CONTEXT_LABEL = IS_PROFILE_CONTEXT ? "Chart" : "Profile";
+  }
+  applyContext();
+
+  // Right-pane stays open across chart ↔ profile navigation; the iframe
+  // doesn't reload, so IS_PROFILE_CONTEXT would stay stale. Poll the parent
+  // URL and re-render when the context flips, instead of forcing a close.
+  setInterval(function() {
+    var nowProfile = detectProfileContext();
+    if (nowProfile !== IS_PROFILE_CONTEXT) {
+      IS_PROFILE_CONTEXT = nowProfile;
+      applyContext();
+      if (activeTab === "assign") renderPills();
+    }
+  }, 500);
+
+  // ---------- ICONS ----------
+  function iconPlus(size) {
+    var s = size || 12;
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>';
+  }
+  function iconX(size) {
+    var s = size || 12;
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>';
+  }
+  function iconPencil() {
+    return '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z"/></svg>';
+  }
+  function iconTrash() {
+    return '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M5 4V2.5h6V4M4 4l1 10h6l1-10"/></svg>';
+  }
+
+  // ---------- TAB SWITCHING ----------
+  function setTab(name) {
+    activeTab = name;
+    document.querySelectorAll(".tab").forEach(function(t) {
+      t.classList.toggle("active", t.dataset.tab === name);
+    });
+    document.querySelectorAll(".panel").forEach(function(p) {
+      p.classList.toggle("active", p.id === "panel-" + name);
+    });
+    if (name === "banners") renderBannersList();
+    if (name === "manage") renderManageList();
+    if (name === "assign") renderPills();
+    renderFooter();
+  }
+  document.querySelectorAll(".tab").forEach(function(t) {
+    t.addEventListener("click", function() { setTab(t.dataset.tab); });
+  });
+
+  // ---------- HISTORY VIEW ----------
+  function openHistoryView() {
+    document.getElementById("assignMain").style.display = "none";
+    document.getElementById("footerActions").style.display = "none";
+    var view = document.getElementById("historyView");
+    view.style.display = "";
+    var list = document.getElementById("historyList");
+    list.innerHTML = '<div style="font-size:12px; color:var(--neutral-500); padding:12px 0;">Loading…</div>';
+    apiFetch("GET", "/patients/" + PATIENT_ID + "/labels/history", null)
+      .then(function(resp) { renderHistory(resp.history || []); })
+      .catch(function(err) {
+        list.innerHTML = '<div style="font-size:12px; color:var(--danger); padding:12px 0;">Failed to load: ' + escapeHtml(err.message || "") + '</div>';
+      });
+  }
+
+  function closeHistoryView() {
+    document.getElementById("historyView").style.display = "none";
+    document.getElementById("assignMain").style.display = "";
+    document.getElementById("footerActions").style.display = "";
+  }
+
+  function pad2(n) { return n < 10 ? ("0" + n) : String(n); }
+
+  function formatHistoryDate(iso) {
+    // "MM/DD/YYYY 1:09 AM" in the browser's local timezone.
+    try {
+      var d = new Date(iso);
+      var date = pad2(d.getMonth() + 1) + "/" + pad2(d.getDate()) + "/" + d.getFullYear();
+      var hours = d.getHours();
+      var ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+      return date + " " + hours + ":" + pad2(d.getMinutes()) + " " + ampm;
+    } catch (e) { return iso; }
+  }
+
+  function formatHistoryDateLong(iso) {
+    // Full long-form datetime with seconds, used as the hover tooltip.
+    try {
+      var d = new Date(iso);
+      return d.toLocaleString(undefined, {
+        year: "numeric", month: "long", day: "numeric",
+        hour: "numeric", minute: "2-digit", second: "2-digit",
+      });
+    } catch (e) { return iso; }
+  }
+
+  function abbreviateActor(name) {
+    // "First Last" → "First L." Falls back to the original string for
+    // single-word names or empty input.
+    if (!name) return "Unknown";
+    var parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0];
+    var last = parts[parts.length - 1];
+    return parts[0] + " " + last.charAt(0).toUpperCase() + ".";
+  }
+
+  function renderHistory(entries) {
+    var list = document.getElementById("historyList");
+    list.innerHTML = "";
+    if (!entries.length) {
+      list.innerHTML = '<div style="font-size:12px; color:var(--neutral-500); padding:12px 0;">No history yet.</div>';
+      return;
+    }
+    entries.forEach(function(e) {
+      var p = PALETTE[e.label_color] || PALETTE["blue"];
+      var row = document.createElement("div");
+      row.className = "history-row";
+
+      var action = document.createElement("span");
+      action.className = "h-action " + e.action;
+      action.textContent = e.action === "assigned" ? "Assigned" : "Removed";
+      row.appendChild(action);
+
+      var pill = document.createElement("span");
+      pill.className = "pill-preview-mini";
+      pill.style.borderColor = p.border;
+      pill.style.color = p.text;
+      pill.style.background = p.fill;
+      pill.textContent = e.label_name;
+      row.appendChild(pill);
+
+      if (e.via && e.via !== "manual") {
+        var via = document.createElement("span");
+        via.className = "h-via";
+        via.textContent = e.via;
+        row.appendChild(via);
+      }
+
+      var meta = document.createElement("span");
+      meta.className = "h-meta";
+      var when = e.at ? formatHistoryDate(e.at) : "";
+      var whenFull = e.at ? formatHistoryDateLong(e.at) : "";
+      var whoFull = e.actor_name || "Unknown";
+      var whoShort = abbreviateActor(whoFull);
+      meta.textContent = when ? (whoShort + " · " + when) : whoShort;
+      // Hover tooltip: full first/last name + long-form date with seconds.
+      meta.title = whenFull ? (whoFull + " · " + whenFull) : whoFull;
+      row.appendChild(meta);
+
+      list.appendChild(row);
+    });
+  }
+
+  // ---------- TAB 1: ASSIGN ----------
+  function matchesSearch(label) {
+    if (!searchQuery) return true;
+    var q = searchQuery.toLowerCase();
+    return (label.name || "").toLowerCase().indexOf(q) >= 0
+        || (label.description || "").toLowerCase().indexOf(q) >= 0;
+  }
+
+  function renderPills() {
+    var grid = document.getElementById("pillGrid");
+    grid.innerHTML = "";
+
+    // Assigned section: ALL assigned labels (regardless of context). Pills not
+    // assignable from this context render as locked. Available section: only
+    // labels assignable from this context AND not already assigned. Search
+    // filters both.
+    var assignedLabels = LABELS.filter(function(l) {
+      return ASSIGNED_IDS.has(l.id) && matchesSearch(l);
+    });
+    var availableLabels = LABELS.filter(function(l) {
+      return !ASSIGNED_IDS.has(l.id) && l[CONTEXT_FLAG] && matchesSearch(l);
+    });
+
+    if (!assignedLabels.length && !availableLabels.length && !LABELS.length) {
+      grid.innerHTML = '<div class="empty-state">No labels yet. <a id="goManage">Create your first label</a> to get started.</div>';
+      var go = document.getElementById("goManage");
+      if (go) go.addEventListener("click", function() { setTab("manage"); });
+      return;
+    }
+
+    // Assigned (drop-zone). Heading row: ASSIGNED N (left) — View history (right).
+    var assigned = document.createElement("div");
+    assigned.className = "pill-section assigned";
+    var assignedHeading = document.createElement("div");
+    assignedHeading.className = "section-heading";
+    assignedHeading.style.justifyContent = "space-between";
+    assignedHeading.innerHTML =
+      '<span style="display:inline-flex; align-items:center; gap:8px;">' +
+        'Assigned <span class="count">' + assignedLabels.length + '</span>' +
+      '</span>' +
+      '<button type="button" class="history-link" id="viewHistoryBtn">View history</button>';
+    assigned.appendChild(assignedHeading);
+    assignedHeading.querySelector("#viewHistoryBtn").addEventListener("click", openHistoryView);
+    if (assignedLabels.length) {
+      renderLabelSection(assigned, assignedLabels, "assigned");
+    } else {
+      var hint = document.createElement("div");
+      hint.style.cssText = "font-size:12px; color:var(--neutral-400); padding:4px 0;";
+      hint.textContent = searchQuery ? "No assigned tags match your search." : "No tags assigned yet — pick from below.";
+      assigned.appendChild(hint);
+    }
+    grid.appendChild(assigned);
+
+    // Available
+    if (availableLabels.length) {
+      var available = document.createElement("div");
+      available.className = "pill-section available";
+      var availHeading = document.createElement("div");
+      availHeading.className = "section-heading";
+      availHeading.innerHTML = 'Available <span class="count">' + availableLabels.length + '</span>';
+      available.appendChild(availHeading);
+      renderLabelSection(available, availableLabels, "available");
+      grid.appendChild(available);
+    }
+  }
+
+  function renderLabelSection(container, labels, mode) {
+    // Bucket labels: by banner group first (preserves visual cue that they
+    // share a banner), then by color for unbannered ones.
+    var knownGroupIds = {};
+    GROUPS.forEach(function(g) { knownGroupIds[String(g.id)] = true; });
+    var byBannerGroup = {}; var byColor = {};
+    labels.forEach(function(label) {
+      var key = label.banner_group_id ? String(label.banner_group_id) : "";
+      if (key && knownGroupIds[key]) (byBannerGroup[key] = byBannerGroup[key] || []).push(label);
+      else (byColor[label.color] = byColor[label.color] || []).push(label);
+    });
+    GROUPS.forEach(function(g) {
+      var rowLabels = byBannerGroup[String(g.id)];
+      if (rowLabels && rowLabels.length) appendPillRow(container, rowLabels, mode);
+    });
+    Object.keys(PALETTE).forEach(function(color) {
+      var rowLabels = byColor[color];
+      if (rowLabels && rowLabels.length) appendPillRow(container, rowLabels, mode);
+    });
+  }
+
+  function appendPillRow(container, labels, mode) {
+    var row = document.createElement("div");
+    row.className = "pill-row";
+    labels.forEach(function(label) { row.appendChild(makePill(label, mode)); });
+    container.appendChild(row);
+  }
+
+  function makePill(label, mode) {
+    var p = PALETTE[label.color] || PALETTE["blue"];
+    var locked = !label[CONTEXT_FLAG];
+    var pill = document.createElement("div");
+    pill.className = "pill " + mode + (locked ? " locked" : "");
+    pill.style.borderColor = p.border;
+    pill.style.color = p.text;
+    pill.style.background = mode === "assigned" ? p.fill : "transparent";
+
+    if (mode === "available") {
+      var prefix = document.createElement("span");
+      prefix.className = "pill-prefix"; prefix.innerHTML = iconPlus(10);
+      pill.appendChild(prefix);
+    }
+
+    var nameSpan = document.createElement("span");
+    nameSpan.textContent = label.name;
+    pill.appendChild(nameSpan);
+
+    if (label.description) {
+      var info = document.createElement("span");
+      info.className = "info-icon";
+      info.textContent = "i";
+      info.style.borderColor = p.border;
+      info.style.color = p.text;
+      info.addEventListener("mouseenter", function(e) { showTooltip(e.currentTarget, label.description); });
+      info.addEventListener("mouseleave", hideTooltip);
+      pill.appendChild(info);
+    }
+
+    if (mode === "assigned" && !locked) {
+      var x = document.createElement("span");
+      x.className = "pill-suffix"; x.innerHTML = iconX(10);
+      x.title = "Remove tag";
+      x.addEventListener("click", function(e) {
+        e.stopPropagation();
+        ASSIGNED_IDS.delete(label.id);
+        renderPills();
+      });
+      pill.appendChild(x);
+    }
+
+    if (locked) {
+      pill.style.opacity = "0.7";
+      pill.style.cursor = "not-allowed";
+      pill.title = "Set this from the " + OTHER_CONTEXT_LABEL + " view";
+    }
+
+    if (mode === "available" && !locked) {
+      pill.addEventListener("click", function(e) {
+        if (e.target.classList.contains("info-icon")) return;
+        ASSIGNED_IDS.add(label.id);
+        renderPills();
+      });
+    }
+    return pill;
+  }
+
+  // ---------- TAB 2: MANAGE LABELS ----------
+  function renderManageList() {
+    var wrap = document.getElementById("manageList");
+    wrap.innerHTML = "";
+    if (!LABELS.length) {
+      wrap.innerHTML = '<div class="empty-state">No labels yet — click "+ New Label" to create one.</div>';
+      return;
+    }
+
+    // Filter by current sub-tab: only labels assignable in the selected
+    // context. Replaces the inline Chart/Profile chips on each row.
+    var filterFlag = manageSubTab === "profile" ? "assignable_in_profile" : "assignable_in_chart";
+    var filtered = LABELS.filter(function(l) { return l[filterFlag]; });
+    if (!filtered.length) {
+      var contextName = manageSubTab === "profile" ? "Profile" : "Chart";
+      wrap.innerHTML = '<div class="empty-state">No labels assignable from ' + contextName +
+        '. Click "+ New Label" to create one, or edit an existing label to make it assignable from ' + contextName + '.</div>';
+      return;
+    }
+
+    // Group filtered labels by banner. Unbannered ones go in a "_none" bucket.
+    var groupsById = {}; GROUPS.forEach(function(g) { groupsById[String(g.id)] = g; });
+    var byGroup = {};
+    filtered.forEach(function(label) {
+      var key = label.banner_group_id && groupsById[String(label.banner_group_id)]
+        ? String(label.banner_group_id) : "_none";
+      (byGroup[key] = byGroup[key] || []).push(label);
+    });
+
+    function renderGroupCard(headerHtml, labels) {
+      var card = document.createElement("div");
+      card.className = "card";
+      var header = document.createElement("div");
+      header.className = "label-group-header";
+      header.innerHTML = headerHtml;
+      card.appendChild(header);
+      labels.forEach(function(label) { card.appendChild(makeLabelRow(label)); });
+      wrap.appendChild(card);
+    }
+
+    GROUPS.forEach(function(g) {
+      var labels = byGroup[String(g.id)];
+      if (!labels || !labels.length) return;
+      var headerHtml = '<span class="group-name">' + escapeHtml(g.name) + '</span>' +
+        '<span class="intent-badge ' + g.intent + '">' + g.intent + '</span>';
+      renderGroupCard(headerHtml, labels);
+    });
+    if (byGroup["_none"] && byGroup["_none"].length) {
+      renderGroupCard('<span class="no-banner">No banner</span>', byGroup["_none"]);
+    }
+  }
+
+  function makeLabelRow(label) {
+    var p = PALETTE[label.color] || PALETTE["blue"];
+    var row = document.createElement("div");
+    row.className = "card-row";
+
+    // Pill on the left, action icons on the right. Chart/Profile context is
+    // now established by the sub-tab — no per-row location chips needed.
+    var main = document.createElement("div");
+    main.className = "row-main";
+    var preview = document.createElement("span");
+    preview.className = "pill-preview-mini";
+    preview.style.borderColor = p.border;
+    preview.style.color = p.text;
+    preview.style.background = p.fill;
+    preview.textContent = label.name;
+    main.appendChild(preview);
+    row.appendChild(main);
+
+    var actions = document.createElement("div");
+    actions.className = "row-actions";
+    var editBtn = document.createElement("button");
+    editBtn.className = "icon-btn"; editBtn.title = "Edit"; editBtn.innerHTML = iconPencil();
+    editBtn.addEventListener("click", function() { startEdit(label); });
+    var delBtn = document.createElement("button");
+    delBtn.className = "icon-btn danger"; delBtn.title = "Delete"; delBtn.innerHTML = iconTrash();
+    delBtn.addEventListener("click", function() { deleteLabel(label); });
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    row.appendChild(actions);
+
+    return row;
+  }
+
+  function newLabelForm() {
+    // Default assignable flags follow the currently-active sub-tab so
+    // "New Label" from the Profile tab pre-checks Profile, etc.
+    var fromProfile = manageSubTab === "profile";
+    return {
+      name: "",
+      description: "",
+      color: "blue",
+      assignable_in_chart: !fromProfile,
+      assignable_in_profile: fromProfile,
+      banner_choice: "none",  // "none" | "existing:<id>" | "new"
+      new_group: { name: "", intent: "info", placements: ["CHART"], separator: DEFAULT_SEPARATOR, href: "" },
+      pending_rules: [],
+    };
+  }
+
+  function startNew() {
+    editingLabelId = null;
+    formState = newLabelForm();
+    renderForm();
+  }
+
+  function startEdit(label) {
+    editingLabelId = label.id;
+    formState = {
+      name: label.name,
+      description: label.description || "",
+      color: label.color,
+      assignable_in_chart: label.assignable_in_chart,
+      assignable_in_profile: label.assignable_in_profile,
+      banner_choice: label.banner_group_id ? ("existing:" + label.banner_group_id) : "none",
+      new_group: { name: "", intent: "info", placements: ["CHART"], separator: DEFAULT_SEPARATOR, href: "" },
+      pending_rules: [],
+    };
+    renderForm();
+  }
+
+  function cancelForm() {
+    editingLabelId = null;
+    document.getElementById("labelFormWrap").innerHTML = "";
+  }
+
+  function renderForm() {
+    var wrap = document.getElementById("labelFormWrap");
+    wrap.innerHTML = "";
+    var card = document.createElement("div");
+    card.className = "form-card";
+    card.innerHTML =
+      '<div class="form-card-title">' +
+        '<span>' + (editingLabelId ? "Edit Label" : "New Label") + '</span>' +
+        '<span id="f_preview" class="preview-pill"></span>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label class="field-label">Name</label>' +
+        '<input type="text" id="f_name" maxlength="60">' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label class="field-label">Description <span class="optional-hint">(optional)</span></label>' +
+        '<textarea id="f_desc" rows="2" placeholder="Shown when hovering the info icon on the pill"></textarea>' +
+        '<div class="char-counter" id="f_desc_count">0 / ' + DESCRIPTION_MAX + '</div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label class="field-label">Color</label>' +
+        '<div class="swatch-grid" id="f_swatches"></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label class="field-label">Assignable from</label>' +
+        '<div class="toggle-pill-row">' +
+          '<button type="button" class="toggle-pill" id="f_chart">Chart</button>' +
+          '<button type="button" class="toggle-pill" id="f_profile">Profile</button>' +
+        '</div>' +
+        '<div class="field-hint">Where clinicians can add or remove this tag. Once assigned, the tag is visible in both views.</div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<label class="field-label">Banner</label>' +
+        '<select id="f_banner"></select>' +
+        '<div id="f_group_wrap"></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
+          '<label class="field-label" style="margin-bottom:0;">Rules</label>' +
+          '<button type="button" class="btn btn-secondary btn-sm" id="f_add_rule_toggle">' + iconPlus() + '<span>Add Rule</span></button>' +
+        '</div>' +
+        '<div id="f_rules_wrap" style="display:flex; flex-direction:column;"></div>' +
+        '<div id="f_add_rule_form" style="display:none;"></div>' +
+        '<div class="field-hint">When this label is manually assigned, automatically assign or remove other labels. Single pass — rule-induced changes do not re-trigger rules.</div>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">' +
+        '<button class="btn" id="f_cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="f_save">' + (editingLabelId ? "Save Changes" : "Create Label") + '</button>' +
+      '</div>';
+    wrap.appendChild(card);
+
+    document.getElementById("f_name").value = formState.name;
+    document.getElementById("f_desc").value = formState.description;
+
+    renderSwatches();
+    renderTogglePills();
+    renderBannerDropdown();
+    renderPreviewPill();
+    updateDescCount();
+    renderGroupSubform();
+    refreshRulesUI();
+
+    document.getElementById("f_name").addEventListener("input", function(e) {
+      formState.name = e.target.value; renderPreviewPill();
+    });
+    document.getElementById("f_desc").addEventListener("input", function(e) {
+      formState.description = e.target.value; updateDescCount();
+    });
+    document.getElementById("f_banner").addEventListener("change", function(e) {
+      formState.banner_choice = e.target.value; renderGroupSubform();
+    });
+    document.getElementById("f_cancel").addEventListener("click", cancelForm);
+    document.getElementById("f_save").addEventListener("click", saveLabelForm);
+    document.getElementById("f_add_rule_toggle").addEventListener("click", function() {
+      var f = document.getElementById("f_add_rule_form");
+      f.style.display = f.style.display === "none" ? "" : "none";
+    });
+
+    // Scroll to the form so the user sees it immediately, regardless of where
+    // the panel was scrolled when "+ New label" was clicked.
+    wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+    var nameInput = document.getElementById("f_name");
+    if (nameInput && !editingLabelId) nameInput.focus();
+  }
+
+  function renderTogglePills() {
+    var chart = document.getElementById("f_chart");
+    var profile = document.getElementById("f_profile");
+    chart.classList.toggle("active", !!formState.assignable_in_chart);
+    profile.classList.toggle("active", !!formState.assignable_in_profile);
+    chart.onclick = function() {
+      formState.assignable_in_chart = !formState.assignable_in_chart;
+      renderTogglePills();
+    };
+    profile.onclick = function() {
+      formState.assignable_in_profile = !formState.assignable_in_profile;
+      renderTogglePills();
+    };
+  }
+
+  function renderPreviewPill() {
+    var el = document.getElementById("f_preview");
+    if (!el) return;
+    var p = PALETTE[formState.color] || PALETTE["blue"];
+    el.style.borderColor = p.border;
+    el.style.color = p.text;
+    el.style.background = p.fill;
+    el.textContent = formState.name || "Preview";
+  }
+
+  function renderSwatches() {
+    var sw = document.getElementById("f_swatches");
+    sw.innerHTML = "";
+    Object.keys(PALETTE).forEach(function(name) {
+      var p = PALETTE[name];
+      var s = document.createElement("div");
+      s.className = "swatch" + (formState.color === name ? " selected" : "");
+      s.title = name;
+      s.style.background = p.fill;
+      s.style.boxShadow = "inset 0 0 0 1.5px " + p.border;
+      s.addEventListener("click", function() {
+        formState.color = name;
+        renderSwatches();
+        renderPreviewPill();
+      });
+      sw.appendChild(s);
+    });
+  }
+
+  function renderBannerDropdown() {
+    var sel = document.getElementById("f_banner");
+    sel.innerHTML = "";
+    sel.appendChild(opt("none", "None"));
+    GROUPS.forEach(function(g) {
+      sel.appendChild(opt("existing:" + g.id, g.name + " (" + g.intent + ")"));
+    });
+    sel.appendChild(opt("new", "+ Create new banner"));
+    sel.value = formState.banner_choice;
+  }
+
+  function opt(value, label) {
+    var o = document.createElement("option");
+    o.value = value; o.textContent = label;
+    return o;
+  }
+
+  function renderGroupSubform() {
+    var wrap = document.getElementById("f_group_wrap");
+    wrap.innerHTML = "";
+    if (formState.banner_choice !== "new") return;
+    var card = document.createElement("div");
+    card.className = "group-subform";
+    card.innerHTML =
+      '<div class="form-card-title">New Banner</div>' +
+      '<div class="form-row"><label class="field-label">Banner name</label><input type="text" id="g_name"></div>' +
+      '<div class="form-row"><label class="field-label">Style</label><div class="checkbox-row" id="g_intent_row"></div></div>' +
+      '<div class="form-row"><label class="field-label">Show in</label><div class="checkbox-row" id="g_placements"></div></div>' +
+      '<div class="form-row"><label class="field-label">Separator (when multiple labels in this banner)</label><input type="text" id="g_sep"></div>' +
+      '<div class="form-row"><label class="field-label">Link URL <span class="optional-hint">(optional)</span></label><input type="text" id="g_href" placeholder="https://..."></div>';
+    wrap.appendChild(card);
+
+    document.getElementById("g_name").value = formState.new_group.name;
+    document.getElementById("g_sep").value = formState.new_group.separator;
+    document.getElementById("g_href").value = formState.new_group.href;
+
+    var intentRow = document.getElementById("g_intent_row");
+    VALID_INTENTS.forEach(function(intent) {
+      var l = document.createElement("label");
+      l.innerHTML = '<input type="radio" name="g_intent" value="' + intent + '"' +
+        (formState.new_group.intent === intent ? " checked" : "") + '> ' +
+        intent.charAt(0).toUpperCase() + intent.slice(1);
+      l.querySelector("input").addEventListener("change", function() { formState.new_group.intent = intent; });
+      intentRow.appendChild(l);
+    });
+    var placeRow = document.getElementById("g_placements");
+    VALID_PLACEMENTS.forEach(function(place) {
+      var l = document.createElement("label");
+      l.innerHTML = '<input type="checkbox" value="' + place + '"' +
+        (formState.new_group.placements.indexOf(place) >= 0 ? " checked" : "") + '> ' +
+        prettyPlacement(place);
+      l.querySelector("input").addEventListener("change", function(e) {
+        var p = formState.new_group.placements;
+        if (e.target.checked) { if (p.indexOf(place) < 0) p.push(place); }
+        else { formState.new_group.placements = p.filter(function(x) { return x !== place; }); }
+      });
+      placeRow.appendChild(l);
+    });
+    document.getElementById("g_name").addEventListener("input", function(e) { formState.new_group.name = e.target.value; });
+    document.getElementById("g_sep").addEventListener("input", function(e) { formState.new_group.separator = e.target.value; });
+    document.getElementById("g_href").addEventListener("input", function(e) { formState.new_group.href = e.target.value; });
+  }
+
+  function prettyPlacement(p) {
+    return p.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  }
+
+  function updateDescCount() {
+    var el = document.getElementById("f_desc_count");
+    var len = formState.description.length;
+    el.textContent = len + " / " + DESCRIPTION_MAX;
+    el.classList.toggle("over", len > DESCRIPTION_MAX);
+  }
+
+  // ---------- API CALLS ----------
+  function saveLabelForm() {
+    var btn = document.getElementById("f_save");
+    btn.disabled = true;
+    setStatus("");
+
+    var doSave = Promise.resolve(null);
+    if (formState.banner_choice === "new") {
+      doSave = createGroup(formState.new_group).then(function(g) { return g.id; });
+    } else if (formState.banner_choice === "none") {
+      doSave = Promise.resolve(null);
+    } else {
+      doSave = Promise.resolve(parseInt(formState.banner_choice.split(":")[1], 10));
+    }
+
+    doSave.then(function(groupId) {
+      var payload = {
+        name: formState.name,
+        description: formState.description,
+        color: formState.color,
+        assignable_in_chart: formState.assignable_in_chart,
+        assignable_in_profile: formState.assignable_in_profile,
+        banner_group_id: groupId,
+      };
+      return editingLabelId
+        ? apiFetch("PATCH", "/labels/" + editingLabelId, payload)
+        : apiFetch("POST", "/labels", payload);
+    }).then(function(savedLabel) {
+      if (editingLabelId || !formState.pending_rules.length) return null;
+      var newLabelId = savedLabel && savedLabel.id;
+      if (!newLabelId) return null;
+      return formState.pending_rules.reduce(function(promise, rule) {
+        return promise.then(function() {
+          return apiFetch("POST", "/labels/" + newLabelId + "/rules", {
+            action: rule.action, target_label_id: rule.target_label_id,
+          });
+        });
+      }, Promise.resolve());
+    }).then(function() {
+      return reloadLabelsAndGroups();
+    }).then(function() {
+      cancelForm();
+      renderManageList();
+      renderPills();
+      setStatus("Label saved.", "success");
+    }).catch(function(err) {
+      setStatus(err.message || "Save failed.", "error");
+    }).then(function() {
+      btn.disabled = false;
+    });
+  }
+
+  function createGroup(g) { return apiFetch("POST", "/banner-groups", g); }
+
+  // ---------- RULES ----------
+  function refreshRulesUI() {
+    var wrap = document.getElementById("f_rules_wrap");
+    if (!wrap) return;
+    if (editingLabelId) {
+      wrap.innerHTML = '<div style="font-size:12px; color:var(--neutral-400);">Loading rules…</div>';
+      apiFetch("GET", "/labels/" + editingLabelId + "/rules", null)
+        .then(function(resp) { renderRulesList(resp.rules || []); })
+        .catch(function(err) {
+          wrap.innerHTML = '<div style="font-size:12px; color:var(--danger);">Failed to load rules: ' + escapeHtml(err.message || "") + '</div>';
+        });
+    } else {
+      renderRulesList(formState.pending_rules);
+    }
+  }
+
+  function renderRulesList(rules) {
+    var wrap = document.getElementById("f_rules_wrap");
+    var formWrap = document.getElementById("f_add_rule_form");
+    if (!wrap || !formWrap) return;
+    wrap.innerHTML = "";
+
+    rules.forEach(function(rule, idx) {
+      var row = document.createElement("div");
+      row.className = "rules-row";
+      var targetName = rule.target_label_name;
+      if (!targetName) {
+        var lookup = LABELS.filter(function(l) { return l.id === rule.target_label_id; })[0];
+        targetName = lookup ? lookup.name : ("label #" + rule.target_label_id);
+      }
+      var span = document.createElement("span");
+      span.className = "rule-text";
+      span.innerHTML = '<strong>' + escapeHtml(RULE_ACTION_LABELS[rule.action] || rule.action) + '</strong>: ' + escapeHtml(targetName);
+      row.appendChild(span);
+      var del = document.createElement("button");
+      del.className = "icon-btn danger"; del.title = "Remove rule"; del.innerHTML = iconX(12);
+      del.addEventListener("click", function() {
+        if (editingLabelId) deleteRuleViaApi(rule.id);
+        else removePendingRule(idx);
+      });
+      row.appendChild(del);
+      wrap.appendChild(row);
+    });
+
+    // Add-rule form (toggled by the section header + button).
+    formWrap.innerHTML = "";
+    var add = document.createElement("div");
+    add.className = "rules-add";
+    var actionSel = document.createElement("select");
+    VALID_RULE_ACTIONS.forEach(function(action) {
+      var o = document.createElement("option");
+      o.value = action; o.textContent = RULE_ACTION_LABELS[action] || action;
+      actionSel.appendChild(o);
+    });
+    var targetSel = document.createElement("select");
+    var emptyOpt = document.createElement("option");
+    emptyOpt.value = ""; emptyOpt.textContent = "Target Label";
+    targetSel.appendChild(emptyOpt);
+    LABELS.forEach(function(l) {
+      if (l.id === editingLabelId) return;
+      var o = document.createElement("option");
+      o.value = String(l.id); o.textContent = l.name;
+      targetSel.appendChild(o);
+    });
+    var addBtn = document.createElement("button");
+    addBtn.className = "btn btn-sm";
+    addBtn.textContent = "Add";
+    addBtn.addEventListener("click", function() {
+      var action = actionSel.value;
+      var targetId = parseInt(targetSel.value, 10);
+      if (!targetId) { setStatus("Pick a target label.", "error"); return; }
+      var opposing = action === "auto_assign" ? "auto_remove" : "auto_assign";
+      var conflict = rules.some(function(r) {
+        return r.target_label_id === targetId && r.action === opposing;
+      });
+      if (conflict) {
+        setStatus(
+          "Conflict: There is already an " + RULE_ACTION_LABELS[opposing] + " rule for that label. " +
+          "Remove the existing rule first.",
+          "error"
+        );
+        return;
+      }
+      addBtn.disabled = true;
+      if (editingLabelId) {
+        apiFetch("POST", "/labels/" + editingLabelId + "/rules", {
+          action: action, target_label_id: targetId,
+        })
+          .then(function() { refreshRulesUI(); setStatus("Rule added.", "success"); })
+          .catch(function(err) { setStatus(err.message || "Add rule failed.", "error"); })
+          .then(function() { addBtn.disabled = false; });
+      } else {
+        formState.pending_rules.push({ action: action, target_label_id: targetId });
+        addBtn.disabled = false;
+        refreshRulesUI();
+        setStatus("Rule queued — will save with the label.", "success");
+      }
+    });
+    add.appendChild(actionSel);
+    add.appendChild(targetSel);
+    add.appendChild(addBtn);
+    formWrap.appendChild(add);
+  }
+
+  function removePendingRule(idx) {
+    formState.pending_rules.splice(idx, 1);
+    refreshRulesUI();
+  }
+
+  function deleteRuleViaApi(ruleId) {
+    apiFetch("DELETE", "/rules/" + ruleId, null)
+      .then(function() { refreshRulesUI(); setStatus("Rule removed.", "success"); })
+      .catch(function(err) { setStatus(err.message || "Remove failed.", "error"); });
+  }
+
+  function deleteLabel(label) {
+    if (!confirm('Delete label "' + label.name + '"?')) return;
+    apiFetch("DELETE", "/labels/" + label.id, null)
+      .then(reloadLabelsAndGroups)
+      .then(function() {
+        ASSIGNED_IDS.delete(label.id);
+        renderManageList();
+        renderPills();
+        setStatus("Label deleted.", "success");
+      })
+      .catch(function(err) { setStatus(err.message || "Delete failed.", "error"); });
+  }
+
+  function savePatientAssignments() {
+    var btn = document.getElementById("savePatientBtn");
+    if (btn) btn.disabled = true;
+    setStatus("Saving…");
+    var ids = Array.from(ASSIGNED_IDS);
+    apiFetch("POST", "/patients/" + PATIENT_ID + "/labels", { label_ids: ids })
+      .then(function() {
+        // Reload the parent page — closes the pane, re-renders the Tags
+        // button with fresh count/color, refreshes banners and chart summary.
+        try { window.top.location.reload(); } catch (e) { window.location.reload(); }
+      })
+      .catch(function(err) {
+        setStatus(err.message || "Save failed.", "error");
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  function reloadLabelsAndGroups() {
+    return Promise.all([
+      apiFetch("GET", "/labels", null),
+      apiFetch("GET", "/banner-groups", null),
+    ]).then(function(results) {
+      LABELS = results[0].labels || [];
+      GROUPS = results[1].groups || [];
+    });
+  }
+
+  // ---------- TAB 3: BANNERS ----------
+  function newBannerForm() {
+    return { name: "", intent: "info", placements: ["CHART"], separator: DEFAULT_SEPARATOR, href: "" };
+  }
+  function startNewBanner() { editingBannerId = null; bannerFormState = newBannerForm(); renderBannerForm(); }
+  function startEditBanner(group) {
+    editingBannerId = group.id;
+    bannerFormState = {
+      name: group.name, intent: group.intent,
+      placements: group.placements.slice(),
+      separator: group.separator, href: group.href || "",
+    };
+    renderBannerForm();
+  }
+  function cancelBannerForm() {
+    editingBannerId = null;
+    document.getElementById("bannerFormWrap").innerHTML = "";
+  }
+
+  function renderBannersList() {
+    var wrap = document.getElementById("bannersList");
+    wrap.innerHTML = "";
+    if (!GROUPS.length) {
+      wrap.innerHTML = '<div class="empty-state">No banners yet — click "+ New Banner" to create one.</div>';
+      return;
+    }
+    var card = document.createElement("div");
+    card.className = "card";
+    GROUPS.forEach(function(g) {
+      var row = document.createElement("div");
+      row.className = "card-row banner-row";
+
+      // Top-left: title.
+      var title = document.createElement("span");
+      title.className = "b-title card-row-title";
+      title.textContent = g.name;
+      row.appendChild(title);
+
+      // Top-right: intent badge (aligned with title).
+      var intent = document.createElement("span");
+      intent.className = "b-intent intent-badge " + g.intent;
+      intent.textContent = g.intent;
+      row.appendChild(intent);
+
+      // Bottom-left: label count + optional link.
+      var meta = document.createElement("div");
+      meta.className = "b-meta card-row-meta";
+      var count = (g.label_count || 0);
+      var metaHtml = count + ' label' + (count === 1 ? '' : 's');
+      if (g.href) {
+        metaHtml += ' · <a href="' + escapeHtml(g.href) + '" target="_blank" rel="noopener" style="color:var(--neutral-700); text-decoration:underline;">link</a>';
+      }
+      meta.innerHTML = metaHtml;
+      row.appendChild(meta);
+
+      // Bottom-right: action icons (aligned with label count).
+      var actions = document.createElement("div");
+      actions.className = "b-actions row-actions";
+      var editBtn = document.createElement("button");
+      editBtn.className = "icon-btn"; editBtn.title = "Edit"; editBtn.innerHTML = iconPencil();
+      editBtn.addEventListener("click", function() { startEditBanner(g); });
+      var delBtn = document.createElement("button");
+      delBtn.className = "icon-btn danger"; delBtn.title = "Delete"; delBtn.innerHTML = iconTrash();
+      delBtn.addEventListener("click", function() { deleteBanner(g); });
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      row.appendChild(actions);
+
+      card.appendChild(row);
+    });
+    wrap.appendChild(card);
+  }
+
+  function renderBannerForm() {
+    var wrap = document.getElementById("bannerFormWrap");
+    wrap.innerHTML = "";
+    var card = document.createElement("div");
+    card.className = "form-card";
+    card.innerHTML =
+      '<div class="form-card-title">' + (editingBannerId ? "Edit Banner" : "New Banner") + '</div>' +
+      '<div class="form-row"><label class="field-label">Banner name</label><input type="text" id="b_name"></div>' +
+      '<div class="form-row"><label class="field-label">Style</label><div class="checkbox-row" id="b_intent_row"></div></div>' +
+      '<div class="form-row"><label class="field-label">Show in</label><div class="checkbox-row" id="b_placements"></div></div>' +
+      '<div class="form-row"><label class="field-label">Separator (when multiple labels share this banner)</label><input type="text" id="b_sep"></div>' +
+      '<div class="form-row"><label class="field-label">Link URL <span class="optional-hint">(optional)</span></label><input type="text" id="b_href" placeholder="https://..."></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">' +
+        '<button class="btn" id="b_cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="b_save">' + (editingBannerId ? "Save Changes" : "Create Banner") + '</button>' +
+      '</div>';
+    wrap.appendChild(card);
+
+    document.getElementById("b_name").value = bannerFormState.name;
+    document.getElementById("b_sep").value = bannerFormState.separator;
+    document.getElementById("b_href").value = bannerFormState.href;
+
+    var intentRow = document.getElementById("b_intent_row");
+    VALID_INTENTS.forEach(function(intent) {
+      var l = document.createElement("label");
+      l.innerHTML = '<input type="radio" name="b_intent" value="' + intent + '"' +
+        (bannerFormState.intent === intent ? " checked" : "") + '> ' +
+        intent.charAt(0).toUpperCase() + intent.slice(1);
+      l.querySelector("input").addEventListener("change", function() { bannerFormState.intent = intent; });
+      intentRow.appendChild(l);
+    });
+    var placeRow = document.getElementById("b_placements");
+    VALID_PLACEMENTS.forEach(function(place) {
+      var l = document.createElement("label");
+      l.innerHTML = '<input type="checkbox" value="' + place + '"' +
+        (bannerFormState.placements.indexOf(place) >= 0 ? " checked" : "") + '> ' +
+        prettyPlacement(place);
+      l.querySelector("input").addEventListener("change", function(e) {
+        var p = bannerFormState.placements;
+        if (e.target.checked) { if (p.indexOf(place) < 0) p.push(place); }
+        else { bannerFormState.placements = p.filter(function(x) { return x !== place; }); }
+      });
+      placeRow.appendChild(l);
+    });
+
+    document.getElementById("b_name").addEventListener("input", function(e) { bannerFormState.name = e.target.value; });
+    document.getElementById("b_sep").addEventListener("input", function(e) { bannerFormState.separator = e.target.value; });
+    document.getElementById("b_href").addEventListener("input", function(e) { bannerFormState.href = e.target.value; });
+    document.getElementById("b_cancel").addEventListener("click", cancelBannerForm);
+    document.getElementById("b_save").addEventListener("click", saveBannerForm);
+
+    wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+    var bNameInput = document.getElementById("b_name");
+    if (bNameInput && !editingBannerId) bNameInput.focus();
+  }
+
+  function saveBannerForm() {
+    var btn = document.getElementById("b_save");
+    btn.disabled = true;
+    setStatus("");
+    var payload = {
+      name: bannerFormState.name, intent: bannerFormState.intent,
+      placements: bannerFormState.placements,
+      separator: bannerFormState.separator, href: bannerFormState.href,
+    };
+    var req = editingBannerId
+      ? apiFetch("PATCH", "/banner-groups/" + editingBannerId, payload)
+      : apiFetch("POST", "/banner-groups", payload);
+    req.then(reloadLabelsAndGroups).then(function() {
+      cancelBannerForm();
+      renderBannersList();
+      renderManageList();
+      setStatus("Banner saved.", "success");
+    }).catch(function(err) {
+      setStatus(err.message || "Save failed.", "error");
+    }).then(function() { btn.disabled = false; });
+  }
+
+  function deleteBanner(group) {
+    var msg = 'Delete banner "' + group.name + '"?';
+    if (group.label_count > 0) {
+      msg += '\n\n' + group.label_count + ' label' + (group.label_count === 1 ? '' : 's') +
+        ' will become non-banner labels (still visible in the modal, no banner emitted).';
+    }
+    if (!confirm(msg)) return;
+    apiFetch("DELETE", "/banner-groups/" + group.id, null)
+      .then(reloadLabelsAndGroups)
+      .then(function() {
+        renderBannersList();
+        renderManageList();
+        setStatus("Banner deleted.", "success");
+      })
+      .catch(function(err) { setStatus(err.message || "Delete failed.", "error"); });
+  }
+
+  // ---------- HELPERS ----------
+  function apiFetch(method, path, body) {
+    var opts = { method: method, headers: {"Content-Type": "application/json"}, credentials: "same-origin" };
+    if (body !== null && body !== undefined) opts.body = JSON.stringify(body);
+    return fetch(API + path, opts).then(function(resp) {
+      return resp.text().then(function(text) {
+        var data = null;
+        if (text) { try { data = JSON.parse(text); } catch (e) {} }
+        if (!resp.ok) {
+          var msg = (data && data.error) ? data.error : (resp.statusText || ("HTTP " + resp.status));
+          throw new Error(msg);
+        }
+        return data || {};
+      });
+    });
+  }
+
+  function setStatus(msg, kind) {
+    var el = document.getElementById("status");
+    el.textContent = msg || "";
+    el.className = "status footer-left" + (kind ? " " + kind : "");
+    if (msg) setTimeout(function() {
+      if (el.textContent === msg) el.textContent = "";
+    }, 4000);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c];
+    });
+  }
+
+  // ---------- TOOLTIP ----------
+  var tooltipEl = null;
+  function ensureTooltipEl() {
+    if (tooltipEl) return tooltipEl;
+    tooltipEl = document.createElement("div");
+    tooltipEl.id = "tagTooltip";
+    document.body.appendChild(tooltipEl);
+    return tooltipEl;
+  }
+  function showTooltip(anchor, text) {
+    var el = ensureTooltipEl();
+    el.textContent = text;
+    el.classList.add("visible");
+    var rect = anchor.getBoundingClientRect();
+    el.style.left = "-9999px"; el.style.top = "-9999px";
+    el.dataset.pos = "above";
+    var tipRect = el.getBoundingClientRect();
+    var margin = 8;
+    var spaceAbove = rect.top;
+    var pos = (spaceAbove >= tipRect.height + margin) ? "above" : "below";
+    el.dataset.pos = pos;
+    var top = (pos === "above") ? rect.top - tipRect.height - margin : rect.bottom + margin;
+    var anchorCenter = rect.left + rect.width / 2;
+    var left = anchorCenter - tipRect.width / 2;
+    var maxLeft = window.innerWidth - tipRect.width - 8;
+    if (left < 8) left = 8;
+    if (left > maxLeft) left = maxLeft;
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    var arrowX = anchorCenter - left;
+    arrowX = Math.max(10, Math.min(tipRect.width - 10, arrowX));
+    el.style.setProperty("--arrow-x", arrowX + "px");
+  }
+  function hideTooltip() {
+    if (tooltipEl) tooltipEl.classList.remove("visible");
+  }
+
+  // ---------- FOOTER ----------
+  function renderFooter() {
+    var el = document.getElementById("footerActions");
+    el.innerHTML = "";
+    if (activeTab === "assign") {
+      var cancel = document.createElement("button");
+      cancel.className = "btn"; cancel.textContent = "Cancel";
+      cancel.addEventListener("click", function() {
+        try { window.top.location.reload(); } catch (e) { window.location.reload(); }
+      });
+      el.appendChild(cancel);
+      var save = document.createElement("button");
+      save.id = "savePatientBtn"; save.className = "btn btn-primary"; save.textContent = "Save Tags";
+      save.addEventListener("click", savePatientAssignments);
+      el.appendChild(save);
+    }
+  }
+
+  // ---------- INIT ----------
+  document.getElementById("newLabelBtn").innerHTML = iconPlus() + '<span>New Label</span>';
+  document.getElementById("newBannerBtn").innerHTML = iconPlus() + '<span>New Banner</span>';
+  document.getElementById("newLabelBtn").addEventListener("click", startNew);
+  document.getElementById("newBannerBtn").addEventListener("click", startNewBanner);
+  document.getElementById("searchInput").addEventListener("input", function(e) {
+    searchQuery = e.target.value || "";
+    renderPills();
+  });
+  document.getElementById("historyBackBtn").addEventListener("click", closeHistoryView);
+  // Role-gated visibility: ask the API if the current user may see Manage
+  // Labels / Manage Banners tabs. If MANAGE_TABS_ROLES secret is empty/unset
+  // the API returns true for everyone, so by default no one is hidden.
+  apiFetch("GET", "/me/can-manage", null)
+    .then(function(resp) {
+      if (resp && resp.can_manage === false) {
+        document.querySelectorAll('.tab[data-tab="manage"], .tab[data-tab="banners"]')
+          .forEach(function(t) { t.style.display = "none"; });
+        if (activeTab !== "assign") setTab("assign");
+      }
+    })
+    .catch(function() { /* fail-open: leave tabs visible if the check errors */ });
+
+  document.querySelectorAll("#manageSubtabs .subtab").forEach(function(t) {
+    t.addEventListener("click", function() {
+      manageSubTab = t.dataset.subtab;
+      document.querySelectorAll("#manageSubtabs .subtab").forEach(function(x) {
+        x.classList.toggle("active", x.dataset.subtab === manageSubTab);
+      });
+      renderManageList();
+    });
+  });
+  renderPills();
+  renderManageList();
+  renderBannersList();
+  renderFooter();
+</script>
+</body>
+</html>
