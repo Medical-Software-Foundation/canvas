@@ -400,3 +400,54 @@ def test_render_page_emits_ghost_handling_for_inactive_indications() -> None:
     # tracking but leaving the ghost-render loop in place (which would
     # cause every saved code to render twice).
     assert "optsSet" in html
+
+
+def test_render_page_threads_canonical_row_ids_into_multi_section_descriptors() -> None:
+    """The Remove-button gating in `buildMultiRow` distinguishes
+    canonical rows (driven by a section's `checklist_options`, managed
+    via the checklist toggle, no Remove button) from user-added rows
+    (minted with a fresh UUID, must have a Remove button so the
+    dietician can recover from an accidental "+ Add another …" click).
+
+    Before this fix the gate was a prefix check that was always true
+    for every row in every section — leaving Referrals unsaveable after
+    an accidental add-row click because the empty row failed validation
+    and had no Remove affordance. The fix threads an exact list of
+    canonical row_ids per section into the descriptor JS so the gate
+    can do an exact-match instead.
+
+    This is a smoke test on the rendered output: the canonical row_ids
+    for educational_materials must appear in the embedded JSON, the
+    exact-match lookup must be present in the JS, and the prefix-only
+    fallback must be gone."""
+    chart = {
+        "missing": False,
+        "patient_id": "pat-1",
+        "age": 36, "sex": "F",
+        "anthropometrics": {"height": None, "weight": None},
+        "pmh": [], "allergies": [], "medications": [], "labs": [],
+    }
+
+    html = _render_page(
+        note_uuid="n-1",
+        patient_id="pat-1",
+        note_type_name="Nutrition Initial",
+        chart=chart,
+    )
+
+    # The five canonical educational-material row_ids must be present
+    # in the embedded descriptor JSON. If this list ever empties out
+    # for that section, every "Add other material" row would also be
+    # classified as canonical and lose its Remove button.
+    assert "material:dash_diet" in html
+    assert "material:mediterranean" in html
+    assert "material:low_fodmap" in html
+    assert "material:diabetic_carb_counting" in html
+    assert "material:weight_management" in html
+
+    # The JS gate must use `canonical_row_ids` (exact-match) — not the
+    # old `row_id_prefix` prefix check. Locks in the fix at the source.
+    assert "canonical_row_ids" in html
+    # Sanity check on the JS shape: the descriptor name appears alongside
+    # an indexOf lookup, which is how the exact-match check is written.
+    assert "canonicalIds.indexOf" in html

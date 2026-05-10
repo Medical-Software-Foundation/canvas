@@ -552,10 +552,25 @@ def _render_page(*, note_uuid: str, patient_id: str, note_type_name: str, chart:
                 # Per-patient options threaded in at render time.
                 field_descriptor["options"] = list(pmh_options)
             descriptor_fields.append(field_descriptor)
+        # `canonical_row_ids` is the exact set of row_ids minted from a
+        # section's `checklist_options` (e.g. `material:dash_diet` for the
+        # five canonical educational-materials handouts). User-added rows
+        # use the same prefix but with a fresh UUID, so a prefix-only
+        # check can't tell them apart — every row would be misclassified
+        # as canonical and never get a Remove button. Listing the exact
+        # canonical row_ids lets the client gate the Remove affordance
+        # correctly: empty list for goals/referrals (every row removable)
+        # and the five `material:<key>` strings for educational_materials.
+        prefix = section.get("row_id_prefix", section_id)
+        canonical_row_ids = [
+            f"{prefix}:{value}"
+            for value, _label in (section.get("checklist_options") or [])
+        ]
         multi_section_descriptors[section_id] = {
-            "row_id_prefix": section.get("row_id_prefix", section_id),
+            "row_id_prefix": prefix,
             "row_fields": descriptor_fields,
             "required_fields": list(section.get("required_fields", [])),
+            "canonical_row_ids": canonical_row_ids,
         }
     multi_sections_js = _json_for_script(multi_section_descriptors)
     note_uuid_js = repr(note_uuid)  # safely-quoted JS string literal
@@ -1235,7 +1250,14 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 1
       wrapper.appendChild(fieldDiv);
     }});
 
-    var canonical = String(rowId).indexOf(descriptor.row_id_prefix + ":") === 0;
+    // Exact-match against the canonical row_ids list, not a prefix
+    // check. The prefix check was always true for user-added rows
+    // (they share the prefix and only differ by the trailing UUID),
+    // so no row ever got a Remove button — leaving Referrals rows
+    // unsaveable after an accidental "+ Add another referral" click,
+    // and forcing a note reload (with loss of unsaved work) to recover.
+    var canonicalIds = descriptor.canonical_row_ids || [];
+    var canonical = canonicalIds.indexOf(String(rowId)) !== -1;
     if (!canonical) {{
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
