@@ -58,5 +58,5 @@
     "references": [],
     "license": "",
     "diagram": false,
-    "readme": "./README.md"
+    "readme": "../README.md"
 }

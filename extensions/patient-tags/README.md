@@ -15,7 +15,9 @@ Designed for clinic operations, intake, scheduling, billing, and care-management
 
 ## Screenshots
 
-<!-- TODO: add screenshots before merge — at minimum the chart header with Tags button + modal open with assigned pills. -->
+The "Tags" action button lives in the patient chart header. Clicking it opens a right-pane modal with three tabs: **Patient Tags** for assigning labels to the patient, **Manage Labels** for the label catalog, and **Manage Banners** for the banner-group configuration. Labels that belong to a banner group surface as a colored alert in the chart sidebar (here, the blue "Pending Intake forms" banner on the left).
+
+![Patient Tags modal showing one assigned label with banner alert visible in the chart sidebar](./screenshots/tags-modal.png)
 
 ## Installation
 
