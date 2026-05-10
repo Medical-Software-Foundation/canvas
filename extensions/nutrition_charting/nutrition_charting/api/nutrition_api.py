@@ -31,8 +31,10 @@ from canvas_sdk.handlers.simple_api import (
 from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 from canvas_sdk.v1.data import ServiceProvider as ServiceProviderRecord
 from canvas_sdk.v1.data.note import Note
+from django.db import DatabaseError
 from django.db.models import Q
 from logger import log
+from pydantic import ValidationError
 
 # Cap typeahead results so the dropdown stays bounded and the query stays cheap.
 _REFER_SEARCH_LIMIT = 20
@@ -220,14 +222,7 @@ def _structured_assessment_effects(
         effects.append(cmd.originate())
         _record_originated_command(note_uuid, section_id, command_uuid)
 
-    try:
-        questions = list(cmd.questions or [])
-    except Exception as exc:
-        log.error(
-            f"[NutritionChartingAPI] could not resolve questions for "
-            f"section={section_id}: {exc!r}"
-        )
-        return effects
+    questions = list(cmd.questions or [])
 
     for idx, (field_id, _label) in enumerate(field_defs):
         if idx >= len(questions):
@@ -236,9 +231,13 @@ def _structured_assessment_effects(
         text = "" if raw is None else str(raw).strip()
         if not text:
             continue
+        # `add_response` validates the response against the question's
+        # pydantic schema; tolerate per-field validation rejection so one
+        # malformed answer doesn't kill the entire section save. Anything
+        # else (AttributeError, TypeError) propagates so Sentry sees it.
         try:
             questions[idx].add_response(text=text)
-        except Exception as exc:
+        except ValidationError as exc:
             log.warning(
                 f"[NutritionChartingAPI] add_response failed for "
                 f"section={section_id} field={field_id}: {exc!r}"
@@ -406,11 +405,18 @@ class NutritionChartingAPI(StaffSessionAuthMixin, SimpleAPI):
     def auto_populate(self) -> list[Response | Effect]:
         patient_id = self.request.query_params.get("patient_id", "")
         log.info(f"[NutritionChartingAPI] auto-populate patient_id={patient_id}")
+        # `Patient.DoesNotExist` is handled inside `build_chart_review`;
+        # this catch is narrowed to ORM-level errors so AttributeError /
+        # TypeError / ImportError after a refactor reach Sentry instead of
+        # being swallowed as a generic "auto_populate_failed".
         try:
             cache: dict[str, Any] = {}
             data = build_chart_review(patient_id, cache=cache)
-        except Exception as exc:
-            log.error(f"[NutritionChartingAPI] auto-populate failed: {exc!r}")
+        except DatabaseError as exc:
+            log.error(
+                f"[NutritionChartingAPI] auto-populate failed: {exc!r}",
+                exc_info=True,
+            )
             return [_json(
                 {"success": False, "error": "auto_populate_failed"},
                 HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -563,10 +569,17 @@ class PrintNutritionNoteAPI(SimpleAPI):
         patient_id = self.request.query_params.get("patient_id", "")
         note_id = self.request.query_params.get("note_id", "")
         log.info(f"[PrintNutritionNoteAPI] render patient={patient_id} note={note_id}")
+        # Narrow to ORM-level errors so AttributeError / TypeError /
+        # ImportError after a refactor surface in Sentry instead of being
+        # rendered as a "render failed" page indistinguishable from a
+        # transient DB hiccup.
         try:
             payload = build_print_payload(note_id, patient_id)
-        except Exception as exc:
-            log.error(f"[PrintNutritionNoteAPI] payload assembly failed: {exc!r}")
+        except DatabaseError as exc:
+            log.error(
+                f"[PrintNutritionNoteAPI] payload assembly failed: {exc!r}",
+                exc_info=True,
+            )
             return [HTMLResponse(
                 _print_error_page(str(exc)), status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             )]

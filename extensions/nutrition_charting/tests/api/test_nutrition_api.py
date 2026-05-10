@@ -11,6 +11,7 @@ import pytest
 from canvas_generated.messages.effects_pb2 import EffectType
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin
 from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
+from django.db import DatabaseError
 
 
 def _effect_name(effect: Any) -> str:
@@ -277,7 +278,9 @@ def test_auto_populate_returns_chart_payload(mock_build: MagicMock) -> None:
 
 @patch("nutrition_charting.api.nutrition_api.build_chart_review")
 def test_auto_populate_returns_500_on_chart_extraction_failure(mock_build: MagicMock) -> None:
-    mock_build.side_effect = RuntimeError("DB went away")
+    # `auto_populate` only catches `DatabaseError` (everything else
+    # propagates so Sentry sees it). Simulate a transient ORM error.
+    mock_build.side_effect = DatabaseError("DB went away")
     api_inst = _make_api(NutritionChartingAPI, query_params={"patient_id": "pat-1"})
 
     responses = api_inst.auto_populate()
@@ -286,6 +289,19 @@ def test_auto_populate_returns_500_on_chart_extraction_failure(mock_build: Magic
     body = json.loads(responses[0].content)
     assert body["success"] is False
     assert body["error"] == "auto_populate_failed"
+
+
+@patch("nutrition_charting.api.nutrition_api.build_chart_review")
+def test_auto_populate_propagates_non_db_errors_to_sentry(mock_build: MagicMock) -> None:
+    """Bugs (AttributeError after a refactor, etc.) must NOT be swallowed by
+    the handler — they need to bubble up to the SimpleAPI framework so the
+    logging integration captures them in Sentry. Locks in the narrowed
+    catch from the broad-except cleanup."""
+    mock_build.side_effect = AttributeError("renamed field")
+    api_inst = _make_api(NutritionChartingAPI, query_params={"patient_id": "pat-1"})
+
+    with pytest.raises(AttributeError):
+        api_inst.auto_populate()
 
 
 # ============================================================================
@@ -1228,9 +1244,11 @@ def test_print_api_index_renders_without_practice_secrets(mock_build: MagicMock)
 
 @patch("nutrition_charting.api.nutrition_api.build_print_payload")
 def test_print_api_index_returns_500_on_payload_failure(mock_build: MagicMock) -> None:
-    """If payload assembly throws (e.g. note_uuid invalid), the API returns
-    a 500 with a fallback HTML error page rather than an opaque blank modal."""
-    mock_build.side_effect = RuntimeError("DB blew up")
+    """On a transient DB error during payload assembly, the API returns a 500
+    with a fallback HTML error page rather than an opaque blank modal. Real
+    bugs (AttributeError etc.) propagate so they reach Sentry — see
+    `test_print_api_index_propagates_non_db_errors_to_sentry`."""
+    mock_build.side_effect = DatabaseError("DB blew up")
     api_inst = _make_api(
         PrintNutritionNoteAPI,
         query_params={"patient_id": "pat-7", "note_id": "bad"},
@@ -1242,4 +1260,15 @@ def test_print_api_index_returns_500_on_payload_failure(mock_build: MagicMock) -
     raw = responses[0].content
     body = raw.decode() if isinstance(raw, bytes) else raw
     assert "render failed" in body
-    assert "DB blew up" in body
+
+
+@patch("nutrition_charting.api.nutrition_api.build_print_payload")
+def test_print_api_index_propagates_non_db_errors_to_sentry(mock_build: MagicMock) -> None:
+    mock_build.side_effect = AttributeError("renamed field")
+    api_inst = _make_api(
+        PrintNutritionNoteAPI,
+        query_params={"patient_id": "pat-7", "note_id": "bad"},
+    )
+
+    with pytest.raises(AttributeError):
+        api_inst.index()

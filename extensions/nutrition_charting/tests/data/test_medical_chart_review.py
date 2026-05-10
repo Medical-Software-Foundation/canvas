@@ -94,6 +94,16 @@ def test_anthropometrics_returns_latest_height_and_weight(mock_obs: MagicMock) -
 
     out = mcr.get_anthropometrics("pat-1")
 
+    # Locks in the `entered_in_error__isnull=True` filter on Observation —
+    # without it, a retracted height/weight could pre-fill the form and be
+    # re-emitted as a VitalsCommand on save.
+    mock_obs.objects.filter.assert_called_once_with(
+        patient__id="pat-1",
+        codings__code__in=["8302-2", "29463-7"],
+        codings__system="http://loinc.org",
+        deleted=False,
+        entered_in_error__isnull=True,
+    )
     assert out["height"] == "67"
     assert out["weight"] == "165"
     assert out["height_units"] == "in"
@@ -126,8 +136,13 @@ def test_pmh_returns_active_conditions_with_codings(mock_cond: MagicMock) -> Non
     out = mcr.get_pmh("pat-1")
 
     mock_cond.objects.for_patient.assert_called_once_with("pat-1")
+    # Locks in the `entered_in_error__isnull=True` filter — without it,
+    # retracted conditions surface in the chart review and become
+    # selectable indications on emitted Refer commands.
     mock_cond.objects.for_patient.return_value.filter.assert_called_once_with(
-        clinical_status="active", deleted=False,
+        clinical_status="active",
+        deleted=False,
+        entered_in_error__isnull=True,
     )
     qs.prefetch_related.assert_called_once_with("codings")
     assert [c["display"] for c in out] == [
@@ -159,6 +174,12 @@ def test_allergies_uses_display_or_falls_back_to_narrative(mock_a: MagicMock) ->
 
     out = mcr.get_allergies("pat-1")
 
+    # Locks in the `entered_in_error__isnull=True` filter on AllergyIntolerance.
+    mock_a.objects.for_patient.return_value.filter.assert_called_once_with(
+        status="active",
+        deleted=False,
+        entered_in_error__isnull=True,
+    )
     qs.prefetch_related.assert_called_once_with("codings")
     assert [a["display"] for a in out] == ["Peanut", "Shellfish (anaphylaxis)"]
     assert out[0]["severity"] == "severe"
@@ -202,6 +223,12 @@ def test_recent_labs_returns_latest_per_loinc_within_window(mock_obs: MagicMock)
     ]
 
     out = mcr.get_recent_nutrition_labs("pat-1", today=date(2026, 5, 4))
+
+    # Locks in the `entered_in_error__isnull=True` filter on Observation —
+    # without it, retracted lab values could anchor a nutrition plan.
+    filter_kwargs = mock_obs.objects.filter.call_args.kwargs
+    assert filter_kwargs["deleted"] is False
+    assert filter_kwargs["entered_in_error__isnull"] is True
 
     assert [lab["code"] for lab in out] == ["4548-4", "2093-3"]
     assert out[0]["label"] == "Hemoglobin A1c"

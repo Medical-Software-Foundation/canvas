@@ -13,6 +13,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import NoteApplication
 from canvas_sdk.v1.data.note import Note
+from django.db import DatabaseError
 from logger import log
 
 from nutrition_charting.data.medical_chart_review import build_chart_review
@@ -121,13 +122,22 @@ class NutritionChartingApp(NoteApplication):
 def _safe_chart_review(
     patient_id: str, *, cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Never let a chart-extraction error block the tab from rendering."""
+    """Degrade gracefully on transient DB errors so the tab still renders.
+
+    `Patient.DoesNotExist` is handled inside `build_chart_review` and surfaces
+    as `{"missing": True}`. Anything other than a `DatabaseError` (e.g.
+    AttributeError after a model field rename) propagates so Sentry sees it
+    instead of the dietician seeing a silently empty chart-review section.
+    """
     if not patient_id:
         return {"missing": True, "patient_id": ""}
     try:
         return build_chart_review(patient_id, cache=cache)
-    except Exception as exc:
-        log.error(f"[NutritionChartingApp] chart review failed: {exc!r}")
+    except DatabaseError as exc:
+        log.error(
+            f"[NutritionChartingApp] chart review failed: {exc!r}",
+            exc_info=True,
+        )
         return {"missing": True, "patient_id": patient_id, "error": str(exc)}
 
 

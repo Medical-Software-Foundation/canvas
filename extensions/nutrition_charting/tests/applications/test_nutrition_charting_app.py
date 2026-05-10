@@ -2,7 +2,9 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from canvas_sdk.handlers.application import NoteApplication
+from django.db import DatabaseError
 
 from nutrition_charting.applications.nutrition_charting_app import (
     NutritionChartingApp,
@@ -139,14 +141,30 @@ def test_handle_html_includes_note_uuid_and_patient_id(
 def test_handle_falls_back_safely_when_chart_review_raises(
     mock_note_cls: MagicMock, mock_build: MagicMock,
 ) -> None:
+    """Transient DB errors during chart extraction must not kill the tab —
+    the modal still renders with a 'patient chart not loaded' message."""
     mock_note_cls.objects.select_related.return_value.get.return_value = _mock_note()
-    mock_build.side_effect = RuntimeError("DB blew up")
+    mock_build.side_effect = DatabaseError("DB blew up")
 
     effects = NutritionChartingApp(event=_mock_event(patient_id="pat-1")).handle()
 
-    # Should still produce a modal — chart errors must not kill the tab
     assert len(effects) == 1
     assert "Nutrition" in effects[0].payload
+
+
+@patch("nutrition_charting.applications.nutrition_charting_app.build_chart_review")
+@patch("nutrition_charting.applications.nutrition_charting_app.Note")
+def test_handle_propagates_non_db_errors_so_sentry_sees_them(
+    mock_note_cls: MagicMock, mock_build: MagicMock,
+) -> None:
+    """A bug like AttributeError after a model field rename must NOT be
+    swallowed by `_safe_chart_review`'s narrowed catch — it has to bubble
+    up so Sentry's logging integration captures it."""
+    mock_note_cls.objects.select_related.return_value.get.return_value = _mock_note()
+    mock_build.side_effect = AttributeError("renamed field")
+
+    with pytest.raises(AttributeError):
+        NutritionChartingApp(event=_mock_event(patient_id="pat-1")).handle()
 
 
 # ---- _render_chart_review_section ----

@@ -109,6 +109,7 @@ def get_anthropometrics(patient_id: str) -> dict[str, Any]:
             codings__code__in=[HEIGHT_LOINC, WEIGHT_LOINC],
             codings__system=LOINC_SYSTEM,
             deleted=False,
+            entered_in_error__isnull=True,
         )
         .order_by("-effective_datetime")
         .values("codings__code", "value", "units", "effective_datetime")
@@ -143,7 +144,11 @@ def get_pmh(patient_id: str) -> list[dict[str, str]]:
     """Active conditions (PMH). Returns ICD-10/SNOMED codings + display."""
     conditions = (
         Condition.objects.for_patient(patient_id)
-        .filter(clinical_status="active", deleted=False)
+        .filter(
+            clinical_status="active",
+            deleted=False,
+            entered_in_error__isnull=True,
+        )
         .order_by("-onset_date")
         # Prefetch codings so `_first_coding(c)` reads from the cache rather
         # than firing a per-condition `.first()` query (was an N+1 pattern).
@@ -168,7 +173,11 @@ def get_pmh(patient_id: str) -> list[dict[str, str]]:
 def get_allergies(patient_id: str) -> list[dict[str, str]]:
     allergies = (
         AllergyIntolerance.objects.for_patient(patient_id)
-        .filter(status="active", deleted=False)
+        .filter(
+            status="active",
+            deleted=False,
+            entered_in_error__isnull=True,
+        )
         .prefetch_related("codings")
     )
     out: list[dict[str, str]] = []
@@ -236,6 +245,7 @@ def get_recent_nutrition_labs(
             codings__code__in=list(NUTRITION_LAB_LOINCS.keys()),
             codings__system=LOINC_SYSTEM,
             deleted=False,
+            entered_in_error__isnull=True,
             effective_datetime__gte=since,
         )
         .order_by("-effective_datetime")

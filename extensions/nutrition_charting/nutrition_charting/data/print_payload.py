@@ -20,6 +20,7 @@ from typing import Any
 
 from canvas_sdk.v1.data.note import Note
 from canvas_sdk.v1.data.patient import Patient
+from django.db import DatabaseError
 from logger import log
 
 from nutrition_charting.data.form_state import get_form_state
@@ -219,12 +220,19 @@ def _monitor_team_meeting(sections: dict[str, Any]) -> dict[str, Any]:
 def _safe_chart_review(
     patient_id: str, *, cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Degrade gracefully on transient DB errors so the print modal still
+    renders. `Patient.DoesNotExist` is handled inside `build_chart_review`;
+    anything other than `DatabaseError` propagates so Sentry sees it.
+    """
     if not patient_id:
         return {"missing": True}
     try:
         return build_chart_review(patient_id, cache=cache)
-    except Exception as exc:
-        log.error(f"[print_payload] chart review failed: {exc!r}")
+    except DatabaseError as exc:
+        log.error(
+            f"[print_payload] chart review failed: {exc!r}",
+            exc_info=True,
+        )
         return {"missing": True, "error": str(exc)}
 
 
