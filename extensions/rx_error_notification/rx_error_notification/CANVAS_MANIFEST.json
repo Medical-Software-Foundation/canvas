@@ -2,7 +2,7 @@
     "sdk_version": "0.123.1",
     "plugin_version": "0.2.1",
     "name": "rx_error_notification",
-    "description": "Creates a task assigned to the prescriber when a prescription returns an error status",
+    "description": "Alerts prescribers to failed prescriptions by automatically creating a task assigned to them when a prescription returns an error status, so prescription failures never fall through the cracks.",
     "tags": {},
     "license": "MIT",
     "readme": "../README.md",

@@ -1,7 +1,7 @@
 [project]
 name = "rx-error-notification"
 version = "0.0.1"
-description = "Creates a task assigned to the prescriber when a prescription returns an error status"
+description = "Alerts prescribers to failed prescriptions by automatically creating a task assigned to them when a prescription returns an error status, so prescription failures never fall through the cracks."
 authors = [{ name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com" }]
 license = "MIT"
 readme = "README.md"
