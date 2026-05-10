@@ -466,9 +466,13 @@ class NutritionChartingAPI(StaffSessionAuthMixin, SimpleAPI):
     def save_section(self) -> list[Response | Effect]:
         section = self.request.query_params.get("section", "")
         note_uuid = self.request.query_params.get("note_id", "")
+        # `request.json()` raises `json.JSONDecodeError` (a `ValueError`
+        # subclass) on malformed payloads. Narrowed to `ValueError` so any
+        # other failure (AttributeError on a renamed attr, etc.) propagates
+        # to Sentry instead of getting silently 400'd as "invalid_json".
         try:
             body = self.request.json()
-        except Exception:
+        except ValueError:
             return [_json(
                 {"success": False, "error": "invalid_json"},
                 HTTPStatus.BAD_REQUEST,
