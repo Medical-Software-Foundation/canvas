@@ -615,6 +615,8 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 1
 
 .nc-checkbox {{ display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }}
 .nc-checkbox--inline {{ margin-right: 14px; }}
+.nc-checkbox--ghost {{ color: #999; font-style: italic; }}
+.nc-checkbox--ghost input[type=checkbox] {{ accent-color: #999; }}
 .nc-checklist {{ display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 6px 0; }}
 
 .nc-multi-rows {{ display: flex; flex-direction: column; gap: 8px; }}
@@ -1138,11 +1140,27 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 1
         var saved = Array.isArray(values[field.id]) ? values[field.id] : [];
         var savedSet = {{}};
         saved.forEach(function(v) {{ savedSet[v] = true; }});
+        // Track which option values appear in the canonical option list
+        // (current active PMH for the referrals row's "indications"
+        // field). Saved values absent from msOpts are "ghost" entries
+        // — codes that were active when the dietician originally
+        // selected them but whose underlying chart entry has since
+        // been retracted (entered_in_error) or resolved. Without
+        // explicit handling, those codes have no DOM checkbox, so
+        // collectMultiSection silently drops them on the next save —
+        // corrupting the committed Refer command's diagnosis_codes
+        // (or deleting the whole command if all indications drop).
+        // Render them as checked "(no longer active)" checkboxes so
+        // the dietician sees what's on the row and can deliberately
+        // uncheck to remove; otherwise the collector rolls the value
+        // back up unchanged.
+        var optsSet = {{}};
+        msOpts.forEach(function(opt) {{ optsSet[opt.value] = true; }});
         var msContainer = document.createElement("div");
         msContainer.className = "nc-checklist nc-multiselect";
         msContainer.setAttribute("data-row-field", field.id);
         msContainer.setAttribute("data-row-field-kind", "multiselect");
-        if (msOpts.length === 0) {{
+        if (msOpts.length === 0 && saved.length === 0) {{
           var empty = document.createElement("p");
           empty.className = "nc-empty";
           empty.textContent = "No active conditions on record.";
@@ -1160,6 +1178,21 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 1
             optLabel.appendChild(optCb);
             optLabel.appendChild(optSpan);
             msContainer.appendChild(optLabel);
+          }});
+          saved.forEach(function(v) {{
+            if (!v || optsSet[v]) return;
+            var ghostLabel = document.createElement("label");
+            ghostLabel.className =
+              "nc-checkbox nc-checkbox--inline nc-checkbox--ghost";
+            var ghostCb = document.createElement("input");
+            ghostCb.type = "checkbox";
+            ghostCb.value = v;
+            ghostCb.checked = true;
+            var ghostSpan = document.createElement("span");
+            ghostSpan.textContent = " " + v + " (no longer active)";
+            ghostLabel.appendChild(ghostCb);
+            ghostLabel.appendChild(ghostSpan);
+            msContainer.appendChild(ghostLabel);
           }});
         }}
         fieldDiv.appendChild(msContainer);

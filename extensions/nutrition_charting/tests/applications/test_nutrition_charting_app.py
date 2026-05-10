@@ -352,3 +352,51 @@ def test_render_page_escapes_script_close_in_pmh_for_js_context() -> None:
     # encoded — proves the escape was applied (not just the test data
     # being missing for some unrelated reason).
     assert "Hypertension\\u003c/script>\\u003cscript>alert(1)" in html
+
+
+def test_render_page_emits_ghost_handling_for_inactive_indications() -> None:
+    """The referrals row's `indications` multiselect renders options from
+    current active PMH only, but the saved row stores a list of ICD-10
+    codes. If a previously-selected condition is later retracted or
+    resolved, the saved code has no DOM checkbox and the next save would
+    silently strip the code from the committed Refer command (or delete
+    the whole command if all indications drop). The render embeds JS
+    that handles this case by drawing a checked "(no longer active)"
+    ghost checkbox for any saved value not in the canonical option list,
+    so `collectMultiSection` rolls the value back up on save.
+
+    This is a smoke test that only verifies the ghost-handling code
+    is present in the rendered JS — the actual checkbox is drawn at
+    runtime after `loadFormState` returns the saved row values. End-
+    to-end coverage requires a Canvas sandbox with a retracted
+    Condition; this test guards against the fix being accidentally
+    removed during refactors."""
+    chart = {
+        "missing": False,
+        "patient_id": "pat-1",
+        "age": 36, "sex": "F",
+        "anthropometrics": {"height": None, "weight": None},
+        "pmh": [{"display": "Hypertension", "code": "I10", "system": "icd-10"}],
+        "allergies": [], "medications": [], "labs": [],
+    }
+
+    html = _render_page(
+        note_uuid="n-1",
+        patient_id="pat-1",
+        note_type_name="Nutrition Initial",
+        chart=chart,
+    )
+
+    # The ghost-checkbox annotation string must appear in the embedded
+    # JS — proves the second-pass render for saved-but-not-in-msOpts
+    # codes is wired in. Without it, retracted indications drop
+    # silently on resave.
+    assert "(no longer active)" in html
+    # The CSS class hook for visually distinguishing ghost checkboxes
+    # must also be present so a future stylesheet tweak can target them.
+    assert "nc-checkbox--ghost" in html
+    # And the `optsSet` membership map that determines what counts as
+    # "ghost" must be built — guards against someone removing the set
+    # tracking but leaving the ghost-render loop in place (which would
+    # cause every saved code to render twice).
+    assert "optsSet" in html
