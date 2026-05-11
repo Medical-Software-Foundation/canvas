@@ -1,6 +1,8 @@
 # Patient Portal Membership
 
-A Canvas plugin that manages patient membership sign-up, recurring billing via Stripe, and cancellation — all driven from the patient portal.
+## What it does
+
+A Canvas plugin that manages patient membership sign-up, recurring billing via Stripe, and cancellation — all driven from the patient portal. Patients self-serve enrollment, card updates, and cancellation; providers see membership status on the chart banner; the daily billing cron handles recurring charges, retries, and auto-cancellation without leaving Canvas.
 
 ## Problem it solves
 
