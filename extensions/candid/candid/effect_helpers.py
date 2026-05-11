@@ -7,9 +7,10 @@ from typing import Any
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import BannerAlertIntent, ClaimEffect
 from canvas_sdk.v1.data import Claim
-from canvas_sdk.v1.data.claim import ClaimQueues
+from canvas_sdk.v1.data.claim import ClaimPayerOrder, ClaimQueues
 
 BANNER_KEY = "candid-clearinghouse-status"
+BANNER_NARRATIVE_MAX = 90
 
 META_SUBMITTED_AT = "candid_submitted_at"
 META_CLAIM_STATUS = "candid_claim_status"
@@ -23,7 +24,14 @@ META_SUBMISSION_ERROR = "candid_submission_error"
 PATIENT_COVERAGE_ID = "patient"
 DEFAULT_CLAIM_STATUS = "synced"
 DENIED_STATUSES = {"denied", "finalized_denied", "rejected", "failed"}
-MISSING_PAYER_ORDER = 99
+
+PAYER_ORDER_RANK = {
+    ClaimPayerOrder.PRIMARY: 1,
+    ClaimPayerOrder.SECONDARY: 2,
+    ClaimPayerOrder.TERTIARY: 3,
+    ClaimPayerOrder.QUATERNARY: 4,
+    ClaimPayerOrder.QUINARY: 5,
+}
 
 FAILURE_QUEUE = ClaimQueues.NEEDS_CODING_REVIEW
 SUCCESS_QUEUE = ClaimQueues.FILED_AWAITING_RESPONSE
@@ -49,22 +57,26 @@ def get_claim_metadata_set(claim: Claim, key: str) -> set[str]:
 def active_coverages_ordered(claim: Claim) -> list:
     """Return the claim's active coverages sorted by payer_order (primary first)."""
     return sorted(
-        (c for c in claim.coverages.all() if c.active),
-        key=lambda c: (
-            c.payer_order if c.payer_order is not None else MISSING_PAYER_ORDER
-        ),
+        claim.coverages.active(),
+        key=lambda c: PAYER_ORDER_RANK.get(c.payer_order, 99),
     )
+
+
+def format_date_display(date_str: str) -> str:
+    """Convert an ISO date string (YYYY-MM-DD...) to MM-DD-YYYY display format."""
+    y, m, d = date_str[:10].split("-")
+    return f"{m}-{d}-{y}"
 
 
 def submission_banner(
     claim_effect: ClaimEffect, submitted_at: str, split_count: int
 ) -> Effect:
-    date_display = submitted_at[:10]
+    date_display = format_date_display(submitted_at)
     splits_note = f" ({split_count} encounters)" if split_count > 1 else ""
     narrative = f"Candid: Submitted {date_display}{splits_note} | Awaiting response"
     return claim_effect.add_banner(
         key=BANNER_KEY,
-        narrative=narrative,
+        narrative=narrative[:BANNER_NARRATIVE_MAX],
         intent=BannerAlertIntent.INFO,
     )
 
@@ -75,13 +87,12 @@ def sync_banner(
     last_sync_at: str,
     submitted_at: str | None = None,
 ) -> Effect:
-    sync_date = last_sync_at[:10]
     status_display = claim_status.replace("_", " ").title()
 
     parts = [f"Candid: {status_display}"]
     if submitted_at:
-        parts.append(f"Submitted {submitted_at[:10]}")
-    parts.append(f"Last synced {sync_date}")
+        parts.append(f"Submitted {format_date_display(submitted_at)}")
+    parts.append(f"Last synced {format_date_display(last_sync_at)}")
 
     narrative = " | ".join(parts)
     intent = (
@@ -92,7 +103,7 @@ def sync_banner(
 
     return ClaimEffect(claim_id=claim_id).add_banner(
         key=BANNER_KEY,
-        narrative=narrative,
+        narrative=narrative[:BANNER_NARRATIVE_MAX],
         intent=intent,
     )
 
@@ -103,6 +114,7 @@ def claim_metadata(
     return [
         claim_effect.upsert_metadata(key=META_ENCOUNTERS, value=json.dumps(encounters)),
         claim_effect.upsert_metadata(key=META_SUBMITTED_AT, value=date_submitted),
+        claim_effect.upsert_metadata(key=META_SUBMISSION_ERROR, value=""),
     ]
 
 
@@ -112,24 +124,22 @@ def handle_submit_success(
     submitted_at: str,
     total_splits: int,
 ) -> list[Effect]:
-    date_display = submitted_at[:10]
+    date_display = format_date_display(submitted_at)
     splits_note = f" across {total_splits} encounters" if total_splits > 1 else ""
-    encounter_ids = (
-        ", ".join(
-            r["candid_encounter_id"]
-            for r in encounter_records
-            if r.get("candid_encounter_id")
-        )
-        or "(none)"
-    )
+    ids = [
+        r["candid_encounter_id"]
+        for r in encounter_records
+        if r.get("candid_encounter_id")
+    ]
+    label = "Encounter ID" if len(ids) <= 1 else "Encounter IDs"
+    encounter_ids = ", ".join(ids) or "(none)"
     comment = (
         f"Claim submitted to Candid on {date_display}{splits_note}. "
-        f"Encounter IDs: {encounter_ids}"
+        f"{label}: {encounter_ids}"
     )
 
     return [
         *claim_metadata(claim_effect, encounter_records, submitted_at),
-        claim_effect.upsert_metadata(key=META_SUBMISSION_ERROR, value=""),
         claim_effect.add_comment(comment=comment),
         submission_banner(claim_effect, submitted_at, total_splits),
         claim_effect.move_to_queue(SUCCESS_QUEUE.label),
@@ -144,7 +154,9 @@ def handle_submit_failure(claim_effect: ClaimEffect, comment: str) -> list[Effec
         claim_effect.upsert_metadata(key=META_SUBMISSION_ERROR, value=error_value),
         claim_effect.add_banner(
             key=BANNER_KEY,
-            narrative=f"Candid: Submission failed {date_display}",
+            narrative=f"Candid: Submission failed {date_display}"[
+                :BANNER_NARRATIVE_MAX
+            ],
             intent=BannerAlertIntent.WARNING,
         ),
         claim_effect.move_to_queue(FAILURE_QUEUE.label),

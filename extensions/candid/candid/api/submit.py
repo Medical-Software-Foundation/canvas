@@ -7,6 +7,7 @@ from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPIRoute
 from canvas_sdk.v1.data.claim import Claim, ClaimQueues
 from logger import log
 
+from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.api.payload_builder import build_split_payloads
 from candid.effect_helpers import (
@@ -55,6 +56,12 @@ class CandidSubmitAPI(SimpleAPIRoute):
         if not (claim := self._get_claim()):
             return []
 
+        claim_id = claim.id
+        effects = self._submit(claim)
+        effects.append(notify_claim_updated(str(claim_id)))
+        return effects
+
+    def _submit(self, claim: Claim) -> list[Effect]:
         claim_id = claim.id
         split_payloads = build_split_payloads(claim)
         claim_effect = ClaimEffect(claim_id=claim_id)

@@ -25,17 +25,20 @@ from candid.effect_helpers import (
 MAX_SYNC_HISTORY = 20
 
 
-def _get_posting_timestamps(claim: Claim) -> dict[str, str]:
-    """Map posting descriptions to their created timestamps.
+def _get_posting_info(claim: Claim) -> dict[str, dict]:
+    """Map posting descriptions to their created timestamps and paid amounts.
 
-    Returns ``{description: iso_timestamp}`` for all active Candid postings
-    on this claim (matched by description prefix).
+    Returns ``{description: {posted_at, paid_amount}}`` for all active Candid
+    postings on this claim (matched by description prefix).
     """
-    timestamps: dict[str, str] = {}
+    info: dict[str, dict] = {}
     for posting in claim.postings.active().filter(description__startswith="Candid "):
         if posting.description and posting.created:
-            timestamps[posting.description] = posting.created.isoformat()
-    return timestamps
+            info[posting.description] = {
+                "posted_at": posting.created.isoformat(),
+                "paid_amount": str(posting.paid_amount),
+            }
+    return info
 
 
 class CandidClaimDetailAPI(SimpleAPIRoute):
@@ -67,7 +70,7 @@ class CandidClaimDetailAPI(SimpleAPIRoute):
         )
         submission_error = get_claim_metadata(claim, META_SUBMISSION_ERROR)
 
-        posting_timestamps = _get_posting_timestamps(claim)
+        posting_info = _get_posting_info(claim)
 
         try:
             sync_history = [
@@ -113,18 +116,15 @@ class CandidClaimDetailAPI(SimpleAPIRoute):
                     "synced_era_ids": [
                         {
                             "id": eid,
-                            "posted_at": posting_timestamps.get(
-                                f"{ERA_DESC_PREFIX}{eid}"
-                            ),
+                            "posted_at": (posting_info.get(f"{ERA_DESC_PREFIX}{eid}") or {}).get("posted_at"),
                         }
                         for eid in synced_era_ids
                     ],
                     "synced_payment_ids": [
                         {
                             "id": pid,
-                            "posted_at": posting_timestamps.get(
-                                f"{PATIENT_PAYMENT_DESC_PREFIX}{pid}"
-                            ),
+                            "posted_at": (posting_info.get(f"{PATIENT_PAYMENT_DESC_PREFIX}{pid}") or {}).get("posted_at"),
+                            "paid_amount": (posting_info.get(f"{PATIENT_PAYMENT_DESC_PREFIX}{pid}") or {}).get("paid_amount"),
                         }
                         for pid in synced_payment_ids
                     ],

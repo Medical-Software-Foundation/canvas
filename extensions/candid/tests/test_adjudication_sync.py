@@ -37,7 +37,7 @@ def _fake_line_item(
     return li
 
 
-def _fake_coverage(coverage_id: str, payer_order: int) -> MagicMock:
+def _fake_coverage(coverage_id: str, payer_order: str) -> MagicMock:
     cov = MagicMock()
     cov.id = coverage_id
     cov.active = True
@@ -57,8 +57,9 @@ def _fake_claim(
     claim.get_active_claim_line_items.return_value = line_items
 
     if coverages is None:
-        coverages = [_fake_coverage("cov-primary", 0)]
+        coverages = [_fake_coverage("cov-primary", "Primary")]
     claim.coverages.all.return_value = coverages
+    claim.coverages.active.return_value = [c for c in coverages if c.active]
 
     stored_meta = metadata or {}
 
@@ -617,8 +618,8 @@ def test_sync_posts_secondary_insurance_payment() -> None:
     claim = _fake_claim(
         [li],
         coverages=[
-            _fake_coverage("cov-primary", 0),
-            _fake_coverage("cov-secondary", 1),
+            _fake_coverage("cov-primary", "Primary"),
+            _fake_coverage("cov-secondary", "Secondary"),
         ],
         metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
     )
@@ -655,9 +656,9 @@ def test_sync_posts_tertiary_insurance_payment() -> None:
     claim = _fake_claim(
         [li],
         coverages=[
-            _fake_coverage("cov-primary", 0),
-            _fake_coverage("cov-secondary", 1),
-            _fake_coverage("cov-tertiary", 2),
+            _fake_coverage("cov-primary", "Primary"),
+            _fake_coverage("cov-secondary", "Secondary"),
+            _fake_coverage("cov-tertiary", "Tertiary"),
         ],
         metadata={"candid_encounters": [{"candid_encounter_id": "enc-abc"}]},
     )

@@ -99,33 +99,22 @@ def test_submission_queue_schedules_delayed_http_request() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_patient_balance_triggers_sync_patient_payments() -> None:
+def test_patient_balance_schedules_async_patient_payment_sync() -> None:
     handler = _build_handler(queue_entered_id="queue-row-id", claim_id="claim-7")
-    fake_claim = MagicMock()
     with (
         _patch_queue_lookup(ClaimQueues.PATIENT_BALANCE),
-        patch("candid.handlers.on_queue_moved.Claim") as MockClaim,
-        patch(
-            "candid.handlers.on_queue_moved.sync_patient_payments",
-            return_value=["sync-effect"],
-        ) as mock_sync,
+        patch("candid.handlers.on_queue_moved.HttpRequestEffect") as MockHttp,
     ):
-        MockClaim.objects.filter.return_value.first.return_value = fake_claim
+        applied = MockHttp.return_value.apply.return_value
+        applied.set_async.return_value = "scheduled-sync"
 
         result = handler.compute()
 
-        assert result == ["sync-effect"]
-        mock_sync.assert_called_once_with(fake_claim, SECRETS)
-
-
-def test_patient_balance_with_missing_claim_returns_empty() -> None:
-    handler = _build_handler(queue_entered_id="queue-row-id", claim_id="claim-missing")
-    with (
-        _patch_queue_lookup(ClaimQueues.PATIENT_BALANCE),
-        patch("candid.handlers.on_queue_moved.Claim") as MockClaim,
-        patch("candid.handlers.on_queue_moved.sync_patient_payments") as mock_sync,
-    ):
-        MockClaim.objects.filter.return_value.first.return_value = None
-
-        assert handler.compute() == []
-        mock_sync.assert_not_called()
+        assert result == ["scheduled-sync"]
+        MockHttp.assert_called_once()
+        kwargs = MockHttp.call_args.kwargs
+        assert "/plugin-io/api/candid/sync-patient-payments" in kwargs["url"]
+        assert kwargs["method"] == "POST"
+        assert kwargs["headers"]["Authorization"] == "client-secret"
+        assert '"claim_id": "claim-7"' in kwargs["body"]
+        applied.set_async.assert_called_once_with(delay_seconds=0)

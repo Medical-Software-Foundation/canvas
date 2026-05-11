@@ -218,17 +218,19 @@ function render(d) {{
 
   // Synced payments (inbound — timestamp from actual posting created date)
   (d.synced_payment_ids || []).forEach(pmt => {{
+    const amt = pmt.paid_amount ? ` $${{pmt.paid_amount}}` : "";
     events.push({{
       type: "payment",
-      title: "Patient Payment Synced",
-      detail: pmt.id,
+      title: "Patient Payment Synced from Candid",
+      detail: `${{amt}} | payment_id=${{pmt.id}}`,
       time: pmt.posted_at || d.last_sync_at,
     }});
   }});
 
-  // Comments (already newest-first from API)
+  // Comments (skip failure comments — already shown via submission_error metadata)
   (d.comments || []).forEach(c => {{
     const isFailure = c.comment.toLowerCase().includes("failed") || c.comment.toLowerCase().includes("rejected");
+    if (isFailure && d.submission_error && d.submission_error.error) return;
     events.push({{
       type: isFailure ? "error" : "comment",
       title: isFailure ? "Submission Failed" : "Claim Comment",
@@ -242,7 +244,7 @@ function render(d) {{
     if (s.log_type === "payment_reported") {{
       events.push({{
         type: "payment",
-        title: "Patient Payment Reported",
+        title: "Patient Payment Reported to Candid",
         detail: s.detail,
         time: s.synced_at,
       }});
@@ -324,7 +326,6 @@ async function triggerSync() {{
     if (!resp.ok) throw new Error(`HTTP ${{resp.status}}`);
     const data = await resp.json();
     showToast(`Sync complete — ${{data.effects_count}} effects`, "success");
-    setTimeout(loadTimeline, 1000);
   }} catch (e) {{
     showToast(`Sync failed: ${{e.message}}`, "error");
   }} finally {{
@@ -341,9 +342,35 @@ function showToast(msg, type) {{
 }}
 
 loadTimeline();
-setInterval(() => {{
-  if (document.visibilityState === "visible") loadTimeline();
-}}, 10000);
+
+// Real-time updates via WebSocket (falls back to polling if WS fails)
+const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+const wsUrl = `${{wsProto}}//${{location.host}}/plugin-io/ws/candid/claim-${{CLAIM_ID}}/`;
+let ws;
+let pollInterval;
+
+function connectWs() {{
+  ws = new WebSocket(wsUrl);
+  ws.onmessage = () => loadTimeline();
+  ws.onclose = () => {{
+    // Fall back to polling if WS disconnects
+    if (!pollInterval) {{
+      pollInterval = setInterval(() => {{
+        if (document.visibilityState === "visible") loadTimeline();
+      }}, 10000);
+    }}
+    // Try to reconnect after 5s
+    setTimeout(connectWs, 5000);
+  }};
+  ws.onopen = () => {{
+    // Stop polling once WS is connected
+    if (pollInterval) {{
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }}
+  }};
+}}
+connectWs();
 </script>
 </body>
 </html>"""

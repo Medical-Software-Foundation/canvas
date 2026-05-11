@@ -3,10 +3,9 @@ import json
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.http_request import HttpRequestEffect
 from canvas_sdk.events import EventType
-from canvas_sdk.v1.data.claim import ClaimQueue, ClaimQueues, Claim
+from canvas_sdk.v1.data.claim import ClaimQueue, ClaimQueues
 from canvas_sdk.handlers import BaseHandler
 from logger import log
-from candid.adjudication_sync import sync_patient_payments
 
 SUBMISSION_QUEUE = ClaimQueues.QUEUED_FOR_SUBMISSION
 SYNC_TRIGGER_QUEUES = {ClaimQueues.PATIENT_BALANCE}
@@ -36,7 +35,7 @@ class OnClaimQueueMoved(BaseHandler):
             return self._schedule_submission()
 
         if queue_sort_ordering in SYNC_TRIGGER_QUEUES:
-            return self._sync_patient_payments()
+            return self._schedule_patient_payment_sync()
 
         return []
 
@@ -68,10 +67,23 @@ class OnClaimQueueMoved(BaseHandler):
             .set_async(delay_seconds=GRACE_PERIOD_SECONDS),
         ]
 
-    def _sync_patient_payments(self) -> list[Effect]:
-        """Fetch patient payments from Candid when claim enters Patient Balance."""
+    def _schedule_patient_payment_sync(self) -> list[Effect]:
+        """Schedule an async patient payment sync when claim enters Patient Balance."""
         claim_id = str(self.event.target.id)
-        claim = Claim.objects.filter(id=claim_id).first()
-        if not claim:
-            return []
-        return sync_patient_payments(claim, self.secrets)
+        instance_url = self._get_instance_url()
+
+        log.info(f"Candid plugin: scheduling patient payment sync for claim {claim_id}")
+
+        return [
+            HttpRequestEffect(
+                url=f"{instance_url}/plugin-io/api/candid/sync-patient-payments",
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": self.secrets["CANDID_CLIENT_SECRET"],
+                },
+                body=json.dumps({"claim_id": claim_id}),
+            )
+            .apply()
+            .set_async(delay_seconds=0),
+        ]

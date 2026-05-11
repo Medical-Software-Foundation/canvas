@@ -10,7 +10,7 @@ from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPIRoute
 from canvas_sdk.v1.data.claim import Claim
 from logger import log
 
-from candid.adjudication_sync import sync_claim_adjudications
+from candid.adjudication_sync import sync_claim_adjudications, sync_patient_payments
 
 
 class CandidSyncAPI(SimpleAPIRoute):
@@ -35,6 +35,33 @@ class CandidSyncAPI(SimpleAPIRoute):
         effects = sync_claim_adjudications(claim, self.secrets)
         log.info(
             f"Candid sync: triggered for claim {canvas_claim_id}, "
+            f"{len(effects)} effects generated"
+        )
+        return effects
+
+
+class CandidSyncPatientPaymentsAPI(SimpleAPIRoute):
+    """Trigger patient payment sync for a single claim (async from queue move)."""
+
+    PATH = "/sync-patient-payments"
+
+    def authenticate(self, credentials: APIKeyCredentials) -> bool:
+        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
+
+    def post(self) -> list[Response | Effect]:
+        body = self.request.json()
+        canvas_claim_id = body.get("claim_id")
+        if not canvas_claim_id:
+            return [JSONResponse({"error": "claim_id is required"}, status_code=400)]
+
+        claim = Claim.objects.filter(id=canvas_claim_id).first()
+        if not claim:
+            log.warning(f"Candid patient payment sync: claim {canvas_claim_id} not found")
+            return [JSONResponse({"error": "claim not found"}, status_code=404)]
+
+        effects = sync_patient_payments(claim, self.secrets)
+        log.info(
+            f"Candid patient payment sync: triggered for claim {canvas_claim_id}, "
             f"{len(effects)} effects generated"
         )
         return effects

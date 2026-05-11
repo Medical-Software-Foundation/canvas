@@ -18,6 +18,7 @@ from canvas_sdk.v1.data import Claim
 from canvas_sdk.v1.data.claim import ClaimQueues
 from logger import log
 
+from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.effect_helpers import (
     DEFAULT_CLAIM_STATUS,
@@ -547,6 +548,7 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     except Exception:
         log.warning(f"Candid sync: failed to write SyncLog for claim {canvas_claim_id}")
 
+    effects.append(notify_claim_updated(canvas_claim_id))
     return effects
 
 
@@ -633,4 +635,6 @@ def sync_patient_payments(claim: Claim, secrets: dict) -> list[Effect]:
         f"Candid sync: posted {len(attempted_payment_ids)} patient payments "
         f"for claim {canvas_claim_id}"
     )
+    if effects:
+        effects.append(notify_claim_updated(canvas_claim_id))
     return effects

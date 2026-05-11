@@ -94,6 +94,7 @@ def test_submit_validation_errors_route_to_failure_handler() -> None:
         patch("candid.api.submit.build_split_payloads") as mock_build,
         patch("candid.api.submit.handle_submit_failure") as mock_failure,
         patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.notify_claim_updated"),
     ):
         MockClaim.objects.filter.return_value.first.return_value = claim
         mock_build.return_value = [({}, ["Patient is missing", "DOB is missing"])]
@@ -102,7 +103,7 @@ def test_submit_validation_errors_route_to_failure_handler() -> None:
         handler = _build_handler(claim)
         result = handler.post()
 
-        assert result == ["failure-effect"]
+        assert result[0] == "failure-effect"
         mock_failure.assert_called_once()
         message = mock_failure.call_args[0][1]
         assert "Patient is missing" in message
@@ -127,6 +128,7 @@ def test_submit_success_for_single_payload() -> None:
         patch("candid.api.submit.build_split_payloads") as mock_build,
         patch("candid.api.submit.handle_submit_success") as mock_success,
         patch("candid.api.submit.handle_submit_failure") as mock_failure,
+        patch("candid.api.submit.notify_claim_updated"),
     ):
         MockClaim.objects.filter.return_value.first.return_value = claim
         mock_build.return_value = [(payload, [])]
@@ -137,7 +139,7 @@ def test_submit_success_for_single_payload() -> None:
         handler = _build_handler(claim)
         result = handler.post()
 
-        assert result == ["success-effect"]
+        assert result[0] == "success-effect"
         client.submit_claim.assert_called_once_with(payload)
         encounter_records = mock_success.call_args[0][1]
         assert len(encounter_records) == 1
@@ -160,6 +162,7 @@ def test_submit_success_for_multiple_splits() -> None:
         patch("candid.api.submit.CandidClient") as MC,
         patch("candid.api.submit.build_split_payloads") as mock_build,
         patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.notify_claim_updated"),
     ):
         MockClaim.objects.filter.return_value.first.return_value = claim
         mock_build.return_value = payloads
@@ -197,6 +200,7 @@ def test_submit_aborts_on_mid_split_failure() -> None:
         patch("candid.api.submit.build_split_payloads") as mock_build,
         patch("candid.api.submit.handle_submit_failure") as mock_failure,
         patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.notify_claim_updated"),
     ):
         MockClaim.objects.filter.return_value.first.return_value = claim
         mock_build.return_value = payloads
@@ -211,7 +215,7 @@ def test_submit_aborts_on_mid_split_failure() -> None:
         handler = _build_handler(claim)
         result = handler.post()
 
-        assert result == ["failure-effect"]
+        assert result[0] == "failure-effect"
         # Stopped after the second submit
         assert client.submit_claim.call_count == 2
         mock_success.assert_not_called()
@@ -229,6 +233,7 @@ def test_submit_handles_exception_during_submit_call() -> None:
         patch("candid.api.submit.CandidClient") as MC,
         patch("candid.api.submit.build_split_payloads") as mock_build,
         patch("candid.api.submit.handle_submit_failure") as mock_failure,
+        patch("candid.api.submit.notify_claim_updated"),
     ):
         MockClaim.objects.filter.return_value.first.return_value = claim
         mock_build.return_value = [({"external_id": "canvas:claim-1"}, [])]
@@ -239,6 +244,6 @@ def test_submit_handles_exception_during_submit_call() -> None:
         handler = _build_handler(claim)
         result = handler.post()
 
-        assert result == ["failure-effect"]
+        assert result[0] == "failure-effect"
         message = mock_failure.call_args[0][1]
         assert "network down" in message

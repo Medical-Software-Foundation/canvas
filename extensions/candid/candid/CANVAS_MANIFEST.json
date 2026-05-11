@@ -23,12 +23,20 @@
                 "description": "Triggers full adjudication sync for a single claim."
             },
             {
+                "class": "candid.api.sync:CandidSyncPatientPaymentsAPI",
+                "description": "Triggers patient payment sync for a single claim (async from queue move)."
+            },
+            {
                 "class": "candid.api.claim_detail:CandidClaimDetailAPI",
                 "description": "Serves Candid timeline data and triggers manual syncs for the claim timeline application."
             },
             {
                 "class": "candid.cron.nightly_sync:NightlyCandidSync",
                 "description": "Nightly cron (2 AM) that syncs adjudication data for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance, and PatientBalance."
+            },
+            {
+                "class": "candid.api.websocket:CandidTimelineWebSocket",
+                "description": "WebSocket for real-time claim timeline updates."
             }
         ],
         "commands": [],

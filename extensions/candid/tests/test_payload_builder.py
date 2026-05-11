@@ -349,7 +349,7 @@ def _full_claim_for_payload() -> MagicMock:
     primary = MagicMock()
     primary.id = "cov-primary"
     primary.active = True
-    primary.payer_order = 0
+    primary.payer_order = "Primary"
     primary.subscriber_first_name = "Bob"
     primary.subscriber_last_name = "Jones"
     primary.subscriber_sex = "M"
@@ -366,6 +366,7 @@ def _full_claim_for_payload() -> MagicMock:
     primary.subscriber_zip = "62701"
     primary.coverage = MagicMock(plan="Gold PPO")
     claim.coverages.all.return_value = [primary]
+    claim.coverages.active.return_value = [primary]
     return claim
 
 
@@ -397,6 +398,7 @@ def test_build_claim_payload_self_pay_when_no_coverage() -> None:
     """No coverages → responsible_party = SELF_PAY."""
     claim = _full_claim_for_payload()
     claim.coverages.all.return_value = []
+    claim.coverages.active.return_value = []
     payload, errors = build_claim_payload(claim)
 
     assert errors == []

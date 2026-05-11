@@ -52,8 +52,8 @@ def test_sync_banner_includes_status_and_dates_in_narrative() -> None:
         )
         narrative = MCE.return_value.add_banner.call_args.kwargs["narrative"]
         assert "Finalized Paid" in narrative
-        assert "2026-04-24" in narrative
-        assert "2026-04-28" in narrative
+        assert "04-24-2026" in narrative
+        assert "04-28-2026" in narrative
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ def test_sync_banner_includes_status_and_dates_in_narrative() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _coverage(coverage_id: str, payer_order: int | None, active: bool = True) -> MagicMock:
+def _coverage(coverage_id: str, payer_order: str | None, active: bool = True) -> MagicMock:
     cov = MagicMock()
     cov.id = coverage_id
     cov.payer_order = payer_order
@@ -71,30 +71,33 @@ def _coverage(coverage_id: str, payer_order: int | None, active: bool = True) ->
 
 def test_active_coverages_ordered_drops_inactive() -> None:
     claim = MagicMock()
-    claim.coverages.all.return_value = [
-        _coverage("c1", 0, active=True),
-        _coverage("c2", 1, active=False),
+    all_covs = [
+        _coverage("c1", "Primary", active=True),
+        _coverage("c2", "Secondary", active=False),
     ]
+    claim.coverages.active.return_value = [c for c in all_covs if c.active]
     result = active_coverages_ordered(claim)
     assert [c.id for c in result] == ["c1"]
 
 
 def test_active_coverages_ordered_sorts_by_payer_order() -> None:
     claim = MagicMock()
-    claim.coverages.all.return_value = [
-        _coverage("c-tertiary", 2),
-        _coverage("c-primary", 0),
-        _coverage("c-secondary", 1),
+    covs = [
+        _coverage("c-tertiary", "Tertiary"),
+        _coverage("c-primary", "Primary"),
+        _coverage("c-secondary", "Secondary"),
     ]
+    claim.coverages.active.return_value = covs
     result = active_coverages_ordered(claim)
     assert [c.id for c in result] == ["c-primary", "c-secondary", "c-tertiary"]
 
 
 def test_active_coverages_ordered_puts_missing_payer_order_last() -> None:
     claim = MagicMock()
-    claim.coverages.all.return_value = [
+    covs = [
         _coverage("c-none", None),
-        _coverage("c-primary", 0),
+        _coverage("c-primary", "Primary"),
     ]
+    claim.coverages.active.return_value = covs
     result = active_coverages_ordered(claim)
     assert [c.id for c in result] == ["c-primary", "c-none"]

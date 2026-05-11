@@ -13,6 +13,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect
 from canvas_sdk.effects.task.task import AddTask
 from canvas_sdk.events import EventType
+from candid.api.broadcast import notify_claim_updated
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Claim
 from logger import log
@@ -34,6 +35,13 @@ class OnPatientPaymentProcessed(BaseHandler):
         timestamp = context.get("timestamp", "")
         payment_method = context.get("payment_method_and_description", "")
         claim_payments = context.get("claim_payments", [])
+
+        # Skip payments that originated from our own Candid sync — prevents
+        # a feedback loop where we sync a payment from Candid, Canvas posts
+        # it, the event fires, and we'd report it right back.
+        if "Candid patient payment" in payment_method:
+            log.info("Candid: skipping payment report — originated from Candid sync")
+            return []
 
         total_cents = int(Decimal(total_amount_cents))
 
@@ -135,5 +143,6 @@ class OnPatientPaymentProcessed(BaseHandler):
                     log.warning(
                         f"Candid: failed to write SyncLog for claim {claim_ext_id}"
                     )
+                effects.append(notify_claim_updated(claim_ext_id))
 
         return effects
