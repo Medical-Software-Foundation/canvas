@@ -459,15 +459,19 @@ class TestPostSignup:
 
     @patch("portal_membership.protocols.membership_api.try_claim_signup")
     @patch("portal_membership.protocols.membership_api.StripeProcessor")
-    def test_signup_passes_idempotency_key(
+    def test_signup_does_not_pass_idempotency_key(
         self,
         mock_stripe_cls: MagicMock,
         mock_claim: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
     ) -> None:
-        """A stable per-day idempotency key is passed on the signup charge so
-        Stripe dedupes if a transient post-charge failure triggers a retry."""
+        """The interactive signup path must NOT send an Idempotency-Key.
+        Stripe Elements mints a fresh ``pm_*`` per submission, so a
+        coarse same-day key would produce same-key + different-body
+        on a retry and Stripe would reject with 400 ``idempotency_error``,
+        locking the patient out for 24h. ``try_claim_signup`` already
+        prevents concurrent double-charges via the DB mutex."""
         mock_claim.return_value = ("claimed", None)
         mock_processor = MagicMock()
         mock_processor.create_customer.return_value = "cus_x"
@@ -477,8 +481,10 @@ class TestPostSignup:
         handler.request.json.return_value = VALID_SIGNUP_BODY
         handler.post_signup()
 
-        key = mock_processor.charge.call_args.kwargs["idempotency_key"]
-        assert key.startswith("portal_membership:signup:patient-abc-123:")
+        # Either the kwarg is absent entirely, or it's explicitly None —
+        # both forms mean Stripe is called without an Idempotency-Key.
+        kwargs = mock_processor.charge.call_args.kwargs
+        assert kwargs.get("idempotency_key") is None
 
 
 # ---------------------------------------------------------------------------

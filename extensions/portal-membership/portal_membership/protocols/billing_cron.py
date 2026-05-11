@@ -28,6 +28,7 @@ The cron query matches ``Q(next_billing_date=today) | Q(retry_date=today)``,
 so a single code path handles both normal billing and the retry grace period.
 """
 from datetime import date
+from typing import Any
 
 import arrow
 
@@ -47,8 +48,8 @@ from portal_membership.utils.billing_cycle import next_billing_iso
 from portal_membership.utils.charge_history import append_charge
 from portal_membership.utils.discount import apply_discount
 from portal_membership.utils.membership_store import (
+    _resolve_patient_dbid,
     get_membership,
-    set_membership,
 )
 from portal_membership.utils.team_resolver import resolve_team_id
 
@@ -154,11 +155,18 @@ class MonthlyBillingCron(CronTask):
                 f"patient={patient_id} code={record.get('discount_code')}"
             )
         else:
-            # Idempotency-Key on the (patient, billing-date) pair so a retried
-            # cron run after a post-charge DB blip doesn't double-charge —
-            # Stripe deduplicates on this header within a 24h window.
+            # Idempotency-Key on (patient, billing-date, attempt) — the attempt
+            # counter is essential because ``_handle_failure_with_retry``
+            # deliberately preserves ``next_billing_date`` across retries (so
+            # the success path advances from the original anchor). Without
+            # the attempt suffix, day-2 and day-3 retries would replay day-1's
+            # cached 402 from Stripe's 24h idempotency cache, and a patient
+            # who updates their card between attempts would hit a 400
+            # ``idempotency_error`` instead of a real retry.
+            attempt = record.get("consecutive_failures", 0) + 1
             idempotency_key = (
                 f"portal_membership:{patient_id}:{record.get('next_billing_date')}"
+                f":attempt{attempt}"
             )
             try:
                 processor.charge(
@@ -187,6 +195,24 @@ class MonthlyBillingCron(CronTask):
             patient_id, record, consecutive_failures, charge_amount
         )
 
+    def _update_membership_fields(self, patient_id: str, **fields) -> None:
+        """Write only the specified columns on the patient's membership row.
+
+        Replaces the prior ``set_membership(patient_id, record)`` pattern,
+        which rewrote every scalar (including ``payment_method_id`` and
+        ``stripe_customer_id``) and would silently clobber a concurrent
+        ``/update-payment-method`` or ``/cancel`` whose targeted UPDATE
+        landed during the cron's Stripe round-trip.
+        """
+        dbid = _resolve_patient_dbid(patient_id)
+        if dbid is None:
+            log.warning(
+                f"portal_membership billing_cron: skipped UPDATE — patient_id={patient_id!r} "
+                "did not resolve to a known patient"
+            )
+            return
+        Membership.objects.filter(patient_id=dbid).update(**fields)
+
     def _handle_success(
         self,
         patient_id: str,
@@ -201,9 +227,17 @@ class MonthlyBillingCron(CronTask):
         """
         next_date = next_billing_iso(record["next_billing_date"], record.get("cadence"))
         plan_name = record.get("plan_name", record.get("plan", "membership"))
+        # Mutate the in-memory record so the banner narrative below sees the
+        # advanced date — but only the changed fields get persisted.
         record["next_billing_date"] = next_date
         record["consecutive_failures"] = 0
         record.pop("retry_date", None)
+
+        update_fields: dict[str, Any] = {
+            "next_billing_date": date.fromisoformat(next_date),
+            "consecutive_failures": 0,
+            "retry_date": None,
+        }
         # Snapshot discount_code for history before it may be cleared below.
         history_discount_code = record.get("discount_code") if discount_applied else None
         if discount_applied:
@@ -216,9 +250,17 @@ class MonthlyBillingCron(CronTask):
                     "discount_cycles_remaining",
                 ):
                     record.pop(key, None)
+                update_fields.update(
+                    discount_code="",
+                    discount_type="",
+                    discount_value=0,
+                    discount_cycles_remaining=0,
+                )
             else:
                 record["discount_cycles_remaining"] = remaining
-        set_membership(patient_id, record)
+                update_fields["discount_cycles_remaining"] = remaining
+
+        self._update_membership_fields(patient_id, **update_fields)
         append_charge(
             patient_id,
             amount_cents=charge_amount,
@@ -246,11 +288,15 @@ class MonthlyBillingCron(CronTask):
         billing anchor — without this the anchor would drift forward by one
         day per retried recovery (see PR #243 review).
         """
-        retry_date = arrow.utcnow().shift(days=RETRY_DELAY_DAYS).date().isoformat()
+        retry_date_str = arrow.utcnow().shift(days=RETRY_DELAY_DAYS).date().isoformat()
         plan_name = record.get("plan_name", record.get("plan", "membership"))
         record["consecutive_failures"] = consecutive_failures
-        record["retry_date"] = retry_date
-        set_membership(patient_id, record)
+        record["retry_date"] = retry_date_str
+        self._update_membership_fields(
+            patient_id,
+            consecutive_failures=consecutive_failures,
+            retry_date=date.fromisoformat(retry_date_str),
+        )
         append_charge(
             patient_id,
             amount_cents=charge_amount,
@@ -263,7 +309,7 @@ class MonthlyBillingCron(CronTask):
         )
         log.warning(
             f"portal_membership billing_cron: failure {consecutive_failures}/{MAX_ATTEMPTS} — "
-            f"patient={patient_id} retry_date={retry_date}"
+            f"patient={patient_id} retry_date={retry_date_str}"
         )
         return []
 
@@ -274,7 +320,11 @@ class MonthlyBillingCron(CronTask):
         plan_name = record.get("plan_name", record.get("plan", "membership"))
         record["status"] = "cancelled"
         record["consecutive_failures"] = 0
-        set_membership(patient_id, record)
+        self._update_membership_fields(
+            patient_id,
+            status="cancelled",
+            consecutive_failures=0,
+        )
         append_charge(
             patient_id,
             amount_cents=charge_amount,

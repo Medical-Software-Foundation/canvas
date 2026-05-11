@@ -43,6 +43,23 @@ def _set_due(mock_membership_cls: MagicMock, patient_ids: list[str]) -> None:
     mock_membership_cls.objects.filter.return_value.filter.return_value = _DueQs(instances)
 
 
+def _get_update_kwargs(mock_membership_cls: MagicMock) -> dict[str, Any]:
+    """Return the kwargs of the most recent ``Membership.objects.filter(...).update(...)``.
+
+    The cron's three handlers (``_handle_success`` /
+    ``_handle_failure_with_retry`` / ``_handle_auto_cancel``) now write
+    through ``_update_membership_fields``, which issues a single targeted
+    UPDATE per call. This helper is the test surface for asserting which
+    columns the handler actually mutated — replacing the old
+    ``set_membership.call_args[0][1]`` pattern from before targeted UPDATEs
+    landed (PR #243 review #6).
+    """
+    update_mock = mock_membership_cls.objects.filter.return_value.update
+    if not update_mock.call_args:
+        return {}
+    return dict(update_mock.call_args.kwargs)
+
+
 
 # Cadence-aware date math is fully exercised in test_membership_api's
 # TestNextBillingIso. The cron-side coverage focuses on _process_patient
@@ -162,7 +179,7 @@ class TestExecuteNoMembers:
 # ---------------------------------------------------------------------------
 
 class TestExecuteSuccess:
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -171,7 +188,7 @@ class TestExecuteSuccess:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
@@ -189,22 +206,26 @@ class TestExecuteSuccess:
         effects = cron.execute()
 
         assert effects == []
+        # Idempotency key includes the attempt counter (1 on first try) so
+        # day-2 retries don't replay day-1's cached Stripe response.
         mock_processor.charge.assert_called_once_with(
             customer_id="cus_test123",
             amount_cents=9900,
             currency="usd",
             description="Membership: Gold (recurring)",
             payment_method_id="pm_test456",
-            idempotency_key=f"portal_membership:patient-abc-123:{today_str}",
+            idempotency_key=f"portal_membership:patient-abc-123:{today_str}:attempt1",
         )
-        saved = mock_set_membership.call_args[0][1]
-        # next_billing_date must be a real ISO date string, not mocked
-        assert saved["next_billing_date"] != today_str
-        assert len(saved["next_billing_date"]) == 10  # "YYYY-MM-DD"
+        saved = _get_update_kwargs(mock_membership_cls)
+        # next_billing_date is written as a date object (targeted UPDATE) and
+        # must be advanced past today.
+        assert isinstance(saved["next_billing_date"], date)
+        assert saved["next_billing_date"] != date.fromisoformat(today_str)
         assert saved["consecutive_failures"] == 0
-        assert "retry_date" not in saved
+        # retry_date is explicitly cleared on success.
+        assert saved["retry_date"] is None
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -213,7 +234,7 @@ class TestExecuteSuccess:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
@@ -254,7 +275,7 @@ class TestExecuteCadenceAdvancement:
             ("annually", "2028-02-29", "2029-02-28"),
         ],
     )
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -263,7 +284,7 @@ class TestExecuteCadenceAdvancement:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
         cadence: str,
@@ -281,10 +302,10 @@ class TestExecuteCadenceAdvancement:
         cron = _make_cron(secrets)
         cron.execute()
 
-        saved = mock_set_membership.call_args[0][1]
-        assert saved["next_billing_date"] == expected_next
+        saved = _get_update_kwargs(mock_membership_cls)
+        assert saved["next_billing_date"] == date.fromisoformat(expected_next)
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -293,7 +314,7 @@ class TestExecuteCadenceAdvancement:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
@@ -308,8 +329,8 @@ class TestExecuteCadenceAdvancement:
 
         cron = _make_cron(secrets)
         cron.execute()
-        saved = mock_set_membership.call_args[0][1]
-        assert saved["next_billing_date"] == "2026-06-15"
+        saved = _get_update_kwargs(mock_membership_cls)
+        assert saved["next_billing_date"] == date(2026, 6, 15)
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +338,7 @@ class TestExecuteCadenceAdvancement:
 # ---------------------------------------------------------------------------
 
 class TestExecuteFirstFailure:
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -326,7 +347,7 @@ class TestExecuteFirstFailure:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
@@ -345,14 +366,15 @@ class TestExecuteFirstFailure:
         effects = cron.execute()
 
         assert effects == []
-        saved = mock_set_membership.call_args[0][1]
+        saved = _get_update_kwargs(mock_membership_cls)
         assert saved["consecutive_failures"] == 1
-        assert "retry_date" in saved
-        # Anchor preserved: a later retry success advances from the original
-        # billing day, not from the retry date (PR #243 review).
-        assert saved["next_billing_date"] == today_str
+        assert isinstance(saved["retry_date"], date)
+        # Anchor preserved: the retry path does NOT write next_billing_date,
+        # so the targeted UPDATE leaves the original billing day intact and
+        # a later retry success advances the cadence from that anchor.
+        assert "next_billing_date" not in saved
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -361,7 +383,7 @@ class TestExecuteFirstFailure:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
@@ -383,12 +405,130 @@ class TestExecuteFirstFailure:
 
         # No banner/task effects — the membership stays active.
         assert effects == []
-        saved = mock_set_membership.call_args[0][1]
-        assert saved["status"] == "active"
+        saved = _get_update_kwargs(mock_membership_cls)
+        # The retry path doesn't touch status (still 'active' on the row);
+        # the targeted UPDATE only writes consecutive_failures + retry_date.
+        assert "status" not in saved
         assert saved["consecutive_failures"] == 2
-        assert "retry_date" in saved
-        # Anchor preserved across retries — see PR #243 review.
-        assert saved["next_billing_date"] == today_str
+        assert isinstance(saved["retry_date"], date)
+        # Anchor preserved across retries — next_billing_date is never
+        # rewritten on the failure path.
+        assert "next_billing_date" not in saved
+
+
+class TestCronTargetedUpdateInvariants:
+    """Regression coverage for the targeted-UPDATE design.
+
+    The cron must not write columns it didn't mean to mutate — otherwise a
+    concurrent /update-payment-method or /cancel landing during the Stripe
+    round-trip would be silently reverted by a full-row write.
+    """
+
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
+    @patch("portal_membership.protocols.billing_cron.get_membership")
+    @patch("portal_membership.protocols.billing_cron.Membership")
+    @patch("portal_membership.protocols.billing_cron.StripeProcessor")
+    def test_success_does_not_write_payment_method_id(
+        self,
+        mock_stripe_cls: MagicMock,
+        mock_membership_cls: MagicMock,
+        mock_get_membership: MagicMock,
+        _mock_resolve: MagicMock,
+        secrets: dict[str, str],
+        active_record: dict[str, Any],
+    ) -> None:
+        """A successful cron charge must not touch payment_method_id /
+        stripe_customer_id / status — otherwise a /update-payment-method
+        racing with the cron's Stripe call would be silently reverted."""
+        _set_due(mock_membership_cls, ["patient-abc-123"])
+        mock_get_membership.return_value = active_record
+        mock_processor = MagicMock()
+        mock_processor.charge.return_value = "pi_ok"
+        mock_stripe_cls.return_value = mock_processor
+
+        cron = _make_cron(secrets)
+        cron.execute()
+
+        saved = _get_update_kwargs(mock_membership_cls)
+        for protected in (
+            "payment_method_id",
+            "stripe_customer_id",
+            "status",
+            "plan",
+            "plan_name",
+            "amount_cents",
+            "currency",
+            "cadence",
+            "billing_day",
+        ):
+            assert protected not in saved, (
+                f"{protected!r} must not be written by _handle_success — "
+                "the cron's targeted UPDATE is what protects concurrent "
+                "patient-side writes from being clobbered."
+            )
+
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
+    @patch("portal_membership.protocols.billing_cron.get_membership")
+    @patch("portal_membership.protocols.billing_cron.Membership")
+    @patch("portal_membership.protocols.billing_cron.StripeProcessor")
+    def test_failure_retry_does_not_write_payment_method_id(
+        self,
+        mock_stripe_cls: MagicMock,
+        mock_membership_cls: MagicMock,
+        mock_get_membership: MagicMock,
+        _mock_resolve: MagicMock,
+        secrets: dict[str, str],
+        active_record: dict[str, Any],
+    ) -> None:
+        """Critical: if the patient updates their card via
+        /update-payment-method between cron attempts 1 and 2, the cron's
+        failure-retry write must not revert payment_method_id to pm_old."""
+        _set_due(mock_membership_cls, ["patient-abc-123"])
+        mock_get_membership.return_value = active_record
+        mock_processor = MagicMock()
+        mock_processor.charge.side_effect = StripeError("Declined")
+        mock_stripe_cls.return_value = mock_processor
+
+        cron = _make_cron(secrets)
+        cron.execute()
+
+        saved = _get_update_kwargs(mock_membership_cls)
+        assert "payment_method_id" not in saved
+
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
+    @patch("portal_membership.protocols.billing_cron.get_membership")
+    @patch("portal_membership.protocols.billing_cron.Membership")
+    @patch("portal_membership.protocols.billing_cron.StripeProcessor")
+    def test_idempotency_key_varies_by_attempt(
+        self,
+        mock_stripe_cls: MagicMock,
+        mock_membership_cls: MagicMock,
+        mock_get_membership: MagicMock,
+        _mock_resolve: MagicMock,
+        secrets: dict[str, str],
+        active_record: dict[str, Any],
+    ) -> None:
+        """The Idempotency-Key must include the attempt counter so a day-2
+        retry doesn't replay Stripe's cached 402 from day 1."""
+        keys_seen: list[str] = []
+        for consecutive_failures in (0, 1, 2):
+            active_record["consecutive_failures"] = consecutive_failures
+            _set_due(mock_membership_cls, ["patient-abc-123"])
+            mock_get_membership.return_value = active_record
+            mock_processor = MagicMock()
+            mock_processor.charge.side_effect = StripeError("Declined")
+            mock_stripe_cls.return_value = mock_processor
+
+            cron = _make_cron(secrets)
+            cron.execute()
+
+            keys_seen.append(mock_processor.charge.call_args.kwargs["idempotency_key"])
+
+        # All three attempts produced distinct keys.
+        assert len(set(keys_seen)) == 3
+        assert keys_seen[0].endswith(":attempt1")
+        assert keys_seen[1].endswith(":attempt2")
+        assert keys_seen[2].endswith(":attempt3")
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +537,7 @@ class TestExecuteFirstFailure:
 
 class TestExecuteAutoCancel:
     @patch("portal_membership.protocols.billing_cron.resolve_team_id", return_value="team-uuid")
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -406,7 +546,7 @@ class TestExecuteAutoCancel:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         _mock_resolve_team: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
@@ -430,7 +570,7 @@ class TestExecuteAutoCancel:
         # refreshed status banner, task — no separate cancel banner
         assert len(effects) == 2
 
-        saved = mock_set_membership.call_args[0][1]
+        saved = _get_update_kwargs(mock_membership_cls)
         assert saved["status"] == "cancelled"
 
 
@@ -450,7 +590,7 @@ def discounted_active_record(active_record: dict[str, Any]) -> dict[str, Any]:
 
 
 class TestExecuteDiscount:
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -459,7 +599,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         discounted_active_record: dict[str, Any],
     ) -> None:
@@ -474,11 +614,15 @@ class TestExecuteDiscount:
 
         # 10% off 9900 = 8910
         assert mock_processor.charge.call_args.kwargs["amount_cents"] == 8910
-        saved = mock_set_membership.call_args.args[1]
+        saved = _get_update_kwargs(mock_membership_cls)
+        # Only the counter is written when the discount remains active —
+        # discount_code/type/value are untouched (targeted UPDATE).
         assert saved["discount_cycles_remaining"] == 1  # was 2, decremented
-        assert saved["discount_code"] == "WELCOME10"  # still present
+        assert "discount_code" not in saved
+        assert "discount_type" not in saved
+        assert "discount_value" not in saved
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -487,7 +631,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         discounted_active_record: dict[str, Any],
     ) -> None:
@@ -502,13 +646,15 @@ class TestExecuteDiscount:
         cron = _make_cron(secrets)
         cron.execute()
 
-        saved = mock_set_membership.call_args.args[1]
-        assert "discount_code" not in saved
-        assert "discount_type" not in saved
-        assert "discount_value" not in saved
-        assert "discount_cycles_remaining" not in saved
+        saved = _get_update_kwargs(mock_membership_cls)
+        # Cleared discount writes empty strings / zeros so a stale
+        # discount_code on the row never resurrects as a phantom.
+        assert saved["discount_code"] == ""
+        assert saved["discount_type"] == ""
+        assert saved["discount_value"] == 0
+        assert saved["discount_cycles_remaining"] == 0
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -517,7 +663,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         discounted_active_record: dict[str, Any],
     ) -> None:
@@ -531,11 +677,11 @@ class TestExecuteDiscount:
         cron.execute()
 
         mock_processor.charge.assert_not_called()
-        saved = mock_set_membership.call_args.args[1]
+        saved = _get_update_kwargs(mock_membership_cls)
         # Still advances next_billing_date and decrements counter.
         assert saved["discount_cycles_remaining"] == 1
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -544,7 +690,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         discounted_active_record: dict[str, Any],
     ) -> None:
@@ -558,13 +704,15 @@ class TestExecuteDiscount:
         cron = _make_cron(secrets)
         cron.execute()
 
-        saved = mock_set_membership.call_args.args[1]
-        assert saved["discount_cycles_remaining"] == 2  # unchanged
+        saved = _get_update_kwargs(mock_membership_cls)
+        # Failed retry path doesn't write discount columns at all — the
+        # counter on the row stays at 2 by virtue of not being touched.
+        assert "discount_cycles_remaining" not in saved
         assert saved["consecutive_failures"] == 1
-        assert "retry_date" in saved
+        assert isinstance(saved["retry_date"], date)
 
     @patch("portal_membership.protocols.billing_cron.append_charge")
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -573,7 +721,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         mock_append_charge: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
@@ -597,7 +745,7 @@ class TestExecuteDiscount:
         assert "Gold" in call.kwargs["description"]
 
     @patch("portal_membership.protocols.billing_cron.append_charge")
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -606,7 +754,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         mock_append_charge: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
@@ -628,7 +776,7 @@ class TestExecuteDiscount:
         assert "retry" in kwargs["description"].lower()
 
     @patch("portal_membership.protocols.billing_cron.append_charge")
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -637,7 +785,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         mock_append_charge: MagicMock,
         secrets: dict[str, str],
         discounted_active_record: dict[str, Any],
@@ -654,14 +802,15 @@ class TestExecuteDiscount:
         cron = _make_cron(secrets)
         cron.execute()
 
-        saved = mock_set_membership.call_args.args[1]
-        # Discount fields cleared from the persisted record …
-        assert "discount_code" not in saved
+        saved = _get_update_kwargs(mock_membership_cls)
+        # Persisted record clears the discount fields to empty / zero.
+        assert saved["discount_code"] == ""
+        assert saved["discount_cycles_remaining"] == 0
         # … but the history entry still captures the code that was active.
         mock_append_charge.assert_called_once()
         assert mock_append_charge.call_args.kwargs["discount_code"] == "WELCOME10"
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -670,7 +819,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         secrets: dict[str, str],
         discounted_active_record: dict[str, Any],
     ) -> None:
@@ -687,7 +836,7 @@ class TestExecuteDiscount:
 
         assert mock_processor.charge.call_args.kwargs["amount_cents"] == 9900
 
-    @patch("portal_membership.protocols.billing_cron.set_membership")
+    @patch("portal_membership.protocols.billing_cron._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.billing_cron.get_membership")
     @patch("portal_membership.protocols.billing_cron.Membership")
     @patch("portal_membership.protocols.billing_cron.StripeProcessor")
@@ -696,7 +845,7 @@ class TestExecuteDiscount:
         mock_stripe_cls: MagicMock,
         mock_membership_cls: MagicMock,
         mock_get_membership: MagicMock,
-        mock_set_membership: MagicMock,
+        _mock_resolve: MagicMock,
         active_record: dict[str, Any],
     ) -> None:
         """Auto-cancel should work even when STAFF_OFFBOARDING_TEAM_ID is absent."""

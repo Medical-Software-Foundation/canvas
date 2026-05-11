@@ -298,8 +298,14 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
         )
 
         today = date.today()
-        signup_idempotency_key = f"portal_membership:signup:{patient_id}:{today.isoformat()}"
 
+        # Note: no Idempotency-Key on the interactive signup path. ``try_claim_signup``
+        # already serializes concurrent attempts via the DB-backed pending_signup
+        # mutex, and there's no retry loop above this call. A coarse key (e.g.
+        # ``signup:{patient_id}:{date}``) would collide across same-day retries —
+        # Stripe Elements mints a fresh ``pm_*`` per submission, so a re-submit
+        # produces same-key + different-body, which Stripe rejects with 400
+        # ``idempotency_error`` and locks the patient out for 24h.
         try:
             stripe_customer_id = processor.create_customer(
                 patient_id=patient_id,
@@ -313,7 +319,6 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                     currency=currency,
                     description=f"Membership: {plan['name']} (first payment)",
                     payment_method_id=payment_method_id,
-                    idempotency_key=signup_idempotency_key,
                 )
         except StripeError as exc:
             release_claim(patient_id, prior_status)
@@ -600,8 +605,10 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
         )
 
         today = date.today()
-        restart_idempotency_key = f"portal_membership:restart:{patient_id}:{today.isoformat()}"
 
+        # See post_signup: no Idempotency-Key on the interactive restart path —
+        # try_claim_signup serializes concurrent attempts and a coarse key would
+        # break same-day retries with Stripe's idempotency_error.
         try:
             stripe_customer_id = processor.create_customer(
                 patient_id=patient_id,
@@ -614,7 +621,6 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                     currency=currency,
                     description=f"Membership: {plan['name']} (restart)",
                     payment_method_id=payment_method_id,
-                    idempotency_key=restart_idempotency_key,
                 )
         except StripeError as exc:
             release_claim(patient_id, prior_status)
