@@ -25,12 +25,15 @@ class PaymentProcessor(ABC):
         currency: str,
         description: str,
         payment_method_id: str = "",
+        idempotency_key: str | None = None,
     ) -> str:
         """Charge an existing customer.
 
         If *payment_method_id* is provided it is sent explicitly on the
         PaymentIntent; otherwise the processor falls back to the customer's
-        default payment method.
+        default payment method. *idempotency_key* (if provided) lets the
+        processor deduplicate retried charges so a transient failure
+        between the charge and the local DB write doesn't double-bill.
 
         Returns the processor-specific payment/charge ID.
         Raises an exception if the charge fails.

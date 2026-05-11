@@ -196,11 +196,13 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
         api_base = f"https://{instance}.canvasmedical.com" if instance else ""
 
         stripe_pub_key = self.secrets.get("STRIPE_PUBLISHABLE_KEY", "")
+        billing_currency = self.secrets.get("BILLING_CURRENCY", "usd")
         html_content = _render_membership_page(
             plans=plans,
             record=record,
             api_base=api_base,
             stripe_publishable_key=stripe_pub_key,
+            billing_currency=billing_currency,
         )
         return [HTMLResponse(html_content, status_code=HTTPStatus.OK)]
 
@@ -295,6 +297,9 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
             else base_amount
         )
 
+        today = date.today()
+        signup_idempotency_key = f"portal_membership:signup:{patient_id}:{today.isoformat()}"
+
         try:
             stripe_customer_id = processor.create_customer(
                 patient_id=patient_id,
@@ -308,6 +313,7 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                     currency=currency,
                     description=f"Membership: {plan['name']} (first payment)",
                     payment_method_id=payment_method_id,
+                    idempotency_key=signup_idempotency_key,
                 )
         except StripeError as exc:
             release_claim(patient_id, prior_status)
@@ -331,7 +337,6 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
             f"amount={charge_amount} {currency} (base={base_amount})"
         )
 
-        today = date.today()
         cadence = plan.get("cadence") or "monthly"
         record: dict[str, Any] = {
             "plan": plan_key,
@@ -364,14 +369,38 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                 "discount_cycles_remaining",
             ):
                 record.pop(key, None)
-        set_membership(patient_id, record)
-        append_charge(
-            patient_id,
-            amount_cents=charge_amount,
-            status="succeeded",
-            description=f"Membership signup: {plan['name']}",
-            discount_code=applied_discount_code,
-        )
+
+        # Stripe has already charged the patient — any DB write failure from
+        # here on would leak the pending_signup mutex (permanent lockout) and
+        # leave the patient billed without an active membership. Catch any
+        # exception, release the claim, and surface a "contact support"
+        # error so the patient knows not to retry (and we don't double-bill).
+        try:
+            set_membership(patient_id, record)
+            append_charge(
+                patient_id,
+                amount_cents=charge_amount,
+                status="succeeded",
+                description=f"Membership signup: {plan['name']}",
+                discount_code=applied_discount_code,
+            )
+        except Exception as exc:  # noqa: BLE001 — see comment above
+            release_claim(patient_id, prior_status)
+            log.error(
+                f"portal_membership: signup post-charge write failed — "
+                f"patient={patient_id} stripe_customer={stripe_customer_id} error={exc}"
+            )
+            return [
+                JSONResponse(
+                    {
+                        "error": (
+                            "Your payment was processed but we couldn't finalize your "
+                            "membership. Please contact support — do not retry."
+                        ),
+                    },
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+            ]
 
         # Refresh the chart status banner so the provider sees the new
         # active membership immediately — matches /cancel, /restart, and
@@ -570,6 +599,9 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
             else base_amount
         )
 
+        today = date.today()
+        restart_idempotency_key = f"portal_membership:restart:{patient_id}:{today.isoformat()}"
+
         try:
             stripe_customer_id = processor.create_customer(
                 patient_id=patient_id,
@@ -582,6 +614,7 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                     currency=currency,
                     description=f"Membership: {plan['name']} (restart)",
                     payment_method_id=payment_method_id,
+                    idempotency_key=restart_idempotency_key,
                 )
         except StripeError as exc:
             release_claim(patient_id, prior_status)
@@ -601,7 +634,6 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
             f"plan={plan_key} amount={charge_amount} base={base_amount}"
         )
 
-        today = date.today()
         cadence = plan.get("cadence") or "monthly"
         record: dict[str, Any] = {
             "plan": plan_key,
@@ -629,14 +661,36 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                 "discount_cycles_remaining",
             ):
                 record.pop(key, None)
-        set_membership(patient_id, record)
-        append_charge(
-            patient_id,
-            amount_cents=charge_amount,
-            status="succeeded",
-            description=f"Membership restart: {plan['name']}",
-            discount_code=applied_discount_code,
-        )
+
+        # Same protection as /signup: Stripe is already charged at this point,
+        # so a DB-write failure must release the claim and tell the patient
+        # not to retry.
+        try:
+            set_membership(patient_id, record)
+            append_charge(
+                patient_id,
+                amount_cents=charge_amount,
+                status="succeeded",
+                description=f"Membership restart: {plan['name']}",
+                discount_code=applied_discount_code,
+            )
+        except Exception as exc:  # noqa: BLE001 — see /signup comment
+            release_claim(patient_id, prior_status)
+            log.error(
+                f"portal_membership: restart post-charge write failed — "
+                f"patient={patient_id} stripe_customer={stripe_customer_id} error={exc}"
+            )
+            return [
+                JSONResponse(
+                    {
+                        "error": (
+                            "Your payment was processed but we couldn't finalize your "
+                            "membership. Please contact support — do not retry."
+                        ),
+                    },
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+            ]
 
         # Clear any stale "Cancelled Membership" banner left over from older
         # plugin versions (harmless if none exists).
@@ -742,8 +796,27 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        record["payment_method_id"] = payment_method_id
-        set_membership(patient_id, record)
+        # Targeted UPDATE on the single column the handler is meant to write.
+        # The previous read-modify-write rewrote the whole row via
+        # ``set_membership``, which would clobber a concurrent /cancel
+        # (resurrecting ``status='active'``) or the cron's in-flight retry
+        # counters. ``_resolve_patient_dbid`` is cheap (one indexed lookup
+        # by UUID) and only runs after Stripe has accepted the new card.
+        dbid = _resolve_patient_dbid(patient_id)
+        if dbid is None:
+            log.warning(
+                f"portal_membership: update payment method — patient={patient_id} "
+                "could not resolve dbid after successful Stripe attach"
+            )
+            return [
+                JSONResponse(
+                    {"error": "No membership found"},
+                    status_code=HTTPStatus.NOT_FOUND,
+                )
+            ]
+        Membership.objects.filter(patient_id=dbid).update(
+            payment_method_id=payment_method_id
+        )
         log.info(
             f"portal_membership: payment method updated — patient={patient_id}"
         )
@@ -773,13 +846,21 @@ def _render_membership_page(
     record: dict | None,
     api_base: str,
     stripe_publishable_key: str = "",
+    billing_currency: str = "usd",
 ) -> str:
-    """Return the membership management HTML page rendered from a template."""
+    """Return the membership management HTML page rendered from a template.
+
+    *billing_currency* is the ``BILLING_CURRENCY`` secret value, used as the
+    fallback when *record* is ``None`` (a not-yet-enrolled patient viewing
+    the signup screen). Without it, non-USD instances would show a stray
+    "$" on the plan dropdown and discount preview for new patients while
+    enrolled members correctly see no symbol.
+    """
     status = record.get("status", "none") if record else "none"
     current_plan_name = record.get("plan_name", "") if record else ""
     next_billing = record.get("next_billing_date", "") if record else ""
     amount_cents = record.get("amount_cents", 0) if record else 0
-    currency = (record.get("currency") if record else None) or "usd"
+    currency = (record.get("currency") if record else None) or billing_currency or "usd"
     # Same idiom as portal_widget / membership_card / admin_api: USD shows
     # a leading "$"; non-USD currencies render the bare amount.
     currency_symbol = "$" if currency.lower() == "usd" else ""

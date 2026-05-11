@@ -28,13 +28,23 @@ class StripeError(Exception):
         self.http_status = http_status
 
 
-def _stripe_post(api_key: str, path: str, data: dict[str, Any]) -> dict[str, Any]:
+def _stripe_post(
+    api_key: str,
+    path: str,
+    data: dict[str, Any],
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
     """POST form-encoded data to the Stripe REST API.
 
     Args:
         api_key: Stripe secret key used for HTTP Basic auth.
         path: API path (e.g. ``/customers``).
         data: Form fields to include in the request body.
+        idempotency_key: Optional ``Idempotency-Key`` header value. Stripe
+            deduplicates calls bearing the same key for 24 hours, so a
+            retried charge after a transient post-charge failure won't bill
+            the patient twice. See ``billing_cron`` for the canonical
+            ``{patient_id}-{next_billing_date}`` key shape.
 
     Returns:
         Parsed JSON response body.
@@ -48,11 +58,15 @@ def _stripe_post(api_key: str, path: str, data: dict[str, Any]) -> dict[str, Any
             Stripe blip.
     """
     url = f"{_STRIPE_API_BASE}{path}"
+    headers: dict[str, str] = {}
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
     try:
         response = requests.post(
             url,
             auth=(api_key, ""),
             data=data,
+            headers=headers or None,
             timeout=_STRIPE_TIMEOUT,
         )
         body: dict[str, Any] = response.json()
@@ -131,6 +145,7 @@ class StripeProcessor(PaymentProcessor):
         currency: str,
         description: str,
         payment_method_id: str = "",
+        idempotency_key: str | None = None,
     ) -> str:
         """Charge an existing Stripe customer.
 
@@ -142,6 +157,12 @@ class StripeProcessor(PaymentProcessor):
             payment_method_id: Explicit PaymentMethod ID to charge. Required for
                 off-session PaymentIntents; the customer's
                 ``invoice_settings.default_payment_method`` only applies to invoices.
+            idempotency_key: Optional Stripe idempotency key. Callers that
+                may retry a charge for the same billing event (cron retries,
+                client resubmits) should pass a stable per-event key
+                (e.g. ``{patient_id}-{next_billing_date}``) so Stripe
+                deduplicates within its 24h window instead of creating a
+                second PaymentIntent.
 
         Returns:
             Stripe PaymentIntent ID (``pi_xxx``).
@@ -160,5 +181,7 @@ class StripeProcessor(PaymentProcessor):
         }
         if payment_method_id:
             data["payment_method"] = payment_method_id
-        intent = _stripe_post(self._api_key, "/payment_intents", data)
+        intent = _stripe_post(
+            self._api_key, "/payment_intents", data, idempotency_key=idempotency_key
+        )
         return cast(str, intent["id"])

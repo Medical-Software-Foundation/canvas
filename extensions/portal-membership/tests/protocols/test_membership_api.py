@@ -421,6 +421,65 @@ class TestPostSignup:
         results = handler.post_signup()
         assert results[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
 
+    @patch("portal_membership.protocols.membership_api.release_claim")
+    @patch("portal_membership.protocols.membership_api.set_membership")
+    @patch("portal_membership.protocols.membership_api.try_claim_signup")
+    @patch("portal_membership.protocols.membership_api.StripeProcessor")
+    def test_signup_db_write_failure_releases_claim(
+        self,
+        mock_stripe_cls: MagicMock,
+        mock_claim: MagicMock,
+        mock_set: MagicMock,
+        mock_release: MagicMock,
+        mock_event: MagicMock,
+        secrets: dict[str, str],
+    ) -> None:
+        """Stripe is already charged when set_membership runs. A DB blip
+        here must release the claim and surface a contact-support 5xx so
+        the patient doesn't retry and get double-billed, and so the
+        pending_signup mutex row doesn't leak (permanent lockout)."""
+        mock_claim.return_value = ("claimed", "cancelled")
+        mock_processor = MagicMock()
+        mock_processor.create_customer.return_value = "cus_paid"
+        mock_processor.charge.return_value = "pi_paid"
+        mock_stripe_cls.return_value = mock_processor
+        mock_set.side_effect = Exception("transient DB error")
+
+        handler = _make_handler(mock_event, secrets)
+        handler.request.json.return_value = VALID_SIGNUP_BODY
+        results = handler.post_signup()
+
+        assert results[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        body = json.loads(results[0].content)
+        assert "contact support" in body["error"].lower()
+        # Stripe details must not leak.
+        assert "transient DB error" not in body["error"]
+        # Critical: release_claim must run so the patient isn't locked out.
+        mock_release.assert_called_once_with("patient-abc-123", "cancelled")
+
+    @patch("portal_membership.protocols.membership_api.try_claim_signup")
+    @patch("portal_membership.protocols.membership_api.StripeProcessor")
+    def test_signup_passes_idempotency_key(
+        self,
+        mock_stripe_cls: MagicMock,
+        mock_claim: MagicMock,
+        mock_event: MagicMock,
+        secrets: dict[str, str],
+    ) -> None:
+        """A stable per-day idempotency key is passed on the signup charge so
+        Stripe dedupes if a transient post-charge failure triggers a retry."""
+        mock_claim.return_value = ("claimed", None)
+        mock_processor = MagicMock()
+        mock_processor.create_customer.return_value = "cus_x"
+        mock_stripe_cls.return_value = mock_processor
+
+        handler = _make_handler(mock_event, secrets)
+        handler.request.json.return_value = VALID_SIGNUP_BODY
+        handler.post_signup()
+
+        key = mock_processor.charge.call_args.kwargs["idempotency_key"]
+        assert key.startswith("portal_membership:signup:patient-abc-123:")
+
 
 # ---------------------------------------------------------------------------
 # POST /signup — discount-code cases
@@ -1017,14 +1076,16 @@ class TestPostUpdatePaymentMethod:
         results = handler.post_update_payment_method()
         assert results[0].status_code == HTTPStatus.BAD_REQUEST
 
-    @patch("portal_membership.protocols.membership_api.set_membership")
+    @patch("portal_membership.protocols.membership_api.Membership")
+    @patch("portal_membership.protocols.membership_api._resolve_patient_dbid", return_value=42)
     @patch("portal_membership.protocols.membership_api.get_membership")
     @patch("portal_membership.protocols.membership_api.StripeProcessor")
     def test_successful_update(
         self,
         mock_stripe_cls: MagicMock,
         mock_get: MagicMock,
-        mock_set: MagicMock,
+        _mock_resolve: MagicMock,
+        mock_membership_cls: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
@@ -1043,8 +1104,12 @@ class TestPostUpdatePaymentMethod:
             customer_id=active_record["stripe_customer_id"],
             payment_method_id="pm_new_card",
         )
-        saved = mock_set.call_args.args[1]
-        assert saved["payment_method_id"] == "pm_new_card"
+        # Targeted UPDATE writes only the one column the handler is meant to
+        # change — no read-modify-write that could resurrect a stale status.
+        mock_membership_cls.objects.filter.assert_called_once_with(patient_id=42)
+        mock_membership_cls.objects.filter.return_value.update.assert_called_once_with(
+            payment_method_id="pm_new_card"
+        )
 
     @patch("portal_membership.protocols.membership_api.get_membership")
     @patch("portal_membership.protocols.membership_api.StripeProcessor")
@@ -1098,9 +1163,15 @@ class TestRenderMembershipPage:
         plans: list[dict[str, Any]],
         record: dict[str, Any] | None,
         api_base: str = "",
+        billing_currency: str = "usd",
     ) -> dict[str, Any]:
         mock_render.return_value = "<html />"
-        _render_membership_page(plans=plans, record=record, api_base=api_base)
+        _render_membership_page(
+            plans=plans,
+            record=record,
+            api_base=api_base,
+            billing_currency=billing_currency,
+        )
         _, ctx = mock_render.call_args.args
         return ctx
 
@@ -1157,5 +1228,18 @@ class TestRenderMembershipPage:
         ctx = self._context(plans=membership_plans, record=active_record)
         assert ctx["currency_symbol"] == ""
         assert "$" not in ctx["amount_display"]
+        for option in ctx["plan_options"]:
+            assert "$" not in option["price_display"]
+
+    def test_non_usd_signup_screen_uses_billing_currency_fallback(
+        self, membership_plans: list[dict[str, Any]]
+    ) -> None:
+        """A not-yet-enrolled patient on a non-USD instance must see bare
+        amounts on the plan dropdown — the BILLING_CURRENCY secret is the
+        only signal available because there's no record yet."""
+        ctx = self._context(
+            plans=membership_plans, record=None, billing_currency="eur"
+        )
+        assert ctx["currency_symbol"] == ""
         for option in ctx["plan_options"]:
             assert "$" not in option["price_display"]

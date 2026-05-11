@@ -131,6 +131,31 @@ class TestExecuteNoMembers:
         effects = cron.execute()
         assert effects == []
 
+    @patch("portal_membership.protocols.billing_cron.get_membership")
+    @patch("portal_membership.protocols.billing_cron.Membership")
+    def test_one_bad_patient_does_not_abort_batch(
+        self,
+        mock_membership_cls: MagicMock,
+        mock_get_membership: MagicMock,
+        secrets: dict[str, str],
+    ) -> None:
+        """A non-StripeError exception on one patient must not halt the
+        whole run. Every remaining patient still gets processed; the bad
+        record is logged and skipped."""
+        _set_due(mock_membership_cls, ["bad-patient", "good-patient"])
+
+        # First call (bad-patient) raises, second (good-patient) returns None.
+        mock_get_membership.side_effect = [
+            Exception("transient DB error"),
+            None,
+        ]
+
+        cron = _make_cron(secrets)
+        # Must not raise — the loop's per-patient try/except absorbs the error.
+        cron.execute()
+        # Both patients were attempted.
+        assert mock_get_membership.call_count == 2
+
 
 # ---------------------------------------------------------------------------
 # execute — successful charge
@@ -170,6 +195,7 @@ class TestExecuteSuccess:
             currency="usd",
             description="Membership: Gold (recurring)",
             payment_method_id="pm_test456",
+            idempotency_key=f"portal_membership:patient-abc-123:{today_str}",
         )
         saved = mock_set_membership.call_args[0][1]
         # next_billing_date must be a real ISO date string, not mocked

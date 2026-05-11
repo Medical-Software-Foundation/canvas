@@ -87,15 +87,27 @@ class MonthlyBillingCron(CronTask):
         effects: list[Effect] = []
         for instance in due.select_related("patient"):
             patient_id = str(instance.patient.id)
-            record = get_membership(patient_id)
-            if record is None:
-                # Shouldn't happen — we just queried it — but guard defensively.
+            # Isolate per-patient failures so one bad record can't abort the
+            # whole batch (and skip every still-queued patient for the day).
+            # The combination of __lte=today in the query and the Stripe
+            # Idempotency-Key on the charge call means retried days don't
+            # double-charge.
+            try:
+                record = get_membership(patient_id)
+                if record is None:
+                    # Shouldn't happen — we just queried it — but guard defensively.
+                    continue
+                log.info(
+                    f"portal_membership billing_cron: billing due — patient={patient_id} "
+                    f"amount={record.get('amount_cents')} {record.get('currency')}"
+                )
+                effects.extend(self._process_patient(patient_id, record))
+            except Exception as exc:  # noqa: BLE001 — see comment above
+                log.error(
+                    f"portal_membership billing_cron: skipping patient={patient_id} "
+                    f"after unhandled error: {type(exc).__name__}: {exc}"
+                )
                 continue
-            log.info(
-                f"portal_membership billing_cron: billing due — patient={patient_id} "
-                f"amount={record.get('amount_cents')} {record.get('currency')}"
-            )
-            effects.extend(self._process_patient(patient_id, record))
         return effects
 
     # ------------------------------------------------------------------
@@ -142,6 +154,12 @@ class MonthlyBillingCron(CronTask):
                 f"patient={patient_id} code={record.get('discount_code')}"
             )
         else:
+            # Idempotency-Key on the (patient, billing-date) pair so a retried
+            # cron run after a post-charge DB blip doesn't double-charge —
+            # Stripe deduplicates on this header within a 24h window.
+            idempotency_key = (
+                f"portal_membership:{patient_id}:{record.get('next_billing_date')}"
+            )
             try:
                 processor.charge(
                     customer_id=stripe_customer_id,
@@ -149,6 +167,7 @@ class MonthlyBillingCron(CronTask):
                     currency=currency,
                     description=f"Membership: {plan_name} (recurring)",
                     payment_method_id=pm_id,
+                    idempotency_key=idempotency_key,
                 )
                 charge_succeeded = True
             except StripeError as exc:
