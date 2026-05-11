@@ -474,6 +474,22 @@
       return CURRENCY_SYMBOL + (cents / 100).toFixed(2);
     }
 
+    /* Translate a billing-cycle count + cadence into a patient-facing
+       duration label. The discount config's `months` field semantically
+       counts cycles, not calendar months — so for an annual plan,
+       `3 months` of discount actually means "3 years". */
+    function durationLabel(n, cadence) {
+      var units = {
+        daily: "day",
+        weekly: "week",
+        monthly: "month",
+        quarterly: "quarter",
+        annually: "year",
+      };
+      var unit = units[cadence] || "month";
+      return n + " " + unit + (n === 1 ? "" : "s");
+    }
+
     document.getElementById("promoApplyBtn").addEventListener("click", function() {
       var code = document.getElementById("promoInput").value.trim();
       var feedback = document.getElementById("promoFeedback");
@@ -511,8 +527,8 @@
           : (formatCents(data.value) + " off");
         feedback.className = "promo-feedback ok";
         feedback.textContent =
-          "Applied " + data.code + " — " + descr + " for " + data.months
-          + " month" + (data.months === 1 ? "" : "s")
+          "Applied " + data.code + " — " + descr + " for "
+          + durationLabel(data.months, data.cadence)
           + " (first charge: " + formatCents(data.discounted_cents) + ")";
       })
       .catch(function(e) {

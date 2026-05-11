@@ -291,7 +291,8 @@ class TestPostSignup:
         handler.request.json.return_value = VALID_SIGNUP_BODY
         results = handler.post_signup()
 
-        body = json.loads(results[0].content)
+        # results: [banner_effect, JSONResponse]
+        body = json.loads(results[-1].content)
         assert body["status"] == "ok"
         assert "next_billing_date" in body
         mock_processor.create_customer.assert_called_once_with(
@@ -323,7 +324,7 @@ class TestPostSignup:
         handler.request.json.return_value = {"plan_key": "basic", "payment_method_id": "pm_new2"}
         results = handler.post_signup()
 
-        resp_body = json.loads(results[0].content)
+        resp_body = json.loads(results[-1].content)
         assert resp_body["status"] == "ok"
 
     @patch("portal_membership.protocols.membership_api.release_claim")
@@ -449,7 +450,7 @@ class TestPostSignupWithDiscount:
         }
         results = handler.post_signup()
 
-        body = json.loads(results[0].content)
+        body = json.loads(results[-1].content)
         assert body["status"] == "ok"
         # 10% off 9900 = 990 off → 8910 charged
         charge_kwargs = mock_processor.charge.call_args.kwargs
@@ -528,7 +529,7 @@ class TestPostSignupWithDiscount:
         }
         results = handler.post_signup()
 
-        assert json.loads(results[0].content)["status"] == "ok"
+        assert json.loads(results[-1].content)["status"] == "ok"
         mock_processor.create_customer.assert_called_once()
         mock_processor.charge.assert_not_called()
 
@@ -567,6 +568,33 @@ class TestValidateCode:
         results = handler.post_validate_code()
         body = json.loads(results[0].content)
         assert body["discounted_cents"] == 7900
+
+    def test_returns_plan_cadence(self, mock_event: MagicMock, secrets: dict[str, str]) -> None:
+        """JS uses the cadence to render the duration label ("3 years" vs
+        "3 months") — the response must surface it. Plans without an explicit
+        cadence default to monthly."""
+        handler = _make_handler(mock_event, secrets)
+        handler.request.json.return_value = {"plan_key": "gold", "code": "WELCOME10"}
+        body = json.loads(handler.post_validate_code()[0].content)
+        assert body["cadence"] == "monthly"
+
+    def test_returns_explicit_plan_cadence(
+        self, mock_event: MagicMock, discount_codes: list[dict[str, Any]]
+    ) -> None:
+        """A plan declaring cadence='annually' should surface that in the
+        preview so the JS can render '3 years' rather than '3 months'."""
+        plans = [{"name": "Yearly", "key": "yearly", "price_cents": 99900, "cadence": "annually"}]
+        secrets_yearly = {
+            "STRIPE_SECRET_KEY": "sk_test_fake",
+            "MEMBERSHIP_PLANS": json.dumps(plans),
+            "DISCOUNT_CODES": json.dumps(discount_codes),
+            "STAFF_OFFBOARDING_TEAM_ID": "team-uuid-999",
+            "BILLING_CURRENCY": "usd",
+        }
+        handler = _make_handler(mock_event, secrets_yearly)
+        handler.request.json.return_value = {"plan_key": "yearly", "code": "WELCOME10"}
+        body = json.loads(handler.post_validate_code()[0].content)
+        assert body["cadence"] == "annually"
 
     def test_unknown_plan(self, mock_event: MagicMock, secrets: dict[str, str]) -> None:
         handler = _make_handler(mock_event, secrets)
@@ -723,41 +751,59 @@ class TestGetHistory:
 # ---------------------------------------------------------------------------
 
 class TestPostCancel:
-    @patch("portal_membership.protocols.membership_api.get_membership")
-    def test_no_active_membership(self, mock_get: MagicMock, mock_event: MagicMock, secrets: dict[str, str]) -> None:
-        mock_get.return_value = None
+    @patch("portal_membership.protocols.membership_api._resolve_patient_dbid", return_value=None)
+    def test_no_active_membership(
+        self, _mock_resolve: MagicMock, mock_event: MagicMock, secrets: dict[str, str]
+    ) -> None:
         handler = _make_handler(mock_event, secrets)
         handler.request.json.return_value = {}
         results = handler.post_cancel()
         assert results[0].status_code == HTTPStatus.NOT_FOUND
 
-    @patch("portal_membership.protocols.membership_api.get_membership")
+    @patch("portal_membership.protocols.membership_api.Membership")
+    @patch("portal_membership.protocols.membership_api._resolve_patient_dbid", return_value=1)
     def test_already_cancelled(
         self,
-        mock_get: MagicMock,
+        _mock_resolve: MagicMock,
+        mock_membership_cls: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
-        cancelled_record: dict[str, Any],
     ) -> None:
-        mock_get.return_value = cancelled_record
+        # Conditional UPDATE matches zero rows (membership is not active).
+        mock_membership_cls.objects.filter.return_value.update.return_value = 0
         handler = _make_handler(mock_event, secrets)
         handler.request.json.return_value = {}
         results = handler.post_cancel()
         assert results[0].status_code == HTTPStatus.NOT_FOUND
 
+    def _arrange_cancel(
+        self,
+        mock_membership_cls: MagicMock,
+        mock_get: MagicMock,
+        active_record: dict,
+    ) -> None:
+        # Conditional UPDATE flips active → cancelled. Return 1 to indicate
+        # the current worker won the race.
+        mock_membership_cls.objects.filter.return_value.update.return_value = 1
+        # Re-read after the UPDATE returns the cancelled record.
+        cancelled = {**active_record, "status": "cancelled"}
+        mock_get.return_value = cancelled
+
     @patch("portal_membership.protocols.membership_api.resolve_team_id", return_value="team-uuid")
-    @patch("portal_membership.protocols.membership_api.set_membership")
+    @patch("portal_membership.protocols.membership_api.Membership")
+    @patch("portal_membership.protocols.membership_api._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.membership_api.get_membership")
     def test_successful_cancel_returns_expected_effects(
         self,
         mock_get: MagicMock,
-        mock_set: MagicMock,
+        _mock_resolve: MagicMock,
+        mock_membership_cls: MagicMock,
         _mock_resolve_team: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
         active_record: dict[str, Any],
     ) -> None:
-        mock_get.return_value = active_record
+        self._arrange_cancel(mock_membership_cls, mock_get, active_record)
         handler = _make_handler(mock_event, secrets)
         handler.request.json.return_value = {}
         results = handler.post_cancel()
@@ -766,20 +812,41 @@ class TestPostCancel:
         assert len(results) == 3
         body = json.loads(results[-1].content)
         assert body["status"] == "ok"
-        mock_set.assert_called_once()
 
         # The refreshed status banner should narrate the cancellation with
         # effective date, not leave the old "Active" banner stale on the chart.
         payloads = [str(getattr(r, "payload", "")) for r in results[:-1]]
         assert any("(Cancelled)" in p and "Effective:" in p for p in payloads)
 
+    @patch("portal_membership.protocols.membership_api.Membership")
+    @patch("portal_membership.protocols.membership_api._resolve_patient_dbid", return_value=1)
+    def test_concurrent_cancel_only_one_emits_side_effects(
+        self,
+        _mock_resolve: MagicMock,
+        mock_membership_cls: MagicMock,
+        mock_event: MagicMock,
+        secrets: dict[str, str],
+    ) -> None:
+        """The losing worker in a /cancel race returns 404, so the staff
+        queue gets exactly one off-boarding task per cancellation."""
+        # The losing worker's UPDATE matches zero rows because the winning
+        # worker already flipped status to 'cancelled'.
+        mock_membership_cls.objects.filter.return_value.update.return_value = 0
+        handler = _make_handler(mock_event, secrets)
+        handler.request.json.return_value = {}
+        results = handler.post_cancel()
+        assert len(results) == 1
+        assert results[0].status_code == HTTPStatus.NOT_FOUND
+
     @patch("portal_membership.protocols.membership_api.resolve_team_id", return_value="team-uuid")
-    @patch("portal_membership.protocols.membership_api.set_membership")
+    @patch("portal_membership.protocols.membership_api.Membership")
+    @patch("portal_membership.protocols.membership_api._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.membership_api.get_membership")
     def test_does_not_emit_legacy_cancelled_banner(
         self,
         mock_get: MagicMock,
-        mock_set: MagicMock,
+        _mock_resolve: MagicMock,
+        mock_membership_cls: MagicMock,
         _mock_resolve_team: MagicMock,
         mock_event: MagicMock,
         secrets: dict[str, str],
@@ -787,7 +854,7 @@ class TestPostCancel:
     ) -> None:
         """Regression: the separate 'Cancelled Membership' banner was removed —
         the status banner alone conveys the cancellation."""
-        mock_get.return_value = active_record
+        self._arrange_cancel(mock_membership_cls, mock_get, active_record)
         handler = _make_handler(mock_event, secrets)
         handler.request.json.return_value = {}
         results = handler.post_cancel()
@@ -795,17 +862,19 @@ class TestPostCancel:
         payloads = [str(getattr(r, "payload", "")) for r in results]
         assert not any('"key": "membership-cancelled"' in p for p in payloads)
 
-    @patch("portal_membership.protocols.membership_api.set_membership")
+    @patch("portal_membership.protocols.membership_api.Membership")
+    @patch("portal_membership.protocols.membership_api._resolve_patient_dbid", return_value=1)
     @patch("portal_membership.protocols.membership_api.get_membership")
     def test_cancel_without_team_id(
         self,
         mock_get: MagicMock,
-        mock_set: MagicMock,
+        _mock_resolve: MagicMock,
+        mock_membership_cls: MagicMock,
         mock_event: MagicMock,
         active_record: dict[str, Any],
     ) -> None:
         """Cancel should still work when STAFF_OFFBOARDING_TEAM_ID is not set."""
-        mock_get.return_value = active_record
+        self._arrange_cancel(mock_membership_cls, mock_get, active_record)
         secrets_no_team: dict[str, str] = {
             "STRIPE_SECRET_KEY": "sk_test_fake",
             "MEMBERSHIP_PLANS": "[]",

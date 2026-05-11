@@ -37,7 +37,9 @@ from portal_membership.utils.discount import (
     describe as describe_discount,
     find_code as find_discount_code,
 )
+from portal_membership.models import Membership
 from portal_membership.utils.membership_store import (
+    _resolve_patient_dbid,
     delete_membership,
     get_membership,
     release_claim,
@@ -161,6 +163,10 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
 
         original = int(plan["price_cents"])
         discounted = apply_discount(original, entry["type"], int(entry["value"]))
+        # ``months`` is the practice-facing config field name but semantically
+        # counts billing cycles. Returning the plan's cadence lets the JS
+        # render the preview as "3 years" / "3 days" / "3 months" instead of
+        # the misleading hardcoded "months" label.
         return [
             JSONResponse(
                 {
@@ -169,6 +175,7 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                     "type": entry["type"],
                     "value": int(entry["value"]),
                     "months": int(entry["months"]),
+                    "cadence": plan.get("cadence") or "monthly",
                     "original_cents": original,
                     "discounted_cents": discounted,
                 }
@@ -366,14 +373,23 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
             discount_code=applied_discount_code,
         )
 
+        # Refresh the chart status banner so the provider sees the new
+        # active membership immediately — matches /cancel, /restart, and
+        # the cron's auto-cancel path. Without this, the banner only
+        # appears on the next PATIENT_UPDATED event or plugin redeploy.
+        status_banner_effects = build_status_banner_effects(
+            patient_id=patient_id, record=record
+        )
+
         return [
+            *status_banner_effects,
             JSONResponse(
                 {
                     "status": "ok",
                     "message": f"Membership activated: {plan['name']}",
                     "next_billing_date": record["next_billing_date"],
                 }
-            )
+            ),
         ]
 
     # ------------------------------------------------------------------
@@ -391,9 +407,8 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
         date).
         """
         patient_id = self._patient_id()
-        record = get_membership(patient_id)
-
-        if record is None or record.get("status") != "active":
+        dbid = _resolve_patient_dbid(patient_id)
+        if dbid is None:
             return [
                 JSONResponse(
                     {"error": "No active membership found"},
@@ -401,8 +416,31 @@ class MembershipPortalAPI(PatientSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        record["status"] = "cancelled"
-        set_membership(patient_id, record)
+        # DB-backed mutex: only the worker whose UPDATE flips the row from
+        # 'active' to 'cancelled' emits the side effects. Without this guard,
+        # two concurrent /cancel requests (double-click, two tabs, retried
+        # POST) both pass the read-check and both fire AddTask, duplicating
+        # the staff off-boarding task.
+        updated = Membership.objects.filter(
+            patient_id=dbid, status="active"
+        ).update(status="cancelled")
+        if updated != 1:
+            return [
+                JSONResponse(
+                    {"error": "No active membership found"},
+                    status_code=HTTPStatus.NOT_FOUND,
+                )
+            ]
+
+        record = get_membership(patient_id)
+        if record is None:
+            # The row vanished between the UPDATE and the re-read — defensive.
+            return [
+                JSONResponse(
+                    {"error": "No active membership found"},
+                    status_code=HTTPStatus.NOT_FOUND,
+                )
+            ]
 
         log.info(f"portal_membership: cancelled — patient={patient_id}")
 
