@@ -1,0 +1,25 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "prescribing_pharmacy_verification",
+    "description": "Block Prescribe, Refill, and Adjust-Prescription command commit until a pharmacy is selected.",
+    "components": {
+        "protocols": [],
+        "handlers": [
+            {
+                "class": "prescribing_pharmacy_verification.handlers.require_pharmacy:RequirePharmacyOnPrescription",
+                "description": "Validates that Prescribe, Refill, and Adjust-Prescription commands have a pharmacy set before allowing commit."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
