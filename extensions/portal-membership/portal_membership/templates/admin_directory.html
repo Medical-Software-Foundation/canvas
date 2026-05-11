@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Memberships</title>
+  <style>
+    :root {
+      --bg: #030B14;
+      --surface: #051222;
+      --surface-2: #07182D;
+      --border: rgba(255,255,255,0.10);
+      --border-soft: rgba(255,255,255,0.06);
+      --text: #EBF5FC;
+      --muted: #DCE5EB;
+      --tertiary: #8496AA;
+      --primary: #01A4FF;
+      --secondary: #01ECFF;
+      --green: #55F7A9;
+      --orange: #FFA24C;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+    h1 {
+      color: #fff;
+      font-size: 22px;
+      margin: 0 0 4px 0;
+      font-weight: 600;
+    }
+    .subtitle { color: var(--tertiary); margin-bottom: 24px; font-size: 13px; }
+    .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+    .pill {
+      background: var(--surface-2);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .pill:hover { border-color: rgba(255,255,255,0.18); }
+    .pill.active {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: #fff;
+      border-color: transparent;
+    }
+    .total { color: var(--tertiary); margin-left: auto; font-size: 13px; }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left;
+      padding: 12px 16px;
+      background: var(--surface-2);
+      color: var(--tertiary);
+      font-weight: 500;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    tbody td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .patient-link { color: var(--primary); text-decoration: none; font-weight: 500; }
+    .patient-link:hover { color: var(--secondary); text-decoration: underline; }
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-active { background: rgba(85, 247, 169, 0.12); color: var(--green); }
+    .status-cancelled { background: rgba(255, 162, 76, 0.12); color: var(--orange); }
+    .empty { padding: 48px 24px; text-align: center; color: var(--tertiary); }
+    .loading { padding: 24px; text-align: center; color: var(--tertiary); }
+    .muted { color: var(--tertiary); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Memberships</h1>
+    <div class="subtitle">All active and cancelled memberships on this instance.</div>
+
+    <div class="toolbar">
+      <button class="pill active" data-filter="all">All</button>
+      <button class="pill" data-filter="active">Active</button>
+      <button class="pill" data-filter="cancelled">Cancelled</button>
+      <span class="total" id="total"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>DOB</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Next billing</th>
+            <th>Amount</th>
+            <th>Signed up</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="7" class="loading">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    var API_BASE = "{{ api_base|escapejs }}";
+    var CHART_BASE = "{{ chart_base|escapejs }}";
+    var currentFilter = "all";
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+    }
+
+    function statusBadge(status) {
+      var cls = "status-badge status-" + escapeHtml(status);
+      var label = status.charAt(0).toUpperCase() + status.slice(1);
+      return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
+    }
+
+    function chartUrl(patientId) {
+      return CHART_BASE + "/" + encodeURIComponent(patientId);
+    }
+
+    function renderRows(memberships) {
+      var tbody = document.getElementById("tbody");
+      if (!memberships.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No memberships in this view.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = memberships.map(function(m) {
+        var name = m.patient_name || "(unknown)";
+        var nameCell = m.patient_id
+          ? '<a class="patient-link" href="' + escapeHtml(chartUrl(m.patient_id))
+            + '" target="_blank" rel="noopener">' + escapeHtml(name) + '</a>'
+          : escapeHtml(name);
+        return '<tr>'
+          + '<td>' + nameCell + '</td>'
+          + '<td>' + escapeHtml(m.dob || '') + '</td>'
+          + '<td>' + escapeHtml(m.plan || '') + '</td>'
+          + '<td>' + statusBadge(m.status || 'unknown') + '</td>'
+          + '<td>' + escapeHtml(m.next_billing_date || '') + '</td>'
+          + '<td>' + escapeHtml(m.amount_display || '') + '</td>'
+          + '<td>' + escapeHtml(m.signed_up_at || '') + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    function load(filter) {
+      var tbody = document.getElementById("tbody");
+      tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading…</td></tr>';
+      fetch(API_BASE + "/memberships?status=" + encodeURIComponent(filter), {
+        credentials: "include",
+        headers: { "Accept": "application/json" }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        renderRows(data.memberships || []);
+        document.getElementById("total").textContent = (data.total || 0) + " "
+          + ((data.total === 1) ? "membership" : "memberships");
+      })
+      .catch(function() {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">Failed to load memberships.</td></tr>';
+      });
+    }
+
+    document.querySelectorAll(".pill").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        document.querySelectorAll(".pill").forEach(function(b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        currentFilter = btn.getAttribute("data-filter");
+        load(currentFilter);
+      });
+    });
+
+    load(currentFilter);
+  </script>
+</body>
+</html>
