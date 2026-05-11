@@ -6,6 +6,9 @@ authors = [{ name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com" 
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+    "canvas[test-utils]",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
