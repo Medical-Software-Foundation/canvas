@@ -1,0 +1,88 @@
+name: "Nutrition: Dietary Intake"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "NUTRITION_DIETARY_INTAKE"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+questions:
+- content: "Meals per day"
+  code_system: "INTERNAL"
+  code: "NUT_DI_MEALS"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Meals per day"
+    code: "NUT_DI_MEALS_RESP"
+    value: ''
+- content: "Snacks per day"
+  code_system: "INTERNAL"
+  code: "NUT_DI_SNACKS_DAY"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Snacks per day"
+    code: "NUT_DI_SNACKS_DAY_RESP"
+    value: ''
+- content: "Breakfast (AM)"
+  code_system: "INTERNAL"
+  code: "NUT_DI_BREAKFAST"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Breakfast"
+    code: "NUT_DI_BREAKFAST_RESP"
+    value: ''
+- content: "Lunch (PM)"
+  code_system: "INTERNAL"
+  code: "NUT_DI_LUNCH"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Lunch"
+    code: "NUT_DI_LUNCH_RESP"
+    value: ''
+- content: "Dinner (PM)"
+  code_system: "INTERNAL"
+  code: "NUT_DI_DINNER"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Dinner"
+    code: "NUT_DI_DINNER_RESP"
+    value: ''
+- content: "Snacks"
+  code_system: "INTERNAL"
+  code: "NUT_DI_SNACKS"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Snacks"
+    code: "NUT_DI_SNACKS_RESP"
+    value: ''
+- content: "Fluids"
+  code_system: "INTERNAL"
+  code: "NUT_DI_FLUIDS"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Fluids"
+    code: "NUT_DI_FLUIDS_RESP"
+    value: ''
+- content: "ETOH"
+  code_system: "INTERNAL"
+  code: "NUT_DI_ETOH"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "ETOH"
+    code: "NUT_DI_ETOH_RESP"
+    value: ''
+- content: "Physical activity history and limitations"
+  code_system: "INTERNAL"
+  code: "NUT_DI_PHYSICAL_ACTIVITY"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Physical activity"
+    code: "NUT_DI_PHYSICAL_ACTIVITY_RESP"
+    value: ''
