@@ -42,6 +42,13 @@ Subscribes to `EventType.COMMAND__FORM__GET_ADDITIONAL_FIELDS`. On each event it
 
 Subscribes to `MEDICATION_STATEMENT_COMMAND__POST_VALIDATION` and `STOP_MEDICATION_COMMAND__POST_VALIDATION`. On commit it reads the stored `alert_facility` metadata via `CommandMetadata.objects.filter(...)`. If the value is missing or blank it returns a `CommandValidationErrorEffect` with the message *"Alert Facility is a required field."* — the platform surfaces the error inline and refuses the commit until the user makes a choice.
 
+## Demo
+
+[Loom walkthrough](https://www.loom.com/share/80b5b115d70a4609a2aaa59cbf62307a) —
+shows the Alert facility dropdown rendering on a Medication Statement command,
+the validation error appearing when commit is attempted without a value, and
+the command committing cleanly once a value is selected.
+
 ## Project layout
 
 ```
