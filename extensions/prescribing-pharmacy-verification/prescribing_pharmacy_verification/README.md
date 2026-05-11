@@ -35,8 +35,9 @@ Select a pharmacy before recording.
 
 ## Demo
 
-_TODO: add demo video link or screenshots showing the error appearing on a
-Prescribe command without a pharmacy and disappearing once one is selected._
+[Loom walkthrough](https://www.loom.com/share/7b59432326e94902b063dfc5d8158a19) —
+shows the validation error appearing on a Prescribe command without a pharmacy
+and disappearing once one is selected.
 
 ## Development
 
