@@ -135,10 +135,32 @@ def test_endpoint_partial_allocation_remainder_unattributed() -> None:
 
 
 def test_endpoint_skips_candid_originated_payments() -> None:
-    """Payments originating from Candid sync are not re-reported."""
-    effects, client = _run_endpoint(
-        _payment_context(payment_method="Candid patient payment pay-123")
-    )
+    """Payments with an embedded ID that's already synced are not re-reported."""
+    from candid.api.report_payment import CandidReportPaymentAPI
+
+    mock_claim = MagicMock()
+    mock_claim.id = "claim-1"
+
+    with (
+        patch("candid.api.report_payment.CandidClient") as MockClient,
+        patch("candid.api.report_payment.Claim") as MockClaim,
+        patch(
+            "candid.api.report_payment.get_claim_metadata_set",
+            return_value={"pay-123"},
+        ),
+    ):
+        client = MockClient.from_secrets.return_value
+        MockClaim.objects.filter.return_value = [mock_claim]
+
+        handler = CandidReportPaymentAPI.__new__(CandidReportPaymentAPI)
+        handler.secrets = MOCK_SECRETS
+        handler.request = MagicMock()
+        handler.request.json.return_value = _payment_context(
+            payment_method="other: Candid patient payment pay-123",
+            claim_payments=[{"claim_id": "claim-1", "allocated_cents": "10000.00"}],
+        )
+
+        effects = handler.post()
 
     assert effects == []
     client.submit_payment.assert_not_called()

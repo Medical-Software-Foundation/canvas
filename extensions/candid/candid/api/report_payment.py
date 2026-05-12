@@ -44,14 +44,20 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
 
         total_cents = int(Decimal(total_amount_cents))
 
+        # Extract embedded payment_id if this looks like a Candid-originated payment.
+        # The event's payment_method_and_description is e.g.
+        # "other: Candid patient payment 019e1cdb-..." (lowercase method prefix).
+        prefix = PATIENT_PAYMENT_DESC_PREFIX.strip()
         embedded_id = ""
-        if payment_method.startswith(PATIENT_PAYMENT_DESC_PREFIX):
-            embedded_id = payment_method[len(PATIENT_PAYMENT_DESC_PREFIX):].strip()
+        if prefix in payment_method:
+            embedded_id = payment_method.split(prefix, 1)[1].strip()
 
         claim_ids = [cp.get("claim_id") for cp in claim_payments if cp.get("claim_id")]
-        claims_by_id = {
-            str(c.id): c for c in Claim.objects.filter(id__in=claim_ids)
-        } if claim_ids else {}
+        claims_by_id = (
+            {str(c.id): c for c in Claim.objects.filter(id__in=claim_ids)}
+            if claim_ids
+            else {}
+        )
 
         allocations: list[dict] = []
         # (claim_id, reported_payment_ids_set) — cached so the success path
@@ -69,6 +75,7 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
                 else set()
             )
 
+            # Skip if the embedded payment_id is already synced or reported
             if embedded_id and claim:
                 synced_set = get_claim_metadata_set(claim, META_SYNCED_PAYMENT_IDS)
                 if embedded_id in synced_set | reported_set:
@@ -91,7 +98,7 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
             reportable_claims.append((claim_ext_id, reported_set))
 
         if not allocations:
-            if embedded_id:
+            if claim_ids:
                 log.info("Candid: skipping payment report — all claims already synced")
                 return []
             allocations.append(_unattributed(total_cents))
