@@ -13,11 +13,12 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect
 from canvas_sdk.effects.task.task import AddTask
 from canvas_sdk.events import EventType
-from candid.api.broadcast import notify_claim_updated
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Claim
 from logger import log
 
+from candid.adjudication_sync import PATIENT_PAYMENT_DESC_PREFIX
+from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.effect_helpers import META_REPORTED_PAYMENT_IDS, get_claim_metadata_set
 from candid.models.sync_state import LOG_TYPE_PAYMENT_REPORTED, SyncLog
@@ -39,7 +40,7 @@ class OnPatientPaymentProcessed(BaseHandler):
         # Skip payments that originated from our own Candid sync — prevents
         # a feedback loop where we sync a payment from Candid, Canvas posts
         # it, the event fires, and we'd report it right back.
-        if "Candid patient payment" in payment_method:
+        if PATIENT_PAYMENT_DESC_PREFIX.strip() in payment_method:
             log.info("Candid: skipping payment report — originated from Candid sync")
             return []
 

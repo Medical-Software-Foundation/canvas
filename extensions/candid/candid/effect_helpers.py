@@ -68,17 +68,23 @@ def format_date_display(date_str: str) -> str:
     return f"{m}-{d}-{y}"
 
 
+def _add_status_banner(
+    claim_effect: ClaimEffect, narrative: str, intent: BannerAlertIntent
+) -> Effect:
+    return claim_effect.add_banner(
+        key=BANNER_KEY,
+        narrative=narrative[:BANNER_NARRATIVE_MAX],
+        intent=intent,
+    )
+
+
 def submission_banner(
     claim_effect: ClaimEffect, submitted_at: str, split_count: int
 ) -> Effect:
     date_display = format_date_display(submitted_at)
     splits_note = f" ({split_count} encounters)" if split_count > 1 else ""
     narrative = f"Candid: Submitted {date_display}{splits_note} | Awaiting response"
-    return claim_effect.add_banner(
-        key=BANNER_KEY,
-        narrative=narrative[:BANNER_NARRATIVE_MAX],
-        intent=BannerAlertIntent.INFO,
-    )
+    return _add_status_banner(claim_effect, narrative, BannerAlertIntent.INFO)
 
 
 def sync_banner(
@@ -94,18 +100,13 @@ def sync_banner(
         parts.append(f"Submitted {format_date_display(submitted_at)}")
     parts.append(f"Last synced {format_date_display(last_sync_at)}")
 
-    narrative = " | ".join(parts)
     intent = (
         BannerAlertIntent.WARNING
         if claim_status.lower() in DENIED_STATUSES
         else BannerAlertIntent.INFO
     )
 
-    return ClaimEffect(claim_id=claim_id).add_banner(
-        key=BANNER_KEY,
-        narrative=narrative[:BANNER_NARRATIVE_MAX],
-        intent=intent,
-    )
+    return _add_status_banner(ClaimEffect(claim_id=claim_id), " | ".join(parts), intent)
 
 
 def claim_metadata(
@@ -152,12 +153,10 @@ def handle_submit_failure(claim_effect: ClaimEffect, comment: str) -> list[Effec
     return [
         claim_effect.add_comment(comment),
         claim_effect.upsert_metadata(key=META_SUBMISSION_ERROR, value=error_value),
-        claim_effect.add_banner(
-            key=BANNER_KEY,
-            narrative=f"Candid: Submission failed {date_display}"[
-                :BANNER_NARRATIVE_MAX
-            ],
-            intent=BannerAlertIntent.WARNING,
+        _add_status_banner(
+            claim_effect,
+            f"Candid: Submission failed {date_display}",
+            BannerAlertIntent.WARNING,
         ),
         claim_effect.move_to_queue(FAILURE_QUEUE.label),
     ]

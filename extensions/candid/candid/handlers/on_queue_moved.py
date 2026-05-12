@@ -43,19 +43,11 @@ class OnClaimQueueMoved(BaseHandler):
         customer_id = self.environment.get("CUSTOMER_IDENTIFIER", "")
         return f"https://{customer_id}.canvasmedical.com"
 
-    def _schedule_submission(self) -> list[Effect]:
-        """Schedule a delayed claim submission to Candid."""
+    def _schedule_async_post(self, path: str, delay_seconds: int) -> list[Effect]:
         claim_id = str(self.event.target.id)
-        instance_url = self._get_instance_url()
-
-        log.info(
-            f"Candid plugin: scheduling submission check for claim {claim_id} "
-            f"in {GRACE_PERIOD_SECONDS}s"
-        )
-
         return [
             HttpRequestEffect(
-                url=f"{instance_url}/plugin-io/api/candid/submit",
+                url=f"{self._get_instance_url()}/plugin-io/api/candid/{path}",
                 method="POST",
                 headers={
                     "Content-Type": "application/json",
@@ -64,26 +56,21 @@ class OnClaimQueueMoved(BaseHandler):
                 body=json.dumps({"claim_id": claim_id}),
             )
             .apply()
-            .set_async(delay_seconds=GRACE_PERIOD_SECONDS),
+            .set_async(delay_seconds=delay_seconds),
         ]
+
+    def _schedule_submission(self) -> list[Effect]:
+        """Schedule a delayed claim submission to Candid."""
+        log.info(
+            f"Candid plugin: scheduling submission check for claim "
+            f"{self.event.target.id} in {GRACE_PERIOD_SECONDS}s"
+        )
+        return self._schedule_async_post("submit", GRACE_PERIOD_SECONDS)
 
     def _schedule_patient_payment_sync(self) -> list[Effect]:
         """Schedule an async patient payment sync when claim enters Patient Balance."""
-        claim_id = str(self.event.target.id)
-        instance_url = self._get_instance_url()
-
-        log.info(f"Candid plugin: scheduling patient payment sync for claim {claim_id}")
-
-        return [
-            HttpRequestEffect(
-                url=f"{instance_url}/plugin-io/api/candid/sync-patient-payments",
-                method="POST",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": self.secrets["CANDID_CLIENT_SECRET"],
-                },
-                body=json.dumps({"claim_id": claim_id}),
-            )
-            .apply()
-            .set_async(delay_seconds=0),
-        ]
+        log.info(
+            f"Candid plugin: scheduling patient payment sync for claim "
+            f"{self.event.target.id}"
+        )
+        return self._schedule_async_post("sync-patient-payments", 0)

@@ -56,9 +56,8 @@ class CandidSubmitAPI(SimpleAPIRoute):
         if not (claim := self._get_claim()):
             return []
 
-        claim_id = claim.id
         effects = self._submit(claim)
-        effects.append(notify_claim_updated(str(claim_id)))
+        effects.append(notify_claim_updated(str(claim.id)))
         return effects
 
     def _submit(self, claim: Claim) -> list[Effect]:

@@ -116,15 +116,21 @@ class CandidClaimDetailAPI(SimpleAPIRoute):
                     "synced_era_ids": [
                         {
                             "id": eid,
-                            "posted_at": (posting_info.get(f"{ERA_DESC_PREFIX}{eid}") or {}).get("posted_at"),
+                            "posted_at": posting_info.get(
+                                f"{ERA_DESC_PREFIX}{eid}", {}
+                            ).get("posted_at"),
                         }
                         for eid in synced_era_ids
                     ],
                     "synced_payment_ids": [
                         {
                             "id": pid,
-                            "posted_at": (posting_info.get(f"{PATIENT_PAYMENT_DESC_PREFIX}{pid}") or {}).get("posted_at"),
-                            "paid_amount": (posting_info.get(f"{PATIENT_PAYMENT_DESC_PREFIX}{pid}") or {}).get("paid_amount"),
+                            "posted_at": posting_info.get(
+                                f"{PATIENT_PAYMENT_DESC_PREFIX}{pid}", {}
+                            ).get("posted_at"),
+                            "paid_amount": posting_info.get(
+                                f"{PATIENT_PAYMENT_DESC_PREFIX}{pid}", {}
+                            ).get("paid_amount"),
                         }
                         for pid in synced_payment_ids
                     ],

@@ -218,11 +218,13 @@ function render(d) {{
 
   // Synced payments (inbound — timestamp from actual posting created date)
   (d.synced_payment_ids || []).forEach(pmt => {{
-    const amt = pmt.paid_amount ? ` $${{pmt.paid_amount}}` : "";
+    const parts = [];
+    if (pmt.paid_amount) parts.push(`$${{pmt.paid_amount}}`);
+    parts.push(`payment_id=${{pmt.id}}`);
     events.push({{
       type: "payment",
       title: "Patient Payment Synced from Candid",
-      detail: `${{amt}} | payment_id=${{pmt.id}}`,
+      detail: parts.join(" | "),
       time: pmt.posted_at || d.last_sync_at,
     }});
   }});
@@ -348,25 +350,26 @@ const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
 const wsUrl = `${{wsProto}}//${{location.host}}/plugin-io/ws/candid/claim-${{CLAIM_ID}}/`;
 let ws;
 let pollInterval;
+let reconnectTimer;
 
 function connectWs() {{
+  reconnectTimer = null;
   ws = new WebSocket(wsUrl);
   ws.onmessage = () => loadTimeline();
+  ws.onopen = () => {{
+    if (pollInterval) {{
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }}
+  }};
   ws.onclose = () => {{
-    // Fall back to polling if WS disconnects
     if (!pollInterval) {{
       pollInterval = setInterval(() => {{
         if (document.visibilityState === "visible") loadTimeline();
       }}, 10000);
     }}
-    // Try to reconnect after 5s
-    setTimeout(connectWs, 5000);
-  }};
-  ws.onopen = () => {{
-    // Stop polling once WS is connected
-    if (pollInterval) {{
-      clearInterval(pollInterval);
-      pollInterval = null;
+    if (!reconnectTimer) {{
+      reconnectTimer = setTimeout(connectWs, 5000);
     }}
   }};
 }}
