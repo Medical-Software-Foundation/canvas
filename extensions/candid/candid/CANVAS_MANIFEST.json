@@ -61,11 +61,11 @@
         "namespace": "canvas__candid",
         "access": "read_write"
     },
-    "secrets": [
-        "CANDID_CLIENT_ID",
-        "CANDID_CLIENT_SECRET",
-        "CANDID_BASE_URL",
-        "namespace_read_write_access_key"
+    "variables": [
+        {"name": "CANDID_CLIENT_ID", "sensitive": true},
+        {"name": "CANDID_CLIENT_SECRET", "sensitive": true},
+        {"name": "CANDID_BASE_URL", "sensitive": false},
+        {"name": "namespace_read_write_access_key", "sensitive": true}
     ],
     "tags": {},
     "references": [],

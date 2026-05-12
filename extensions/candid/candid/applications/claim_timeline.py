@@ -346,14 +346,21 @@ function showToast(msg, type) {{
 loadTimeline();
 
 // Real-time updates via WebSocket (falls back to polling if WS fails)
-const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-const wsUrl = `${{wsProto}}//${{location.host}}/plugin-io/ws/candid/claim-${{CLAIM_ID}}/`;
+// The app runs inside an srcdoc iframe, so location.host is empty.
+// Derive the host from the parent window's origin.
+let _wsHost;
+try {{ _wsHost = window.parent.location.host; }} catch {{ _wsHost = ""; }}
+const _wsProto = (window.parent.location?.protocol ?? location.protocol) === "https:" ? "wss:" : "ws:";
+const wsUrl = _wsHost
+  ? `${{_wsProto}}//${{_wsHost}}/plugin-io/ws/candid/claim-${{CLAIM_ID}}/`
+  : null;
 let ws;
 let pollInterval;
 let reconnectTimer;
 
 function connectWs() {{
   reconnectTimer = null;
+  if (!wsUrl) {{ startPolling(); return; }}
   ws = new WebSocket(wsUrl);
   ws.onmessage = () => loadTimeline();
   ws.onopen = () => {{

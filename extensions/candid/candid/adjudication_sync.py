@@ -522,11 +522,12 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
         )
     if attempted_payment_ids:
         updated_pmt_ids = sorted(synced_pmt_ids | set(attempted_payment_ids))
-        effects.append(
+        effects.insert(
+            0,
             claim_effect.upsert_metadata(
                 key=META_SYNCED_PAYMENT_IDS,
                 value=json.dumps(updated_pmt_ids),
-            )
+            ),
         )
 
     log.info(
@@ -624,11 +625,12 @@ def sync_patient_payments(claim: Claim, secrets: dict) -> list[Effect]:
 
     if attempted_payment_ids:
         updated_pmt_ids = sorted(synced_pmt_ids | set(attempted_payment_ids))
-        effects.append(
+        effects.insert(
+            0,
             claim_effect.upsert_metadata(
                 key=META_SYNCED_PAYMENT_IDS,
                 value=json.dumps(updated_pmt_ids),
-            )
+            ),
         )
 
     log.info(
