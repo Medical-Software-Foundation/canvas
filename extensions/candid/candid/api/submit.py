@@ -22,7 +22,10 @@ class CandidSubmitAPI(SimpleAPIRoute):
     """SimpleAPI endpoint that submits a claim to Candid after the grace period.
 
     Invoked by the plugin's own ``OnClaimQueueMoved`` handler via a delayed
-    ``HttpRequestEffect``. Authentication uses a shared API key secret.
+    (``GRACE_PERIOD_SECONDS``) ``HttpRequestEffect``. Before submitting, the
+    route re-checks that the claim is still in ``QueuedForSubmission`` and
+    skips if the user moved it elsewhere during the grace period.
+    Authentication uses ``CANDID_CLIENT_SECRET`` as a shared API key.
     """
 
     PATH = "/submit"

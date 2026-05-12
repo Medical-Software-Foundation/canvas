@@ -1,7 +1,15 @@
-"""SimpleAPI endpoint that triggers full adjudication sync for a single claim.
+"""SimpleAPI endpoints that trigger Candid sync for a single claim.
 
-Called manually or by future automation to pull ERA data, insurance payments,
-adjustments, and patient payments from Candid for a specific claim.
+Two routes share the same shape (auth + ``{claim_id}`` body) but call into
+different sync functions:
+
+- ``CandidSyncAPI`` (``/sync``) — full adjudication sync: ERA data, insurance
+  payments, adjustments, and patient payments.
+- ``CandidSyncPatientPaymentsAPI`` (``/sync-patient-payments``) — patient
+  payments only. Invoked asynchronously by ``OnClaimQueueMoved`` when a claim
+  enters the Patient Balance queue.
+
+Authentication uses ``CANDID_CLIENT_SECRET`` as a shared API key.
 """
 
 from typing import Callable
@@ -15,14 +23,12 @@ from logger import log
 from candid.adjudication_sync import sync_claim_adjudications, sync_patient_payments
 
 
-class _ClaimSyncAPIBase(SimpleAPIRoute):
-    SYNC_FN: Callable[[Claim, dict], list[Effect]]
-    LOG_LABEL: str
+def _sync_handler(
+    sync_fn: Callable[[Claim, dict], list[Effect]], label: str
+) -> Callable:
+    """Build a ``post`` method for a sync SimpleAPIRoute."""
 
-    def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
-
-    def post(self) -> list[Response | Effect]:
+    def post(self: SimpleAPIRoute) -> list[Response | Effect]:
         body = self.request.json()
         canvas_claim_id = body.get("claim_id")
         if not canvas_claim_id:
@@ -30,28 +36,36 @@ class _ClaimSyncAPIBase(SimpleAPIRoute):
 
         claim = Claim.objects.filter(id=canvas_claim_id).first()
         if not claim:
-            log.warning(f"Candid {self.LOG_LABEL}: claim {canvas_claim_id} not found")
+            log.warning(f"Candid {label}: claim {canvas_claim_id} not found")
             return [JSONResponse({"error": "claim not found"}, status_code=404)]
 
-        effects = type(self).SYNC_FN(claim, self.secrets)
+        effects = sync_fn(claim, self.secrets)
         log.info(
-            f"Candid {self.LOG_LABEL}: triggered for claim {canvas_claim_id}, "
+            f"Candid {label}: triggered for claim {canvas_claim_id}, "
             f"{len(effects)} effects generated"
         )
         return effects
 
+    return post
 
-class CandidSyncAPI(_ClaimSyncAPIBase):
+
+class CandidSyncAPI(SimpleAPIRoute):
     """Trigger full adjudication sync for a single claim."""
 
     PATH = "/sync"
-    SYNC_FN = staticmethod(sync_claim_adjudications)
-    LOG_LABEL = "sync"
+
+    def authenticate(self, credentials: APIKeyCredentials) -> bool:
+        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
+
+    post = _sync_handler(sync_claim_adjudications, "sync")
 
 
-class CandidSyncPatientPaymentsAPI(_ClaimSyncAPIBase):
+class CandidSyncPatientPaymentsAPI(SimpleAPIRoute):
     """Trigger patient payment sync for a single claim (async from queue move)."""
 
     PATH = "/sync-patient-payments"
-    SYNC_FN = staticmethod(sync_patient_payments)
-    LOG_LABEL = "patient payment sync"
+
+    def authenticate(self, credentials: APIKeyCredentials) -> bool:
+        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
+
+    post = _sync_handler(sync_patient_payments, "patient payment sync")

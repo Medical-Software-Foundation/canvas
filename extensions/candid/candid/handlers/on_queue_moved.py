@@ -15,8 +15,12 @@ GRACE_PERIOD_SECONDS = 60
 class OnClaimQueueMoved(BaseHandler):
     """Handle claim queue moves for Candid integration.
 
-    - **QueuedForSubmission**: Schedule a delayed submission to Candid (60s grace period).
-    - **Patient Responsibility** (or other sync triggers): Pull adjudication data from Candid.
+    - **QueuedForSubmission**: Asynchronously dispatch a submission to Candid via the
+      plugin's ``/submit`` SimpleAPI route after a ``GRACE_PERIOD_SECONDS`` delay
+      (60s). During that window the user can move the claim out of the queue;
+      the submit handler's queue re-check will then skip the submission.
+    - **PatientBalance**: Asynchronously dispatch to ``/sync-patient-payments`` to pull
+      patient payments from Candid for this claim.
     """
 
     RESPONDS_TO = EventType.Name(EventType.CLAIM_QUEUE_MOVED)
