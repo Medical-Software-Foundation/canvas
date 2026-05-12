@@ -1,11 +1,9 @@
-import json
-
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.http_request import HttpRequestEffect
 from canvas_sdk.events import EventType
 from canvas_sdk.v1.data.claim import ClaimQueue, ClaimQueues
 from canvas_sdk.handlers import BaseHandler
 from logger import log
+from candid.effect_helpers import schedule_async_post
 
 SUBMISSION_QUEUE = ClaimQueues.QUEUED_FOR_SUBMISSION
 SYNC_TRIGGER_QUEUES = {ClaimQueues.PATIENT_BALANCE}
@@ -43,24 +41,15 @@ class OnClaimQueueMoved(BaseHandler):
 
         return []
 
-    def _get_instance_url(self) -> str:
-        customer_id = self.environment.get("CUSTOMER_IDENTIFIER", "")
-        return f"https://{customer_id}.canvasmedical.com"
-
     def _schedule_async_post(self, path: str, delay_seconds: int) -> list[Effect]:
-        claim_id = str(self.event.target.id)
         return [
-            HttpRequestEffect(
-                url=f"{self._get_instance_url()}/plugin-io/api/candid/{path}",
-                method="POST",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": self.secrets["CANDID_CLIENT_SECRET"],
-                },
-                body=json.dumps({"claim_id": claim_id}),
+            schedule_async_post(
+                self.environment,
+                self.secrets,
+                path,
+                {"claim_id": str(self.event.target.id)},
+                delay_seconds=delay_seconds,
             )
-            .apply()
-            .set_async(delay_seconds=delay_seconds),
         ]
 
     def _schedule_submission(self) -> list[Effect]:

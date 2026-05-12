@@ -6,8 +6,39 @@ from typing import Any
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import BannerAlertIntent, ClaimEffect
+from canvas_sdk.effects.http_request import HttpRequestEffect
 from canvas_sdk.v1.data import Claim
 from canvas_sdk.v1.data.claim import ClaimPayerOrder, ClaimQueues
+
+
+def get_instance_url(environment: dict) -> str:
+    """Derive the Canvas instance URL from the plugin environment."""
+    customer_id = environment.get("CUSTOMER_IDENTIFIER", "")
+    return f"https://{customer_id}.canvasmedical.com"
+
+
+def schedule_async_post(
+    environment: dict,
+    secrets: dict,
+    path: str,
+    body: dict,
+    delay_seconds: int = 0,
+) -> Effect:
+    """Build an async HttpRequestEffect targeting the plugin's own SimpleAPI."""
+    return (
+        HttpRequestEffect(
+            url=f"{get_instance_url(environment)}/plugin-io/api/candid/{path}",
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": secrets["CANDID_CLIENT_SECRET"],
+            },
+            body=json.dumps(body),
+        )
+        .apply()
+        .set_async(delay_seconds=delay_seconds)
+    )
+
 
 BANNER_KEY = "candid-clearinghouse-status"
 BANNER_NARRATIVE_MAX = 90

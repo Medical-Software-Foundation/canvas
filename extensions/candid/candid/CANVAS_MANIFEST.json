@@ -27,6 +27,10 @@
                 "description": "Triggers patient payment sync for a single claim (async from queue move)."
             },
             {
+                "class": "candid.api.report_payment:CandidReportPaymentAPI",
+                "description": "Reports a patient payment to Candid's API (async from payment event)."
+            },
+            {
                 "class": "candid.api.claim_detail:CandidClaimDetailAPI",
                 "description": "Serves Candid timeline data and triggers manual syncs for the claim timeline application."
             },

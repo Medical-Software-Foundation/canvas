@@ -1,17 +1,8 @@
 """Tests for OnClaimQueueMoved handler: submit-on-queue and sync-on-queue."""
 
-import sys
-import types
 from unittest.mock import MagicMock, patch
 
 from canvas_sdk.v1.data.claim import ClaimQueues
-
-# The locked canvas_sdk in this plugin's venv doesn't yet expose
-# canvas_sdk.effects.http_request; stub it so on_queue_moved imports cleanly.
-if "canvas_sdk.effects.http_request" not in sys.modules:
-    stub = types.ModuleType("canvas_sdk.effects.http_request")
-    stub.HttpRequestEffect = MagicMock()
-    sys.modules["canvas_sdk.effects.http_request"] = stub
 
 from candid.handlers.on_queue_moved import GRACE_PERIOD_SECONDS, OnClaimQueueMoved
 
@@ -76,22 +67,21 @@ def test_submission_queue_schedules_delayed_http_request() -> None:
     handler = _build_handler(queue_entered_id="queue-row-id", claim_id="claim-99")
     with (
         _patch_queue_lookup(ClaimQueues.QUEUED_FOR_SUBMISSION),
-        patch("candid.handlers.on_queue_moved.HttpRequestEffect") as MockHttp,
+        patch(
+            "candid.handlers.on_queue_moved.schedule_async_post",
+            return_value="scheduled-effect",
+        ) as mock_dispatch,
     ):
-        # The chain: HttpRequestEffect(...).apply().set_async(delay_seconds=...)
-        applied = MockHttp.return_value.apply.return_value
-        applied.set_async.return_value = "scheduled-effect"
-
         result = handler.compute()
 
         assert result == ["scheduled-effect"]
-        MockHttp.assert_called_once()
-        kwargs = MockHttp.call_args.kwargs
-        assert kwargs["url"] == "https://canvas-test.canvasmedical.com/plugin-io/api/candid/submit"
-        assert kwargs["method"] == "POST"
-        assert kwargs["headers"]["Authorization"] == "client-secret"
-        assert '"claim_id": "claim-99"' in kwargs["body"]
-        applied.set_async.assert_called_once_with(delay_seconds=GRACE_PERIOD_SECONDS)
+        mock_dispatch.assert_called_once_with(
+            ENVIRONMENT,
+            SECRETS,
+            "submit",
+            {"claim_id": "claim-99"},
+            delay_seconds=GRACE_PERIOD_SECONDS,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -103,18 +93,18 @@ def test_patient_balance_schedules_async_patient_payment_sync() -> None:
     handler = _build_handler(queue_entered_id="queue-row-id", claim_id="claim-7")
     with (
         _patch_queue_lookup(ClaimQueues.PATIENT_BALANCE),
-        patch("candid.handlers.on_queue_moved.HttpRequestEffect") as MockHttp,
+        patch(
+            "candid.handlers.on_queue_moved.schedule_async_post",
+            return_value="scheduled-sync",
+        ) as mock_dispatch,
     ):
-        applied = MockHttp.return_value.apply.return_value
-        applied.set_async.return_value = "scheduled-sync"
-
         result = handler.compute()
 
         assert result == ["scheduled-sync"]
-        MockHttp.assert_called_once()
-        kwargs = MockHttp.call_args.kwargs
-        assert "/plugin-io/api/candid/sync-patient-payments" in kwargs["url"]
-        assert kwargs["method"] == "POST"
-        assert kwargs["headers"]["Authorization"] == "client-secret"
-        assert '"claim_id": "claim-7"' in kwargs["body"]
-        applied.set_async.assert_called_once_with(delay_seconds=0)
+        mock_dispatch.assert_called_once_with(
+            ENVIRONMENT,
+            SECRETS,
+            "sync-patient-payments",
+            {"claim_id": "claim-7"},
+            delay_seconds=0,
+        )

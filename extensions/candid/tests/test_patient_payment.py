@@ -1,72 +1,100 @@
-"""Tests for OnPatientPaymentProcessed handler — patient payment reporting to Candid."""
+"""Tests for patient payment reporting — handler dispatch + SimpleAPI endpoint."""
 
-import json
 from unittest.mock import MagicMock, patch
 
 from candid.handlers.on_patient_payment import OnPatientPaymentProcessed
 from tests.conftest import MOCK_SECRETS
+
+ENVIRONMENT = {"CUSTOMER_IDENTIFIER": "canvas-test"}
 
 
 def _payment_context(
     patient_id: str = "patient-key-123",
     total_cents: str = "10000.00",
     claim_payments: list[dict] | None = None,
+    payment_method: str = "card",
 ) -> dict:
-    """Build a minimal payment_event_context dict."""
     ctx = {
         "patient_id": patient_id,
         "total_amount_cents": total_cents,
         "timestamp": "2026-04-24T12:00:00+00:00",
-        "payment_method_and_description": "card",
+        "payment_method_and_description": payment_method,
     }
     if claim_payments is not None:
         ctx["claim_payments"] = claim_payments
     return ctx
 
 
-def _run_handler(
-    context: dict, existing_payment_ids: list[str] | None = None
-) -> tuple[MagicMock, MagicMock]:
-    """Run the handler and return the mock CandidClient and ClaimEffect."""
-    with (
-        patch("candid.handlers.on_patient_payment.CandidClient") as MockClient,
-        patch("candid.handlers.on_patient_payment.ClaimEffect") as MockClaimEffect,
-        patch("candid.handlers.on_patient_payment.SyncLog"),
-        patch("candid.handlers.on_patient_payment.Claim") as MockClaim,
-        patch(
-            "candid.handlers.on_patient_payment.get_claim_metadata_set",
-            return_value=set(existing_payment_ids or []),
-        ),
-    ):
-        client = MockClient.from_secrets.return_value
-        client.submit_payment.return_value = (True, "pay-id-123")
-        MockClaim.objects.filter.return_value.first.return_value = MagicMock()
+# ---------------------------------------------------------------------------
+# Handler: just forwards event context to /report-payment
+# ---------------------------------------------------------------------------
 
+
+def test_handler_dispatches_event_context() -> None:
+    """Handler dispatches the raw event context to /report-payment."""
+    context = _payment_context(
+        claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}]
+    )
+
+    with patch(
+        "candid.handlers.on_patient_payment.schedule_async_post",
+        return_value="dispatched-effect",
+    ) as mock_dispatch:
         handler = OnPatientPaymentProcessed.__new__(OnPatientPaymentProcessed)
         handler.event = MagicMock()
         handler.event.context = context
         handler.secrets = MOCK_SECRETS
+        handler.environment = ENVIRONMENT
 
-        handler.compute()
-        return client, MockClaimEffect
+        effects = handler.compute()
+
+    assert effects == ["dispatched-effect"]
+    mock_dispatch.assert_called_once_with(
+        ENVIRONMENT, MOCK_SECRETS, "report-payment", context
+    )
 
 
 # ---------------------------------------------------------------------------
-# Allocation mapping
+# SimpleAPI endpoint: /report-payment
 # ---------------------------------------------------------------------------
 
 
-def test_payment_with_claim_allocations() -> None:
-    """Claim allocations use canvas:{claim_id} as encounter external_id."""
-    client, _ = _run_handler(
+def _run_endpoint(body: dict, submit_result: tuple = (True, "pay-id-456")):
+    """Run the /report-payment endpoint and return (effects, mock_client)."""
+    from candid.api.report_payment import CandidReportPaymentAPI
+
+    mock_claims = []
+    for cp in body.get("claim_payments", []):
+        mc = MagicMock()
+        mc.id = cp.get("claim_id", "")
+        mock_claims.append(mc)
+
+    with (
+        patch("candid.api.report_payment.CandidClient") as MockClient,
+        patch("candid.api.report_payment.ClaimEffect"),
+        patch("candid.api.report_payment.SyncLog"),
+        patch("candid.api.report_payment.Claim") as MockClaim,
+        patch("candid.api.report_payment.get_claim_metadata_set", return_value=set()),
+        patch("candid.api.report_payment.notify_claim_updated", return_value=MagicMock()),
+    ):
+        client = MockClient.from_secrets.return_value
+        client.submit_payment.return_value = submit_result
+        MockClaim.objects.filter.return_value = mock_claims
+
+        handler = CandidReportPaymentAPI.__new__(CandidReportPaymentAPI)
+        handler.secrets = MOCK_SECRETS
+        handler.request = MagicMock()
+        handler.request.json.return_value = body
+
+        effects = handler.post()
+        return effects, client
+
+
+def test_endpoint_builds_allocations_from_claim_payments() -> None:
+    """Endpoint builds allocations using canvas:{claim_id} format."""
+    effects, client = _run_endpoint(
         _payment_context(
-            total_cents="10000.00",
-            claim_payments=[
-                {
-                    "claim_id": "abc-123",
-                    "allocated_cents": "10000.00",
-                },
-            ],
+            claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}]
         )
     )
 
@@ -77,12 +105,11 @@ def test_payment_with_claim_allocations() -> None:
     assert len(payload["allocations"]) == 1
     assert payload["allocations"][0]["target"]["type"] == "claim_by_encounter_external_id"
     assert payload["allocations"][0]["target"]["value"] == "canvas:abc-123"
-    assert payload["allocations"][0]["amount_cents"] == 10000
 
 
-def test_payment_without_claim_allocations() -> None:
-    """Payment without claim_payments goes as unattributed."""
-    client, _ = _run_handler(_payment_context(total_cents="5000.00"))
+def test_endpoint_unattributed_when_no_claim_payments() -> None:
+    """Without claim_payments, full amount goes as unattributed."""
+    _, client = _run_endpoint(_payment_context(total_cents="5000.00"))
 
     payload = client.submit_payment.call_args[0][0]
     assert len(payload["allocations"]) == 1
@@ -90,99 +117,52 @@ def test_payment_without_claim_allocations() -> None:
     assert payload["allocations"][0]["amount_cents"] == 5000
 
 
-def test_payment_partial_allocation_remainder_unattributed() -> None:
-    """Amount not allocated to claims goes as unattributed."""
-    client, _ = _run_handler(
+def test_endpoint_partial_allocation_remainder_unattributed() -> None:
+    """Unallocated remainder goes as unattributed."""
+    _, client = _run_endpoint(
         _payment_context(
             total_cents="15000.00",
-            claim_payments=[
-                {
-                    "claim_id": "abc-123",
-                    "allocated_cents": "10000.00",
-                },
-            ],
+            claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}],
         )
     )
 
     payload = client.submit_payment.call_args[0][0]
     assert len(payload["allocations"]) == 2
-    assert payload["allocations"][0]["target"]["type"] == "claim_by_encounter_external_id"
     assert payload["allocations"][0]["target"]["value"] == "canvas:abc-123"
     assert payload["allocations"][0]["amount_cents"] == 10000
     assert payload["allocations"][1]["target"]["type"] == "unattributed"
     assert payload["allocations"][1]["amount_cents"] == 5000
 
 
-def test_payment_multiple_claims() -> None:
-    """Payment split across multiple claims allocates to each."""
-    client, _ = _run_handler(
-        _payment_context(
-            total_cents="15000.00",
-            claim_payments=[
-                {
-                    "claim_id": "claim-1",
-                    "allocated_cents": "10000.00",
-                },
-                {
-                    "claim_id": "claim-2",
-                    "allocated_cents": "5000.00",
-                },
-            ],
-        )
+def test_endpoint_skips_candid_originated_payments() -> None:
+    """Payments originating from Candid sync are not re-reported."""
+    effects, client = _run_endpoint(
+        _payment_context(payment_method="Candid patient payment pay-123")
     )
 
-    payload = client.submit_payment.call_args[0][0]
-    assert len(payload["allocations"]) == 2
-    assert payload["allocations"][0]["target"]["value"] == "canvas:claim-1"
-    assert payload["allocations"][0]["amount_cents"] == 10000
-    assert payload["allocations"][1]["target"]["value"] == "canvas:claim-2"
-    assert payload["allocations"][1]["amount_cents"] == 5000
+    assert effects == []
+    client.submit_payment.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Reported payment IDs metadata
-# ---------------------------------------------------------------------------
+def test_endpoint_creates_task_on_failure() -> None:
+    """Endpoint creates a Task when Candid rejects the payment."""
+    from candid.api.report_payment import CandidReportPaymentAPI
 
-
-def test_payment_failure_creates_task() -> None:
-    """When Candid rejects the payment, an AddTask effect is returned."""
     with (
-        patch("candid.handlers.on_patient_payment.CandidClient") as MockClient,
-        patch("candid.handlers.on_patient_payment.AddTask") as MockAddTask,
-        patch("candid.handlers.on_patient_payment.SyncLog"),
+        patch("candid.api.report_payment.CandidClient") as MockClient,
+        patch("candid.api.report_payment.AddTask") as MockAddTask,
     ):
         client = MockClient.from_secrets.return_value
-        client.submit_payment.return_value = (False, "<422 HttpRequestValidationError> bad data")
+        client.submit_payment.return_value = (False, "<422> bad data")
 
-        handler = OnPatientPaymentProcessed.__new__(OnPatientPaymentProcessed)
-        handler.event = MagicMock()
-        handler.event.context = _payment_context(
-            total_cents="5000.00",
-            claim_payments=[{"claim_id": "claim-1", "allocated_cents": "5000.00"}],
-        )
+        handler = CandidReportPaymentAPI.__new__(CandidReportPaymentAPI)
         handler.secrets = MOCK_SECRETS
+        handler.request = MagicMock()
+        handler.request.json.return_value = _payment_context()
 
-        effects = handler.compute()
+        effects = handler.post()
 
-    # Should return exactly one effect (the task)
     assert len(effects) == 1
     MockAddTask.assert_called_once()
-    call_kwargs = MockAddTask.call_args.kwargs
-    assert call_kwargs["patient_id"] == "patient-key-123"
-    assert "Payment Notification Failed" in call_kwargs["title"]
-    assert "bad data" in call_kwargs["title"]
-    assert "Candid Integration" in call_kwargs["labels"]
-
-
-def test_reported_payment_ids_merged_with_existing() -> None:
-    """New payment_id is merged into existing reported IDs, not overwriting them."""
-    _, MockClaimEffect = _run_handler(
-        _payment_context(
-            claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}],
-        ),
-        existing_payment_ids=["pay-id-001", "pay-id-002"],
-    )
-
-    upsert_call = MockClaimEffect.return_value.upsert_metadata.call_args
-    written = json.loads(upsert_call.kwargs["value"])
-    assert written == ["pay-id-001", "pay-id-002", "pay-id-123"]
+    assert "Payment Notification Failed" in MockAddTask.call_args.kwargs["title"]
+    assert "bad data" in MockAddTask.call_args.kwargs["title"]

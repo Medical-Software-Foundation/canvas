@@ -81,14 +81,14 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 
 ### Patient Payment Reporting (Canvas -> Candid)
 
-When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSED` event), the plugin reports it to Candid's `POST /api/patient-payments/v4` endpoint.
+When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSED` event), the handler dispatches the raw event context to the plugin's `/report-payment` SimpleAPI route via an async `HttpRequestEffect` (same pattern as claim submission and patient payment sync). The endpoint then:
 
-- Maps Canvas claim allocations to Candid encounter external IDs using `canvas:{claim_id}` (matching the `external_id` set at submission time)
+- Builds allocations mapping Canvas claim IDs to Candid encounter external IDs using `canvas:{claim_id}` (matching the `external_id` set at submission time)
 - Handles partial allocations (allocated amounts go to specific encounters, remainder goes as unattributed)
-- Supports payments across multiple claims
+- Submits the payment to Candid's `POST /api/patient-payments/v4`
 - Stores the returned `patient_payment_id` on each allocated claim's metadata so the sync knows not to re-post it
 - Writes a `payment_reported` `SyncLog` row per allocated claim for the timeline UI
-- Skips reporting if the originating payment description matches `Candid patient payment ` — this is the prefix the inbound sync writes, and it prevents a feedback loop where a payment pulled from Candid is reported right back
+- Skips reporting if the originating payment description matches `Candid patient payment ` — this prevents a feedback loop where a payment pulled from Candid is reported right back
 - On failure, creates a Canvas Task labeled "Candid Integration" with the error details to notify clinicians
 
 ### Claim Banners
@@ -118,13 +118,14 @@ candid/
     claim_timeline.py         # Application: Candid activity timeline on claim pages
   handlers/
     on_queue_moved.py         # CLAIM_QUEUE_MOVED -> async POST to /submit or /sync-patient-payments
-    on_patient_payment.py     # PATIENT_PAYMENT_PROCESSED -> report to Candid
+    on_patient_payment.py     # PATIENT_PAYMENT_PROCESSED -> async POST to /report-payment
   api/
     broadcast.py              # notify_claim_updated: Broadcast effect to the claim WebSocket channel
     client.py                 # CandidClient: OAuth, submit_claim, submit_payment,
                               #   get_encounter, get_patient_payments
     claim_detail.py           # SimpleAPI: timeline data (GET) + manual full sync (POST) (/claim-detail)
     payload_builder.py        # Build Candid encounter payloads with claim splitting
+    report_payment.py         # SimpleAPI: report patient payment to Candid (/report-payment)
     submit.py                 # SimpleAPI: async claim submission (/submit)
     sync.py                   # SimpleAPI: trigger full adjudication sync (/sync)
                               #   and patient-payment-only sync (/sync-patient-payments)
