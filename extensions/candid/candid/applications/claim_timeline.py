@@ -53,7 +53,7 @@ def _html(claim_id: str | None) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px; color: #333; font-size: 13px; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 16px 16px 32px; color: #333; font-size: 13px; }}
 
   .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }}
   .header h2 {{ font-size: 15px; font-weight: 600; }}
