@@ -81,7 +81,7 @@ class CandidDashboardAPI(SimpleAPIRoute):
                     "candid_status": candid_status,
                     "submitted_at": meta.get(META_SUBMITTED_AT, ""),
                     "last_sync_at": meta.get(META_LAST_SYNC, ""),
-                    "current_queue": claim.current_queue.name
+                    "current_queue": claim.current_queue.display_name
                     if claim.current_queue
                     else "",
                     "has_error": has_error,
