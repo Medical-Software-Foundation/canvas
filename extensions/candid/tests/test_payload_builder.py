@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from candid.api.payload_builder import (
     MAX_DIAGNOSES_PER_ENCOUNTER,
+    MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE,
     OVERFLOW_CHARGE_CENTS,
     OVERFLOW_CPT_CODE,
     _add_service_lines,
@@ -162,6 +163,13 @@ def test_overflow_line_structure() -> None:
     assert line["quantity"] == "1"
 
 
+def test_overflow_line_caps_pointers_at_max() -> None:
+    """Overflow line points to at most 4 diagnoses (837 limit)."""
+    line = _make_overflow_service_line(MAX_DIAGNOSES_PER_ENCOUNTER)
+    assert line["diagnosis_pointers"] == [0, 1, 2, 3]
+    assert len(line["diagnosis_pointers"]) == MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE
+
+
 # ---------------------------------------------------------------------------
 # _add_service_lines — diagnosis pointer sorting
 # ---------------------------------------------------------------------------
@@ -219,6 +227,24 @@ def test_diagnosis_pointers_are_sorted_ascending() -> None:
     pointers = payload["service_lines"][0]["diagnosis_pointers"]
     # Should be sorted: [0, 1, 2] not [1, 0, 2]
     assert pointers == [0, 1, 2]
+
+
+def test_diagnosis_pointers_capped_at_four() -> None:
+    """Service line links to at most 4 diagnoses (837 limit)."""
+    payload: dict = {
+        "diagnoses": [
+            {"code": f"DX_{i}", "code_type": "ABK" if i == 0 else "ABF"}
+            for i in range(6)
+        ]
+    }
+
+    li = _fake_line_item("99213", 100, ["DX_0", "DX_1", "DX_2", "DX_3", "DX_4", "DX_5"])
+    claim = _fake_claim([li])
+
+    _add_service_lines(claim, payload)
+
+    pointers = payload["service_lines"][0]["diagnosis_pointers"]
+    assert pointers == [0, 1, 2, 3]
 
 
 def test_diagnosis_pointers_sorted_with_subset() -> None:

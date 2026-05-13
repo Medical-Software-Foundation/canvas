@@ -20,6 +20,7 @@ CANVAS = "CANVAS"
 TELEHEALTH_PLACES_OF_SERVICE = {"02", "10"}
 
 MAX_DIAGNOSES_PER_ENCOUNTER = 12
+MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE = 4
 OVERFLOW_CPT_CODE = "99499"
 OVERFLOW_CHARGE_CENTS = 1  # $0.01 — some payers reject $0.00 as "missing charge"
 
@@ -203,7 +204,9 @@ def _make_overflow_service_line(num_diagnoses: int) -> dict:
         "units": "UN",
         "quantity": "1",
         "charge_amount_cents": OVERFLOW_CHARGE_CENTS,
-        "diagnosis_pointers": list(range(num_diagnoses)),
+        "diagnosis_pointers": list(
+            range(min(num_diagnoses, MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE))
+        ),
     }
 
 
@@ -277,7 +280,9 @@ def _add_service_lines(claim: Claim, payload: dict) -> None:
             if code is not None and code in diagnosis_code_to_index:
                 pointer_indices.append(diagnosis_code_to_index[code])
         if pointer_indices:
-            service_line["diagnosis_pointers"] = sorted(pointer_indices)
+            service_line["diagnosis_pointers"] = sorted(pointer_indices)[
+                :MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE
+            ]
 
         modifiers = list(line_item.modifiers.values_list("modifier", flat=True))
         if modifiers:
