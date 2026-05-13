@@ -77,7 +77,7 @@ def _html() -> str:
   .col-filter:hover { background: #f9fafb; }
   .col-filter.active { background: #eff6ff; border-color: #93c5fd; color: #1e40af; }
   .filter-popup {
-    display: none; position: absolute; top: 100%; left: 0; margin-top: 4px;
+    display: none; position: absolute; top: 0px; left: 100%; margin-left: 2px;
     background: white; border: 1px solid #d1d5db; border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 220px; z-index: 10;
     font-weight: 400; text-transform: none; letter-spacing: 0;
@@ -101,10 +101,7 @@ def _html() -> str:
   }
   .filter-popup label:hover { background: #f9fafb; }
   .filter-popup label input { margin: 0; }
-  .patient-search-popup {
-    padding: 10px; display: none;
-    top: 0; left: 100%; margin-top: 0; margin-left: 4px;
-  }
+  .patient-search-popup { padding: 10px; }
   .patient-search-popup.open { display: flex; gap: 8px; align-items: center; }
   .patient-search-popup input[type="text"] {
     flex: 1; padding: 5px 8px; font-size: 12px;
