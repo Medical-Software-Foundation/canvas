@@ -41,4 +41,11 @@ The recording dot pulses with your voice level. If no audio is detected for 7.5 
 
 ## Screenshots
 
-> Screenshots to be added after final UAT — capture idle state, recording state, and transcript review state.
+![Dictate tab — idle state](assets/screenshots/screenshot-dictate-idle.png)
+*Select HPI or Plan, then click Record*
+
+![Dictate tab — recording](assets/screenshots/screenshot-dictate-recording.png)
+*Audio level dot pulses while recording, with Pause and Finish controls*
+
+![Dictate tab — transcript review](assets/screenshots/screenshot-dictate-transcript.png)
+*Review and edit the transcript before adding to the note*
