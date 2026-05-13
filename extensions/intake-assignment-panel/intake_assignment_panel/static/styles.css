@@ -1,0 +1,214 @@
+:root {
+    --canvas-base01: #030B14;
+    --canvas-base02: #051222;
+    --canvas-base03: #07182D;
+    --canvas-primary: #01A4FF;
+    --canvas-secondary: #01ECFF;
+    --canvas-text-body: #EBF5FC;
+    --canvas-text-heading: #FFFFFF;
+    --canvas-text-muted: #DCE5EB;
+    --canvas-text-faint: #8496AA;
+    --canvas-accent-cyan: #02E3FB;
+    --canvas-accent-orange: #FFA24C;
+    --canvas-border-subtle: rgba(255, 255, 255, 0.06);
+    --canvas-border-default: rgba(255, 255, 255, 0.10);
+    --canvas-border-hover: rgba(255, 255, 255, 0.15);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    background-color: var(--canvas-base01);
+    color: var(--canvas-text-body);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+.page-header {
+    padding: 24px 32px 8px;
+    border-bottom: 1px solid var(--canvas-border-subtle);
+}
+
+.page-header h1 {
+    margin: 0 0 4px;
+    color: var(--canvas-text-heading);
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.page-subtitle {
+    margin: 0;
+    color: var(--canvas-text-muted);
+    font-size: 13px;
+}
+
+.table-container {
+    padding: 16px 32px 32px;
+}
+
+.loading {
+    color: var(--canvas-text-faint);
+    font-style: italic;
+}
+
+.table-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.filter-banner {
+    background-color: var(--canvas-base02);
+    border: 1px solid var(--canvas-border-subtle);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    flex: 1 1 auto;
+}
+
+.filter-banner-unlicensed {
+    border-color: rgba(255, 162, 76, 0.25);
+}
+
+.filter-label {
+    color: var(--canvas-text-muted);
+    font-size: 13px;
+}
+
+.filter-states {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.state-pill {
+    display: inline-block;
+    background-color: var(--canvas-base03);
+    color: var(--canvas-accent-cyan);
+    border: 1px solid var(--canvas-border-default);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.state-missing {
+    color: var(--canvas-text-faint);
+}
+
+.result-count {
+    color: var(--canvas-text-faint);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.intake-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background-color: var(--canvas-base02);
+    border: 1px solid var(--canvas-border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.intake-table thead th {
+    text-align: left;
+    padding: 12px 16px;
+    background-color: var(--canvas-base03);
+    color: var(--canvas-text-muted);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--canvas-border-subtle);
+    user-select: none;
+    white-space: nowrap;
+}
+
+.intake-table th.sortable {
+    cursor: pointer;
+}
+
+.intake-table th.sortable:hover {
+    color: var(--canvas-text-heading);
+    background-color: rgba(1, 164, 255, 0.08);
+}
+
+.intake-table th.sorted-asc,
+.intake-table th.sorted-desc {
+    color: var(--canvas-primary);
+}
+
+.sort-arrow {
+    margin-left: 4px;
+    font-size: 10px;
+}
+
+.intake-table tbody tr {
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+
+.intake-table tbody tr:not(:last-child) td {
+    border-bottom: 1px solid var(--canvas-border-subtle);
+}
+
+.intake-table tbody tr:hover {
+    background-color: rgba(1, 164, 255, 0.05);
+}
+
+.intake-table tbody td {
+    padding: 14px 16px;
+    color: var(--canvas-text-body);
+    vertical-align: middle;
+}
+
+.patient-link {
+    color: var(--canvas-text-heading);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.patient-link:hover {
+    color: var(--canvas-secondary);
+    text-decoration: underline;
+}
+
+.col-pending {
+    font-variant-numeric: tabular-nums;
+    color: var(--canvas-text-muted);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 64px 24px;
+    background-color: var(--canvas-base02);
+    border: 1px solid var(--canvas-border-subtle);
+    border-radius: 12px;
+}
+
+.empty-title {
+    margin: 0 0 8px;
+    color: var(--canvas-text-heading);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.empty-subtitle {
+    margin: 0;
+    color: var(--canvas-text-muted);
+    font-size: 13px;
+}
