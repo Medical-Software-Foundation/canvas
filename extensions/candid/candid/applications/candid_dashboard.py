@@ -497,7 +497,7 @@ function renderBody() {
   tbody.innerHTML = visible.map(c => {
     const cls = c.has_error ? "error" : (c.is_denied ? "denied" : "");
     return `
-      <tr class="${cls}" onclick="openClaim('${escapeHtml(c.id)}')">
+      <tr class="${cls}" onclick="openClaim('${escapeHtml(c.dbid)}')">
         <td>
           <div class="patient">${escapeHtml(c.patient_name)}</div>
         </td>

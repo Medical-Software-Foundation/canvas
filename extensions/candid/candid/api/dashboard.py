@@ -75,12 +75,15 @@ class CandidDashboardAPI(SimpleAPIRoute):
             results.append(
                 {
                     "id": str(claim.id),
+                    "dbid": claim.dbid,
                     "patient_name": patient_name,
                     "patient_id": patient_id,
                     "candid_status": candid_status,
                     "submitted_at": meta.get(META_SUBMITTED_AT, ""),
                     "last_sync_at": meta.get(META_LAST_SYNC, ""),
-                    "current_queue": claim.current_queue.name if claim.current_queue else "",
+                    "current_queue": claim.current_queue.name
+                    if claim.current_queue
+                    else "",
                     "has_error": has_error,
                     "error_message": error_obj.get("error") if error_obj else None,
                     "is_denied": is_denied,
