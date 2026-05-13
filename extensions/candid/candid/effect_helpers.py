@@ -68,15 +68,20 @@ FAILURE_QUEUE = ClaimQueues.NEEDS_CODING_REVIEW
 SUCCESS_QUEUE = ClaimQueues.FILED_AWAITING_RESPONSE
 
 
+def parse_metadata_json(raw: str | None) -> Any:
+    """Parse a metadata value as JSON, falling back to the raw string."""
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return raw
+
+
 def get_claim_metadata(claim: Claim, key: str) -> Any:
     """Read a metadata value from a claim, returning parsed JSON or raw string."""
     meta = claim.metadata.filter(key=key).first()
-    if not meta:
-        return None
-    try:
-        return json.loads(meta.value)
-    except (ValueError, TypeError):
-        return meta.value
+    return parse_metadata_json(meta.value) if meta else None
 
 
 def get_claim_metadata_set(claim: Claim, key: str) -> set[str]:

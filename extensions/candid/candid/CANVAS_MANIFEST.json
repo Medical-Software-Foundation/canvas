@@ -35,6 +35,10 @@
                 "description": "Serves Candid timeline data and triggers manual syncs for the claim timeline application."
             },
             {
+                "class": "candid.api.dashboard:CandidDashboardAPI",
+                "description": "Serves aggregated Candid claim data for the dashboard application."
+            },
+            {
                 "class": "candid.cron.nightly_sync:NightlyCandidSync",
                 "description": "Nightly cron (2 AM) that syncs adjudication data for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance, and PatientBalance."
             },
@@ -54,6 +58,13 @@
                 "description": "Shows Candid submission, adjudication, and payment activity for the current claim.",
                 "icon": "assets/candid-icon.png",
                 "scope": "global"
+            },
+            {
+                "class": "candid.applications.candid_dashboard:CandidDashboard",
+                "name": "Candid Dashboard",
+                "description": "Lists all claims submitted to Candid with their current status.",
+                "icon": "assets/candid-icon.png",
+                "scope": "provider_menu_item"
             }
         ]
     },
