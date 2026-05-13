@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "voice-dictation"
 version = "0.0.1"
 description = "Voice dictation plugin for Canvas — ElevenLabs STT for HPI and Plan commands"
+license = "MIT"
 requires-python = ">=3.11,<3.13"
 dependencies = ["canvas>=0.1.4"]
 

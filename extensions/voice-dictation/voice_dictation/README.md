@@ -1,40 +1,44 @@
 # Voice Dictation
 
-Voice dictation for HPI and Plan commands in Canvas using ElevenLabs speech-to-text.
+## What it does
 
-## Features
+Adds a "Dictate" tab to patient notes where providers can record voice dictation and create HPI (History of Present Illness) or Plan commands from the transcript. Audio is transcribed using ElevenLabs Scribe v1 speech-to-text. After recording, providers can review and edit the transcript before adding it to the note as a command.
 
-- **Dictate tab** appears in every note as a NoteApplication
-- **HPI / Plan selector** — choose which command type to create
-- **Scribe-style recording controls** — Record, Pause, Resume, Finish (2-click confirm)
-- **Audio level visualization** — recording dot pulses with voice activity
-- **Silence detection** — warning after 7.5s of no audio detected
-- **ElevenLabs Scribe v1** batch transcription
-- **Editable transcript** — review and modify text before adding to note
-- **Command origination** — creates HPI or Plan command in the note
+## Problem it solves
 
-## Triggers
+Providers often prefer speaking over typing when documenting clinical encounters. Without dictation, they must manually type narrative text into HPI and Plan commands, which slows down charting. This plugin lets providers dictate directly into their notes with a familiar record/pause/resume workflow, reducing documentation time.
 
-- `APPLICATION__ON_GET` — shows the Dictate tab in notes
-- `APPLICATION__ON_OPEN` — loads the recording UI when tab is selected
-- `SIMPLE_API_AUTHENTICATE` / `SIMPLE_API_REQUEST` — serves UI and handles API calls
+## Who it's for
 
-## Effects
+Any provider who documents patient encounters in Canvas notes — primary care, specialists, and other clinicians who write HPI and Plan narratives.
 
-- `SHOW_APPLICATION` — registers the Dictate tab
-- `LAUNCH_MODAL` (target: NOTE) — renders recording UI in the tab
-- `ORIGINATE_HPI_COMMAND` — creates HPI command from transcript
-- `ORIGINATE_PLAN_COMMAND` — creates Plan command from transcript
-
-## Configuration
-
-Set the following secret after installing:
-
-- `ELEVENLABS_API_KEY` — Your ElevenLabs API key (get one at https://elevenlabs.io)
-
-## Installation
+## How to install
 
 ```bash
 canvas install voice_dictation --host <your-instance>
 canvas config set voice_dictation ELEVENLABS_API_KEY=<your-key> --host <your-instance>
 ```
+
+## Configuration
+
+| Secret | Description |
+|--------|-------------|
+| `ELEVENLABS_API_KEY` | Your ElevenLabs API key. Get one at [elevenlabs.io](https://elevenlabs.io). Required for transcription. |
+
+No other configuration is needed. The plugin works with any note type.
+
+## How it works
+
+1. Open a patient note — the **Dictate** tab appears alongside other note tabs
+2. Select **HPI** or **Plan** to choose the command type
+3. Click **Record** and speak your dictation
+4. Use **Pause** and **Resume** as needed
+5. Click **Finish** (two clicks to confirm) to send audio for transcription
+6. Review and edit the transcript in the text area
+7. Click **Add to Note** to create the command
+
+The recording dot pulses with your voice level. If no audio is detected for 7.5 seconds, a warning banner appears prompting you to check your microphone.
+
+## Screenshots
+
+> Screenshots to be added after final UAT — capture idle state, recording state, and transcript review state.
