@@ -12,6 +12,7 @@ from tests.conftest import MOCK_SECRETS
 def _build_handler(claim: MagicMock | None, body: dict | None = None) -> CandidSubmitAPI:
     handler = CandidSubmitAPI.__new__(CandidSubmitAPI)
     handler.secrets = MOCK_SECRETS
+    handler.environment = {"INSTALLATION_TIME_ZONE": "US/Central"}
     handler.request = MagicMock()
     handler.request.json.return_value = (
         {"claim_id": "claim-1"} if body is None else body

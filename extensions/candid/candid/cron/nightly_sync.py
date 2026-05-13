@@ -4,7 +4,14 @@ Queries Canvas for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance,
 and PatientBalance queues that have Candid encounter metadata, then runs
 ``sync_claim_adjudications`` on each to pull ERA data, patient payments, and
 post them back to Canvas.
+
+The cron fires every hour but only does work at 2 AM in the instance's
+configured time zone (``INSTALLATION_TIME_ZONE``). This avoids hardcoding
+a UTC hour that maps to a different local time for each customer.
 """
+
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.handlers.cron_task import CronTask
@@ -20,18 +27,24 @@ SYNC_QUEUES = (
     ClaimQueues.PATIENT_BALANCE,
 )
 
+TARGET_HOUR = 2  # 2 AM local time
+
 
 class NightlyCandidSync(CronTask):
-    """Run at 2 AM daily — sync adjudication data for all pending Candid claims.
+    """Sync adjudication data at 2 AM in the instance's local time zone.
 
-    Finds claims in the three queues where we expect adjudication activity,
-    filters to those with ``candid_encounters`` metadata, and calls
-    ``sync_claim_adjudications`` on each.
+    Fires every hour (``SCHEDULE = "0 * * * *"``), but ``execute()`` checks
+    the current local hour and returns early unless it's the target hour.
     """
 
-    SCHEDULE = "0 2 * * *"
+    SCHEDULE = "0 * * * *"
 
     def execute(self) -> list[Effect]:
+        tz_name = self.environment.get("INSTALLATION_TIME_ZONE")
+        tz = ZoneInfo(tz_name) if tz_name else ZoneInfo("US/Central")
+        local_hour = datetime.now(UTC).astimezone(tz).hour
+        if local_hour != TARGET_HOUR:
+            return []
         queue_values = [q.value for q in SYNC_QUEUES]
         claims = Claim.objects.filter(
             current_queue__queue_sort_ordering__in=queue_values,

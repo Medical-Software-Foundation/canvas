@@ -14,7 +14,7 @@ from canvas_sdk.v1.data import Claim, ClaimCoverage
 
 from candid.effect_helpers import active_coverages_ordered
 
-CENTRAL_TZ = ZoneInfo("US/Central")
+DEFAULT_TZ = ZoneInfo("US/Central")
 
 CANVAS = "CANVAS"
 TELEHEALTH_PLACES_OF_SERVICE = {"02", "10"}
@@ -66,8 +66,14 @@ def _split_zip(zip_code: str | None) -> tuple[str, str]:
     return clean[:5], ""
 
 
-def build_claim_payload(claim: Claim) -> tuple[dict, list[str]]:
+def build_claim_payload(
+    claim: Claim, tz: ZoneInfo | None = None
+) -> tuple[dict, list[str]]:
     """Build the Candid claim submission payload from a Claim model.
+
+    ``tz`` is the instance's configured time zone (from
+    ``self.environment["INSTALLATION_TIME_ZONE"]``). Falls back to US/Central
+    for backwards compatibility with the home-app's hardcoded CST conversion.
 
     Returns (payload, error_messages). If error_messages is non-empty, the
     caller should NOT submit the payload and should surface the errors to the
@@ -80,8 +86,10 @@ def build_claim_payload(claim: Claim) -> tuple[dict, list[str]]:
         "patient_authorized_release": True,
     }
 
+    instance_tz = tz or DEFAULT_TZ
+
     for label, step_fn in (
-        ("core fields", lambda c, p, e: _add_core_fields(c, p, e)),
+        ("core fields", lambda c, p, e: _add_core_fields(c, p, e, instance_tz)),
         ("diagnoses", lambda c, p, e: _add_diagnoses(c, p, e)),
         ("service lines", lambda c, p, e: _add_service_lines(c, p)),
         ("patient", lambda c, p, e: _add_patient(c, p, e)),
@@ -98,7 +106,9 @@ def build_claim_payload(claim: Claim) -> tuple[dict, list[str]]:
     return _strip_none(payload), errors
 
 
-def build_split_payloads(claim: Claim) -> list[tuple[dict, list[str]]]:
+def build_split_payloads(
+    claim: Claim, tz: ZoneInfo | None = None
+) -> list[tuple[dict, list[str]]]:
     """Build one or more Candid encounter payloads, splitting if >12 diagnoses.
 
     Claims with ≤12 diagnoses produce a single payload (unchanged behavior).
@@ -113,7 +123,7 @@ def build_split_payloads(claim: Claim) -> list[tuple[dict, list[str]]]:
 
     Returns a list of ``(payload, errors)`` tuples, one per split.
     """
-    payload, errors = build_claim_payload(claim)
+    payload, errors = build_claim_payload(claim, tz=tz)
     if errors:
         return [(payload, errors)]
 
@@ -197,7 +207,9 @@ def _make_overflow_service_line(num_diagnoses: int) -> dict:
     }
 
 
-def _add_core_fields(claim: Claim, payload: dict, errors: list[str]) -> None:
+def _add_core_fields(
+    claim: Claim, payload: dict, errors: list[str], tz: ZoneInfo = DEFAULT_TZ
+) -> None:
     coverages = active_coverages_ordered(claim)
     payload["responsible_party"] = "INSURANCE_PAY" if coverages else "SELF_PAY"
 
@@ -206,7 +218,7 @@ def _add_core_fields(claim: Claim, payload: dict, errors: list[str]) -> None:
     else:
         errors.append("External encounter id is missing")
 
-    dos = _date_of_service(claim)
+    dos = _date_of_service(claim, tz)
     if dos:
         payload["date_of_service"] = str(dos)
     else:
@@ -517,16 +529,16 @@ def _subscriber_payload(coverage: ClaimCoverage) -> dict | None:
     return subscriber
 
 
-def _date_of_service(claim: Claim) -> Any:
+def _date_of_service(claim: Claim, tz: ZoneInfo = DEFAULT_TZ) -> Any:
     """Determine the date of service for the claim.
 
-    Uses the note's datetime_of_service converted to US/Central (CST),
-    matching the home-app's SQL: ``date(n.datetime_of_service AT TIME ZONE 'CST')``.
-    Falls back to the first line item's from_date if the note has no datetime.
+    Converts the note's datetime_of_service to the instance's configured
+    time zone before extracting the date. Falls back to the first line
+    item's from_date if the note has no datetime.
     """
     note = claim.note
     if note and getattr(note, "datetime_of_service", None):
-        return note.datetime_of_service.astimezone(CENTRAL_TZ).date()
+        return note.datetime_of_service.astimezone(tz).date()
 
     first_line = claim.line_items.first()
     if first_line and first_line.from_date:

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect
@@ -65,7 +66,9 @@ class CandidSubmitAPI(SimpleAPIRoute):
 
     def _submit(self, claim: Claim) -> list[Effect]:
         claim_id = claim.id
-        split_payloads = build_split_payloads(claim)
+        tz_name = self.environment.get("INSTALLATION_TIME_ZONE")
+        tz = ZoneInfo(tz_name) if tz_name else None
+        split_payloads = build_split_payloads(claim, tz=tz)
         claim_effect = ClaimEffect(claim_id=claim_id)
 
         for payload, errors in split_payloads:
