@@ -1,0 +1,59 @@
+<div class="table-meta" data-sort-by="{{ sort_by }}" data-sort-dir="{{ sort_dir }}">
+    {% if has_license_filter %}
+        <div class="filter-banner filter-banner-licensed">
+            <span class="filter-label">Filtered to your licensed states:</span>
+            <span class="filter-states">
+                {% for state in licensed_states %}<span class="state-pill">{{ state }}</span>{% endfor %}
+            </span>
+        </div>
+    {% else %}
+        <div class="filter-banner filter-banner-unlicensed">
+            <span class="filter-label">No active state licenses on your profile — showing all pending intakes.</span>
+        </div>
+    {% endif %}
+    <div class="result-count">{{ total_count }} pending intake{{ total_count|pluralize }}</div>
+</div>
+
+{% if rows %}
+<table class="intake-table">
+    <thead>
+        <tr>
+            <th class="col-patient sortable{% if sort_by == 'patient' %} sorted-{{ sort_dir }}{% endif %}" data-sort="patient">
+                Patient
+                {% if sort_by == 'patient' %}<span class="sort-arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </th>
+            <th class="col-state sortable{% if sort_by == 'state' %} sorted-{{ sort_dir }}{% endif %}" data-sort="state">
+                State
+                {% if sort_by == 'state' %}<span class="sort-arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </th>
+            <th class="col-pending sortable{% if sort_by == 'time_pending' or not sort_by %} sorted-{% if sort_by %}{{ sort_dir }}{% else %}desc{% endif %}{% endif %}" data-sort="time_pending">
+                Time pending
+                {% if sort_by == 'time_pending' %}<span class="sort-arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% elif not sort_by %}<span class="sort-arrow">▼</span>{% endif %}
+            </th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr class="intake-row" data-note-url="{{ row.note_url }}" onclick="openNote(event, '{{ row.note_url }}')">
+            <td class="col-patient">
+                <a class="patient-link" href="{{ row.note_url }}" target="_blank" rel="noopener">{{ row.patient_name }}</a>
+            </td>
+            <td class="col-state">
+                {% if row.state %}<span class="state-pill">{{ row.state }}</span>{% else %}<span class="state-missing">—</span>{% endif %}
+            </td>
+            <td class="col-pending">{{ row.time_pending_display }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    {% if has_license_filter %}
+        <p class="empty-title">No pending intakes in your licensed states.</p>
+        <p class="empty-subtitle">When a patient submits an intake from a state where you're licensed, it'll show up here.</p>
+    {% else %}
+        <p class="empty-title">No pending intakes.</p>
+        <p class="empty-subtitle">When a patient submits an intake, it'll show up here.</p>
+    {% endif %}
+</div>
+{% endif %}
