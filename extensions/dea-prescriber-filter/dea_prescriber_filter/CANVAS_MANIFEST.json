@@ -1,0 +1,66 @@
+{
+    "sdk_version": "0.94.0",
+    "plugin_version": "0.1.30",
+    "name": "dea_prescriber_filter",
+    "description": "Filters prescribe actions based on NPI matching between user and selected prescriber",
+    "license": "MIT",
+    "components": {
+        "protocols": [
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:PrescriberSearchPrioritization",
+                "description": "Prioritizes prescriber search results with state annotations"
+            },
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:PrescribeActionFilter",
+                "description": "Hides sign actions when user not authorized for prescriber"
+            },
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:RefillActionFilter",
+                "description": "Hides sign actions on refill when user not authorized"
+            },
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:AdjustPrescriptionActionFilter",
+                "description": "Hides sign actions on adjust when user not authorized"
+            },
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:PrescribeValidation",
+                "description": "Validation error when prescriber doesn't match note provider"
+            },
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:RefillValidation",
+                "description": "Validation error on refill when prescriber doesn't match"
+            },
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:AdjustPrescriptionValidation",
+                "description": "Validation error on adjust when prescriber doesn't match"
+            },
+            {
+                "class": "dea_prescriber_filter.protocols.prescriber_filter:SupervisingProviderSorter",
+                "description": "Adds state annotations and sorts supervising provider dropdown"
+            },
+            {
+                "class": "dea_prescriber_filter.api.delegation_api:DelegationUIApi",
+                "description": "API endpoints for delegation admin UI"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": [
+            {
+                "class": "dea_prescriber_filter.applications.delegation_app:PrescriberDelegationApp",
+                "name": "Prescriber Assist",
+                "description": "Configure which staff can sign prescriptions for each provider",
+                "icon": "assets/prescriber-delegation-icon.png",
+                "scope": "global"
+            }
+        ]
+    },
+    "secrets": ["ADMIN_STAFF_IDS"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "README.md"
+}
