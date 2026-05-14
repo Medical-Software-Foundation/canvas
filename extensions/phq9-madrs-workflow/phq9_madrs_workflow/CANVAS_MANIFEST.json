@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.6",
+    "name": "phq9_madrs_workflow",
+    "description": "Automates depression screening workflow: originates MADRS questionnaire when PHQ-9 score is ≤20, and adds score interpretation when MADRS is completed",
+    "components": {
+        "protocols": [
+            {
+                "class": "phq9_madrs_workflow.protocols.phq9_madrs_workflow:Protocol",
+                "description": "Listens for PHQ-9 and MADRS questionnaire commits to automate follow-up assessments and score interpretation"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
