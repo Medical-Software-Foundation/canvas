@@ -84,16 +84,6 @@ def test_check_pharmacy_state_case_insensitive_match() -> None:
     assert handler._check_pharmacy_state("prescriber") is None
 
 
-def test_check_pharmacy_state_handles_exception() -> None:
-    from dea_prescriber_filter.protocols.prescriber_filter import PrescribeValidation
-
-    handler = PrescribeValidation.__new__(PrescribeValidation)
-    handler.event = _make_event()
-    handler._get_pharmacy_state = MagicMock(side_effect=RuntimeError("boom"))
-
-    assert handler._check_pharmacy_state("prescriber") is None
-
-
 # ─────────────────────────────────────────────────────────────
 # _get_pharmacy_state
 # ─────────────────────────────────────────────────────────────
@@ -172,11 +162,16 @@ def test_get_pharmacy_state_returns_none_when_lookup_fails() -> None:
         assert handler._get_pharmacy_state() is None
 
 
-def test_get_pharmacy_state_handles_exception() -> None:
+class _CommandDoesNotExist(Exception):
+    pass
+
+
+def test_get_pharmacy_state_returns_none_when_command_missing() -> None:
     from dea_prescriber_filter.protocols.prescriber_filter import PrescribeValidation
 
     with patch("dea_prescriber_filter.protocols.prescriber_filter.Command") as mock_command:
-        mock_command.objects.get.side_effect = RuntimeError("db down")
+        mock_command.DoesNotExist = _CommandDoesNotExist
+        mock_command.objects.get.side_effect = _CommandDoesNotExist()
 
         handler = PrescribeValidation.__new__(PrescribeValidation)
         handler.event = _make_event()

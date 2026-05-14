@@ -448,23 +448,19 @@ class DelegationUIApi(StaffSessionAuthMixin, SimpleAPI):
         must be granted by an explicitly-listed admin, never by "any authenticated
         staff." See CLAUDE.md fail-closed anti-pattern guidance.
         """
-        try:
-            admin_ids_raw = self.secrets.get("ADMIN_STAFF_IDS", "") or ""
-            admin_ids = {s.strip() for s in admin_ids_raw.split(",") if s.strip()}
+        admin_ids_raw = self.secrets.get("ADMIN_STAFF_IDS", "") or ""
+        admin_ids = {s.strip() for s in admin_ids_raw.split(",") if s.strip()}
 
-            if not admin_ids:
-                log.warning(
-                    "ADMIN_STAFF_IDS is not configured; denying admin access. "
-                    "Set this secret to a comma-separated list of staff UUIDs to allow admins."
-                )
-                return False
-
-            headers = getattr(self.request, "headers", {}) or {}
-            user_id = headers.get("canvas-logged-in-user-id") or headers.get("Canvas-Logged-In-User-Id")
-            return bool(user_id) and str(user_id) in admin_ids
-        except Exception:
-            log.exception("_is_admin_user check failed")
+        if not admin_ids:
+            log.warning(
+                "ADMIN_STAFF_IDS is not configured; denying admin access. "
+                "Set this secret to a comma-separated list of staff UUIDs to allow admins."
+            )
             return False
+
+        headers = getattr(self.request, "headers", {}) or {}
+        user_id = headers.get("canvas-logged-in-user-id") or headers.get("Canvas-Logged-In-User-Id")
+        return bool(user_id) and str(user_id) in admin_ids
 
     def _is_same_origin(self) -> bool:
         """CSRF defense: require Origin or Referer host to exactly match the Host header.
@@ -472,21 +468,17 @@ class DelegationUIApi(StaffSessionAuthMixin, SimpleAPI):
         Uses host equality (not substring containment) so a URL like
         https://legit-host.attacker.com cannot pass when legit-host is the Host.
         """
-        try:
-            headers = getattr(self.request, "headers", {}) or {}
-            host = (headers.get("Host") or headers.get("host") or "").lower()
-            if not host:
-                return False
-            origin = headers.get("Origin") or headers.get("origin") or ""
-            if origin:
-                return _extract_url_host(origin) == host
-            referer = headers.get("Referer") or headers.get("referer") or ""
-            if referer:
-                return _extract_url_host(referer) == host
-            # No Origin or Referer — reject to be safe
+        headers = getattr(self.request, "headers", {}) or {}
+        host = (headers.get("Host") or headers.get("host") or "").lower()
+        if not host:
             return False
-        except Exception:
-            return False
+        origin = headers.get("Origin") or headers.get("origin") or ""
+        if origin:
+            return _extract_url_host(origin) == host
+        referer = headers.get("Referer") or headers.get("referer") or ""
+        if referer:
+            return _extract_url_host(referer) == host
+        return False
 
     def _forbidden(self) -> list[Response | Effect]:
         return [HTMLResponse("Forbidden", status_code=HTTPStatus.FORBIDDEN)]
@@ -497,13 +489,9 @@ class DelegationUIApi(StaffSessionAuthMixin, SimpleAPI):
         if not self._is_admin_user():
             return self._forbidden()
 
-        try:
-            providers = get_active_providers()
-            staff = get_active_staff()
-            all_delegations = get_all_delegations()
-        except Exception:
-            log.exception("Failed to load delegation data")
-            providers, staff, all_delegations = [], [], {}
+        providers = get_active_providers()
+        staff = get_active_staff()
+        all_delegations = get_all_delegations()
 
         # Filter delegations to only active providers
         active_provider_ids = {p["id"] for p in providers}
@@ -541,58 +529,58 @@ class DelegationUIApi(StaffSessionAuthMixin, SimpleAPI):
         if not self._is_same_origin():
             return self._forbidden()
 
+        # 303 See Other so the browser issues a GET on the admin URL. Avoids the
+        # "Confirm form resubmission" prompt on refresh (PRG pattern).
+        redirect = [Response(
+            content=b"",
+            status_code=HTTPStatus.SEE_OTHER,
+            headers={"Location": "/plugin-io/api/dea_prescriber_filter/app/delegation-admin"},
+        )]
+
+        # Parse body — only malformed input (bad utf-8 or bad JSON) is silently
+        # tolerated here. Any other exception in save/remove should reach Sentry.
         try:
             body = self.request.body
             if isinstance(body, bytes):
                 body = body.decode("utf-8")
 
             # Parse URL-encoded form data manually (parse_qs blocked by sandbox)
-            params = {}
+            import re
+            params: dict[str, str] = {}
             for pair in body.split("&"):
                 if "=" in pair:
                     k, v = pair.split("=", 1)
-                    # Basic URL decode: + to space, %XX sequences
                     v = v.replace("+", " ")
-                    import re
                     v = re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), v)
                     params[k] = v
             action = params.get("_action", "")
             data = json.loads(params.get("_data", "{}"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            log.warning("form-action received malformed body; ignoring")
+            return redirect
 
-            if action == "save":
-                provider_id = data.get("provider_id")
-                staff_ids = data.get("staff_ids", [])
-                if provider_id and _valid_staff_id(provider_id):
-                    validated_staff_ids = [sid for sid in staff_ids if _valid_staff_id(sid)]
-                    set_delegation(provider_id, validated_staff_ids)
-                    log.info("Saved delegation: provider=%s staff=%s", provider_id, validated_staff_ids)
+        if action == "save":
+            provider_id = data.get("provider_id")
+            staff_ids = data.get("staff_ids", [])
+            if provider_id and _valid_staff_id(provider_id):
+                validated_staff_ids = [sid for sid in staff_ids if _valid_staff_id(sid)]
+                set_delegation(provider_id, validated_staff_ids)
+                log.info("Saved delegation: provider=%s staff=%s", provider_id, validated_staff_ids)
 
-            elif action == "remove":
-                provider_id = data.get("provider_id")
-                if provider_id and _valid_staff_id(provider_id):
-                    remove_delegation(provider_id)
-                    log.info("Removed delegation for provider=%s", provider_id)
+        elif action == "remove":
+            provider_id = data.get("provider_id")
+            if provider_id and _valid_staff_id(provider_id):
+                remove_delegation(provider_id)
+                log.info("Removed delegation for provider=%s", provider_id)
 
-        except Exception:
-            log.exception("form-action failed")
-
-        # 303 See Other so the browser issues a GET on the admin URL. Avoids the
-        # "Confirm form resubmission" prompt on refresh (PRG pattern).
-        return [Response(
-            content=b"",
-            status_code=HTTPStatus.SEE_OTHER,
-            headers={"Location": "/plugin-io/api/dea_prescriber_filter/app/delegation-admin"},
-        )]
+        return redirect
 
 
 def _valid_staff_id(staff_id: str) -> bool:
     """Check that a staff ID corresponds to a real Staff record."""
     if not staff_id or not isinstance(staff_id, str):
         return False
-    try:
-        return Staff.objects.filter(id=staff_id).exists()
-    except Exception:
-        return False
+    return Staff.objects.filter(id=staff_id).exists()
 
 
 def _extract_url_host(url: str) -> str:

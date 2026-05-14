@@ -346,18 +346,12 @@ class PrescribeActionFilter(BaseProtocol):
 
         if not user_staff_key:
             # No user context — hide sign actions to be safe
-            try:
-                get_cache().delete(cache_key)
-            except Exception:
-                pass
+            get_cache().delete(cache_key)
             return self._restrict(actions)
 
         # Always refresh the cache with the CURRENT user — this overwrites any
         # stale entry left by a previous user on the same command.
-        try:
-            get_cache().set(cache_key, str(user_staff_key), timeout_seconds=AUTH_USER_CACHE_TTL)
-        except Exception:
-            pass
+        get_cache().set(cache_key, str(user_staff_key), timeout_seconds=AUTH_USER_CACHE_TTL)
 
         prescriber_key = self._get_prescriber_key()
         if not prescriber_key:
@@ -380,20 +374,20 @@ class PrescribeActionFilter(BaseProtocol):
     def _get_prescriber_key(self) -> str | None:
         try:
             command = Command.objects.get(id=self.event.target.id)
-            data = command.data or {}
-            prescriber = data.get("prescriber")
-            if prescriber is None:
-                return None
-            if isinstance(prescriber, int):
-                return str(prescriber)
-            if isinstance(prescriber, str):
-                return prescriber
-            if isinstance(prescriber, dict):
-                key = prescriber.get("key") or prescriber.get("id") or prescriber.get("value") or prescriber.get("pk")
-                return str(key) if key else None
+        except Command.DoesNotExist:
             return None
-        except Exception:
+        data = command.data or {}
+        prescriber = data.get("prescriber")
+        if prescriber is None:
             return None
+        if isinstance(prescriber, int):
+            return str(prescriber)
+        if isinstance(prescriber, str):
+            return prescriber
+        if isinstance(prescriber, dict):
+            key = prescriber.get("key") or prescriber.get("id") or prescriber.get("value") or prescriber.get("pk")
+            return str(key) if key else None
+        return None
 
 
 class RefillActionFilter(PrescribeActionFilter):
@@ -419,121 +413,101 @@ class PrescribeValidation(BaseProtocol):
     def compute(self) -> list[Effect]:
         effect = CommandValidationErrorEffect()
 
-        try:
-            prescriber_key = self._get_prescriber_key()
-            if not prescriber_key:
-                return [effect.apply()]
+        prescriber_key = self._get_prescriber_key()
+        if not prescriber_key:
+            return [effect.apply()]
 
-            # ── User authorization check ──
-            # Prefer event.context.user.staff (direct, always current); fall back to
-            # the cache populated by the action filter for SDK versions where
-            # POST_VALIDATION events don't include user info.
-            user_staff_key = self.event.context.get("user", {}).get("staff")
-            if not user_staff_key:
-                command_uuid = str(self.event.target.id)
-                cache_key = f"{AUTH_USER_CACHE_PREFIX}{command_uuid}"
-                user_staff_key = get_cache().get(cache_key)
+        # Prefer event.context.user.staff (direct, always current); fall back to
+        # the cache populated by the action filter for SDK versions where
+        # POST_VALIDATION events don't include user info.
+        user_staff_key = self.event.context.get("user", {}).get("staff")
+        if not user_staff_key:
+            command_uuid = str(self.event.target.id)
+            cache_key = f"{AUTH_USER_CACHE_PREFIX}{command_uuid}"
+            user_staff_key = get_cache().get(cache_key)
 
-            if user_staff_key:
-                is_own = _is_own_prescriber(str(user_staff_key), prescriber_key)
-                if not is_own and not _is_authorized(str(user_staff_key), prescriber_key):
-                    log.info(
-                        f"[DEBUG] auth-block: event={self.event.type if hasattr(self.event, 'type') else '?'} "
-                        f"user_staff_key={user_staff_key!r} prescriber_key={prescriber_key!r} "
-                        f"is_own={is_own}"
-                    )
-                    effect.add_error("Not authorized to prescribe for this provider.")
-            else:
-                log.warning(
-                    "PrescribeValidation could not identify current user — "
-                    "skipping auth error message. Action filter still blocks signing."
+        if user_staff_key:
+            is_own = _is_own_prescriber(str(user_staff_key), prescriber_key)
+            if not is_own and not _is_authorized(str(user_staff_key), prescriber_key):
+                log.info(
+                    f"[DEBUG] auth-block: event={self.event.type if hasattr(self.event, 'type') else '?'} "
+                    f"user_staff_key={user_staff_key!r} prescriber_key={prescriber_key!r} "
+                    f"is_own={is_own}"
                 )
-
-            # ── Pharmacy state check ──
-            state_error = self._check_pharmacy_state(prescriber_key)
-            if state_error:
-                effect.add_error(state_error)
-
-        except Exception:
-            # Fail closed: an unexpected error in the authorization or state-check
-            # pipeline must not let the prescription through silently.
-            log.exception("PrescribeValidation failed")
-            effect.add_error(
-                "Could not validate this prescription. Please retry; "
-                "if the issue persists, contact support."
+                effect.add_error("Not authorized to prescribe for this provider.")
+        else:
+            log.warning(
+                "PrescribeValidation could not identify current user — "
+                "skipping auth error message. Action filter still blocks signing."
             )
+
+        state_error = self._check_pharmacy_state(prescriber_key)
+        if state_error:
+            effect.add_error(state_error)
 
         return [effect.apply()]
 
     def _get_prescriber_key(self) -> str | None:
         """Get prescriber key from the Command object (same approach as action filter)."""
         try:
-            command_id = self.event.target.id
-            command = Command.objects.get(id=command_id)
-            data = command.data or {}
-            prescriber = data.get("prescriber")
-            if prescriber is None:
-                return None
-            if isinstance(prescriber, int):
-                return str(prescriber)
-            if isinstance(prescriber, str):
-                return prescriber
-            if isinstance(prescriber, dict):
-                key = prescriber.get("key") or prescriber.get("id") or prescriber.get("value") or prescriber.get("pk")
-                return str(key) if key else None
+            command = Command.objects.get(id=self.event.target.id)
+        except Command.DoesNotExist:
             return None
-        except Exception:
+        data = command.data or {}
+        prescriber = data.get("prescriber")
+        if prescriber is None:
             return None
+        if isinstance(prescriber, int):
+            return str(prescriber)
+        if isinstance(prescriber, str):
+            return prescriber
+        if isinstance(prescriber, dict):
+            key = prescriber.get("key") or prescriber.get("id") or prescriber.get("value") or prescriber.get("pk")
+            return str(key) if key else None
+        return None
 
     def _check_pharmacy_state(self, prescriber_key: str) -> str | None:
         """Check if prescriber has a license matching the pharmacy's state.
         Returns an error message string, or None if OK."""
-        try:
-            pharmacy_state = self._get_pharmacy_state()
-            if not pharmacy_state:
-                return None  # No pharmacy selected yet — nothing to validate
+        pharmacy_state = self._get_pharmacy_state()
+        if not pharmacy_state:
+            return None  # No pharmacy selected yet — nothing to validate
 
-            prescriber_states = self._get_prescriber_license_states(prescriber_key)
-            if not prescriber_states:
-                return f"Prescriber has no licenses on file. A license for {pharmacy_state} is required."
+        prescriber_states = self._get_prescriber_license_states(prescriber_key)
+        if not prescriber_states:
+            return f"Prescriber has no licenses on file. A license for {pharmacy_state} is required."
 
-            if pharmacy_state.upper() not in [s.upper() for s in prescriber_states]:
-                return f"Prescriber state ({', '.join(sorted(prescriber_states))}) does not match pharmacy state ({pharmacy_state})."
+        if pharmacy_state.upper() not in [s.upper() for s in prescriber_states]:
+            return f"Prescriber state ({', '.join(sorted(prescriber_states))}) does not match pharmacy state ({pharmacy_state})."
 
-            return None
-        except Exception:
-            log.exception("_check_pharmacy_state failed")
-            return None
+        return None
 
     def _get_pharmacy_state(self) -> str | None:
         """Get the state of the selected pharmacy from command data."""
         try:
-            command_id = self.event.target.id
-            command = Command.objects.get(id=command_id)
-            data = command.data or {}
-            pharmacy = data.get("pharmacy")
-            if not pharmacy:
-                return None
-
-            # Extract NCPDP ID from pharmacy field
-            ncpdp_id = None
-            if isinstance(pharmacy, str):
-                ncpdp_id = pharmacy
-            elif isinstance(pharmacy, dict):
-                ncpdp_id = pharmacy.get("ncpdp_id") or pharmacy.get("key") or pharmacy.get("value")
-
-            if not ncpdp_id:
-                return None
-
-            from canvas_sdk.utils.http import pharmacy_http
-            result = pharmacy_http.get_pharmacy_by_ncpdp_id(str(ncpdp_id))
-            if result and isinstance(result, dict):
-                return result.get("state")
-
+            command = Command.objects.get(id=self.event.target.id)
+        except Command.DoesNotExist:
             return None
-        except Exception:
-            log.exception("_get_pharmacy_state failed")
+        data = command.data or {}
+        pharmacy = data.get("pharmacy")
+        if not pharmacy:
             return None
+
+        ncpdp_id = None
+        if isinstance(pharmacy, str):
+            ncpdp_id = pharmacy
+        elif isinstance(pharmacy, dict):
+            ncpdp_id = pharmacy.get("ncpdp_id") or pharmacy.get("key") or pharmacy.get("value")
+
+        if not ncpdp_id:
+            return None
+
+        from canvas_sdk.utils.http import pharmacy_http
+        result = pharmacy_http.get_pharmacy_by_ncpdp_id(str(ncpdp_id))
+        if result and isinstance(result, dict):
+            return result.get("state")
+
+        return None
 
     def _get_prescriber_license_states(self, staff_key: str) -> list[str]:
         """Get license states for the specific selected prescriber profile only."""

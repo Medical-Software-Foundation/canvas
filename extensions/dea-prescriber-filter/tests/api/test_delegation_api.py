@@ -77,16 +77,6 @@ def test_is_admin_user_rejects_when_no_user_id_and_secret_set() -> None:
     assert handler._is_admin_user() is False
 
 
-def test_is_admin_user_handles_exception() -> None:
-    from dea_prescriber_filter.api.delegation_api import DelegationUIApi
-
-    handler = DelegationUIApi.__new__(DelegationUIApi)
-    # secrets attribute missing entirely → raises AttributeError
-    handler.request = MagicMock()
-
-    assert handler._is_admin_user() is False
-
-
 # ─────────────────────────────────────────────────────────────
 # _is_same_origin — CSRF check
 # ─────────────────────────────────────────────────────────────
@@ -133,14 +123,6 @@ def test_is_same_origin_rejects_substring_attack_via_referer() -> None:
     assert handler._is_same_origin() is False
 
 
-def test_is_same_origin_handles_exception() -> None:
-    from dea_prescriber_filter.api.delegation_api import DelegationUIApi
-
-    handler = DelegationUIApi.__new__(DelegationUIApi)
-    # No request attribute → raises AttributeError → caught
-    assert handler._is_same_origin() is False
-
-
 # ─────────────────────────────────────────────────────────────
 # _valid_staff_id
 # ─────────────────────────────────────────────────────────────
@@ -182,15 +164,6 @@ def test_valid_staff_id_returns_false_when_staff_missing() -> None:
         from dea_prescriber_filter.api.delegation_api import _valid_staff_id
 
         assert _valid_staff_id("missing") is False
-
-
-def test_valid_staff_id_handles_exception() -> None:
-    with patch("dea_prescriber_filter.api.delegation_api.Staff") as mock_staff:
-        mock_staff.objects.filter.side_effect = RuntimeError("db down")
-
-        from dea_prescriber_filter.api.delegation_api import _valid_staff_id
-
-        assert _valid_staff_id("staff-a") is False
 
 
 # ─────────────────────────────────────────────────────────────
@@ -240,21 +213,6 @@ def test_get_admin_ui_filters_delegations_to_active_providers() -> None:
     assert "p1" in html
     # p2 should be absent because it's not an active provider
     assert '"p2"' not in html
-
-
-def test_get_admin_ui_handles_data_load_exception() -> None:
-    handler = _make_handler(admin=True)
-
-    with (
-        patch("dea_prescriber_filter.api.delegation_api.get_active_providers", side_effect=RuntimeError("boom")),
-        patch("dea_prescriber_filter.api.delegation_api.get_active_staff", return_value=[]),
-        patch("dea_prescriber_filter.api.delegation_api.get_all_delegations", return_value={}),
-        patch("dea_prescriber_filter.api.delegation_api.get_staff_name", return_value="Name"),
-    ):
-        result = handler.get_admin_ui()
-
-    # Should still return HTML OK, just with empty data
-    assert result[0].status_code == HTTPStatus.OK
 
 
 # ─────────────────────────────────────────────────────────────
@@ -363,16 +321,30 @@ def test_handle_form_action_handles_bytes_body() -> None:
     assert mock_set.mock_calls == [call("p1", [])]
 
 
-def test_handle_form_action_handles_exception() -> None:
+def test_handle_form_action_redirects_when_json_decode_fails() -> None:
     handler = _make_handler(
         admin=True,
         headers={"Host": "foo.com", "Origin": "https://foo.com"},
-        body="garbage-body",  # will fail JSON decode
+        body="_action=save&_data=not-json",  # _data is not valid JSON
     )
 
     result = handler.handle_form_action()
 
-    # Should still redirect back to admin UI (303) even when body parsing fails.
+    # Malformed _data → JSONDecodeError is caught, request is a no-op redirect.
+    assert len(result) == 1
+    assert result[0].status_code == HTTPStatus.SEE_OTHER
+    assert result[0].headers["Location"] == "/plugin-io/api/dea_prescriber_filter/app/delegation-admin"
+
+
+def test_handle_form_action_redirects_when_bytes_body_is_invalid_utf8() -> None:
+    handler = _make_handler(
+        admin=True,
+        headers={"Host": "foo.com", "Origin": "https://foo.com"},
+    )
+    handler.request.body = b"\xff\xfe\xfd"  # not valid UTF-8
+
+    result = handler.handle_form_action()
+
     assert len(result) == 1
     assert result[0].status_code == HTTPStatus.SEE_OTHER
     assert result[0].headers["Location"] == "/plugin-io/api/dea_prescriber_filter/app/delegation-admin"

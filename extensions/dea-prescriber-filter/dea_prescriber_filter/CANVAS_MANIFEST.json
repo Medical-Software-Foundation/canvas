@@ -60,7 +60,6 @@
     "secrets": ["ADMIN_STAFF_IDS"],
     "tags": {},
     "references": [],
-    "license": "",
     "diagram": false,
     "readme": "README.md"
 }

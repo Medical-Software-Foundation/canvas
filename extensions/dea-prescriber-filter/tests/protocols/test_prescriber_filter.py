@@ -560,27 +560,6 @@ def test_validation_adds_both_errors_when_unauthorized_and_state_mismatch() -> N
     ]
 
 
-def test_validation_handles_exception_gracefully() -> None:
-    from dea_prescriber_filter.protocols.prescriber_filter import PrescribeValidation
-
-    mock_effect_inst = MagicMock()
-    mock_effect_inst.apply.return_value = "effect"
-
-    with (
-        patch("dea_prescriber_filter.protocols.prescriber_filter.Command") as mock_command,
-        patch("dea_prescriber_filter.protocols.prescriber_filter.CommandValidationErrorEffect") as mock_effect,
-    ):
-        mock_command.objects.get.side_effect = RuntimeError("db down")
-        mock_effect.return_value = mock_effect_inst
-
-        handler = PrescribeValidation.__new__(PrescribeValidation)
-        handler.event = _make_validation_event()
-
-        effects = handler.compute()
-
-    assert effects == ["effect"]
-
-
 # ─────────────────────────────────────────────────────────────
 # _get_prescriber_key — handles various input formats
 # ─────────────────────────────────────────────────────────────
