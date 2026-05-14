@@ -117,3 +117,40 @@ def test_coverage_with_null_rank_ignored(make_coverage):
     errors = coverage_sequence.check(patient)
 
     assert errors == []
+
+
+def test_deleted_coverage_treated_as_no_active(make_coverage):
+    """A removed (state=deleted) coverage should not trigger Rule 1."""
+    patient = MagicMock()
+    patient.coverages.all.return_value = [
+        make_coverage(rank=1, state="deleted"),
+    ]
+
+    errors = coverage_sequence.check(patient)
+
+    assert errors == []
+
+
+def test_only_deleted_alongside_self_pay_passes(make_coverage):
+    """A user removed their only coverage; patient is now effectively self-pay."""
+    patient = MagicMock()
+    patient.coverages.all.return_value = [
+        make_coverage(rank=2, state="deleted"),
+    ]
+
+    errors = coverage_sequence.check(patient)
+
+    assert errors == []
+
+
+def test_active_coverage_alongside_deleted_uses_only_active(make_coverage):
+    """Deleted coverage with no rank should not cause a 'missing primary' error."""
+    patient = MagicMock()
+    patient.coverages.all.return_value = [
+        make_coverage(rank=1, state="active"),
+        make_coverage(rank=None, state="deleted"),
+    ]
+
+    errors = coverage_sequence.check(patient)
+
+    assert errors == []

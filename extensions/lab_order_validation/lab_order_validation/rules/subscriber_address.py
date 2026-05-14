@@ -7,30 +7,24 @@ patient, Rule 4 already covers it and this rule skips the check to avoid
 duplicate errors.
 """
 
-from datetime import date
+from lab_order_validation.rules._helpers import (
+    has_meaningful_content,
+    is_active_coverage,
+    sanitize_for_display,
+)
 
 
 def _active_coverages(patient) -> list:
-    today = date.today()
-    out = []
-    for coverage in patient.coverages.all():
-        start = coverage.coverage_start_date
-        end = coverage.coverage_end_date
-        if start and start > today:
-            continue
-        if end and end < today:
-            continue
-        out.append(coverage)
-    return out
+    return [c for c in patient.coverages.all() if is_active_coverage(c)]
 
 
 def _has_complete_address(person) -> bool:
     for address in person.addresses.all():
         if (
-            address.line1
-            and address.city
-            and address.state_code
-            and address.postal_code
+            has_meaningful_content(address.line1)
+            and has_meaningful_content(address.city)
+            and has_meaningful_content(address.state_code)
+            and has_meaningful_content(address.postal_code)
         ):
             return True
     return False
@@ -66,7 +60,7 @@ def check(patient) -> list[str]:
         seen.add(subscriber_id)
 
         if not _has_complete_address(subscriber):
-            name = _display_name(subscriber)
+            name = sanitize_for_display(_display_name(subscriber))
             errors.append(
                 f"Coverage subscriber '{name}' has no complete address. "
                 "Update their address on their patient chart."
