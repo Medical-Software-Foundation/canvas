@@ -1,0 +1,41 @@
+# Local development and testing only — Canvas plugin packaging uses CANVAS_MANIFEST.json.
+
+[project]
+name = "dea-prescriber-filter"
+version = "0.0.0"
+description = "Filters prescribe actions based on NPI matching between user and selected prescriber"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Alyssa Yandura", email = "alyssa.yandura@canvasmedical.com" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["dea_prescriber_filter"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*", ".venv/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
