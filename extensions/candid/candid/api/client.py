@@ -1,4 +1,10 @@
 import requests
+from logger import log
+
+CACHE_KEY = "candid_bearer_token"
+# Candid tokens expire after 5 hours (18000s). Cache for 4.5 hours to
+# refresh before expiry.
+CACHE_TTL_SECONDS = 16200
 
 
 class CandidClient:
@@ -8,7 +14,7 @@ class CandidClient:
         self.base_url = base_url.rstrip("/")
         self.client_id = client_id
         self.client_secret = client_secret
-        self._cached_token: str | None = None
+        self._instance_token: str | None = None
 
     @classmethod
     def from_secrets(cls, secrets: dict) -> "CandidClient":
@@ -19,9 +25,32 @@ class CandidClient:
         )
 
     def _token(self) -> str:
-        if not self._cached_token:
-            self._cached_token = self._fetch_token()
-        return self._cached_token
+        # Instance-level cache (same CandidClient object reused within a handler)
+        if self._instance_token:
+            return self._instance_token
+
+        # Plugin cache (shared across handler invocations)
+        try:
+            from canvas_sdk.caching.plugins import get_cache
+
+            cache = get_cache()
+            token = cache.get(CACHE_KEY)
+            if token:
+                self._instance_token = token
+                return token
+        except Exception:
+            cache = None
+
+        token = self._fetch_token()
+        self._instance_token = token
+
+        if cache:
+            try:
+                cache.set(CACHE_KEY, token, timeout_seconds=CACHE_TTL_SECONDS)
+            except Exception:
+                log.warning("Candid: failed to cache bearer token")
+
+        return token
 
     def _fetch_token(self) -> str:
         response = requests.post(
