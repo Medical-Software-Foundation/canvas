@@ -2,29 +2,32 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from types import SimpleNamespace
+from unittest.mock import call, patch
 
 
-def test_on_open_returns_launch_modal_effect_for_admin_url() -> None:
-    mock_effect_instance = MagicMock()
-    mock_effect_instance.apply.return_value = "applied-effect"
-
-    with patch("dea_prescriber_filter.applications.delegation_app.LaunchModalEffect") as mock_effect:
-        mock_effect.return_value = mock_effect_instance
-        mock_effect.TargetType.DEFAULT_MODAL = "DEFAULT_MODAL"
+def test_on_open__returns_launch_modal_effect_for_admin_url() -> None:
+    """on_open returns a LaunchModalEffect with the admin UI URL and modal config."""
+    with (
+        patch("dea_prescriber_filter.applications.delegation_app._CACHE_BUST", "12345"),
+        patch("dea_prescriber_filter.applications.delegation_app.LaunchModalEffect") as mock_effect,
+    ):
+        mock_effect.return_value = SimpleNamespace(apply=lambda: "applied-effect")
+        mock_effect.TargetType = SimpleNamespace(DEFAULT_MODAL="DEFAULT_MODAL")
 
         from dea_prescriber_filter.applications.delegation_app import PrescriberDelegationApp
 
-        app = PrescriberDelegationApp.__new__(PrescriberDelegationApp)
-        result = app.on_open()
+        tested = PrescriberDelegationApp.__new__(PrescriberDelegationApp)
+        result = tested.on_open()
 
-    assert result == "applied-effect"
-    assert len(mock_effect.mock_calls) == 2
-    # First call: the constructor
-    constructor_call = mock_effect.mock_calls[0]
-    _, args, kwargs = constructor_call
-    assert kwargs["target"] == "DEFAULT_MODAL"
-    assert kwargs["title"] == "Prescriber Assist"
-    assert kwargs["url"].startswith("/plugin-io/api/dea_prescriber_filter/app/delegation-admin?v=")
-    # Second call: .apply()
-    assert mock_effect_instance.mock_calls == [call.apply()]
+    expected = "applied-effect"
+    assert result == expected
+
+    exp_calls = [
+        call(
+            url="/plugin-io/api/dea_prescriber_filter/app/delegation-admin?v=12345",
+            target="DEFAULT_MODAL",
+            title="Prescriber Assist",
+        ),
+    ]
+    assert mock_effect.mock_calls == exp_calls
