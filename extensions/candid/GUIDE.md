@@ -21,6 +21,23 @@ After the grace period:
 
 For claims with more than 12 diagnosis codes, the plugin automatically splits into multiple Candid encounters (primary + supplemental) to stay within CMS-1500 limits. You'll see a comment like "Claim submitted to Candid on 2026-05-01 across 2 encounters."
 
+### Claim Splitting (>12 Diagnoses)
+
+CMS-1500 forms limit claims to 12 diagnosis codes per encounter. When a claim has more than 12, the plugin automatically splits it:
+
+- **Primary encounter (split 1):** Contains the first 12 diagnoses and all real service lines with their charges. Diagnosis pointers on the service lines are clamped to only reference diagnoses within this split.
+- **Supplemental encounters (splits 2, 3, ...):** Each carries the next batch of up to 12 diagnoses under a single **99499** CPT code at **$0.01**. The 99499 code is a "not otherwise classified" placeholder — some payers reject $0.00 charges, so we use a penny.
+
+**How diagnoses are ordered:** Diagnoses are split in their existing rank order (first 12, next 12, etc.) without reordering. The Canvas UI provides a Claim Review Records (CRR) workflow where users can review and assign diagnoses across splits before submission, so the plugin trusts the ordering the user has approved.
+
+**What you'll see:**
+- The claim comment says "Claim submitted to Candid on 2026-05-01 across 2 encounters" with both encounter IDs
+- The banner shows "(2 encounters)"
+- The `candid_encounters` metadata stores all splits: `[{split: 1, candid_encounter_id: "...", external_id: "canvas:claim-id-1"}, {split: 2, ...}]`
+- The `external_id` for each split uses a `-1`, `-2` suffix (e.g. `canvas:abc123-1`, `canvas:abc123-2`)
+
+**During adjudication sync**, the plugin fetches ERA data for ALL encounters in the split — each is checked independently for new ERAs and patient payments.
+
 ### When adjudication data arrives from Candid
 
 A nightly sync runs at **2:00 AM** to check all claims in Filed Awaiting Response, Adjudicated Open Balance, and Patient Balance queues. When new ERA (Electronic Remittance Advice) data is found:
