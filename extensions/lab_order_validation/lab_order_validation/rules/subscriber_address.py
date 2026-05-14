@@ -1,9 +1,10 @@
-"""Rule 5: Each insurance subscriber must have an address on file.
+"""Rule 5: Each coverage subscriber must have an address on file.
 
-When the patient is a dependent on someone else's policy, the subscriber is a
-separate Patient record. Health Gorilla requires the subscriber to have a
-complete address. When the subscriber IS the patient, Rule 4 already covers it
-and this rule skips the check to avoid duplicate errors.
+When the patient is a dependent on someone else's policy, the coverage
+subscriber is a separate Patient record. Health Gorilla requires the coverage
+subscriber to have a complete address. When the coverage subscriber IS the
+patient, Rule 4 already covers it and this rule skips the check to avoid
+duplicate errors.
 """
 
 from datetime import date
@@ -42,7 +43,7 @@ def _display_name(person) -> str:
     first = getattr(person, "first_name", "") or ""
     last = getattr(person, "last_name", "") or ""
     combined = f"{first} {last}".strip()
-    return combined or "the subscriber"
+    return combined or "the coverage subscriber"
 
 
 def check(patient) -> list[str]:
@@ -57,7 +58,7 @@ def check(patient) -> list[str]:
         subscriber_id = getattr(subscriber, "id", None)
         if subscriber_id is None:
             continue
-        # If the subscriber is the patient, Rule 4 already covers their address.
+        # If the coverage subscriber is the patient, Rule 4 already covers their address.
         if patient_id is not None and subscriber_id == patient_id:
             continue
         if subscriber_id in seen:
@@ -67,8 +68,8 @@ def check(patient) -> list[str]:
         if not _has_complete_address(subscriber):
             name = _display_name(subscriber)
             errors.append(
-                f"Subscriber '{name}' has no complete address. "
-                "Update the subscriber's profile from the Coverages tab."
+                f"Coverage subscriber '{name}' has no complete address. "
+                "Update their address on their patient chart."
             )
 
     return errors
