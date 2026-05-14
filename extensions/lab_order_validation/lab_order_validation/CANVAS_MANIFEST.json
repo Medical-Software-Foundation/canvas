@@ -1,0 +1,26 @@
+{
+  "sdk_version": "0.1.4",
+  "plugin_version": "0.1.0",
+  "name": "lab_order_validation",
+  "description": "Pre-flight validation for lab orders bound for electronic transmission. Blocks Sign-and-Send if patient/coverage/payer data would fail downstream at Health Gorilla. No override.",
+  "readme": "../README.md",
+  "url_permissions": [],
+  "components": {
+    "protocols": [
+      {
+        "class": "lab_order_validation.handlers.preflight_validator:LabOrderPreflightValidator",
+        "description": "Validates lab orders before commit when the lab partner has electronic ordering enabled.",
+        "data_access": {
+          "event": "LAB_ORDER_COMMAND__POST_VALIDATION",
+          "read": ["Patient", "Coverage", "LabPartner"],
+          "write": []
+        }
+      }
+    ]
+  },
+  "variables": [],
+  "tags": [],
+  "license": "MIT",
+  "diagram": false,
+  "references": []
+}
