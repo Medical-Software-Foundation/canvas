@@ -18,30 +18,39 @@ def _make_search_event(results: list, user_id: str | None = "user-1", note_uuid:
     return event
 
 
+# ─────────────────────────────────────────────────────────────
+# PrescriberSearchPrioritization.compute
+# ─────────────────────────────────────────────────────────────
+
 def test_search_returns_null_when_results_is_none() -> None:
+    """compute() emits a null-payload effect when context has no results."""
     from dea_prescriber_filter.protocols.prescriber_filter import PrescriberSearchPrioritization
 
-    handler = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
-    handler.event = _make_search_event(None)
+    tested = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
+    tested.event = _make_search_event(None)
 
-    effects = handler.compute()
+    result = tested.compute()
 
-    assert len(effects) == 1
-    assert effects[0].payload == json.dumps(None)
+    expected_payload = json.dumps(None)
+    assert len(result) == 1
+    assert result[0].payload == expected_payload
 
 
 def test_search_returns_null_when_no_user_staff_key() -> None:
+    """compute() emits a null-payload effect when the user has no staff key."""
     from dea_prescriber_filter.protocols.prescriber_filter import PrescriberSearchPrioritization
 
-    handler = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
-    handler.event = _make_search_event([{"text": "Dr Smith", "value": "123"}], user_id=None)
+    tested = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
+    tested.event = _make_search_event([{"text": "Dr Smith", "value": "123"}], user_id=None)
 
-    effects = handler.compute()
+    result = tested.compute()
 
-    assert effects[0].payload == json.dumps(None)
+    expected_payload = json.dumps(None)
+    assert result[0].payload == expected_payload
 
 
 def test_search_adds_state_annotation_to_all_providers() -> None:
+    """compute() annotates every result with its license state from prefetched staff."""
     from dea_prescriber_filter.protocols.prescriber_filter import PrescriberSearchPrioritization
 
     results = [
@@ -58,27 +67,35 @@ def test_search_adds_state_annotation_to_all_providers() -> None:
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._bulk_fetch_staff",
             return_value={"user-1": fake_user, "a": fake_a, "b": fake_b},
-        ),
+        ) as mock_bulk_fetch,
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._license_state_of_staff",
             side_effect=["NY", "CA"],
-        ),
+        ) as mock_license_state,
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter.get_all_delegations",
             return_value={},
-        ),
+        ) as mock_delegations,
     ):
-        handler = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
-        handler.event = _make_search_event(results)
+        tested = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
+        tested.event = _make_search_event(results)
 
-        effects = handler.compute()
+        result = tested.compute()
 
-    payload = json.loads(effects[0].payload)
+    payload = json.loads(result[0].payload)
     states = [r.get("annotations", []) for r in payload]
     assert "NY" in str(states) and "CA" in str(states)
 
+    exp_bulk_fetch_calls = [call(["user-1", "a", "b"])]
+    exp_license_state_calls = [call(fake_a), call(fake_b)]
+    exp_delegations_calls = [call()]
+    assert mock_bulk_fetch.mock_calls == exp_bulk_fetch_calls
+    assert mock_license_state.mock_calls == exp_license_state_calls
+    assert mock_delegations.mock_calls == exp_delegations_calls
+
 
 def test_search_puts_authorized_providers_before_others() -> None:
+    """compute() orders delegated prescribers ahead of non-delegated ones."""
     from dea_prescriber_filter.protocols.prescriber_filter import PrescriberSearchPrioritization
 
     results = [
@@ -94,28 +111,36 @@ def test_search_puts_authorized_providers_before_others() -> None:
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._bulk_fetch_staff",
             return_value={"user-1": fake_user, "other": fake_other, "auth": fake_auth},
-        ),
+        ) as mock_bulk_fetch,
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._license_state_of_staff",
             return_value="NY",
-        ),
+        ) as mock_license_state,
         # Delegations: prescriber "auth-uuid" has "user-uuid" authorized.
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter.get_all_delegations",
             return_value={"auth-uuid": ["user-uuid"]},
-        ),
+        ) as mock_delegations,
     ):
-        handler = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
-        handler.event = _make_search_event(results)
+        tested = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
+        tested.event = _make_search_event(results)
 
-        effects = handler.compute()
+        result = tested.compute()
 
-    payload = json.loads(effects[0].payload)
+    payload = json.loads(result[0].payload)
     assert payload[0]["value"] == "auth"
     assert payload[1]["value"] == "other"
 
+    exp_bulk_fetch_calls = [call(["user-1", "other", "auth"])]
+    exp_license_state_calls = [call(fake_other), call(fake_auth)]
+    exp_delegations_calls = [call()]
+    assert mock_bulk_fetch.mock_calls == exp_bulk_fetch_calls
+    assert mock_license_state.mock_calls == exp_license_state_calls
+    assert mock_delegations.mock_calls == exp_delegations_calls
+
 
 def test_search_skips_results_without_staff_key() -> None:
+    """compute() keeps results that have no staff key in the unrestricted bucket."""
     from dea_prescriber_filter.protocols.prescriber_filter import PrescriberSearchPrioritization
 
     results = [{"text": "No value"}]  # missing "value"
@@ -126,26 +151,33 @@ def test_search_skips_results_without_staff_key() -> None:
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._bulk_fetch_staff",
             return_value={"user-1": fake_user},
-        ),
+        ) as mock_bulk_fetch,
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter.get_all_delegations",
             return_value={},
-        ),
+        ) as mock_delegations,
     ):
-        handler = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
-        handler.event = _make_search_event(results)
+        tested = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
+        tested.event = _make_search_event(results)
 
-        effects = handler.compute()
+        result = tested.compute()
 
-    payload = json.loads(effects[0].payload)
-    assert len(payload) == 1
+    payload = json.loads(result[0].payload)
+    expected_len = 1
+    assert len(payload) == expected_len
+
+    exp_bulk_fetch_calls = [call(["user-1"])]
+    exp_delegations_calls = [call()]
+    assert mock_bulk_fetch.mock_calls == exp_bulk_fetch_calls
+    assert mock_delegations.mock_calls == exp_delegations_calls
 
 
 def test_search_does_not_use_per_result_helpers() -> None:
-    """Regression: compute() must not call _get_staff_npi / _get_staff_license_state /
-    _is_authorized per result. Those helpers are reserved for single-prescriber
-    paths (PrescribeActionFilter, PrescribeValidation). Calling them in a loop
-    causes the N+1 query problem the refactor was meant to fix.
+    """Regression: compute() must not call per-result helpers (N+1 query guard).
+
+    _get_staff_npi / _get_staff_license_state / _is_authorized are reserved
+    for single-prescriber paths (PrescribeActionFilter, PrescribeValidation).
+    Calling them in a loop causes the N+1 problem the refactor fixed.
     """
     from dea_prescriber_filter.protocols.prescriber_filter import PrescriberSearchPrioritization
 
@@ -165,55 +197,81 @@ def test_search_does_not_use_per_result_helpers() -> None:
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._bulk_fetch_staff",
             return_value={"user-1": fake_user, "a": fake_a, "b": fake_b},
-        ),
+        ) as mock_bulk_fetch,
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._license_state_of_staff",
             return_value=None,
-        ),
+        ) as mock_license_state,
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter.get_all_delegations",
             return_value={},
-        ),
-        patch("dea_prescriber_filter.protocols.prescriber_filter._get_staff_npi", side_effect=_boom),
-        patch("dea_prescriber_filter.protocols.prescriber_filter._get_staff_license_state", side_effect=_boom),
-        patch("dea_prescriber_filter.protocols.prescriber_filter._is_authorized", side_effect=_boom),
+        ) as mock_delegations,
+        patch(
+            "dea_prescriber_filter.protocols.prescriber_filter._get_staff_npi",
+            side_effect=_boom,
+        ) as mock_get_npi,
+        patch(
+            "dea_prescriber_filter.protocols.prescriber_filter._get_staff_license_state",
+            side_effect=_boom,
+        ) as mock_get_license_state,
+        patch(
+            "dea_prescriber_filter.protocols.prescriber_filter._is_authorized",
+            side_effect=_boom,
+        ) as mock_is_authorized,
     ):
-        handler = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
-        handler.event = _make_search_event(results)
+        tested = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
+        tested.event = _make_search_event(results)
 
         # If any per-result helper is called, _boom raises AssertionError and the test fails.
-        handler.compute()
+        tested.compute()
+
+    exp_bulk_fetch_calls = [call(["user-1", "a", "b"])]
+    exp_license_state_calls = [call(fake_a), call(fake_b)]
+    exp_delegations_calls = [call()]
+    exp_get_npi_calls: list = []
+    exp_get_license_state_calls: list = []
+    exp_is_authorized_calls: list = []
+    assert mock_bulk_fetch.mock_calls == exp_bulk_fetch_calls
+    assert mock_license_state.mock_calls == exp_license_state_calls
+    assert mock_delegations.mock_calls == exp_delegations_calls
+    assert mock_get_npi.mock_calls == exp_get_npi_calls
+    assert mock_get_license_state.mock_calls == exp_get_license_state_calls
+    assert mock_is_authorized.mock_calls == exp_is_authorized_calls
 
 
-def test_extract_staff_key_from_result_handles_int() -> None:
+def test_extract_staff_key_from_result__prescriber() -> None:
+    """_extract_staff_key_from_result coerces int/str/dict values and returns None when missing."""
     from dea_prescriber_filter.protocols.prescriber_filter import PrescriberSearchPrioritization
 
-    handler = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
+    tested = PrescriberSearchPrioritization.__new__(PrescriberSearchPrioritization)
 
-    assert handler._extract_staff_key_from_result({"value": 42}) == "42"
-    assert handler._extract_staff_key_from_result({"value": "abc"}) == "abc"
-    assert handler._extract_staff_key_from_result({"value": {"key": "k1"}}) == "k1"
-    assert handler._extract_staff_key_from_result({"value": {"id": "i1"}}) == "i1"
-    assert handler._extract_staff_key_from_result({}) is None
+    assert tested._extract_staff_key_from_result({"value": 42}) == "42"
+    assert tested._extract_staff_key_from_result({"value": "abc"}) == "abc"
+    assert tested._extract_staff_key_from_result({"value": {"key": "k1"}}) == "k1"
+    assert tested._extract_staff_key_from_result({"value": {"id": "i1"}}) == "i1"
+    assert tested._extract_staff_key_from_result({}) is None
 
 
 # ─────────────────────────────────────────────────────────────
-# SupervisingProviderSorter
+# SupervisingProviderSorter.compute
 # ─────────────────────────────────────────────────────────────
 
 def test_supervising_sorter_returns_null_when_no_results() -> None:
+    """compute() emits a null-payload effect when context has no results."""
     from dea_prescriber_filter.protocols.prescriber_filter import SupervisingProviderSorter
 
-    handler = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
-    handler.event = MagicMock()
-    handler.event.context = {"results": None}
+    tested = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
+    tested.event = MagicMock()
+    tested.event.context = {"results": None}
 
-    effects = handler.compute()
+    result = tested.compute()
 
-    assert effects[0].payload == json.dumps(None)
+    expected_payload = json.dumps(None)
+    assert result[0].payload == expected_payload
 
 
 def test_supervising_sorter_annotates_and_sorts() -> None:
+    """compute() annotates with license state and sorts results by last name."""
     from dea_prescriber_filter.protocols.prescriber_filter import SupervisingProviderSorter
 
     results = [
@@ -228,19 +286,19 @@ def test_supervising_sorter_annotates_and_sorts() -> None:
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._bulk_fetch_staff",
             return_value={"a": fake_a, "b": fake_b},
-        ),
+        ) as mock_bulk_fetch,
         patch(
             "dea_prescriber_filter.protocols.prescriber_filter._license_state_of_staff",
             side_effect=lambda s: {"uuid-a": "CA", "uuid-b": "NY"}.get(getattr(s, "id", None)),
-        ),
+        ) as mock_license_state,
     ):
-        handler = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
-        handler.event = MagicMock()
-        handler.event.context = {"results": results}
+        tested = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
+        tested.event = MagicMock()
+        tested.event.context = {"results": results}
 
-        effects = handler.compute()
+        result = tested.compute()
 
-    payload = json.loads(effects[0].payload)
+    payload = json.loads(result[0].payload)
     # Sorted by last name (Aaa < Zzz)
     assert payload[0]["text"] == "Alice Aaa"
     assert payload[1]["text"] == "Bob Zzz"
@@ -248,28 +306,36 @@ def test_supervising_sorter_annotates_and_sorts() -> None:
     assert "CA" in payload[0].get("annotations", [])
     assert "NY" in payload[1].get("annotations", [])
 
+    exp_bulk_fetch_calls = [call(["b", "a"])]
+    exp_license_state_calls = [call(fake_b), call(fake_a)]
+    assert mock_bulk_fetch.mock_calls == exp_bulk_fetch_calls
+    assert mock_license_state.mock_calls == exp_license_state_calls
+
 
 def test_supervising_sorter_skips_results_without_staff_key() -> None:
+    """compute() keeps results lacking a staff key without raising."""
     from dea_prescriber_filter.protocols.prescriber_filter import SupervisingProviderSorter
 
     results = [{"text": "No value"}]
 
-    handler = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
-    handler.event = MagicMock()
-    handler.event.context = {"results": results}
+    tested = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
+    tested.event = MagicMock()
+    tested.event.context = {"results": results}
 
-    effects = handler.compute()
+    result = tested.compute()
 
-    payload = json.loads(effects[0].payload)
-    assert len(payload) == 1
+    payload = json.loads(result[0].payload)
+    expected_len = 1
+    assert len(payload) == expected_len
 
 
-def test_supervising_extract_staff_key() -> None:
+def test_extract_staff_key__supervising() -> None:
+    """_extract_staff_key_from_result on SupervisingProviderSorter coerces values and handles missing keys."""
     from dea_prescriber_filter.protocols.prescriber_filter import SupervisingProviderSorter
 
-    handler = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
+    tested = SupervisingProviderSorter.__new__(SupervisingProviderSorter)
 
-    assert handler._extract_staff_key_from_result({"value": 42}) == "42"
-    assert handler._extract_staff_key_from_result({"value": "abc"}) == "abc"
-    assert handler._extract_staff_key_from_result({"value": {"key": "k1"}}) == "k1"
-    assert handler._extract_staff_key_from_result({}) is None
+    assert tested._extract_staff_key_from_result({"value": 42}) == "42"
+    assert tested._extract_staff_key_from_result({"value": "abc"}) == "abc"
+    assert tested._extract_staff_key_from_result({"value": {"key": "k1"}}) == "k1"
+    assert tested._extract_staff_key_from_result({}) is None
