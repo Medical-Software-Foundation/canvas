@@ -1,11 +1,16 @@
 """Pre-flight validation for lab orders bound for electronic transmission.
 
-Hooks LAB_ORDER_COMMAND__POST_VALIDATION. When the selected lab partner has
-electronic_ordering_enabled=True, runs five data-state checks. If any fail,
-returns a CommandValidationErrorEffect that blocks Sign-and-Send and shows
-each error in the Canvas UI. For paper or manual labs, returns no effects.
+Hooks LAB_ORDER_COMMAND__POST_VALIDATION. Looks up the order's lab partner in
+the LabPartner table; if its electronic_ordering_enabled flag is True, runs
+five data-state checks. If any fail, returns a CommandValidationErrorEffect
+that blocks Sign-and-Send and shows each error in the Canvas UI. For paper
+or manual labs (or unknown partners), returns no effects.
 
-This is a hard block — there is no override. To send the order, the
+The LabPartner lookup is the source of truth - we do not trust the field's
+`extra.electronic_ordering_enabled` blob, because orders created by automation
+may carry stale or missing extra data.
+
+This is a hard block - there is no override. To send the order, the
 underlying data must be fixed first.
 """
 
@@ -15,6 +20,7 @@ from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Patient
 from canvas_sdk.v1.data.coverage import Coverage
+from canvas_sdk.v1.data.lab import LabPartner
 from django.db.models import Prefetch
 from logger import log
 
@@ -37,20 +43,23 @@ class LabOrderPreflightValidator(BaseHandler):
         note_uuid = note_ctx.get("uuid")
         lab_partner_field = fields.get("lab_partner")
 
+        partner = self._lookup_partner(lab_partner_field)
+        is_electronic = bool(partner and partner.electronic_ordering_enabled)
+
         log.info(
             f"lab_order_validation: invoked patient_id={patient_id} "
             f"note_uuid={note_uuid} partner={self._partner_name(lab_partner_field)!r} "
-            f"electronic={self._is_electronic(lab_partner_field)}"
+            f"resolved={getattr(partner, 'name', None)!r} electronic={is_electronic}"
         )
 
         if not patient_id:
             return []
 
-        if not self._is_electronic(lab_partner_field):
+        if not is_electronic:
             return []
 
         # Prefetch the full coverage tree so the rule modules don't issue
-        # N+1 queries when they iterate coverages → issuer/subscriber → addresses.
+        # N+1 queries when they iterate coverages -> issuer/subscriber -> addresses.
         patient = (
             Patient.objects.filter(id=patient_id)
             .prefetch_related(
@@ -109,21 +118,37 @@ class LabOrderPreflightValidator(BaseHandler):
         return [effect.apply()]
 
     @staticmethod
-    def _is_electronic(lab_partner_field) -> bool:
-        """Read the electronic_ordering_enabled flag directly from the field.
+    def _lookup_partner(lab_partner_field) -> LabPartner | None:
+        """Resolve the lab_partner field to a LabPartner record.
 
-        The lab_partner command field is a dropdown selection of shape:
-            {"value": "<name>", "text": "<name>",
-             "extra": {"electronic_ordering_enabled": bool}, ...}
-        The flag is exposed in `extra` so we don't need a LabPartner lookup.
+        The field can arrive in two shapes:
+        - A dict from the UI dropdown: {"value": "<id or name>", "text": "<name>",
+          "extra": {"electronic_ordering_enabled": bool}, ...}
+        - A plain string from automation: the partner's name or ID
+
+        We use the LabPartner record as the source of truth instead of trusting
+        the dropdown's `extra` blob, because automation-created orders may carry
+        stale or missing `extra` data.
         """
-        if not isinstance(lab_partner_field, dict):
-            return False
-        extra = lab_partner_field.get("extra") or {}
-        return bool(extra.get("electronic_ordering_enabled"))
+        if isinstance(lab_partner_field, dict):
+            identifier = lab_partner_field.get("value") or lab_partner_field.get("text")
+        elif isinstance(lab_partner_field, str):
+            identifier = lab_partner_field
+        else:
+            return None
+
+        if not identifier:
+            return None
+
+        partner = LabPartner.objects.filter(id=identifier).first()
+        if partner is None:
+            partner = LabPartner.objects.filter(name=identifier).first()
+        return partner
 
     @staticmethod
     def _partner_name(lab_partner_field) -> str | None:
-        if not isinstance(lab_partner_field, dict):
-            return None
-        return lab_partner_field.get("text") or lab_partner_field.get("value")
+        if isinstance(lab_partner_field, dict):
+            return lab_partner_field.get("text") or lab_partner_field.get("value")
+        if isinstance(lab_partner_field, str):
+            return lab_partner_field
+        return None
