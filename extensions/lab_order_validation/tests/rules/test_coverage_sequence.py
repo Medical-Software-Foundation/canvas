@@ -30,17 +30,18 @@ def test_pass_with_primary_and_secondary(make_coverage):
     assert errors == []
 
 
-def test_fail_no_active_coverages():
+def test_pass_with_no_coverages_at_all():
+    """Self-pay patients with zero coverages should pass Rule 1."""
     patient = MagicMock()
     patient.coverages.all.return_value = []
 
     errors = coverage_sequence.check(patient)
 
-    assert len(errors) == 1
-    assert "No active insurance coverage" in errors[0]
+    assert errors == []
 
 
-def test_expired_coverage_treated_as_inactive(make_coverage):
+def test_pass_when_only_coverage_is_expired(make_coverage):
+    """Expired coverage counts as no-active; rule is a no-op."""
     expired = make_coverage(
         rank=1,
         end=date.today() - timedelta(days=10),
@@ -50,11 +51,11 @@ def test_expired_coverage_treated_as_inactive(make_coverage):
 
     errors = coverage_sequence.check(patient)
 
-    assert len(errors) == 1
-    assert "No active insurance coverage" in errors[0]
+    assert errors == []
 
 
-def test_future_coverage_treated_as_inactive(make_coverage):
+def test_pass_when_only_coverage_is_future_dated(make_coverage):
+    """Future-dated coverage counts as no-active; rule is a no-op."""
     future = make_coverage(
         rank=1,
         start=date.today() + timedelta(days=30),
@@ -64,8 +65,7 @@ def test_future_coverage_treated_as_inactive(make_coverage):
 
     errors = coverage_sequence.check(patient)
 
-    assert len(errors) == 1
-    assert "No active insurance coverage" in errors[0]
+    assert errors == []
 
 
 def test_fail_no_primary_when_only_secondary(make_coverage):

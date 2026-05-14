@@ -1,7 +1,8 @@
-"""Rule 1: Coverages must be sequential and have a single primary.
+"""Rule 1: When coverages exist, they must be sequential and have a single primary.
 
 Health Gorilla rejects orders when the patient's coverage stack is missing a
-primary, has duplicate ranks, or has no active coverages at all.
+primary or has duplicate ranks. A patient with zero active coverages is fine -
+self-pay lab orders are allowed - so this rule is a no-op in that case.
 """
 
 from collections import Counter
@@ -26,7 +27,7 @@ def check(patient) -> list[str]:
     active = _active_coverages(patient)
 
     if not active:
-        return ["No active insurance coverage. Add one in the Coverages tab."]
+        return []
 
     ranks = [c.coverage_rank for c in active if c.coverage_rank is not None]
 
