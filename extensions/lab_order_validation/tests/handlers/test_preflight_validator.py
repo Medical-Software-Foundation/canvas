@@ -261,3 +261,128 @@ def _ok_transactor_phone():
     phone = MagicMock()
     phone.value = "617-555-0100"
     return phone
+
+
+# ------------------------------------------------------------------
+# _lookup_partner unit tests - exercise the resolver directly
+# ------------------------------------------------------------------
+
+
+class TestLookupPartner:
+    """Direct tests for the static _lookup_partner resolver.
+
+    These verify each lookup path (UUID, name, name__iexact) and the
+    defensive try/except behavior, without going through the full handler.
+    """
+
+    UUID = "a74592ae-8a6c-4d0e-be07-99d3fb3713d1"
+
+    def _matched_partner(self, name="Labcorp"):
+        partner = MagicMock()
+        partner.name = name
+        return partner
+
+    def test_uuid_value_calls_filter_by_id(self):
+        with patch(LAB_PARTNER_PATH) as mock_lp:
+            expected = self._matched_partner()
+            mock_lp.objects.filter.return_value.first.return_value = expected
+
+            result = LabOrderPreflightValidator._lookup_partner(
+                {"value": self.UUID, "text": "Labcorp"}
+            )
+
+            assert result is expected
+            # First call should be filter(id=<uuid>)
+            mock_lp.objects.filter.assert_any_call(id=self.UUID)
+
+    def test_non_uuid_string_skips_id_filter_and_uses_name(self):
+        """Critical regression: passing a name to filter(id=...) raises in
+        Django (UUIDField). The UUID-shape guard prevents this crash."""
+        with patch(LAB_PARTNER_PATH) as mock_lp:
+            # First call (name=) misses; we won't reach iexact in this test
+            mock_lp.objects.filter.return_value.first.side_effect = [
+                self._matched_partner(),
+            ]
+
+            result = LabOrderPreflightValidator._lookup_partner("Labcorp")
+
+            assert result is not None
+            # filter(id=...) should NOT have been called
+            id_calls = [
+                c for c in mock_lp.objects.filter.call_args_list
+                if "id" in c.kwargs
+            ]
+            assert id_calls == []
+            # filter(name=...) SHOULD have been called
+            mock_lp.objects.filter.assert_any_call(name="Labcorp")
+
+    def test_name_iexact_fallback_when_exact_name_misses(self):
+        """If case differs (e.g. 'labcorp' vs 'Labcorp'), iexact saves us."""
+        with patch(LAB_PARTNER_PATH) as mock_lp:
+            # Sequence: exact name miss (None), then iexact hit
+            mock_lp.objects.filter.return_value.first.side_effect = [
+                None,
+                self._matched_partner(name="Labcorp"),
+            ]
+
+            result = LabOrderPreflightValidator._lookup_partner("labcorp")
+
+            assert result is not None
+            assert result.name == "Labcorp"
+            mock_lp.objects.filter.assert_any_call(name__iexact="labcorp")
+
+    def test_tries_both_value_and_text_candidates(self):
+        """If value misses but text matches, we should still resolve."""
+        with patch(LAB_PARTNER_PATH) as mock_lp:
+            # value="stale-id" misses every path; text="Labcorp" hits name=
+            mock_lp.objects.filter.return_value.first.side_effect = [
+                None,  # name="stale-id"
+                self._matched_partner(),  # name="Labcorp"
+            ]
+
+            result = LabOrderPreflightValidator._lookup_partner(
+                {"value": "stale-id", "text": "Labcorp"}
+            )
+
+            assert result is not None
+
+    def test_returns_none_when_no_candidates(self):
+        for field in (None, {}, "", {"value": "", "text": ""}):
+            assert LabOrderPreflightValidator._lookup_partner(field) is None
+
+    def test_returns_none_when_no_match_anywhere(self):
+        with patch(LAB_PARTNER_PATH) as mock_lp:
+            mock_lp.objects.filter.return_value.first.return_value = None
+
+            result = LabOrderPreflightValidator._lookup_partner("Unknown Lab")
+
+            assert result is None
+
+    def test_returns_none_when_lookup_raises(self):
+        """Defensive: an unexpected DB-layer exception must not crash the handler."""
+        with patch(LAB_PARTNER_PATH) as mock_lp:
+            mock_lp.objects.filter.return_value.first.side_effect = ValueError(
+                "simulated db error"
+            )
+
+            result = LabOrderPreflightValidator._lookup_partner("Labcorp")
+
+            assert result is None
+
+    def test_uuid_in_value_with_dashes_or_without(self):
+        """Both dashed and undashed UUIDs should match the UUID pattern."""
+        with patch(LAB_PARTNER_PATH) as mock_lp:
+            mock_lp.objects.filter.return_value.first.return_value = self._matched_partner()
+
+            for shape in (
+                self.UUID,  # dashed
+                self.UUID.replace("-", ""),  # undashed
+            ):
+                LabOrderPreflightValidator._lookup_partner(shape)
+
+            # Both invocations should have used filter(id=...)
+            id_calls = [
+                c for c in mock_lp.objects.filter.call_args_list
+                if "id" in c.kwargs
+            ]
+            assert len(id_calls) == 2

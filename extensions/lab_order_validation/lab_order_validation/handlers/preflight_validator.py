@@ -14,6 +14,8 @@ This is a hard block - there is no override. To send the order, the
 underlying data must be fixed first.
 """
 
+import re
+
 from canvas_sdk.commands.validation import CommandValidationErrorEffect
 from canvas_sdk.effects import Effect
 from canvas_sdk.events import EventType
@@ -23,6 +25,11 @@ from canvas_sdk.v1.data.coverage import Coverage
 from canvas_sdk.v1.data.lab import LabPartner
 from django.db.models import Prefetch
 from logger import log
+
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 from lab_order_validation.rules.coverage_sequence import check as check_coverage_sequence
 from lab_order_validation.rules.patient_address import check as check_patient_address
@@ -43,13 +50,19 @@ class LabOrderPreflightValidator(BaseHandler):
         note_uuid = note_ctx.get("uuid")
         lab_partner_field = fields.get("lab_partner")
 
+        log.info(
+            f"lab_order_validation: invoked patient_id={patient_id} "
+            f"note_uuid={note_uuid} lab_partner_field={lab_partner_field!r}"
+        )
+
         partner = self._lookup_partner(lab_partner_field)
         is_electronic = bool(partner and partner.electronic_ordering_enabled)
 
         log.info(
-            f"lab_order_validation: invoked patient_id={patient_id} "
-            f"note_uuid={note_uuid} partner={self._partner_name(lab_partner_field)!r} "
-            f"resolved={getattr(partner, 'name', None)!r} electronic={is_electronic}"
+            f"lab_order_validation: partner={self._partner_name(lab_partner_field)!r} "
+            f"resolved={getattr(partner, 'name', None)!r} "
+            f"electronic_ordering_enabled={getattr(partner, 'electronic_ordering_enabled', None)} "
+            f"is_electronic={is_electronic}"
         )
 
         if not patient_id:
@@ -121,29 +134,71 @@ class LabOrderPreflightValidator(BaseHandler):
     def _lookup_partner(lab_partner_field) -> LabPartner | None:
         """Resolve the lab_partner field to a LabPartner record.
 
-        The field can arrive in two shapes:
-        - A dict from the UI dropdown: {"value": "<id or name>", "text": "<name>",
-          "extra": {"electronic_ordering_enabled": bool}, ...}
-        - A plain string from automation: the partner's name or ID
+        The field can arrive in several shapes:
+        - A dict from the UI dropdown: {"value": "<uuid or name>",
+          "text": "<name>", "extra": {"electronic_ordering_enabled": bool}, ...}
+        - A plain string from automation: the partner's name or UUID
 
-        We use the LabPartner record as the source of truth instead of trusting
-        the dropdown's `extra` blob, because automation-created orders may carry
-        stale or missing `extra` data.
+        We try, in order:
+        1. UUID lookup on any candidate that is UUID-shaped (avoids Django
+           raising ValidationError on non-UUID strings passed to a UUIDField).
+        2. Exact name match on every candidate.
+        3. Case-insensitive name match on every candidate.
+
+        Returns None if nothing matches or the lookup itself fails. Logs the
+        attempted candidates and the outcome so silent-skip cases are
+        debuggable from the Canvas logs.
         """
+        candidates: list[str] = []
         if isinstance(lab_partner_field, dict):
-            identifier = lab_partner_field.get("value") or lab_partner_field.get("text")
-        elif isinstance(lab_partner_field, str):
-            identifier = lab_partner_field
-        else:
+            for key in ("value", "text"):
+                value = lab_partner_field.get(key)
+                if isinstance(value, str) and value and value not in candidates:
+                    candidates.append(value)
+        elif isinstance(lab_partner_field, str) and lab_partner_field:
+            candidates.append(lab_partner_field)
+
+        if not candidates:
+            log.info("lab_order_validation: no lab_partner identifier present")
             return None
 
-        if not identifier:
+        try:
+            for candidate in candidates:
+                if UUID_PATTERN.match(candidate):
+                    partner = LabPartner.objects.filter(id=candidate).first()
+                    if partner is not None:
+                        log.info(
+                            f"lab_order_validation: partner matched by id {candidate!r}"
+                        )
+                        return partner
+
+            for candidate in candidates:
+                partner = LabPartner.objects.filter(name=candidate).first()
+                if partner is not None:
+                    log.info(
+                        f"lab_order_validation: partner matched by name {candidate!r}"
+                    )
+                    return partner
+
+            for candidate in candidates:
+                partner = LabPartner.objects.filter(name__iexact=candidate).first()
+                if partner is not None:
+                    log.info(
+                        f"lab_order_validation: partner matched by case-insensitive "
+                        f"name {candidate!r} -> {partner.name!r}"
+                    )
+                    return partner
+        except Exception as exc:
+            log.warning(
+                f"lab_order_validation: LabPartner lookup raised "
+                f"{type(exc).__name__} for candidates={candidates!r}: {exc}"
+            )
             return None
 
-        partner = LabPartner.objects.filter(id=identifier).first()
-        if partner is None:
-            partner = LabPartner.objects.filter(name=identifier).first()
-        return partner
+        log.warning(
+            f"lab_order_validation: no LabPartner matched any of {candidates!r}"
+        )
+        return None
 
     @staticmethod
     def _partner_name(lab_partner_field) -> str | None:
