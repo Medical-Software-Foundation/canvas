@@ -34,10 +34,16 @@
     }
     .entry-top {
       display: flex;
-      align-items: baseline;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 8px;
       margin-bottom: 1px;
+    }
+    .top-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      flex-shrink: 0;
     }
     .entry-title {
       font-weight: 700;
@@ -90,9 +96,14 @@
     <div class="entry">
       <div class="entry-top">
         <div class="entry-title">{{ h.hospital_name }}</div>
-        {% if h.length_of_stay_days is not None %}
-        <span class="badge badge-los">{{ h.length_of_stay_days }}d stay</span>
-        {% endif %}
+        <div class="top-badges">
+          {% if h.icu_stay %}
+          <span class="badge badge-icu">ICU{% if h.icu_duration_days %} {{ h.icu_duration_days }}d{% endif %}</span>
+          {% endif %}
+          {% if h.length_of_stay_days is not None %}
+          <span class="badge badge-los">{{ h.length_of_stay_days }}d stay</span>
+          {% endif %}
+        </div>
       </div>
       <div class="entry-detail">
         {{ h.admission_date }}{% if h.discharge_date %} – {{ h.discharge_date }}{% endif %}
@@ -101,14 +112,9 @@
       {% if h.principal_diagnosis %}
       <div class="entry-detail">Dx: {{ h.principal_diagnosis }}</div>
       {% endif %}
-      {% if h.icu_stay or h.readmission_within_30_days %}
+      {% if h.readmission_within_30_days %}
       <div class="badges">
-        {% if h.icu_stay %}
-        <span class="badge badge-icu">ICU{% if h.icu_duration_days %} {{ h.icu_duration_days }}d{% endif %}</span>
-        {% endif %}
-        {% if h.readmission_within_30_days %}
         <span class="badge badge-readmit">30d Readmit</span>
-        {% endif %}
       </div>
       {% endif %}
     </div>

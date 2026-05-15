@@ -3,40 +3,67 @@
 <head>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #1a202c; margin: 0; padding: 8px 12px; }
-    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; }
-    .hospital { font-weight: 600; font-size: 13px; flex: 1; }
-    .dates { font-size: 12px; color: #4a5568; }
-    .detail { font-size: 12px; color: #4a5568; margin-bottom: 2px; }
-    .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-    .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
+    .top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .hospital { font-weight: 600; font-size: 13px; flex: 1; min-width: 0; }
+    .top-badges { display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; white-space: nowrap; }
     .badge-icu { background: #fed7d7; color: #c53030; }
     .badge-readmit { background: #fefcbf; color: #744210; }
     .badge-los { background: #e9d8fd; color: #553c9a; }
+    .fields { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; }
+    .label { font-size: 11px; font-weight: 600; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 1px; }
+    .value { font-size: 12px; color: #1a202c; }
   </style>
 </head>
 <body>
-  <div class="row">
+  <div class="top-row">
     <span class="hospital">{{ hospitalization.hospital_name }}</span>
-    {% if hospitalization.length_of_stay_days is not None %}
-    <span class="badge badge-los">{{ hospitalization.length_of_stay_days }}d stay</span>
-    {% endif %}
+    <div class="top-badges">
+      {% if hospitalization.icu_stay %}
+      <span class="badge badge-icu">ICU{% if hospitalization.icu_duration_days %} {{ hospitalization.icu_duration_days }}d{% endif %}</span>
+      {% endif %}
+      {% if hospitalization.length_of_stay_days is not None %}
+      <span class="badge badge-los">{{ hospitalization.length_of_stay_days }}d stay</span>
+      {% endif %}
+    </div>
   </div>
-  <div class="dates">
-    {{ hospitalization.admission_date }}{% if hospitalization.discharge_date %} – {{ hospitalization.discharge_date }}{% endif %}
-  </div>
-  <div class="detail">{{ hospitalization.reason_for_admission }}</div>
-  {% if hospitalization.principal_diagnosis %}
-  <div class="detail">Dx: {{ hospitalization.principal_diagnosis }}</div>
-  {% endif %}
-  {% if hospitalization.icu_stay or hospitalization.readmission_within_30_days %}
-  <div class="badges">
-    {% if hospitalization.icu_stay %}
-    <span class="badge badge-icu">ICU{% if hospitalization.icu_duration_days %} {{ hospitalization.icu_duration_days }}d{% endif %}</span>
+
+  <div class="fields">
+    <span class="label">Admission</span>
+    <span class="value">{{ hospitalization.admission_date }}</span>
+
+    {% if hospitalization.discharge_date %}
+    <span class="label">Discharge</span>
+    <span class="value">{{ hospitalization.discharge_date }}</span>
     {% endif %}
+
+    <span class="label">Reason</span>
+    <span class="value">{{ hospitalization.reason_for_admission }}</span>
+
+    {% if hospitalization.principal_diagnosis %}
+    <span class="label">Diagnosis</span>
+    <span class="value">{{ hospitalization.principal_diagnosis }}</span>
+    {% endif %}
+
+    {% if hospitalization.discharge_disposition %}
+    <span class="label">Disposition</span>
+    <span class="value">{{ hospitalization.discharge_disposition }}</span>
+    {% endif %}
+
+    {% if hospitalization.treating_physician %}
+    <span class="label">Physician</span>
+    <span class="value">{{ hospitalization.treating_physician }}</span>
+    {% endif %}
+
     {% if hospitalization.readmission_within_30_days %}
-    <span class="badge badge-readmit">30d Readmit</span>
+    <span class="label">Readmission</span>
+    <span class="value"><span class="badge badge-readmit">Within 30 days</span></span>
+    {% endif %}
+
+    {% if hospitalization.notes %}
+    <span class="label">Notes</span>
+    <span class="value">{{ hospitalization.notes }}</span>
     {% endif %}
   </div>
-  {% endif %}
 </body>
 </html>
