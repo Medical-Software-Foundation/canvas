@@ -7,7 +7,7 @@ from typing import Any
 
 from canvas_sdk.effects import Effect, EffectType
 from canvas_sdk.events import EventType
-from canvas_sdk.protocols import BaseProtocol
+from canvas_sdk.handlers import BaseHandler
 
 from expired_icd10_alert.helpers import (
     get_expired_codes,
@@ -19,7 +19,7 @@ ICD10_SYSTEMS = {"ICD-10", "http://hl7.org/fhir/sid/icd-10"}
 EXPIRED_TAG = "EXPIRED"
 
 
-class ExpiredICD10Annotation(BaseProtocol):
+class ExpiredICD10Annotation(BaseHandler):
     """Tag conditions in the patient chart that use an expired ICD-10 code.
 
     Reads the default expired-codes list from the bundled JSON data file.
