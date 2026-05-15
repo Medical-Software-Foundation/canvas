@@ -6,21 +6,12 @@ self-pay lab orders are allowed - so this rule is a no-op in that case.
 """
 
 from collections import Counter
-from datetime import date
+
+from lab_order_validation.rules._helpers import is_active_coverage
 
 
 def _active_coverages(patient) -> list:
-    today = date.today()
-    active = []
-    for coverage in patient.coverages.all():
-        start = coverage.coverage_start_date
-        end = coverage.coverage_end_date
-        if start and start > today:
-            continue
-        if end and end < today:
-            continue
-        active.append(coverage)
-    return active
+    return [c for c in patient.coverages.all() if is_active_coverage(c)]
 
 
 def check(patient) -> list[str]:

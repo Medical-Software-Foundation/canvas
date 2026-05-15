@@ -13,6 +13,8 @@ def _coverage(
     end: date | None = None,
     issuer: object = None,
     subscriber: object = None,
+    state: str = "active",
+    stack: str = "IN_USE",
 ) -> MagicMock:
     cov = MagicMock()
     cov.coverage_rank = rank
@@ -20,6 +22,8 @@ def _coverage(
     cov.coverage_end_date = end
     cov.issuer = issuer
     cov.subscriber = subscriber
+    cov.state = state
+    cov.stack = stack
     return cov
 
 

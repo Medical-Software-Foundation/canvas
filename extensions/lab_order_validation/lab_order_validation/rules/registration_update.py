@@ -2,31 +2,24 @@
 
 This is the duplicate-coverage class of bugs where the same patient has
 two active coverages from the same payer (Transactor). Today the Canvas UI
-hides the duplicate but the data state breaks the Send button — Health
+hides the duplicate but the data state breaks the Send button - Health
 Gorilla returns a 422 or the order is silently dropped.
 
 Detection here is best-effort. False alarms can be dismissed via the
-note-header "Acknowledge coverage warning" button (see plan-technical.md).
+note-header "Acknowledge coverage warning" button.
 """
 
 from collections import Counter
-from datetime import date
+
+from lab_order_validation.rules._helpers import is_active_coverage, sanitize_for_display
 
 
 def _active_coverages_with_issuer(patient) -> list:
-    today = date.today()
-    out = []
-    for coverage in patient.coverages.all():
-        start = coverage.coverage_start_date
-        end = coverage.coverage_end_date
-        if start and start > today:
-            continue
-        if end and end < today:
-            continue
-        if coverage.issuer is None:
-            continue
-        out.append(coverage)
-    return out
+    return [
+        c
+        for c in patient.coverages.all()
+        if is_active_coverage(c) and c.issuer is not None
+    ]
 
 
 def check(patient) -> list[str]:
@@ -42,7 +35,7 @@ def check(patient) -> list[str]:
         return []
 
     duplicate_payer_names = sorted(
-        {c.issuer.name for c in active if c.issuer.dbid in duplicates}
+        {sanitize_for_display(c.issuer.name) for c in active if c.issuer.dbid in duplicates}
     )
     payer_list = ", ".join(f"'{name}'" for name in duplicate_payer_names)
     return [

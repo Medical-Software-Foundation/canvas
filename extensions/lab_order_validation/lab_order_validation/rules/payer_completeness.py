@@ -5,16 +5,20 @@ contact info. We check the Transactor (issuer) attached to each active
 coverage on the patient.
 """
 
-from datetime import date
+from lab_order_validation.rules._helpers import (
+    has_meaningful_content,
+    is_active_coverage,
+    sanitize_for_display,
+)
 
 
 def _has_complete_address(transactor) -> bool:
     for address in transactor.addresses.all():
         if (
-            address.line1
-            and address.city
-            and address.state_code
-            and address.postal_code
+            has_meaningful_content(address.line1)
+            and has_meaningful_content(address.city)
+            and has_meaningful_content(address.state_code)
+            and has_meaningful_content(address.postal_code)
         ):
             return True
     return False
@@ -22,22 +26,17 @@ def _has_complete_address(transactor) -> bool:
 
 def _has_phone(transactor) -> bool:
     for phone in transactor.phones.all():
-        if phone.value:
+        if has_meaningful_content(phone.value, min_alnum=7):
             return True
     return False
 
 
 def check(patient) -> list[str]:
-    today = date.today()
     errors: list[str] = []
     seen_issuer_dbids: set = set()
 
     for coverage in patient.coverages.all():
-        start = coverage.coverage_start_date
-        end = coverage.coverage_end_date
-        if start and start > today:
-            continue
-        if end and end < today:
+        if not is_active_coverage(coverage):
             continue
         issuer = coverage.issuer
         if issuer is None or issuer.dbid in seen_issuer_dbids:
@@ -53,7 +52,7 @@ def check(patient) -> list[str]:
         if missing:
             missing_list = " and ".join(missing)
             errors.append(
-                f"Payer '{issuer.name}' is missing {missing_list}. "
+                f"Payer '{sanitize_for_display(issuer.name)}' is missing {missing_list}. "
                 "Update the payer record."
             )
 

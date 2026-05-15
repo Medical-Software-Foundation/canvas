@@ -38,11 +38,15 @@ def _complete_address(
     return addr
 
 
-def _coverage(*, subscriber, start=None, end=None) -> MagicMock:
+def _coverage(
+    *, subscriber, start=None, end=None, state="active", stack="IN_USE"
+) -> MagicMock:
     cov = MagicMock()
     cov.coverage_start_date = start if start is not None else date(2020, 1, 1)
     cov.coverage_end_date = end
     cov.subscriber = subscriber
+    cov.state = state
+    cov.stack = stack
     return cov
 
 
@@ -166,3 +170,68 @@ def test_fallback_name_when_full_name_missing():
 
     assert len(errors) == 1
     assert "Alex Quinn" in errors[0]
+
+
+def test_deleted_coverage_skipped():
+    """A removed coverage should not produce a subscriber-address error."""
+    sub = _subscriber(addresses=[])
+    patient = MagicMock()
+    patient.id = "patient-1"
+    patient.coverages.all.return_value = [_coverage(subscriber=sub, state="deleted")]
+
+    assert subscriber_address.check(patient) == []
+
+
+def test_removed_stack_coverage_skipped():
+    """Regression: a coverage 'Removed' via the Coverages tab carries stack=REMOVED
+    while state stays 'active'. Its subscriber should not be flagged."""
+    sub = _subscriber(addresses=[])
+    patient = MagicMock()
+    patient.id = "patient-1"
+    patient.coverages.all.return_value = [
+        _coverage(subscriber=sub, state="active", stack="REMOVED")
+    ]
+
+    assert subscriber_address.check(patient) == []
+
+
+def test_placeholder_address_line_fails():
+    """An address with line1='---' should not count as a complete address."""
+    bad_addr = _complete_address(line1="---")
+    sub = _subscriber(addresses=[bad_addr])
+    patient = MagicMock()
+    patient.id = "patient-1"
+    patient.coverages.all.return_value = [_coverage(subscriber=sub)]
+
+    errors = subscriber_address.check(patient)
+
+    assert len(errors) == 1
+    assert "Jane Doe" in errors[0]
+
+
+def test_subscriber_name_with_control_chars_sanitized_in_error():
+    sub = _subscriber(full_name="Jane\x00\x1fDoe", addresses=[])
+    patient = MagicMock()
+    patient.id = "patient-1"
+    patient.coverages.all.return_value = [_coverage(subscriber=sub)]
+
+    errors = subscriber_address.check(patient)
+
+    assert len(errors) == 1
+    assert "\x00" not in errors[0]
+    assert "\x1f" not in errors[0]
+    assert "JaneDoe" in errors[0]
+
+
+def test_error_message_points_to_patient_chart_not_coverages_tab():
+    """Rule 5 error must tell the user to update the patient chart."""
+    sub = _subscriber(addresses=[])
+    patient = MagicMock()
+    patient.id = "patient-1"
+    patient.coverages.all.return_value = [_coverage(subscriber=sub)]
+
+    errors = subscriber_address.check(patient)
+
+    assert len(errors) == 1
+    assert "patient chart" in errors[0]
+    assert "Coverages tab" not in errors[0]

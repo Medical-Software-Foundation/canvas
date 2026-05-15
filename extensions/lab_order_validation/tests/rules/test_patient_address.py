@@ -117,3 +117,31 @@ def test_enum_like_object_with_value_attribute_supported():
     patient.addresses.all.return_value = [addr]
 
     assert patient_address.check(patient) == []
+
+
+def test_placeholder_address_line_rejected(make_patient_address):
+    """A home/both address with line1='---' should fail Rule 4."""
+    bad = make_patient_address(line1="---")
+    patient = MagicMock()
+    patient.addresses.all.return_value = [bad]
+
+    errors = patient_address.check(patient)
+
+    assert len(errors) == 1
+
+
+def test_whitespace_only_city_rejected(make_patient_address):
+    bad = make_patient_address(city="   ")
+    patient = MagicMock()
+    patient.addresses.all.return_value = [bad]
+
+    assert len(patient_address.check(patient)) == 1
+
+
+def test_single_char_state_rejected(make_patient_address):
+    """state_code='M' has only one alnum and should fail (default min=2)."""
+    bad = make_patient_address(state_code="M")
+    patient = MagicMock()
+    patient.addresses.all.return_value = [bad]
+
+    assert len(patient_address.check(patient)) == 1

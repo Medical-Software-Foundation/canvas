@@ -127,3 +127,54 @@ def test_coverage_without_issuer_skipped(make_coverage):
     patient.coverages.all.return_value = [make_coverage(rank=1, issuer=None)]
 
     assert payer_completeness.check(patient) == []
+
+
+def test_deleted_coverage_skipped(make_coverage, make_issuer):
+    """Removed coverages should be ignored even if the payer is incomplete."""
+    bad_issuer = make_issuer(dbid=1, name="Removed Payer", addresses=[], phones=[])
+    patient = MagicMock()
+    patient.coverages.all.return_value = [
+        make_coverage(rank=1, issuer=bad_issuer, state="deleted"),
+    ]
+
+    assert payer_completeness.check(patient) == []
+
+
+def test_placeholder_address_line_is_rejected(make_coverage, make_issuer, make_transactor_address):
+    """An address with line1='---' should fail the completeness check."""
+    bad_addr = make_transactor_address(line1="---")
+    issuer = make_issuer(dbid=1, name="Placeholder Payer", addresses=[bad_addr])
+    patient = MagicMock()
+    patient.coverages.all.return_value = [make_coverage(rank=1, issuer=issuer)]
+
+    errors = payer_completeness.check(patient)
+
+    assert len(errors) == 1
+    assert "missing address" in errors[0]
+
+
+def test_placeholder_phone_is_rejected(make_coverage, make_issuer, make_transactor_phone):
+    """A phone with value='--' should fail the phone check (needs >= 7 alnum)."""
+    bad_phone = make_transactor_phone(value="--")
+    issuer = make_issuer(dbid=1, name="Placeholder Payer", phones=[bad_phone])
+    patient = MagicMock()
+    patient.coverages.all.return_value = [make_coverage(rank=1, issuer=issuer)]
+
+    errors = payer_completeness.check(patient)
+
+    assert len(errors) == 1
+    assert "missing phone" in errors[0]
+
+
+def test_payer_name_with_control_chars_sanitized_in_error(make_coverage, make_issuer):
+    """Payer name with control characters should be sanitized in the error message."""
+    issuer = make_issuer(dbid=1, name="Acme\x00\x1fHealth", addresses=[], phones=[])
+    patient = MagicMock()
+    patient.coverages.all.return_value = [make_coverage(rank=1, issuer=issuer)]
+
+    errors = payer_completeness.check(patient)
+
+    assert len(errors) == 1
+    assert "\x00" not in errors[0]
+    assert "\x1f" not in errors[0]
+    assert "AcmeHealth" in errors[0]

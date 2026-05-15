@@ -1,6 +1,6 @@
 [project]
 name = "lab-order-validation"
-version = "0.0.1"
+version = "0.0.2"
 description = "Pre-flight validation for lab orders bound for electronic transmission. Blocks Sign-and-Send if patient/coverage/payer data would fail downstream at Health Gorilla. No override."
 authors = [{ name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com" }]
 license = "MIT"

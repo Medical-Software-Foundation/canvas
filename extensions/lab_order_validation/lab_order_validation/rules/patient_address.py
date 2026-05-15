@@ -4,6 +4,8 @@ Health Gorilla silently drops orders when the only home address is
 type=Physical. The fix is to mark the address as Postal or Both.
 """
 
+from lab_order_validation.rules._helpers import has_meaningful_content
+
 HOME_USE = "home"
 ACCEPTED_TYPES = {"postal", "both"}
 
@@ -25,10 +27,10 @@ def check(patient) -> list[str]:
         if _normalize(address.type) not in ACCEPTED_TYPES:
             continue
         if (
-            address.line1
-            and address.city
-            and address.state_code
-            and address.postal_code
+            has_meaningful_content(address.line1)
+            and has_meaningful_content(address.city)
+            and has_meaningful_content(address.state_code)
+            and has_meaningful_content(address.postal_code)
         ):
             return []
 
