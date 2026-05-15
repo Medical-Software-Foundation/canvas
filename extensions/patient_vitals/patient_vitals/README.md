@@ -6,6 +6,10 @@ when more than one reading exists.
 
 ![My Vitals on the patient portal](../vitals.png)
 
+![My Vitals pulse graph on the patient portal](../pulse.png)
+
+![My Vitals blood pressure graph on the patient portal](../blood_pressure.png)
+
 ## What it does
 
 Renders the logged-in patient's most recent vital signs as a tile grid on the
