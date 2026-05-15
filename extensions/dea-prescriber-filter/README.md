@@ -34,6 +34,16 @@ canvas install . --host <your-instance>
 
 After install, the Prescriber Assist app appears in the app drawer for authenticated staff. Before anyone can open the admin UI, configure the `ADMIN_STAFF_IDS` secret (see [Configuration options](#configuration-options)) — without it, all admin-UI requests return 403 Forbidden.
 
+## Important: disable `RESTRICT_MEDICATION_ORDERS_TO_PRESCRIBER`
+
+This plugin enforces the same prescriber-restriction logic as Canvas's built-in `RESTRICT_MEDICATION_ORDERS_TO_PRESCRIBER` instance setting — but with an explicit override mechanism that the built-in setting does not provide.
+
+**Before installing, set `RESTRICT_MEDICATION_ORDERS_TO_PRESCRIBER` to `false`** in the Canvas admin panel. Leaving both layers active is redundant: the built-in setting will block prescriptions that the plugin's Prescriber Assist delegation is meant to allow, with no way to override.
+
+With the built-in setting disabled and the plugin installed:
+- The plugin enforces the same restriction at sign-time
+- Admins can use Prescriber Assist to grant explicit delegations when staff members need to sign on behalf of a provider — a documented, audited override path the built-in setting doesn't support
+
 ## Configuration options
 
 ### `ADMIN_STAFF_IDS` (required plugin secret)
