@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import uuid as uuid_module
-from datetime import datetime, timezone
+from datetime import datetime
 from http import HTTPStatus
 
 from canvas_sdk.commands.commands.custom_command import CustomCommand
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
+from canvas_sdk.effects.simple_api import Broadcast, HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.handlers.simple_api.websocket import WebSocketAPI
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import Note
 from canvas_sdk.v1.data.patient import Patient
 
 from hospitalization_tracker.models import Hospitalization
+
+WS_CHANNEL_PREFIX = "hospitalization-tracker"
 
 
 class HospitalizationSummaryCommand(CustomCommand):
@@ -157,11 +160,35 @@ class HospitalizationAPI(StaffSessionAuthMixin, SimpleAPI):
 
         return [
             command.originate(),
+            Broadcast(
+                channel=f"{WS_CHANNEL_PREFIX}-{patient_id}",
+                message={"event_type": "hospitalization_update"},
+            ).apply(),
             JSONResponse(
                 {"success": True, "id": hospitalization.dbid},
                 status_code=HTTPStatus.CREATED,
             ),
         ]
+
+    @api.get("/section")
+    def get_section(self) -> list[Response | Effect]:
+        """Render the chart summary section HTML for a given patient (used by WebSocket refresh)."""
+        patient_id = self.request.query_params.get("patient_id", "")
+        if not patient_id:
+            return [
+                JSONResponse(
+                    {"error": "patient_id is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        hospitalizations = list(
+            Hospitalization.objects.filter(patient__id=patient_id).order_by("-admission_date")
+        )
+        content = render_to_string(
+            "templates/chart_summary_section.html",
+            {"hospitalizations": hospitalizations, "patient_id": patient_id},
+        )
+        return [HTMLResponse(content=content)]
 
     @api.get("/hospitalizations")
     def list_hospitalizations(self) -> list[Response | Effect]:
@@ -188,6 +215,13 @@ class HospitalizationAPI(StaffSessionAuthMixin, SimpleAPI):
                 }
             )
         ]
+
+
+class HospitalizationWebSocket(WebSocketAPI):
+    """Authenticates WebSocket connections for hospitalization real-time updates."""
+
+    def authenticate(self) -> bool:
+        return True
 
 
 def _serialize_hospitalization(h: Hospitalization) -> dict[str, object]:

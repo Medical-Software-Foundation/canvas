@@ -5,9 +5,6 @@ from canvas_sdk.effects.patient_chart_summary_custom_section import PatientChart
 from canvas_sdk.handlers.patient_chart_summary_custom_section_handler import (
     PatientChartSummaryCustomSectionHandler,
 )
-from canvas_sdk.templates import render_to_string
-
-from hospitalization_tracker.models import Hospitalization
 
 
 class HospitalizationSummarySection(PatientChartSummaryCustomSectionHandler):
@@ -16,17 +13,11 @@ class HospitalizationSummarySection(PatientChartSummaryCustomSectionHandler):
     SECTION_KEY = "hospitalization_history"
 
     def handle(self) -> list[Effect]:
-        """Return the rendered hospitalization history section."""
-        hospitalizations = list(
-            Hospitalization.objects.filter(patient__id=self.event.target.id).order_by("-admission_date")
-        )
-        content = render_to_string(
-            "templates/chart_summary_section.html",
-            {"hospitalizations": hospitalizations},
-        )
+        """Return the URL-based chart summary section (enables live WebSocket refresh)."""
+        patient_id = self.event.target.id
         return [
             PatientChartSummaryCustomSection(
-                content=content,
+                url=f"/plugin-io/api/hospitalization_tracker/section?patient_id={patient_id}",
                 icon="🏥",
             ).apply()
         ]

@@ -139,6 +139,31 @@
         new ResizeObserver(sendResize).observe(document.body);
       }
     });
+
+    var patientId = "{{ patient_id }}";
+    var wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var wsUrl = wsProtocol + '//' + window.location.host + '/plugin-io/ws/hospitalization_tracker/hospitalization-tracker-' + patientId + '/';
+
+    function connectWS() {
+      var ws = new WebSocket(wsUrl);
+      ws.onmessage = function(event) {
+        try {
+          var data = JSON.parse(event.data);
+          if (data.message && data.message.event_type === 'hospitalization_update') {
+            fetch('/plugin-io/api/hospitalization_tracker/section?patient_id=' + patientId)
+              .then(function(r) { return r.text(); })
+              .then(function(html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                document.body.innerHTML = doc.body.innerHTML;
+                sendResize();
+              });
+          }
+        } catch(e) {}
+      };
+      ws.onclose = function() { setTimeout(connectWS, 3000); };
+    }
+
+    connectWS();
   </script>
 </body>
 </html>

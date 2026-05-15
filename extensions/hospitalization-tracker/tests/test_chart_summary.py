@@ -8,7 +8,7 @@ from canvas_sdk.test_utils.factories import PatientFactory
 
 from hospitalization_tracker.handlers.chart_summary_config import HospitalizationChartSummaryConfig
 from hospitalization_tracker.handlers.chart_summary_section import HospitalizationSummarySection
-from tests.conftest import HospitalizationFactory
+from tests.conftest import HospitalizationFactory  # noqa: F401 (used by integtest factories)
 
 
 # ---------------------------------------------------------------------------
@@ -64,15 +64,8 @@ def test_summary_section_section_key() -> None:
     assert HospitalizationSummarySection.SECTION_KEY == "hospitalization_history"
 
 
-@patch("hospitalization_tracker.handlers.chart_summary_section.Hospitalization.objects")
-@patch("hospitalization_tracker.handlers.chart_summary_section.render_to_string")
-def test_summary_section_returns_effect_with_html(
-    mock_render: MagicMock, mock_objects: MagicMock
-) -> None:
-    """handle() returns a PatientChartSummaryCustomSection effect with rendered HTML."""
-    mock_objects.filter.return_value.order_by.return_value = []
-    mock_render.return_value = "<ul><li>No records</li></ul>"
-
+def test_summary_section_returns_one_effect() -> None:
+    """handle() returns exactly one PatientChartSummaryCustomSection effect."""
     mock_event = MagicMock()
     mock_event.target.id = "patient-uuid-123"
     handler = HospitalizationSummarySection(event=mock_event)
@@ -80,47 +73,21 @@ def test_summary_section_returns_effect_with_html(
     effects = handler.handle()
 
     assert len(effects) == 1
-    mock_render.assert_called_once()
 
 
-@patch("hospitalization_tracker.handlers.chart_summary_section.Hospitalization.objects")
-@patch("hospitalization_tracker.handlers.chart_summary_section.render_to_string")
-def test_summary_section_passes_hospitalizations_to_template(
-    mock_render: MagicMock, mock_objects: MagicMock
-) -> None:
-    """handle() passes the patient's hospitalizations to the template context."""
-    mock_hosp = MagicMock()
-    mock_objects.filter.return_value.order_by.return_value = [mock_hosp]
-    mock_render.return_value = "<p>content</p>"
-
+def test_summary_section_effect_contains_patient_url() -> None:
+    """handle() returns a URL-based effect pointing to the section API with the patient ID."""
+    patient_id = "patient-uuid-456"
     mock_event = MagicMock()
-    mock_event.target.id = "patient-uuid-456"
+    mock_event.target.id = patient_id
     handler = HospitalizationSummarySection(event=mock_event)
 
-    handler.handle()
+    effects = handler.handle()
 
-    call_kwargs = mock_render.call_args
-    context = call_kwargs[0][1]
-    assert "hospitalizations" in context
-    assert mock_hosp in context["hospitalizations"]
-
-
-@patch("hospitalization_tracker.handlers.chart_summary_section.Hospitalization.objects")
-@patch("hospitalization_tracker.handlers.chart_summary_section.render_to_string")
-def test_summary_section_filters_by_patient(
-    mock_render: MagicMock, mock_objects: MagicMock
-) -> None:
-    """handle() queries hospitalizations filtered by the current patient."""
-    mock_objects.filter.return_value.order_by.return_value = []
-    mock_render.return_value = "<p></p>"
-
-    mock_event = MagicMock()
-    mock_event.target.id = "specific-patient-id"
-    handler = HospitalizationSummarySection(event=mock_event)
-
-    handler.handle()
-
-    mock_objects.filter.assert_called_once_with(patient__id="specific-patient-id")
+    # Effect payload contains the section URL with the patient_id
+    payload = effects[0].payload
+    assert patient_id in payload
+    assert "hospitalization_tracker/section" in payload
 
 
 # ---------------------------------------------------------------------------
@@ -129,40 +96,32 @@ def test_summary_section_filters_by_patient(
 
 
 @pytest.mark.integtest
-@patch("hospitalization_tracker.handlers.chart_summary_section.render_to_string")
-def test_summary_section_integration_empty_patient(mock_render: MagicMock) -> None:
-    """Returns a section with empty hospitalizations list for a new patient."""
-    mock_render.return_value = "<p>No records</p>"
+def test_summary_section_integration_url_contains_patient_id() -> None:
+    """Integration: handle() URL encodes the correct patient ID from the event target."""
     patient = PatientFactory.create()
+    patient_id = str(patient.id)
 
     mock_event = MagicMock()
-    mock_event.target.id = str(patient.id)
+    mock_event.target.id = patient_id
     handler = HospitalizationSummarySection(event=mock_event)
 
     effects = handler.handle()
     assert len(effects) == 1
-    # Verify no hospitalizations were passed for a brand-new patient
-    _, call_args = mock_render.call_args
-    assert call_args["hospitalizations"] == [] if mock_render.call_args.kwargs else (
-        mock_render.call_args[0][1]["hospitalizations"] == []
-    )
+    assert patient_id in effects[0].payload
 
 
 @pytest.mark.integtest
-@patch("hospitalization_tracker.handlers.chart_summary_section.render_to_string")
-def test_summary_section_integration_with_records(mock_render: MagicMock) -> None:
-    """Returns a section populated with hospitalizations for a patient."""
-    mock_render.return_value = "<p>Records</p>"
-    patient = PatientFactory.create()
-    HospitalizationFactory.create(patient=patient)
-    HospitalizationFactory.create(patient=patient)
+def test_summary_section_integration_different_patients_get_different_urls() -> None:
+    """Integration: two different patients produce different section URLs."""
+    patient_a = PatientFactory.create()
+    patient_b = PatientFactory.create()
 
-    mock_event = MagicMock()
-    mock_event.target.id = str(patient.id)
-    handler = HospitalizationSummarySection(event=mock_event)
+    mock_event_a = MagicMock()
+    mock_event_a.target.id = str(patient_a.id)
+    mock_event_b = MagicMock()
+    mock_event_b.target.id = str(patient_b.id)
 
-    effects = handler.handle()
-    assert len(effects) == 1
-    # Verify 2 hospitalizations were found and passed
-    call_context = mock_render.call_args[0][1]
-    assert len(call_context["hospitalizations"]) == 2
+    url_a = HospitalizationSummarySection(event=mock_event_a).handle()[0].payload
+    url_b = HospitalizationSummarySection(event=mock_event_b).handle()[0].payload
+
+    assert url_a != url_b

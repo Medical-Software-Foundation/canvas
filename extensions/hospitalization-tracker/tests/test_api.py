@@ -265,9 +265,9 @@ def test_create_hospitalization_success(
     api = _make_api(req)
     result = HospitalizationAPI.create_hospitalization(api)
 
-    # Two items: command.originate() effect + JSONResponse
-    assert len(result) == 2
-    json_response = result[1]
+    # Three items: command.originate() + Broadcast + JSONResponse
+    assert len(result) == 3
+    json_response = result[2]
     assert json_response.status_code == HTTPStatus.CREATED
     data = json.loads(json_response.content)
     assert data["success"] is True
@@ -304,9 +304,9 @@ def test_create_hospitalization_integration() -> None:
     ):
         result = HospitalizationAPI.create_hospitalization(api)
 
-    # Two effects: originate command + JSON response
-    assert len(result) == 2
-    data = json.loads(result[1].content)
+    # Three effects: originate command + Broadcast + JSON response
+    assert len(result) == 3
+    data = json.loads(result[2].content)
     assert data["success"] is True
 
     # Verify DB record
