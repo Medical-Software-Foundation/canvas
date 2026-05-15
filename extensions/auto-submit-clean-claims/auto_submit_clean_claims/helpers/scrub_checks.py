@@ -1,4 +1,4 @@
-from canvas_sdk.v1.data import ClaimLineItemDiagnosisCode
+from canvas_sdk.v1.data import ClaimLineItemDiagnosisCode, ClaimLineItemModifier
 from canvas_sdk.v1.data.coverage import CoverageRelationshipCode, CoverageStack
 
 
@@ -128,9 +128,8 @@ def check_diagnoses(claim, active_lines) -> list[str]:
     return errors
 
 
-def check_clia(fhir_client, claim, provider, active_lines) -> list[str]:
-    """Check if lab charges with QW modifier are missing a CLIA number.
-    Uses FHIR Claim read to get line item modifiers (not available in SDK)."""
+def check_clia(claim, provider, active_lines) -> list[str]:
+    """Check if lab charges with QW modifier are missing a CLIA number."""
     if provider.clia_number:
         return []
 
@@ -138,16 +137,12 @@ def check_clia(fhir_client, claim, provider, active_lines) -> list[str]:
     if not lab_charges:
         return []
 
-    fhir_claim = fhir_client.read("Claim", str(claim.id))
-    for item in fhir_claim.get("item", []):
-        proc_code = item.get("productOrService", {}).get("coding", [{}])[0].get("code", "")
-        if not proc_code.startswith("8"):
-            continue
-        modifiers = [
-            m.get("coding", [{}])[0].get("code", "")
-            for m in item.get("modifier", [])
-        ]
-        if "QW" in modifiers:
-            return ["Lab charges with QW modifier but missing CLIA#"]
+    has_qw = ClaimLineItemModifier.objects.filter(
+        line_item__in=lab_charges,
+        modifier="QW",
+    ).exists()
+
+    if has_qw:
+        return ["Lab charges with QW modifier but missing CLIA#"]
 
     return []

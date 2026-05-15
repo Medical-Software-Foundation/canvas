@@ -5,7 +5,6 @@ from canvas_sdk.v1.data import Claim
 from canvas_sdk.v1.data.claim import ClaimQueues
 
 from auto_submit_clean_claims.helpers.claim_processor import process_claim
-from auto_submit_clean_claims.helpers.fhir_client import FhirClient
 
 
 class AutoSubmitCleanClaims(BaseHandler):
@@ -21,8 +20,7 @@ class AutoSubmitCleanClaims(BaseHandler):
     """
 
     RESPONDS_TO = [
-        EventType.Name(EventType.CLAIM_CREATED),
-        EventType.Name(EventType.CLAIM_UPDATED),
+        EventType.Name(EventType.CLAIM_QUEUE_MOVED),
     ]
 
     def compute(self) -> list[Effect]:
@@ -37,10 +35,4 @@ class AutoSubmitCleanClaims(BaseHandler):
         if claim.current_queue.name != ClaimQueues.NEEDS_CODING_REVIEW.label:
             return []
 
-        fhir_client = FhirClient(
-            client_id=self.secrets["CANVAS_FHIR_CLIENT_ID"],
-            client_secret=self.secrets["CANVAS_FHIR_CLIENT_SECRET"],
-            customer_identifier=self.environment["CUSTOMER_IDENTIFIER"],
-        )
-
-        return process_claim(claim, fhir_client)
+        return process_claim(claim)

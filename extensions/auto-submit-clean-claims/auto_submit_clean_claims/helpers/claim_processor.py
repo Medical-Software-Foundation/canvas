@@ -3,7 +3,6 @@ from canvas_sdk.effects.claim import ClaimEffect
 from canvas_sdk.v1.data import Claim
 from canvas_sdk.v1.data.claim import ClaimQueues
 
-from auto_submit_clean_claims.helpers.fhir_client import FhirClient
 from auto_submit_clean_claims.helpers.scrub_checks import (
     check_clia,
     check_coverage,
@@ -51,7 +50,7 @@ def is_plugin_label(label_name: str) -> bool:
     return any(label_name.startswith(prefix) for prefix in DYNAMIC_LABEL_PREFIXES)
 
 
-def scrub(claim: Claim, fhir_client: FhirClient) -> list[str]:
+def scrub(claim: Claim) -> list[str]:
     """Run all scrub checks against a claim. Returns error descriptions. Empty = clean."""
     errors: list[str] = []
     provider = claim.provider
@@ -59,7 +58,7 @@ def scrub(claim: Claim, fhir_client: FhirClient) -> list[str]:
     coverage = claim.coverages.filter(active=True).first()
 
     errors.extend(check_provider(provider))
-    errors.extend(check_clia(fhir_client, claim, provider, active_lines))
+    errors.extend(check_clia(claim, provider, active_lines))
     errors.extend(check_hospital_dates(provider, active_lines))
     errors.extend(check_patient(claim))
     if coverage:
@@ -70,9 +69,9 @@ def scrub(claim: Claim, fhir_client: FhirClient) -> list[str]:
     return errors
 
 
-def process_claim(claim: Claim, fhir_client: FhirClient) -> list[Effect]:
+def process_claim(claim: Claim) -> list[Effect]:
     """Scrub a claim, manage labels, and move to submission if clean."""
-    errors = scrub(claim, fhir_client)
+    errors = scrub(claim)
     claim_id = str(claim.id)
     effects: list[Effect] = []
 
@@ -95,7 +94,11 @@ def process_claim(claim: Claim, fhir_client: FhirClient) -> list[Effect]:
         return effects
 
     log.info(f"Claim {claim_id} is clean — moving to Submission queue")
+    claim_effect = ClaimEffect(claim_id=claim_id)
+    effects.append(claim_effect.move_to_queue(ClaimQueues.QUEUED_FOR_SUBMISSION.label))
     effects.append(
-        ClaimEffect(claim_id=claim_id).move_to_queue(ClaimQueues.QUEUED_FOR_SUBMISSION.label)
+        claim_effect.add_comment(
+            "Claim automatically moved to Submission queue by the auto_submit_clean_claims plugin."
+        )
     )
     return effects

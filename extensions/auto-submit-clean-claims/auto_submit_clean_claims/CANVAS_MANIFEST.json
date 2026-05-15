@@ -19,7 +19,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": ["CANVAS_FHIR_CLIENT_ID", "CANVAS_FHIR_CLIENT_SECRET"],
+    "variables": [],
     "tags": {},
     "references": [],
     "license": "",

@@ -11,6 +11,7 @@ from canvas_sdk.test_utils.factories import (
     ClaimLabelFactory,
     ClaimLineItemDiagnosisCodeFactory,
     ClaimLineItemFactory,
+    ClaimLineItemModifierFactory,
     ClaimProviderFactory,
     ClaimQueueFactory,
     CoverageFactory,
@@ -35,11 +36,8 @@ from auto_submit_clean_claims.helpers.scrub_checks import (
 )
 
 
-SECRETS = {
-    "CANVAS_FHIR_CLIENT_ID": "test-client-id",
-    "CANVAS_FHIR_CLIENT_SECRET": "test-client-secret",
-}
-ENVIRONMENT = {"CUSTOMER_IDENTIFIER": "testinstance"}
+SECRETS = {}
+ENVIRONMENT = {}
 
 
 @pytest.fixture
@@ -70,7 +68,7 @@ def clean_claim(coding_queue):
     return claim
 
 
-def _make_handler(claim_id, event_type=EventType.CLAIM_CREATED):
+def _make_handler(claim_id, event_type=EventType.CLAIM_QUEUE_MOVED):
     mock_event = MagicMock()
     mock_event.type = event_type
     mock_event.target.id = str(claim_id)
@@ -86,8 +84,7 @@ def _make_handler(claim_id, event_type=EventType.CLAIM_CREATED):
 
 
 def test_handler_responds_to_correct_events():
-    assert EventType.Name(EventType.CLAIM_CREATED) in AutoSubmitCleanClaims.RESPONDS_TO
-    assert EventType.Name(EventType.CLAIM_UPDATED) in AutoSubmitCleanClaims.RESPONDS_TO
+    assert EventType.Name(EventType.CLAIM_QUEUE_MOVED) in AutoSubmitCleanClaims.RESPONDS_TO
 
 
 def test_skips_claim_not_in_coding_queue():
@@ -98,9 +95,8 @@ def test_skips_claim_not_in_coding_queue():
     assert effects == []
 
 
-@patch("auto_submit_clean_claims.handlers.auto_submit.FhirClient")
 @patch("auto_submit_clean_claims.handlers.auto_submit.process_claim")
-def test_clean_claim_moves_to_submission(mock_process, mock_fhir_cls, clean_claim, submission_queue):
+def test_clean_claim_moves_to_submission(mock_process, clean_claim, submission_queue):
     from canvas_sdk.effects.claim import ClaimEffect
     from canvas_sdk.v1.data.claim import ClaimQueues
     mock_process.return_value = [
@@ -112,9 +108,8 @@ def test_clean_claim_moves_to_submission(mock_process, mock_fhir_cls, clean_clai
     assert effects[0].type == EffectType.MOVE_CLAIM_TO_QUEUE
 
 
-@patch("auto_submit_clean_claims.handlers.auto_submit.FhirClient")
 @patch("auto_submit_clean_claims.handlers.auto_submit.process_claim")
-def test_claim_with_errors_adds_labels(mock_process, mock_fhir_cls, clean_claim):
+def test_claim_with_errors_adds_labels(mock_process, clean_claim):
     from canvas_sdk.effects.claim import ClaimEffect
     mock_process.return_value = [
         ClaimEffect(claim_id=str(clean_claim.id)).add_labels(["Missing Billing Provider Tax ID"])
@@ -132,9 +127,8 @@ def test_stale_static_label_removed_on_rerun(clean_claim, submission_queue):
     """A previously added static label is removed when it's no longer an error."""
     label = TaskLabelFactory(name="Missing Billing Provider Tax ID")
     ClaimLabelFactory(claim=clean_claim, label=label)
-    fhir_client = MagicMock()
     with patch("auto_submit_clean_claims.helpers.claim_processor.scrub", return_value=[]):
-        effects = process_claim(clean_claim, fhir_client)
+        effects = process_claim(clean_claim)
     effect_types = [e.type for e in effects]
     assert EffectType.REMOVE_CLAIM_LABEL in effect_types
     assert EffectType.MOVE_CLAIM_TO_QUEUE in effect_types
@@ -144,9 +138,8 @@ def test_stale_dynamic_label_removed_on_rerun(clean_claim, submission_queue):
     """A previously added dynamic label (e.g. 'Charge 99213 has units < 1') is removed."""
     label = TaskLabelFactory(name="Charge 99213 has units < 1")
     ClaimLabelFactory(claim=clean_claim, label=label)
-    fhir_client = MagicMock()
     with patch("auto_submit_clean_claims.helpers.claim_processor.scrub", return_value=[]):
-        effects = process_claim(clean_claim, fhir_client)
+        effects = process_claim(clean_claim)
     effect_types = [e.type for e in effects]
     assert EffectType.REMOVE_CLAIM_LABEL in effect_types
 
@@ -155,9 +148,8 @@ def test_non_plugin_labels_not_removed(clean_claim, submission_queue):
     """Labels not owned by this plugin are left alone."""
     label = TaskLabelFactory(name="Some Other Label")
     ClaimLabelFactory(claim=clean_claim, label=label)
-    fhir_client = MagicMock()
     with patch("auto_submit_clean_claims.helpers.claim_processor.scrub", return_value=[]):
-        effects = process_claim(clean_claim, fhir_client)
+        effects = process_claim(clean_claim)
     effect_types = [e.type for e in effects]
     assert EffectType.REMOVE_CLAIM_LABEL not in effect_types
 
@@ -166,9 +158,8 @@ def test_stale_labels_removed_while_new_errors_added(clean_claim):
     """Old error label removed and new error label added in the same run."""
     old_label = TaskLabelFactory(name="Patient DOB missing")
     ClaimLabelFactory(claim=clean_claim, label=old_label)
-    fhir_client = MagicMock()
     with patch("auto_submit_clean_claims.helpers.claim_processor.scrub", return_value=["Missing Billing Provider Tax ID"]):
-        effects = process_claim(clean_claim, fhir_client)
+        effects = process_claim(clean_claim)
     effect_types = [e.type for e in effects]
     assert EffectType.REMOVE_CLAIM_LABEL in effect_types
     assert EffectType.ADD_CLAIM_LABEL in effect_types
@@ -178,11 +169,27 @@ def test_no_duplicate_label_added(clean_claim):
     """If an error label already exists, it is not added again."""
     label = TaskLabelFactory(name="Missing Billing Provider Tax ID")
     ClaimLabelFactory(claim=clean_claim, label=label)
-    fhir_client = MagicMock()
     with patch("auto_submit_clean_claims.helpers.claim_processor.scrub", return_value=["Missing Billing Provider Tax ID"]):
-        effects = process_claim(clean_claim, fhir_client)
+        effects = process_claim(clean_claim)
     effect_types = [e.type for e in effects]
     assert EffectType.ADD_CLAIM_LABEL not in effect_types
+
+
+def test_clean_claim_gets_comment(clean_claim, submission_queue):
+    """A comment is added when a clean claim is moved to the Submission queue."""
+    with patch("auto_submit_clean_claims.helpers.claim_processor.scrub", return_value=[]):
+        effects = process_claim(clean_claim)
+    effect_types = [e.type for e in effects]
+    assert EffectType.MOVE_CLAIM_TO_QUEUE in effect_types
+    assert EffectType.ADD_CLAIM_COMMENT in effect_types
+
+
+def test_claim_with_errors_gets_no_comment(clean_claim):
+    """No comment is added when a claim has scrub errors and stays in the Coding queue."""
+    with patch("auto_submit_clean_claims.helpers.claim_processor.scrub", return_value=["Missing Billing Provider Tax ID"]):
+        effects = process_claim(clean_claim)
+    effect_types = [e.type for e in effects]
+    assert EffectType.ADD_CLAIM_COMMENT not in effect_types
 
 
 # -- is_plugin_label tests --
@@ -447,10 +454,11 @@ def test_primary_diagnosis_external_cause_code(coding_queue):
     assert "Primary diagnosis V97.0 is an external cause code" in check_diagnoses(claim, claim.line_items.active())
 
 
-# -- FHIR-based checks --
+# -- CLIA checks --
 
 
 def test_clia_check_skipped_when_clia_present(coding_queue):
+    """CLIA check short-circuits when the provider already has a CLIA number."""
     claim = ClaimFactory(current_queue=coding_queue)
     ClaimProviderFactory(
         claim=claim,
@@ -460,14 +468,14 @@ def test_clia_check_skipped_when_clia_present(coding_queue):
         provider_npi="0987654321",
         clia_number="12D3456789",
     )
-    ClaimLineItemFactory(claim=claim, proc_code="80053", units=1, charge=50.00)
-    fhir_client = MagicMock()
-    errors = check_clia(fhir_client, claim, claim.provider, claim.line_items.active())
+    li = ClaimLineItemFactory(claim=claim, proc_code="80053", units=1, charge=50.00)
+    ClaimLineItemModifierFactory(line_item=li, modifier="QW")
+    errors = check_clia(claim, claim.provider, claim.line_items.active())
     assert errors == []
-    fhir_client.read.assert_not_called()
 
 
 def test_clia_check_skipped_when_no_lab_charges(coding_queue):
+    """CLIA check short-circuits when there are no lab charges (proc code starting with 8)."""
     claim = ClaimFactory(current_queue=coding_queue)
     ClaimProviderFactory(
         claim=claim,
@@ -478,13 +486,12 @@ def test_clia_check_skipped_when_no_lab_charges(coding_queue):
         clia_number="",
     )
     ClaimLineItemFactory(claim=claim, proc_code="99213", units=1, charge=100.00)
-    fhir_client = MagicMock()
-    errors = check_clia(fhir_client, claim, claim.provider, claim.line_items.active())
+    errors = check_clia(claim, claim.provider, claim.line_items.active())
     assert errors == []
-    fhir_client.read.assert_not_called()
 
 
 def test_clia_check_catches_qw_modifier(coding_queue):
+    """CLIA check flags lab charges with QW modifier when CLIA number is missing."""
     claim = ClaimFactory(current_queue=coding_queue)
     ClaimProviderFactory(
         claim=claim,
@@ -494,21 +501,14 @@ def test_clia_check_catches_qw_modifier(coding_queue):
         provider_npi="0987654321",
         clia_number="",
     )
-    ClaimLineItemFactory(claim=claim, proc_code="80053", units=1, charge=50.00)
-    fhir_client = MagicMock()
-    fhir_client.read.return_value = {
-        "item": [
-            {
-                "productOrService": {"coding": [{"code": "80053"}]},
-                "modifier": [{"coding": [{"code": "QW"}]}],
-            }
-        ]
-    }
-    errors = check_clia(fhir_client, claim, claim.provider, claim.line_items.active())
+    li = ClaimLineItemFactory(claim=claim, proc_code="80053", units=1, charge=50.00)
+    ClaimLineItemModifierFactory(line_item=li, modifier="QW")
+    errors = check_clia(claim, claim.provider, claim.line_items.active())
     assert errors == ["Lab charges with QW modifier but missing CLIA#"]
 
 
 def test_clia_check_passes_without_qw_modifier(coding_queue):
+    """CLIA check passes when lab charges have no QW modifier."""
     claim = ClaimFactory(current_queue=coding_queue)
     ClaimProviderFactory(
         claim=claim,
@@ -518,17 +518,9 @@ def test_clia_check_passes_without_qw_modifier(coding_queue):
         provider_npi="0987654321",
         clia_number="",
     )
-    ClaimLineItemFactory(claim=claim, proc_code="80053", units=1, charge=50.00)
-    fhir_client = MagicMock()
-    fhir_client.read.return_value = {
-        "item": [
-            {
-                "productOrService": {"coding": [{"code": "80053"}]},
-                "modifier": [],
-            }
-        ]
-    }
-    errors = check_clia(fhir_client, claim, claim.provider, claim.line_items.active())
+    li = ClaimLineItemFactory(claim=claim, proc_code="80053", units=1, charge=50.00)
+    ClaimLineItemModifierFactory(line_item=li, modifier="26")
+    errors = check_clia(claim, claim.provider, claim.line_items.active())
     assert errors == []
 
 
@@ -591,17 +583,16 @@ def _make_cron_handler():
     return handler
 
 
-@patch("auto_submit_clean_claims.handlers.sweep_coding_queue.FhirClient")
-def test_cron_skips_when_no_claims_in_coding_queue(mock_fhir_cls):
+def test_cron_skips_when_no_claims_in_coding_queue():
+    """Cron handler returns no effects when no claims are in the Coding queue."""
     handler = _make_cron_handler()
     effects = handler.execute()
     assert effects == []
-    mock_fhir_cls.assert_not_called()
 
 
-@patch("auto_submit_clean_claims.handlers.sweep_coding_queue.FhirClient")
 @patch("auto_submit_clean_claims.handlers.sweep_coding_queue.process_claim")
-def test_cron_moves_clean_claim(mock_process, mock_fhir_cls, clean_claim, submission_queue):
+def test_cron_moves_clean_claim(mock_process, clean_claim, submission_queue):
+    """Cron handler moves a clean claim to the Submission queue."""
     from canvas_sdk.effects.claim import ClaimEffect
     from canvas_sdk.v1.data.claim import ClaimQueues
     mock_process.return_value = [
@@ -612,9 +603,9 @@ def test_cron_moves_clean_claim(mock_process, mock_fhir_cls, clean_claim, submis
     assert any(e.type == EffectType.MOVE_CLAIM_TO_QUEUE for e in effects)
 
 
-@patch("auto_submit_clean_claims.handlers.sweep_coding_queue.FhirClient")
 @patch("auto_submit_clean_claims.handlers.sweep_coding_queue.process_claim")
-def test_cron_labels_claim_with_errors(mock_process, mock_fhir_cls, clean_claim):
+def test_cron_labels_claim_with_errors(mock_process, clean_claim):
+    """Cron handler adds error labels when a claim has scrub errors."""
     from canvas_sdk.effects.claim import ClaimEffect
     mock_process.return_value = [
         ClaimEffect(claim_id=str(clean_claim.id)).add_labels(["Patient DOB missing"])
@@ -625,14 +616,14 @@ def test_cron_labels_claim_with_errors(mock_process, mock_fhir_cls, clean_claim)
     assert not any(e.type == EffectType.MOVE_CLAIM_TO_QUEUE for e in effects)
 
 
-@patch("auto_submit_clean_claims.handlers.sweep_coding_queue.FhirClient")
 @patch("auto_submit_clean_claims.handlers.sweep_coding_queue.process_claim")
-def test_cron_processes_multiple_claims(mock_process, mock_fhir_cls, coding_queue, submission_queue):
+def test_cron_processes_multiple_claims(mock_process, coding_queue, submission_queue):
+    """Cron handler processes all claims in the Coding queue."""
     from canvas_sdk.effects.claim import ClaimEffect
     from canvas_sdk.v1.data.claim import ClaimQueues
     claim1 = ClaimFactory(current_queue=coding_queue)
     claim2 = ClaimFactory(current_queue=coding_queue)
-    mock_process.side_effect = lambda claim, fhir: [
+    mock_process.side_effect = lambda claim: [
         ClaimEffect(claim_id=str(claim.id)).move_to_queue(ClaimQueues.QUEUED_FOR_SUBMISSION.label)
     ]
     handler = _make_cron_handler()
@@ -641,9 +632,9 @@ def test_cron_processes_multiple_claims(mock_process, mock_fhir_cls, coding_queu
     assert len(move_effects) == 2
 
 
-@patch("auto_submit_clean_claims.handlers.sweep_coding_queue.FhirClient")
 @patch("auto_submit_clean_claims.handlers.sweep_coding_queue.process_claim")
-def test_cron_removes_stale_labels(mock_process, mock_fhir_cls, clean_claim, submission_queue):
+def test_cron_removes_stale_labels(mock_process, clean_claim, submission_queue):
+    """Cron handler removes stale labels from claims that are now clean."""
     from canvas_sdk.effects.claim import ClaimEffect
     mock_process.return_value = [
         ClaimEffect(claim_id=str(clean_claim.id)).remove_labels(["Patient DOB missing"]),
