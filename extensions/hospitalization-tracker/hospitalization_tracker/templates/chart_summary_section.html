@@ -112,6 +112,9 @@
       {% if h.principal_diagnosis %}
       <div class="entry-detail">Dx: {{ h.principal_diagnosis }}</div>
       {% endif %}
+      {% if h.treating_physician %}
+      <div class="entry-detail">Dr: {{ h.treating_physician }}</div>
+      {% endif %}
       {% if h.readmission_within_30_days %}
       <div class="badges">
         <span class="badge badge-readmit">30d Readmit</span>
