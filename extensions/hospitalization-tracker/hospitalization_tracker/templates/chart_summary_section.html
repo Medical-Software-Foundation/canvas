@@ -32,11 +32,19 @@
     .entry:last-child {
       margin-bottom: 0;
     }
+    .entry-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 1px;
+    }
     .entry-title {
       font-weight: 700;
       font-size: 12px;
       color: #1a1a1a;
-      margin-bottom: 1px;
+      flex: 1;
+      min-width: 0;
     }
     .entry-detail {
       color: #555;
@@ -55,6 +63,7 @@
       font-weight: 700;
       padding: 1px 6px;
       border-radius: 10px;
+      white-space: nowrap;
     }
     .badge-icu { background: #fed7d7; color: #c53030; }
     .badge-readmit { background: #fefcbf; color: #744210; }
@@ -79,8 +88,11 @@
   {% if hospitalizations %}
     {% for h in hospitalizations %}
     <div class="entry">
-      <div class="entry-title">
-        {{ h.hospital_name }}
+      <div class="entry-top">
+        <div class="entry-title">{{ h.hospital_name }}</div>
+        {% if h.length_of_stay_days is not None %}
+        <span class="badge badge-los">{{ h.length_of_stay_days }}d stay</span>
+        {% endif %}
       </div>
       <div class="entry-detail">
         {{ h.admission_date }}{% if h.discharge_date %} – {{ h.discharge_date }}{% endif %}
@@ -89,11 +101,8 @@
       {% if h.principal_diagnosis %}
       <div class="entry-detail">Dx: {{ h.principal_diagnosis }}</div>
       {% endif %}
-      {% if h.length_of_stay_days is not None or h.icu_stay or h.readmission_within_30_days %}
+      {% if h.icu_stay or h.readmission_within_30_days %}
       <div class="badges">
-        {% if h.length_of_stay_days is not None %}
-        <span class="badge badge-los">{{ h.length_of_stay_days }}d stay</span>
-        {% endif %}
         {% if h.icu_stay %}
         <span class="badge badge-icu">ICU{% if h.icu_duration_days %} {{ h.icu_duration_days }}d{% endif %}</span>
         {% endif %}

@@ -140,16 +140,12 @@ class HospitalizationAPI(StaffSessionAuthMixin, SimpleAPI):
         )
         hospitalization.save()
 
-        all_hospitalizations = list(
-            Hospitalization.objects.filter(patient__id=patient_id).order_by("-admission_date")
-        )
-
         note_uuid = str(note.id)
         command_uuid = str(uuid_module.uuid4())
 
         command_content = render_to_string(
             "templates/hospitalization_command.html",
-            {"hospitalizations": all_hospitalizations},
+            {"hospitalization": hospitalization},
         )
 
         command = HospitalizationSummaryCommand(
