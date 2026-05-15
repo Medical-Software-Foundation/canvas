@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db.models import Q
+
 from canvas_sdk.v1.data import Observation
 
 PER_CODE_CAP = 100
@@ -119,6 +121,17 @@ VITAL_CATALOG: dict[str, dict[str, Any]] = {
 }
 
 
+# Reverse indices built from VITAL_CATALOG so resolution is O(1) per row
+# instead of O(catalog) inside `_resolve_canonicals`. Rebuilt only if the
+# catalog is mutated at import time.
+_LOINC_TO_CODE: dict[str, str] = {cfg["loinc"]: code for code, cfg in VITAL_CATALOG.items()}
+_NAME_TO_CODE: dict[str, str] = {
+    name.lower(): code
+    for code, cfg in VITAL_CATALOG.items()
+    for name in cfg["names"]
+}
+
+
 # ---------- pure helpers ---------------------------------------------------
 
 
@@ -160,16 +173,12 @@ def _resolve_canonicals(obs: Any) -> set[str]:
         if first is not None:
             loinc = getattr(first, "code", None)
 
-    if loinc:
-        for key, cfg in VITAL_CATALOG.items():
-            if cfg["loinc"] == loinc:
-                return {key}
+    if loinc and loinc in _LOINC_TO_CODE:
+        return {_LOINC_TO_CODE[loinc]}
 
     name = (getattr(obs, "name", None) or "").strip().lower()
-    if name:
-        for key, cfg in VITAL_CATALOG.items():
-            if name in {n.lower() for n in cfg["names"]}:
-                return {key}
+    if name and name in _NAME_TO_CODE:
+        return {_NAME_TO_CODE[name]}
 
     return set()
 
@@ -238,11 +247,21 @@ def _normalize_point(obs: Any, canon: str) -> dict[str, Any] | None:
 # ---------- query helper (the only place we touch the ORM) -----------------
 
 
-def _query_vitals(patient_id: str, limit_hint: int | None = None) -> Any:
+def _query_vitals(
+    patient_id: str,
+    limit_hint: int | None = None,
+    *,
+    loincs: list[str] | None = None,
+    names: list[str] | None = None,
+) -> Any:
     """Return a queryset of vital-sign observations, most recent first.
 
     `.committed()` (inherited from AuditedModel) filters out entries-in-error.
-    The outer LIMIT, if supplied, bounds Python-side memory.
+    When ``loincs`` and/or ``names`` are supplied, narrowing happens at the DB
+    layer (LOINC join on ``codings`` ∪ free-text match on ``name``) so callers
+    don't pay to fetch and discard unrelated vital rows. ``distinct()`` collapses
+    the join duplicates that the LOINC OR produces. The outer LIMIT bounds
+    Python-side memory.
     """
     qs = (
         Observation.objects.for_patient(patient_id)
@@ -253,6 +272,13 @@ def _query_vitals(patient_id: str, limit_hint: int | None = None) -> Any:
         .prefetch_related("codings", "components__codings")
         .order_by("-effective_datetime")
     )
+    if loincs or names:
+        narrow = Q()
+        if loincs:
+            narrow |= Q(codings__code__in=loincs)
+        if names:
+            narrow |= Q(name__in=names)
+        qs = qs.filter(narrow).distinct()
     if limit_hint is not None:
         qs = qs[:limit_hint]
     return qs
@@ -267,7 +293,12 @@ def aggregate_summary(patient_id: str) -> list[dict[str, Any]]:
     Output is ordered by VITAL_CATALOG insertion order (i.e. clinically grouped).
     """
     n_codes = len(VITAL_CATALOG)
-    qs = _query_vitals(patient_id, limit_hint=n_codes * PER_CODE_CAP + 500)
+    qs = _query_vitals(
+        patient_id,
+        limit_hint=n_codes * PER_CODE_CAP,
+        loincs=list(_LOINC_TO_CODE.keys()),
+        names=list(_NAME_TO_CODE.keys()),
+    )
 
     grouped: dict[str, list[dict[str, Any]]] = {key: [] for key in VITAL_CATALOG}
     for obs in qs:
@@ -310,15 +341,21 @@ def history_for_code(patient_id: str, code: str | None) -> dict[str, Any]:
         raise UnknownVitalCode(code or "<missing>")
     cfg = VITAL_CATALOG[code]
 
-    n_codes = len(VITAL_CATALOG)
-    qs = _query_vitals(patient_id, limit_hint=n_codes * PER_CODE_CAP + 500)
+    qs = _query_vitals(
+        patient_id,
+        limit_hint=PER_CODE_CAP,
+        loincs=[cfg["loinc"]],
+        names=list(cfg["names"]),
+    )
 
     points_desc: list[dict[str, Any]] = []
     for obs in qs:
+        # Defense in depth: the DB filter already narrowed by this code's LOINC
+        # and names, but verify before normalizing so a row that matched on
+        # name alone still resolves to this canonical key (and so tests that
+        # stub `_query_vitals` with un-narrowed data still behave correctly).
         if code not in _resolve_canonicals(obs):
             continue
-        if len(points_desc) >= PER_CODE_CAP:
-            break
         point = _normalize_point(obs, code)
         if point and point.get("chart_value") is not None:
             points_desc.append(point)

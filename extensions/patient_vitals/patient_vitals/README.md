@@ -6,17 +6,51 @@ when more than one reading exists.
 
 ![My Vitals on the patient portal](../vitals.png)
 
-## What it shows
+## What it does
 
-For each distinct vital type with at least one reading:
+Renders the logged-in patient's most recent vital signs as a tile grid on the
+Canvas patient portal. Each tile shows the latest value, unit, and recorded
+date. Tiles with more than one reading open a modal with a Chart.js line graph
+of the full history (capped at the 100 most recent readings). Blood pressure
+renders as two series (systolic / diastolic) sharing one X axis.
 
-- Inline SVG icon
-- Latest value + unit (e.g. `120/80 mmHg`)
-- Recorded date
-- A "View trends →" affordance when there are 2+ readings
+## Problem it solves
 
-Clicking a multi-reading tile opens a modal with a Chart.js line graph. Blood
-pressure renders as two series (systolic / diastolic) on one X axis.
+Patients have no portal-native way to look back at their own vitals between
+visits. Today they either ask their care team for a printout, request records
+through support, or piece values together from after-visit summaries. This
+plugin gives patients self-service visibility into the same vital-sign data
+that's already in their chart, with at-a-glance trends so they can spot
+changes (e.g. blood pressure creeping up, weight loss/gain over months)
+without contacting the practice.
+
+## Who it's for
+
+- **Patients** using the Canvas patient portal who want to see their own
+  vitals and how they've changed over time.
+- **Practices** on Canvas that want to surface this information in the portal
+  without building it themselves. No specialty assumptions — applies anywhere
+  vitals are recorded (primary care, cardiology, weight management, pediatrics,
+  etc.).
+
+## How to install
+
+```bash
+canvas install patient_vitals
+```
+
+No additional configuration steps are required. After install, "My Vitals"
+appears in the patient portal menu for every logged-in patient.
+
+## Configuration options
+
+This plugin has **no secrets, settings, or thresholds** to configure. It is
+stateless and reads vital-sign observations directly from the patient's chart
+via the Canvas SDK ORM.
+
+The set of supported vital types is fixed (see [Vital types supported](#vital-types-supported)
+below). The server-side cap of 100 readings per vital is defined in
+`vitals_data.py` as `PER_CODE_CAP` if you fork and want to change it.
 
 ## Architecture
 
@@ -67,20 +101,14 @@ Chart.js is loaded from `https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.
   request body, so a patient cannot read another patient's vitals by spoofing
   the body.
 
-## Menu icon
-
-`patient_vitals/assets/icon.png` is currently a placeholder copy of the
-`portal-content` labs icon so the plugin installs cleanly. Replace it with a
-heart-rate / vitals glyph (~96×96 PNG, transparent background) before shipping.
-
 ## Local development
 
 ```bash
-cd /Users/miguelquintas/Documents/canvas/canvas-msf/extensions/patient_vitals
+cd extensions/patient_vitals
 uv run pytest tests/ -v
 uv run ruff check patient_vitals tests
 uv run mypy patient_vitals
 ```
 
-Install against a local Canvas instance with the standard plugin install path,
+Install against a local Canvas instance with `canvas install patient_vitals`,
 then log in to the patient portal and open "My Vitals" from the menu.

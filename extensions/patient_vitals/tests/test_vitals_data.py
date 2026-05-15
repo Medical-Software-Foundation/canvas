@@ -146,9 +146,15 @@ def test_normalize_point_unparseable_bp(make_observation) -> None:
 
 
 def _patch_query(monkeypatch: pytest.MonkeyPatch, observations: list) -> None:
-    """Helper: short-circuit ``_query_vitals`` to return the given list."""
+    """Helper: short-circuit ``_query_vitals`` to return the given list.
 
-    def fake_query(patient_id, limit_hint=None):
+    The fake ignores narrowing kwargs (``loincs``/``names``) because the
+    in-Python ``_resolve_canonicals`` filter in callers still excludes
+    unrelated rows, and these unit tests are about Python-side aggregation,
+    not DB-layer narrowing.
+    """
+
+    def fake_query(patient_id, limit_hint=None, **_kwargs):
         # Honour the limit_hint so the cap test exercises real bounds.
         return observations if limit_hint is None else observations[:limit_hint]
 
@@ -303,6 +309,54 @@ def test_history_excludes_unparseable_bp(make_observation, monkeypatch) -> None:
 
     assert len(payload["series"][0]["points"]) == 1
     assert payload["series"][0]["points"][0]["value"] == 120.0
+
+
+# ---------- DB narrowing --------------------------------------------------
+
+
+def test_history_narrows_query_to_single_loinc_and_names(monkeypatch) -> None:
+    """history_for_code must pass the code's LOINC + names to _query_vitals.
+
+    Without this narrowing, the endpoint would fetch every vital row for the
+    patient and then discard all but one code's worth — back to the pre-fix
+    behaviour.
+    """
+    captured: dict = {}
+
+    def fake_query(patient_id, limit_hint=None, *, loincs=None, names=None):
+        captured["patient_id"] = patient_id
+        captured["limit_hint"] = limit_hint
+        captured["loincs"] = loincs
+        captured["names"] = names
+        return []
+
+    monkeypatch.setattr(vitals_data, "_query_vitals", fake_query)
+    history_for_code("patient-123", "pulse")
+
+    assert captured["loincs"] == ["8867-4"]
+    assert captured["names"] == ["pulse"]
+    assert captured["limit_hint"] == vitals_data.PER_CODE_CAP
+
+
+def test_aggregate_summary_narrows_query_to_all_catalog_codes(monkeypatch) -> None:
+    """aggregate_summary must narrow to every catalogued LOINC + name set.
+
+    The DB is then expected to do the filtering instead of Python fetching
+    unrelated vital rows and discarding them.
+    """
+    captured: dict = {}
+
+    def fake_query(patient_id, limit_hint=None, *, loincs=None, names=None):
+        captured["loincs"] = loincs
+        captured["names"] = names
+        return []
+
+    monkeypatch.setattr(vitals_data, "_query_vitals", fake_query)
+    aggregate_summary("patient-123")
+
+    assert set(captured["loincs"] or []) == {cfg["loinc"] for cfg in VITAL_CATALOG.values()}
+    expected_names = {n.lower() for cfg in VITAL_CATALOG.values() for n in cfg["names"]}
+    assert set(captured["names"] or []) == expected_names
 
 
 # ---------- catalog sanity -------------------------------------------------
