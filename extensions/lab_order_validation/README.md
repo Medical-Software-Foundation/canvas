@@ -32,7 +32,9 @@ None. The plugin reads the `electronic_ordering_enabled` flag from the lab partn
 
 ## Screenshots or screen recordings
 
-> _Screenshot pending - the Sign-and-Send block message shown in the Canvas UI when one of the five rules fails. To be added._
+Sign-and-Send blocked in the Canvas UI when Rule 5 fires - the coverage subscriber lacks a complete address on their patient chart:
+
+![Sign-and-Send blocked by Rule 5: coverage subscriber address missing](screenshots/rule5-subscriber-address-block.jpg)
 
 ## Important: hard block, no override
 

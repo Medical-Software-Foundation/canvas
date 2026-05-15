@@ -140,14 +140,18 @@ class LabOrderPreflightValidator(BaseHandler):
         - A plain string from automation: the partner's name or UUID
 
         We try, in order:
-        1. UUID lookup on any candidate that is UUID-shaped (avoids Django
-           raising ValidationError on non-UUID strings passed to a UUIDField).
+        1. UUID lookup on any candidate that is UUID-shaped. The UUID_PATTERN
+           gate prevents passing a non-UUID string to a UUIDField, which would
+           otherwise raise ValidationError.
         2. Exact name match on every candidate.
         3. Case-insensitive name match on every candidate.
 
-        Returns None if nothing matches or the lookup itself fails. Logs the
-        attempted candidates and the outcome so silent-skip cases are
-        debuggable from the Canvas logs.
+        Returns None only when no candidate matches. We deliberately do NOT
+        catch unexpected exceptions (OperationalError, etc.) - those must
+        propagate so they reach Sentry and the documented "hard block, no
+        override" invariant remains observable in production. Swallowing
+        them would fail-open and ship broken orders to Health Gorilla
+        silently.
         """
         candidates: list[str] = []
         if isinstance(lab_partner_field, dict):
@@ -162,38 +166,31 @@ class LabOrderPreflightValidator(BaseHandler):
             log.info("lab_order_validation: no lab_partner identifier present")
             return None
 
-        try:
-            for candidate in candidates:
-                if UUID_PATTERN.match(candidate):
-                    partner = LabPartner.objects.filter(id=candidate).first()
-                    if partner is not None:
-                        log.info(
-                            f"lab_order_validation: partner matched by id {candidate!r}"
-                        )
-                        return partner
-
-            for candidate in candidates:
-                partner = LabPartner.objects.filter(name=candidate).first()
+        for candidate in candidates:
+            if UUID_PATTERN.match(candidate):
+                partner = LabPartner.objects.filter(id=candidate).first()
                 if partner is not None:
                     log.info(
-                        f"lab_order_validation: partner matched by name {candidate!r}"
+                        f"lab_order_validation: partner matched by id {candidate!r}"
                     )
                     return partner
 
-            for candidate in candidates:
-                partner = LabPartner.objects.filter(name__iexact=candidate).first()
-                if partner is not None:
-                    log.info(
-                        f"lab_order_validation: partner matched by case-insensitive "
-                        f"name {candidate!r} -> {partner.name!r}"
-                    )
-                    return partner
-        except Exception as exc:
-            log.warning(
-                f"lab_order_validation: LabPartner lookup raised "
-                f"{type(exc).__name__} for candidates={candidates!r}: {exc}"
-            )
-            return None
+        for candidate in candidates:
+            partner = LabPartner.objects.filter(name=candidate).first()
+            if partner is not None:
+                log.info(
+                    f"lab_order_validation: partner matched by name {candidate!r}"
+                )
+                return partner
+
+        for candidate in candidates:
+            partner = LabPartner.objects.filter(name__iexact=candidate).first()
+            if partner is not None:
+                log.info(
+                    f"lab_order_validation: partner matched by case-insensitive "
+                    f"name {candidate!r} -> {partner.name!r}"
+                )
+                return partner
 
         log.warning(
             f"lab_order_validation: no LabPartner matched any of {candidates!r}"

@@ -358,16 +358,24 @@ class TestLookupPartner:
 
             assert result is None
 
-    def test_returns_none_when_lookup_raises(self):
-        """Defensive: an unexpected DB-layer exception must not crash the handler."""
+    def test_lookup_propagates_unexpected_exceptions(self):
+        """Unexpected DB-layer exceptions must propagate, not be swallowed.
+
+        The plugin's contract is a hard block with no override. If a transient
+        OperationalError or similar were caught here, _lookup_partner would
+        return None -> is_electronic=False -> validation skipped -> broken
+        order ships silently and Sentry never sees the error. Fail-loud
+        instead so the failure is observable.
+        """
+        import pytest
+
         with patch(LAB_PARTNER_PATH) as mock_lp:
             mock_lp.objects.filter.return_value.first.side_effect = ValueError(
                 "simulated db error"
             )
 
-            result = LabOrderPreflightValidator._lookup_partner("Labcorp")
-
-            assert result is None
+            with pytest.raises(ValueError, match="simulated db error"):
+                LabOrderPreflightValidator._lookup_partner("Labcorp")
 
     def test_uuid_in_value_with_dashes_or_without(self):
         """Both dashed and undashed UUIDs should match the UUID pattern."""
