@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.1.0",
     "name": "hospitalization_tracker",
     "description": "Track inpatient stays (ICU admissions, long stays) with structured data entry from a note tab and a chart summary section.",
     "components": {
