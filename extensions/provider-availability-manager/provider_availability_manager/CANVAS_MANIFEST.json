@@ -1,0 +1,76 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "provider_availability_manager",
+    "description": "Drag-and-schedule provider availability manager that filters slots in the native Canvas appointment book.",
+    "url_permissions": [],
+    "components": {
+        "protocols": [
+            {
+                "class": "provider_availability_manager.handlers.availability_web_app:AvailabilityWebApp",
+                "description": "Serves the drag-and-schedule availability manager UI (HTML/CSS/JS)",
+                "data_access": {
+                    "event": "",
+                    "read": ["Staff", "PracticeLocation", "NoteType", "Calendar", "Event"],
+                    "write": []
+                }
+            },
+            {
+                "class": "provider_availability_manager.api.calendar:CalendarAPI",
+                "description": "Create or retrieve provider Clinic/Admin calendars",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar"],
+                    "write": ["Calendar"]
+                }
+            },
+            {
+                "class": "provider_availability_manager.api.events:CalendarEventsAPI",
+                "description": "Create, update, or delete calendar events that express provider availability",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "Staff", "PracticeLocation", "NoteType"],
+                    "write": ["Event"]
+                }
+            },
+            {
+                "class": "provider_availability_manager.protocols.availability_slot_filter:AvailabilitySlotFilter",
+                "description": "Filters native scheduler slots to configured provider availability windows (fail-closed)",
+                "data_access": {
+                    "event": "APPOINTMENT__SLOTS__POST_SEARCH",
+                    "read": ["Calendar", "Event", "Staff", "PracticeLocation"],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "provider_availability_manager.applications.provider_availability_app:ProviderAvailabilityManagerApp",
+                "name": "Manage Availability",
+                "description": "Open the drag-and-schedule provider availability manager",
+                "icon": "assets/calendar-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 110
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "SCHEDULABLE_STAFF_ROLES",
+        "BRAND_PRIMARY",
+        "BRAND_PRIMARY_HOVER",
+        "BRAND_PRIMARY_TINT_BG",
+        "BRAND_PRIMARY_TINT_TEXT",
+        "BRAND_FONT_STACK",
+        "BRAND_FONT_URL"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
