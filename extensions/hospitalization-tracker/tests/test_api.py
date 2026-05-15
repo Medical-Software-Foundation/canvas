@@ -14,6 +14,7 @@ from canvas_sdk.v1.data.patient import Patient
 from hospitalization_tracker.handlers.api import (
     HospitalizationAPI,
     HospitalizationSummaryCommand,
+    HospitalizationWebSocket,
     _serialize_hospitalization,
 )
 from hospitalization_tracker.models import Hospitalization
@@ -377,3 +378,46 @@ def test_custom_command_schema_key() -> None:
     """HospitalizationSummaryCommand uses the correct schema_key."""
     cmd = HospitalizationSummaryCommand(content="<p>test</p>")
     assert cmd.schema_key == "hospitalizationSummary"
+
+
+# ---------------------------------------------------------------------------
+# GET /section
+# ---------------------------------------------------------------------------
+
+
+def test_get_section_missing_patient_id_returns_400() -> None:
+    """GET /section without patient_id returns 400."""
+    req = _make_request(query_params={})
+    api = _make_api(req)
+    result = HospitalizationAPI.get_section(api)
+    assert len(result) == 1
+    assert result[0].status_code == HTTPStatus.BAD_REQUEST
+    assert b"patient_id" in result[0].content
+
+
+@patch("hospitalization_tracker.handlers.api.render_to_string", return_value="<html>section</html>")
+@patch("hospitalization_tracker.handlers.api.Hospitalization.objects")
+def test_get_section_returns_html(mock_objects: MagicMock, mock_render: MagicMock) -> None:
+    """GET /section with patient_id returns rendered HTML."""
+    mock_objects.filter.return_value.order_by.return_value = []
+    req = _make_request(query_params={"patient_id": "patient-abc"})
+    api = _make_api(req)
+    result = HospitalizationAPI.get_section(api)
+    assert len(result) == 1
+    assert b"section" in result[0].content
+    mock_render.assert_called_once()
+    ctx = mock_render.call_args[0][1]
+    assert ctx["patient_id"] == "patient-abc"
+
+
+# ---------------------------------------------------------------------------
+# HospitalizationWebSocket
+# ---------------------------------------------------------------------------
+
+
+def test_websocket_authenticate_returns_true() -> None:
+    """HospitalizationWebSocket.authenticate() always returns True (Canvas session auth)."""
+    mock_event = MagicMock()
+    mock_event.context = {"channel_name": "test-channel", "headers": []}
+    ws = HospitalizationWebSocket(event=mock_event)
+    assert ws.authenticate() is True
