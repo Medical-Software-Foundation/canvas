@@ -195,12 +195,20 @@
       document.getElementById('icu-duration-group').style.display = this.checked ? 'block' : 'none';
     });
 
-    // Canvas message port for closing modal
     let messagePort = null;
+
+    function sendResize() {
+      if (messagePort) {
+        messagePort.postMessage({ type: 'RESIZE', height: document.body.scrollHeight });
+      }
+    }
+
     window.addEventListener('message', function(event) {
       if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
         messagePort = event.ports[0];
         messagePort.start();
+        sendResize();
+        new ResizeObserver(sendResize).observe(document.body);
       }
     });
 

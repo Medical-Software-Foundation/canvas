@@ -79,5 +79,22 @@
   {% else %}
   <p class="empty">No hospitalizations on record.</p>
   {% endif %}
+  <script>
+    var resizePort = null;
+
+    function sendResize() {
+      if (resizePort) {
+        resizePort.postMessage({ type: 'RESIZE', height: document.body.scrollHeight });
+      }
+    }
+
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+        resizePort = event.ports[0];
+        sendResize();
+        new ResizeObserver(sendResize).observe(document.body);
+      }
+    });
+  </script>
 </body>
 </html>
