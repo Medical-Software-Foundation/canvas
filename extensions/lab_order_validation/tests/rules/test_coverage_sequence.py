@@ -154,3 +154,18 @@ def test_active_coverage_alongside_deleted_uses_only_active(make_coverage):
     errors = coverage_sequence.check(patient)
 
     assert errors == []
+
+
+def test_active_alongside_removed_stack_does_not_report_duplicate_ranks(make_coverage):
+    """Regression: a coverage 'Removed' via the Coverages tab carries stack=REMOVED
+    while state stays 'active'. It must not be counted alongside the in-use
+    primary, or Rule 1 falsely reports duplicate rank=1."""
+    patient = MagicMock()
+    patient.coverages.all.return_value = [
+        make_coverage(rank=1, state="active", stack="IN_USE"),
+        make_coverage(rank=1, state="active", stack="REMOVED"),
+    ]
+
+    errors = coverage_sequence.check(patient)
+
+    assert errors == []

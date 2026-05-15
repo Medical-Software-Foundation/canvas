@@ -10,9 +10,10 @@ from lab_order_validation.rules._helpers import (
 )
 
 
-def _coverage(*, state="active", start=None, end=None):
+def _coverage(*, state="active", stack="IN_USE", start=None, end=None):
     cov = MagicMock()
     cov.state = state
+    cov.stack = stack
     cov.coverage_start_date = start
     cov.coverage_end_date = end
     return cov
@@ -69,6 +70,28 @@ class TestIsActiveCoverage:
             )
             is True
         )
+
+    def test_removed_stack_is_not_active(self):
+        """A coverage the user 'Removed' in the Coverages tab carries stack=REMOVED
+        while state stays 'active'. The validator must skip it."""
+        assert is_active_coverage(_coverage(state="active", stack="REMOVED")) is False
+
+    def test_other_stack_is_not_active(self):
+        """stack=OTHER is also not in-use; only IN_USE counts."""
+        assert is_active_coverage(_coverage(state="active", stack="OTHER")) is False
+
+    def test_in_use_stack_case_insensitive(self):
+        assert is_active_coverage(_coverage(state="active", stack="in_use")) is True
+
+    def test_removed_stack_enum_with_value_attribute_is_not_active(self):
+        enum_like = MagicMock()
+        enum_like.value = "REMOVED"
+        assert is_active_coverage(_coverage(state="active", stack=enum_like)) is False
+
+    def test_in_use_stack_enum_with_value_attribute(self):
+        enum_like = MagicMock()
+        enum_like.value = "IN_USE"
+        assert is_active_coverage(_coverage(state="active", stack=enum_like)) is True
 
 
 class TestHasMeaningfulContent:

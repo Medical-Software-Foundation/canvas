@@ -91,6 +91,20 @@ def test_deleted_duplicate_does_not_trigger(make_coverage):
     assert registration_update.check(patient) == []
 
 
+def test_removed_stack_duplicate_does_not_trigger(make_coverage):
+    """Regression: a coverage 'Removed' via the Coverages tab carries stack=REMOVED
+    while state stays 'active'. It must not count as an active duplicate of the
+    in-use coverage from the same payer."""
+    payer = _issuer(1, "Aetna")
+    patient = MagicMock()
+    patient.coverages.all.return_value = [
+        make_coverage(rank=1, issuer=payer, state="active", stack="IN_USE"),
+        make_coverage(rank=1, issuer=payer, state="active", stack="REMOVED"),
+    ]
+
+    assert registration_update.check(patient) == []
+
+
 def test_payer_name_sanitized_in_error(make_coverage):
     """Duplicate-payer error message should sanitize control chars in the payer name."""
     payer = _issuer(1, "Acme\x00\x1fHealth")

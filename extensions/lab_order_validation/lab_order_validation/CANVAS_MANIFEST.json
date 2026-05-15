@@ -1,6 +1,6 @@
 {
   "sdk_version": "0.1.4",
-  "plugin_version": "0.1.0",
+  "plugin_version": "0.1.1",
   "name": "lab_order_validation",
   "description": "Pre-flight validation for lab orders bound for electronic transmission. Blocks Sign-and-Send if patient/coverage/payer data would fail downstream at Health Gorilla. No override.",
   "readme": "../README.md",

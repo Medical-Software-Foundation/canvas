@@ -7,13 +7,21 @@ from datetime import date
 
 
 def is_active_coverage(coverage) -> bool:
-    """True iff the coverage is state=active and not expired or future-dated.
+    """True iff the coverage is in use, state=active, and not expired or future-dated.
 
-    Filters out:
-    - Coverages a user removed in the Canvas UI (state=deleted)
-    - Coverages whose end date has already passed
-    - Coverages whose start date is still in the future
+    Canvas stores coverage status across two fields:
+    - `stack`: IN_USE / OTHER / REMOVED. The user-facing "Remove" button in the
+      Coverages tab sets this to REMOVED. The active stack is IN_USE.
+    - `state`: active / deleted. This is the hard-delete flag for data cleanup,
+      NOT what the UI "Remove" button toggles.
+
+    A coverage is only "active" for validation purposes when BOTH fields agree
+    AND the coverage's effective date window includes today.
     """
+    stack = getattr(coverage.stack, "value", coverage.stack)
+    if str(stack).strip().upper() != "IN_USE":
+        return False
+
     state = getattr(coverage.state, "value", coverage.state)
     if str(state).strip().lower() != "active":
         return False

@@ -38,12 +38,15 @@ def _complete_address(
     return addr
 
 
-def _coverage(*, subscriber, start=None, end=None, state="active") -> MagicMock:
+def _coverage(
+    *, subscriber, start=None, end=None, state="active", stack="IN_USE"
+) -> MagicMock:
     cov = MagicMock()
     cov.coverage_start_date = start if start is not None else date(2020, 1, 1)
     cov.coverage_end_date = end
     cov.subscriber = subscriber
     cov.state = state
+    cov.stack = stack
     return cov
 
 
@@ -175,6 +178,19 @@ def test_deleted_coverage_skipped():
     patient = MagicMock()
     patient.id = "patient-1"
     patient.coverages.all.return_value = [_coverage(subscriber=sub, state="deleted")]
+
+    assert subscriber_address.check(patient) == []
+
+
+def test_removed_stack_coverage_skipped():
+    """Regression: a coverage 'Removed' via the Coverages tab carries stack=REMOVED
+    while state stays 'active'. Its subscriber should not be flagged."""
+    sub = _subscriber(addresses=[])
+    patient = MagicMock()
+    patient.id = "patient-1"
+    patient.coverages.all.return_value = [
+        _coverage(subscriber=sub, state="active", stack="REMOVED")
+    ]
 
     assert subscriber_address.check(patient) == []
 
