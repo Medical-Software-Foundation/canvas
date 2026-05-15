@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Vitals</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #2c3e50; background-color: #f5f5f5; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; margin-bottom: 8px; font-size: 28px; }
+        .subtitle { color: #7f8c8d; margin-bottom: 28px; font-size: 16px; }
+        .loading { text-align: center; padding: 40px; color: #7f8c8d; }
+        .error { background-color: #fee; color: #c33; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #7f8c8d; }
+        .empty-state-icon { font-size: 48px; margin-bottom: 20px; }
+        .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+        .tile { background:#fff; border:1px solid #e1e8ed; border-radius:8px; padding:18px 18px 28px; min-height:140px; position:relative; transition: all 0.18s ease; }
+        .tile.clickable { cursor:pointer; }
+        .tile.clickable:hover { border-color:#3498db; box-shadow:0 2px 8px rgba(52,152,219,0.2); }
+        .tile-icon  { position:absolute; top:14px; left:14px; width:28px; height:28px; color:#3498db; }
+        .tile-name  { margin-left:42px; font-size:14px; color:#7f8c8d; }
+        .tile-value { font-size:30px; font-weight:600; color:#2c3e50; margin-top:10px; }
+        .tile-unit  { font-size:14px; color:#7f8c8d; margin-left:6px; font-weight:400; }
+        .tile-date  { font-size:12px; color:#95a5a6; margin-top:6px; }
+        .tile-trends{ position:absolute; bottom:10px; right:14px; font-size:12px; color:#3498db; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto; }
+        .modal.active { display: block; }
+        .modal-content { background: white; max-width: 900px; width: 95%; margin: 40px auto; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: flex; flex-direction: column; max-height: calc(100vh - 80px); }
+        .modal-header { padding: 18px 24px; border-bottom: 1px solid #e1e8ed; display: flex; justify-content: space-between; align-items: center; }
+        .modal-title { font-size: 22px; color: #2c3e50; display: flex; align-items: center; gap: 10px; }
+        .modal-title svg { width: 24px; height: 24px; color: #3498db; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .btn-secondary { background-color: #ecf0f1; color: #2c3e50; }
+        .btn-secondary:hover { background-color: #d6dbdd; }
+        .modal-body { padding: 24px; flex: 1; min-height: 360px; }
+        .chart-wrap { position: relative; height: 360px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>My Vitals</h1>
+        <p class="subtitle">Your most recent readings. Tap any tile with more than one reading to see how it has changed over time.</p>
+        <div id="error-message" class="error" style="display: none;"></div>
+        <div id="loading" class="loading">Loading your vitals…</div>
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <div class="empty-state-icon">📋</div>
+            <h2>No vital signs recorded yet</h2>
+            <p>Once your care team records your vitals, they will appear here.</p>
+        </div>
+        <div id="tiles" class="tiles" style="display: none;"></div>
+    </div>
+
+    <div id="chart-modal" class="modal" aria-modal="true" role="dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-title"></h2>
+                <button class="btn btn-secondary" onclick="closeModal()" aria-label="Close">Close</button>
+            </div>
+            <div class="modal-body">
+                <div class="chart-wrap"><canvas id="chart-canvas"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        const API = '/plugin-io/api/patient_vitals/observations';
+        let activeChart = null;
+
+        // Inline Lucide-style SVG icons (MIT). All 24x24, stroke=currentColor, stroke-width=2.
+        const ICONS = {
+            'droplet':     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>',
+            'heart':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>',
+            'thermometer': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>',
+            'scale':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>',
+            'ruler':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 8.7 8.7 21.3a2.4 2.4 0 0 1-3.4 0L2.7 18.7a2.4 2.4 0 0 1 0-3.4L15.3 2.7a2.4 2.4 0 0 1 3.4 0l2.6 2.6a2.4 2.4 0 0 1 0 3.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/></svg>',
+            'gauge':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>',
+            'lung':        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.081 20c1.612 0 2.919-1.335 2.919-2.98V8.5C9 6.567 7.433 5 5.5 5h-.041C3.55 5 2 6.55 2 8.459V17.02C2 18.665 3.307 20 4.919 20h1.162Z"/><path d="M17.919 20c1.612 0 2.919-1.335 2.919-2.98V8.459C20.838 6.55 19.289 5 17.379 5h-.041C15.408 5 13.84 6.567 13.84 8.5v8.52c0 1.645 1.307 2.98 2.919 2.98h1.16Z"/><path d="M12 3v15"/></svg>',
+            'wave':        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+            'ruler-h':     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="8" rx="1"/><path d="M7 8v3"/><path d="M11 8v3"/><path d="M15 8v3"/><path d="M19 8v3"/></svg>',
+            'circle-dot':  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/></svg>',
+            'alert':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadVitals();
+            document.getElementById('tiles').addEventListener('click', onTileClick);
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+        document.getElementById('chart-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'chart-modal') closeModal();
+        });
+
+        function onTileClick(event) {
+            const tile = event.target.closest('.tile.clickable');
+            if (!tile) return;
+            const { code, displayName, iconKey } = tile.dataset;
+            if (code) openHistory(code, displayName, iconKey);
+        }
+
+        async function loadVitals() {
+            try {
+                const res = await fetch(API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'list_summary' }),
+                });
+                const result = await res.json();
+                if (result.status !== 'success') {
+                    showError(result.message || 'Failed to load your vitals.');
+                    return;
+                }
+                renderTiles(result.data.vitals || []);
+            } catch (err) {
+                console.error(err);
+                showError('Network error: ' + err.message);
+            }
+        }
+
+        function renderTiles(vitals) {
+            const loading = document.getElementById('loading');
+            const empty = document.getElementById('empty-state');
+            const tiles = document.getElementById('tiles');
+            loading.style.display = 'none';
+
+            if (!vitals.length) {
+                empty.style.display = 'block';
+                tiles.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+            tiles.style.display = 'grid';
+
+            tiles.innerHTML = vitals.map(v => {
+                const clickable = v.reading_count > 1;
+                const icon = ICONS[v.icon_key] || '';
+                const dataAttrs = clickable
+                    ? ` data-code="${escapeHtml(v.code)}" data-display-name="${escapeHtml(v.display_name)}" data-icon-key="${escapeHtml(v.icon_key)}"`
+                    : '';
+                const trends = clickable ? `<span class="tile-trends">View trends →</span>` : '';
+                const unit = v.latest_unit ? ` <span class="tile-unit">${escapeHtml(v.latest_unit)}</span>` : '';
+                return `
+                    <div class="tile ${clickable ? 'clickable' : ''}"${dataAttrs}>
+                        <span class="tile-icon">${icon}</span>
+                        <div class="tile-name">${escapeHtml(v.display_name)}</div>
+                        <div class="tile-value">${escapeHtml(v.latest_value)}${unit}</div>
+                        <div class="tile-date">${formatDate(v.latest_recorded_at)}</div>
+                        ${trends}
+                    </div>`;
+            }).join('');
+        }
+
+        async function openHistory(code, displayName, iconKey) {
+            try {
+                const res = await fetch(API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'history', code }),
+                });
+                const result = await res.json();
+                if (result.status !== 'success') {
+                    showError(result.message || 'Failed to load trend data.');
+                    return;
+                }
+                showModal(displayName, iconKey, result.data);
+            } catch (err) {
+                console.error(err);
+                showError('Network error: ' + err.message);
+            }
+        }
+
+        function showModal(displayName, iconKey, payload) {
+            const modal = document.getElementById('chart-modal');
+            const title = document.getElementById('modal-title');
+            const icon = ICONS[iconKey] || '';
+            title.innerHTML = `${icon}<span>${escapeHtml(displayName)}</span>`;
+            modal.classList.add('active');
+
+            if (activeChart) { activeChart.destroy(); activeChart = null; }
+
+            // Build a sorted union of dates so multi-series share a single X axis
+            const allDates = new Set();
+            payload.series.forEach(s => s.points.forEach(p => allDates.add(p.recorded_at)));
+            const labels = Array.from(allDates).sort();
+
+            const palette = ['#3498db', '#e74c3c', '#27ae60', '#9b59b6'];
+            const datasets = payload.series.map((s, i) => {
+                const byDate = new Map(s.points.map(p => [p.recorded_at, p.value]));
+                const color = palette[i % palette.length];
+                return {
+                    label: s.label,
+                    data: labels.map(d => byDate.has(d) ? byDate.get(d) : null),
+                    borderColor: color,
+                    backgroundColor: color,
+                    tension: 0.25,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 2.5,
+                    spanGaps: true,
+                };
+            });
+
+            const ctx = document.getElementById('chart-canvas').getContext('2d');
+            activeChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels.map(d => formatDate(d)), datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 600, easing: 'easeOutQuad' },
+                    plugins: {
+                        tooltip: { mode: 'index', intersect: false },
+                        legend: { display: datasets.length > 1, position: 'top' },
+                    },
+                    scales: {
+                        x: { title: { display: true, text: 'Date' } },
+                        y: { title: { display: true, text: payload.unit || '' }, beginAtZero: false },
+                    },
+                },
+            });
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('chart-modal');
+            modal.classList.remove('active');
+            if (activeChart) { activeChart.destroy(); activeChart = null; }
+        }
+
+        function formatDate(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return iso;
+            return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function escapeHtml(s) {
+            if (s === null || s === undefined) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showError(message) {
+            const loading = document.getElementById('loading');
+            const errorEl = document.getElementById('error-message');
+            loading.style.display = 'none';
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
