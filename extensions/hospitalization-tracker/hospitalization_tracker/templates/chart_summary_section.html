@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #1a202c; margin: 0; padding: 12px; }
+    h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #2d3748; display: flex; align-items: center; gap: 6px; }
+    .timeline { list-style: none; padding: 0; margin: 0; }
+    .timeline-item {
+      position: relative;
+      padding: 10px 12px 10px 24px;
+      border-left: 2px solid #bee3f8;
+      margin-bottom: 8px;
+      background: #f7fafc;
+      border-radius: 0 4px 4px 0;
+    }
+    .timeline-item:last-child { margin-bottom: 0; }
+    .timeline-dot {
+      position: absolute;
+      left: -5px;
+      top: 14px;
+      width: 8px;
+      height: 8px;
+      background: #3182ce;
+      border-radius: 50%;
+    }
+    .entry-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+    .dates { font-weight: 600; font-size: 12px; color: #2b6cb0; }
+    .hospital { font-weight: 600; font-size: 13px; color: #1a202c; }
+    .reason { font-size: 12px; color: #4a5568; margin-bottom: 2px; }
+    .diag { font-size: 11px; color: #718096; margin-bottom: 4px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    .badge-icu { background: #fed7d7; color: #c53030; }
+    .badge-readmit { background: #fefcbf; color: #744210; }
+    .badge-los { background: #e9d8fd; color: #553c9a; }
+    .empty { color: #a0aec0; font-style: italic; padding: 8px 0; }
+  </style>
+</head>
+<body>
+  <h3>Inpatient Stay History</h3>
+  {% if hospitalizations %}
+  <ul class="timeline">
+    {% for h in hospitalizations %}
+    <li class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="entry-header">
+        <span class="dates">
+          {{ h.admission_date }}{% if h.discharge_date %} – {{ h.discharge_date }}{% endif %}
+        </span>
+      </div>
+      <div class="hospital">{{ h.hospital_name }}</div>
+      <div class="reason">{{ h.reason_for_admission }}</div>
+      {% if h.principal_diagnosis %}
+      <div class="diag">Dx: {{ h.principal_diagnosis }}</div>
+      {% endif %}
+      <div class="meta">
+        {% if h.length_of_stay_days is not None %}
+        <span class="badge badge-los">{{ h.length_of_stay_days }}d stay</span>
+        {% endif %}
+        {% if h.icu_stay %}
+        <span class="badge badge-icu">
+          ICU{% if h.icu_duration_days %} {{ h.icu_duration_days }}d{% endif %}
+        </span>
+        {% endif %}
+        {% if h.readmission_within_30_days %}
+        <span class="badge badge-readmit">30d Readmit</span>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No hospitalizations on record.</p>
+  {% endif %}
+</body>
+</html>
