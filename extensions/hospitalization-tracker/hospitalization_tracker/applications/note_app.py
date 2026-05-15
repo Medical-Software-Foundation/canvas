@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import NoteApplication
 from canvas_sdk.v1.data.note import Note
+
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 class HospitalizationTrackerApp(NoteApplication):
@@ -20,7 +24,7 @@ class HospitalizationTrackerApp(NoteApplication):
         return LaunchModalEffect(
             url=(
                 f"/plugin-io/api/hospitalization_tracker/app/form"
-                f"?patient_id={patient_id}&note_id={note.id}"
+                f"?patient_id={patient_id}&note_id={note.id}&v={_CACHE_BUST}"
             ),
             target=LaunchModalEffect.TargetType.NOTE,
             title="Add Hospitalization",
