@@ -1,9 +1,10 @@
 """Render the 'Patient Info' custom section.
 
-Surfaces the four fields clinicians and staff most often copy out of a chart -
-patient name, date of birth, primary phone number, and home address - each
-with a one-click copy button. Rows are only included when the underlying
-field is populated; otherwise the row is omitted from the rendered HTML.
+Surfaces the four fields clinicians and staff most often copy out of a
+chart - patient name, date of birth, preferred pharmacy name, and primary
+insurance payer name - each with a one-click copy button. Rows are only
+included when the underlying field is populated; otherwise the row is
+omitted from the rendered HTML.
 """
 
 import base64
@@ -15,13 +16,20 @@ from canvas_sdk.handlers.patient_chart_summary_custom_section_handler import (
     PatientChartSummaryCustomSectionHandler,
 )
 from canvas_sdk.templates import render_to_string
-from canvas_sdk.v1.data.common import (
-    AddressState,
-    AddressUse,
-    ContactPointState,
-    ContactPointSystem,
-)
 from canvas_sdk.v1.data.patient import Patient
+
+
+# Canvas sandbox does not allow importing the CoverageRank / CoverageStack /
+# CoverageState enum classes themselves (only the Coverage and Transactor
+# models are on the allowlist). The ORM accepts the underlying values
+# directly, so we filter against the literal strings and ints. The values
+# come from canvas_sdk.v1.data.coverage and are stable:
+#   - CoverageRank.PRIMARY    = 1
+#   - CoverageStack.IN_USE    = "IN_USE"
+#   - CoverageState.ACTIVE    = "active"
+_COVERAGE_RANK_PRIMARY = 1
+_COVERAGE_STACK_IN_USE = "IN_USE"
+_COVERAGE_STATE_ACTIVE = "active"
 
 from quick_copy_patient_info.handlers.section_config import SECTION_KEY
 
@@ -59,77 +67,47 @@ def _format_dob(patient: Patient) -> dict | None:
     return {"label": "DOB", "display": text, "copy": text}
 
 
-def _format_phone(patient: Patient) -> dict | None:
-    """Build the Phone row.
+def _format_pharmacy(patient: Patient) -> dict | None:
+    """Build the Pharmacy row from the patient's preferred pharmacy setting.
 
-    Display: NANP-formatted "(555) 123-4567" when the raw value parses as a
-    10-digit US number (an 11-digit number whose leading digit is 1 is
-    accepted and stripped). Otherwise the raw value is shown verbatim.
-
-    Copy payload: digits only, e.g. "5551234567". When the raw value has no
-    numeric digits at all, the row is omitted.
+    The setting is stored as a JSON dict (or a list of dicts where one is
+    marked default). The Patient model's `preferred_pharmacy` property
+    handles both shapes and returns the dict that represents the default.
+    The pharmacy name lives under `organization_name`.
     """
-    phone = (
-        patient.telecom.filter(
-            system=ContactPointSystem.PHONE,
-            state=ContactPointState.ACTIVE,
+    pharmacy = patient.preferred_pharmacy
+    if not pharmacy:
+        return None
+    name = (pharmacy.get("organization_name") or "").strip()
+    if not name:
+        return None
+    return {"label": "Pharmacy", "display": name, "copy": name}
+
+
+def _format_insurance(patient: Patient) -> dict | None:
+    """Build the Insurance row from the patient's primary active coverage.
+
+    "Primary" means `coverage_rank=1`. We additionally filter on
+    `state=active` and `stack=IN_USE` because the Canvas UI's "Remove"
+    action sets `stack=REMOVED` without touching `state`, so a state-only
+    filter would surface coverages that have been removed from the chart.
+    The displayed and copied value is the payer name (`issuer.name`).
+    """
+    coverage = (
+        patient.coverages.filter(
+            state=_COVERAGE_STATE_ACTIVE,
+            stack=_COVERAGE_STACK_IN_USE,
+            coverage_rank=_COVERAGE_RANK_PRIMARY,
         )
-        .order_by("rank")
+        .select_related("issuer")
         .first()
     )
-    if phone is None or not phone.value:
+    if coverage is None or coverage.issuer is None:
         return None
-
-    digits = "".join(c for c in phone.value if c.isdigit())
-    if not digits:
+    name = (coverage.issuer.name or "").strip()
+    if not name:
         return None
-
-    if len(digits) == 11 and digits.startswith("1"):
-        digits = digits[1:]
-
-    if len(digits) == 10:
-        display = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-    else:
-        display = phone.value.strip()
-
-    return {"label": "Phone", "display": display, "copy": digits}
-
-
-def _format_address(patient: Patient) -> dict | None:
-    """Build the Address row in multi-line USPS format.
-
-    Prefers home addresses; falls back to the first active address. Returns
-    None when no active address is on file or when all the address parts are
-    blank.
-    """
-    addresses = patient.addresses.filter(state=AddressState.ACTIVE)
-    address = addresses.filter(use=AddressUse.HOME).first() or addresses.first()
-    if address is None:
-        return None
-
-    line1 = (address.line1 or "").strip()
-    line2 = (address.line2 or "").strip()
-    city = (address.city or "").strip()
-    state_code = (address.state_code or "").strip()
-    postal_code = (address.postal_code or "").strip()
-
-    csz_parts = []
-    if city and state_code:
-        csz_parts.append(f"{city}, {state_code}")
-    elif city:
-        csz_parts.append(city)
-    elif state_code:
-        csz_parts.append(state_code)
-    if postal_code:
-        csz_parts.append(postal_code)
-    csz = " ".join(csz_parts)
-
-    lines = [piece for piece in (line1, line2, csz) if piece]
-    if not lines:
-        return None
-
-    text = "\n".join(lines)
-    return {"label": "Address", "display": text, "copy": text}
+    return {"label": "Insurance", "display": name, "copy": name}
 
 
 class QuickCopyPatientInfoSectionContent(PatientChartSummaryCustomSectionHandler):
@@ -148,8 +126,8 @@ class QuickCopyPatientInfoSectionContent(PatientChartSummaryCustomSectionHandler
         candidates = (
             _format_name(patient),
             _format_dob(patient),
-            _format_phone(patient),
-            _format_address(patient),
+            _format_pharmacy(patient),
+            _format_insurance(patient),
         )
         rows = [row for row in candidates if row is not None]
 

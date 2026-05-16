@@ -3,9 +3,8 @@
 import base64
 import json
 from datetime import date
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-import pytest
 from canvas_sdk.effects.base import EffectType
 
 from quick_copy_patient_info.handlers import section_content
@@ -13,12 +12,12 @@ from quick_copy_patient_info.handlers.section_config import SECTION_KEY
 from quick_copy_patient_info.handlers.section_content import (
     Patient as _RealPatient,
     QuickCopyPatientInfoSectionContent,
-    _format_address,
     _format_dob,
+    _format_insurance,
     _format_name,
-    _format_phone,
+    _format_pharmacy,
 )
-from tests.conftest import make_address, make_contact_point, make_patient
+from tests.conftest import make_coverage, make_patient, make_transactor
 
 # Capture the real DoesNotExist class at import time. The TestHandle tests
 # patch the `Patient` symbol in the handler module, which turns
@@ -88,205 +87,154 @@ def test_format_dob_returns_none_when_birth_date_missing() -> None:
     assert _format_dob(patient) is None
 
 
-# --- _format_phone ---------------------------------------------------------
+# --- _format_pharmacy ------------------------------------------------------
 
 
-def test_format_phone_ten_digit_us_number() -> None:
+def test_format_pharmacy_returns_organization_name() -> None:
     patient = make_patient(
-        contact_points=[make_contact_point(value="(555) 123-4567")]
+        preferred_pharmacy={
+            "organization_name": "CVS Pharmacy #1234",
+            "phone": "3175557890",
+            "address": "9700 N Michigan Rd, Indianapolis, IN",
+        }
     )
-    row = _format_phone(patient)
-    assert row == {"label": "Phone", "display": "(555) 123-4567", "copy": "5551234567"}
-
-
-def test_format_phone_strips_leading_country_code_one() -> None:
-    patient = make_patient(
-        contact_points=[make_contact_point(value="+1 (555) 123-4567")]
-    )
-    row = _format_phone(patient)
-    assert row["display"] == "(555) 123-4567"
-    assert row["copy"] == "5551234567"
-
-
-def test_format_phone_unformatted_input_is_reformatted_for_display() -> None:
-    patient = make_patient(contact_points=[make_contact_point(value="5551234567")])
-    row = _format_phone(patient)
-    assert row["display"] == "(555) 123-4567"
-    assert row["copy"] == "5551234567"
-
-
-def test_format_phone_preferred_by_rank() -> None:
-    """The lowest rank is the preferred phone."""
-    patient = make_patient(
-        contact_points=[
-            make_contact_point(value="5559999999", rank=3, use="work"),
-            make_contact_point(value="5551234567", rank=1, use="mobile"),
-            make_contact_point(value="5550000000", rank=2, use="home"),
-        ]
-    )
-    row = _format_phone(patient)
-    assert row["copy"] == "5551234567"
-
-
-def test_format_phone_filters_to_phone_system() -> None:
-    """A patient who has only email contact points should not get a phone row."""
-    patient = make_patient(
-        contact_points=[make_contact_point(value="jane@example.com", system="email")]
-    )
-    assert _format_phone(patient) is None
-
-
-def test_format_phone_filters_inactive_contact_points() -> None:
-    patient = make_patient(
-        contact_points=[
-            make_contact_point(value="5551234567", state="inactive"),
-        ]
-    )
-    assert _format_phone(patient) is None
-
-
-def test_format_phone_returns_none_when_no_phones() -> None:
-    patient = make_patient(contact_points=[])
-    assert _format_phone(patient) is None
-
-
-def test_format_phone_non_numeric_value_returns_none() -> None:
-    patient = make_patient(contact_points=[make_contact_point(value="no-digits-here")])
-    assert _format_phone(patient) is None
-
-
-def test_format_phone_non_nanp_falls_back_to_raw_value() -> None:
-    """A 7-digit phone (no area code) cannot be NANP-formatted, so the
-    raw value is shown verbatim but the copy is still digits-only."""
-    patient = make_patient(contact_points=[make_contact_point(value="123-4567")])
-    row = _format_phone(patient)
-    assert row["display"] == "123-4567"
-    assert row["copy"] == "1234567"
-
-
-# --- _format_address -------------------------------------------------------
-
-
-def test_format_address_full_three_lines() -> None:
-    patient = make_patient(
-        addresses=[
-            make_address(
-                line1="123 Main St",
-                line2="Apt 4",
-                city="Indianapolis",
-                state_code="IN",
-                postal_code="46077",
-            )
-        ]
-    )
-    row = _format_address(patient)
+    row = _format_pharmacy(patient)
     assert row == {
-        "label": "Address",
-        "display": "123 Main St\nApt 4\nIndianapolis, IN 46077",
-        "copy": "123 Main St\nApt 4\nIndianapolis, IN 46077",
+        "label": "Pharmacy",
+        "display": "CVS Pharmacy #1234",
+        "copy": "CVS Pharmacy #1234",
     }
 
 
-def test_format_address_skips_blank_line_2() -> None:
+def test_format_pharmacy_ignores_other_fields() -> None:
+    """Even when phone and address are populated, copy should be name only."""
     patient = make_patient(
-        addresses=[
-            make_address(
-                line1="42 Oak Ridge Ln",
-                city="Carmel",
-                state_code="IN",
-                postal_code="46033",
+        preferred_pharmacy={
+            "organization_name": "Walgreens #5678",
+            "phone": "3175550000",
+        }
+    )
+    row = _format_pharmacy(patient)
+    assert row["copy"] == "Walgreens #5678"
+    assert row["display"] == "Walgreens #5678"
+
+
+def test_format_pharmacy_trims_whitespace() -> None:
+    patient = make_patient(
+        preferred_pharmacy={"organization_name": "  Express Scripts  "}
+    )
+    row = _format_pharmacy(patient)
+    assert row["display"] == "Express Scripts"
+
+
+def test_format_pharmacy_returns_none_when_no_pharmacy() -> None:
+    patient = make_patient(preferred_pharmacy=None)
+    assert _format_pharmacy(patient) is None
+
+
+def test_format_pharmacy_returns_none_when_empty_dict() -> None:
+    """A pharmacy record with no organization_name field is unusable."""
+    patient = make_patient(preferred_pharmacy={})
+    assert _format_pharmacy(patient) is None
+
+
+def test_format_pharmacy_returns_none_when_organization_name_blank() -> None:
+    patient = make_patient(preferred_pharmacy={"organization_name": "   "})
+    assert _format_pharmacy(patient) is None
+
+
+def test_format_pharmacy_returns_none_when_organization_name_none() -> None:
+    patient = make_patient(
+        preferred_pharmacy={"organization_name": None, "phone": "3175550000"}
+    )
+    assert _format_pharmacy(patient) is None
+
+
+# --- _format_insurance -----------------------------------------------------
+
+
+def test_format_insurance_returns_payer_name_for_primary_coverage() -> None:
+    patient = make_patient(
+        coverages=[make_coverage(payer_name="Aetna")],
+    )
+    row = _format_insurance(patient)
+    assert row == {"label": "Insurance", "display": "Aetna", "copy": "Aetna"}
+
+
+def test_format_insurance_picks_rank_one_when_multiple_coverages() -> None:
+    patient = make_patient(
+        coverages=[
+            make_coverage(payer_name="Medicare", coverage_rank=2),
+            make_coverage(payer_name="Aetna", coverage_rank=1),
+            make_coverage(payer_name="Cigna", coverage_rank=3),
+        ],
+    )
+    row = _format_insurance(patient)
+    assert row["display"] == "Aetna"
+
+
+def test_format_insurance_skips_non_primary_when_no_primary_exists() -> None:
+    """Spec is 'primary only' - if there is no rank=1 coverage, no row."""
+    patient = make_patient(
+        coverages=[make_coverage(payer_name="Medicare", coverage_rank=2)],
+    )
+    assert _format_insurance(patient) is None
+
+
+def test_format_insurance_filters_deleted_state() -> None:
+    """A coverage with state=deleted should not surface even at rank=1."""
+    patient = make_patient(
+        coverages=[
+            make_coverage(payer_name="Aetna", state="deleted"),
+        ],
+    )
+    assert _format_insurance(patient) is None
+
+
+def test_format_insurance_filters_removed_stack() -> None:
+    """Coverages removed via the UI keep state=active but get stack=REMOVED.
+    Without filtering on stack=IN_USE the section would surface removed
+    coverages."""
+    patient = make_patient(
+        coverages=[
+            make_coverage(payer_name="Aetna", stack="REMOVED"),
+        ],
+    )
+    assert _format_insurance(patient) is None
+
+
+def test_format_insurance_returns_none_when_no_coverages() -> None:
+    patient = make_patient(coverages=[])
+    assert _format_insurance(patient) is None
+
+
+def test_format_insurance_returns_none_when_issuer_is_none() -> None:
+    """A coverage row with no linked Transactor is meaningless for the
+    quick-copy use case."""
+    patient = make_patient(
+        coverages=[make_coverage(payer_name=None, issuer=None)],
+    )
+    assert _format_insurance(patient) is None
+
+
+def test_format_insurance_returns_none_when_payer_name_blank() -> None:
+    patient = make_patient(
+        coverages=[make_coverage(payer_name="", issuer=make_transactor(name=""))],
+    )
+    assert _format_insurance(patient) is None
+
+
+def test_format_insurance_trims_payer_name() -> None:
+    patient = make_patient(
+        coverages=[
+            make_coverage(
+                payer_name=None,
+                issuer=make_transactor(name="  Blue Cross Blue Shield  "),
             )
-        ]
+        ],
     )
-    row = _format_address(patient)
-    assert row["display"] == "42 Oak Ridge Ln\nCarmel, IN 46033"
-
-
-def test_format_address_prefers_home_over_other_uses() -> None:
-    patient = make_patient(
-        addresses=[
-            make_address(
-                line1="500 Work Pkwy",
-                city="Zionsville",
-                state_code="IN",
-                postal_code="46077",
-                use="work",
-            ),
-            make_address(
-                line1="123 Main St",
-                city="Indianapolis",
-                state_code="IN",
-                postal_code="46202",
-                use="home",
-            ),
-        ]
-    )
-    row = _format_address(patient)
-    assert row["display"].startswith("123 Main St")
-
-
-def test_format_address_falls_back_to_first_active_when_no_home() -> None:
-    patient = make_patient(
-        addresses=[
-            make_address(
-                line1="500 Work Pkwy",
-                city="Zionsville",
-                state_code="IN",
-                postal_code="46077",
-                use="work",
-            ),
-        ]
-    )
-    row = _format_address(patient)
-    assert row["display"].startswith("500 Work Pkwy")
-
-
-def test_format_address_filters_inactive_addresses() -> None:
-    patient = make_patient(
-        addresses=[
-            make_address(
-                line1="123 Main St",
-                city="Indianapolis",
-                state_code="IN",
-                postal_code="46077",
-                state="inactive",
-            )
-        ]
-    )
-    assert _format_address(patient) is None
-
-
-def test_format_address_returns_none_when_no_addresses() -> None:
-    patient = make_patient(addresses=[])
-    assert _format_address(patient) is None
-
-
-def test_format_address_returns_none_when_all_parts_blank() -> None:
-    patient = make_patient(addresses=[make_address()])
-    assert _format_address(patient) is None
-
-
-def test_format_address_handles_partial_city_state_zip() -> None:
-    """A city-only record should still render a single-line address."""
-    patient = make_patient(
-        addresses=[
-            make_address(line1="123 Main St", city="Indianapolis"),
-        ]
-    )
-    row = _format_address(patient)
-    assert row["display"] == "123 Main St\nIndianapolis"
-
-
-def test_format_address_handles_state_only_without_city() -> None:
-    """A rare case: state on file but no city. The state value still
-    needs to land on the last line so it can be copied."""
-    patient = make_patient(
-        addresses=[
-            make_address(line1="123 Main St", state_code="IN", postal_code="46077"),
-        ]
-    )
-    row = _format_address(patient)
-    assert row["display"] == "123 Main St\nIN 46077"
+    row = _format_insurance(patient)
+    assert row["display"] == "Blue Cross Blue Shield"
 
 
 # --- handler.handle() -------------------------------------------------------
@@ -306,15 +254,8 @@ class TestHandle:
             first_name="Jane",
             last_name="Doe",
             birth_date=date(1985, 3, 14),
-            contact_points=[make_contact_point(value="5551234567")],
-            addresses=[
-                make_address(
-                    line1="123 Main St",
-                    city="Indianapolis",
-                    state_code="IN",
-                    postal_code="46077",
-                )
-            ],
+            preferred_pharmacy={"organization_name": "CVS Pharmacy #1234"},
+            coverages=[make_coverage(payer_name="Aetna")],
         )
         mock_render.return_value = "<div/>"
 
@@ -323,18 +264,16 @@ class TestHandle:
 
         ctx = mock_render.call_args_list[-1].args[1]
         labels = [row["label"] for row in ctx["rows"]]
-        assert labels == ["Name", "DOB", "Phone", "Address"]
+        assert labels == ["Name", "DOB", "Pharmacy", "Insurance"]
 
     @patch("quick_copy_patient_info.handlers.section_content.render_to_string")
     @patch("quick_copy_patient_info.handlers.section_content.Patient")
-    def test_missing_phone_omits_phone_row(
+    def test_missing_pharmacy_omits_pharmacy_row(
         self, mock_patient_cls, mock_render, mock_event
     ) -> None:
         mock_patient_cls.objects.get.return_value = make_patient(
-            contact_points=[],
-            addresses=[
-                make_address(line1="1 Main", city="X", state_code="IN", postal_code="46077")
-            ],
+            preferred_pharmacy=None,
+            coverages=[make_coverage(payer_name="Aetna")],
         )
         mock_render.return_value = "<div/>"
 
@@ -343,17 +282,17 @@ class TestHandle:
 
         ctx = mock_render.call_args_list[-1].args[1]
         labels = [row["label"] for row in ctx["rows"]]
-        assert "Phone" not in labels
-        assert labels == ["Name", "DOB", "Address"]
+        assert "Pharmacy" not in labels
+        assert labels == ["Name", "DOB", "Insurance"]
 
     @patch("quick_copy_patient_info.handlers.section_content.render_to_string")
     @patch("quick_copy_patient_info.handlers.section_content.Patient")
-    def test_missing_address_omits_address_row(
+    def test_missing_insurance_omits_insurance_row(
         self, mock_patient_cls, mock_render, mock_event
     ) -> None:
         mock_patient_cls.objects.get.return_value = make_patient(
-            contact_points=[make_contact_point(value="5551234567")],
-            addresses=[],
+            preferred_pharmacy={"organization_name": "Walgreens #1"},
+            coverages=[],
         )
         mock_render.return_value = "<div/>"
 
@@ -362,7 +301,7 @@ class TestHandle:
 
         ctx = mock_render.call_args_list[-1].args[1]
         labels = [row["label"] for row in ctx["rows"]]
-        assert "Address" not in labels
+        assert "Insurance" not in labels
 
     @patch("quick_copy_patient_info.handlers.section_content.render_to_string")
     @patch("quick_copy_patient_info.handlers.section_content.Patient")
@@ -373,8 +312,8 @@ class TestHandle:
             first_name="",
             last_name="",
             birth_date=None,
-            contact_points=[],
-            addresses=[],
+            preferred_pharmacy=None,
+            coverages=[],
         )
         mock_render.return_value = "<div/>"
 

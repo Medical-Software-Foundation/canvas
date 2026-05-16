@@ -20,48 +20,38 @@ def mock_event():
     return _create
 
 
-def make_contact_point(
-    value: str,
-    system: str = "phone",
-    state: str = "active",
-    rank: int = 1,
-    use: str = "mobile",
-) -> SimpleNamespace:
-    """Build a PatientContactPoint-shaped object."""
-    return SimpleNamespace(
-        value=value,
-        system=system,
-        state=state,
-        rank=rank,
-        use=use,
-    )
+def make_transactor(name: str = "Aetna") -> SimpleNamespace:
+    """Build a Transactor (payer) shaped object."""
+    return SimpleNamespace(name=name)
 
 
-def make_address(
-    line1: str = "",
-    line2: str = "",
-    city: str = "",
-    state_code: str = "",
-    postal_code: str = "",
-    use: str = "home",
+def make_coverage(
+    payer_name: str = "Aetna",
+    *,
     state: str = "active",
+    stack: str = "IN_USE",
+    coverage_rank: int = 1,
+    issuer: SimpleNamespace | None = None,
 ) -> SimpleNamespace:
-    """Build a PatientAddress-shaped object."""
+    """Build a Coverage-shaped object.
+
+    `payer_name` is a shortcut that wraps a Transactor; pass `issuer=None`
+    explicitly to test the no-issuer case.
+    """
+    if issuer is None and payer_name is not None:
+        issuer = make_transactor(name=payer_name)
     return SimpleNamespace(
-        line1=line1,
-        line2=line2,
-        city=city,
-        state_code=state_code,
-        postal_code=postal_code,
-        use=use,
         state=state,
+        stack=stack,
+        coverage_rank=coverage_rank,
+        issuer=issuer,
     )
 
 
 def _build_filterable(items):
-    """Wrap a list of namespace items in a queryset-like object that supports
-    .filter(**kwargs), .order_by(*args), .first() in the order the handler
-    invokes them."""
+    """Wrap a list of namespace items in a queryset-like object supporting
+    .filter(**kwargs), .select_related(*fields), .order_by(*fields), and
+    .first() - the chain shapes the handler invokes."""
 
     class _Q:
         def __init__(self, data):
@@ -75,6 +65,10 @@ def _build_filterable(items):
                 return True
 
             return _Q([i for i in self._data if matches(i)])
+
+        def select_related(self, *fields):
+            # No-op for the fake - FK targets are already in-memory.
+            return self
 
         def order_by(self, *fields):
             sorted_data = list(self._data)
@@ -95,20 +89,23 @@ def make_patient(
     first_name: str = "Jane",
     last_name: str = "Doe",
     birth_date: date | None = date(1985, 3, 14),
-    contact_points: list | None = None,
-    addresses: list | None = None,
+    preferred_pharmacy: dict | None = None,
+    coverages: list | None = None,
 ) -> SimpleNamespace:
     """Build a Patient-shaped object for handler tests.
 
-    `contact_points` and `addresses` accept lists of SimpleNamespace objects
-    (use `make_contact_point` / `make_address`). They are exposed via the
-    `telecom` and `addresses` related-manager attributes that the handler
-    uses, supporting the `.filter().order_by().first()` chain.
+    `preferred_pharmacy` should be a dict matching the structure the
+    Patient.preferred_pharmacy property returns (with `organization_name`,
+    optional `phone`, `address`, `ncpdp_id`). Pass None to simulate no
+    preferred pharmacy on file.
+
+    `coverages` is a list of Coverage-shaped objects (use `make_coverage`).
+    The handler accesses them through `patient.coverages.filter(...)`.
     """
     return SimpleNamespace(
         first_name=first_name,
         last_name=last_name,
         birth_date=birth_date,
-        telecom=_build_filterable(contact_points or []),
-        addresses=_build_filterable(addresses or []),
+        preferred_pharmacy=preferred_pharmacy,
+        coverages=_build_filterable(coverages or []),
     )
