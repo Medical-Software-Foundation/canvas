@@ -5,6 +5,8 @@ fields - **Name**, **Date of Birth**, **Preferred Pharmacy**, and
 **Primary Insurance** - to the top of every patient chart, each with a
 one-click copy button.
 
+## Screenshots
+
 ![Patient Info section pinned to the top of the patient chart summary, showing Name, DOB, Pharmacy, and Insurance rows each with a copy button](./Screenshot.jpg)
 
 ## What it does
@@ -69,6 +71,16 @@ canvas install --host <your-instance> quick_copy_patient_info
 No secrets, environment variables, or external API keys are required -
 the plugin only reads internal Canvas patient demographic, pharmacy
 setting, and coverage data.
+
+## Configuration options
+
+None. The plugin ships with no secrets, no environment variables, no
+settings, and no thresholds. The four-row field set (Name, DOB,
+Preferred Pharmacy, Primary Insurance) and their formatting rules are
+fixed in code. To change which fields appear, which keys are checked
+for the pharmacy name, or which standard chart sections are listed
+underneath the custom section, edit `handlers/section_content.py` and
+`handlers/section_config.py` respectively.
 
 ## How it works
 
