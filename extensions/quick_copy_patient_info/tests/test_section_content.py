@@ -106,6 +106,38 @@ def test_format_pharmacy_returns_organization_name() -> None:
     }
 
 
+def test_format_pharmacy_falls_back_to_pharmacy_name_key() -> None:
+    """Some instances store the pharmacy name under 'pharmacy_name' (the
+    Prescription model uses that key)."""
+    patient = make_patient(
+        preferred_pharmacy={"pharmacy_name": "Walgreens #5678", "ncpdp_id": "1234567"}
+    )
+    row = _format_pharmacy(patient)
+    assert row["display"] == "Walgreens #5678"
+
+
+def test_format_pharmacy_falls_back_to_name_key() -> None:
+    """A bare 'name' key should also work."""
+    patient = make_patient(
+        preferred_pharmacy={"name": "Express Scripts", "ncpdp_id": "1234567"}
+    )
+    row = _format_pharmacy(patient)
+    assert row["display"] == "Express Scripts"
+
+
+def test_format_pharmacy_prefers_organization_name_over_other_keys() -> None:
+    """If multiple name keys are present, organization_name wins."""
+    patient = make_patient(
+        preferred_pharmacy={
+            "organization_name": "CVS Pharmacy",
+            "pharmacy_name": "Walgreens",
+            "name": "Express Scripts",
+        }
+    )
+    row = _format_pharmacy(patient)
+    assert row["display"] == "CVS Pharmacy"
+
+
 def test_format_pharmacy_ignores_other_fields() -> None:
     """Even when phone and address are populated, copy should be name only."""
     patient = make_patient(
@@ -133,17 +165,26 @@ def test_format_pharmacy_returns_none_when_no_pharmacy() -> None:
 
 
 def test_format_pharmacy_returns_none_when_empty_dict() -> None:
-    """A pharmacy record with no organization_name field is unusable."""
+    """A pharmacy record with no recognized name key is unusable."""
     patient = make_patient(preferred_pharmacy={})
     assert _format_pharmacy(patient) is None
 
 
-def test_format_pharmacy_returns_none_when_organization_name_blank() -> None:
+def test_format_pharmacy_returns_none_when_only_ncpdp_id_present() -> None:
+    """Canonical SDK shape (ncpdp_id + default only, no name) - row should
+    hide rather than copying an unhelpful identifier."""
+    patient = make_patient(
+        preferred_pharmacy={"ncpdp_id": "5755167", "default": True}
+    )
+    assert _format_pharmacy(patient) is None
+
+
+def test_format_pharmacy_returns_none_when_name_keys_blank() -> None:
     patient = make_patient(preferred_pharmacy={"organization_name": "   "})
     assert _format_pharmacy(patient) is None
 
 
-def test_format_pharmacy_returns_none_when_organization_name_none() -> None:
+def test_format_pharmacy_returns_none_when_name_keys_none() -> None:
     patient = make_patient(
         preferred_pharmacy={"organization_name": None, "phone": "3175550000"}
     )

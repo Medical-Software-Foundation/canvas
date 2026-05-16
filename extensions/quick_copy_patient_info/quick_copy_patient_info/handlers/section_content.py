@@ -17,6 +17,20 @@ from canvas_sdk.handlers.patient_chart_summary_custom_section_handler import (
 )
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.patient import Patient
+from logger import log
+
+
+# The canonical PatientPreferredPharmacy dataclass in the SDK only declares
+# `ncpdp_id` and `default`, but the stored PatientSetting JSON often carries
+# richer denormalized info (name, address, phone) depending on how the
+# pharmacy was set. Try each plausible name key in priority order.
+_PHARMACY_NAME_KEYS = (
+    "organization_name",
+    "pharmacy_name",
+    "name",
+    "service_location",
+    "description",
+)
 
 
 # Canvas sandbox does not allow importing the CoverageRank / CoverageStack /
@@ -73,15 +87,32 @@ def _format_pharmacy(patient: Patient) -> dict | None:
     The setting is stored as a JSON dict (or a list of dicts where one is
     marked default). The Patient model's `preferred_pharmacy` property
     handles both shapes and returns the dict that represents the default.
-    The pharmacy name lives under `organization_name`.
+
+    The canonical SDK shape is `{ncpdp_id, default}` only, but in practice
+    the stored JSON often carries a denormalized pharmacy name under one of
+    several keys depending on how the pharmacy was set on the patient.
+    Iterate the known name keys in priority order; if none yields a value,
+    log the keys we did see (no values, to avoid leaking PHI) and return
+    None so the row is hidden.
     """
     pharmacy = patient.preferred_pharmacy
     if not pharmacy:
         return None
-    name = (pharmacy.get("organization_name") or "").strip()
-    if not name:
-        return None
-    return {"label": "Pharmacy", "display": name, "copy": name}
+
+    for key in _PHARMACY_NAME_KEYS:
+        candidate = pharmacy.get(key)
+        if isinstance(candidate, str):
+            name = candidate.strip()
+            if name:
+                return {"label": "Pharmacy", "display": name, "copy": name}
+
+    log.info(
+        "quick_copy_patient_info: preferred_pharmacy dict has no recognized "
+        "name key. patient_id=%s available_keys=%s",
+        getattr(patient, "id", None),
+        sorted(pharmacy.keys()),
+    )
+    return None
 
 
 def _format_insurance(patient: Patient) -> dict | None:
