@@ -5,6 +5,8 @@ fields - **Name**, **Date of Birth**, **Preferred Pharmacy**, and
 **Primary Insurance** - to the top of every patient chart, each with a
 one-click copy button.
 
+![Patient Info section pinned to the top of the patient chart summary, showing Name, DOB, Pharmacy, and Insurance rows each with a copy button](./Screenshot.jpg)
+
 ## What it does
 
 Adds a custom **Patient Info** section pinned to the top of the patient
