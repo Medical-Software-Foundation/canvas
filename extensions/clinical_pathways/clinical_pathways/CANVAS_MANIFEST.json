@@ -1,0 +1,62 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "clinical_pathways",
+    "description": "Build structured branching questionnaires and run them against a patient note, originating a Q&A trail and recommendation as custom commands.",
+    "custom_data": {
+        "namespace": "canvas__clinical_pathways",
+        "access": "read_write"
+    },
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "clinical_pathways.applications.builder_app:PathwayBuilderApp",
+                "name": "Pathway Builder",
+                "description": "Create and edit clinical pathways (branching questionnaires).",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png",
+                "menu_position": "top"
+            },
+            {
+                "class": "clinical_pathways.applications.runner_app:PathwayRunnerApp",
+                "name": "Clinical Pathways",
+                "description": "Run a clinical pathway during a note encounter.",
+                "scope": "note_application"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "clinical_pathways.handlers.builder_api:BuilderAPI",
+                "description": "CRUD endpoints for the pathway builder UI."
+            },
+            {
+                "class": "clinical_pathways.handlers.runner_api:RunnerAPI",
+                "description": "Search, segment-step, and complete endpoints for the chart runner."
+            }
+        ],
+        "commands": [
+            {
+                "name": "PathwayQA",
+                "label": "Pathway Q&A",
+                "schema_key": "pathwayQA",
+                "section": "plan"
+            },
+            {
+                "name": "PathwayRecommendation",
+                "label": "Pathway Recommendation",
+                "schema_key": "pathwayRecommendation",
+                "section": "plan"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
