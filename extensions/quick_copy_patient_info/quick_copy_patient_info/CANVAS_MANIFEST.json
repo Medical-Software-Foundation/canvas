@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.142.0",
+    "plugin_version": "0.1.0",
+    "name": "quick_copy_patient_info",
+    "description": "Adds a 'Patient Info' custom section pinned to the top of the patient chart summary with one-click copy buttons for the patient's name, date of birth, preferred pharmacy name, and primary insurance payer name.",
+    "components": {
+        "handlers": [
+            {
+                "class": "quick_copy_patient_info.handlers.section_config:QuickCopyPatientInfoSectionConfig",
+                "description": "Registers the 'Patient Info' custom section in the patient chart summary."
+            },
+            {
+                "class": "quick_copy_patient_info.handlers.section_content:QuickCopyPatientInfoSectionContent",
+                "description": "Renders the 'Patient Info' summary card with copy buttons for name, DOB, phone, and address."
+            }
+        ],
+        "applications": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
