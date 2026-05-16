@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background plate (subtle rounded square) -->
+  <rect x="6" y="6" width="88" height="88" rx="14" fill="#eef2ff"/>
+
+  <!-- Stethoscope tubing: curves behind the clipboard from the chestpiece up
+       to two earpiece tips. Drawn first so the clipboard sits in front. -->
+  <path d="M28 24 C 28 50, 52 56, 52 78"
+        fill="none" stroke="#2563eb" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M76 24 C 76 50, 52 56, 52 78"
+        fill="none" stroke="#2563eb" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Earpiece tips -->
+  <circle cx="28" cy="22" r="3.5" fill="#1d4ed8"/>
+  <circle cx="76" cy="22" r="3.5" fill="#1d4ed8"/>
+
+  <!-- Chestpiece -->
+  <circle cx="52" cy="82" r="7" fill="#1d4ed8"/>
+  <circle cx="52" cy="82" r="3.2" fill="#dbeafe"/>
+
+  <!-- Clipboard body -->
+  <rect x="26" y="30" width="48" height="50" rx="4"
+        fill="#ffffff" stroke="#1f2937" stroke-width="2.5"/>
+
+  <!-- Clip at the top of the clipboard -->
+  <rect x="42" y="24" width="16" height="10" rx="2"
+        fill="#1f2937"/>
+  <rect x="45" y="22" width="10" height="4" rx="1"
+        fill="#4b5563"/>
+
+  <!-- Section lines (suggesting structured form sections) -->
+  <line x1="33" y1="46" x2="62" y2="46" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+  <line x1="33" y1="54" x2="58" y2="54" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+  <line x1="33" y1="62" x2="62" y2="62" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Green checkmark indicating completed/finalized -->
+  <path d="M40 70 L 48 76 L 64 60"
+        fill="none" stroke="#16a34a" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

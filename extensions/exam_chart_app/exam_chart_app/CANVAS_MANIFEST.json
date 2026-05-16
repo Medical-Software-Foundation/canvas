@@ -1,0 +1,70 @@
+{
+    "sdk_version": "0.142.0",
+    "plugin_version": "0.1.0",
+    "name": "exam_chart_app",
+    "description": "Adds an 'Exam' tab to the note body that walks providers through Reason for Visit, HPI, ROS, Physical Exam, and Assessment & Plan (with diagnoses and orders) in one guided form. Clicking Finalize Exam emits the corresponding Canvas commands.",
+    "components": {
+        "applications": [],
+        "protocols": [
+            {
+                "class": "exam_chart_app.applications.exam_app:ExamChartingApp",
+                "description": "NoteApplication rendering the Exam tab on the note body. Declared under protocols (not applications) to keep the entry out of the chart's 9-dot drawer — the drawer is populated from plugin_io_application rows that only the applications array creates. The plugin runner still loads the class so the SDK's APPLICATION__ON_GET event wires the note tab.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Note", "NoteType"],
+                    "write": []
+                }
+            },
+            {
+                "class": "exam_chart_app.api.exam_api:ExamChartingAPI",
+                "description": "Form-state load/save + finalize handler for the Exam tab",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "exam_chart_app.api.exam_search_api:ExamSearchAPI",
+                "description": "Database-backed search endpoints (RFV codings, ICD-10, etc.) powering the form dropdowns",
+                "data_access": { "event": "", "read": [], "write": [] }
+            },
+            {
+                "class": "exam_chart_app.protocols.additional_fields:ExamSectionAdditionalFieldsHandler",
+                "description": "Renders the Narrative additional-field on ROS and PE commands; reads pre-fill text from AttributeHub",
+                "data_access": {
+                    "event": "COMMAND__FORM__GET_ADDITIONAL_FIELDS",
+                    "read": ["Command", "AttributeHub"],
+                    "write": []
+                }
+            },
+            {
+                "class": "exam_chart_app.protocols.note_lifecycle:ExamNoteLifecycle",
+                "description": "Clears the plugin's draft form state in AttributeHub when a Note is deleted",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": ["NoteStateChangeEvent", "Note"],
+                    "write": ["AttributeHub"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": []
+    },
+    "secrets": [
+        "exam-note-types",
+        "ros-questionnaire-code",
+        "pe-questionnaire-code",
+        "exam-imaging-codes",
+        "icd10-search-url",
+        "namespace_read_write_access_key"
+    ],
+    "tags": {},
+    "references": [],
+    "custom_data": {
+        "namespace": "canvas__exam_chart_app",
+        "access": "read_write"
+    },
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

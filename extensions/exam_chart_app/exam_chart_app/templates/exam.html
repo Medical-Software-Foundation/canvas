@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Exam</title>
+  <link rel="stylesheet" href="{{ api_base }}/exam/static/exam.css">
+</head>
+<body>
+  <div class="exam-container">
+    <div class="exam-header">
+      <span class="exam-badge">{{ note_type_name|default:"Note" }}</span>
+      <h1>Exam</h1>
+    </div>
+
+    <div class="exam-finalized-banner" id="finalized-banner" hidden></div>
+    <div class="exam-save-error-banner" id="save-error-banner" hidden></div>
+
+    <section class="exam-section" id="section-rfv">
+      <div class="exam-section-header">
+        <h2 class="exam-section-title">Reason for Visit</h2>
+        <span class="exam-section-status" id="status-rfv"></span>
+      </div>
+      <div class="exam-section-body">
+        <div class="exam-search-wrap">
+          <input type="text"
+                 id="rfv-search-input"
+                 class="exam-input"
+                 placeholder="Search RFV codings or type free-text below…"
+                 autocomplete="off">
+          <div class="exam-search-results" id="rfv-search-results" hidden></div>
+        </div>
+        <div class="exam-search-picked" id="rfv-search-picked" hidden></div>
+        <label class="exam-label" for="rfv-comment">Or free-text reason</label>
+        <textarea id="rfv-comment" class="exam-textarea" rows="2"
+                  placeholder="Optional free-text reason for visit"></textarea>
+      </div>
+    </section>
+
+    <section class="exam-section" id="section-hpi">
+      <div class="exam-section-header">
+        <h2 class="exam-section-title">History of Present Illness</h2>
+        <span class="exam-section-status" id="status-hpi"></span>
+      </div>
+      <div class="exam-section-body">
+        <textarea id="hpi-narrative" class="exam-textarea" rows="6"
+                  placeholder="Write the HPI narrative. Picking a Reason for Visit above prefills a template."></textarea>
+      </div>
+    </section>
+
+    <section class="exam-section" id="section-ros">
+      <div class="exam-section-header">
+        <h2 class="exam-section-title">Review of Systems</h2>
+        <span class="exam-section-status" id="status-ros"></span>
+      </div>
+      <div class="exam-section-body">
+        <label class="exam-label" for="ros-chooser">Use questionnaire</label>
+        <select id="ros-chooser" class="exam-input">
+          <option value="">— None (skip ROS) —</option>
+        </select>
+        <div class="exam-q-list" id="ros-questions" hidden></div>
+        <label class="exam-label" for="ros-narrative">Additional notes</label>
+        <textarea id="ros-narrative" class="exam-textarea" rows="3"
+                  placeholder="Optional ROS narrative — lands on the command as a Narrative field."></textarea>
+      </div>
+    </section>
+
+    <section class="exam-section" id="section-pe">
+      <div class="exam-section-header">
+        <h2 class="exam-section-title">Physical Exam</h2>
+        <span class="exam-section-status" id="status-pe"></span>
+      </div>
+      <div class="exam-section-body">
+        <label class="exam-label" for="pe-chooser">Use questionnaire</label>
+        <select id="pe-chooser" class="exam-input">
+          <option value="">— None (skip PE) —</option>
+        </select>
+        <div class="exam-q-list" id="pe-questions" hidden></div>
+        <label class="exam-label" for="pe-narrative">Additional notes</label>
+        <textarea id="pe-narrative" class="exam-textarea" rows="3"
+                  placeholder="Optional PE narrative — lands on the command as a Narrative field."></textarea>
+      </div>
+    </section>
+
+    <section class="exam-section" id="section-ap">
+      <div class="exam-section-header">
+        <h2 class="exam-section-title">Assessment &amp; Plan</h2>
+        <span class="exam-section-status" id="status-ap"></span>
+      </div>
+      <div class="exam-section-body">
+        <p class="exam-help">
+          Each diagnosis carries its own Today's Assessment, Assessment (status + narrative), and Plan
+          (narrative). The Reason for Visit pulls in automatically as the first diagnosis when picked
+          structured.
+        </p>
+        <div class="exam-search-wrap">
+          <input type="text"
+                 id="dx-search-input"
+                 class="exam-input"
+                 placeholder="Search ICD-10 by name or code…"
+                 autocomplete="off">
+          <div class="exam-search-results" id="dx-search-results" hidden></div>
+        </div>
+        <div class="exam-dx-list" id="dx-list"></div>
+
+        <div class="exam-orders-block">
+          <h3 class="exam-orders-title">Orders</h3>
+          <div class="exam-orders-buttons">
+            <button type="button" class="exam-add-order-btn" data-order-type="lab">+ Lab</button>
+            <button type="button" class="exam-add-order-btn" data-order-type="imaging">+ Imaging</button>
+            <button type="button" class="exam-add-order-btn" data-order-type="prescribe">+ Prescription</button>
+            <button type="button" class="exam-add-order-btn" data-order-type="refer">+ Referral</button>
+          </div>
+          <div class="exam-orders-list" id="orders-list"></div>
+        </div>
+
+        <div class="exam-orders-block">
+          <h3 class="exam-orders-title">Goals, plans &amp; follow-ups</h3>
+          <div class="exam-orders-buttons">
+            <button type="button" class="exam-add-order-btn" data-order-type="goal">+ Goal</button>
+            <button type="button" class="exam-add-order-btn" data-order-type="plan_item">+ Plan</button>
+            <button type="button" class="exam-add-order-btn" data-order-type="follow_up">+ Follow up</button>
+          </div>
+          <div class="exam-orders-list" id="goals-plans-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="exam-footer">
+      <button type="button" class="exam-finalize-btn" id="finalize-btn" disabled>
+        Finalize Exam
+      </button>
+      <span class="exam-finalize-status" id="finalize-status">
+        Pick or type a Reason for Visit to enable Finalize.
+      </span>
+    </div>
+
+    <div class="exam-meta">
+      note_uuid: <code>{{ note_uuid|default:"-" }}</code>
+      · patient_id: <code>{{ patient_id|default:"-" }}</code>
+    </div>
+  </div>
+
+  {{ exam_config|default_if_none:""|json_script:"exam-config" }}
+  <script type="text/javascript" src="{{ api_base }}/exam/static/exam.js"></script>
+</body>
+</html>
