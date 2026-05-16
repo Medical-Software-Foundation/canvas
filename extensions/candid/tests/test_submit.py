@@ -248,3 +248,30 @@ def test_submit_handles_exception_during_submit_call() -> None:
         assert result[0] == "failure-effect"
         message = mock_failure.call_args[0][1]
         assert "network down" in message
+
+
+# ---------------------------------------------------------------------------
+# authenticate: %2C-decoding mirrors the encoding in schedule_async_post
+# ---------------------------------------------------------------------------
+
+
+def test_authenticate_accepts_comma_encoded_authorization() -> None:
+    """The sender %2C-encodes commas; authenticate decodes before comparison.
+
+    Regression for canvas-plugins#1709 — see candid.effect_helpers.schedule_async_post.
+    """
+    handler = CandidSubmitAPI.__new__(CandidSubmitAPI)
+    handler.secrets = {"CANDID_CLIENT_SECRET": "abc,def,ghi"}
+    credentials = MagicMock()
+    credentials.key = "abc%2Cdef%2Cghi"
+
+    assert handler.authenticate(credentials) is True
+
+
+def test_authenticate_rejects_mismatched_key() -> None:
+    handler = CandidSubmitAPI.__new__(CandidSubmitAPI)
+    handler.secrets = {"CANDID_CLIENT_SECRET": "abc,def,ghi"}
+    credentials = MagicMock()
+    credentials.key = "wrong"
+
+    assert handler.authenticate(credentials) is False

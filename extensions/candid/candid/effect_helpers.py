@@ -25,13 +25,16 @@ def schedule_async_post(
     delay_seconds: int = 0,
 ) -> Effect:
     """Build an async HttpRequestEffect targeting the plugin's own SimpleAPI."""
+    # Workaround for the SDK's separate_headers comma-splitting: see
+    # canvas-plugins#1709. Encoded value is decoded on the receiver side.
+    auth_header = secrets["CANDID_CLIENT_SECRET"].replace(",", "%2C")
     return (
         HttpRequestEffect(
             url=f"{get_instance_url(environment)}/plugin-io/api/candid/{path}",
             method="POST",
             headers={
                 "Content-Type": "application/json",
-                "Authorization": secrets["CANDID_CLIENT_SECRET"],
+                "Authorization": auth_header,
             },
             body=json.dumps(body),
         )
