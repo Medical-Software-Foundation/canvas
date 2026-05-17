@@ -830,6 +830,18 @@ class IntakeAPI(StaffSessionAuthMixin, SimpleAPI):
 
         all_effects: list[Effect] = []
         failures: list[dict[str, str]] = []
+        # No outer try/except around this loop on purpose. Per-section
+        # helpers return ``(effects, error)`` tuples for *expected*
+        # validation failures (collected in ``failures`` and surfaced as
+        # the structured ``{success: false}`` ack below). Anything that
+        # raises here is unexpected — SDK drift, malformed snapshot
+        # data, programmer error — and MUST propagate to the runtime so
+        # Sentry sees it. The all-or-nothing invariant is preserved by
+        # structure: ``snapshot.flush()`` and ``_dispatch_pending_reviews``
+        # only run after this loop exits cleanly, so an uncaught
+        # exception leaves zero partial side effects on AttributeHub or
+        # the home-app. Do not "harden" this with a blanket
+        # ``except Exception`` — that would silently bury bugs.
         for section in SINGLE_COMMAND_SECTIONS:
             if getattr(section, "questionnaire_code", ""):
                 section_effects, error = _commit_questionnaire_section(
