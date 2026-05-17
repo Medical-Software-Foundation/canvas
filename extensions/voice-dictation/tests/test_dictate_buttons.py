@@ -1,4 +1,5 @@
 import json
+from urllib.parse import parse_qs, urlparse
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
@@ -30,7 +31,7 @@ def test_open_by_default():
 
 
 def test_on_open_returns_effect():
-    """on_open returns an Effect with the correct URL."""
+    """on_open returns a LaunchModalEffect with the correct note_id in the URL."""
     context = json.dumps({"note": {"id": "abc-123"}, "note_id": 42})
     event = Event(EventRequest(context=context))
     app = DictateApp(event, {})
@@ -39,15 +40,20 @@ def test_on_open_returns_effect():
 
     assert isinstance(result, Effect)
     payload = json.loads(result.payload)
-    # LaunchModalEffect payload has nested data structure
-    url = payload.get("url", "") or json.dumps(payload)
-    assert "voice_dictation" in url or "abc-123" in json.dumps(payload)
+    url = payload["data"]["url"]
+    parsed = urlparse(url)
+    assert parsed.path == "/plugin-io/api/voice_dictation/dictate/app"
+    assert parse_qs(parsed.query)["note_id"] == ["abc-123"]
 
 
 def test_on_open_missing_note_context():
-    """on_open handles missing note context gracefully."""
+    """on_open produces an empty note_id when note context is missing."""
     event = Event(EventRequest(context="{}"))
     app = DictateApp(event, {})
 
     result = app.on_open()
     assert isinstance(result, Effect)
+    payload = json.loads(result.payload)
+    url = payload["data"]["url"]
+    parsed = urlparse(url)
+    assert parse_qs(parsed.query).get("note_id", [""]) == [""]
