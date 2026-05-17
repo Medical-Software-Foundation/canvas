@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 from uuid import uuid4
+
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 from canvas_sdk.commands.commands.custom_command import CustomCommand
 from canvas_sdk.effects import Effect
@@ -100,7 +103,10 @@ class RunnerAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/")
     def index(self) -> list[Response | Effect]:
-        html = render_to_string("static/runner/index.html", {"api_base": _API_BASE})
+        html = render_to_string(
+            "static/runner/index.html",
+            {"api_base": _API_BASE, "cache_bust": _CACHE_BUST},
+        )
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
 
     @api.get("/main.js")

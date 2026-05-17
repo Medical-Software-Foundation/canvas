@@ -1,6 +1,10 @@
+from datetime import datetime, timezone
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import NoteApplication
+
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 class PathwayRunnerApp(NoteApplication):
@@ -19,7 +23,7 @@ class PathwayRunnerApp(NoteApplication):
         return LaunchModalEffect(
             url=(
                 "/plugin-io/api/clinical_pathways/runner/"
-                f"?note_uuid={note_uuid}&patient_id={patient_id}"
+                f"?note_uuid={note_uuid}&patient_id={patient_id}&v={_CACHE_BUST}"
             ),
             target=LaunchModalEffect.TargetType.NOTE,
             title="Clinical Pathways",

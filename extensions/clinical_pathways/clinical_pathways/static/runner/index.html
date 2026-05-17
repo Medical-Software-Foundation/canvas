@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Clinical Pathways</title>
-  <link rel="stylesheet" href="{{ api_base }}/styles.css" />
+  <link rel="stylesheet" href="{{ api_base }}/styles.css?v={{ cache_bust }}" />
 </head>
 <body data-api-base="{{ api_base }}">
   <header class="topbar">
@@ -44,6 +44,6 @@
     </div>
   </template>
 
-  <script src="{{ api_base }}/main.js"></script>
+  <script src="{{ api_base }}/main.js?v={{ cache_bust }}"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 {
-    "sdk_version": "0.1.4",
+    "sdk_version": "0.139.0",
     "plugin_version": "0.1.0",
     "name": "clinical_pathways",
     "description": "Build structured branching questionnaires and run them against a patient note, originating a Q&A trail and recommendation as custom commands.",
@@ -22,7 +22,8 @@
                 "class": "clinical_pathways.applications.runner_app:PathwayRunnerApp",
                 "name": "Clinical Pathways",
                 "description": "Run a clinical pathway during a note encounter.",
-                "scope": "note_application"
+                "scope": "provider_companion_note_specific",
+                "icon": "assets/icon.png"
             }
         ],
         "protocols": [

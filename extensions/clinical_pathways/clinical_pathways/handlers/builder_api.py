@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 
 from canvas_sdk.effects import Effect
+
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
@@ -100,7 +103,7 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
     def index(self) -> list[Response | Effect]:
         html = render_to_string(
             "static/builder/index.html",
-            {"api_base": _API_BASE},
+            {"api_base": _API_BASE, "cache_bust": _CACHE_BUST},
         )
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
 
