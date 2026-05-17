@@ -1,14 +1,5 @@
   // ----- RFV search -----
-  var debounceTimer = null;
   var lastQuery = "";
-
-  function debounce(fn, ms) {
-    return function () {
-      var args = arguments;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(function () { fn.apply(null, args); }, ms);
-    };
-  }
 
   function placeDropdown(box) {
     // Flip the absolutely-positioned dropdown above its input when there
@@ -128,15 +119,19 @@
       return;
     }
     // ICD-10-CM search endpoint — defaults to NLM Clinical Tables (no
-    // auth, cross-origin GET). Response shape: [count, [codes,...],
-    // extras_or_null, [[code, name], ...]]. The intake plugin uses the
-    // same endpoint. Override via the `icd10-search-url` plugin secret.
+    // auth, cross-origin GET). NLM's response shape is
+    // ``[count, [codes,...], extras_or_null, [[code, name], ...]]`` and
+    // the parser below pulls `data[3]` for the code/name pairs.
+    // Operators who override via the `icd10-search-url` plugin secret
+    // MUST mirror this response shape (see README's secrets table); the
+    // fallback below treats anything else as "no results" so the picker
+    // degrades cleanly rather than rendering garbage.
     var url = ICD10_SEARCH_URL
       + "?sf=code,name&maxList=12&terms=" + encodeURIComponent(q);
     fetch(url)
-      .then(function (r) { return r.ok ? r.json() : [0, [], null, []]; })
+      .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
-        var pairs = (data && data[3]) || [];
+        var pairs = (data && Array.isArray(data[3])) ? data[3] : [];
         var items = pairs.map(function (pair) {
           return {
             code: (pair && pair[0]) || "",
@@ -152,7 +147,7 @@
       });
   }
 
-  var debouncedSearch = debounce(function (q) { performSearch(q); }, 200);
+  var debouncedSearch = makeDebouncer(function (q) { performSearch(q); }, 200);
 
   // ----- Wire up inputs -----
   $("rfv-search-input").addEventListener("input", function (e) {

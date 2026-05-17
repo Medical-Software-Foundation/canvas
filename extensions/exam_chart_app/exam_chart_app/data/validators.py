@@ -21,14 +21,14 @@ def looks_like_uuid(value: str) -> bool:
     """Return True when ``value`` parses as a UUID string.
 
     Used by route handlers to short-circuit garbage input BEFORE it
-    reaches the ORM. ``AttributeError`` covers the case where ``value``
-    is not a string at all (``uuid.UUID(None)`` would raise it via
-    ``.lower()``).
+    reaches the ORM. The ``isinstance`` gate handles the non-string
+    case, so ``uuid.UUID`` only sees strings; ``ValueError`` is the
+    only exception it raises for malformed input.
     """
     if not isinstance(value, str) or not value:
         return False
     try:
         uuid.UUID(value)
         return True
-    except (ValueError, AttributeError):
+    except ValueError:
         return False

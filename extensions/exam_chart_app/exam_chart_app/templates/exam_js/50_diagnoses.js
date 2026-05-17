@@ -1,5 +1,4 @@
   // ----- Diagnoses: reuse NLM ICD-10 search from RFV -----
-  var dxDebounceTimer = null;
   var dxLastQuery = "";
 
   function renderDxResults(results) {
@@ -211,9 +210,8 @@
       .catch(function () { renderDxResults([]); });
   }
 
+  var debouncedDxSearch = makeDebouncer(function (q) { performDxSearch(q); }, 200);
   $("dx-search-input").addEventListener("input", function (e) {
-    var q = e.target.value.trim();
-    if (dxDebounceTimer) clearTimeout(dxDebounceTimer);
-    dxDebounceTimer = setTimeout(function () { performDxSearch(q); }, 200);
+    debouncedDxSearch(e.target.value.trim());
   });
 

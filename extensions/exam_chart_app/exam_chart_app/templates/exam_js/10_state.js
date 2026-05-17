@@ -62,6 +62,18 @@
     });
   }
 
+  // Per-instance debouncer. Each call closes over its own timer rather
+  // than sharing module-level state, so multiple debounced functions
+  // can coexist in this bundle without timer-aliasing bugs.
+  function makeDebouncer(fn, ms) {
+    var timer = null;
+    return function () {
+      var args = arguments;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { fn.apply(null, args); }, ms);
+    };
+  }
+
   // Re-edit-on-reopen flag. Set when the saved state is hydrated with
   // finalized=true, or when Finalize completes successfully. Disables
   // the Finalize button and surfaces the read-only banner. The saved
