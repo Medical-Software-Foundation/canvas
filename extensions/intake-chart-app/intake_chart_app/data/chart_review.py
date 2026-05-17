@@ -16,9 +16,12 @@ from typing import Any
 # ``note`` text using a markdown-style hidden comment of the form
 # ``[//]: # (FORM_STATE::section::{...giant JSON...})``. That blob would
 # leak straight into the Intake modal's read-only summary if left in
-# place, so this regex strips any ``[//]: # (...)`` segment (greedy across
-# the trailing close-paren is fine because the form-state payload doesn't
-# contain unbalanced parens at the top level).
+# place, so this regex strips any ``[//]: # (...)`` segment. ``[^)]*``
+# stops at the first ``)`` — fine here because the form-state payload
+# is JSON, which has no top-level raw parens (any ``)`` inside a string
+# value would be JSON-escaped). If a future caller embeds payload shapes
+# that can contain literal ``)`` characters, widen this to a balanced
+# matcher.
 _MARKDOWN_HIDDEN_COMMENT_RE = re.compile(r"\[//\]:\s*#\s*\([^)]*\)\s*", re.DOTALL)
 
 
