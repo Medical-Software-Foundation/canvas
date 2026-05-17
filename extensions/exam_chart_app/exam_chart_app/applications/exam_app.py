@@ -98,6 +98,17 @@ def _validate_icd10_search_url(value: object) -> str:
         host = host_with_port[:colon] if colon >= 0 else host_with_port
     if not host:
         return ""
+    # IPv4-mapped IPv6 form (``::ffff:127.0.0.1``, ``::ffff:10.0.0.5``)
+    # resolves to the embedded IPv4 on every common platform — every
+    # OS-level connect() unwraps the wrapper before opening the socket.
+    # Without this normalization, an operator could bypass the loopback /
+    # RFC-1918 blocklist by writing the same address in v4-mapped-v6
+    # form (e.g. ``https://[::ffff:127.0.0.1]/search``), since the raw
+    # host string wouldn't match any IPv4-shaped prefix entry. Strip the
+    # ``::ffff:`` wrapper here so the embedded IPv4 hits the existing
+    # checks below.
+    if host.startswith("::ffff:"):
+        host = host[len("::ffff:"):]
     if host in _ICD10_URL_BLOCKED_HOSTS:
         return ""
     if any(host.startswith(p) for p in _ICD10_URL_BLOCKED_PREFIXES):

@@ -22,7 +22,26 @@ from exam_chart_app.data.draft_state import clear_draft
 
 
 class ExamNoteLifecycle(BaseHandler):
-    """Deletes the plugin's per-note draft row when a Note is deleted."""
+    """Deletes the plugin's per-note draft row when a Note is deleted.
+
+    Pragmatic deviation from the SDK's "no side effects inside
+    ``compute()``" convention: ``clear_draft`` runs as a direct
+    ``AttributeHub.objects.filter(...).delete()`` rather than as a
+    returned ``Effect``. The SDK does not (as of canvas_sdk 0.142.0)
+    expose an ``AttributeHubDeleteEffect`` — the existing
+    ``hub.set_attribute`` write path itself bypasses the Effect
+    pipeline, and there's no corresponding delete primitive.
+
+    The alternatives were:
+      - Leak draft rows forever (rejected: violates the README's
+        per-note cleanup contract; AttributeHub is not FK-linked to
+        Note, so Canvas's cascade-delete won't reach this row).
+      - Wait for an SDK-level delete Effect (rejected: blocks
+        publication on an external dependency that may never land).
+
+    If a delete-shaped SDK Effect is added, switch this handler to
+    return that Effect from compute() instead.
+    """
 
     RESPONDS_TO = EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_CREATED)
 

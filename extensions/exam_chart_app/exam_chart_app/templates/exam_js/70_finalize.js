@@ -33,7 +33,22 @@
       body: JSON.stringify(payload),
     })
       .then(function (r) {
-        return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+        // Parse via r.text() + try-catch rather than r.json() directly:
+        // a non-JSON error body (e.g. an empty-body 500 from an
+        // un-caught upstream exception) would otherwise reject the
+        // promise, route control to .catch, and surface as a misleading
+        // "Network error: Unexpected token..." message. Falling back
+        // to a synthesized error body keeps the response-status path
+        // the same regardless of whether the server sent JSON.
+        return r.text().then(function (text) {
+          var body;
+          try {
+            body = text ? JSON.parse(text) : {};
+          } catch (e) {
+            body = { errors: [{ message: "HTTP " + r.status + ": " + (text || "no response body") }] };
+          }
+          return { ok: r.ok, body: body };
+        });
       })
       .then(function (res) {
         if (!res.ok) {

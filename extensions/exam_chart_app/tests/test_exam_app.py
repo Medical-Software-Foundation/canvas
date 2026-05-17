@@ -272,6 +272,13 @@ def test_validate_icd10_search_url_accepts_https_public_hosts(value):
     "https://127.0.0.2/search",       # 127.0.0.0/8 is all loopback (RFC 1122)
     "https://127.1.2.3/",
     "https://127.255.255.254/",
+    # IPv4-mapped IPv6 form must not bypass the IPv4 blocklist; the
+    # OS unwraps these to the embedded IPv4 before connect().
+    "https://[::ffff:127.0.0.1]/search",
+    "https://[::ffff:127.1.2.3]/",
+    "https://[::ffff:10.0.0.5]/",
+    "https://[::ffff:192.168.1.1]/",
+    "https://[::ffff:169.254.169.254]/latest/meta-data/",
     "https://0.0.0.0/search",
     "https://[::1]/search",
     "https://10.0.0.5/search",

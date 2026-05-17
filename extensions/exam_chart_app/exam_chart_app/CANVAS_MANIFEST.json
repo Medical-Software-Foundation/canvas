@@ -18,12 +18,20 @@
             {
                 "class": "exam_chart_app.api.exam_api:ExamChartingAPI",
                 "description": "Form-state load/save + finalize handler for the Exam tab",
-                "data_access": { "event": "", "read": [], "write": [] }
+                "data_access": {
+                    "event": "",
+                    "read": ["AttributeHub", "Condition", "Questionnaire", "Staff"],
+                    "write": ["AttributeHub"]
+                }
             },
             {
                 "class": "exam_chart_app.api.exam_search_api:ExamSearchAPI",
                 "description": "Database-backed search endpoints (RFV codings, ICD-10, etc.) powering the form dropdowns",
-                "data_access": { "event": "", "read": [], "write": [] }
+                "data_access": {
+                    "event": "",
+                    "read": ["LabPartner", "LabPartnerTest", "ReasonForVisitSettingCoding", "ServiceProvider", "Staff"],
+                    "write": []
+                }
             },
             {
                 "class": "exam_chart_app.protocols.additional_fields:ExamSectionAdditionalFieldsHandler",
