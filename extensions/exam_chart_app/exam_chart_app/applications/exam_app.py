@@ -26,16 +26,18 @@ ICD10_SEARCH_URL_SECRET = "icd10-search-url"
 # while looking fine in dev. Exact-match list keeps the rule simple.
 _ICD10_URL_BLOCKED_HOSTS = frozenset({
     "localhost",
-    "127.0.0.1",
     "0.0.0.0",
     "::1",
 })
 
-# Private IPv4 prefixes blocked for the same reason. Substring-prefix
-# matching on the literal first octet(s) is sufficient — operators
-# pointing at internal mirrors should DNS-name them, not raw private IPs.
+# Private / loopback IPv4 prefixes blocked for the same reason.
+# Substring-prefix matching on the literal first octet(s) is sufficient —
+# operators pointing at internal mirrors should DNS-name them, not raw
+# private IPs. ``127.`` covers the full 127.0.0.0/8 loopback range per
+# RFC 1122 §3.2.1.3 (e.g. 127.0.0.2, 127.1.2.3 are loopback too); a prior
+# exact-match entry for 127.0.0.1 missed the rest of the /8.
 _ICD10_URL_BLOCKED_PREFIXES = (
-    "10.", "192.168.",
+    "10.", "127.", "192.168.",
     "172.16.", "172.17.", "172.18.", "172.19.",
     "172.20.", "172.21.", "172.22.", "172.23.",
     "172.24.", "172.25.", "172.26.", "172.27.",
@@ -55,7 +57,7 @@ def _validate_icd10_search_url(value: object) -> str:
       - Non-string / empty / whitespace-only
       - Schemes other than https (no http, file, javascript, data, ftp)
       - Missing hostname
-      - Loopback / unspecified hosts (localhost, 127.0.0.1, 0.0.0.0, ::1)
+      - Loopback / unspecified hosts (localhost, 127.0.0.0/8, 0.0.0.0, ::1)
       - Private IPv4 ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
 
     Caller logs the rejected value's reason and falls back to the

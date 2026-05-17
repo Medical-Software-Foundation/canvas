@@ -269,6 +269,9 @@ def test_validate_icd10_search_url_accepts_https_public_hosts(value):
     "https://localhost/search",
     "https://localhost:8080/search",
     "https://127.0.0.1/search",
+    "https://127.0.0.2/search",       # 127.0.0.0/8 is all loopback (RFC 1122)
+    "https://127.1.2.3/",
+    "https://127.255.255.254/",
     "https://0.0.0.0/search",
     "https://[::1]/search",
     "https://10.0.0.5/search",
