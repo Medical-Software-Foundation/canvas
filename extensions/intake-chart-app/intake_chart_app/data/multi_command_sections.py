@@ -422,7 +422,11 @@ class AllergiesSection(MultiCommandSection):
         allergy_id = _chart_row_id(row_id, ALLERGIES_ROW_PREFIX)
         if not allergy_id:
             return RowOutcome()
-        narrative = _stripped(values, "narrative") or DEFAULT_REMOVE_RATIONALE
+        # Form template writes the MA-typed reason under
+        # ``data-row-field="rationale"`` (see _intake_active_list.html);
+        # mirrors how ProblemsSection / MedicationsSection read it. The
+        # ``narrative=`` kwarg below is the SDK field name and stays.
+        narrative = _stripped(values, "rationale") or DEFAULT_REMOVE_RATIONALE
         cmd_uuid = prior_uuid or _new_uuid()
         cmd = RemoveAllergyCommand(
             note_uuid=note_uuid,

@@ -541,8 +541,15 @@ def _commit_multi_section(
     # POST so commit() can fire it after the all-or-nothing failures gate
     # passes. Doing the POST inline would land partial review records on
     # the chart even when a later section fails — the home-app endpoint
-    # is not idempotent, so a retry would then duplicate them.
-    if _all_rows_confirmed(rows):
+    # is not idempotent, so a retry would then duplicate them. Skip when
+    # a successful POST already landed for this section on this note:
+    # without the persisted ``reviewed:<section_id>`` flag, every
+    # successive commit on the same note (e.g. correcting a Vitals
+    # typo) would re-POST and clutter the chart with duplicate
+    # "Reviewed:" cards seconds apart.
+    if _all_rows_confirmed(rows) and not snapshot.is_section_reviewed(
+        section.section_id
+    ):
         snapshot.stage_review(section.section_id)
 
     return [], None
@@ -566,14 +573,24 @@ def _dispatch_pending_reviews(
     if not pending:
         return
     for section_id in pending:
-        _post_section_review(
+        ok = _post_section_review(
             note_uuid,
             section_id,
             instance_origin=instance_origin,
             forwarded_cookie=forwarded_cookie,
             note=note,
         )
+        if ok:
+            # Persist the "already reviewed on this note" flag so the
+            # next commit on the same note skips re-staging this
+            # section's POST. Only on 2xx — a failed POST leaves the
+            # flag unset so the retry attempts again.
+            snapshot.mark_section_reviewed(section_id)
     snapshot.clear_pending_reviews()
+    # Persist any reviewed-flags accumulated above. ``snapshot.flush()``
+    # is a no-op when nothing is pending, so this is safe even if every
+    # POST failed.
+    snapshot.flush()
 
 
 class IntakeAPI(StaffSessionAuthMixin, SimpleAPI):

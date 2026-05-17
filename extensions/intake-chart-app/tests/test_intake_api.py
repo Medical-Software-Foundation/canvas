@@ -788,6 +788,193 @@ def test_commit_dispatch_continues_when_one_review_post_raises(
     assert _json_body(result[0])["success"] is True
 
 
+def test_consecutive_successful_commits_do_not_re_post_reviews(
+    fake_hubs, note_uuid, mock_note
+):
+    """The home-app ``/ChartSectionReview/`` endpoint is not idempotent:
+    each 2xx persists a new card on the chart. A naive implementation
+    would re-stage and re-POST every all-confirmed multi-section on
+    every successive commit (e.g. when the MA corrects a Vitals typo
+    and clicks Commit again), producing duplicate "Reviewed:" cards
+    seconds apart with the same staff attribution.
+
+    The fix persists a per-(note, section_id) "already reviewed" flag
+    through AttributeHub. This test runs commit twice in sequence and
+    asserts ``_post_section_review`` fires exactly once per section,
+    not twice."""
+    mock_note.objects.select_related.return_value.get.return_value = (
+        _make_note_mock()
+    )
+
+    stage_targets = {"problems", "allergies"}
+
+    def _stage_two(note_uuid, section, snapshot):
+        section_id = getattr(section, "section_id", "")
+        if section_id in stage_targets:
+            # Only stage if not already reviewed — mirrors the real
+            # _commit_multi_section logic the test is pinning.
+            if not snapshot.is_section_reviewed(section_id):
+                snapshot.stage_review(section_id)
+        return [], None
+
+    with patch(
+        "intake_chart_app.api.intake_api._commit_single_section",
+        return_value=([], None),
+    ), patch(
+        "intake_chart_app.api.intake_api._commit_questionnaire_section",
+        return_value=([], None),
+    ), patch(
+        "intake_chart_app.api.intake_api._commit_multi_section",
+        side_effect=_stage_two,
+    ), patch(
+        "intake_chart_app.api.intake_api._post_section_review",
+        return_value=True,
+    ) as mock_post:
+        api = _make_api(
+            request=_make_request(
+                query_params={"note_id": note_uuid},
+                headers={"Cookie": "sessionid=abc"},
+            ),
+            secrets={
+                "canvas-instance-origin": "https://tenant.canvasmedical.com",
+            },
+        )
+        first = api.commit()
+        # Fresh request for the second commit — same note_uuid, so the
+        # snapshot rebuilds from AttributeHub and SHOULD see the
+        # "reviewed:<section>" flags persisted by the first commit.
+        api2 = _make_api(
+            request=_make_request(
+                query_params={"note_id": note_uuid},
+                headers={"Cookie": "sessionid=abc"},
+            ),
+            secrets={
+                "canvas-instance-origin": "https://tenant.canvasmedical.com",
+            },
+        )
+        second = api2.commit()
+
+    assert _json_body(first[0])["success"] is True
+    assert _json_body(second[0])["success"] is True
+    # Critical: only TWO POSTs total — one for "problems", one for
+    # "allergies", across both commits. A regression would push this to 4.
+    posted_section_ids = [c.args[1] for c in mock_post.call_args_list]
+    assert sorted(posted_section_ids) == ["allergies", "problems"]
+    assert mock_post.call_count == 2
+
+
+def test_failed_review_post_can_be_retried_on_next_commit(
+    fake_hubs, note_uuid, mock_note
+):
+    """Idempotency complement: when a review POST fails (non-2xx /
+    network error), the "reviewed" flag is NOT set, so the next
+    commit retries that section's POST. Failed reviews are
+    recoverable; locked-out-by-flag would lose the chart card forever."""
+    mock_note.objects.select_related.return_value.get.return_value = (
+        _make_note_mock()
+    )
+
+    def _stage_one(note_uuid, section, snapshot):
+        section_id = getattr(section, "section_id", "")
+        if section_id == "problems":
+            if not snapshot.is_section_reviewed(section_id):
+                snapshot.stage_review(section_id)
+        return [], None
+
+    # First commit: POST returns False (e.g. home-app 503). Second
+    # commit: POST returns True. Flag persists only after the True.
+    post_returns = iter([False, True])
+
+    def _post(*args, **kwargs):
+        return next(post_returns)
+
+    with patch(
+        "intake_chart_app.api.intake_api._commit_single_section",
+        return_value=([], None),
+    ), patch(
+        "intake_chart_app.api.intake_api._commit_questionnaire_section",
+        return_value=([], None),
+    ), patch(
+        "intake_chart_app.api.intake_api._commit_multi_section",
+        side_effect=_stage_one,
+    ), patch(
+        "intake_chart_app.api.intake_api._post_section_review",
+        side_effect=_post,
+    ) as mock_post:
+        first_api = _make_api(
+            request=_make_request(
+                query_params={"note_id": note_uuid},
+                headers={"Cookie": "sessionid=abc"},
+            ),
+            secrets={
+                "canvas-instance-origin": "https://tenant.canvasmedical.com",
+            },
+        )
+        first_api.commit()
+        second_api = _make_api(
+            request=_make_request(
+                query_params={"note_id": note_uuid},
+                headers={"Cookie": "sessionid=abc"},
+            ),
+            secrets={
+                "canvas-instance-origin": "https://tenant.canvasmedical.com",
+            },
+        )
+        second_api.commit()
+
+    # Two POSTs, both for "problems" — first failed, second succeeded.
+    assert mock_post.call_count == 2
+    posted_section_ids = [c.args[1] for c in mock_post.call_args_list]
+    assert posted_section_ids == ["problems", "problems"]
+
+
+def test_save_section_clears_attribute_hub_on_empty_rows_payload(
+    fake_hubs, note_uuid, mock_note
+):
+    """Pins the server-side half of the Drop-from-draft fix in intake.js.
+
+    The Drop affordance removes a row from the DOM via ``removeChild``
+    without dispatching ``input``/``change`` events, so debounced
+    auto-save never fires. The fix removes the empty-rows guard in
+    ``autoSaveAllSections`` so the commit-time client-side flush POSTs
+    every multi-section's current DOM state — including ``{rows: {}}``
+    — and the server must accept that payload and overwrite the
+    stale AttributeHub draft. Without the overwrite, the commit walks
+    the stale draft and originates the dropped row anyway.
+
+    This test asserts: POSTing ``{"rows": {}}`` to ``/intake/section/save``
+    persists the empty payload to AttributeHub, overwriting whatever
+    was there before."""
+    from intake_chart_app.data import form_state
+
+    mock_note.objects.filter.return_value.exists.return_value = True
+    # Seed AttributeHub with a stale row to mimic the
+    # auto-saved-then-dropped state.
+    form_state.set_section(note_uuid, "problems", {
+        "rows": {
+            "new:abc": {
+                "action": "add",
+                "values": {"icd10_code": "E11.9"},
+            },
+        },
+    })
+    assert form_state.get_section(note_uuid, "problems") != {}
+
+    api = _make_api(
+        request=_make_request(
+            query_params={"section": "problems", "note_id": note_uuid},
+            json_body={"rows": {}},
+        ),
+    )
+    [resp] = api.save_section()
+
+    assert resp.status_code in (200, HTTPStatus.OK)
+    # AttributeHub should now reflect the empty payload, not the stale
+    # add-row. The next commit walks an empty row set and emits no
+    # ORIGINATE for the dropped row.
+    assert form_state.get_section(note_uuid, "problems") == {"rows": {}}
+
+
 # ----- search routes -------------------------------------------------------
 
 

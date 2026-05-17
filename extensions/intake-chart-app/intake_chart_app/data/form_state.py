@@ -27,6 +27,12 @@ NAMESPACE = "canvas__intake_chart_app"
 SECTION_PREFIX = "section:"
 COMMAND_PREFIX = "command:"
 MULTI_COMMAND_PREFIX = "multi_commands:"
+# Per-(note, section_id) flag recording that a ChartSectionReview POST
+# already landed for this section on this note. Read by
+# ``_commit_multi_section`` to skip re-staging the side-channel POST on
+# repeat commits (the home-app endpoint is not idempotent — a re-POST
+# produces a duplicate "Reviewed:" card on the chart).
+REVIEWED_PREFIX = "reviewed:"
 
 
 def _get_or_create_hub(note_uuid: str) -> AttributeHub:
@@ -312,3 +318,27 @@ class FormStateSnapshot:
         """Drop the staged review list. ``commit()`` calls this after
         dispatching so a retry doesn't double-send."""
         self._pending_reviews.clear()
+
+    def is_section_reviewed(self, section_id: str) -> bool:
+        """Return ``True`` when a ChartSectionReview POST for
+        ``section_id`` already landed for this note on a prior commit.
+
+        Stored as a persistent AttributeHub flag (``reviewed:<section_id>``)
+        because the home-app endpoint is not idempotent — without the
+        flag, every successive commit on the same note would re-POST and
+        produce a fresh "Reviewed:" card on the chart, cluttering the
+        Commands tab and confusing the audit trail."""
+        if not section_id:
+            return False
+        return bool(self._attrs.get(f"{REVIEWED_PREFIX}{section_id}"))
+
+    def mark_section_reviewed(self, section_id: str) -> None:
+        """Stage the persistent flag that ``is_section_reviewed`` reads.
+        Use ``flush()`` to persist. Called by ``_dispatch_pending_reviews``
+        ONLY when the underlying POST returned 2xx — a failed POST
+        leaves the flag unset so the next commit retries."""
+        if not section_id or not self.note_uuid:
+            return
+        key = f"{REVIEWED_PREFIX}{section_id}"
+        self._attrs[key] = "1"
+        self._pending[key] = "1"

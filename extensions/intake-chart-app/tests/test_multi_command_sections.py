@@ -261,6 +261,30 @@ def test_allergies_remove_emits_remove_allergy_with_id(MockRemove, note_uuid):
     instance.originate.assert_called_once()
 
 
+@patch("intake_chart_app.data.multi_command_sections.RemoveAllergyCommand")
+def test_allergies_remove_passes_through_typed_rationale(MockRemove, note_uuid):
+    """The form template writes the MA-typed reason under
+    ``data-row-field="rationale"`` (see _intake_active_list.html); the
+    section reconciler must read that key, not the SDK's ``narrative``
+    field name. Earlier code looked up ``values["narrative"]`` and
+    silently substituted the boilerplate ``DEFAULT_REMOVE_RATIONALE``
+    for the MA's typed clinical reason on every Remove Allergy commit
+    — sibling sections (Problems / Medications) always read
+    ``rationale`` from the same template."""
+    section = AllergiesSection()
+    section.reconcile(
+        note_uuid,
+        {"allergy:abc-123": {"action": "remove", "values": {
+            "rationale": "Patient now tolerates latex per challenge test",
+        }}},
+        {},
+    )
+    assert (
+        MockRemove.call_args.kwargs["narrative"]
+        == "Patient now tolerates latex per challenge test"
+    )
+
+
 # ---------------------------------------------------------------------------
 # MedicationsSection (MedicationStatement / StopMedication)
 # ---------------------------------------------------------------------------

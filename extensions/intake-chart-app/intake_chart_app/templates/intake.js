@@ -675,7 +675,18 @@
     });
     MULTI_SECTIONS.forEach(function(sectionId) {
       var data = collectMultiSection(sectionId);
-      if (data && data.rows && Object.keys(data.rows).length > 0) {
+      // POST every multi-section unconditionally at commit time, even
+      // when rows is empty. The 'Drop from draft' affordance removes a
+      // row via removeChild without dispatching input/change events,
+      // so a debounced auto-save never fires after a Drop — meaning
+      // AttributeHub can still hold a row the MA explicitly cancelled.
+      // The empty-rows POST clears the stale draft so the server-side
+      // commit walks an empty row set and never originates the dropped
+      // row. Cost: ~6 no-op POSTs per commit for sections the MA
+      // never touched and that have no pre-fill (e.g. Family History
+      // on a healthy patient). Worth it to avoid silently emitting
+      // commands the user dropped.
+      if (data) {
         saves.push(saveSectionPayload(sectionId, data));
       }
     });
