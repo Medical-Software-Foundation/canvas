@@ -10,7 +10,6 @@ Auth: StaffSessionAuthMixin — staff session only, no API-key fallback.
 """
 from __future__ import annotations
 
-import uuid
 from http import HTTPStatus
 
 from canvas_sdk.commands import (
@@ -46,16 +45,7 @@ from exam_chart_app.data.questionnaires import (
     get_questionnaire_detail,
 )
 from exam_chart_app.data.templates import get_hpi_template
-
-
-def _looks_like_uuid(value: str) -> bool:
-    if not isinstance(value, str) or not value:
-        return False
-    try:
-        uuid.UUID(value)
-        return True
-    except (ValueError, AttributeError):
-        return False
+from exam_chart_app.data.validators import looks_like_uuid
 
 
 # Cache the rendered+encoded bytes for static assets. exam.js is ~90 KB
@@ -201,7 +191,7 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         patient_id = (self.request.query_params.get("patient_id") or "").strip()
         if not patient_id:
             return [JSONResponse({"conditions": []}, status_code=HTTPStatus.OK)]
-        if not _looks_like_uuid(patient_id):
+        if not looks_like_uuid(patient_id):
             # Patient.id is a UUIDField; passing a non-UUID string raises
             # django.core.exceptions.ValidationError before the query runs.
             # Without this gate the exception escapes the handler, SimpleAPI
@@ -304,7 +294,7 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         note, and survives `clear_draft`, so it's the right signal.
         """
         note_uuid = (self.request.query_params.get("note_uuid") or "").strip()
-        if not _looks_like_uuid(note_uuid):
+        if not looks_like_uuid(note_uuid):
             return [JSONResponse(
                 {"errors": [{"section": "note", "field": "note_uuid",
                              "message": "Missing or invalid note_uuid"}]},
@@ -347,7 +337,7 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
         note_uuid = (payload.get("note_uuid") or "").strip()
-        if not _looks_like_uuid(note_uuid):
+        if not looks_like_uuid(note_uuid):
             return [JSONResponse(
                 {"errors": [{"section": "note", "field": "note_uuid",
                              "message": "Missing or invalid note_uuid"}]},
@@ -398,7 +388,7 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
             )]
 
         note_uuid = (payload.get("note_uuid") or "").strip()
-        if not _looks_like_uuid(note_uuid):
+        if not looks_like_uuid(note_uuid):
             return [JSONResponse(
                 {"errors": [{"section": "note", "field": "note_uuid", "message": "Missing or invalid note_uuid"}]},
                 status_code=HTTPStatus.BAD_REQUEST,

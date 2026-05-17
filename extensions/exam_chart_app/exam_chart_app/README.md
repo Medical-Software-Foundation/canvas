@@ -53,6 +53,45 @@ the string `"active"`). To pin one specific questionnaire and hide the
 others from the chooser, set the corresponding `*-questionnaire-code`
 secret to its `Questionnaire.code` value.
 
+### Extending the HPI prefill library
+
+When the provider picks a Reason for Visit, the HPI textarea pre-fills
+from a code-keyed template bundled at `templates/default_templates.json`.
+The bundled file ships a generic `default` paragraph plus a couple of
+worked examples (K21.9 GERD, M25.561 right knee pain) — every other
+ICD-10 falls back to the generic template. To extend coverage, add
+entries to `default_templates.json` keyed by ICD-10 code:
+
+```json
+"E11.9": {
+  "hpi": "Patient with type 2 diabetes mellitus presents for...",
+  "note": "",
+  "letter": { "subject": "", "body": "" }
+}
+```
+
+The `note` / `letter` fields are reserved for future use; HPI is the
+only field the current plugin reads.
+
+### Customizing the imaging-code catalog
+
+The Imaging order card's dropdown lists CPT-coded studies from a
+bundled catalog in `data/imaging_codes.py`. Each entry's `label` is a
+verbatim copy of the chart's CPT-typeahead string for that code so the
+chart can string-match it back to its internal catalog when the staged
+Imaging command renders. Two consequences worth knowing:
+
+1. If Canvas's chart-side typeahead phrasing drifts, a bundled label
+   stops matching and the staged command renders with an empty
+   "Image:" row. Set the `exam-imaging-codes` plugin secret to override
+   the catalog — paste one entry per line, copied verbatim from your
+   instance's CPT typeahead.
+2. The catalog is best-effort by design. The bundled defaults cover
+   common X-Ray / CT / MRI / Ultrasound studies but are not
+   encyclopedic. Operators with narrower / broader imaging needs
+   should override via the secret rather than editing the bundled
+   list.
+
 ### Co-existing with other note-tab plugins
 
 The plugin keeps its per-note state in `AttributeHub` under its own

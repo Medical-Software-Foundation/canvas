@@ -12,12 +12,13 @@ questionnaires. We:
 """
 from __future__ import annotations
 
-import uuid
 from typing import Any, Literal
 
 from canvas_sdk.v1.data import Questionnaire
 from django.db.models import Q
 from logger import log
+
+from exam_chart_app.data.validators import looks_like_uuid
 
 Kind = Literal["ros", "pe"]
 
@@ -84,8 +85,8 @@ def get_questionnaire_detail(questionnaire_id: str) -> dict[str, Any] | None:
     body, and Django's exception-formatting pipeline allocated ~48 MB
     rendering the traceback. We CANNOT import ``ValidationError`` —
     Canvas's plugin sandbox blocks ``django.core.exceptions``. Instead
-    pre-validate via ``uuid.UUID()`` (which Python ships natively); a
-    bad string raises ``ValueError`` and we bail with None before the
+    pre-validate via the shared ``looks_like_uuid`` helper (built on
+    ``uuid.UUID()`` from the stdlib) and bail with None before the
     ORM call.
 
     The ``prefetch_related`` call collapses the N+1 on the success path:
@@ -94,9 +95,7 @@ def get_questionnaire_detail(questionnaire_id: str) -> dict[str, Any] | None:
     response_option_sets, options), with per-request RSS dropping by
     roughly the same factor.
     """
-    try:
-        uuid.UUID(questionnaire_id)
-    except (ValueError, TypeError, AttributeError):
+    if not looks_like_uuid(questionnaire_id):
         return None
     try:
         q = (
