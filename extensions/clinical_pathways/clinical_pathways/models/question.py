@@ -38,10 +38,10 @@ class Question(CustomModel):
     )
     text = TextField()
     response_type = TextField(default=ResponseType.FREE_TEXT)
-    order = IntegerField(default=0)
+    display_order = IntegerField(default=0)
     required = BooleanField(default=True)
 
     class Meta:
         indexes = [
-            Index(fields=["segment", "order"]),
+            Index(fields=["segment", "display_order"]),
         ]

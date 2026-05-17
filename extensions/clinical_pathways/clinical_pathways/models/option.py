@@ -25,9 +25,9 @@ class Option(CustomModel):
         related_name="options",
     )
     label = TextField()
-    order = IntegerField(default=0)
+    display_order = IntegerField(default=0)
 
     class Meta:
         indexes = [
-            Index(fields=["question", "order"]),
+            Index(fields=["question", "display_order"]),
         ]

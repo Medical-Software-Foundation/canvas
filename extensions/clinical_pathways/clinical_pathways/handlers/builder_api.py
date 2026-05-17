@@ -39,7 +39,7 @@ def _bad_request(message: str) -> Response:
 
 
 def _serialize_option(opt: Option) -> dict[str, Any]:
-    return {"dbid": opt.dbid, "label": opt.label, "order": opt.order}
+    return {"dbid": opt.dbid, "label": opt.label, "display_order": opt.display_order}
 
 
 def _serialize_question(q: Question) -> dict[str, Any]:
@@ -47,9 +47,9 @@ def _serialize_question(q: Question) -> dict[str, Any]:
         "dbid": q.dbid,
         "text": q.text,
         "response_type": q.response_type,
-        "order": q.order,
+        "display_order": q.display_order,
         "required": q.required,
-        "options": [_serialize_option(o) for o in q.options.order_by("order")],
+        "options": [_serialize_option(o) for o in q.options.order_by("display_order")],
     }
 
 
@@ -68,9 +68,9 @@ def _serialize_segment(seg: Segment, *, include_branches: bool = True) -> dict[s
     payload = {
         "dbid": seg.dbid,
         "title": seg.title,
-        "order": seg.order,
+        "display_order": seg.display_order,
         "is_entry": seg.is_entry,
-        "questions": [_serialize_question(q) for q in seg.questions.order_by("order")],
+        "questions": [_serialize_question(q) for q in seg.questions.order_by("display_order")],
     }
     if include_branches:
         payload["branches"] = [
@@ -88,7 +88,7 @@ def _serialize_pathway(pw: Pathway, *, deep: bool = False) -> dict[str, Any]:
         "is_active": pw.is_active,
     }
     if deep:
-        base["segments"] = [_serialize_segment(s) for s in pw.segments.order_by("order")]
+        base["segments"] = [_serialize_segment(s) for s in pw.segments.order_by("display_order")]
     return base
 
 
@@ -201,7 +201,7 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         seg = Segment(
             pathway=pw,
             title=body.get("title", "Untitled segment"),
-            order=body.get("order", existing),
+            display_order=body.get("display_order", existing),
             is_entry=existing == 0,
         )
         seg.save()
@@ -216,8 +216,8 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         body = self.request.json() or {}
         if "title" in body:
             seg.title = body["title"]
-        if "order" in body:
-            seg.order = int(body["order"])
+        if "display_order" in body:
+            seg.display_order = int(body["display_order"])
         if "is_entry" in body and body["is_entry"]:
             Segment.objects.filter(pathway_id=seg.pathway_id, is_entry=True).exclude(
                 dbid=seg.dbid
@@ -256,13 +256,13 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
             segment=seg,
             text=body.get("text", ""),
             response_type=response_type,
-            order=body.get("order", seg.questions.count()),
+            display_order=body.get("display_order", seg.questions.count()),
             required=bool(body.get("required", True)),
         )
         q.save()
         if response_type == ResponseType.YES_NO:
-            Option(question=q, label="Yes", order=0).save()
-            Option(question=q, label="No", order=1).save()
+            Option(question=q, label="Yes", display_order=0).save()
+            Option(question=q, label="No", display_order=1).save()
         return [JSONResponse(_serialize_question(q), status_code=HTTPStatus.CREATED)]
 
     @api.patch("/questions/<question_dbid>")
@@ -279,8 +279,8 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
             if rt not in ResponseType.ALL:
                 return [_bad_request(f"response_type must be one of {ResponseType.ALL}")]
             q.response_type = rt
-        if "order" in body:
-            q.order = int(body["order"])
+        if "display_order" in body:
+            q.display_order = int(body["display_order"])
         if "required" in body:
             q.required = bool(body["required"])
         q.save()
@@ -308,7 +308,7 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         opt = Option(
             question=q,
             label=body.get("label", ""),
-            order=body.get("order", q.options.count()),
+            display_order=body.get("display_order", q.options.count()),
         )
         opt.save()
         return [JSONResponse(_serialize_option(opt), status_code=HTTPStatus.CREATED)]
@@ -322,8 +322,8 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         body = self.request.json() or {}
         if "label" in body:
             opt.label = body["label"]
-        if "order" in body:
-            opt.order = int(body["order"])
+        if "display_order" in body:
+            opt.display_order = int(body["display_order"])
         opt.save()
         return [JSONResponse(_serialize_option(opt))]
 

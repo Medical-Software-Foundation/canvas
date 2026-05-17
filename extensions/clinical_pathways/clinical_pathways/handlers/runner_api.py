@@ -86,10 +86,10 @@ def _serialize_segment(seg: Segment) -> dict[str, Any]:
                 "response_type": q.response_type,
                 "required": q.required,
                 "options": [
-                    {"dbid": o.dbid, "label": o.label} for o in q.options.order_by("order")
+                    {"dbid": o.dbid, "label": o.label} for o in q.options.order_by("display_order")
                 ],
             }
-            for q in seg.questions.order_by("order")
+            for q in seg.questions.order_by("display_order")
         ],
     }
 
@@ -153,9 +153,9 @@ class RunnerAPI(StaffSessionAuthMixin, SimpleAPI):
         pw = Pathway.objects.filter(dbid=dbid, is_active=True).first()
         if not pw:
             return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        entry = pw.segments.filter(is_entry=True).order_by("order").first()
+        entry = pw.segments.filter(is_entry=True).order_by("display_order").first()
         if not entry:
-            entry = pw.segments.order_by("order").first()
+            entry = pw.segments.order_by("display_order").first()
         if not entry:
             return [JSONResponse({"done": True, "recommendation": pw.recommendation})]
         return [

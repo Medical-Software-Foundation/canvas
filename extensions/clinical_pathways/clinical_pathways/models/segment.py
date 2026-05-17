@@ -28,11 +28,11 @@ class Segment(CustomModel):
         related_name="segments",
     )
     title = TextField()
-    order = IntegerField(default=0)
+    display_order = IntegerField(default=0)
     is_entry = BooleanField(default=False)
 
     class Meta:
         indexes = [
-            Index(fields=["pathway", "order"]),
+            Index(fields=["pathway", "display_order"]),
             Index(fields=["is_entry"]),
         ]
