@@ -714,6 +714,80 @@ def test_commit_success_dispatches_staged_section_review_posts(
     assert posted_section_ids == stage_targets
 
 
+def test_commit_dispatch_continues_when_one_review_post_raises(
+    fake_hubs, note_uuid, mock_note
+):
+    """Partial dispatch failure: one section's review POST raises a
+    ``RequestException``, the other succeeds.
+
+    The dispatch loop must still attempt the second POST (one section's
+    network blip can't take down the rest) and the commit handler must
+    still return ``{success: true}`` — staged review POSTs are documented
+    as recoverable (the MA can re-mark from the chart sidebar), unlike
+    the AttributeHub flush which is not.
+
+    Mocks the real ``Http()`` rather than ``_post_section_review`` so the
+    helper's own ``RequestException`` catch is exercised — the test
+    fails if the catch is ever narrowed or removed."""
+    from requests.exceptions import ConnectionError as RequestsConnectionError
+
+    mock_note.objects.select_related.return_value.get.return_value = (
+        _make_note_mock()
+    )
+
+    stage_targets = {"problems", "allergies"}
+
+    def _stage_two(note_uuid, section, snapshot):
+        section_id = getattr(section, "section_id", "")
+        if section_id in stage_targets:
+            snapshot.stage_review(section_id)
+        return [], None
+
+    # First POST raises, second succeeds. Order of (raise, success)
+    # doesn't matter for the assertion — we only care that both calls
+    # were attempted.
+    post_results = iter([
+        RequestsConnectionError("home-app unreachable"),
+        SimpleNamespace(status_code=201),
+    ])
+
+    def _fake_post(url, json, headers):
+        outcome = next(post_results)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    with patch(
+        "intake_chart_app.api.intake_api._commit_single_section",
+        return_value=([], None),
+    ), patch(
+        "intake_chart_app.api.intake_api._commit_questionnaire_section",
+        return_value=([], None),
+    ), patch(
+        "intake_chart_app.api.intake_api._commit_multi_section",
+        side_effect=_stage_two,
+    ), patch(
+        "intake_chart_app.api.intake_api.Http",
+    ) as MockHttp:
+        MockHttp.return_value.post.side_effect = _fake_post
+        api = _make_api(
+            request=_make_request(
+                query_params={"note_id": note_uuid},
+                headers={"Cookie": "sessionid=abc"},
+            ),
+            secrets={
+                "canvas-instance-origin": "https://tenant.canvasmedical.com",
+            },
+        )
+        result = api.commit()
+
+    # Both POSTs attempted — the loop didn't bail after the first raise.
+    assert MockHttp.return_value.post.call_count == 2
+    # Commit still succeeds — failed reviews are recoverable.
+    assert result[0].status_code in (200, HTTPStatus.OK)
+    assert _json_body(result[0])["success"] is True
+
+
 # ----- search routes -------------------------------------------------------
 
 

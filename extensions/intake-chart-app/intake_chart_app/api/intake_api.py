@@ -428,6 +428,22 @@ def _post_section_review(
     item. The user's incoming session cookie is forwarded so the request
     authenticates as the staff member who clicked Commit.
 
+    Security envelope on the forwarded cookie:
+      - Source: the cookie comes from the request that already passed
+        ``StaffSessionAuthMixin`` at the ``/intake/commit`` boundary, so
+        no attacker-influenced cookie can reach this helper.
+      - Scope: forwarding preserves the staff's existing chart-write
+        permissions; it does NOT elevate. ``ChartSectionReview.save()``
+        runs as that same staff member on the home-app side.
+      - Destination: gated upstream by ``_safe_canvas_origin``, which
+        rejects any ``Host`` not matching ``.canvasmedical.com`` (unless
+        the operator explicitly set ``canvas-instance-origin``). The
+        cookie can only travel to a Canvas-owned origin.
+      - Logging: only ``bool(forwarded_cookie)`` is ever logged here;
+        the cookie value itself is never written to logs or telemetry.
+      - CSRF: no surface — the request originates from the authenticated
+        session itself, not from an external referrer.
+
     Pass ``note`` to skip the per-section ``Note.objects.get`` — the
     ``commit()`` entry point pre-fetches the row once for all sections.
 
