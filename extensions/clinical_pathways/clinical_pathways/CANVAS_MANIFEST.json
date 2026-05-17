@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.139.0",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.1.1",
     "name": "clinical_pathways",
     "description": "Build structured branching questionnaires and run them against a patient note, originating a Q&A trail and recommendation as custom commands.",
     "custom_data": {
@@ -17,13 +17,6 @@
                 "scope": "provider_menu_item",
                 "icon": "assets/icon.png",
                 "menu_position": "top"
-            },
-            {
-                "class": "clinical_pathways.applications.runner_app:PathwayRunnerApp",
-                "name": "Clinical Pathways",
-                "description": "Run a clinical pathway during a note encounter.",
-                "scope": "provider_companion_note_specific",
-                "icon": "assets/icon.png"
             }
         ],
         "protocols": [
@@ -34,6 +27,10 @@
             {
                 "class": "clinical_pathways.handlers.runner_api:RunnerAPI",
                 "description": "Search, segment-step, and complete endpoints for the chart runner."
+            },
+            {
+                "class": "clinical_pathways.handlers.runner_button:PathwayRunnerButton",
+                "description": "Note-header button that opens the pathway runner side panel."
             }
         ],
         "commands": [
