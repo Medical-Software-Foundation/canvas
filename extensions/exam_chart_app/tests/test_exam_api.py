@@ -495,7 +495,7 @@ def test_get_patient_conditions_returns_icd10_first(mock_cond_cls):
     mock_cond_cls.objects.filter.return_value = qs
     mock_cond_cls.objects.filter.return_value.count.return_value = 1
 
-    api_obj = _make_api(query={"patient_id": "patient-x"})
+    api_obj = _make_api(query={"patient_id": "22222222-2222-2222-2222-222222222222"})
     responses = api_obj.get_patient_conditions()
     body = json.loads(responses[0].content.decode())
     assert body["conditions"] == [{
@@ -506,7 +506,7 @@ def test_get_patient_conditions_returns_icd10_first(mock_cond_cls):
         "clinical_status": "active",
     }]
     filter_kwargs = mock_cond_cls.objects.filter.call_args_list[0].kwargs
-    assert filter_kwargs["patient__id"] == "patient-x"
+    assert filter_kwargs["patient__id"] == "22222222-2222-2222-2222-222222222222"
     assert filter_kwargs["entered_in_error__isnull"] is True
     # No clinical_status filter — Canvas's value varies and missing a
     # match here silently degrades the existing-condition flow.
@@ -527,7 +527,7 @@ def test_get_patient_conditions_falls_back_to_icd10_shape_when_no_icd_system(moc
     mock_cond_cls.objects.filter.return_value = qs
     mock_cond_cls.objects.filter.return_value.count.return_value = 1
 
-    api_obj = _make_api(query={"patient_id": "patient-x"})
+    api_obj = _make_api(query={"patient_id": "22222222-2222-2222-2222-222222222222"})
     responses = api_obj.get_patient_conditions()
     body = json.loads(responses[0].content.decode())
     assert len(body["conditions"]) == 1
@@ -538,6 +538,19 @@ def test_get_patient_conditions_missing_patient_id_returns_empty():
     responses = _make_api(query={}).get_patient_conditions()
     body = json.loads(responses[0].content.decode())
     assert body == {"conditions": []}
+
+
+@patch("exam_chart_app.api.exam_api.Condition")
+def test_get_patient_conditions_invalid_uuid_returns_empty_without_querying(mock_cond_cls):
+    """Patient.id is a UUIDField; a non-UUID query string would raise
+    django.core.exceptions.ValidationError before the ORM filter runs
+    and escape as an empty-body 500 + 48 MB traceback allocation
+    (same pattern questionnaires.py:get_questionnaire_detail mitigates).
+    Verify the gate short-circuits BEFORE the ORM is touched."""
+    responses = _make_api(query={"patient_id": "not-a-uuid"}).get_patient_conditions()
+    body = json.loads(responses[0].content.decode())
+    assert body == {"conditions": []}
+    mock_cond_cls.objects.filter.assert_not_called()
 
 
 @patch("exam_chart_app.api.emitters.ReferCommand")
@@ -1392,7 +1405,7 @@ def test_get_patient_conditions_skips_conditions_without_icd(mock_cond_cls):
     qs.prefetch_related.return_value.__getitem__.return_value = [cond]
     mock_cond_cls.objects.filter.return_value = qs
 
-    api_obj = _make_api(query={"patient_id": "patient-x"})
+    api_obj = _make_api(query={"patient_id": "22222222-2222-2222-2222-222222222222"})
     responses = api_obj.get_patient_conditions()
     body = json.loads(responses[0].content.decode())
     assert body["conditions"] == []

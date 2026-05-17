@@ -201,6 +201,17 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         patient_id = (self.request.query_params.get("patient_id") or "").strip()
         if not patient_id:
             return [JSONResponse({"conditions": []}, status_code=HTTPStatus.OK)]
+        if not _looks_like_uuid(patient_id):
+            # Patient.id is a UUIDField; passing a non-UUID string raises
+            # django.core.exceptions.ValidationError before the query runs.
+            # Without this gate the exception escapes the handler, SimpleAPI
+            # converts it to an empty-body 500, and the exception-formatting
+            # pipeline allocates ~48 MB rendering the traceback (see the
+            # questionnaires.py:get_questionnaire_detail mitigation for the
+            # same pattern). Treat garbage input the same as "no patient" —
+            # the picker shows no existing-condition matches and the
+            # provider proceeds with a fresh DiagnoseCommand.
+            return [JSONResponse({"conditions": []}, status_code=HTTPStatus.OK)]
 
         # Bound the result set: a chronic-care patient can carry hundreds of
         # historical Conditions, and the picker only needs a sensible recent
