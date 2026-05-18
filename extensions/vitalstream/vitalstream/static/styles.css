@@ -17,6 +17,12 @@ div.header img.logo {
   height: 100%;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 details {
   margin: 10px;
   background: rgb(46, 187, 227);
@@ -50,10 +56,6 @@ details[open] summary {
   margin-bottom: 10px;
 }
 
-#persistence-line {
-  text-align: center;
-}
-
 .timeseries-table {
   margin-top: 10px;
   margin-bottom: 10px;
@@ -79,4 +81,307 @@ details[open] summary {
 .timeseries-table th:first-child {
   text-align: left;
   color: #666;
+}
+
+/* Interval selection section */
+#interval-selection {
+  margin: 10px 0;
+}
+
+.interval-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+#interval-selection h3 {
+  margin: 0;
+  color: #333;
+  font-size: 15px;
+}
+
+.interval-body {
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.wrist-select-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wrist-select-label select {
+  padding: 3px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* Compact table variant for narrow chart pane */
+.timeseries-table.compact {
+  font-size: 12px;
+}
+
+.timeseries-table.compact th,
+.timeseries-table.compact td {
+  padding: 6px 8px;
+}
+
+.capture-btn {
+  background: rgb(46, 187, 227);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.capture-btn:hover {
+  background: rgb(30, 160, 200);
+}
+
+.capture-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Live readings — single collapsible feed */
+#live-readings {
+  margin: 6px 0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #d2edff;
+}
+
+#live-readings > summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  background: #d2edff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+}
+
+#live-readings > summary::-webkit-details-marker {
+  display: none;
+}
+
+#live-readings > summary::before {
+  content: '\25B6';
+  font-size: 9px;
+  transition: transform 0.15s;
+}
+
+#live-readings[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.live-readings-label {
+  min-width: 90px;
+}
+
+.live-readings-count {
+  color: #555;
+  font-weight: 400;
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.live-readings-toolbar {
+  padding: 6px 10px;
+  background: #fff;
+  border-top: 1px solid #cde6f5;
+}
+
+#live-readings-filter {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+#live-readings .table-scroll {
+  background: #fff;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+#live-readings-table {
+  margin: 0;
+}
+
+/* Clickable live readings rows — light blue base, darker on hover/select */
+#live-readings-table tbody tr {
+  cursor: pointer;
+  background: rgba(46, 187, 227, 0.06);
+  color: #555;
+}
+
+#live-readings-table tbody tr:hover {
+  background: rgba(46, 187, 227, 0.35);
+}
+
+#live-readings-table tbody tr.selected {
+  background: #d2edff;
+  color: #222;
+  font-weight: 700;
+  outline: 3px solid rgb(20, 140, 180);
+  outline-offset: -3px;
+}
+
+/* Increment averages section */
+.averages-section {
+  margin: 0 0 12px;
+}
+
+.live-readings-heading {
+  margin: 12px 0 4px;
+  font-size: 15px;
+  color: #333;
+}
+
+/* Mode toggle — treatment dropdown */
+#mode-toggle {
+  padding: 6px 10px;
+  margin: 8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.treatment-select-label,
+.increment-select-label,
+.treatment-time-label,
+#mode-toggle .wrist-select-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.treatment-times-row,
+.increment-wrist-row {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.treatment-select-label select,
+.increment-select-label select,
+.treatment-time-label input[type="time"] {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.treatment-select-label {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Session header — Live Readings + Save Summary */
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0 4px;
+}
+
+.session-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #333;
+}
+
+/* Save summary button */
+#save-summary-btn,
+#save-intervals-btn {
+  background: rgb(46, 187, 227);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#save-summary-btn:hover,
+#save-intervals-btn:hover {
+  background: rgb(30, 160, 200);
+}
+
+#save-summary-btn:disabled,
+#save-intervals-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* End session button — in header, revealed once readings start arriving */
+#end-session-btn {
+  background: #c0392b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#end-session-btn:hover {
+  background: #a93226;
+}
+
+/* Mock vitals button — in header */
+#mock-vitals-btn {
+  background: #e67e22;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#mock-vitals-btn:hover {
+  background: #d35400;
+}
+
+#mock-vitals-btn.mock-active {
+  animation: pulse-mock 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-mock {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }

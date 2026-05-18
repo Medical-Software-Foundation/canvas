@@ -1,0 +1,110 @@
+.qcpi-section {
+  font-family: Lato, "Helvetica Neue", Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.4285em;
+  color: rgba(0, 0, 0, 0.87);
+  box-sizing: border-box;
+}
+.qcpi-section *,
+.qcpi-section *::before,
+.qcpi-section *::after {
+  box-sizing: inherit;
+}
+
+.qcpi-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 0.8em 0;
+  font-size: 1.07142857em;
+  font-weight: 700;
+  line-height: 1.28571429em;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.qcpi-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: inherit;
+}
+.qcpi-icon svg { width: 100%; height: 100%; display: block; }
+
+.qcpi-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.qcpi-item {
+  display: grid;
+  grid-template-columns: 5.5em 1fr 28px;
+  align-items: start;
+  column-gap: 0.75em;
+  padding: 0.4em 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+.qcpi-item:first-child { border-top: none; }
+
+.qcpi-label {
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.7);
+  font-size: 0.85714286em;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding-top: 0.15em;
+}
+
+.qcpi-value {
+  color: rgba(0, 0, 0, 0.87);
+  white-space: pre-line;
+  word-break: break-word;
+  line-height: 1.28571429em;
+}
+
+.qcpi-copy {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.qcpi-copy:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.87);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.qcpi-copy:focus-visible {
+  outline: 2px solid #2185d0;
+  outline-offset: 1px;
+}
+.qcpi-copy-icon,
+.qcpi-check-icon {
+  width: 14px;
+  height: 14px;
+}
+.qcpi-check-icon { display: none; }
+
+.qcpi-copy.qcpi-copy--copied {
+  color: #21ba45;
+  background: rgba(33, 186, 69, 0.08);
+  border-color: rgba(33, 186, 69, 0.25);
+}
+.qcpi-copy.qcpi-copy--copied .qcpi-copy-icon { display: none; }
+.qcpi-copy.qcpi-copy--copied .qcpi-check-icon { display: block; }
+
+.qcpi-empty {
+  color: rgba(0, 0, 0, 0.4);
+  font-style: italic;
+}

@@ -1,0 +1,29 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "patient_vitals"
+version = "0.0.1"
+description = "Patient portal page showing the patient's vital signs with per-vital trend charts"
+readme = "patient_vitals/README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+DJANGO_SETTINGS_MODULE = "canvas_sdk.tests.settings"
+addopts = "-v"

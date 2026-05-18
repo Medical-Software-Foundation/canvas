@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.85.0",
-    "plugin_version": "1.0.0",
+    "plugin_version": "1.3.0",
     "name": "vitalstream",
     "description": "An integration for the VitalStream device by Caretaker",
     "components": {
@@ -24,17 +24,23 @@
         ],
         "commands": [
             {
-                "name": "VitalStream",
-                "label": "VitalStream",
-                "schema_key": "vitalStream",
-                "section": "history"
+                "name": "SpravatoVitals",
+                "label": "Spravato Vitals",
+                "schema_key": "spravatoVitals",
+                "section": "objective"
+            },
+            {
+                "name": "VitalstreamSummary",
+                "label": "VitalStream Summary",
+                "schema_key": "vitalstreamSummary",
+                "section": "objective"
             }
         ],
         "content": [],
         "effects": [],
         "views": []
     },
-    "secrets": ["AUTHORIZED_SERIAL_NUMBERS"],
+    "secrets": ["AUTHORIZED_SERIAL_NUMBERS", "ENABLE_MOCK_VITALS"],
     "tags": {},
     "references": [],
     "license": "",

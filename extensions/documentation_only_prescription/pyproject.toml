@@ -1,0 +1,27 @@
+[project]
+name = "documentation_only_prescription"
+description = "Adds an optional 'Documentation only' Yes/No field to the Prescribe command and removes sign-and-send / print actions when it is set to Yes."
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.0.1"
+authors = [
+    { name = "Kristen O'Neill", email = "kristen.oneill@canvasmedical.com" },
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["documentation_only_prescription"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

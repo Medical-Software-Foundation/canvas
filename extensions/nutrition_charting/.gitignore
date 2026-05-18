@@ -1,0 +1,13 @@
+.claude
+.pytest_cache
+__pycache__
+.coverage
+.mypy_cache
+*.pyc
+.DS_Store
+
+# CPA workflow telemetry — local-only; OSS publication strips it entirely.
+.cpa-workflow-artifacts/costs/
+.cpa-workflow-artifacts/costs_aggregation.json
+.cpa-workflow-artifacts/user_inputs/
+.cpa-workflow-artifacts/user_inputs_aggregation.json

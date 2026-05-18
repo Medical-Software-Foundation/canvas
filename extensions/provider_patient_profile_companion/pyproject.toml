@@ -1,0 +1,28 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Provider companion app (patient scope) that edits the writable identity fields of the patient profile (name, DOB, sex at birth, SSN)."
+license = "MIT"
+name = "provider_patient_profile_companion"
+readme = "provider_patient_profile_companion/README.md"
+requires-python = ">=3.11"
+version = "0.0.5"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
+
+[tool.coverage.run]
+source = ["provider_patient_profile_companion"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]

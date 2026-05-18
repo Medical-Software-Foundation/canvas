@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "patient_vitals",
+    "description": "Patient portal page showing the patient's vital signs with per-vital trend charts",
+    "components": {
+        "applications": [
+            {
+                "class": "patient_vitals.application:VitalsApp",
+                "icon": "assets/icon.png",
+                "scope": "portal_menu_item",
+                "name": "My Vitals",
+                "description": "View your vitals and trends"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "patient_vitals.api:VitalsAPI",
+                "description": "Patient-portal API: HTML page and observation JSON endpoints"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

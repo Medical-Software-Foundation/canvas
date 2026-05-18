@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Intake Assignment Panel</title>
+    <link rel="stylesheet" href="/plugin-io/api/intake_assignment_panel/app/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.min.js"
+        integrity="sha384-Akqfrbj/HpNVo8k11SXBb6TlBWmXXlYQrCSqEWmyKJe+hDm3Z/B2WVG4smwBkRVm"
+        crossorigin="anonymous"></script>
+    <script src="/plugin-io/api/intake_assignment_panel/app/scripts.js"></script>
+</head>
+<body>
+    <div class="page-header">
+        <h1>Intake Assignment Panel</h1>
+        <p class="page-subtitle">Pending intakes filtered by your active state licenses</p>
+    </div>
+    <div
+        id="intake-table"
+        class="table-container"
+        hx-get="/plugin-io/api/intake_assignment_panel/app/table"
+        hx-trigger="load"
+        hx-target="#intake-table"
+        hx-swap="innerHTML"
+    >
+        <p class="loading">Loading pending intakes…</p>
+    </div>
+</body>
+</html>

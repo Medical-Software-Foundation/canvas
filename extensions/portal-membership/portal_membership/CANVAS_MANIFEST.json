@@ -1,0 +1,93 @@
+{
+    "sdk_version": "0.136.0",
+    "plugin_version": "0.9.6",
+    "name": "portal_membership",
+    "description": "Patient portal membership sign-up, recurring billing, and cancellation management.",
+    "components": {
+        "protocols": [
+            {
+                "class": "portal_membership.protocols.membership_api:MembershipPortalAPI",
+                "description": "Patient-facing API endpoints for membership signup, cancellation, restart, status, discount code validation, charge history, and portal UI.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Team"],
+                    "write": []
+                }
+            },
+            {
+                "class": "portal_membership.protocols.billing_cron:MonthlyBillingCron",
+                "description": "Daily cron (09:00 UTC) that fires Stripe charges for members whose billing date is today. Retries up to 2 times (1 day apart) on failure; auto-cancels after 3 consecutive failures.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Team"],
+                    "write": []
+                }
+            },
+            {
+                "class": "portal_membership.protocols.membership_card:MembershipBanner",
+                "description": "Displays a BannerAlert under the patient name (CHART) and on appointment cards (APPOINTMENT_CARD) showing the patient's membership level and status.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "portal_membership.protocols.portal_widget:MembershipPortalWidget",
+                "description": "Renders a compact membership status widget on the patient portal landing page, showing current plan details and a call-to-action to manage or join the membership.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "portal_membership.protocols.admin_api:MembershipAdminAPI",
+                "description": "Staff-facing read-only directory of all memberships. Backs the Memberships application opened from the provider menu.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient"],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "portal_membership.applications.membership_admin_app:MembershipAdminApp",
+                "name": "Memberships",
+                "description": "Read-only directory of all memberships on the instance.",
+                "icon": "assets/memberships-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "MEMBERSHIP_PLANS",
+        "DISCOUNT_CODES",
+        "STAFF_OFFBOARDING_TEAM_ID",
+        "BILLING_CURRENCY",
+        "namespace_read_write_access_key"
+    ],
+    "url_permissions": [
+        {
+            "url": "https://js.stripe.com",
+            "permissions": ["SCRIPTS"]
+        }
+    ],
+    "custom_data": {
+        "namespace": "portal__membership",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

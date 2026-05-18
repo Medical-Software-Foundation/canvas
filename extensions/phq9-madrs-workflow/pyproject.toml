@@ -1,0 +1,21 @@
+[project]
+authors = [
+  {email = "amanda.peterson@canvasmedical.com", name = "Amanda Peterson"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Automates depression screening workflow: originates MADRS questionnaire when PHQ-9 score is at most 20, and adds score interpretation when MADRS is completed."
+license = "MIT"
+name = "phq9_madrs_workflow"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]

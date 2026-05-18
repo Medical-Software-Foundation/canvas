@@ -1,0 +1,20 @@
+{
+  "version": "1",
+  "templates": {
+    "default": {
+      "hpi": "Patient presents today reporting the symptoms described above. Onset, duration, and exacerbating/alleviating factors discussed during the visit. Pertinent positives and negatives noted on review of systems and physical exam below.",
+      "note": "",
+      "letter": { "subject": "", "body": "" }
+    },
+    "K21.9": {
+      "hpi": "Patient reports symptoms consistent with gastroesophageal reflux — postprandial heartburn, regurgitation, and occasional dysphagia. Symptoms partially relieved with antacids. No alarm features (weight loss, melena, persistent vomiting) at this time.",
+      "note": "",
+      "letter": { "subject": "", "body": "" }
+    },
+    "M25.561": {
+      "hpi": "Patient reports right knee pain, [insidious / post-traumatic] onset, [acute / chronic] in nature. Pain is [throbbing / sharp / dull], rated [N]/10. Aggravated by [activity / stairs / prolonged sitting], partially relieved by [rest / OTC NSAIDs / ice]. No mechanical symptoms (locking, giving way) reported.",
+      "note": "",
+      "letter": { "subject": "", "body": "" }
+    }
+  }
+}

@@ -115,6 +115,7 @@ Retrieves a note by ID and returns all note attributes with enhanced command dat
 - `created`: ISO timestamp
 - `modified`: ISO timestamp
 - `current_state`: Current note state (e.g., "LKD", "NEW")
+- `link`: URL Link to the note in Canvas UI
 - `state_history`: Array of state transitions with originator details
 - `patient`: Patient details (id, first_name, last_name, birth_date)
 - `note_type_version`: Note type metadata

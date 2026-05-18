@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Calendar Subscriptions - {{logged_in_staff.first_name}} {{logged_in_staff.last_name}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        :root {
+            --bg: #ffffff;
+            --surface: #f7f8fa;
+            --border: #e3e6ec;
+            --text: #1a1f2c;
+            --muted: #6b7280;
+            --accent: #2c5fff;
+            --accent-hover: #1f4bd8;
+            --success: #16a34a;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+            margin: 0;
+            padding: 20px 24px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 13px;
+            margin: 0 0 20px 0;
+        }
+
+        .section-label {
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+            margin: 18px 0 8px 0;
+        }
+
+        .calendar-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+        }
+
+        .calendar-label {
+            flex: 0 0 auto;
+            font-weight: 500;
+            min-width: 100px;
+            font-size: 13px;
+        }
+
+        .calendar-url {
+            flex: 1 1 auto;
+            border: none;
+            background: transparent;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            color: var(--muted);
+            padding: 0;
+            min-width: 0;
+            text-overflow: ellipsis;
+        }
+
+        .calendar-url:focus { outline: none; }
+
+        .copy-btn {
+            flex: 0 0 auto;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .copy-btn:hover { background: var(--accent-hover); }
+
+        .copy-btn.copied {
+            background: var(--success);
+        }
+
+        details {
+            margin-top: 18px;
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+
+        summary {
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 500;
+            list-style: none;
+            user-select: none;
+        }
+
+        summary::-webkit-details-marker { display: none; }
+
+        summary::before {
+            content: "+ ";
+            display: inline-block;
+            width: 12px;
+            font-weight: 600;
+        }
+
+        details[open] summary::before { content: "- "; }
+
+        .help-links {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            font-size: 12px;
+        }
+
+        .help-links a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .help-links a:hover { text-decoration: underline; }
+
+        .empty-note {
+            color: var(--muted);
+            font-size: 12px;
+            font-style: italic;
+            margin: 4px 0 0 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Calendar Subscriptions</h1>
+    <p class="subtitle">Subscribe to these calendars in your external calendar app to see Canvas appointments.</p>
+
+    <div class="section-label">Your Schedule</div>
+    <div class="calendar-row">
+        <span class="calendar-label">{{logged_in_staff.first_name}} {{logged_in_staff.last_name}}</span>
+        <input class="calendar-url" readonly value='{{personal_calendar_url}}' />
+        <button class="copy-btn" data-copy='{{personal_calendar_url}}'>Copy</button>
+    </div>
+
+    {% if location_calendars %}
+    <div class="section-label">Locations</div>
+    {% for location in location_calendars %}
+    <div class="calendar-row">
+        <span class="calendar-label">{{location.label}}</span>
+        <input class="calendar-url" readonly value='{{location.url}}' />
+        <button class="copy-btn" data-copy='{{location.url}}'>Copy</button>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <details>
+        <summary>How to subscribe</summary>
+        <div class="help-links">
+            <a target="_blank" href="https://support.google.com/calendar/answer/37100#:~:text=Use%20a%20link%20to%20add%20a%20public%20calendar">Google Calendar</a>
+            <a target="_blank" href="https://support.apple.com/guide/calendar/subscribe-to-calendars-icl1022/mac">macOS Calendar</a>
+            <a target="_blank" href="https://support.apple.com/guide/iphone/use-multiple-calendars-iph3d1110d4/ios">iOS Calendar</a>
+            <a target="_blank" href="https://support.microsoft.com/en-us/office/import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web-cff1429c-5af6-41ec-a5b4-74f2c278e98c">Outlook</a>
+        </div>
+        <p class="empty-note">External calendars cache subscribed feeds. New events may take several hours to appear after subscribing.</p>
+    </details>
+
+    <script>
+        document.querySelectorAll(".copy-btn").forEach(function (button) {
+            button.addEventListener("click", function () {
+                var url = button.getAttribute("data-copy");
+                navigator.clipboard.writeText(url).then(function () {
+                    button.textContent = "Copied";
+                    button.classList.add("copied");
+                    // Hardcode the reset label so a rapid second click within
+                    // the 1500 ms window does not capture "Copied" as the
+                    // restore value and leave the button stuck on it.
+                    setTimeout(function () {
+                        button.textContent = "Copy";
+                        button.classList.remove("copied");
+                    }, 1500);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

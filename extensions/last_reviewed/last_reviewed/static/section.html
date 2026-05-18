@@ -1,0 +1,30 @@
+<style>{{ styles|safe }}</style>
+<div class="lr-section">
+  <div class="lr-header">
+    <span class="lr-icon" aria-hidden="true">
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="8" width="30" height="34" rx="3"/>
+        <rect x="18" y="4" width="12" height="6" rx="1.5" fill="currentColor"/>
+        <path d="M16 24 l5 5 l11 -11"/>
+        <path d="M16 36 h12"/>
+      </svg>
+    </span>
+    <span>Last Reviewed</span>
+  </div>
+  <div class="lr-list">
+    {% for row in rows %}
+    <div class="lr-item">
+      <div class="lr-name">{{ row.label }}</div>
+      <div class="lr-detail">
+        {% if row.reviewed %}
+          <span title="{{ row.absolute }}">{{ row.relative }}</span>
+          {% if row.reviewer %}<span class="lr-detail-by"> &middot; by {{ row.reviewer }}</span>{% endif %}
+        {% else %}
+          <span class="lr-never">Never reviewed</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<script>{{ script|safe }}</script>

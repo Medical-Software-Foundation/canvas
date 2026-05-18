@@ -1,0 +1,39 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.5",
+    "name": "provider_patient_profile_companion",
+    "description": "Provider companion app (patient scope) that edits the writable identity fields of the patient profile (name, DOB, sex at birth, SSN).",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "provider_patient_profile_companion.applications.profile_app:PatientProfileApp",
+                "name": "Profile",
+                "description": "Edit the patient's identity fields.",
+                "scope": "provider_companion_patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "provider_patient_profile_companion.handlers.profile_api:ProfileAPI",
+                "description": "Serves the profile editor HTML/JS/CSS, the current-values JSON, and applies a Patient.update() effect on save.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

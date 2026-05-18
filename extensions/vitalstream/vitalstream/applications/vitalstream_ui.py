@@ -34,7 +34,7 @@ class VitalstreamUILauncher(ActionButton):
         return [
             LaunchModalEffect(
                 url=f"/plugin-io/api/vitalstream/vitalstream-ui/sessions/{session_id}/",
-                target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE,
+                target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE_LARGE,
             ).apply()
         ]
 

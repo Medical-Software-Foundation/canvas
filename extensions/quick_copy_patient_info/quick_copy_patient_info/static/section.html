@@ -1,0 +1,44 @@
+<style>{{ styles|safe }}</style>
+<div class="qcpi-section">
+  <div class="qcpi-header">
+    <span class="qcpi-icon" aria-hidden="true">
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="7" y="11" width="34" height="26" rx="3"/>
+        <circle cx="18" cy="22" r="4" fill="currentColor" stroke="none"/>
+        <path d="M11 33 c2 -4 12 -4 14 0"/>
+        <path d="M28 19 h8"/>
+        <path d="M28 25 h8"/>
+        <path d="M28 31 h5"/>
+      </svg>
+    </span>
+    <span>Patient Info</span>
+  </div>
+  {% if rows %}
+  <div class="qcpi-list">
+    {% for row in rows %}
+    <div class="qcpi-item">
+      <div class="qcpi-label">{{ row.label }}</div>
+      <div class="qcpi-value">{{ row.display }}</div>
+      <button
+        type="button"
+        class="qcpi-copy"
+        data-copy="{{ row.copy }}"
+        aria-label="Copy {{ row.label|lower }}"
+        title="Copy {{ row.label|lower }}"
+      >
+        <svg class="qcpi-copy-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="9" width="11" height="11" rx="2"/>
+          <path d="M5 15V5a2 2 0 0 1 2-2h10"/>
+        </svg>
+        <svg class="qcpi-check-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="5 12 10 17 19 7"/>
+        </svg>
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="qcpi-empty">No demographics on file for this patient.</div>
+  {% endif %}
+</div>
+<script>{{ script|safe }}</script>

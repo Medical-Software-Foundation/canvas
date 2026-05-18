@@ -1,0 +1,44 @@
+{
+    "sdk_version": "0.147.0",
+    "plugin_version": "0.1.0",
+    "name": "intake_assignment_panel",
+    "description": "Dashboard of pending intake notes filtered by the logged-in provider's active state licenses",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "intake_assignment_panel.applications.intake_panel:IntakePanelApp",
+                "name": "Intake Assignment Panel",
+                "description": "Pending intake notes filtered by licensed states",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png",
+                "menu_position": "top",
+                "menu_order": 100
+            }
+        ],
+        "protocols": [
+            {
+                "class": "intake_assignment_panel.api.intake_api:IntakeAPI",
+                "description": "API that serves the intake assignment dashboard",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "INTAKE_NOTE_TYPES",
+        "CANVAS_INSTANCE_URL"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

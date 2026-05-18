@@ -1,0 +1,34 @@
+name: "Nutrition: Nutrition Diagnosis (PES)"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "NUTRITION_PES"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+questions:
+- content: "Problem"
+  code_system: "INTERNAL"
+  code: "NUT_PES_PROBLEM"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Problem"
+    code: "NUT_PES_PROBLEM_RESP"
+    value: ''
+- content: "Etiology"
+  code_system: "INTERNAL"
+  code: "NUT_PES_ETIOLOGY"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Etiology"
+    code: "NUT_PES_ETIOLOGY_RESP"
+    value: ''
+- content: "Signs/Symptoms"
+  code_system: "INTERNAL"
+  code: "NUT_PES_SIGNS_SYMPTOMS"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Signs/Symptoms"
+    code: "NUT_PES_SIGNS_SYMPTOMS_RESP"
+    value: ''

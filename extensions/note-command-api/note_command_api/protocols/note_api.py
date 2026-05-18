@@ -261,6 +261,7 @@ class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
             "created": note.created.isoformat() if note.created else None,
             "modified": note.modified.isoformat() if note.modified else None,
             "current_state": note.current_state.state if note.current_state else None,
+            "link": f"{self.environment['CUSTOMER_IDENTIFIER']}.canvasmedical.com/patient/{note.patient.id}#noteId={note.dbid}",
             "state_history": [
                 {
                     "state": state.state,
@@ -337,6 +338,7 @@ class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
                 if command_uuid and command_uuid in commands_by_id:
                     enhanced_item = item.copy()
                     enhanced_item["data"] = enhanced_item.get("data", {}).copy()
+                    enhanced_item["data"]["link"] = self.permalinks_for_command(commands_by_id[command_uuid], item.get("data", {}).get("id"))
                     enhanced_item["data"]["attributes"] = self._extract_command_attributes(
                         commands_by_id[command_uuid]
                     )
@@ -349,6 +351,14 @@ class NoteCommandAPI(APIKeyAuthMixin, SimpleAPIRoute):
                 enhanced_body.append(item)
         return enhanced_body
 
+    def permalinks_for_command(self, command: Command, command_id: int) -> str:
+        return (
+            f"{self.environment['CUSTOMER_IDENTIFIER']}.canvasmedical.com"
+            f"/patient/{command.patient.id}"
+            f"?noteId={command.note.dbid}"
+            f"&commandType={command.schema_key}"
+            f"&commandId={command_id}"
+        )
 
     def _extract_command_attributes(self, command: Command) -> dict[str, Any]:
         """

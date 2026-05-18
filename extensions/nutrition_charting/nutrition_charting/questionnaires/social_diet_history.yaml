@@ -1,0 +1,79 @@
+name: "Nutrition: Social and Diet History"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "NUTRITION_SOCIAL_DIET"
+can_originate_in_charting: true
+display_results_in_social_history_section: true
+questions:
+- content: "Appetite"
+  code_system: "INTERNAL"
+  code: "NUT_SD_APPETITE"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Appetite"
+    code: "NUT_SD_APPETITE_RESP"
+    value: ''
+- content: "Chew/Swallow"
+  code_system: "INTERNAL"
+  code: "NUT_SD_CHEW_SWALLOW"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Chew/Swallow"
+    code: "NUT_SD_CHEW_SWALLOW_RESP"
+    value: ''
+- content: "Nausea/Vomiting"
+  code_system: "INTERNAL"
+  code: "NUT_SD_NV"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Nausea/Vomiting"
+    code: "NUT_SD_NV_RESP"
+    value: ''
+- content: "Constipation/Diarrhea"
+  code_system: "INTERNAL"
+  code: "NUT_SD_CD"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Constipation/Diarrhea"
+    code: "NUT_SD_CD_RESP"
+    value: ''
+- content: "Other GI"
+  code_system: "INTERNAL"
+  code: "NUT_SD_OTHER_GI"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Other GI"
+    code: "NUT_SD_OTHER_GI_RESP"
+    value: ''
+- content: "Known Food Allergies"
+  code_system: "INTERNAL"
+  code: "NUT_SD_FOOD_ALLERGIES"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Known Food Allergies"
+    code: "NUT_SD_FOOD_ALLERGIES_RESP"
+    value: ''
+- content: "Diet Followed at Home"
+  code_system: "INTERNAL"
+  code: "NUT_SD_DIET_AT_HOME"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Diet at Home"
+    code: "NUT_SD_DIET_AT_HOME_RESP"
+    value: ''
+- content: "Food Preferences"
+  code_system: "INTERNAL"
+  code: "NUT_SD_FOOD_PREFS"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Food Preferences"
+    code: "NUT_SD_FOOD_PREFS_RESP"
+    value: ''
