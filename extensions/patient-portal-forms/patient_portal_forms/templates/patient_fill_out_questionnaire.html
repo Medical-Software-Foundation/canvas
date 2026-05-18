@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ questionnaire.name }}</title>
+    <style type="text/css">
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+            padding: 0;
+            margin: 0;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 20px calc(80px + env(safe-area-inset-bottom)) 20px;
+        }
+
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            margin: 0 -20px 12px;
+            background-color: rgba(245, 245, 247, 0.96);
+            backdrop-filter: saturate(180%) blur(12px);
+            -webkit-backdrop-filter: saturate(180%) blur(12px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .sticky-header-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 40px;
+            padding: 0 16px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            height: 32px;
+            padding: 0 12px 0 10px;
+            flex-shrink: 0;
+            color: #000;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 16px;
+            background-color: rgba(0, 0, 0, 0.06);
+        }
+
+        .back-link:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .back-link .back-arrow {
+            font-size: 17px;
+            font-weight: 600;
+            line-height: 1;
+        }
+
+        .compact-title {
+            flex: 1;
+            min-width: 0;
+            font-size: 17px;
+            font-weight: 600;
+            color: #000;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .compact-percentage {
+            flex-shrink: 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #6e6e73;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 3px;
+            background-color: #d2d2d7;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #34c759;
+            transition: width 0.3s ease;
+        }
+
+        .due-caption {
+            font-size: 13px;
+            color: #6e6e73;
+            margin-bottom: 12px;
+        }
+
+        .questions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .question-card {
+            background: white;
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            scroll-margin-top: 72px;
+            scroll-margin-bottom: 120px;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .question-card.question-card-missing {
+            box-shadow: 0 0 0 2px #ff3b30, 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .question-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 16px;
+            line-height: 1.35;
+        }
+
+        .answer-options {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .option-label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 15px;
+            color: #1d1d1f;
+            cursor: pointer;
+            padding: 7px 12px;
+            border-radius: 8px;
+            transition: background-color 0.2s ease;
+        }
+
+        .option-label:hover {
+            background-color: #f5f5f7;
+        }
+
+        .option-label input[type="radio"],
+        .option-label input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            min-width: 20px;
+            min-height: 20px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        .text-input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 15px;
+            border: 1.5px solid #d2d2d7;
+            border-radius: 8px;
+            font-family: inherit;
+            transition: border-color 0.2s ease;
+        }
+
+        .text-input:focus {
+            outline: none;
+            border-color: #000;
+        }
+
+        .submit-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 20;
+            display: flex;
+            justify-content: center;
+            background-color: rgba(245, 245, 247, 0.96);
+            backdrop-filter: saturate(180%) blur(12px);
+            -webkit-backdrop-filter: saturate(180%) blur(12px);
+            padding: 12px 20px calc(12px + env(safe-area-inset-bottom)) 20px;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .submit-button {
+            width: 100%;
+            max-width: 520px;
+            min-height: 44px;
+            background-color: #000;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 11px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .submit-button:hover {
+            background-color: #2d2d2f;
+        }
+
+        .submit-button.is-incomplete {
+            background-color: #d2d2d7;
+            color: #6e6e73;
+        }
+
+        .submit-button.is-incomplete:hover {
+            background-color: #c7c7cc;
+        }
+
+        @media (min-width: 769px) {
+            .container {
+                padding-bottom: calc(88px + env(safe-area-inset-bottom));
+            }
+
+            .compact-title {
+                font-size: 19px;
+            }
+
+            .question-card {
+                padding: 28px;
+            }
+
+            .question-title,
+            .option-label,
+            .text-input {
+                font-size: 17px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sticky-header">
+            <div class="sticky-header-row">
+                <a href="/plugin-io/api/patient_portal_forms/patient-view/patient/{{ patient_id }}"
+                   class="back-link"
+                   aria-label="Back to Forms"
+                   title="Back to Forms">
+                    <span class="back-arrow" aria-hidden="true">←</span>
+                    <span>Back</span>
+                </a>
+                <span class="compact-title">{{ questionnaire.name }}</span>
+                <span class="compact-percentage" id="progress-percentage">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <p class="due-caption">Due: <span class="format-date">{{ due_date }}</span></p>
+
+        <form id="questionnaire-form">
+            <div class="questions-list">
+                {% for question in questionnaire.questions %}
+                <div class="question-card" id="question-{{ question.id }}" data-question-id="{{ question.id }}">
+                    <h2 class="question-title">{{ forloop.counter }}. {{ question.question_text }}</h2>
+
+                    {% if question.question_type == 'TXT' %}
+                    <!-- Text input -->
+                    <div class="answer-options">
+                        <input type="text"
+                               class="text-input"
+                               name="question_{{ question.id }}"
+                               data-question-id="{{ question.id }}"
+                               placeholder="Enter your answer">
+                    </div>
+
+                    {% elif question.question_type == 'SING' %}
+                    <!-- Single choice (radio buttons) -->
+                    <div class="answer-options">
+                        {% for option in question.options %}
+                        <label class="option-label">
+                            <input type="radio"
+                                   name="question_{{ question.id }}"
+                                   value="{{ option.id }}"
+                                   data-question-id="{{ question.id }}">
+                            <span>{{ option.name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    {% elif question.question_type == 'MULT' %}
+                    <!-- Multiple choice (checkboxes) -->
+                    <div class="answer-options">
+                        {% for option in question.options %}
+                        <label class="option-label">
+                            <input type="checkbox"
+                                   name="question_{{ question.id }}_option_{{ option.id }}"
+                                   value="{{ option.id }}"
+                                   data-question-id="{{ question.id }}">
+                            <span>{{ option.name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    {% elif question.question_type == 'INT' %}
+                    <!-- Integer input -->
+                    <div class="answer-options">
+                        <input type="number"
+                               class="text-input"
+                               name="question_{{ question.id }}"
+                               data-question-id="{{ question.id }}"
+                               placeholder="Enter a number"
+                               step="1">
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="submit-section">
+                <button type="submit" class="submit-button is-incomplete">Submit Form</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const totalQuestions = {{ questionnaire.questions|length }};
+        const answeredQuestions = new Set();
+
+        // Format dates on page load
+        function formatDate(dateString) {
+            if (!dateString) return '';
+
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+                const [year, month, day] = dateString.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                return date.toLocaleDateString('en-US', options);
+            }
+
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString;
+
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        // Tracks whether the patient has tried to submit with unanswered
+        // questions. Once true, unanswered cards show a red outline until they
+        // are answered, so the patient can scan through and fill gaps.
+        let errorMode = false;
+
+        // Update progress indicator and sync submit button state.
+        function updateProgress() {
+            const answeredCount = answeredQuestions.size;
+            const missingCount = totalQuestions - answeredCount;
+            const percentage = Math.round((answeredCount / totalQuestions) * 100);
+
+            document.getElementById('progress-percentage').textContent = percentage + '%';
+            document.getElementById('progress-fill').style.width = percentage + '%';
+
+            const submitButton = document.querySelector('.submit-button');
+            if (!submitButton || submitButton.dataset.submitting === 'true') return;
+
+            const incomplete = missingCount > 0;
+            submitButton.classList.toggle('is-incomplete', incomplete);
+
+            if (incomplete && errorMode) {
+                submitButton.textContent = missingCount === 1
+                    ? '1 question needs an answer'
+                    : `${missingCount} questions need answers`;
+            } else {
+                submitButton.textContent = 'Submit Form';
+            }
+
+            if (!incomplete) errorMode = false;
+
+            // Clear the missing outline from any card that has since been
+            // answered — the outline should fade as the patient fills gaps.
+            document.querySelectorAll('.question-card.question-card-missing').forEach(card => {
+                if (answeredQuestions.has(card.dataset.questionId)) {
+                    card.classList.remove('question-card-missing');
+                }
+            });
+        }
+
+        // Enter error mode on a submit attempt with unanswered questions:
+        // outline every unanswered card and scroll to the first one.
+        function activateErrorMode() {
+            errorMode = true;
+            let firstMissing = null;
+            document.querySelectorAll('.question-card').forEach(card => {
+                const qid = card.dataset.questionId;
+                if (qid && !answeredQuestions.has(qid)) {
+                    card.classList.add('question-card-missing');
+                    if (!firstMissing) firstMissing = card;
+                }
+            });
+            updateProgress();
+            if (firstMissing) {
+                firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // Local draft persistence. The portal's menu may navigate away from this
+        // page without the patient submitting; store work-in-progress answers so
+        // they can resume where they left off. Only the local device sees this —
+        // nothing is sent to the provider until the patient submits.
+        const DRAFT_KEY = `patient_portal_forms:draft:{{ patient_id }}:{{ questionnaire.name|escapejs }}`;
+
+        function saveDraft() {
+            const form = document.getElementById('questionnaire-form');
+            const fd = new FormData(form);
+            const draft = {};
+            for (const [name, value] of fd.entries()) {
+                if (!(name in draft)) {
+                    draft[name] = value;
+                } else if (Array.isArray(draft[name])) {
+                    draft[name].push(value);
+                } else {
+                    draft[name] = [draft[name], value];
+                }
+            }
+            try {
+                localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+            } catch (err) {}
+        }
+
+        function restoreDraft() {
+            let draft;
+            try {
+                const raw = localStorage.getItem(DRAFT_KEY);
+                if (!raw) return;
+                draft = JSON.parse(raw);
+            } catch (err) { return; }
+
+            const form = document.getElementById('questionnaire-form');
+            Object.entries(draft).forEach(([name, value]) => {
+                const values = Array.isArray(value) ? value : [value];
+                const elements = form.querySelectorAll(`[name="${CSS.escape(name)}"]`);
+                elements.forEach(el => {
+                    if (el.type === 'radio' || el.type === 'checkbox') {
+                        if (values.includes(el.value)) {
+                            el.checked = true;
+                            if (el.dataset.questionId) {
+                                answeredQuestions.add(el.dataset.questionId);
+                            }
+                        }
+                    } else if (values[0] !== undefined && values[0] !== '') {
+                        el.value = values[0];
+                        if (el.dataset.questionId) {
+                            answeredQuestions.add(el.dataset.questionId);
+                        }
+                    }
+                });
+            });
+            updateProgress();
+        }
+
+        function clearDraft() {
+            try { localStorage.removeItem(DRAFT_KEY); } catch (err) {}
+        }
+
+        // Track answers
+        document.addEventListener('change', (e) => {
+            if (e.target.dataset.questionId) {
+                const questionId = e.target.dataset.questionId;
+
+                // For text and number inputs, only count as answered if not empty
+                if (e.target.type === 'text' || e.target.type === 'number') {
+                    if (e.target.value.trim() !== '') {
+                        answeredQuestions.add(questionId);
+                    } else {
+                        answeredQuestions.delete(questionId);
+                    }
+                } else {
+                    // For radio and checkbox, mark as answered when any option is selected
+                    answeredQuestions.add(questionId);
+                }
+
+                updateProgress();
+                saveDraft();
+            }
+        });
+
+        document.addEventListener('input', (e) => {
+            if (e.target.dataset.questionId &&
+                (e.target.type === 'text' || e.target.type === 'number')) {
+                saveDraft();
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('questionnaire-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (answeredQuestions.size < totalQuestions) {
+                activateErrorMode();
+                return;
+            }
+
+            const submitButton = e.target.querySelector('.submit-button');
+            submitButton.dataset.submitting = 'true';
+            submitButton.disabled = true;
+            submitButton.textContent = 'Submitting...';
+
+            const formData = new FormData(e.target);
+            const questionsAndAnswers = [];
+
+            // Collect all answers
+            {% for question in questionnaire.questions %}
+            {% if question.question_type == 'TXT' %}
+            const textValue{{ question.id }} = formData.get('question_{{ question.id }}');
+            if (textValue{{ question.id }}) {
+                questionsAndAnswers.push({
+                    question_id: {{ question.id }},
+                    question_type: '{{ question.question_type }}',
+                    answer: textValue{{ question.id }}
+                });
+            }
+            {% elif question.question_type == 'SING' %}
+            const radioValue{{ question.id }} = formData.get('question_{{ question.id }}');
+            if (radioValue{{ question.id }}) {
+                questionsAndAnswers.push({
+                    question_id: {{ question.id }},
+                    question_type: '{{ question.question_type }}',
+                    answer: parseInt(radioValue{{ question.id }}, 10)
+                });
+            }
+            {% elif question.question_type == 'MULT' %}
+            const checkboxValues{{ question.id }} = [];
+            {% for option in question.options %}
+            if (formData.get('question_{{ question.id }}_option_{{ option.id }}')) {
+                checkboxValues{{ question.id }}.push({{ option.id }});
+            }
+            {% endfor %}
+            if (checkboxValues{{ question.id }}.length > 0) {
+                questionsAndAnswers.push({
+                    question_id: {{ question.id }},
+                    question_type: '{{ question.question_type }}',
+                    answer: checkboxValues{{ question.id }}
+                });
+            }
+            {% elif question.question_type == 'INT' %}
+            const intValue{{ question.id }} = formData.get('question_{{ question.id }}');
+            if (intValue{{ question.id }}) {
+                questionsAndAnswers.push({
+                    question_id: {{ question.id }},
+                    question_type: '{{ question.question_type }}',
+                    answer: parseInt(intValue{{ question.id }}, 10)
+                });
+            }
+            {% endif %}
+            {% endfor %}
+
+            const submissionData = {
+                questionnaire_id: "{{ questionnaire.id }}",
+                questionnaire_name: "{{ questionnaire.name|escapejs }}",
+                assigning_staff_id: "{{ assigning_provider_id }}",
+                questions_and_answers: questionsAndAnswers
+            };
+
+            console.log('Submitting data:', submissionData);
+
+            try {
+                const response = await fetch('/plugin-io/api/patient_portal_forms/patient-view/patient/{{ patient_id }}/questionnaire/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(submissionData)
+                });
+
+                if (response.ok) {
+                    clearDraft();
+                    // Success - redirect back to forms list
+                    window.location.href = '/plugin-io/api/patient_portal_forms/patient-view/patient/{{ patient_id }}';
+                } else {
+                    const error = await response.text();
+                    alert('Error submitting questionnaire: ' + error);
+                    delete submitButton.dataset.submitting;
+                    submitButton.textContent = 'Submit Form';
+                    updateProgress();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error submitting questionnaire. Please try again.');
+                submitButton.disabled = false;
+                submitButton.textContent = 'Submit Form';
+            }
+        });
+
+        // Format dates on load
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.format-date').forEach(element => {
+                const formattedDate = formatDate(element.textContent.trim());
+                if (formattedDate) {
+                    element.textContent = formattedDate;
+                }
+            });
+
+            // Restore any in-progress answers from a previous session on this
+            // device so the patient can pick up where they left off.
+            restoreDraft();
+
+            installFormsMenuInterceptor('{{ patient_id }}');
+        });
+
+        // Intercept clicks on the portal's "Forms" menu item so that tapping it
+        // while the patient is mid-form returns them to the forms list instead
+        // of leaving them stranded on this page. The portal menu is rendered in
+        // the parent frame; if same-origin access is allowed we attach a
+        // capture-phase listener that re-navigates this iframe. The installed
+        // flag on window.parent prevents duplicate listeners across navigations
+        // within the same parent session.
+        function installFormsMenuInterceptor(patientId) {
+            try {
+                if (!window.parent || window.parent === window) return;
+                if (window.parent.__ppfFormsInterceptorInstalled) return;
+                const listPath = `/plugin-io/api/patient_portal_forms/patient-view/patient/${patientId}`;
+                const handler = (e) => {
+                    let el = e.target;
+                    while (el && el.nodeType === 1) {
+                        const role = el.getAttribute && el.getAttribute('role');
+                        const isClickable = el.tagName === 'A' || el.tagName === 'BUTTON' ||
+                            role === 'menuitem' || role === 'button' || role === 'link';
+                        if (isClickable) {
+                            const text = (el.innerText || el.textContent || '').trim();
+                            if (text === 'Forms') {
+                                if (window.location.pathname !== listPath) {
+                                    window.location.href = listPath;
+                                }
+                                return;
+                            }
+                        }
+                        el = el.parentNode;
+                    }
+                };
+                window.parent.document.addEventListener('click', handler, true);
+                window.parent.__ppfFormsInterceptorInstalled = true;
+            } catch (err) {}
+        }
+
+        // Close the patient portal side menu when the patient clicks anywhere
+        // in the plugin's content area. The portal menu is rendered by the portal
+        // shell outside this page, so we notify the parent via postMessage and,
+        // if same-origin access is allowed, dispatch a click on the parent body
+        // to trigger the portal's own outside-click handlers.
+        document.addEventListener('click', () => {
+            try {
+                window.parent.postMessage({ type: 'plugin-content-click' }, '*');
+            } catch (err) {}
+            setTimeout(() => {
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.document.body.dispatchEvent(
+                            new MouseEvent('click', { bubbles: true, cancelable: true })
+                        );
+                    }
+                } catch (err) {}
+            }, 0);
+        });
+    </script>
+</body>
+</html>

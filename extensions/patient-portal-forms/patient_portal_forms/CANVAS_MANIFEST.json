@@ -1,0 +1,72 @@
+{
+    "sdk_version": "0.150.0",
+    "plugin_version": "0.2.0",
+    "name": "patient_portal_forms",
+    "description": "Enables providers to assign questionnaires to patients and allows patients to complete them through the patient portal. Providers can view, assign, and unassign questionnaires from within the patient chart, and send reminder messages. When patients submit completed questionnaires, responses are automatically recorded in a clinical note.",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_portal_forms.protocols.patient_portal_forms_api:ProviderQuestionnaireAPI",
+                "description": "Provider endpoints for viewing, assigning, reminding, and unassigning questionnaires",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_portal_forms.protocols.patient_portal_forms_api:PatientQuestionnaireAPI",
+                "description": "Patient endpoints for viewing and submitting assigned questionnaires",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_portal_forms.protocols.patient_portal_forms_admin_api:PatientPortalFormsAdminAPI",
+                "description": "Admin endpoints — hosts the one-shot legacy-metadata migration",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "patient_portal_forms.apps.patient_portal_forms_provider_application:PatientPortalFormsProviderApplication",
+                "name": "Patient Questionnaire",
+                "description": "Provider-facing app to assign questionnaires for patients to fill out.",
+                "icon": "icon/form.png",
+                "scope": "patient_specific",
+                "show_in_panel": false,
+                "panel_priority": 100
+            },
+            {
+                "class": "patient_portal_forms.apps.patient_portal_forms_patient_application:PatientPortalFormsPatientApplication",
+                "name": "Forms",
+                "description": "Patient-facing application for patients to fill out questionnaires in the patient portal.",
+                "scope": "portal_menu_item",
+                "icon": "icon/form.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "namespace_read_write_access_key",
+        "ENABLE_MIGRATION_ADMIN"
+    ],
+    "custom_data": {
+        "namespace": "canvas__patient_portal_forms",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
