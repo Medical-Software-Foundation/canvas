@@ -1,100 +1,185 @@
-# To run the tests, use the command `pytest` in the terminal or uv run pytest.
-# Each test is wrapped inside a transaction that is rolled back at the end of the test.
-# If you want to modify which files are used for testing, check the [tool.pytest.ini_options] section in pyproject.toml.
-# For more information on testing Canvas plugins, see: https://docs.canvasmedical.com/sdk/testing-utils/
-
+import json
 from unittest.mock import Mock
 
-from canvas_sdk.effects import EffectType
-from canvas_sdk.events import EventType
-from canvas_sdk.test_utils.factories import NoteFactory, NoteTypeFactory, PatientFactory
-from canvas_sdk.v1.data.discount import Discount
+import arrow
+from canvas_sdk.effects.task import TaskStatus
+from canvas_sdk.test_utils.factories import NoteFactory, NoteTypeFactory, PatientFactory, StaffFactory
+from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
+from canvas_sdk.v1.data.task import Task
 
-from unsigned_note_reminder.handlers.event_handlers import NewOfficeVisitNoteHandler
+from unsigned_note_reminder.handlers.event_handlers import UnsignedNoteReminderTask
 
 
-# Test the handler's compute method using factories to create real database records
-def test_handler_responds_to_new_office_visit_note() -> None:
-    """Test that the handler originates a goal command for a new office visit note."""
-    # Create real database records using factories
-    note_type = NoteTypeFactory.create(name="Office visit")
-    note = NoteFactory.create(note_type_version=note_type)
-
-    # Create a mock event with context referencing the real records
+def _make_handler(secrets: dict[str, str] | None = None) -> UnsignedNoteReminderTask:
+    """Create a handler instance with optional secrets override."""
     mock_event = Mock()
-    mock_event.type = EventType.NOTE_STATE_CHANGE_EVENT_CREATED
-    mock_event.context = {
-        "state": "NEW",
-        "note_id": note.id,
-        "patient_id": note.patient.id,
-    }
+    mock_event.type = "cron"
+    handler = UnsignedNoteReminderTask(event=mock_event)
+    handler.secrets = secrets or {}
+    return handler
 
-    # Instantiate the handler with the mock event
-    handler = NewOfficeVisitNoteHandler(event=mock_event)
 
-    # Call compute and get the effects
-    effects = handler.compute()
+def _create_unsigned_note(hours_ago: int = 72, note_type_name: str = "Office visit") -> object:
+    """Create an unsigned note with a provider, dated hours_ago hours in the past."""
+    provider = StaffFactory.create()
+    patient = PatientFactory.create()
+    note_type = NoteTypeFactory.create(name=note_type_name)
+    note = NoteFactory.create(
+        note_type_version=note_type,
+        patient=patient,
+        provider=provider,
+        datetime_of_service=arrow.utcnow().shift(hours=-hours_ago).datetime,
+    )
+    return note
 
-    # Assert that one effect was returned (goal command)
+
+def _lock_note(note: object) -> None:
+    """Mark a note as locked (signed)."""
+    CurrentNoteStateEvent.objects.create(note=note, state=NoteStates.LOCKED)
+
+
+def _parse_effect_payload(effect: object) -> dict:
+    """Parse an effect's JSON string payload."""
+    return json.loads(effect.payload)
+
+
+def test_creates_task_for_unsigned_overdue_note() -> None:
+    """An unsigned note past the threshold should produce a reminder task."""
+    note = _create_unsigned_note(hours_ago=72)
+    handler = _make_handler()
+
+    effects = handler.execute()
+
+    assert len(effects) == 1
+    payload = _parse_effect_payload(effects[0])
+    assert "Sign note for" in payload["data"]["title"]
+    assert payload["data"]["assignee"]["id"] == str(note.provider.id)
+    assert payload["data"]["patient"]["id"] == str(note.patient.id)
+
+
+def test_skips_locked_notes() -> None:
+    """A locked (signed) note should not produce any effects."""
+    note = _create_unsigned_note(hours_ago=72)
+    _lock_note(note)
+    handler = _make_handler()
+
+    effects = handler.execute()
+
+    assert len(effects) == 0
+
+
+def test_skips_recent_notes() -> None:
+    """A note within the threshold window should not produce any effects."""
+    _create_unsigned_note(hours_ago=12)
+    handler = _make_handler(secrets={"THRESHOLD_HOURS": "48"})
+
+    effects = handler.execute()
+
+    assert len(effects) == 0
+
+
+def test_respects_custom_threshold() -> None:
+    """A custom THRESHOLD_HOURS secret should change the cutoff."""
+    _create_unsigned_note(hours_ago=30)
+    handler = _make_handler(secrets={"THRESHOLD_HOURS": "24"})
+
+    effects = handler.execute()
+
     assert len(effects) == 1
 
-    # Assert the effect has the correct type
-    assert effects[0].type == EffectType.ORIGINATE_GOAL_COMMAND
+
+def test_filters_by_note_type() -> None:
+    """When NOTE_TYPES is set, only matching note types should produce tasks."""
+    _create_unsigned_note(hours_ago=72, note_type_name="Office visit")
+    _create_unsigned_note(hours_ago=72, note_type_name="Progress note")
+
+    handler = _make_handler(secrets={"NOTE_TYPES": "Office visit"})
+    effects = handler.execute()
+
+    assert len(effects) == 1
+    payload = _parse_effect_payload(effects[0])
+    assert "Sign note for" in payload["data"]["title"]
 
 
-def test_handler_skips_non_new_notes() -> None:
-    """Test that the handler skips notes that are not in NEW state."""
-    mock_event = Mock()
-    mock_event.type = EventType.NOTE_STATE_CHANGE_EVENT_CREATED
-    mock_event.context = {
-        "state": "SIGNED",
-        "note_id": 1,
-        "patient_id": 1,
-    }
-
-    handler = NewOfficeVisitNoteHandler(event=mock_event)
-    effects = handler.compute()
-
-    # Assert that no effects were returned
-    assert len(effects) == 0
-
-
-def test_handler_skips_non_office_visit_notes() -> None:
-    """Test that the handler skips notes that are not office visits."""
-    # Create a note with a non-office-visit type
-    note_type = NoteTypeFactory.create(name="Progress note")
-    note = NoteFactory.create(note_type_version=note_type)
-
-    mock_event = Mock()
-    mock_event.type = EventType.NOTE_STATE_CHANGE_EVENT_CREATED
-    mock_event.context = {
-        "state": "NEW",
-        "note_id": note.id,
-        "patient_id": note.patient.id,
-    }
-
-    handler = NewOfficeVisitNoteHandler(event=mock_event)
-    effects = handler.compute()
-
-    # Assert that no effects were returned
-    assert len(effects) == 0
-
-
-# Test that the handler class has the correct event type configured
-def test_handler_event_configuration() -> None:
-    """Test that the handler is configured to respond to the correct event type."""
-    assert EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_CREATED) == NewOfficeVisitNoteHandler.RESPONDS_TO
-
-
-# Example: You can use a factory to create a patient instance for testing purposes.
-def test_factory_example() -> None:
-    """Test that a patient can be created using the PatientFactory."""
+def test_skips_notes_without_provider() -> None:
+    """A note with no provider should not produce any effects."""
     patient = PatientFactory.create()
-    assert patient.id is not None
+    note_type = NoteTypeFactory.create(name="Office visit")
+    # Create note with provider, then set to None to avoid factory issues
+    provider = StaffFactory.create()
+    note = NoteFactory.create(
+        note_type_version=note_type,
+        patient=patient,
+        provider=provider,
+        datetime_of_service=arrow.utcnow().shift(hours=-72).datetime,
+    )
+    # Remove provider after creation
+    from canvas_sdk.v1.data.note import Note
+    Note.objects.filter(dbid=note.dbid).update(provider=None)
+
+    handler = _make_handler()
+
+    effects = handler.execute()
+
+    assert len(effects) == 0
 
 
-# Example: If a factory is not available, you can create an instance manually with the data model directly.
-def test_model_example() -> None:
-    """Test that a Discount instance can be created."""
-    Discount.objects.create(name="10%", adjustment_group="30", adjustment_code="CO", discount=0.10)
-    assert Discount.objects.first().pk is not None
+def test_skips_duplicate_reminders() -> None:
+    """If an open reminder task already exists for the same note, skip it."""
+    note = _create_unsigned_note(hours_ago=72)
+
+    note_date = note.datetime_of_service.strftime("%Y-%m-%d")
+    patient_name = f"{note.patient.first_name} {note.patient.last_name}"
+    Task.objects.create(
+        patient=note.patient,
+        assignee=note.provider,
+        status=TaskStatus.OPEN,
+        title=f"Sign note for {patient_name} from {note_date}",
+    )
+
+    handler = _make_handler()
+    effects = handler.execute()
+
+    assert len(effects) == 0
+
+
+def test_creates_task_when_prior_reminder_is_closed() -> None:
+    """A closed prior reminder should not prevent a new task from being created."""
+    note = _create_unsigned_note(hours_ago=72)
+
+    note_date = note.datetime_of_service.strftime("%Y-%m-%d")
+    patient_name = f"{note.patient.first_name} {note.patient.last_name}"
+    Task.objects.create(
+        patient=note.patient,
+        assignee=note.provider,
+        status=TaskStatus.CLOSED,
+        title=f"Sign note for {patient_name} from {note_date}",
+    )
+
+    handler = _make_handler()
+    effects = handler.execute()
+
+    assert len(effects) == 1
+
+
+def test_multiple_unsigned_notes_create_multiple_tasks() -> None:
+    """Multiple overdue unsigned notes should each produce a reminder task."""
+    _create_unsigned_note(hours_ago=72, note_type_name="Office visit")
+    _create_unsigned_note(hours_ago=96, note_type_name="Progress note")
+
+    handler = _make_handler()
+    effects = handler.execute()
+
+    assert len(effects) == 2
+
+
+def test_task_has_unsigned_note_reminder_label() -> None:
+    """Created tasks should have the 'unsigned-note-reminder' label for identification."""
+    _create_unsigned_note(hours_ago=72)
+    handler = _make_handler()
+
+    effects = handler.execute()
+
+    assert len(effects) == 1
+    payload = _parse_effect_payload(effects[0])
+    assert "unsigned-note-reminder" in payload["data"]["labels"]

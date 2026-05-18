@@ -1,13 +1,13 @@
 {
-    "sdk_version": "0.1.4",
+    "sdk_version": "0.152.0",
     "plugin_version": "0.0.1",
     "name": "unsigned_note_reminder",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Creates follow-up tasks for notes that remain unsigned past a configurable threshold. Runs daily and assigns reminder tasks to the note's provider.",
     "components": {
         "handlers": [
             {
-                "class": "unsigned_note_reminder.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "unsigned_note_reminder.handlers.event_handlers:UnsignedNoteReminderTask",
+                "description": "CronTask that checks for unsigned notes and creates reminder tasks for providers."
             }
         ],
         "commands": [],
@@ -15,7 +15,18 @@
         "effects": [],
         "views": []
     },
-    "variables": [],
+    "variables": [
+        {
+            "name": "THRESHOLD_HOURS",
+            "sensitive": false,
+            "default": "48"
+        },
+        {
+            "name": "NOTE_TYPES",
+            "sensitive": false,
+            "default": ""
+        }
+    ],
     "tags": {},
     "references": [],
     "license": "",

@@ -1,71 +1,78 @@
-import json
+import arrow
 
-from canvas_sdk.commands import GoalCommand
 from canvas_sdk.effects import Effect
-from canvas_sdk.events import EventType
-from canvas_sdk.handlers import BaseHandler
-from canvas_sdk.v1.data.note import Note
-from canvas_sdk.v1.data.patient import Patient
+from canvas_sdk.effects.task import AddTask, TaskStatus
+from canvas_sdk.handlers.cron_task import CronTask
+from canvas_sdk.v1.data.note import CurrentNoteStateEvent, Note, NoteStates
+from canvas_sdk.v1.data.task import Task
 from logger import log
 
-# Inherit from BaseHandler to properly get registered for events
-class NewOfficeVisitNoteHandler(BaseHandler):
-    """Originates goal command when a new office visit note is created."""
+DEFAULT_THRESHOLD_HOURS = 48
+DEFAULT_CRON_SCHEDULE = "0 18 * * *"
 
-    # Name the event type you wish to run in response to
-    RESPONDS_TO = EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_CREATED)
 
-    def compute(self) -> list[Effect]:
-        """This method gets called when an event of the type RESPONDS_TO is fired."""
-        # This class is initialized with several pieces of information you can
-        # access.
-        #
-        # `self.event` is the event object that caused this method to be
-        # called.
-        #
-        # `self.event.target.id` is an identifier for the object that is the subject of
-        # the event. In this case, it would be the identifier of the note state.
-        #
-        # `self.event.context` is a python dictionary of additional data that was
-        # given with the event. The information given here depends on the
-        # event type.
-        #
-        # `self.secrets` is a python dictionary of the secrets you defined in
-        # your CANVAS_MANIFEST.json and set values for in the uploaded
-        # plugin's configuration page: <emr_base_url>/admin/plugin_io/plugin/<plugin_id>/change/
-        # Example: self.secrets['WEBHOOK_URL']
+class UnsignedNoteReminderTask(CronTask):
+    """Creates follow-up tasks for notes that remain unsigned past a configurable threshold."""
 
-        # You can log things and see them using the Canvas CLI's log streaming
-        # function.
-        log.info(f"[NewOfficeVisitNoteHandler] Context: {self.event.context}")
+    SCHEDULE = DEFAULT_CRON_SCHEDULE
 
-        # Get the note state from context
-        note_state = self.event.context.get("state")
+    def execute(self) -> list[Effect]:
+        threshold_hours = int(self.secrets.get("THRESHOLD_HOURS", DEFAULT_THRESHOLD_HOURS))
+        note_types_raw = self.secrets.get("NOTE_TYPES", "")
 
-        # Check if the note state is NEW
-        if note_state != "NEW":
-            return []
+        cutoff = arrow.utcnow().shift(hours=-threshold_hours).datetime
 
-        # Get the note ID from context and fetch the Note object
-        note_id = self.event.context.get("note_id")
-        note = Note.objects.get(id=note_id)
+        # Find notes that are NOT locked (i.e., unsigned) and older than the threshold
+        locked_note_ids = CurrentNoteStateEvent.objects.filter(
+            state=NoteStates.LOCKED,
+        ).values_list("note_id", flat=True)
 
-        # Check if note type is OFFICE VISIT
-        note_type_name = note.note_type_version.name
+        unsigned_notes = Note.objects.filter(
+            datetime_of_service__lte=cutoff,
+        ).exclude(
+            dbid__in=locked_note_ids,
+        ).select_related("patient", "provider")
 
-        if note_type_name != "Office visit":
-            return []
+        if note_types_raw.strip():
+            allowed_types = [t.strip() for t in note_types_raw.split(",") if t.strip()]
+            unsigned_notes = unsigned_notes.filter(
+                note_type_version__name__in=allowed_types,
+            )
 
-        # Get the note UUID from the Note object
-        note_uuid = str(note.id)
+        # Filter to notes with an active provider
+        unsigned_notes = unsigned_notes.exclude(provider__isnull=True)
 
-        # Get the patient to create a personalized goal statement
-        patient_id = self.event.context.get("patient_id")
-        patient = Patient.objects.get(id=patient_id)
-        patient_name = patient.first_name
-        goal_statement = f"{patient_name} will build plugins with the Canvas SDK to improve their clinical workflow"
+        effects: list[Effect] = []
 
-        # Create and originate Goal command with personalized statement
-        goal_command = GoalCommand(note_uuid=note_uuid, goal_statement=goal_statement)
+        for note in unsigned_notes:
+            if self._reminder_exists(note):
+                continue
 
-        return [goal_command.originate()]
+            patient_name = f"{note.patient.first_name} {note.patient.last_name}"
+            note_date = note.datetime_of_service.strftime("%Y-%m-%d")
+
+            task = AddTask(
+                assignee_id=str(note.provider.id),
+                patient_id=str(note.patient.id),
+                title=f"Sign note for {patient_name} from {note_date}",
+                due=arrow.utcnow().datetime,
+                status=TaskStatus.OPEN,
+                labels=["unsigned-note-reminder"],
+            )
+            effects.append(task.apply())
+
+        log.info(
+            f"[UnsignedNoteReminderTask] Found {unsigned_notes.count()} unsigned notes, "
+            f"created {len(effects)} reminder tasks"
+        )
+
+        return effects
+
+    def _reminder_exists(self, note: Note) -> bool:
+        """Check if an open reminder task already exists for this note's patient + provider combo."""
+        return bool(Task.objects.filter(
+            patient=note.patient,
+            assignee=note.provider,
+            status=TaskStatus.OPEN,
+            title__startswith=f"Sign note for {note.patient.first_name} {note.patient.last_name} from {note.datetime_of_service.strftime('%Y-%m-%d')}",
+        ).exists())

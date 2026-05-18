@@ -1,20 +1,25 @@
-unsigned-note-reminder
-======================
+# Unsigned Note Reminder
 
-## Description
+Creates follow-up tasks for notes that remain unsigned past a configurable threshold. Runs daily at 6pm UTC and assigns reminder tasks to the note's provider.
 
-A description of this plugin
+## Behavior
 
-### CANVAS_MANIFEST
+1. Finds notes that are **not locked** (unsigned) and older than the threshold (default: 48 hours)
+2. Skips notes without an assigned provider
+3. Checks for existing open reminder tasks to avoid duplicates
+4. Creates a task assigned to the provider: *"Sign note for [Patient Name] from [Date]"*
 
-The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it gets updated if you add, remove, or rename file or class names.
+## Configuration
 
-Required CANVAS_MANIFEST.json fields:
-- sdk_version (string) - The version of the Canvas SDK
-- plugin_version (string) - The version of your plugin
-- name (string) - The name of your plugin
-- description (string) - Description of your plugin
-- components (object) - Must have at least 1 component property (handlers, commands, content, effects, views, applications, or questionnaires)
-- tags (object) - Tags for categorizing your plugin (can be empty: {})
-- license (string) - License information (can be empty: "")
-- readme (string or boolean) - Path to readme or false
+| Secret | Default | Description |
+|--------|---------|-------------|
+| `THRESHOLD_HOURS` | `48` | Hours before a note is considered overdue for signing |
+| `NOTE_TYPES` | *(empty = all)* | Comma-separated note type names to filter |
+
+## Installation
+
+```bash
+canvas install unsigned-note-reminder --host <instance>
+```
+
+After installation, configure secrets in the plugin admin page.

@@ -6,6 +6,7 @@ name = "unsigned-note-reminder"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
+    "arrow",
     "django>=4.2.0",
     "canvas[test-utils]",
 ]
