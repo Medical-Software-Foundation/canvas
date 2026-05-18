@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.94.0",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.2.1",
     "name": "dea_prescriber_filter",
     "description": "Filters prescribe actions based on NPI matching between user and selected prescriber",
     "license": "MIT",
@@ -52,7 +52,7 @@
                 "class": "dea_prescriber_filter.applications.delegation_app:PrescriberDelegationApp",
                 "name": "Prescriber Assist",
                 "description": "Configure which staff can sign prescriptions for each provider",
-                "icon": "assets/prescriber-delegation-icon.png",
+                "icon": "https://raw.githubusercontent.com/Medical-Software-Foundation/canvas/main/extensions/dea-prescriber-filter/dea_prescriber_filter/assets/prescriber-delegation-icon.png",
                 "scope": "global"
             }
         ]
