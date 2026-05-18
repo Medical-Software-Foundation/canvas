@@ -2,6 +2,9 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
+  // Boot marker — verifiable from devtools console to confirm the new bundle
+  // is loaded (cache-bust hand-check).
+  console.log('clinical_pathways builder v0.2.3 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -650,9 +653,9 @@
       const opt = document.createElement('option');
       opt.value = q.id;
       opt.textContent = q.name;
-      if (q.id === comp.questionnaire_id) opt.selected = true;
       qSel.appendChild(opt);
     });
+    qSel.value = comp.questionnaire_id || '';
     qSel.addEventListener('change', async (ev) => {
       comp.questionnaire_id = ev.target.value;
       comp.question_id = '';
@@ -694,13 +697,13 @@
         const opt = document.createElement('option');
         opt.value = q.id;
         opt.textContent = q.name;
-        if (q.id === comp.question_id) opt.selected = true;
         questionSel.appendChild(opt);
       });
+      questionSel.value = comp.question_id || '';
       const currentQuestion = detail.questions.find((q) => q.id === comp.question_id);
       renderOperatorAndValue(opSel, valueCell, comp, currentQuestion, onChange);
 
-      questionSel.addEventListener('change', (ev) => {
+      questionSel.onchange = (ev) => {
         comp.question_id = ev.target.value;
         comp.operator = 'eq';
         comp.value_option_id = '';
@@ -710,7 +713,7 @@
         const q = detail.questions.find((qq) => qq.id === comp.question_id);
         renderOperatorAndValue(opSel, valueCell, comp, q, onChange);
         onChange(comp);
-      });
+      };
     })();
 
     return row;
@@ -722,18 +725,27 @@
     const type = (question && question.response_set_type) || 'TXT';
 
     const ops = operatorsForType(type);
+    const validOpKeys = ops.map(([v]) => v);
+    if (!validOpKeys.includes(comp.operator)) {
+      // The persisted operator isn't valid for this question's type (e.g.,
+      // the question was changed in a prior session); fall back to the first
+      // operator so the dropdown shows something meaningful.
+      comp.operator = ops[0] ? ops[0][0] : 'eq';
+    }
     ops.forEach(([v, lbl]) => {
       const opt = document.createElement('option');
       opt.value = v;
       opt.textContent = lbl;
-      if (comp.operator === v) opt.selected = true;
       opSel.appendChild(opt);
     });
-    opSel.addEventListener('change', (ev) => {
+    opSel.value = comp.operator;
+    // Replace any prior change handler — opSel may be re-decorated when the
+    // question changes, and we don't want duplicate listeners stacking up.
+    opSel.onchange = (ev) => {
       comp.operator = ev.target.value;
       renderValueWidget(valueCell, comp, question, onChange);
       onChange(comp);
-    });
+    };
     renderValueWidget(valueCell, comp, question, onChange);
   }
 
@@ -792,9 +804,14 @@
         const opt = document.createElement('option');
         opt.value = o.id;
         opt.textContent = o.name || o.value;
-        if (o.id === comp.value_option_id) opt.selected = true;
         sel.appendChild(opt);
       });
+      // Set value AFTER all options are appended — the canonical way to
+      // programmatically select. `opt.selected = true` set at insertion time
+      // is unreliable across browsers, especially when the select is already
+      // in the DOM (which it is by the time renderValueWidget runs from the
+      // async hydration path).
+      sel.value = comp.value_option_id || '';
       sel.addEventListener('change', (ev) => {
         comp.value_option_id = ev.target.value;
         onChange(comp);

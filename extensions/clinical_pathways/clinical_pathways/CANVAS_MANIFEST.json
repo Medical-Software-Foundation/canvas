@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.139.0",
-    "plugin_version": "0.2.2",
+    "plugin_version": "0.2.3",
     "name": "clinical_pathways",
     "description": "Author and run branching clinical pathways over existing Canvas questionnaires. Pathways auto-insert questionnaires into the note as the provider commits each step, and terminate in a custom-command classification.",
     "custom_data": {

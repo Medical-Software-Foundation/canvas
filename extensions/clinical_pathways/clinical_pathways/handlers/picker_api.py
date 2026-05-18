@@ -118,9 +118,14 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        # Use pathway_id (column accessor) instead of the instance to dodge a
+        # Canvas SDK quirk where the same model class can be loaded under two
+        # different module references inside the plugin runner; the FK
+        # descriptor's isinstance check then fails on an apparently-correct
+        # instance.
         run = PathwayRun(
             note_uuid=note_uuid,
-            pathway=pw,
+            pathway_id=pw.dbid,
             current_node_id=root.get("node_id", ""),
             status="active",
             captured_responses={},
