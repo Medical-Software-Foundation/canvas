@@ -65,7 +65,19 @@
 
   // ---------- Persistence ----------
 
-  const savePathway = debounce(async () => {
+  let _saveTimer = null;
+  function scheduleSave() {
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      _saveTimer = null;
+      void flushSave();
+    }, 400);
+  }
+  async function flushSave() {
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
     if (!state.pathway || !state.pathway.dbid) return;
     try {
       const pw = await api('/pathways/' + state.pathway.dbid, {
@@ -82,7 +94,9 @@
     } catch (_) {
       /* flashStatus already shown */
     }
-  }, 400);
+  }
+  // Backward-compatible alias used throughout the file.
+  const savePathway = scheduleSave;
 
   // ---------- ID helpers (local) ----------
 
@@ -386,9 +400,10 @@
     whenSec.appendChild(whenH);
     const ctx = collectQuestionnaireContext(parentNode, ancestors);
     whenSec.appendChild(
-      renderCondition(branch.when || { kind: 'group', combinator: 'all', children: [] }, ctx, /*depth*/ 1, (newWhen) => {
+      renderCondition(branch.when || { kind: 'group', combinator: 'all', children: [] }, ctx, /*depth*/ 1, (newWhen, shouldRerender) => {
         branch.when = newWhen;
         savePathway();
+        if (shouldRerender) renderTree();
       })
     );
     el.appendChild(whenSec);
@@ -435,6 +450,9 @@
     rQ.name = 'then-' + branch.branch_id;
     rQ.checked = currentType === 'questionnaire';
     rQ.addEventListener('change', () => {
+      // Guard: only reset the subtree when the user is actually switching
+      // type. Re-clicking the already-selected radio must not wipe data.
+      if (branch.then && branch.then.type === 'questionnaire') return;
       branch.then = {
         node_id: newNodeId(),
         type: 'questionnaire',
@@ -456,6 +474,7 @@
     rT.name = 'then-' + branch.branch_id;
     rT.checked = currentType === 'terminal';
     rT.addEventListener('change', async () => {
+      if (branch.then && branch.then.type === 'terminal') return;
       await loadTerminalCommands();
       const first = state.terminalCommands[0];
       branch.then = {
@@ -564,19 +583,20 @@
     (cond.children || []).forEach((child, idx) => {
       if (child.kind === 'group') {
         group.appendChild(
-          renderCondition(child, contextQuestionnaires, depth + 1, (updated) => {
+          renderCondition(child, contextQuestionnaires, depth + 1, (updated, shouldRerender) => {
             cond.children[idx] = updated;
-            onChange(cond);
+            onChange(cond, shouldRerender);
           })
         );
       } else {
         group.appendChild(renderComparison(child, contextQuestionnaires, (updated) => {
           if (updated === null) {
             cond.children.splice(idx, 1);
+            onChange(cond, true);
           } else {
             cond.children[idx] = updated;
+            onChange(cond, false);
           }
-          onChange(cond);
         }));
       }
     });
@@ -597,7 +617,7 @@
         value_option_id: '',
         value_text: '',
       });
-      onChange(cond);
+      onChange(cond, true);
     });
     actions.appendChild(addCompBtn);
     const addGroupBtn = document.createElement('button');
@@ -607,7 +627,7 @@
     addGroupBtn.addEventListener('click', () => {
       cond.children = cond.children || [];
       cond.children.push({ kind: 'group', combinator: 'all', children: [] });
-      onChange(cond);
+      onChange(cond, true);
     });
     actions.appendChild(addGroupBtn);
     group.appendChild(actions);
@@ -923,6 +943,9 @@
 
   els.publishBtn.addEventListener('click', async () => {
     if (!state.pathway || !state.pathway.dbid) return;
+    // Flush any pending debounced edits so the server validates against
+    // the user's latest state, not an in-flight stale version.
+    await flushSave();
     try {
       const res = await api('/pathways/' + state.pathway.dbid + '/publish', {
         method: 'POST',
