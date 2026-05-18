@@ -1,0 +1,23 @@
+[project]
+name = "recent-patients"
+version = "0.1.13"
+description = "Per-staff list of recently interacted patients. Closes the lost-context gap after inbox-style workflows like signing a result, replying to a message, or completing a task."
+authors = [{ name = "Alyssa Yandura", email = "alyssa.yandura@canvasmedical.com" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
