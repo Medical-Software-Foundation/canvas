@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import arrow
 from canvas_sdk.effects.task import TaskStatus
 from canvas_sdk.test_utils.factories import NoteFactory, NoteTypeFactory, PatientFactory, StaffFactory
-from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
+from canvas_sdk.v1.data.note import CurrentNoteStateEvent, Note, NoteStates
 from canvas_sdk.v1.data.task import Task
 
 from unsigned_note_reminder.handlers.event_handlers import UnsignedNoteReminderTask
@@ -19,7 +19,7 @@ def _make_handler(secrets: dict[str, str] | None = None) -> UnsignedNoteReminder
     return handler
 
 
-def _create_unsigned_note(hours_ago: int = 72, note_type_name: str = "Office visit") -> object:
+def _create_unsigned_note(hours_ago: int = 72, note_type_name: str = "Office visit") -> Note:
     """Create an unsigned note with a provider, dated hours_ago hours in the past."""
     provider = StaffFactory.create()
     patient = PatientFactory.create()
@@ -33,7 +33,7 @@ def _create_unsigned_note(hours_ago: int = 72, note_type_name: str = "Office vis
     return note
 
 
-def _lock_note(note: object) -> None:
+def _lock_note(note: Note) -> None:
     """Mark a note as locked (signed)."""
     CurrentNoteStateEvent.objects.create(note=note, state=NoteStates.LOCKED)
 
@@ -105,7 +105,6 @@ def test_skips_notes_without_provider() -> None:
     """A note with no provider should not produce any effects."""
     patient = PatientFactory.create()
     note_type = NoteTypeFactory.create(name="Office visit")
-    # Create note with provider, then set to None to avoid factory issues
     provider = StaffFactory.create()
     note = NoteFactory.create(
         note_type_version=note_type,
@@ -113,8 +112,6 @@ def test_skips_notes_without_provider() -> None:
         provider=provider,
         datetime_of_service=arrow.utcnow().shift(hours=-72).datetime,
     )
-    # Remove provider after creation
-    from canvas_sdk.v1.data.note import Note
     Note.objects.filter(dbid=note.dbid).update(provider=None)
 
     handler = _make_handler()
@@ -183,3 +180,36 @@ def test_task_has_unsigned_note_reminder_label() -> None:
     assert len(effects) == 1
     payload = _parse_effect_payload(effects[0])
     assert "unsigned-note-reminder" in payload["data"]["labels"]
+
+
+def test_batch_size_limits_effects() -> None:
+    """MAX_BATCH_SIZE should cap how many notes are processed per run."""
+    for i in range(5):
+        _create_unsigned_note(hours_ago=72 + i, note_type_name="Office visit")
+
+    handler = _make_handler(secrets={"MAX_BATCH_SIZE": "3"})
+    effects = handler.execute()
+
+    assert len(effects) == 3
+
+
+def test_oldest_notes_processed_first() -> None:
+    """Notes should be processed oldest-first so the most overdue get reminders."""
+    recent = _create_unsigned_note(hours_ago=72, note_type_name="Office visit")
+    oldest = _create_unsigned_note(hours_ago=200, note_type_name="Office visit")
+
+    handler = _make_handler(secrets={"MAX_BATCH_SIZE": "1"})
+    effects = handler.execute()
+
+    assert len(effects) == 1
+    payload = _parse_effect_payload(effects[0])
+    oldest_date = oldest.datetime_of_service.strftime("%Y-%m-%d")
+    assert oldest_date in payload["data"]["title"]
+
+
+def test_empty_instance_produces_no_effects() -> None:
+    """When there are no unsigned overdue notes, nothing should happen."""
+    handler = _make_handler()
+    effects = handler.execute()
+
+    assert len(effects) == 0

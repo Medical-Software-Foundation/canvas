@@ -22,6 +22,11 @@
             "default": "48"
         },
         {
+            "name": "MAX_BATCH_SIZE",
+            "sensitive": false,
+            "default": "100"
+        },
+        {
             "name": "NOTE_TYPES",
             "sensitive": false,
             "default": ""
