@@ -28,22 +28,22 @@ def _make_handler(
 # _is_admin_user — auth check
 # ─────────────────────────────────────────────────────────────
 
-def test_is_admin_user_denies_when_secret_empty() -> None:
-    """Empty ADMIN_STAFF_IDS secret denies admin access (fail-closed)."""
+def test_is_admin_user_allows_when_secret_empty() -> None:
+    """Empty ADMIN_STAFF_IDS secret means any authenticated staff is admin."""
     tested = _make_handler(secrets={"ADMIN_STAFF_IDS": ""})
 
     result = tested._is_admin_user()
 
-    assert result is False
+    assert result is True
 
 
-def test_is_admin_user_denies_when_secret_missing() -> None:
-    """Missing ADMIN_STAFF_IDS secret denies admin access (fail-closed)."""
+def test_is_admin_user_allows_when_secret_missing() -> None:
+    """Missing ADMIN_STAFF_IDS secret means any authenticated staff is admin."""
     tested = _make_handler(secrets={})
 
     result = tested._is_admin_user()
 
-    assert result is False
+    assert result is True
 
 
 def test_is_admin_user_restricts_when_secret_set_and_user_not_listed() -> None:

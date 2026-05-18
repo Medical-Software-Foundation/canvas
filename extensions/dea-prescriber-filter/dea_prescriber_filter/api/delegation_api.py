@@ -443,20 +443,17 @@ class DelegationUIApi(StaffSessionAuthMixin, SimpleAPI):
     def _is_admin_user(self) -> bool:
         """Check if the current user is allowed to manage delegations.
 
-        Requires ADMIN_STAFF_IDS to be configured (comma-separated staff UUIDs).
-        Empty / unset secret denies all callers — controlled-substance delegation
-        must be granted by an explicitly-listed admin, never by "any authenticated
-        staff." See CLAUDE.md fail-closed anti-pattern guidance.
+        ADMIN_STAFF_IDS is an *optional* restriction list. When unset or empty,
+        any authenticated Canvas staff member can manage delegations
+        (StaffSessionAuthMixin already enforces that the caller is a logged-in
+        staff user). When set to a comma-separated list of staff UUIDs, access
+        is restricted to those staff members only.
         """
         admin_ids_raw = self.secrets.get("ADMIN_STAFF_IDS", "") or ""
         admin_ids = {s.strip() for s in admin_ids_raw.split(",") if s.strip()}
 
         if not admin_ids:
-            log.warning(
-                "ADMIN_STAFF_IDS is not configured; denying admin access. "
-                "Set this secret to a comma-separated list of staff UUIDs to allow admins."
-            )
-            return False
+            return True
 
         headers = getattr(self.request, "headers", {}) or {}
         user_id = headers.get("canvas-logged-in-user-id") or headers.get("Canvas-Logged-In-User-Id")
