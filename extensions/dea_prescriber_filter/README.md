@@ -25,11 +25,17 @@ Particularly relevant for primary care, internal medicine, pain management, psyc
 
 ## How to install
 
-Install via the Canvas CLI from the inner package directory:
+**Via the Canvas CLI** (requires API client credentials in `~/.canvas/credentials.ini` for the target instance):
 
 ```bash
-cd dea_prescriber_filter
+cd extensions/dea_prescriber_filter
 canvas install . --host <your-instance>
+```
+
+**Via the Canvas admin UI (URL upload)** — paste the GitHub directory URL into the plugin upload form:
+
+```
+https://github.com/Medical-Software-Foundation/canvas/tree/main/extensions/dea_prescriber_filter
 ```
 
 After install, the Prescriber Assist app appears in the app drawer for authenticated staff. Any logged-in Canvas staff member can open the admin UI by default; to restrict access to a named subset of admins, configure the `ADMIN_STAFF_IDS` secret (see [Configuration options](#configuration-options)).
@@ -62,7 +68,7 @@ Configure this in the Canvas admin panel: **Plugins → dea_prescriber_filter �
 
 ## Screenshots
 
-![Prescriber Assist admin UI](dea_prescriber_filter/assets/admin-ui-screenshot.png)
+![Prescriber Assist admin UI](assets/admin-ui-screenshot.png)
 
 The Prescriber Assist admin UI: administrators select a provider and a set of staff members, then save a delegation. Existing delegations appear in the table below and can be edited or removed individually.
 
@@ -150,9 +156,3 @@ POST_VALIDATION fires
 ```
 
 The action filter is the primary safety gate: it always runs with the *current* user context (not a cached decision), so user-switching does not leak authorization.
-
-## Running tests
-
-```bash
-uv run pytest
-```
