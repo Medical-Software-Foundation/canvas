@@ -1,0 +1,34 @@
+{
+    "sdk_version": "0.135.0",
+    "plugin_version": "0.1.90",
+    "name": "practitioner_bulk_loader",
+    "description": "Bulk-load practitioners from a CSV file: validates records, detects duplicates, and creates or additively merges FHIR Practitioner resources with staff keys returned on completion.",
+    "components": {
+        "applications": [
+            {
+                "class": "practitioner_bulk_loader.applications.practitioner_bulk_loader:PractitionerBulkLoaderApp",
+                "name": "Staff Loader",
+                "description": "Upload a CSV to create or update multiple practitioners at once.",
+                "icon": "assets/practitioner-bulk-loader-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 200
+            }
+        ],
+        "protocols": [
+            {
+                "class": "practitioner_bulk_loader.api.bulk_upload_api:BulkUploadAPI",
+                "description": "REST endpoints for CSV template download, parse-and-validate, and create-practitioners."
+            }
+        ]
+    },
+    "secrets": [
+        "fumage-client-id",
+        "fumage-client-secret"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
