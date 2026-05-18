@@ -1,5 +1,7 @@
 """SimpleAPI endpoint serving aggregated Candid claim data for the dashboard."""
 
+from django.db.models import Q
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SessionCredentials, SimpleAPIRoute
@@ -34,10 +36,13 @@ class CandidDashboardAPI(SimpleAPIRoute):
         except ValueError:
             limit = DEFAULT_LIMIT
 
-        # Over-fetch so post-filter on metadata-derived fields still yields `limit` rows.
+        # Include claims that were submitted OR that have a submission error
+        # (rejected claims never get META_SUBMITTED_AT but do get META_SUBMISSION_ERROR)
         fetch_size = limit * 3 if errors_only else limit
         claims = (
-            Claim.objects.filter(metadata__key=META_SUBMITTED_AT)
+            Claim.objects.filter(
+                Q(metadata__key=META_SUBMITTED_AT) | Q(metadata__key=META_SUBMISSION_ERROR)
+            )
             .select_related("patient", "current_queue")
             .prefetch_related("metadata")
             .distinct()
