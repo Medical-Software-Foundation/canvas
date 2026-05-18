@@ -331,7 +331,7 @@ def _add_patient(claim: Claim, payload: dict, errors: list[str]) -> None:
             "address1": claim_patient.addr1,
             "city": claim_patient.city,
             "state": claim_patient.state,
-            "zip_code": claim_patient.zip,
+            "zip_code": _split_zip(claim_patient.zip)[0],
         },
     }
     if claim_patient.addr2:
@@ -526,7 +526,7 @@ def _subscriber_payload(coverage: ClaimCoverage) -> dict | None:
             "address1": coverage.subscriber_addr1,
             "city": coverage.subscriber_city,
             "state": coverage.subscriber_state,
-            "zip_code": coverage.subscriber_zip,
+            "zip_code": _split_zip(coverage.subscriber_zip)[0],
         }
         if coverage.subscriber_addr2:
             subscriber["address"]["address2"] = coverage.subscriber_addr2
