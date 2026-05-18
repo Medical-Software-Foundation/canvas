@@ -1,5 +1,21 @@
-// Store measurements for later submission
-let pendingMeasurements = [];
+// State for interval-based vitals capture
+let selectedRow = null;
+let intervalSelections = {};
+let mockInterval = null;
+let sessionStartTime = null; // timestamp of first reading
+let activeSocket = null;
+let sessionEndedByUser = false;
+
+// Map interval labels to Spravato charting app's row_id values (0, 1, 2).
+var INTERVAL_ROW_IDS = {
+  'Pre-administration': '0',
+  '40-min post': '1',
+  'Pre-discharge': '2',
+};
+
+// Raw reading log used to render the live table and compute averages.
+// Each entry: { elapsedMin, time, displayTime, hr, sys, dia, rr, spo2 }
+var allReadings = [];
 
 window.addEventListener("load", () => {{
   var session_id = window._caretaker.session_id;
@@ -14,12 +30,41 @@ window.addEventListener("load", () => {{
     }
   );
 
-  // Set up save button
-  document.getElementById('save-to-chart-btn').addEventListener('click', () => {
-    saveToChart(window._caretaker.session_id, subdomain);
+  // Set up save intervals button
+  document.getElementById('save-intervals-btn').addEventListener('click', () => {
+    saveIntervalsToChart(window._caretaker.session_id, subdomain);
   });
 
-  // Create WebSocket connection.
+  // Set up save summary button
+  document.getElementById('save-summary-btn').addEventListener('click', () => {
+    saveSummaryToChart(window._caretaker.session_id, subdomain);
+  });
+
+  // Set up mock vitals button if enabled
+  var mockBtn = document.getElementById('mock-vitals-btn');
+  if (mockBtn) {
+    mockBtn.addEventListener('click', () => {
+      toggleMockVitals(window._caretaker.session_id, subdomain);
+    });
+  }
+
+  // Set up end session button — provider clicks when device feed is done.
+  var endBtn = document.getElementById('end-session-btn');
+  if (endBtn) {
+    endBtn.addEventListener('click', endSession);
+  }
+
+  // Live filter for the readings feed.
+  var filterInput = document.getElementById('live-readings-filter');
+  if (filterInput) {
+    filterInput.addEventListener('input', applyLiveFilter);
+  }
+
+  // Recompute the increment averages when the size dropdown changes.
+  var incrementSelect = document.getElementById('increment-size');
+  if (incrementSelect) {
+    incrementSelect.addEventListener('change', recomputeAverages);
+  }
 
   // TODO: convert hyphens in UUID to underscores
   session_id = session_id.replaceAll("-", "_");
@@ -28,16 +73,17 @@ window.addEventListener("load", () => {{
 
 function connectToWebsocket(session_id, subdomain) {
   const socket = new WebSocket("wss://" + subdomain + ".canvasmedical.com/plugin-io/ws/vitalstream/" + session_id + "/");
+  activeSocket = socket;
 
-  // Connection opened
   socket.addEventListener("open", (event) => {
     setSessionStatus("Waiting for data...");
+    setSaveSummaryVisible(false);
   });
 
-  // Listen for messages
   socket.addEventListener("message", (event) => {
     ensureInstructionsAreClosed();
     setSessionStatus("Receiving data...", true);
+    setEndSessionVisible(true);
 
     data = JSON.parse(event.data).message
 
@@ -48,45 +94,52 @@ function connectToWebsocket(session_id, subdomain) {
     }
   });
 
-  // Connection closed
   socket.addEventListener("close", (event) => {
+    if (sessionEndedByUser) {
+      setSessionStatus("Session ended");
+      setSaveSummaryVisible(true);
+      return;
+    }
     setSessionStatus("Disconnected. Attempting to reconnect.");
-    setTimeout(() => connectToWebsocket(session_id, subdomain), 3000); // retry after 3 seconds
+    setSaveSummaryVisible(true);
+    setTimeout(() => connectToWebsocket(session_id, subdomain), 3000);
   });
 
-  // Connection error
   socket.addEventListener("error", (event) => {
     setSessionStatus("Connection error");
   });
 }
 
-function createMeasurementRow(timestamp, heartRate, systolic, diastolic, respiratoryRate, oxygenSaturation) {
-  const measurementContainer = document.createElement("tr");
-  
-  measurementContainer.appendChild(createTableCell(new Date(timestamp).toLocaleTimeString("en-US")));
-  measurementContainer.appendChild(createTableCell(heartRate));
-
-  // Require at least one of systolic/diastolic to be present before creating
-  // a cell with any content.
-  // If neither are defined, no content.
-  // If one is defined, show the data we have and make clear what data we
-  // don't have
-  // If both are defined, show both, of course.
-  if (typeof systolic === 'undefined' && typeof diastolic === 'undefined') {
-      measurementContainer.appendChild(createTableCell(undefined));
-  } else if (typeof systolic === 'undefined' || typeof diastolic === 'undefined') {
-    if (typeof systolic === 'undefined') {
-      measurementContainer.appendChild(createTableCell("???/" + diastolic));
-    } else if (typeof diastolic === 'undefined') {
-      measurementContainer.appendChild(createTableCell(systolic + "/???"));
-    }
-  } else {
-    measurementContainer.appendChild(createTableCell(systolic + "/" + diastolic));
+function endSession() {
+  if (!confirm('End this VitalStream session? You will no longer receive readings, and the summary can then be saved to the chart.')) {
+    return;
   }
 
-  measurementContainer.appendChild(createTableCell(respiratoryRate));
-  measurementContainer.appendChild(createTableCell(oxygenSaturation));
-  return measurementContainer;
+  sessionEndedByUser = true;
+
+  if (mockInterval) {
+    clearInterval(mockInterval);
+    mockInterval = null;
+    var mockBtn = document.getElementById('mock-vitals-btn');
+    if (mockBtn) {
+      mockBtn.textContent = 'Mock Vitals';
+      mockBtn.classList.remove('mock-active');
+    }
+  }
+
+  if (activeSocket && activeSocket.readyState <= WebSocket.OPEN) {
+    activeSocket.close();
+  } else {
+    setSessionStatus("Session ended");
+    setSaveSummaryVisible(true);
+  }
+
+  setEndSessionVisible(false);
+}
+
+function setEndSessionVisible(visible) {
+  var btn = document.getElementById('end-session-btn');
+  if (btn) btn.style.display = visible ? '' : 'none';
 }
 
 function createTableCell(content) {
@@ -98,121 +151,445 @@ function createTableCell(content) {
   return cell;
 }
 
-function handleNewDiscreteMeasurement(timestamp, data) {
-  const measurementRow = createMeasurementRow(
-    timestamp,
-    data.hr,
-    data.sys,
-    data.dia,
-    data.resp,
-    data.spo2,
-  );
-  document.getElementById("measurements-table").querySelector("tbody").prepend(measurementRow);
+function toHHMM(date) {
+  return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+}
 
-  // Store measurement for later submission
-  pendingMeasurements.push({
-    timestamp: new Date(timestamp).toISOString(),
+function handleNewDiscreteMeasurement(timestamp, data) {
+  var dt = new Date(timestamp);
+  if (!sessionStartTime) sessionStartTime = dt.getTime();
+  var elapsedMin = (dt.getTime() - sessionStartTime) / 60000;
+  var displayTime = dt.toLocaleTimeString("en-US");
+  var hhmmTime = toHHMM(dt);
+  var isoTimestamp = dt.toISOString();
+
+  allReadings.push({
+    elapsedMin: elapsedMin,
+    timestamp: isoTimestamp,
+    time: hhmmTime,
+    displayTime: displayTime,
     hr: data.hr,
     sys: data.sys,
     dia: data.dia,
-    resp: data.resp,
+    rr: data.resp,
     spo2: data.spo2,
+  });
+
+  appendLiveRow(displayTime, hhmmTime, isoTimestamp, data);
+  updateLiveCount();
+  recomputeAverages();
+}
+
+function formatBPDisplay(sys, dia) {
+  if (typeof sys === 'undefined' && typeof dia === 'undefined') return undefined;
+  if (typeof sys === 'undefined') return '???/' + dia;
+  if (typeof dia === 'undefined') return sys + '/???';
+  return sys + '/' + dia;
+}
+
+function appendLiveRow(displayTime, hhmmTime, isoTimestamp, data) {
+  var tbody = document.querySelector('#live-readings-table tbody');
+  if (!tbody) return;
+
+  var row = document.createElement('tr');
+  row.appendChild(createTableCell(displayTime));
+  row.appendChild(createTableCell(data.hr));
+  row.appendChild(createTableCell(formatBPDisplay(data.sys, data.dia)));
+  row.appendChild(createTableCell(data.resp));
+  row.appendChild(createTableCell(data.spo2));
+
+  row.dataset.timestamp = isoTimestamp || '';
+  row.dataset.time = hhmmTime;
+  row.dataset.displayTime = displayTime;
+  row.dataset.hr = data.hr !== undefined ? data.hr : '';
+  row.dataset.bpSys = data.sys !== undefined ? data.sys : '';
+  row.dataset.bpDia = data.dia !== undefined ? data.dia : '';
+  row.dataset.rr = data.resp !== undefined ? data.resp : '';
+  row.dataset.spo2 = data.spo2 !== undefined ? data.spo2 : '';
+
+  row.addEventListener('click', () => {
+    var prev = document.querySelector('#live-readings-table tr.selected');
+    if (prev) prev.classList.remove('selected');
+    row.classList.add('selected');
+    selectedRow = {
+      timestamp: row.dataset.timestamp,
+      time: row.dataset.time,
+      displayTime: row.dataset.displayTime,
+      hr: row.dataset.hr,
+      bp_sys: row.dataset.bpSys,
+      bp_dia: row.dataset.bpDia,
+      rr: row.dataset.rr,
+      spo2: row.dataset.spo2,
+    };
+  });
+
+  tbody.prepend(row);
+
+  // Hide immediately if there's an active filter that excludes this row.
+  var filter = currentFilterValue();
+  if (filter && !rowMatchesFilter(row, filter)) row.style.display = 'none';
+}
+
+function updateLiveCount() {
+  var el = document.getElementById('live-readings-count');
+  if (!el) return;
+  el.textContent = allReadings.length + (allReadings.length === 1 ? ' reading' : ' readings');
+}
+
+function currentFilterValue() {
+  var input = document.getElementById('live-readings-filter');
+  return input ? (input.value || '').trim().toLowerCase() : '';
+}
+
+function rowMatchesFilter(row, filter) {
+  var time = (row.dataset.displayTime || '').toLowerCase();
+  var hhmm = (row.dataset.time || '').toLowerCase();
+  return time.indexOf(filter) !== -1 || hhmm.indexOf(filter) !== -1;
+}
+
+function applyLiveFilter() {
+  var filter = currentFilterValue();
+  var rows = document.querySelectorAll('#live-readings-table tbody tr');
+  rows.forEach(function (row) {
+    row.style.display = (!filter || rowMatchesFilter(row, filter)) ? '' : 'none';
   });
 }
 
-async function saveToChart(session_id, subdomain) {
-  if (pendingMeasurements.length === 0) {
+function computeIncrementBuckets() {
+  if (allReadings.length === 0) return [];
+  var incrementMin = getIncrementSizeMinutes();
+  // Average the 30 seconds before and after each increment mark.
+  var windowMin = 0.5;
+
+  var maxElapsedMin = 0;
+  for (var i = 0; i < allReadings.length; i++) {
+    if (allReadings[i].elapsedMin > maxElapsedMin) maxElapsedMin = allReadings[i].elapsedMin;
+  }
+
+  var buckets = [];
+  for (var t = 0; t <= maxElapsedMin + windowMin; t += incrementMin) {
+    var lo = t - windowMin;
+    var hi = t + windowMin;
+
+    var totals = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+    var counts = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+    var windowCount = 0;
+    var firstReading = null;
+
+    for (var j = 0; j < allReadings.length; j++) {
+      var r = allReadings[j];
+      if (r.elapsedMin < lo || r.elapsedMin > hi) continue;
+      windowCount++;
+      if (firstReading === null) firstReading = r;
+      if (r.hr !== undefined) { totals.hr += Number(r.hr); counts.hr++; }
+      if (r.sys !== undefined) { totals.sys += Number(r.sys); counts.sys++; }
+      if (r.dia !== undefined) { totals.dia += Number(r.dia); counts.dia++; }
+      if (r.rr !== undefined) { totals.rr += Number(r.rr); counts.rr++; }
+      if (r.spo2 !== undefined) { totals.spo2 += Number(r.spo2); counts.spo2++; }
+    }
+
+    if (windowCount === 0) continue;
+
+    var timeStr = '';
+    var timestampStr = '';
+    if (sessionStartTime) {
+      var bucketDate = new Date(sessionStartTime + t * 60 * 1000);
+      timeStr = toHHMM(bucketDate);
+      timestampStr = bucketDate.toISOString();
+    } else if (firstReading) {
+      timeStr = firstReading.time || '';
+      timestampStr = firstReading.timestamp || '';
+    }
+
+    buckets.push({
+      label: t + ' min',
+      count: String(windowCount),
+      timestamp: timestampStr,
+      time: timeStr,
+      elapsedMin: t,
+      hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
+      bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
+      bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
+      rr: counts.rr ? String(Math.round(totals.rr / counts.rr)) : '',
+      spo2: counts.spo2 ? String(Math.round(totals.spo2 / counts.spo2)) : '',
+    });
+  }
+  return buckets;
+}
+
+function recomputeAverages() {
+  var tbody = document.querySelector('#averages-table tbody');
+  if (!tbody) return;
+  var rows = computeIncrementBuckets();
+  tbody.innerHTML = '';
+  rows.forEach(function (b) {
+    var tr = document.createElement('tr');
+    tr.appendChild(createTableCell(b.label));
+    tr.appendChild(createTableCell(b.count));
+    tr.appendChild(createTableCell(b.hr || '--'));
+    var bp = (b.bp_sys && b.bp_dia) ? b.bp_sys + '/' + b.bp_dia : '--';
+    tr.appendChild(createTableCell(bp));
+    tr.appendChild(createTableCell(b.rr || '--'));
+    tr.appendChild(createTableCell(b.spo2 || '--'));
+    tbody.appendChild(tr);
+  });
+}
+
+// Convert a wall-clock HH:MM (from the treatment-start/end inputs) into elapsed
+// minutes since sessionStartTime. Anchors to sessionStartTime's calendar day
+// and rolls forward one day if the HH:MM would otherwise sit unreasonably far
+// in the past — that's the case when the treatment window crosses midnight
+// (e.g. start=22:30, end=00:15 next day).
+function hhmmToElapsedMin(hhmm) {
+  if (!hhmm || !sessionStartTime) return null;
+  var parts = hhmm.split(':');
+  if (parts.length < 2) return null;
+  var hours = parseInt(parts[0], 10);
+  var mins = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(mins)) return null;
+
+  var session = new Date(sessionStartTime);
+  var candidate = new Date(
+    session.getFullYear(), session.getMonth(), session.getDate(), hours, mins, 0, 0
+  );
+  // If the candidate is more than 12 hours before session start, it's the
+  // next-day occurrence (midnight crossover).
+  if (candidate.getTime() < session.getTime() - 12 * 60 * 60 * 1000) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return (candidate.getTime() - session.getTime()) / 60000;
+}
+
+// Classify a bucket by its elapsed-minute offset from sessionStartTime against
+// the treatment window. elapsedMin is monotonic across midnight; the previous
+// HH:MM lexicographic comparison was not.
+function classifyPhase(bucketElapsedMin, startElapsedMin, endElapsedMin) {
+  if (startElapsedMin === null && endElapsedMin === null) return '';
+  if (typeof bucketElapsedMin !== 'number' || isNaN(bucketElapsedMin)) return '';
+  if (startElapsedMin !== null && bucketElapsedMin < startElapsedMin) return 'pre';
+  if (endElapsedMin !== null && bucketElapsedMin > endElapsedMin) return 'post';
+  return 'during';
+}
+
+// Average over the trailing 30 seconds of `allReadings`. Returns null if no
+// readings are within that window.
+function computeDischargeAverage() {
+  if (allReadings.length === 0) return null;
+
+  var maxElapsedMin = 0;
+  for (var i = 0; i < allReadings.length; i++) {
+    if (allReadings[i].elapsedMin > maxElapsedMin) maxElapsedMin = allReadings[i].elapsedMin;
+  }
+  var cutoff = maxElapsedMin - 0.5;
+
+  var totals = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+  var counts = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
+  var n = 0;
+  var lastReading = null;
+
+  for (var j = 0; j < allReadings.length; j++) {
+    var r = allReadings[j];
+    if (r.elapsedMin < cutoff) continue;
+    n++;
+    lastReading = r;
+    if (r.hr !== undefined) { totals.hr += Number(r.hr); counts.hr++; }
+    if (r.sys !== undefined) { totals.sys += Number(r.sys); counts.sys++; }
+    if (r.dia !== undefined) { totals.dia += Number(r.dia); counts.dia++; }
+    if (r.rr !== undefined) { totals.rr += Number(r.rr); counts.rr++; }
+    if (r.spo2 !== undefined) { totals.spo2 += Number(r.spo2); counts.spo2++; }
+  }
+
+  if (n === 0) return null;
+
+  return {
+    label: 'Discharge',
+    count: String(n),
+    timestamp: lastReading ? (lastReading.timestamp || '') : '',
+    time: lastReading ? lastReading.time : '',
+    elapsedMin: lastReading ? lastReading.elapsedMin : null,
+    hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
+    bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
+    bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
+    rr: counts.rr ? String(Math.round(totals.rr / counts.rr)) : '',
+    spo2: counts.spo2 ? String(Math.round(totals.spo2 / counts.spo2)) : '',
+  };
+}
+
+function assignToInterval(intervalName) {
+  if (!selectedRow) {
+    alert('Select a reading from the feed first.');
     return;
   }
 
-  const numReadings = Math.min(50, Math.max(1, parseInt(document.getElementById('num-readings').value, 10) || 10));
+  intervalSelections[intervalName] = {
+    ...selectedRow,
+    label: intervalName,
+    row_id: INTERVAL_ROW_IDS[intervalName] || '',
+    temp: '',
+    comments: '',
+  };
+  delete intervalSelections[intervalName].displayTime;
 
-  // Sort measurements by timestamp
-  const sorted = [...pendingMeasurements].sort((a, b) =>
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  if (Object.keys(intervalSelections).length === Object.keys(INTERVAL_ROW_IDS).length) {
+    document.getElementById('save-intervals-btn').style.display = '';
+  }
 
-  // Find time range
-  const minTime = new Date(sorted[0].timestamp).getTime();
-  const maxTime = new Date(sorted[sorted.length - 1].timestamp).getTime();
-  const timeSpan = maxTime - minTime;
+  var intervalRow = document.querySelector('#interval-table tr[data-interval="' + intervalName + '"]');
+  if (intervalRow) {
+    intervalRow.querySelector('.iv-time').textContent = selectedRow.displayTime || selectedRow.time;
+    intervalRow.querySelector('.iv-hr').textContent = selectedRow.hr || '--';
+    var bp = (selectedRow.bp_sys && selectedRow.bp_dia) ? selectedRow.bp_sys + '/' + selectedRow.bp_dia : '--';
+    intervalRow.querySelector('.iv-bp').textContent = bp;
+    intervalRow.querySelector('.iv-resp').textContent = selectedRow.rr || '--';
+    intervalRow.querySelector('.iv-spo2').textContent = selectedRow.spo2 || '--';
+  }
+}
 
-  // Handle edge case: all measurements at same time or only one reading requested
-  const bucketSize = numReadings > 1 && timeSpan > 0 ? timeSpan / numReadings : timeSpan + 1;
+async function saveIntervalsToChart(session_id, subdomain) {
+  var rows = Object.values(intervalSelections);
+  if (rows.length === 0) {
+    alert('Assign at least one interval before saving.');
+    return;
+  }
 
-  // Collect all fetch promises
-  const fetchPromises = [];
+  var btn = document.getElementById('save-intervals-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
 
-  // Create buckets and average measurements
-  for (let i = 0; i < numReadings; i++) {
-    const bucketStart = minTime + (i * bucketSize);
-    const bucketEnd = minTime + ((i + 1) * bucketSize);
-    const bucketTimestamp = new Date(bucketStart + (bucketSize / 2)).toISOString();
-
-    // Find measurements in this bucket
-    const bucketMeasurements = sorted.filter(m => {
-      const t = new Date(m.timestamp).getTime();
-      return t >= bucketStart && (i === numReadings - 1 ? t <= bucketEnd : t < bucketEnd);
-    });
-
-    if (bucketMeasurements.length === 0) {
-      continue;
-    }
-
-    // Calculate averages for each measurement type
-    const measurementTypes = ['hr', 'sys', 'dia', 'resp', 'spo2'];
-    const averaged = { timestamp: bucketTimestamp };
-
-    for (const type of measurementTypes) {
-      const values = bucketMeasurements
-        .map(m => m[type])
-        .filter(v => typeof v !== 'undefined');
-
-      if (values.length > 0) {
-        averaged[type] = Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
+  try {
+    var resp = await fetch(
+      `https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/save-intervals/`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          rows: rows,
+          bp_placement: document.getElementById('wrist-placement').value,
+        }),
       }
-    }
+    );
 
-    // Only send if we have at least one measurement type
-    if (Object.keys(averaged).length > 1) {
-      fetchPromises.push(
-        fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/measurements/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(averaged),
-        })
-      );
+    if (resp.ok) {
+      btn.textContent = 'Saved to Chart!';
+      document.querySelectorAll('.capture-btn').forEach(b => b.disabled = true);
+    } else {
+      btn.textContent = 'Error - Try Again';
+      btn.disabled = false;
+    }
+  } catch (e) {
+    btn.textContent = 'Error - Try Again';
+    btn.disabled = false;
+  }
+}
+
+function toggleMode() {
+  var isSpravato = document.getElementById('treatment-type').value === 'spravato';
+  document.getElementById('interval-selection').style.display = isSpravato ? 'block' : 'none';
+}
+
+function getIncrementSizeMinutes() {
+  var el = document.getElementById('increment-size');
+  var val = el ? parseInt(el.value, 10) : 10;
+  return [5, 10, 15, 30].includes(val) ? val : 10;
+}
+
+async function saveSummaryToChart(session_id, subdomain) {
+  if (allReadings.length === 0) {
+    alert('No readings to summarize.');
+    return;
+  }
+
+  var summaryBuckets = computeIncrementBuckets();
+  if (summaryBuckets.length === 0) {
+    alert('No readings near the selected increment marks.');
+    return;
+  }
+
+  var treatmentStart = (document.getElementById('treatment-start').value || '').trim();
+  var treatmentEnd = (document.getElementById('treatment-end').value || '').trim();
+  // Resolve the HH:MM inputs to elapsed-minute offsets so cross-midnight
+  // windows (e.g. start=22:30, end=00:15 next day) classify correctly.
+  var startElapsedMin = treatmentStart ? hhmmToElapsedMin(treatmentStart) : null;
+  var endElapsedMin = treatmentEnd ? hhmmToElapsedMin(treatmentEnd) : null;
+
+  summaryBuckets.forEach(function (b) {
+    b.phase = classifyPhase(b.elapsedMin, startElapsedMin, endElapsedMin);
+  });
+
+  // Append a discharge row averaging the last 30 seconds of readings — only
+  // when treatment end is set and there are readings recorded after it.
+  if (treatmentEnd && endElapsedMin !== null) {
+    var discharge = computeDischargeAverage();
+    if (discharge && typeof discharge.elapsedMin === 'number' && discharge.elapsedMin > endElapsedMin) {
+      discharge.phase = 'discharge';
+      summaryBuckets.push(discharge);
     }
   }
 
-  // Wait for all measurements to be saved
-  await Promise.all(fetchPromises);
+  var btn = document.getElementById('save-summary-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
 
-  // Finalize session by creating plan command
-  await fetch(`https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/finalize/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
+  try {
+    var resp = await fetch(
+      `https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/save-summary/`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          buckets: summaryBuckets,
+          bp_placement: document.getElementById('wrist-placement').value,
+          treatment_start: treatmentStart,
+          treatment_end: treatmentEnd,
+        }),
+      }
+    );
 
-  pendingMeasurements = [];
-
-  // Clear the table and show confirmation message
-  const tbody = document.getElementById("measurements-table").querySelector("tbody");
-  tbody.innerHTML = '';
-
-  const caption = document.getElementById("measurements-table").querySelector("caption");
-  const originalCaption = caption.textContent;
-  caption.textContent = 'Saved to chart!';
-
-  setTimeout(() => {
-    caption.textContent = originalCaption;
-  }, 3000);
+    if (resp.ok) {
+      btn.textContent = 'Saved to Chart!';
+    } else {
+      btn.textContent = 'Error - Try Again';
+      btn.disabled = false;
+    }
+  } catch (e) {
+    btn.textContent = 'Error - Try Again';
+    btn.disabled = false;
+  }
 }
 
-function setSessionStatus(message) {
-  document.getElementById("session-status").innerHTML = message;
+function toggleMockVitals(session_id, subdomain) {
+  var btn = document.getElementById('mock-vitals-btn');
+  if (mockInterval) {
+    clearInterval(mockInterval);
+    mockInterval = null;
+    btn.textContent = 'Mock Vitals';
+    btn.classList.remove('mock-active');
+    setSaveSummaryVisible(true);
+  } else {
+    btn.textContent = 'Stop Mock';
+    btn.classList.add('mock-active');
+    setSaveSummaryVisible(false);
+    postMockVital(session_id, subdomain);
+    mockInterval = setInterval(() => postMockVital(session_id, subdomain), 3000);
+  }
+}
+
+function setSaveSummaryVisible(visible) {
+  var btn = document.getElementById('save-summary-btn');
+  if (btn) btn.style.display = visible ? '' : 'none';
+}
+
+function postMockVital(session_id, subdomain) {
+  fetch(
+    `https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/mock-vitals/`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    }
+  );
 }
 
 let sessionTimeout = null;

@@ -1,16 +1,38 @@
+# Used for local development and testing only.
+# The Canvas plugin packaging process does not use this file.
+
 [project]
-authors = [
-  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
-]
-dependencies = [
-  "canvas[test-utils]"
-]
-description = "UI and API to integrate with the VitalStream device by Caretaker Medical."
-license = "MIT"
-name = "vitalstream"
-readme = "vitalstream/README.md"
+name = "vitalstream-plugin"
+version = "0.0.0"
 requires-python = ">=3.11"
-version = "0.1.0"
+dependencies = [
+    "arrow>=1.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
 
 [tool.pytest.ini_options]
-python_files = ["*_tests.py", "test_*.py", "tests.py"]
+pythonpath = [".."]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "*/tests/*",
+    "static/*",
+    "templates/*",
+]
+
+[tool.coverage.report]
+omit = [
+    "tests/*",
+    "*/tests/*",
+    "static/*",
+    "templates/*",
+]

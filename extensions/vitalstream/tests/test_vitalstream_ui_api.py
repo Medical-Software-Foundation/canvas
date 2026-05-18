@@ -1,629 +1,632 @@
-from http import HTTPStatus
-from unittest.mock import Mock, patch
+from __future__ import annotations
 
-import arrow
+import datetime
+import json
+import sys
+from http import HTTPStatus
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
 import pytest
 
-from vitalstream.routes.vitalstream_ui_api import VitalstreamUIAPI
-
-
-class TestVitalstreamUIAPI:
-    """Tests for the VitalstreamUIAPI class."""
-
-    def create_api_instance(
-        self,
-        path_params: dict = None,
-        headers: dict = None,
-        json_data: dict = None,
-        environment: dict = None,
-    ) -> VitalstreamUIAPI:
-        """Helper to create a VitalstreamUIAPI instance with mocked request."""
-        api = VitalstreamUIAPI.__new__(VitalstreamUIAPI)
-        api.request = Mock()
-        api.request.path_params = path_params or {}
-        api.request.headers = headers or {}
-        api.request.json.return_value = json_data or {}
-        api.environment = environment or {}
-        return api
-
-
-class TestValidateSession(TestVitalstreamUIAPI):
-    """Tests for the validate_session method."""
-
-    @patch("vitalstream.routes.vitalstream_ui_api.get_cache")
-    @patch("vitalstream.routes.vitalstream_ui_api.Staff")
-    def test_returns_session_when_valid(self, mock_staff, mock_get_cache) -> None:
-        """Test that validate_session returns session dict when session exists and staff matches."""
-        mock_staff_instance = Mock()
-        mock_staff_instance.id = "staff-123"
-        mock_staff.objects.get.return_value = mock_staff_instance
-
-        mock_cache = Mock()
-        session_data = {"note_id": "note-456", "staff_id": "staff-123"}
-        mock_cache.get.return_value = session_data
-        mock_get_cache.return_value = mock_cache
-
-        api = self.create_api_instance(
-            headers={"canvas-logged-in-user-id": "staff-123"}
-        )
-
-        result = api.validate_session("test-session-id")
-
-        assert result == session_data
-        mock_cache.get.assert_called_once_with("session_id:test-session-id")
-
-    @patch("vitalstream.routes.vitalstream_ui_api.get_cache")
-    @patch("vitalstream.routes.vitalstream_ui_api.Staff")
-    def test_returns_none_when_session_not_found(self, mock_staff, mock_get_cache) -> None:
-        """Test that validate_session returns None when session doesn't exist."""
-        mock_staff_instance = Mock()
-        mock_staff_instance.id = "staff-123"
-        mock_staff.objects.get.return_value = mock_staff_instance
-
-        mock_cache = Mock()
-        mock_cache.get.return_value = None
-        mock_get_cache.return_value = mock_cache
-
-        api = self.create_api_instance(
-            headers={"canvas-logged-in-user-id": "staff-123"}
-        )
-
-        result = api.validate_session("nonexistent-session")
-
-        assert result is None
-
-    @patch("vitalstream.routes.vitalstream_ui_api.get_cache")
-    @patch("vitalstream.routes.vitalstream_ui_api.Staff")
-    def test_returns_none_when_staff_id_mismatch(self, mock_staff, mock_get_cache) -> None:
-        """Test that validate_session returns None when logged-in staff doesn't match session."""
-        mock_staff_instance = Mock()
-        mock_staff_instance.id = "staff-123"
-        mock_staff.objects.get.return_value = mock_staff_instance
-
-        mock_cache = Mock()
-        session_data = {"note_id": "note-456", "staff_id": "different-staff-789"}
-        mock_cache.get.return_value = session_data
-        mock_get_cache.return_value = mock_cache
-
-        api = self.create_api_instance(
-            headers={"canvas-logged-in-user-id": "staff-123"}
-        )
-
-        result = api.validate_session("test-session-id")
-
-        assert result is None
-
-
-class TestIndex(TestVitalstreamUIAPI):
-    """Tests for the index method."""
-
-    @patch("vitalstream.routes.vitalstream_ui_api.render_to_string")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_returns_404_when_session_invalid(self, mock_validate, mock_render) -> None:
-        """Test that index returns 404 when session is invalid."""
-        mock_validate.return_value = None
-        mock_render.return_value = "<html>Not Found</html>"
-
-        api = self.create_api_instance(
-            path_params={"session_id": "invalid-session"}
-        )
-
-        effects = api.index()
-
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.NOT_FOUND
-        mock_render.assert_called_once_with("templates/session-not-found.html")
-
-    @patch("vitalstream.routes.vitalstream_ui_api.render_to_string")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_returns_200_with_html_when_session_valid(self, mock_validate, mock_render) -> None:
-        """Test that index returns 200 with rendered HTML when session is valid."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-        mock_render.return_value = "<html>VitalStream UI</html>"
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"},
-            environment={"CUSTOMER_IDENTIFIER": "testcustomer"},
-        )
-
-        effects = api.index()
-
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.OK
-        mock_render.assert_called_once_with(
-            "templates/vitalstream-ui.html",
-            {"session_id": "valid-session", "subdomain": "testcustomer"},
-        )
-
-
-class TestPostMeasurements(TestVitalstreamUIAPI):
-    """Tests for the post_measurements method."""
-
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_returns_404_when_session_invalid(self, mock_validate) -> None:
-        """Test that post_measurements returns 404 when session is invalid."""
-        mock_validate.return_value = None
-
-        api = self.create_api_instance(
-            path_params={"session_id": "invalid-session"}
-        )
-
-        effects = api.post_measurements()
-
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.NOT_FOUND
-        assert effects[0].headers["Content-Type"] == "application/json"
-
-    @patch("vitalstream.routes.vitalstream_ui_api.Observation")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_observation_for_heart_rate(self, mock_validate, mock_note, mock_observation) -> None:
-        """Test that post_measurements creates an observation for heart rate."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.patient.id = "patient-789"
-        mock_note_instance.dbid = 123
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_obs_instance = Mock()
-        mock_obs_instance.create.return_value = Mock()
-        mock_observation.return_value = mock_obs_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"},
-            json_data={
-                "timestamp": "2026-01-07T08:50:14+00:00",
-                "hr": 72,
-            },
-        )
-
-        effects = api.post_measurements()
-
-        # Should have 1 observation effect + 1 response
-        assert len(effects) == 2
-        assert effects[-1].status_code == HTTPStatus.OK
-
-        mock_observation.assert_called_once()
-        call_kwargs = mock_observation.call_args.kwargs
-        assert call_kwargs["patient_id"] == "patient-789"
-        assert call_kwargs["note_id"] == 123
-        assert call_kwargs["category"] == "vital-signs"
-        assert call_kwargs["name"] == "Mean heart rate"
-        assert call_kwargs["value"] == "72"
-        assert call_kwargs["units"] == "{beats}/min"
-        assert call_kwargs["codings"][0].code == "103205-1"
-
-    @patch("vitalstream.routes.vitalstream_ui_api.Observation")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_bp_panel_when_systolic_present(self, mock_validate, mock_note, mock_observation) -> None:
-        """Test that post_measurements creates a BP panel when only systolic is present."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.patient.id = "patient-789"
-        mock_note_instance.dbid = 123
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_obs_instance = Mock()
-        mock_obs_instance.create.return_value = Mock()
-        mock_observation.return_value = mock_obs_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"},
-            json_data={
-                "timestamp": "2026-01-07T08:50:14+00:00",
-                "sys": 120,
-            },
-        )
-
-        effects = api.post_measurements()
-
-        # Should have 1 BP panel observation + 1 response
-        assert len(effects) == 2
-
-        mock_observation.assert_called_once()
-        call_kwargs = mock_observation.call_args.kwargs
-        assert call_kwargs["category"] == "vital-signs"
-        assert call_kwargs["name"] == "Blood pressure panel mean systolic and mean diastolic"
-        assert call_kwargs["codings"][0].code == "96607-7"
-        assert len(call_kwargs["components"]) == 1
-        assert call_kwargs["components"][0].value_quantity == "120"
-        assert call_kwargs["components"][0].codings[0].code == "96608-5"
-
-    @patch("vitalstream.routes.vitalstream_ui_api.Observation")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_bp_panel_when_diastolic_present(self, mock_validate, mock_note, mock_observation) -> None:
-        """Test that post_measurements creates a BP panel when only diastolic is present."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.patient.id = "patient-789"
-        mock_note_instance.dbid = 123
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_obs_instance = Mock()
-        mock_obs_instance.create.return_value = Mock()
-        mock_observation.return_value = mock_obs_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"},
-            json_data={
-                "timestamp": "2026-01-07T08:50:14+00:00",
-                "dia": 80,
-            },
-        )
-
-        effects = api.post_measurements()
-
-        # Should have 1 BP panel observation + 1 response
-        assert len(effects) == 2
-
-        mock_observation.assert_called_once()
-        call_kwargs = mock_observation.call_args.kwargs
-        assert call_kwargs["category"] == "vital-signs"
-        assert call_kwargs["name"] == "Blood pressure panel mean systolic and mean diastolic"
-        assert call_kwargs["codings"][0].code == "96607-7"
-        assert len(call_kwargs["components"]) == 1
-        assert call_kwargs["components"][0].value_quantity == "80"
-        assert call_kwargs["components"][0].codings[0].code == "96609-3"
-
-    @patch("vitalstream.routes.vitalstream_ui_api.Observation")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_bp_panel_with_both_components(self, mock_validate, mock_note, mock_observation) -> None:
-        """Test that post_measurements creates a BP panel with both sys and dia."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.patient.id = "patient-789"
-        mock_note_instance.dbid = 123
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_obs_instance = Mock()
-        mock_obs_instance.create.return_value = Mock()
-        mock_observation.return_value = mock_obs_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"},
-            json_data={
-                "timestamp": "2026-01-07T08:50:14+00:00",
-                "sys": 120,
-                "dia": 80,
-            },
-        )
-
-        effects = api.post_measurements()
-
-        mock_observation.assert_called_once()
-        call_kwargs = mock_observation.call_args.kwargs
-        assert len(call_kwargs["components"]) == 2
-
-    @patch("vitalstream.routes.vitalstream_ui_api.Observation")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_multiple_observations_for_all_vitals(self, mock_validate, mock_note, mock_observation) -> None:
-        """Test that post_measurements creates observations for all provided vitals."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.patient.id = "patient-789"
-        mock_note_instance.dbid = 123
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_obs_instance = Mock()
-        mock_obs_instance.create.return_value = Mock()
-        mock_observation.return_value = mock_obs_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"},
-            json_data={
-                "timestamp": "2026-01-07T08:50:14+00:00",
-                "hr": 72,
-                "sys": 120,
-                "dia": 80,
-                "resp": 16,
-                "spo2": 98,
-            },
-        )
-
-        effects = api.post_measurements()
-
-        # 3 individual observations (hr, resp, spo2) + 1 BP panel + 1 response = 5
-        assert len(effects) == 5
-        assert mock_observation.call_count == 4  # 3 individual + 1 BP panel
-
-    @patch("vitalstream.routes.vitalstream_ui_api.Observation")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_skips_missing_vitals(self, mock_validate, mock_note, mock_observation) -> None:
-        """Test that post_measurements skips vitals that are not in the data."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.patient.id = "patient-789"
-        mock_note_instance.dbid = 123
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_obs_instance = Mock()
-        mock_obs_instance.create.return_value = Mock()
-        mock_observation.return_value = mock_obs_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"},
-            json_data={
-                "timestamp": "2026-01-07T08:50:14+00:00",
-                # No vitals provided
-            },
-        )
-
-        effects = api.post_measurements()
-
-        # Only the response, no observations
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.OK
-        mock_observation.assert_not_called()
-
-
-class TestGetMainJs(TestVitalstreamUIAPI):
-    """Tests for the get_main_js method."""
-
-    @patch("vitalstream.routes.vitalstream_ui_api.render_to_string")
-    def test_returns_javascript_file(self, mock_render) -> None:
-        """Test that get_main_js returns JavaScript with correct content type."""
-        mock_render.return_value = "console.log('test');"
-
-        api = self.create_api_instance()
-
-        effects = api.get_main_js()
-
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.OK
-        assert effects[0].headers["Content-Type"] == "text/javascript"
-        assert effects[0].content == b"console.log('test');"
-        mock_render.assert_called_once_with("static/main.js")
-
-
-class TestGetCss(TestVitalstreamUIAPI):
-    """Tests for the get_css method."""
-
-    @patch("vitalstream.routes.vitalstream_ui_api.render_to_string")
-    def test_returns_css_file(self, mock_render) -> None:
-        """Test that get_css returns CSS with correct content type."""
-        mock_render.return_value = "body { color: red; }"
-
-        api = self.create_api_instance()
-
-        effects = api.get_css()
-
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.OK
-        assert effects[0].headers["Content-Type"] == "text/css"
-        assert effects[0].content == b"body { color: red; }"
-        mock_render.assert_called_once_with("static/styles.css")
-
-
-class TestFinalizeSession(TestVitalstreamUIAPI):
-    """Tests for the finalize_session method."""
-
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_returns_404_when_session_invalid(self, mock_validate) -> None:
-        """Test that finalize_session returns 404 when session is invalid."""
-        mock_validate.return_value = None
-
-        api = self.create_api_instance(
-            path_params={"session_id": "invalid-session"}
-        )
-
-        effects = api.finalize_session()
-
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.NOT_FOUND
-        assert effects[0].headers["Content-Type"] == "application/json"
-
-    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
-    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_plan_with_no_data_found_when_no_observations(
-        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
-    ) -> None:
-        """Test that finalize_session creates plan with 'No data found.' when no observations exist."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.dbid = 123
-        mock_note_instance.id = "note-uuid-123"
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_queryset = Mock()
-        mock_queryset.exists.return_value = False
-        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
-
-        mock_plan_instance = Mock()
-        mock_plan_instance.originate.return_value = Mock()
-        mock_plan_command.return_value = mock_plan_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"}
-        )
-
-        effects = api.finalize_session()
-
-        assert len(effects) == 2
-        mock_plan_command.assert_called_once_with(
-            note_uuid="note-uuid-123",
-            narrative="No data found.",
-        )
-        mock_plan_instance.originate.assert_called_once()
-
-    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
-    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_plan_with_observation_narrative(
-        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
-    ) -> None:
-        """Test that finalize_session creates plan with narrative from observations."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.dbid = 123
-        mock_note_instance.id = "note-uuid-123"
-        mock_note.objects.get.return_value = mock_note_instance
-
-        # Create mock observation with value (simple vital sign)
-        from datetime import datetime
-        mock_obs = Mock()
-        mock_obs.effective_datetime = arrow.get('2026-01-07 08:50:14Z').datetime
-        mock_obs.name = "Mean heart rate"
-        mock_obs.value = "72"
-        mock_obs.units = "{beats}/min"
-
-        mock_queryset = Mock()
-        mock_queryset.exists.return_value = True
-        mock_queryset.__iter__ = Mock(return_value=iter([mock_obs]))
-        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
-
-        mock_plan_instance = Mock()
-        mock_plan_instance.originate.return_value = Mock()
-        mock_plan_command.return_value = mock_plan_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"}
-        )
-
-        effects = api.finalize_session()
-
-        assert len(effects) == 2
-        mock_plan_command.assert_called_once()
-        call_kwargs = mock_plan_command.call_args.kwargs
-        assert call_kwargs["note_uuid"] == "note-uuid-123"
-        assert "VitalStream Measurements:" in call_kwargs["narrative"]
-        assert "08:50:14 UTC - Mean heart rate: 72 {beats}/min" in call_kwargs["narrative"]
-
-    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
-    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_creates_plan_with_bp_panel_components(
-        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
-    ) -> None:
-        """Test that finalize_session handles BP panel observations with components."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.dbid = 123
-        mock_note_instance.id = "note-uuid-123"
-        mock_note.objects.get.return_value = mock_note_instance
-
-        # Create mock BP panel observation (no value, has components)
-        from datetime import datetime
-        mock_component_sys = Mock()
-        mock_component_sys.name = "Systolic blood pressure mean"
-        mock_component_sys.value_quantity = "120"
-        mock_component_sys.value_quantity_unit = "mm[Hg]"
-
-        mock_component_dia = Mock()
-        mock_component_dia.name = "Diastolic blood pressure mean"
-        mock_component_dia.value_quantity = "80"
-        mock_component_dia.value_quantity_unit = "mm[Hg]"
-
-        mock_obs = Mock()
-        mock_obs.effective_datetime = datetime(2026, 1, 7, 8, 50, 14)
-        mock_obs.name = "Blood pressure panel mean systolic and mean diastolic"
-        mock_obs.value = None  # BP panel has no direct value
-        mock_obs.units = None
-        mock_obs.components.all.return_value = [mock_component_sys, mock_component_dia]
-
-        mock_queryset = Mock()
-        mock_queryset.exists.return_value = True
-        mock_queryset.__iter__ = Mock(return_value=iter([mock_obs]))
-        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
-
-        mock_plan_instance = Mock()
-        mock_plan_instance.originate.return_value = Mock()
-        mock_plan_command.return_value = mock_plan_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"}
-        )
-
-        effects = api.finalize_session()
-
-        assert len(effects) == 2
-        call_kwargs = mock_plan_command.call_args.kwargs
-        assert "Blood pressure panel" in call_kwargs["narrative"]
-        assert "Systolic blood pressure mean: 120 mm[Hg]" in call_kwargs["narrative"]
-        assert "Diastolic blood pressure mean: 80 mm[Hg]" in call_kwargs["narrative"]
-
-    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
-    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_filters_observations_by_vital_codes(
-        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
-    ) -> None:
-        """Test that finalize_session filters observations by vital sign codes."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.dbid = 123
-        mock_note_instance.id = "note-uuid-123"
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_queryset = Mock()
-        mock_queryset.exists.return_value = False
-        mock_obs_data.objects.filter.return_value.order_by.return_value = mock_queryset
-
-        mock_plan_instance = Mock()
-        mock_plan_instance.originate.return_value = Mock()
-        mock_plan_command.return_value = mock_plan_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"}
-        )
-
-        api.finalize_session()
-
-        # Verify filter was called with correct parameters
-        mock_obs_data.objects.filter.assert_called_once()
-        filter_kwargs = mock_obs_data.objects.filter.call_args.kwargs
-        assert filter_kwargs["note_id"] == 123
-        assert "codings__code__in" in filter_kwargs
-
-    @patch("vitalstream.routes.vitalstream_ui_api.PlanCommand")
-    @patch("vitalstream.routes.vitalstream_ui_api.ObservationData")
-    @patch("vitalstream.routes.vitalstream_ui_api.Note")
-    @patch.object(VitalstreamUIAPI, "validate_session")
-    def test_orders_observations_by_datetime(
-        self, mock_validate, mock_note, mock_obs_data, mock_plan_command
-    ) -> None:
-        """Test that finalize_session orders observations by effective_datetime."""
-        mock_validate.return_value = {"note_id": "note-123", "staff_id": "staff-456"}
-
-        mock_note_instance = Mock()
-        mock_note_instance.dbid = 123
-        mock_note_instance.id = "note-uuid-123"
-        mock_note.objects.get.return_value = mock_note_instance
-
-        mock_queryset = Mock()
-        mock_queryset.exists.return_value = False
-        mock_filter_result = Mock()
-        mock_filter_result.order_by.return_value = mock_queryset
-        mock_obs_data.objects.filter.return_value = mock_filter_result
-
-        mock_plan_instance = Mock()
-        mock_plan_instance.originate.return_value = Mock()
-        mock_plan_command.return_value = mock_plan_instance
-
-        api = self.create_api_instance(
-            path_params={"session_id": "valid-session"}
-        )
-
-        api.finalize_session()
-
-        # Verify order_by was called with effective_datetime
-        mock_filter_result.order_by.assert_called_once_with("effective_datetime")
+from vitalstream.constants import TREATMENT_INTERVALS
+from vitalstream.routes import vitalstream_ui_api as api_mod
+from vitalstream.routes.vitalstream_ui_api import (
+    VitalstreamUIAPI,
+    _build_interval_html_table,
+    _build_summary_html_table,
+    _create_interval_observations,
+    _create_summary_observations,
+    _parse_bool_secret,
+    _parse_vitals_datetime,
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers for constructing a handler without running framework __init__.
+# ---------------------------------------------------------------------------
+
+
+def _make_handler(
+    *,
+    session: dict | None,
+    path_params: dict | None = None,
+    body: dict | None = None,
+    secrets: dict | None = None,
+    environment: dict | None = None,
+    headers: dict | None = None,
+) -> VitalstreamUIAPI:
+    handler = VitalstreamUIAPI.__new__(VitalstreamUIAPI)
+    handler.request = MagicMock()
+    handler.request.path_params = path_params or {}
+    handler.request.json = MagicMock(return_value=body or {})
+    handler.request.headers = headers or {"canvas-logged-in-user-id": "staff-1"}
+    handler.secrets = secrets or {}
+    handler.environment = environment or {"CUSTOMER_IDENTIFIER": "testsub"}
+
+    # Pre-wire validate_session via the cache mock unless overridden.
+    cache_mod = sys.modules["canvas_sdk.caching.plugins"]
+    cache_mock = MagicMock()
+    cache_mock.get.return_value = session
+    cache_mod.get_cache.return_value = cache_mock
+    return handler
+
+
+# ---------------------------------------------------------------------------
+# _parse_bool_secret
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "True", "yes", "on", " enabled "])
+def test_parse_bool_secret_truthy(value: str) -> None:
+    assert _parse_bool_secret(value) is True
+
+
+@pytest.mark.parametrize("value", ["", None, "0", "false", "False", "no", "off", "disabled", "anything-else"])
+def test_parse_bool_secret_falsy(value: str | None) -> None:
+    assert _parse_bool_secret(value) is False
+
+
+# ---------------------------------------------------------------------------
+# _parse_vitals_datetime
+# ---------------------------------------------------------------------------
+
+
+def test_parse_vitals_datetime_iso_with_z_suffix() -> None:
+    dt = _parse_vitals_datetime("2026-05-17T14:30:45Z")
+    assert dt.year == 2026 and dt.month == 5 and dt.day == 17
+    assert dt.hour == 14 and dt.minute == 30 and dt.second == 45
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
+
+
+def test_parse_vitals_datetime_iso_with_offset() -> None:
+    dt = _parse_vitals_datetime("2026-05-17T09:05:00+00:00")
+    assert dt.year == 2026 and dt.hour == 9 and dt.minute == 5
+    assert dt.tzinfo is not None
+
+
+def test_parse_vitals_datetime_naive_iso_is_treated_as_utc() -> None:
+    dt = _parse_vitals_datetime("2026-05-17T09:05:00")
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
+
+
+def test_parse_vitals_datetime_invalid_falls_back_to_now_utc() -> None:
+    dt = _parse_vitals_datetime("not-a-time")
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
+
+
+def test_parse_vitals_datetime_empty_falls_back_to_now_utc() -> None:
+    dt = _parse_vitals_datetime("")
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
+
+
+# ---------------------------------------------------------------------------
+# _build_interval_html_table / _build_summary_html_table
+# ---------------------------------------------------------------------------
+
+
+def _extract_embedded_json(html: str) -> dict:
+    # The raw_data div uses HTML-escaped JSON in data-vitals.
+    start = html.index('data-vitals="') + len('data-vitals="')
+    end = html.index('"', start)
+    escaped = html[start:end]
+    raw = (
+        escaped
+        .replace("&#x27;", "'")
+        .replace("&quot;", '"')
+        .replace("&gt;", ">")
+        .replace("&lt;", "<")
+        .replace("&amp;", "&")
+    )
+    return json.loads(raw)
+
+
+def test_build_interval_html_table_renders_each_row_and_embeds_json() -> None:
+    rows = [
+        {
+            "label": "Pre-administration",
+            "time": "09:00",
+            "hr": "72",
+            "bp_sys": "120",
+            "bp_dia": "80",
+            "rr": "16",
+            "spo2": "98",
+        },
+        {
+            "label": "40-min post",
+            "time": "09:40",
+            "hr": "78",
+            "bp_sys": "",
+            "bp_dia": "",
+            "rr": "",
+            "spo2": "97",
+        },
+    ]
+    html = _build_interval_html_table(rows, bp_placement="right_wrist")
+
+    assert "Pre-administration" in html
+    assert "40-min post" in html
+    assert "120/80" in html
+    # BP is blank for the second row since sys/dia are empty — there must
+    # only be one "<sys>/<dia>" BP value rendered.
+    assert html.count("/80") == 1
+
+    payload = _extract_embedded_json(html)
+    assert payload["bp_placement"] == "right_wrist"
+    assert payload["rows"] == rows
+
+
+def test_build_summary_html_table_renders_buckets() -> None:
+    buckets = [
+        {
+            "label": "0 min",
+            "count": "5",
+            "time": "09:00",
+            "hr": "72",
+            "bp_sys": "120",
+            "bp_dia": "80",
+            "rr": "16",
+            "spo2": "98",
+        }
+    ]
+    html = _build_summary_html_table(buckets)
+    assert "09:00" in html
+    assert "120/80" in html
+    payload = _extract_embedded_json(html)
+    assert payload["buckets"] == buckets
+    assert payload["bp_placement"] == "left_wrist"
+
+
+def test_build_interval_html_table_escapes_html_in_cell_values() -> None:
+    # A malicious staff (or compromised client) must not be able to inject
+    # script tags via any visible row field.
+    rows = [
+        {
+            "label": "<script>alert(1)</script>",
+            "time": "09:00",
+            "hr": "72\"><img src=x onerror=alert(1)>",
+            "bp_sys": "120",
+            "bp_dia": "80",
+            "rr": "16",
+            "spo2": "98",
+        }
+    ]
+    html = _build_interval_html_table(rows)
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    # The HR payload must have its quotes and angle brackets escaped too.
+    assert "onerror=alert(1)" not in html or "&lt;img" in html
+    assert "&quot;" in html
+
+
+def test_build_summary_html_table_escapes_html_in_cell_values() -> None:
+    buckets = [
+        {
+            "label": "Discharge",
+            "count": "5<script>x</script>",
+            "time": "<b>09:00</b>",
+            "hr": "72",
+            "bp_sys": "120",
+            "bp_dia": "80",
+            "rr": "16",
+            "spo2": "98",
+        }
+    ]
+    html = _build_summary_html_table(buckets)
+    assert "<b>09:00</b>" not in html
+    assert "&lt;b&gt;09:00&lt;/b&gt;" in html
+    assert "<script>x</script>" not in html
+
+
+# ---------------------------------------------------------------------------
+# _create_interval_observations / _create_summary_observations
+# ---------------------------------------------------------------------------
+
+
+def test_create_interval_observations_skips_rows_missing_timestamp() -> None:
+    effects = _create_interval_observations(
+        [{"label": "x", "time": "09:00", "timestamp": "", "hr": "70"}], "p1", 1
+    )
+    assert effects == []
+
+
+def test_create_interval_observations_creates_expected_number_of_effects(monkeypatch: pytest.MonkeyPatch) -> None:
+    obs_ctor = MagicMock()
+    monkeypatch.setattr(api_mod, "Observation", obs_ctor)
+    rows = [
+        {
+            "label": "Pre-administration",
+            "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
+            "hr": "70",
+            "bp_sys": "118",
+            "bp_dia": "76",
+            "rr": "14",
+            "spo2": "99",
+        }
+    ]
+    effects = _create_interval_observations(rows, "patient-1", 42)
+
+    # HR + BP + SpO2 + RR = 4 Observation.create() calls
+    assert len(effects) == 4
+
+    names = [c.kwargs["name"] for c in obs_ctor.call_args_list]
+    assert names == [
+        "Heart Rate (Pre-administration)",
+        "Blood Pressure (Pre-administration)",
+        "SpO2 (Pre-administration)",
+        "Respiratory Rate (Pre-administration)",
+    ]
+
+    # Effective datetime should reflect the ISO timestamp, not today's date.
+    effective_dts = [c.kwargs["effective_datetime"] for c in obs_ctor.call_args_list]
+    for dt in effective_dts:
+        assert dt.year == 2026 and dt.month == 5 and dt.day == 17
+        assert dt.hour == 9 and dt.minute == 0
+        assert dt.tzinfo is not None
+
+
+def test_create_summary_observations_creates_mean_observations(monkeypatch: pytest.MonkeyPatch) -> None:
+    obs_ctor = MagicMock()
+    monkeypatch.setattr(api_mod, "Observation", obs_ctor)
+    buckets = [
+        {
+            "label": "0 min",
+            "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
+            "hr": "72",
+            "bp_sys": "120",
+            "bp_dia": "80",
+            "rr": "16",
+            "spo2": "98",
+        }
+    ]
+    effects = _create_summary_observations(buckets, "patient-1", 42)
+    assert len(effects) == 4
+    names = [c.kwargs["name"] for c in obs_ctor.call_args_list]
+    assert names == [
+        "Mean Heart Rate (0 min)",
+        "Mean Blood Pressure (0 min)",
+        "Mean SpO2 (0 min)",
+        "Mean Respiratory Rate (0 min)",
+    ]
+
+
+def test_create_summary_observations_skips_bucket_without_timestamp() -> None:
+    effects = _create_summary_observations(
+        [{"label": "x", "time": "09:00", "timestamp": "", "hr": "70"}], "p1", 1
+    )
+    assert effects == []
+
+
+# ---------------------------------------------------------------------------
+# VitalstreamUIAPI.validate_session
+# ---------------------------------------------------------------------------
+
+
+def test_validate_session_returns_none_when_missing() -> None:
+    handler = _make_handler(session=None)
+    assert handler.validate_session("abc") is None
+
+
+def test_validate_session_returns_none_when_staff_mismatches() -> None:
+    handler = _make_handler(session={"staff_id": "other-staff", "note_id": 1})
+    assert handler.validate_session("abc") is None
+
+
+def test_validate_session_returns_session_on_match() -> None:
+    session = {"staff_id": "staff-1", "note_id": 42}
+    handler = _make_handler(session=session)
+    assert handler.validate_session("abc") is session
+
+
+# ---------------------------------------------------------------------------
+# VitalstreamUIAPI.index
+# ---------------------------------------------------------------------------
+
+
+def test_index_missing_session_returns_404() -> None:
+    handler = _make_handler(session=None, path_params={"session_id": "s1"})
+    responses = handler.index()
+    assert len(responses) == 1
+    assert responses[0].status_code == HTTPStatus.NOT_FOUND
+
+
+def _render_context(handler: VitalstreamUIAPI) -> dict:
+    templates_mod = sys.modules["canvas_sdk.templates"]
+    templates_mod.render_to_string.reset_mock()
+    templates_mod.render_to_string.return_value = "<html/>"
+    handler.index()
+    args, _ = templates_mod.render_to_string.call_args
+    return args[1]
+
+
+def _make_index_handler(note_type_name: str, note_title: str, secrets: dict | None = None) -> VitalstreamUIAPI:
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        secrets=secrets,
+    )
+    note = MagicMock()
+    note.note_type_version = SimpleNamespace(name=note_type_name)
+    note.title = note_title
+    note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
+    note_mgr.get.return_value = note
+    note_mgr.select_related.return_value.get.return_value = note
+    return handler
+
+
+def test_index_detects_spravato_from_note_type_name() -> None:
+    handler = _make_index_handler("Spravato Treatment", "Visit 3")
+    context = _render_context(handler)
+    assert context["is_spravato"] is True
+    assert context["subdomain"] == "testsub"
+    assert context["treatment_intervals"] == TREATMENT_INTERVALS
+
+
+def test_index_detects_spravato_from_note_title_case_insensitive() -> None:
+    handler = _make_index_handler("Follow-up", "SPRAVATO session")
+    context = _render_context(handler)
+    assert context["is_spravato"] is True
+
+
+def test_index_treatment_alone_does_not_match() -> None:
+    # Regression: "treatment" used to match alongside "spravato". It must not,
+    # because non-Spravato treatment notes (e.g. IV ketamine) would otherwise
+    # default to the Spravato workflow.
+    handler = _make_index_handler("IV Ketamine Treatment", "")
+    context = _render_context(handler)
+    assert context["is_spravato"] is False
+
+
+def test_index_treatment_plan_does_not_match() -> None:
+    handler = _make_index_handler("Treatment Plan", "")
+    context = _render_context(handler)
+    assert context["is_spravato"] is False
+
+
+def test_index_non_spravato_context() -> None:
+    handler = _make_index_handler("Follow-up", "Checkup")
+    context = _render_context(handler)
+    assert context["is_spravato"] is False
+
+
+def test_index_enable_mock_vitals_only_for_truthy_secret() -> None:
+    enabled = _render_context(_make_index_handler("Follow-up", "", secrets={"ENABLE_MOCK_VITALS": "true"}))
+    assert enabled["enable_mock_vitals"] is True
+
+    # The pre-fix behavior would have treated "false" as truthy. It must not.
+    disabled = _render_context(_make_index_handler("Follow-up", "", secrets={"ENABLE_MOCK_VITALS": "false"}))
+    assert disabled["enable_mock_vitals"] is False
+
+    unset = _render_context(_make_index_handler("Follow-up", "", secrets={}))
+    assert unset["enable_mock_vitals"] is False
+
+
+# ---------------------------------------------------------------------------
+# VitalstreamUIAPI.mock_vitals
+# ---------------------------------------------------------------------------
+
+
+def test_mock_vitals_missing_session_returns_404() -> None:
+    handler = _make_handler(session=None, path_params={"session_id": "s1"})
+    responses = handler.mock_vitals()
+    assert responses[0].status_code == HTTPStatus.NOT_FOUND
+
+
+def test_mock_vitals_disabled_returns_forbidden() -> None:
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        secrets={},
+    )
+    responses = handler.mock_vitals()
+    assert responses[0].status_code == HTTPStatus.FORBIDDEN
+
+
+def test_mock_vitals_false_string_secret_still_rejects() -> None:
+    # Regression: the previous truthiness check enabled mock vitals when the
+    # operator set ENABLE_MOCK_VITALS="false" to try to disable it.
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        secrets={"ENABLE_MOCK_VITALS": "false"},
+    )
+    responses = handler.mock_vitals()
+    assert responses[0].status_code == HTTPStatus.FORBIDDEN
+
+
+def test_mock_vitals_enabled_broadcasts_and_returns_ok() -> None:
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "a-b-c"},
+        secrets={"ENABLE_MOCK_VITALS": "1"},
+    )
+    effects = handler.mock_vitals()
+    # First effect = Broadcast (with "-" → "_" substitution), second = JSON ok.
+    broadcast = effects[0]
+    assert broadcast.kwargs["channel"] == "a_b_c"
+    assert "measurements" in broadcast.kwargs["message"]
+    measurements = broadcast.kwargs["message"]["measurements"]
+    (_ts, reading), = measurements.items()
+    assert set(reading) == {"hr", "sys", "dia", "resp", "spo2"}
+    assert effects[1].status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# VitalstreamUIAPI.save_intervals
+# ---------------------------------------------------------------------------
+
+
+def test_save_intervals_missing_session_returns_404() -> None:
+    handler = _make_handler(session=None, path_params={"session_id": "s1"})
+    responses = handler.save_intervals()
+    assert responses[0].status_code == HTTPStatus.NOT_FOUND
+
+
+def test_save_intervals_empty_rows_returns_400() -> None:
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        body={"rows": []},
+    )
+    responses = handler.save_intervals()
+    assert responses[0].status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_save_intervals_happy_path_produces_effects_and_json_ok() -> None:
+    rows = [
+        {
+            "label": "Pre-administration",
+            "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
+            "hr": "70",
+            "bp_sys": "120",
+            "bp_dia": "80",
+            "rr": "16",
+            "spo2": "99",
+        },
+        {
+            "label": "40-min post",
+            "time": "09:40",
+            "timestamp": "2026-05-17T09:40:00Z",
+            "hr": "72",
+            "bp_sys": "118",
+            "bp_dia": "78",
+            "rr": "16",
+            "spo2": "99",
+        },
+        {
+            "label": "Pre-discharge",
+            "time": "10:00",
+            "timestamp": "2026-05-17T10:00:00Z",
+            "hr": "70",
+            "bp_sys": "116",
+            "bp_dia": "76",
+            "rr": "16",
+            "spo2": "99",
+        },
+    ]
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        body={"rows": rows, "bp_placement": "right_wrist"},
+    )
+    note = MagicMock()
+    note.id = "abcd-1234"
+    note.dbid = 42
+    note.patient.id = "patient-1"
+    note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
+    note_mgr.get.return_value = note
+    note_mgr.select_related.return_value.get.return_value = note
+
+    custom_cmd_ctor = MagicMock()
+    from unittest.mock import patch
+    with patch.object(api_mod, "CustomCommand", custom_cmd_ctor), \
+         patch.object(api_mod, "Observation", MagicMock()):
+        effects = handler.save_intervals()
+
+    # Must end with a JSONResponse that reports ok.
+    assert effects[-1].status_code == 200
+    assert effects[-1].data == {"status": "ok"}
+
+    # The broadcast must be scoped to the note (hyphens replaced with
+    # underscores). The previous global `spravato_notify` channel leaked note
+    # UUIDs to every staff in the org.
+    broadcast_channels = [
+        e.kwargs.get("channel")
+        for e in effects
+        if hasattr(e, "kwargs") and isinstance(e.kwargs, dict) and "channel" in e.kwargs
+    ]
+    assert "spravato_notify_abcd_1234" in broadcast_channels
+    assert "spravato_notify" not in broadcast_channels
+
+    # The CustomCommand was constructed with the spravato vitals schema.
+    assert custom_cmd_ctor.call_args.kwargs["schema_key"] == "spravatoVitals"
+
+
+# ---------------------------------------------------------------------------
+# VitalstreamUIAPI.save_summary
+# ---------------------------------------------------------------------------
+
+
+def test_save_summary_missing_session_returns_404() -> None:
+    handler = _make_handler(session=None, path_params={"session_id": "s1"})
+    responses = handler.save_summary()
+    assert responses[0].status_code == HTTPStatus.NOT_FOUND
+
+
+def test_save_summary_empty_buckets_returns_400() -> None:
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        body={"buckets": []},
+    )
+    responses = handler.save_summary()
+    assert responses[0].status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_save_summary_happy_path() -> None:
+    buckets = [
+        {
+            "label": "0 min",
+            "count": "5",
+            "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
+            "hr": "72",
+            "bp_sys": "120",
+            "bp_dia": "80",
+            "rr": "16",
+            "spo2": "98",
+        }
+    ]
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        body={"buckets": buckets},
+    )
+    note = MagicMock()
+    note.id = "note-uuid"
+    note.dbid = 42
+    note.patient.id = "patient-1"
+    note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
+    note_mgr.get.return_value = note
+    note_mgr.select_related.return_value.get.return_value = note
+
+    custom_cmd_ctor = MagicMock()
+    from unittest.mock import patch
+    with patch.object(api_mod, "CustomCommand", custom_cmd_ctor), \
+         patch.object(api_mod, "Observation", MagicMock()):
+        effects = handler.save_summary()
+
+    assert effects[-1].status_code == 200
+    assert custom_cmd_ctor.call_args.kwargs["schema_key"] == "vitalstreamSummary"
+
+
+# ---------------------------------------------------------------------------
+# Static asset routes
+# ---------------------------------------------------------------------------
+
+
+def test_get_main_js_returns_javascript_response() -> None:
+    templates_mod = sys.modules["canvas_sdk.templates"]
+    templates_mod.render_to_string.return_value = "console.log('hi');"
+    handler = VitalstreamUIAPI.__new__(VitalstreamUIAPI)
+
+    responses = handler.get_main_js()
+    assert responses[0].content_type == "text/javascript"
+    assert responses[0].status_code == HTTPStatus.OK
+
+
+def test_get_css_returns_stylesheet_response() -> None:
+    templates_mod = sys.modules["canvas_sdk.templates"]
+    templates_mod.render_to_string.return_value = "body {}"
+    handler = VitalstreamUIAPI.__new__(VitalstreamUIAPI)
+
+    responses = handler.get_css()
+    assert responses[0].content_type == "text/css"
+    assert responses[0].status_code == HTTPStatus.OK
