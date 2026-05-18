@@ -32,7 +32,8 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
     PATH = "/report-payment"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
+        # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
+        return credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
 
     def post(self) -> list[Response | Effect]:
         body = self.request.json()
