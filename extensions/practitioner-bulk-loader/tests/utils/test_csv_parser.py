@@ -209,7 +209,7 @@ class TestParseCsv:
         """Regression: a row with First/Last populated but Email blank must
         NOT be silently merged into the previous practitioner's group.
 
-        Real-world failure (Lykos Medical CSV, ~29 staff): a typo'd blank
+        Real-world failure on a customer CSV (~29 staff): a typo'd blank
         Email cell on a new practitioner caused that practitioner's licenses
         to attach to the previous practitioner's record. Rule 14 emitted a
         demographic-mismatch warning but warnings don't gate the import.
@@ -985,7 +985,7 @@ class TestPrimaryOnlyDoesNotCreatePhantomLicense:
 # ---------------------------------------------------------------------------
 # Orphan row acts as a barrier — subsequent continuation rows don't leak
 # back to the prior practitioner. Regression against the deeper layer of
-# the Lykos misattribution pattern Kevin Carey reported.
+# the same silent-misattribution pattern reported by a customer.
 # ---------------------------------------------------------------------------
 
 class TestOrphanRowResetsContinuationContext:

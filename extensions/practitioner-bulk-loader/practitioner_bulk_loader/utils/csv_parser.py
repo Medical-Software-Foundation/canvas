@@ -430,8 +430,8 @@ def parse_csv(csv_text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]
             # record. The orphan acts as a barrier: anything after it that
             # would otherwise be a continuation becomes its own orphan
             # (also failing Rule 1) instead of leaking to the prior group.
-            # This is the deeper layer of the Lykos misattribution pattern
-            # Kevin Carey reported — the immediate-row case was patched
+            # This closes the deeper layer of the same misattribution pattern
+            # reported by a customer — the immediate-row case was patched
             # earlier; this fix closes the downstream-row case.
             email_key = f"__no_email_{csv_row_index}__"
             last_email_key = ""

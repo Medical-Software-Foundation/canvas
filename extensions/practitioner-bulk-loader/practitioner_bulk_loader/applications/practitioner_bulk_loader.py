@@ -686,8 +686,8 @@ function renderPreview(data) {
     // differs from Canvas's value. The asymmetric case (CSV blank or
     // placeholder vs Canvas-has-real-NPI) is surfaced via the conflict
     // badge under the row + the diff panel, so the inline cell stays
-    // plain and consistent with other blank-NPI rows (e.g. Liam-style
-    // existing-also-placeholder records). Rendering the placeholder
+    // plain and consistent with other blank-NPI rows where the
+    // existing Canvas record also stores the placeholder. Rendering it
     // here in red would imply the admin is asking to overwrite with it,
     // which the backend's write-path guard prevents anyway.
     const csvNpiRaw = (p.npi || '').trim();
