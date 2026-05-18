@@ -55,7 +55,8 @@ class CandidSyncAPI(SimpleAPIRoute):
     PATH = "/sync"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
+        # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
+        return credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
 
     post = _sync_handler(sync_claim_adjudications, "sync")
 
@@ -66,6 +67,7 @@ class CandidSyncPatientPaymentsAPI(SimpleAPIRoute):
     PATH = "/sync-patient-payments"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        return credentials.key == self.secrets["CANDID_CLIENT_SECRET"]
+        # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
+        return credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
 
     post = _sync_handler(sync_patient_payments, "patient payment sync")

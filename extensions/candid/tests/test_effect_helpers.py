@@ -8,6 +8,7 @@ from candid.effect_helpers import (
     BANNER_KEY,
     DENIED_STATUSES,
     active_coverages_ordered,
+    schedule_async_post,
     sync_banner,
 )
 
@@ -101,3 +102,47 @@ def test_active_coverages_ordered_puts_missing_payer_order_last() -> None:
     claim.coverages.active.return_value = covs
     result = active_coverages_ordered(claim)
     assert [c.id for c in result] == ["c-primary", "c-none"]
+
+
+# ---------------------------------------------------------------------------
+# schedule_async_post: comma encoding in Authorization header
+# ---------------------------------------------------------------------------
+
+
+def test_schedule_async_post_encodes_commas_in_authorization() -> None:
+    """Commas in CANDID_CLIENT_SECRET are %2C-encoded in the Authorization header.
+
+    The Canvas SDK's separate_headers helper (canvas_sdk/handlers/simple_api/tools.py)
+    splits every inbound header value on ``,`` and exposes only the first segment via
+    ``request.headers.get(...)``. A Candid OAuth client secret that contains commas
+    therefore fails the receiver's ``credentials.key == self.secrets[...]`` check
+    on /submit, /sync, /sync-patient-payments, and /report-payment.
+
+    See canvas-plugins#1709 for the SDK fix. Until that ships, %2C-encode commas
+    on the sender; the receiver routes restore them before comparison.
+    """
+    secrets = {"CANDID_CLIENT_SECRET": "abc,def,ghi"}
+    environment = {"CUSTOMER_IDENTIFIER": "test-instance"}
+
+    with patch("candid.effect_helpers.HttpRequestEffect") as MockEffect:
+        schedule_async_post(environment, secrets, "submit", {"claim_id": "x"})
+
+        kwargs = MockEffect.call_args.kwargs
+        auth = kwargs["headers"]["Authorization"]
+
+        assert "," not in auth, "commas must be encoded to survive SDK header parse"
+        assert auth == "abc%2Cdef%2Cghi"
+        # Round-trip on the receiver side reconstructs the original secret.
+        assert auth.replace("%2C", ",") == secrets["CANDID_CLIENT_SECRET"]
+
+
+def test_schedule_async_post_passes_comma_free_secret_through() -> None:
+    """A comma-free secret is unaffected — Authorization header equals the secret."""
+    secrets = {"CANDID_CLIENT_SECRET": "no-commas-here"}
+    environment = {"CUSTOMER_IDENTIFIER": "test-instance"}
+
+    with patch("candid.effect_helpers.HttpRequestEffect") as MockEffect:
+        schedule_async_post(environment, secrets, "submit", {"claim_id": "x"})
+
+        auth = MockEffect.call_args.kwargs["headers"]["Authorization"]
+        assert auth == "no-commas-here"
