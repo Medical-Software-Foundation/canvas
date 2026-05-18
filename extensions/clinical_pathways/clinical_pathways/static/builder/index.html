@@ -8,7 +8,10 @@
 <body data-api-base="{{ api_base }}">
   <header class="topbar">
     <h1>Pathway Builder</h1>
-    <button id="new-pathway-btn" class="primary">+ New Pathway</button>
+    <div class="topbar-right">
+      <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
+      <button id="new-pathway-btn" class="primary">+ New Pathway</button>
+    </div>
   </header>
 
   <main id="app">

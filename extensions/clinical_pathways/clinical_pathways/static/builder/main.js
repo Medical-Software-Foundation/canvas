@@ -14,9 +14,22 @@
     deleteBtn: document.getElementById('delete-pathway-btn'),
     segmentsContainer: document.getElementById('segments-container'),
     addSegmentBtn: document.getElementById('add-segment-btn'),
+    saveStatus: document.getElementById('save-status'),
   };
 
   let state = { pathway: null };
+  let _statusTimer = null;
+
+  function flashStatus(text, kind) {
+    if (!els.saveStatus) return;
+    els.saveStatus.textContent = text;
+    els.saveStatus.className = 'save-status ' + (kind || 'ok');
+    if (_statusTimer) clearTimeout(_statusTimer);
+    _statusTimer = setTimeout(() => {
+      els.saveStatus.textContent = '';
+      els.saveStatus.className = 'save-status';
+    }, kind === 'err' ? 5000 : 2000);
+  }
 
   // ---------- HTTP helpers ----------
 
@@ -26,6 +39,7 @@
     const res = await fetch(apiBase + path, opts);
     if (!res.ok) {
       const text = await res.text();
+      flashStatus('Save failed: ' + (text || res.statusText), 'err');
       throw new Error(text || res.statusText);
     }
     return res.status === 204 ? null : res.json();
@@ -53,9 +67,19 @@
     await loadPathwayList();
   }
 
-  function newPathwayLocal() {
-    state.pathway = { dbid: null, title: '', description: '', recommendation: '', segments: [] };
+  async function newPathway() {
+    // Auto-create a pathway server-side so the segments section is immediately
+    // usable. The user can then rename / fill in details on top of the default.
+    const pw = await api('/pathways', {
+      method: 'POST',
+      body: { title: 'New Pathway', description: '', recommendation: '' },
+    });
+    state.pathway = pw;
+    await loadPathwayList();
     renderPathwayForm();
+    flashStatus('New pathway created');
+    els.title.focus();
+    els.title.select();
   }
 
   function renderPathwayForm() {
@@ -77,25 +101,31 @@
 
   // ---------- Form save (pathway top-level) ----------
 
-  els.form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
+  async function savePathwayFields() {
+    if (!state.pathway || !state.pathway.dbid) return;
     const body = {
       title: els.title.value,
       description: els.description.value,
       recommendation: els.recommendation.value,
     };
-    let pw;
-    if (state.pathway && state.pathway.dbid) {
-      pw = await api('/pathways/' + state.pathway.dbid, { method: 'PATCH', body });
-    } else {
-      pw = await api('/pathways', { method: 'POST', body });
-    }
+    const pw = await api('/pathways/' + state.pathway.dbid, { method: 'PATCH', body });
     state.pathway = pw;
     await loadPathwayList();
-    renderPathwayForm();
+    flashStatus('Saved');
+  }
+
+  els.form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    await savePathwayFields();
   });
 
-  els.newBtn.addEventListener('click', newPathwayLocal);
+  // Auto-save top-level fields on blur so the user doesn't need to remember
+  // to click "Save pathway" before adding segments.
+  els.title.addEventListener('blur', savePathwayFields);
+  els.description.addEventListener('blur', savePathwayFields);
+  els.recommendation.addEventListener('blur', savePathwayFields);
+
+  els.newBtn.addEventListener('click', newPathway);
 
   els.deleteBtn.addEventListener('click', async () => {
     if (!state.pathway || !state.pathway.dbid) return;
@@ -104,6 +134,7 @@
     state.pathway = null;
     await loadPathwayList();
     renderPathwayForm();
+    flashStatus('Pathway deleted');
   });
 
   // ---------- Segments / questions / options ----------

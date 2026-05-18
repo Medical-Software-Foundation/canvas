@@ -3,6 +3,11 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Ro
 
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: #fff; border-bottom: 1px solid #e2e8f0; }
 .topbar h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+.save-status { font-size: 13px; color: transparent; padding: 4px 10px; border-radius: 4px; transition: color 0.15s, background 0.15s; min-width: 0; }
+.save-status.ok { color: #22543d; background: #c6f6d5; }
+.save-status.err { color: #742a2a; background: #fed7d7; }
 
 main#app { display: flex; height: calc(100vh - 53px); }
 

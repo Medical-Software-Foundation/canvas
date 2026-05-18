@@ -36,6 +36,7 @@ button.secondary { background: #edf2f7; }
 
 .recommendation { background: #f0fff4; border: 1px solid #c6f6d5; padding: 12px 14px; border-radius: 6px; white-space: pre-wrap; line-height: 1.5; }
 
-.status { margin-top: 8px; font-size: 13px; }
-.status.ok { color: #2f855a; }
-.status.err { color: #c53030; }
+.status { margin-top: 12px; font-size: 14px; padding: 10px 14px; border-radius: 6px; line-height: 1.4; }
+.status:empty { padding: 0; }
+.status.ok { background: #c6f6d5; color: #22543d; border: 1px solid #9ae6b4; }
+.status.err { background: #fed7d7; color: #742a2a; border: 1px solid #feb2b2; }

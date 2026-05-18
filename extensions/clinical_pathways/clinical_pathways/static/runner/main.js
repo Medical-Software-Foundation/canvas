@@ -69,17 +69,19 @@
 
   async function startPathway(pathwayDbid) {
     const data = await api('/pathways/' + pathwayDbid + '/entry');
-    if (data.done) {
-      finishRun(data.recommendation || '');
-      return;
-    }
-    state.pathway = data.pathway;
-    state.recommendation = data.pathway.recommendation || '';
-    state.currentSegment = data.segment;
+    state.pathway = data.pathway || null;
+    state.recommendation =
+      (data.pathway && data.pathway.recommendation) || data.recommendation || '';
     state.trail = [];
     els.searchView.classList.add('hidden');
-    els.runView.classList.remove('hidden');
     els.restartBtn.classList.remove('hidden');
+    if (data.done) {
+      els.runView.classList.add('hidden');
+      finishRun(state.recommendation);
+      return;
+    }
+    state.currentSegment = data.segment;
+    els.runView.classList.remove('hidden');
     els.pathwayName.textContent = state.pathway.title;
     renderSegment();
   }
@@ -196,7 +198,12 @@
     els.commitStatus.className = 'status';
     if (!noteUuid) {
       els.commitStatus.className = 'status err';
-      els.commitStatus.textContent = 'Cannot commit: no note context.';
+      els.commitStatus.textContent = 'Cannot commit: no note context (open from a note).';
+      return;
+    }
+    if (!state.pathway || !state.pathway.dbid) {
+      els.commitStatus.className = 'status err';
+      els.commitStatus.textContent = 'Cannot commit: no pathway loaded.';
       return;
     }
     try {
@@ -210,7 +217,9 @@
         },
       });
       els.commitStatus.className = 'status ok';
-      els.commitStatus.textContent = 'Committed to note.';
+      els.commitStatus.innerHTML =
+        '✓ Inserted into the note. <br/>' +
+        'Close this panel to view the new commands on the chart.';
       els.commitBtn.disabled = true;
     } catch (err) {
       els.commitStatus.className = 'status err';

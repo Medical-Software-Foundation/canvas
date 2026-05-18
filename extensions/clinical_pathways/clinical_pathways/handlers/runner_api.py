@@ -153,23 +153,25 @@ class RunnerAPI(StaffSessionAuthMixin, SimpleAPI):
         pw = Pathway.objects.filter(dbid=dbid, is_active=True).first()
         if not pw:
             return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        pathway_payload = {
+            "dbid": pw.dbid,
+            "title": pw.title,
+            "recommendation": pw.recommendation,
+        }
         entry = pw.segments.filter(is_entry=True).order_by("display_order").first()
         if not entry:
             entry = pw.segments.order_by("display_order").first()
         if not entry:
-            return [JSONResponse({"done": True, "recommendation": pw.recommendation})]
-        return [
-            JSONResponse(
-                {
-                    "pathway": {
-                        "dbid": pw.dbid,
-                        "title": pw.title,
+            return [
+                JSONResponse(
+                    {
+                        "done": True,
+                        "pathway": pathway_payload,
                         "recommendation": pw.recommendation,
-                    },
-                    "segment": _serialize_segment(entry),
-                }
-            )
-        ]
+                    }
+                )
+            ]
+        return [JSONResponse({"pathway": pathway_payload, "segment": _serialize_segment(entry)})]
 
     # ---------- Segment step ----------
 
