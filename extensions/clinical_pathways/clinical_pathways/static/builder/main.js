@@ -80,7 +80,7 @@
     }
     if (!state.pathway || !state.pathway.dbid) return;
     try {
-      const pw = await api('/pathways/' + state.pathway.dbid, {
+      await api('/pathways/' + state.pathway.dbid, {
         method: 'PUT',
         body: {
           title: state.pathway.title,
@@ -88,7 +88,11 @@
           definition: state.pathway.definition,
         },
       });
-      state.pathway = pw;
+      // Critical: do NOT assign `state.pathway = serverResponse` here. Every
+      // DOM closure (terminal editor, condition rows, radio handlers) holds
+      // direct references into the pathway tree; replacing the root object
+      // would detach them, causing the very next keystroke or click to land
+      // on an orphan and silently lose data.
       flashStatus('Saved');
       await reloadList();
     } catch (_) {
