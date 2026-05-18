@@ -43,13 +43,14 @@ def _serialize_option(opt: Option) -> dict[str, Any]:
 
 
 def _serialize_question(q: Question) -> dict[str, Any]:
+    options = Option.objects.filter(question__dbid=q.dbid).order_by("display_order")
     return {
         "dbid": q.dbid,
         "text": q.text,
         "response_type": q.response_type,
         "display_order": q.display_order,
         "required": q.required,
-        "options": [_serialize_option(o) for o in q.options.order_by("display_order")],
+        "options": [_serialize_option(o) for o in options],
     }
 
 
@@ -65,17 +66,17 @@ def _serialize_branch(rule: BranchRule) -> dict[str, Any]:
 
 
 def _serialize_segment(seg: Segment, *, include_branches: bool = True) -> dict[str, Any]:
+    questions = Question.objects.filter(segment__dbid=seg.dbid).order_by("display_order")
     payload = {
         "dbid": seg.dbid,
         "title": seg.title,
         "display_order": seg.display_order,
         "is_entry": seg.is_entry,
-        "questions": [_serialize_question(q) for q in seg.questions.order_by("display_order")],
+        "questions": [_serialize_question(q) for q in questions],
     }
     if include_branches:
-        payload["branches"] = [
-            _serialize_branch(r) for r in seg.outgoing_rules.order_by("priority")
-        ]
+        rules = BranchRule.objects.filter(from_segment__dbid=seg.dbid).order_by("priority")
+        payload["branches"] = [_serialize_branch(r) for r in rules]
     return payload
 
 
@@ -88,7 +89,8 @@ def _serialize_pathway(pw: Pathway, *, deep: bool = False) -> dict[str, Any]:
         "is_active": pw.is_active,
     }
     if deep:
-        base["segments"] = [_serialize_segment(s) for s in pw.segments.order_by("display_order")]
+        segments = Segment.objects.filter(pathway__dbid=pw.dbid).order_by("display_order")
+        base["segments"] = [_serialize_segment(s) for s in segments]
     return base
 
 
@@ -197,7 +199,7 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         if not pw:
             return [_not_found("Pathway")]
         body = self.request.json() or {}
-        existing = pw.segments.count()
+        existing = Segment.objects.filter(pathway__dbid=pw.dbid).count()
         seg = Segment(
             pathway=pw,
             title=body.get("title", "Untitled segment"),
@@ -219,7 +221,7 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         if "display_order" in body:
             seg.display_order = int(body["display_order"])
         if "is_entry" in body and body["is_entry"]:
-            Segment.objects.filter(pathway_id=seg.pathway_id, is_entry=True).exclude(
+            Segment.objects.filter(pathway__dbid=seg.pathway_id, is_entry=True).exclude(
                 dbid=seg.dbid
             ).update(is_entry=False)
             seg.is_entry = True
@@ -232,10 +234,10 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         seg = Segment.objects.filter(dbid=dbid).first()
         if not seg:
             return [_not_found("Segment")]
-        BranchRule.objects.filter(from_segment=seg).delete()
-        BranchRule.objects.filter(to_segment=seg).delete()
-        for q in seg.questions.all():
-            q.options.all().delete()
+        BranchRule.objects.filter(from_segment__dbid=seg.dbid).delete()
+        BranchRule.objects.filter(to_segment__dbid=seg.dbid).delete()
+        for q in Question.objects.filter(segment__dbid=seg.dbid):
+            Option.objects.filter(question__dbid=q.dbid).delete()
             q.delete()
         seg.delete()
         return [JSONResponse({"deleted": True})]
@@ -256,7 +258,9 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
             segment=seg,
             text=body.get("text", ""),
             response_type=response_type,
-            display_order=body.get("display_order", seg.questions.count()),
+            display_order=body.get(
+                "display_order", Question.objects.filter(segment__dbid=seg.dbid).count()
+            ),
             required=bool(body.get("required", True)),
         )
         q.save()
@@ -292,7 +296,7 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         q = Question.objects.filter(dbid=dbid).first()
         if not q:
             return [_not_found("Question")]
-        q.options.all().delete()
+        Option.objects.filter(question__dbid=q.dbid).delete()
         q.delete()
         return [JSONResponse({"deleted": True})]
 
@@ -308,7 +312,9 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         opt = Option(
             question=q,
             label=body.get("label", ""),
-            display_order=body.get("display_order", q.options.count()),
+            display_order=body.get(
+                "display_order", Option.objects.filter(question__dbid=q.dbid).count()
+            ),
         )
         opt.save()
         return [JSONResponse(_serialize_option(opt), status_code=HTTPStatus.CREATED)]
@@ -344,7 +350,10 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
         seg = Segment.objects.filter(dbid=dbid).first()
         if not seg:
             return [_not_found("Segment")]
-        rules = [_serialize_branch(r) for r in seg.outgoing_rules.order_by("priority")]
+        rules = [
+            _serialize_branch(r)
+            for r in BranchRule.objects.filter(from_segment__dbid=seg.dbid).order_by("priority")
+        ]
         return [JSONResponse({"branches": rules})]
 
     @api.post("/segments/<segment_dbid>/branches")

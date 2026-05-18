@@ -13,7 +13,7 @@ from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
-from clinical_pathways.models import BranchRule, Pathway, Segment
+from clinical_pathways.models import BranchRule, Option, Pathway, Question, Segment
 
 _API_BASE = "/plugin-io/api/clinical_pathways/runner"
 
@@ -69,13 +69,15 @@ def _evaluate_rule(rule: BranchRule, answers: dict[int, str]) -> bool:
 
 
 def _next_segment(from_segment: Segment, answers: dict[int, str]) -> Segment | None:
-    for rule in from_segment.outgoing_rules.order_by("priority"):
+    rules = BranchRule.objects.filter(from_segment__dbid=from_segment.dbid).order_by("priority")
+    for rule in rules:
         if _evaluate_rule(rule, answers):
-            return rule.to_segment
+            return Segment.objects.filter(dbid=rule.to_segment_id).first()
     return None
 
 
 def _serialize_segment(seg: Segment) -> dict[str, Any]:
+    questions = Question.objects.filter(segment__dbid=seg.dbid).order_by("display_order")
     return {
         "dbid": seg.dbid,
         "title": seg.title,
@@ -86,10 +88,11 @@ def _serialize_segment(seg: Segment) -> dict[str, Any]:
                 "response_type": q.response_type,
                 "required": q.required,
                 "options": [
-                    {"dbid": o.dbid, "label": o.label} for o in q.options.order_by("display_order")
+                    {"dbid": o.dbid, "label": o.label}
+                    for o in Option.objects.filter(question__dbid=q.dbid).order_by("display_order")
                 ],
             }
-            for q in seg.questions.order_by("display_order")
+            for q in questions
         ],
     }
 
@@ -158,9 +161,17 @@ class RunnerAPI(StaffSessionAuthMixin, SimpleAPI):
             "title": pw.title,
             "recommendation": pw.recommendation,
         }
-        entry = pw.segments.filter(is_entry=True).order_by("display_order").first()
+        entry = (
+            Segment.objects.filter(pathway__dbid=pw.dbid, is_entry=True)
+            .order_by("display_order")
+            .first()
+        )
         if not entry:
-            entry = pw.segments.order_by("display_order").first()
+            entry = (
+                Segment.objects.filter(pathway__dbid=pw.dbid)
+                .order_by("display_order")
+                .first()
+            )
         if not entry:
             return [
                 JSONResponse(
@@ -191,8 +202,9 @@ class RunnerAPI(StaffSessionAuthMixin, SimpleAPI):
             answers[qid] = str(r.get("answer", ""))
         nxt = _next_segment(seg, answers)
         if not nxt:
-            pw = seg.pathway
-            return [JSONResponse({"done": True, "recommendation": pw.recommendation})]
+            pw = Pathway.objects.filter(dbid=seg.pathway_id).first()
+            recommendation = pw.recommendation if pw else ""
+            return [JSONResponse({"done": True, "recommendation": recommendation})]
         return [JSONResponse({"segment": _serialize_segment(nxt)})]
 
     # ---------- Complete: originate custom commands ----------
