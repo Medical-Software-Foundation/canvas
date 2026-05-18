@@ -1,0 +1,30 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.23",
+    "name": "voice_dictation",
+    "description": "Voice dictation for HPI and Plan commands using ElevenLabs speech-to-text",
+    "components": {
+        "protocols": [
+            {
+                "class": "voice_dictation.handlers.dictate_api:DictateAPI",
+                "description": "API endpoint for audio transcription and command creation"
+            }
+        ],
+        "applications": [
+            {
+                "class": "voice_dictation.handlers.dictate_buttons:DictateApp",
+                "name": "Dictate",
+                "description": "Voice dictation tab in notes for HPI and Plan commands",
+                "icon": "assets/mic-icon.png",
+                "scope": "provider_companion_note_specific"
+            }
+        ]
+    },
+    "secrets": [
+        "ELEVENLABS_API_KEY"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "readme": "./README.md"
+}
