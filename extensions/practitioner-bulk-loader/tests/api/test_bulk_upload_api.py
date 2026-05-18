@@ -5,6 +5,8 @@ from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
+from django.db import DatabaseError
 
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 
@@ -598,7 +600,7 @@ Jane,Smith,MD,Main Clinic,jane.smith@example.com,5555550100,,,1980-03-15,,,,,,DE
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory") as mock_dir, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.read_practitioner",
-                   side_effect=Exception("404 Not Found")) as mock_read:
+                   side_effect=requests.HTTPError("404 Not Found")) as mock_read:
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}
@@ -997,8 +999,7 @@ class TestCreatePractitionersErrorHandling:
         handler = make_handler(body={"practitioners": [prac]})
 
         response = _FakeFhirResponse(status_code=422, json_body=_role_operation_outcome("XY"))
-        http_err = Exception("422 Unprocessable Entity")
-        http_err.response = response  # type: ignore[attr-defined]
+        http_err = requests.HTTPError("422 Unprocessable Entity", response=response)
 
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc_map, \
@@ -1034,8 +1035,7 @@ class TestCreatePractitionersErrorHandling:
                        "details": {"text": "birthDate is not a valid date"}}],
         }
         response = _FakeFhirResponse(status_code=400, json_body=body)
-        http_err = Exception("400")
-        http_err.response = response  # type: ignore[attr-defined]
+        http_err = requests.HTTPError("400", response=response)
 
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc_map, \
@@ -1059,8 +1059,7 @@ class TestCreatePractitionersErrorHandling:
         handler = make_handler(body={"practitioners": [bad, good]})
 
         response = _FakeFhirResponse(status_code=422, json_body=_role_operation_outcome("XY"))
-        http_err = Exception("422")
-        http_err.response = response  # type: ignore[attr-defined]
+        http_err = requests.HTTPError("422", response=response)
 
         def fake_create(_client, resource):
             # Pick which call fails based on the email in the built resource.
@@ -1104,8 +1103,7 @@ class TestCreatePractitionersErrorHandling:
             }],
         }
         response = _FakeFhirResponse(status_code=400, json_body=body)
-        http_err = Exception("400")
-        http_err.response = response  # type: ignore[attr-defined]
+        http_err = requests.HTTPError("400", response=response)
 
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc_map, \
@@ -1133,7 +1131,7 @@ class TestCreatePractitionersErrorHandling:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc_map, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.create_practitioner",
-                   side_effect=RuntimeError("network unreachable")), \
+                   side_effect=requests.RequestException("network unreachable")), \
              patch("practitioner_bulk_loader.api.bulk_upload_api.build_fhir_practitioner", return_value={}):
 
             mock_client_fn.return_value = MagicMock()
@@ -1233,9 +1231,7 @@ def _username_collision_error():
         }],
     }
     response = _FakeFhirResponse(status_code=422, json_body=body)
-    err = Exception("422 Unprocessable Entity")
-    err.response = response  # type: ignore[attr-defined]
-    return err
+    return requests.HTTPError("422 Unprocessable Entity", response=response)
 
 
 class TestCreatePractitionersUsernameRetry:
@@ -1307,8 +1303,7 @@ class TestCreatePractitionersUsernameRetry:
                        "details": {"text": "Cannot find 1 Staff role(s) for the given role_codes.Missing roles: {'WIZARD'}"}}],
         }
         response = _FakeFhirResponse(status_code=422, json_body=body)
-        err = Exception("422")
-        err.response = response  # type: ignore[attr-defined]
+        err = requests.HTTPError("422", response=response)
 
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc_map, \
@@ -2353,7 +2348,7 @@ class TestParseAndValidateDirectoryFailureDegrades:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory",
-                   side_effect=RuntimeError("Staff ORM exploded")):
+                   side_effect=DatabaseError("Staff ORM exploded")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}
@@ -2375,7 +2370,7 @@ class TestParseAndValidateDirectoryFailureDegrades:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory",
-                   side_effect=RuntimeError("Staff ORM exploded")):
+                   side_effect=DatabaseError("Staff ORM exploded")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}
@@ -2413,7 +2408,7 @@ class TestMergeReadOrWriteFailure:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc_map, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.read_practitioner",
-                   side_effect=RuntimeError("404 Not Found")):
+                   side_effect=requests.HTTPError("404 Not Found")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc_map.return_value = {"main clinic": "Location/loc-1"}
@@ -3663,7 +3658,7 @@ class TestExistingReadFailureSurfacesPerRowFlag:
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory") as mock_dir, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.read_practitioner",
-                   side_effect=RuntimeError("Canvas returned 503")):
+                   side_effect=requests.HTTPError("Canvas returned 503")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}

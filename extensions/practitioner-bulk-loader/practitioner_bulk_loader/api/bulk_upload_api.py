@@ -13,9 +13,11 @@ import re
 from http import HTTPStatus
 from typing import Any
 
+import requests
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.v1.data.staff import Staff
+from django.db import DatabaseError
 from logger import log
 
 from practitioner_bulk_loader.utils.csv_parser import (
@@ -908,7 +910,8 @@ def _extract_fumage_error_text(exc: Exception) -> tuple[int | None, str]:
 
     try:
         body = response.json()
-    except Exception:  # noqa: BLE001 — response may not be JSON
+    except ValueError:
+        # response may not be JSON — fall back to raw text path below
         body = None
 
     if isinstance(body, dict) and body.get("resourceType") == "OperationOutcome":
@@ -1270,7 +1273,14 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
                 f"{len(directory['by_name_dob'])} with name+DOB, "
                 f"{sum(len(v) for v in directory['by_name'].values())} total names indexed"
             )
-        except Exception as exc:  # noqa: BLE001
+        except DatabaseError as exc:
+            # Narrowed to django.db.DatabaseError per the repo rule that
+            # error-handling must surface non-expected exceptions to
+            # Sentry. The expected failure here is a database-level error
+            # (connection loss, query timeout) — the Staff ORM call is
+            # the external dependency. Other exception types (programming
+            # bugs, KeyError, etc.) propagate.
+            #
             # Without the directory every existing practitioner would be
             # classified "new" and the admin could create duplicates of
             # every Staff record. Surface a top-level warning (row=0 — the
@@ -1381,15 +1391,16 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
                         )
                         new_license_count = len(new_licenses)
                         renewal_count = len(renewals)
-                except Exception as exc:  # noqa: BLE001
-                    # Phantom records (Staff row exists with no FHIR
-                    # Practitioner) 404 here — that's the documented case
-                    # and the UI degrades to "total licenses only". But
-                    # the same catch also swallows 5xx, auth blips, and
-                    # malformed-body parsing errors that the admin should
-                    # know about. Set a per-row flag so the UI can render
-                    # "Couldn't preview merge details" on that row instead
-                    # of silently showing an incomplete preview.
+                except requests.RequestException as exc:
+                    # Narrowed to requests.RequestException per the repo
+                    # rule: catch only the expected exception from the
+                    # external Canvas FHIR call. Phantom records (Staff
+                    # row exists with no FHIR Practitioner) 404 here —
+                    # that's the documented case and the UI degrades to
+                    # "total licenses only". The same catch handles 5xx
+                    # and auth blips. Set a per-row flag so the UI can
+                    # render "Couldn't preview merge details" instead of
+                    # silently showing an incomplete preview.
                     existing_read_failed = True
                     log.warning(
                         f"[BulkUpload] Couldn't read existing record for {email} "
@@ -1599,7 +1610,11 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
             _expand_address_for_fhir(prac)
             fhir_resource = build_fhir_practitioner(prac, location_map)
             new_id = create_practitioner(fhir_client, fhir_resource)
-        except Exception as exc:  # noqa: BLE001
+        except requests.RequestException as exc:
+            # Narrowed to requests.RequestException per the repo rule:
+            # catch only the expected exception from the external Canvas
+            # FHIR POST. Local logic errors (build_fhir_practitioner
+            # raising on malformed data, etc.) propagate to Sentry.
             if not _is_username_collision(exc):
                 return self._build_error_result(
                     row_num, prac, email, exc, action="create"
@@ -1624,7 +1639,7 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
                     prac, location_map, username_override=fallback_username
                 )
                 new_id = create_practitioner(fhir_client, fhir_resource)
-            except Exception as retry_exc:  # noqa: BLE001
+            except requests.RequestException as retry_exc:
                 return self._build_error_result(
                     row_num, prac, email, retry_exc, action="create"
                 )
@@ -1822,7 +1837,12 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
                 updated_qualifications + new_qualifications
             )
             replace_practitioner(fhir_client, existing_id, existing_resource)
-        except Exception as exc:  # noqa: BLE001
+        except requests.RequestException as exc:
+            # Narrowed per the repo rule. The expected failures here are
+            # from read_practitioner / replace_practitioner (the Canvas
+            # FHIR GET and PUT). Local logic errors (KeyError in the
+            # ``_normalize_existing_*`` helpers, pydantic validation
+            # mismatches, etc.) propagate to Sentry as real bugs.
             return self._build_error_result(row_num, prac, email, exc, action="merge")
 
         message_parts: list[str] = []
