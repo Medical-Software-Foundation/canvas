@@ -797,8 +797,21 @@ def _apply_csv_address(
       preserving slots the CSV is blank on (Line 2 / apartment numbers,
       the address's ``id``, district, extensions, etc.). The CSV is the
       source of truth for the slots it carries; everything else stays.
-      ``"additional"`` — append the CSV address as a new entry; existing
-      primary stays untouched.
+      ``"additional"`` — append the CSV address as a new entry; this
+      function on its own leaves the existing primary untouched.
+
+    **Caller note (additional mode):** ``_do_merge`` calls this function
+    and then runs ``_normalize_existing_address`` two steps later, which
+    fills blank slots on the existing primary from the CSV. So the
+    merge flow as a whole *does* modify the primary in the
+    partial-primary case — blank-on-Canvas fields get the CSV value,
+    populated slots are still untouched. The diff panel hides this
+    transparently because ``_compute_field_conflicts`` filters out
+    conflicts where either side is blank, so admins never see a
+    misleading "primary kept" label on a slot that's actually being
+    filled. The README's "Add address as additional" section documents
+    this contract; future callers should not treat the docstring above
+    in isolation as the merge flow's whole story.
 
     Why merge instead of wholesale replace on overwrite: the CSV schema
     only carries Line 1 / Line 2 / City / State / Zip, but Canvas may
