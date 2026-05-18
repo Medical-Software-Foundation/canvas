@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  .pc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 12px 16px; color: #1a202c; line-height: 1.5; }
+  .pc h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #2b6cb0; }
+  .pc .source { color: #4a5568; font-size: 12px; margin-bottom: 10px; }
+  .pc .severity { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+  .pc .severity.minor { background: #e6fffa; color: #234e52; }
+  .pc .severity.moderate { background: #fefcbf; color: #744210; }
+  .pc .severity.severe { background: #fed7d7; color: #742a2a; }
+  .pc .severity.critical { background: #c53030; color: #fff; }
+  .pc .body { white-space: pre-wrap; }
+  .pc .action { margin-top: 10px; padding: 8px 10px; background: #f7fafc; border-left: 3px solid #4299e1; border-radius: 3px; }
+  .pc .action-label { font-weight: 600; font-size: 12px; color: #2d3748; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+  <div class="pc">
+    <h3>{{ title }}</h3>
+    <div class="source">From pathway: {{ pathway_title }}</div>
+    {% if severity %}<span class="severity {{ severity }}">{{ severity_label }}</span>{% endif %}
+    <div class="body">{{ body }}</div>
+    {% if recommended_action %}
+      <div class="action">
+        <div class="action-label">Recommended action</div>
+        <div>{{ recommended_action }}</div>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>

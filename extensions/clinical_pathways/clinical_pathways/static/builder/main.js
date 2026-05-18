@@ -2,36 +2,46 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
+
   const els = {
     list: document.getElementById('pathway-list-items'),
     newBtn: document.getElementById('new-pathway-btn'),
     empty: document.getElementById('empty-state'),
-    form: document.getElementById('pathway-form'),
-    dbid: document.getElementById('pathway-dbid'),
+    editor: document.getElementById('pathway-editor'),
     title: document.getElementById('pathway-title'),
     description: document.getElementById('pathway-description'),
-    recommendation: document.getElementById('pathway-recommendation'),
+    statusPill: document.getElementById('status-pill'),
+    publishBtn: document.getElementById('publish-btn'),
+    unpublishBtn: document.getElementById('unpublish-btn'),
     deleteBtn: document.getElementById('delete-pathway-btn'),
-    segmentsContainer: document.getElementById('segments-container'),
-    addSegmentBtn: document.getElementById('add-segment-btn'),
+    rootPickerHost: document.getElementById('root-picker-host'),
+    treeHost: document.getElementById('tree-host'),
+    validation: document.getElementById('validation-issues'),
+    validationList: document.getElementById('validation-list'),
     saveStatus: document.getElementById('save-status'),
   };
 
-  let state = { pathway: null };
-  let _statusTimer = null;
+  const state = {
+    pathway: null, // {dbid, title, description, status, definition: {version, root}}
+    questionnaires: [], // typeahead cache: [{id, name, code}]
+    questionnaireDetails: {}, // id -> {questions: [{id, name, response_set_type, options}]}
+    terminalCommands: [], // [{key, schema_key, name, fields}]
+  };
 
+  // ---------- Status pill ----------
+
+  let _statusTimer = null;
   function flashStatus(text, kind) {
-    if (!els.saveStatus) return;
     els.saveStatus.textContent = text;
     els.saveStatus.className = 'save-status ' + (kind || 'ok');
     if (_statusTimer) clearTimeout(_statusTimer);
     _statusTimer = setTimeout(() => {
       els.saveStatus.textContent = '';
       els.saveStatus.className = 'save-status';
-    }, kind === 'err' ? 5000 : 2000);
+    }, kind === 'err' ? 6000 : 1800);
   }
 
-  // ---------- HTTP helpers ----------
+  // ---------- HTTP ----------
 
   async function api(path, options = {}) {
     const opts = Object.assign({ headers: { 'Content-Type': 'application/json' } }, options);
@@ -39,21 +49,65 @@
     const res = await fetch(apiBase + path, opts);
     if (!res.ok) {
       const text = await res.text();
-      flashStatus('Save failed: ' + (text || res.statusText), 'err');
+      flashStatus('Request failed: ' + (text || res.statusText), 'err');
       throw new Error(text || res.statusText);
     }
     return res.status === 204 ? null : res.json();
   }
 
-  // ---------- Pathway list ----------
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), ms);
+    };
+  }
 
-  async function loadPathwayList() {
+  // ---------- Persistence ----------
+
+  const savePathway = debounce(async () => {
+    if (!state.pathway || !state.pathway.dbid) return;
+    try {
+      const pw = await api('/pathways/' + state.pathway.dbid, {
+        method: 'PUT',
+        body: {
+          title: state.pathway.title,
+          description: state.pathway.description,
+          definition: state.pathway.definition,
+        },
+      });
+      state.pathway = pw;
+      flashStatus('Saved');
+      await reloadList();
+    } catch (_) {
+      /* flashStatus already shown */
+    }
+  }, 400);
+
+  // ---------- ID helpers (local) ----------
+
+  function newNodeId() {
+    return 'n_' + Math.random().toString(36).slice(2, 12);
+  }
+  function newBranchId() {
+    return 'b_' + Math.random().toString(36).slice(2, 12);
+  }
+
+  // ---------- List + load + create + delete ----------
+
+  async function reloadList() {
     const { pathways } = await api('/pathways');
     els.list.innerHTML = '';
     pathways.forEach((pw) => {
       const li = document.createElement('li');
-      li.textContent = pw.title;
-      li.dataset.dbid = pw.dbid;
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = pw.title;
+      li.appendChild(name);
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (pw.status === 'published' ? 'published' : 'draft');
+      badge.textContent = pw.status;
+      li.appendChild(badge);
       if (state.pathway && state.pathway.dbid === pw.dbid) li.classList.add('active');
       li.addEventListener('click', () => loadPathway(pw.dbid));
       els.list.appendChild(li);
@@ -61,311 +115,868 @@
   }
 
   async function loadPathway(dbid) {
-    const pw = await api('/pathways/' + dbid);
-    state.pathway = pw;
-    renderPathwayForm();
-    await loadPathwayList();
+    state.pathway = await api('/pathways/' + dbid);
+    renderEditor();
+    await reloadList();
   }
 
-  async function newPathway() {
-    // Auto-create a pathway server-side so the segments section is immediately
-    // usable. The user can then rename / fill in details on top of the default.
-    const pw = await api('/pathways', {
-      method: 'POST',
-      body: { title: 'New Pathway', description: '', recommendation: '' },
-    });
+  async function createPathway() {
+    const pw = await api('/pathways', { method: 'POST', body: { title: 'Untitled pathway' } });
     state.pathway = pw;
-    await loadPathwayList();
-    renderPathwayForm();
     flashStatus('New pathway created');
+    await reloadList();
+    renderEditor();
     els.title.focus();
     els.title.select();
   }
 
-  function renderPathwayForm() {
-    const pw = state.pathway;
-    if (!pw) {
+  async function deletePathway() {
+    if (!state.pathway || !state.pathway.dbid) return;
+    if (!confirm('Delete this pathway? It will be marked inactive and unpublished.')) return;
+    await api('/pathways/' + state.pathway.dbid, { method: 'DELETE' });
+    state.pathway = null;
+    flashStatus('Pathway deleted');
+    await reloadList();
+    renderEditor();
+  }
+
+  // ---------- Catalog ----------
+
+  async function searchQuestionnaires(q) {
+    const res = await api('/catalog/questionnaires?q=' + encodeURIComponent(q || ''));
+    state.questionnaires = res.questionnaires || [];
+    return state.questionnaires;
+  }
+
+  async function getQuestionnaireDetail(id) {
+    if (state.questionnaireDetails[id]) return state.questionnaireDetails[id];
+    const detail = await api('/catalog/questionnaires/' + encodeURIComponent(id));
+    state.questionnaireDetails[id] = detail;
+    return detail;
+  }
+
+  async function loadTerminalCommands() {
+    if (state.terminalCommands.length) return state.terminalCommands;
+    const res = await api('/catalog/terminal-commands');
+    state.terminalCommands = res.terminal_commands || [];
+    return state.terminalCommands;
+  }
+
+  // ---------- Editor render ----------
+
+  function renderEditor() {
+    if (!state.pathway) {
       els.empty.classList.remove('hidden');
-      els.form.classList.add('hidden');
+      els.editor.classList.add('hidden');
       return;
     }
     els.empty.classList.add('hidden');
-    els.form.classList.remove('hidden');
-    els.dbid.value = pw.dbid || '';
-    els.title.value = pw.title || '';
-    els.description.value = pw.description || '';
-    els.recommendation.value = pw.recommendation || '';
-    els.deleteBtn.classList.toggle('hidden', !pw.dbid);
-    renderSegments();
+    els.editor.classList.remove('hidden');
+    els.title.value = state.pathway.title || '';
+    els.description.value = state.pathway.description || '';
+    const status = state.pathway.status || 'draft';
+    els.statusPill.textContent = status;
+    els.statusPill.className = 'status-pill ' + status;
+    els.publishBtn.classList.toggle('hidden', status === 'published');
+    els.unpublishBtn.classList.toggle('hidden', status !== 'published');
+    renderRootPicker();
+    renderTree();
+    els.validation.classList.add('hidden');
   }
 
-  // ---------- Form save (pathway top-level) ----------
+  // ---------- Root picker ----------
 
-  async function savePathwayFields() {
-    if (!state.pathway || !state.pathway.dbid) return;
-    const body = {
-      title: els.title.value,
-      description: els.description.value,
-      recommendation: els.recommendation.value,
-    };
-    const pw = await api('/pathways/' + state.pathway.dbid, { method: 'PATCH', body });
-    state.pathway = pw;
-    await loadPathwayList();
-    flashStatus('Saved');
+  async function renderRootPicker() {
+    els.rootPickerHost.innerHTML = '';
+    const def = state.pathway.definition || { version: 1, root: null };
+    const wrap = document.createElement('div');
+    const select = document.createElement('select');
+    select.id = 'root-questionnaire-select';
+    wrap.appendChild(select);
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '— Choose a starting questionnaire —';
+    select.appendChild(placeholder);
+
+    // Pre-populate with the currently-selected questionnaire's snapshot so it
+    // shows even if the typeahead cache hasn't loaded it yet.
+    const currentId = def.root && def.root.questionnaire_id;
+    if (currentId) {
+      const opt = document.createElement('option');
+      opt.value = currentId;
+      opt.selected = true;
+      opt.textContent = (def.root.questionnaire_name_snapshot || 'Selected') + ' (' + currentId.slice(0, 8) + '…)';
+      select.appendChild(opt);
+    }
+
+    await searchQuestionnaires('');
+    state.questionnaires.forEach((q) => {
+      if (currentId && q.id === currentId) return; // already added
+      const opt = document.createElement('option');
+      opt.value = q.id;
+      opt.textContent = q.name + (q.code ? ' (' + q.code + ')' : '');
+      select.appendChild(opt);
+    });
+
+    select.addEventListener('change', async (ev) => {
+      const id = ev.target.value;
+      if (!id) {
+        state.pathway.definition.root = null;
+        savePathway();
+        renderTree();
+        return;
+      }
+      const detail = await getQuestionnaireDetail(id);
+      state.pathway.definition.root = {
+        node_id: (def.root && def.root.node_id) || newNodeId(),
+        type: 'questionnaire',
+        questionnaire_id: id,
+        questionnaire_name_snapshot: detail.name,
+        match_mode: 'first',
+        branches: (def.root && def.root.branches) || [],
+      };
+      savePathway();
+      renderTree();
+    });
+
+    els.rootPickerHost.appendChild(wrap);
   }
 
-  els.form.addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    await savePathwayFields();
-  });
+  // ---------- Tree ----------
 
-  // Auto-save top-level fields on blur so the user doesn't need to remember
-  // to click "Save pathway" before adding segments.
-  els.title.addEventListener('blur', savePathwayFields);
-  els.description.addEventListener('blur', savePathwayFields);
-  els.recommendation.addEventListener('blur', savePathwayFields);
-
-  els.newBtn.addEventListener('click', newPathway);
-
-  els.deleteBtn.addEventListener('click', async () => {
-    if (!state.pathway || !state.pathway.dbid) return;
-    if (!confirm('Delete this pathway? (It will be marked inactive.)')) return;
-    await api('/pathways/' + state.pathway.dbid, { method: 'DELETE' });
-    state.pathway = null;
-    await loadPathwayList();
-    renderPathwayForm();
-    flashStatus('Pathway deleted');
-  });
-
-  // ---------- Segments / questions / options ----------
-
-  async function refreshPathway() {
-    state.pathway = await api('/pathways/' + state.pathway.dbid);
-    renderSegments();
-  }
-
-  function renderSegments() {
-    els.segmentsContainer.innerHTML = '';
-    if (!state.pathway || !state.pathway.dbid) {
-      els.addSegmentBtn.classList.add('hidden');
+  function renderTree() {
+    els.treeHost.innerHTML = '';
+    const root = state.pathway.definition && state.pathway.definition.root;
+    if (!root) {
+      const empty = document.createElement('div');
+      empty.className = 'hint';
+      empty.textContent = 'Pick a starting questionnaire above to begin defining branches.';
+      els.treeHost.appendChild(empty);
       return;
     }
-    els.addSegmentBtn.classList.remove('hidden');
-    (state.pathway.segments || []).forEach((seg) => {
-      els.segmentsContainer.appendChild(renderSegmentEl(seg));
-    });
+    const tree = renderNode(root, /*ancestors*/ []);
+    els.treeHost.appendChild(tree);
   }
 
-  function renderSegmentEl(seg) {
-    const tpl = document.getElementById('segment-template').content.cloneNode(true);
-    const root = tpl.querySelector('.segment');
-    root.dataset.segmentDbid = seg.dbid;
-    root.querySelector('.segment-title').value = seg.title || '';
-    const entryInput = root.querySelector('.is-entry');
-    entryInput.checked = !!seg.is_entry;
-    entryInput.addEventListener('change', async () => {
-      await api('/segments/' + seg.dbid, { method: 'PATCH', body: { is_entry: true } });
-      await refreshPathway();
-    });
-    root.querySelector('.segment-title').addEventListener('blur', async (ev) => {
-      await api('/segments/' + seg.dbid, { method: 'PATCH', body: { title: ev.target.value } });
-    });
-    root.querySelector('.delete-segment').addEventListener('click', async () => {
-      if (!confirm('Delete this segment and its questions?')) return;
-      await api('/segments/' + seg.dbid, { method: 'DELETE' });
-      await refreshPathway();
+  function renderNode(node, ancestors) {
+    if (node.type === 'terminal') return renderTerminalNode(node, ancestors);
+    const el = document.createElement('div');
+    el.className = 'node';
+    el.dataset.nodeId = node.node_id;
+
+    const header = document.createElement('div');
+    header.className = 'node-header';
+    const badge = document.createElement('span');
+    badge.className = 'node-type-badge';
+    badge.textContent = 'Questionnaire';
+    header.appendChild(badge);
+    const title = document.createElement('div');
+    title.className = 'node-title';
+    title.textContent = node.questionnaire_name_snapshot || '(no questionnaire selected)';
+    header.appendChild(title);
+    el.appendChild(header);
+
+    const hint = document.createElement('div');
+    hint.className = 'node-auto-insert-hint';
+    hint.textContent = 'Auto-inserts into the note when the pathway reaches this step.';
+    el.appendChild(hint);
+
+    // Branches
+    const branchesSection = document.createElement('div');
+    branchesSection.className = 'branches-section';
+    const label = document.createElement('div');
+    label.className = 'branches-label';
+    label.textContent = 'Branches (top to bottom, first match wins)';
+    branchesSection.appendChild(label);
+
+    (node.branches || []).forEach((b, idx) => {
+      branchesSection.appendChild(renderBranch(node, b, idx, ancestors));
     });
 
-    const qList = root.querySelector('.questions');
-    (seg.questions || []).forEach((q) => qList.appendChild(renderQuestionEl(q)));
-
-    root.querySelector('.add-question').addEventListener('click', async () => {
-      await api('/segments/' + seg.dbid + '/questions', {
-        method: 'POST',
-        body: { text: '', response_type: 'free_text' },
-      });
-      await refreshPathway();
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'secondary small';
+    addBtn.textContent = '+ Add branch';
+    addBtn.addEventListener('click', () => {
+      const newBranch = {
+        branch_id: newBranchId(),
+        label: '',
+        when: { kind: 'group', combinator: 'all', children: [] },
+        then: null,
+      };
+      node.branches = node.branches || [];
+      node.branches.push(newBranch);
+      savePathway();
+      renderTree();
     });
+    branchesSection.appendChild(addBtn);
 
-    const branchList = root.querySelector('.branch-list');
-    (seg.branches || []).forEach((b) => branchList.appendChild(renderBranchEl(seg, b)));
-    root.querySelector('.add-branch').addEventListener('click', async () => {
-      const otherSegments = (state.pathway.segments || []).filter((s) => s.dbid !== seg.dbid);
-      if (!otherSegments.length) {
-        alert('Add another segment before creating a branch rule.');
-        return;
+    el.appendChild(branchesSection);
+    return el;
+  }
+
+  function renderTerminalNode(node, ancestors) {
+    const el = document.createElement('div');
+    el.className = 'node terminal';
+    el.dataset.nodeId = node.node_id;
+
+    const header = document.createElement('div');
+    header.className = 'node-header';
+    const badge = document.createElement('span');
+    badge.className = 'node-type-badge';
+    badge.textContent = 'Terminal';
+    header.appendChild(badge);
+    const title = document.createElement('div');
+    title.className = 'node-title';
+    const cmd = state.terminalCommands.find((c) => c.key === node.command_key);
+    title.textContent = cmd ? cmd.name : '(pick a command)';
+    header.appendChild(title);
+    el.appendChild(header);
+
+    const hint = document.createElement('div');
+    hint.className = 'node-auto-insert-hint';
+    hint.textContent = 'Inserts as the leaf command on this arm.';
+    el.appendChild(hint);
+
+    el.appendChild(renderTerminalEditor(node, ancestors));
+    return el;
+  }
+
+  function renderBranch(parentNode, branch, idx, ancestors) {
+    const el = document.createElement('div');
+    el.className = 'branch';
+    el.dataset.branchId = branch.branch_id;
+
+    const header = document.createElement('div');
+    header.className = 'branch-header';
+    const lbl = document.createElement('strong');
+    lbl.textContent = 'Branch ' + (idx + 1);
+    header.appendChild(lbl);
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'branch-label-input';
+    labelInput.placeholder = 'Branch label (optional)';
+    labelInput.value = branch.label || '';
+    labelInput.addEventListener('input', (ev) => {
+      branch.label = ev.target.value;
+      savePathway();
+    });
+    header.appendChild(labelInput);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'ghost small';
+    delBtn.textContent = '×';
+    delBtn.title = 'Delete branch';
+    delBtn.addEventListener('click', () => {
+      if (!confirm('Delete this branch?')) return;
+      parentNode.branches.splice(idx, 1);
+      savePathway();
+      renderTree();
+    });
+    header.appendChild(delBtn);
+    el.appendChild(header);
+
+    // When
+    const whenSec = document.createElement('div');
+    whenSec.className = 'branch-section';
+    const whenH = document.createElement('h4');
+    whenH.textContent = 'When';
+    whenSec.appendChild(whenH);
+    const ctx = collectQuestionnaireContext(parentNode, ancestors);
+    whenSec.appendChild(
+      renderCondition(branch.when || { kind: 'group', combinator: 'all', children: [] }, ctx, /*depth*/ 1, (newWhen) => {
+        branch.when = newWhen;
+        savePathway();
+      })
+    );
+    el.appendChild(whenSec);
+
+    // Then
+    const thenSec = document.createElement('div');
+    thenSec.className = 'branch-section';
+    const thenH = document.createElement('h4');
+    thenH.textContent = 'Then';
+    thenSec.appendChild(thenH);
+    thenSec.appendChild(renderThenPicker(branch, ancestors.concat([parentNode])));
+    el.appendChild(thenSec);
+
+    return el;
+  }
+
+  function collectQuestionnaireContext(node, ancestors) {
+    // Returns [{id, name}] of questionnaires whose questions are available to
+    // condition on at this point in the tree: the current node + all ancestors.
+    const out = [];
+    const seen = new Set();
+    [node, ...ancestors].forEach((n) => {
+      if (n && n.type === 'questionnaire' && n.questionnaire_id && !seen.has(n.questionnaire_id)) {
+        seen.add(n.questionnaire_id);
+        out.push({ id: n.questionnaire_id, name: n.questionnaire_name_snapshot || '(unknown)' });
       }
-      const rule = await api('/segments/' + seg.dbid + '/branches', {
-        method: 'POST',
-        body: {
-          to_segment_dbid: otherSegments[0].dbid,
-          conditions: [],
-          priority: (seg.branches || []).length,
-          label: '',
-        },
-      });
-      await refreshPathway();
     });
-
-    return tpl;
+    return out;
   }
 
-  function renderQuestionEl(q) {
-    const tpl = document.getElementById('question-template').content.cloneNode(true);
-    const root = tpl.querySelector('.question');
-    root.dataset.questionDbid = q.dbid;
-    root.querySelector('.q-text').value = q.text || '';
-    root.querySelector('.q-response-type').value = q.response_type;
-    root.querySelector('.q-required').checked = !!q.required;
+  // ---------- Then picker ----------
 
-    const optionsList = root.querySelector('.options');
-    const addOptionBtn = root.querySelector('.add-option');
-    const showOptions = q.response_type === 'multi' || q.response_type === 'yes_no';
-    optionsList.classList.toggle('hidden', !showOptions);
-    addOptionBtn.classList.toggle('hidden', q.response_type !== 'multi');
+  function renderThenPicker(branch, ancestorsIncludingParent) {
+    const wrap = document.createElement('div');
+    const then = branch.then;
+    const currentType = then ? then.type : null;
 
-    (q.options || []).forEach((o) => optionsList.appendChild(renderOptionEl(q, o)));
+    const picker = document.createElement('div');
+    picker.className = 'then-picker';
 
-    root.querySelector('.q-text').addEventListener('blur', async (ev) => {
-      await api('/questions/' + q.dbid, { method: 'PATCH', body: { text: ev.target.value } });
+    const optQ = document.createElement('label');
+    const rQ = document.createElement('input');
+    rQ.type = 'radio';
+    rQ.name = 'then-' + branch.branch_id;
+    rQ.checked = currentType === 'questionnaire';
+    rQ.addEventListener('change', () => {
+      branch.then = {
+        node_id: newNodeId(),
+        type: 'questionnaire',
+        questionnaire_id: '',
+        questionnaire_name_snapshot: '',
+        match_mode: 'first',
+        branches: [],
+      };
+      savePathway();
+      renderTree();
     });
-    root.querySelector('.q-response-type').addEventListener('change', async (ev) => {
-      await api('/questions/' + q.dbid, { method: 'PATCH', body: { response_type: ev.target.value } });
-      await refreshPathway();
+    optQ.appendChild(rQ);
+    optQ.appendChild(document.createTextNode('Continue to questionnaire'));
+    picker.appendChild(optQ);
+
+    const optT = document.createElement('label');
+    const rT = document.createElement('input');
+    rT.type = 'radio';
+    rT.name = 'then-' + branch.branch_id;
+    rT.checked = currentType === 'terminal';
+    rT.addEventListener('change', async () => {
+      await loadTerminalCommands();
+      const first = state.terminalCommands[0];
+      branch.then = {
+        node_id: newNodeId(),
+        type: 'terminal',
+        command_key: first ? first.key : '',
+        params: {},
+      };
+      savePathway();
+      renderTree();
     });
-    root.querySelector('.q-required').addEventListener('change', async (ev) => {
-      await api('/questions/' + q.dbid, { method: 'PATCH', body: { required: ev.target.checked } });
-    });
-    root.querySelector('.delete-question').addEventListener('click', async () => {
-      if (!confirm('Delete this question?')) return;
-      await api('/questions/' + q.dbid, { method: 'DELETE' });
-      await refreshPathway();
-    });
-    addOptionBtn.addEventListener('click', async () => {
-      await api('/questions/' + q.dbid + '/options', { method: 'POST', body: { label: '' } });
-      await refreshPathway();
-    });
-    return tpl;
+    optT.appendChild(rT);
+    optT.appendChild(document.createTextNode('End pathway with custom command'));
+    picker.appendChild(optT);
+
+    wrap.appendChild(picker);
+
+    if (currentType === 'questionnaire') {
+      wrap.appendChild(renderNestedQuestionnairePicker(branch.then, ancestorsIncludingParent));
+      // After the nested picker, recursively render the subtree node so the
+      // user can add deeper branches.
+      wrap.appendChild(renderNode(branch.then, ancestorsIncludingParent));
+    } else if (currentType === 'terminal') {
+      wrap.appendChild(renderTerminalNode(branch.then, ancestorsIncludingParent));
+    } else {
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'Choose where this branch leads.';
+      wrap.appendChild(hint);
+    }
+    return wrap;
   }
 
-  function renderOptionEl(q, opt) {
-    const tpl = document.getElementById('option-template').content.cloneNode(true);
-    const root = tpl.querySelector('.option');
-    root.dataset.optionDbid = opt.dbid;
-    root.querySelector('.opt-label').value = opt.label || '';
-    root.querySelector('.opt-label').addEventListener('blur', async (ev) => {
-      await api('/options/' + opt.dbid, { method: 'PATCH', body: { label: ev.target.value } });
-    });
-    root.querySelector('.delete-option').addEventListener('click', async () => {
-      if (q.response_type === 'yes_no') {
-        alert('Yes/No questions require both options.');
-        return;
-      }
-      await api('/options/' + opt.dbid, { method: 'DELETE' });
-      await refreshPathway();
-    });
-    return tpl;
-  }
+  function renderNestedQuestionnairePicker(node, ancestors) {
+    const wrap = document.createElement('div');
+    wrap.className = 'block';
+    const lbl = document.createElement('div');
+    lbl.className = 'field-label';
+    lbl.textContent = 'Questionnaire';
+    wrap.appendChild(lbl);
+    const select = document.createElement('select');
 
-  // ---------- Branch rules ----------
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '— Choose a questionnaire —';
+    select.appendChild(placeholder);
 
-  function renderBranchEl(seg, rule) {
-    const tpl = document.getElementById('branch-template').content.cloneNode(true);
-    const root = tpl.querySelector('.branch');
-    root.dataset.branchDbid = rule.dbid;
-    const target = (state.pathway.segments || []).find((s) => s.dbid === rule.to_segment_dbid);
-    root.querySelector('.branch-label-display').textContent =
-      (rule.label || 'Rule') + ' → ' + (target ? target.title : '?') + '  (priority ' + rule.priority + ')';
-
-    const editor = root.querySelector('.branch-editor');
-    root.querySelector('.edit-branch').addEventListener('click', () => {
-      hydrateBranchEditor(seg, rule, editor);
-      editor.classList.toggle('hidden');
-    });
-    root.querySelector('.delete-branch').addEventListener('click', async () => {
-      if (!confirm('Delete this rule?')) return;
-      await api('/branches/' + rule.dbid, { method: 'DELETE' });
-      await refreshPathway();
-    });
-    return tpl;
-  }
-
-  function hydrateBranchEditor(seg, rule, editor) {
-    editor.querySelector('.b-label').value = rule.label || '';
-    const targetSel = editor.querySelector('.b-target');
-    targetSel.innerHTML = '';
-    (state.pathway.segments || [])
-      .filter((s) => s.dbid !== seg.dbid)
-      .forEach((s) => {
-        const opt = document.createElement('option');
-        opt.value = s.dbid;
-        opt.textContent = s.title;
-        if (s.dbid === rule.to_segment_dbid) opt.selected = true;
-        targetSel.appendChild(opt);
-      });
-    editor.querySelector('.b-priority').value = rule.priority;
-
-    const condsEl = editor.querySelector('.conditions');
-    condsEl.innerHTML = '';
-    (rule.conditions || []).forEach((c) => condsEl.appendChild(renderConditionEl(seg, c)));
-
-    editor.querySelector('.add-condition').onclick = () => {
-      condsEl.appendChild(renderConditionEl(seg, { question_dbid: '', operator: 'eq', value: '' }));
-    };
-    editor.querySelector('.save-branch').onclick = async () => {
-      const conditions = Array.from(condsEl.querySelectorAll('.condition')).map((node) => {
-        const op = node.querySelector('.c-operator').value;
-        let value = node.querySelector('.c-value').value;
-        if (op === 'in') value = value.split(',').map((s) => s.trim()).filter(Boolean);
-        return {
-          question_dbid: Number(node.querySelector('.c-question').value),
-          operator: op,
-          value: value,
-        };
-      });
-      await api('/branches/' + rule.dbid, {
-        method: 'PATCH',
-        body: {
-          label: editor.querySelector('.b-label').value,
-          to_segment_dbid: Number(targetSel.value),
-          priority: Number(editor.querySelector('.b-priority').value),
-          conditions: conditions,
-        },
-      });
-      await refreshPathway();
-    };
-    editor.querySelector('.cancel-branch').onclick = () => editor.classList.add('hidden');
-  }
-
-  function renderConditionEl(seg, cond) {
-    const tpl = document.getElementById('condition-template').content.cloneNode(true);
-    const root = tpl.querySelector('.condition');
-    const qSel = root.querySelector('.c-question');
-    (seg.questions || []).forEach((q) => {
+    if (node.questionnaire_id) {
       const opt = document.createElement('option');
-      opt.value = q.dbid;
-      opt.textContent = q.text || '(untitled question)';
-      if (Number(cond.question_dbid) === q.dbid) opt.selected = true;
+      opt.value = node.questionnaire_id;
+      opt.selected = true;
+      opt.textContent = (node.questionnaire_name_snapshot || 'Selected') + ' (' + node.questionnaire_id.slice(0, 8) + '…)';
+      select.appendChild(opt);
+    }
+    state.questionnaires.forEach((q) => {
+      if (q.id === node.questionnaire_id) return;
+      const opt = document.createElement('option');
+      opt.value = q.id;
+      opt.textContent = q.name + (q.code ? ' (' + q.code + ')' : '');
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', async (ev) => {
+      const id = ev.target.value;
+      if (!id) {
+        node.questionnaire_id = '';
+        node.questionnaire_name_snapshot = '';
+      } else {
+        const detail = await getQuestionnaireDetail(id);
+        node.questionnaire_id = id;
+        node.questionnaire_name_snapshot = detail.name;
+      }
+      savePathway();
+      renderTree();
+    });
+    wrap.appendChild(select);
+    return wrap;
+  }
+
+  // ---------- Condition builder ----------
+
+  function renderCondition(cond, contextQuestionnaires, depth, onChange) {
+    if (!cond || cond.kind !== 'group') {
+      cond = { kind: 'group', combinator: 'all', children: [] };
+      onChange(cond);
+    }
+    const group = document.createElement('div');
+    group.className = 'condition-group depth-' + depth;
+
+    const headerRow = document.createElement('div');
+    headerRow.className = 'group-header';
+    const combSel = document.createElement('select');
+    [['all', 'ALL of'], ['any', 'ANY of'], ['none', 'NONE of']].forEach(([v, lbl]) => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = lbl;
+      if (cond.combinator === v) opt.selected = true;
+      combSel.appendChild(opt);
+    });
+    combSel.addEventListener('change', (ev) => {
+      cond.combinator = ev.target.value;
+      onChange(cond);
+    });
+    headerRow.appendChild(combSel);
+    group.appendChild(headerRow);
+
+    (cond.children || []).forEach((child, idx) => {
+      if (child.kind === 'group') {
+        group.appendChild(
+          renderCondition(child, contextQuestionnaires, depth + 1, (updated) => {
+            cond.children[idx] = updated;
+            onChange(cond);
+          })
+        );
+      } else {
+        group.appendChild(renderComparison(child, contextQuestionnaires, (updated) => {
+          if (updated === null) {
+            cond.children.splice(idx, 1);
+          } else {
+            cond.children[idx] = updated;
+          }
+          onChange(cond);
+        }));
+      }
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'condition-actions';
+    const addCompBtn = document.createElement('button');
+    addCompBtn.type = 'button';
+    addCompBtn.className = 'ghost small';
+    addCompBtn.textContent = '+ condition';
+    addCompBtn.addEventListener('click', () => {
+      cond.children = cond.children || [];
+      cond.children.push({
+        kind: 'comparison',
+        questionnaire_id: contextQuestionnaires[0] ? contextQuestionnaires[0].id : '',
+        question_id: '',
+        operator: 'eq',
+        value_option_id: '',
+        value_text: '',
+      });
+      onChange(cond);
+    });
+    actions.appendChild(addCompBtn);
+    const addGroupBtn = document.createElement('button');
+    addGroupBtn.type = 'button';
+    addGroupBtn.className = 'ghost small';
+    addGroupBtn.textContent = '+ nested group';
+    addGroupBtn.addEventListener('click', () => {
+      cond.children = cond.children || [];
+      cond.children.push({ kind: 'group', combinator: 'all', children: [] });
+      onChange(cond);
+    });
+    actions.appendChild(addGroupBtn);
+    group.appendChild(actions);
+
+    return group;
+  }
+
+  function renderComparison(comp, contextQuestionnaires, onChange) {
+    const row = document.createElement('div');
+    row.className = 'comparison';
+
+    // Questionnaire dropdown
+    const qSel = document.createElement('select');
+    qSel.className = 'questionnaire-select';
+    contextQuestionnaires.forEach((q) => {
+      const opt = document.createElement('option');
+      opt.value = q.id;
+      opt.textContent = q.name;
+      if (q.id === comp.questionnaire_id) opt.selected = true;
       qSel.appendChild(opt);
     });
-    root.querySelector('.c-operator').value = cond.operator || 'eq';
-    root.querySelector('.c-value').value = Array.isArray(cond.value) ? cond.value.join(', ') : (cond.value || '');
-    root.querySelector('.delete-condition').addEventListener('click', () => root.remove());
-    return tpl;
+    qSel.addEventListener('change', async (ev) => {
+      comp.questionnaire_id = ev.target.value;
+      comp.question_id = '';
+      onChange(comp);
+    });
+    row.appendChild(qSel);
+
+    // Question dropdown — populated asynchronously
+    const questionSel = document.createElement('select');
+    questionSel.className = 'question-select';
+    const ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '— question —';
+    questionSel.appendChild(ph);
+    row.appendChild(questionSel);
+
+    // Operator dropdown
+    const opSel = document.createElement('select');
+    row.appendChild(opSel);
+
+    // Value cell (input/select/etc — type-aware)
+    const valueCell = document.createElement('span');
+    valueCell.className = 'value-cell';
+    row.appendChild(valueCell);
+
+    // Delete
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'ghost small delete-comparison';
+    del.textContent = '×';
+    del.addEventListener('click', () => onChange(null));
+    row.appendChild(del);
+
+    // Hydrate the question + operator + value asynchronously
+    (async () => {
+      if (!comp.questionnaire_id) return;
+      const detail = await getQuestionnaireDetail(comp.questionnaire_id);
+      detail.questions.forEach((q) => {
+        const opt = document.createElement('option');
+        opt.value = q.id;
+        opt.textContent = q.name;
+        if (q.id === comp.question_id) opt.selected = true;
+        questionSel.appendChild(opt);
+      });
+      const currentQuestion = detail.questions.find((q) => q.id === comp.question_id);
+      renderOperatorAndValue(opSel, valueCell, comp, currentQuestion, onChange);
+
+      questionSel.addEventListener('change', (ev) => {
+        comp.question_id = ev.target.value;
+        comp.operator = 'eq';
+        comp.value_option_id = '';
+        comp.value_option_ids = [];
+        comp.value_text = '';
+        comp.value_number = null;
+        const q = detail.questions.find((qq) => qq.id === comp.question_id);
+        renderOperatorAndValue(opSel, valueCell, comp, q, onChange);
+        onChange(comp);
+      });
+    })();
+
+    return row;
   }
 
-  // ---------- Add segment ----------
+  function renderOperatorAndValue(opSel, valueCell, comp, question, onChange) {
+    opSel.innerHTML = '';
+    valueCell.innerHTML = '';
+    const type = (question && question.response_set_type) || 'TXT';
 
-  els.addSegmentBtn.addEventListener('click', async () => {
-    if (!state.pathway || !state.pathway.dbid) return;
-    await api('/pathways/' + state.pathway.dbid + '/segments', {
-      method: 'POST',
-      body: { title: 'New segment' },
+    const ops = operatorsForType(type);
+    ops.forEach(([v, lbl]) => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = lbl;
+      if (comp.operator === v) opt.selected = true;
+      opSel.appendChild(opt);
     });
-    await refreshPathway();
+    opSel.addEventListener('change', (ev) => {
+      comp.operator = ev.target.value;
+      renderValueWidget(valueCell, comp, question, onChange);
+      onChange(comp);
+    });
+    renderValueWidget(valueCell, comp, question, onChange);
+  }
+
+  function operatorsForType(type) {
+    if (type === 'SING') {
+      return [
+        ['eq', 'equals'],
+        ['neq', 'does not equal'],
+        ['any_answer', 'any answer'],
+        ['no_answer', 'no answer'],
+      ];
+    }
+    if (type === 'MULT') {
+      return [
+        ['contains_any', 'contains any of'],
+        ['contains_all', 'contains all of'],
+        ['contains_none', 'contains none of'],
+        ['any_answer', 'any answer'],
+        ['no_answer', 'no answer'],
+      ];
+    }
+    if (type === 'INT') {
+      return [
+        ['eq', '='],
+        ['neq', '≠'],
+        ['lt', '<'],
+        ['lte', '≤'],
+        ['gt', '>'],
+        ['gte', '≥'],
+        ['any_answer', 'any answer'],
+        ['no_answer', 'no answer'],
+      ];
+    }
+    return [
+      ['eq', 'equals'],
+      ['neq', 'does not equal'],
+      ['contains', 'contains'],
+      ['any_answer', 'any answer'],
+      ['no_answer', 'no answer'],
+    ];
+  }
+
+  function renderValueWidget(host, comp, question, onChange) {
+    host.innerHTML = '';
+    if (comp.operator === 'any_answer' || comp.operator === 'no_answer') return;
+    const type = (question && question.response_set_type) || 'TXT';
+    const options = (question && question.options) || [];
+
+    if (type === 'SING') {
+      const sel = document.createElement('select');
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = '— value —';
+      sel.appendChild(ph);
+      options.forEach((o) => {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = o.name || o.value;
+        if (o.id === comp.value_option_id) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', (ev) => {
+        comp.value_option_id = ev.target.value;
+        onChange(comp);
+      });
+      host.appendChild(sel);
+      return;
+    }
+    if (type === 'MULT') {
+      const wrap = document.createElement('span');
+      const ids = comp.value_option_ids || (comp.value_option_id ? [comp.value_option_id] : []);
+      options.forEach((o) => {
+        const lbl = document.createElement('label');
+        lbl.style.marginRight = '6px';
+        lbl.style.fontSize = '12px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = ids.includes(o.id);
+        cb.addEventListener('change', () => {
+          const next = new Set(comp.value_option_ids || []);
+          if (cb.checked) next.add(o.id);
+          else next.delete(o.id);
+          comp.value_option_ids = Array.from(next);
+          onChange(comp);
+        });
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(' ' + (o.name || o.value)));
+        wrap.appendChild(lbl);
+      });
+      host.appendChild(wrap);
+      return;
+    }
+    if (type === 'INT') {
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.value = comp.value_number != null ? comp.value_number : '';
+      inp.addEventListener('input', (ev) => {
+        comp.value_number = ev.target.value === '' ? null : Number(ev.target.value);
+        onChange(comp);
+      });
+      host.appendChild(inp);
+      return;
+    }
+    // TEXT
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = comp.value_text || '';
+    inp.addEventListener('input', (ev) => {
+      comp.value_text = ev.target.value;
+      onChange(comp);
+    });
+    host.appendChild(inp);
+  }
+
+  // ---------- Terminal editor ----------
+
+  function renderTerminalEditor(node, ancestors) {
+    const host = document.createElement('div');
+    host.className = 'terminal-editor';
+
+    const cmdRow = document.createElement('div');
+    cmdRow.className = 'terminal-field';
+    const cmdLbl = document.createElement('div');
+    cmdLbl.className = 'field-label';
+    cmdLbl.textContent = 'Command';
+    cmdRow.appendChild(cmdLbl);
+    const cmdSel = document.createElement('select');
+    state.terminalCommands.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.key;
+      opt.textContent = c.name;
+      if (c.key === node.command_key) opt.selected = true;
+      cmdSel.appendChild(opt);
+    });
+    cmdSel.addEventListener('change', (ev) => {
+      node.command_key = ev.target.value;
+      node.params = {};
+      savePathway();
+      renderTree();
+    });
+    cmdRow.appendChild(cmdSel);
+    host.appendChild(cmdRow);
+
+    const cmd = state.terminalCommands.find((c) => c.key === node.command_key);
+    if (cmd) {
+      cmd.fields.forEach((field) => {
+        const row = document.createElement('div');
+        row.className = 'terminal-field';
+        const lbl = document.createElement('div');
+        lbl.className = 'field-label';
+        lbl.textContent = field.label + (field.required ? ' *' : '');
+        row.appendChild(lbl);
+        node.params = node.params || {};
+        const v = node.params[field.key] != null ? node.params[field.key] : '';
+        let input;
+        if (field.type === 'textarea') {
+          input = document.createElement('textarea');
+          input.rows = 3;
+        } else if (field.type === 'select') {
+          input = document.createElement('select');
+          (field.options || []).forEach((opt) => {
+            const o = document.createElement('option');
+            o.value = opt.value;
+            o.textContent = opt.label;
+            if (opt.value === v) o.selected = true;
+            input.appendChild(o);
+          });
+        } else {
+          input = document.createElement('input');
+          input.type = 'text';
+        }
+        if (field.type !== 'select') input.value = v;
+        input.addEventListener('input', (ev) => {
+          node.params[field.key] = ev.target.value;
+          savePathway();
+        });
+        if (field.type === 'select') {
+          input.addEventListener('change', (ev) => {
+            node.params[field.key] = ev.target.value;
+            savePathway();
+          });
+        }
+        row.appendChild(input);
+        const hint = document.createElement('div');
+        hint.className = 'field-hint';
+        hint.textContent = 'Tip: use {{question_id}} to interpolate an answer from earlier in this pathway.';
+        row.appendChild(hint);
+        host.appendChild(row);
+      });
+    }
+    return host;
+  }
+
+  // ---------- Top-level field handlers ----------
+
+  els.title.addEventListener('input', () => {
+    if (!state.pathway) return;
+    state.pathway.title = els.title.value;
+    savePathway();
+    const active = els.list.querySelector('li.active .name');
+    if (active) active.textContent = state.pathway.title;
   });
+  els.description.addEventListener('input', () => {
+    if (!state.pathway) return;
+    state.pathway.description = els.description.value;
+    savePathway();
+  });
+
+  els.newBtn.addEventListener('click', createPathway);
+  els.deleteBtn.addEventListener('click', deletePathway);
+
+  els.publishBtn.addEventListener('click', async () => {
+    if (!state.pathway || !state.pathway.dbid) return;
+    try {
+      const res = await api('/pathways/' + state.pathway.dbid + '/publish', {
+        method: 'POST',
+        body: {},
+      });
+      if (res.published) {
+        state.pathway.status = 'published';
+        flashStatus('Published');
+        renderEditor();
+        await reloadList();
+      }
+      renderValidation(res.issues || []);
+    } catch (err) {
+      // Try to parse JSON error body for issues
+      let issues = [];
+      try {
+        const parsed = JSON.parse(err.message);
+        issues = parsed.issues || [];
+      } catch (_) {
+        /* leave issues empty */
+      }
+      renderValidation(issues);
+    }
+  });
+
+  els.unpublishBtn.addEventListener('click', async () => {
+    if (!state.pathway || !state.pathway.dbid) return;
+    await api('/pathways/' + state.pathway.dbid + '/unpublish', { method: 'POST', body: {} });
+    state.pathway.status = 'draft';
+    flashStatus('Unpublished');
+    renderEditor();
+    await reloadList();
+  });
+
+  function renderValidation(issues) {
+    els.validationList.innerHTML = '';
+    if (!issues.length) {
+      els.validation.classList.add('hidden');
+      return;
+    }
+    issues.forEach((i) => {
+      const li = document.createElement('li');
+      li.className = i.severity || 'error';
+      li.textContent = i.message;
+      els.validationList.appendChild(li);
+    });
+    els.validation.classList.remove('hidden');
+  }
 
   // ---------- Boot ----------
 
-  loadPathwayList();
+  (async () => {
+    await loadTerminalCommands();
+    await reloadList();
+    renderEditor();
+  })();
 })();

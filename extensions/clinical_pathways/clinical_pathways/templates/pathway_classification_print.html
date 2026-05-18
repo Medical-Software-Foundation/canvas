@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #000; }
+  h3 { font-size: 13px; margin: 0 0 4px; }
+  .source { font-style: italic; margin-bottom: 4px; }
+  .severity { font-weight: bold; margin-bottom: 4px; }
+  .body { white-space: pre-wrap; }
+  .action { margin-top: 6px; }
+  .action-label { font-weight: bold; }
+</style>
+</head>
+<body>
+  <h3>{{ title }}</h3>
+  <div class="source">From pathway: {{ pathway_title }}</div>
+  {% if severity_label %}<div class="severity">Severity: {{ severity_label }}</div>{% endif %}
+  <div class="body">{{ body }}</div>
+  {% if recommended_action %}
+    <div class="action"><span class="action-label">Recommended action:</span> {{ recommended_action }}</div>
+  {% endif %}
+</body>
+</html>

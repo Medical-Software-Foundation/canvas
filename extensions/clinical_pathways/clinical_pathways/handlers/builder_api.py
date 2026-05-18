@@ -1,25 +1,21 @@
 from __future__ import annotations
 
+import json
+import uuid as _uuid_lib
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 
 from canvas_sdk.effects import Effect
-
-_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data.questionnaire import Questionnaire
 
-from clinical_pathways.models import (
-    BranchRule,
-    Option,
-    Pathway,
-    Question,
-    ResponseType,
-    Segment,
-)
+from clinical_pathways.models import Pathway
+from clinical_pathways.terminal_commands import TERMINAL_COMMANDS, terminal_command_catalog
 
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 _API_BASE = "/plugin-io/api/clinical_pathways/builder"
 
 
@@ -30,72 +26,144 @@ def _parse_int(value: Any) -> int | None:
         return None
 
 
-def _not_found(resource: str) -> Response:
-    return JSONResponse({"error": f"{resource} not found"}, status_code=HTTPStatus.NOT_FOUND)
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-def _bad_request(message: str) -> Response:
-    return JSONResponse({"error": message}, status_code=HTTPStatus.BAD_REQUEST)
+def _new_node_id() -> str:
+    return "n_" + _uuid_lib.uuid4().hex[:10]
 
 
-def _serialize_option(opt: Option) -> dict[str, Any]:
-    return {"dbid": opt.dbid, "label": opt.label, "display_order": opt.display_order}
+def _new_branch_id() -> str:
+    return "b_" + _uuid_lib.uuid4().hex[:10]
 
 
-def _serialize_question(q: Question) -> dict[str, Any]:
-    options = Option.objects.filter(question__dbid=q.dbid).order_by("display_order")
+def _serialize_pathway_summary(pw: Pathway) -> dict[str, Any]:
     return {
-        "dbid": q.dbid,
-        "text": q.text,
-        "response_type": q.response_type,
-        "display_order": q.display_order,
-        "required": q.required,
-        "options": [_serialize_option(o) for o in options],
-    }
-
-
-def _serialize_branch(rule: BranchRule) -> dict[str, Any]:
-    return {
-        "dbid": rule.dbid,
-        "from_segment_dbid": rule.from_segment_id,
-        "to_segment_dbid": rule.to_segment_id,
-        "conditions": rule.conditions,
-        "priority": rule.priority,
-        "label": rule.label,
-    }
-
-
-def _serialize_segment(seg: Segment, *, include_branches: bool = True) -> dict[str, Any]:
-    questions = Question.objects.filter(segment__dbid=seg.dbid).order_by("display_order")
-    payload = {
-        "dbid": seg.dbid,
-        "title": seg.title,
-        "display_order": seg.display_order,
-        "is_entry": seg.is_entry,
-        "questions": [_serialize_question(q) for q in questions],
-    }
-    if include_branches:
-        rules = BranchRule.objects.filter(from_segment__dbid=seg.dbid).order_by("priority")
-        payload["branches"] = [_serialize_branch(r) for r in rules]
-    return payload
-
-
-def _serialize_pathway(pw: Pathway, *, deep: bool = False) -> dict[str, Any]:
-    base = {
         "dbid": pw.dbid,
         "title": pw.title,
         "description": pw.description,
-        "recommendation": pw.recommendation,
-        "is_active": pw.is_active,
+        "status": pw.status,
+        "updated_at": pw.updated_at.isoformat() if pw.updated_at else None,
     }
-    if deep:
-        segments = Segment.objects.filter(pathway__dbid=pw.dbid).order_by("display_order")
-        base["segments"] = [_serialize_segment(s) for s in segments]
+
+
+def _serialize_pathway_full(pw: Pathway) -> dict[str, Any]:
+    base = _serialize_pathway_summary(pw)
+    base["definition"] = pw.definition or _empty_definition()
     return base
 
 
+def _empty_definition() -> dict[str, Any]:
+    return {
+        "version": 1,
+        "root": None,  # null until the configurator picks a starting questionnaire
+    }
+
+
+def _validate_pathway(definition: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return a list of validation issues. Empty list means publishable."""
+    issues: list[dict[str, Any]] = []
+    root = definition.get("root")
+    if not root:
+        issues.append({"severity": "error", "message": "Pick a starting questionnaire."})
+        return issues
+    _walk_node(root, ancestors=[], issues=issues)
+    return issues
+
+
+def _walk_node(
+    node: dict[str, Any], ancestors: list[dict[str, Any]], issues: list[dict[str, Any]]
+) -> None:
+    if not isinstance(node, dict):
+        issues.append({"severity": "error", "message": "Malformed node."})
+        return
+    ntype = node.get("type")
+    node_id = node.get("node_id", "?")
+    if ntype == "questionnaire":
+        qid = node.get("questionnaire_id")
+        if not qid:
+            issues.append(
+                {
+                    "severity": "error",
+                    "node_id": node_id,
+                    "message": "Questionnaire node is missing a questionnaire reference.",
+                }
+            )
+        elif not Questionnaire.objects.filter(id=qid).exists():
+            issues.append(
+                {
+                    "severity": "warning",
+                    "node_id": node_id,
+                    "message": (
+                        "Referenced questionnaire is no longer available. "
+                        "Branches that condition on it will not evaluate."
+                    ),
+                }
+            )
+        branches = node.get("branches", []) or []
+        if not branches:
+            issues.append(
+                {
+                    "severity": "error",
+                    "node_id": node_id,
+                    "message": "Questionnaire node has no branches; every arm must terminate.",
+                }
+            )
+        for b in branches:
+            then = b.get("then")
+            if not then:
+                issues.append(
+                    {
+                        "severity": "error",
+                        "node_id": node_id,
+                        "message": "Branch is missing its 'then' target.",
+                    }
+                )
+                continue
+            _walk_node(then, ancestors=ancestors + [node], issues=issues)
+    elif ntype == "terminal":
+        cmd_key = node.get("command_key")
+        if not cmd_key:
+            issues.append(
+                {
+                    "severity": "error",
+                    "node_id": node_id,
+                    "message": "Terminal node is missing a command selection.",
+                }
+            )
+        elif cmd_key not in TERMINAL_COMMANDS:
+            issues.append(
+                {
+                    "severity": "error",
+                    "node_id": node_id,
+                    "message": f"Unknown terminal command '{cmd_key}'.",
+                }
+            )
+        else:
+            spec = TERMINAL_COMMANDS[cmd_key]
+            params = node.get("params", {}) or {}
+            for field in spec["fields"]:
+                if field.get("required") and not str(params.get(field["key"], "")).strip():
+                    issues.append(
+                        {
+                            "severity": "error",
+                            "node_id": node_id,
+                            "message": f"Terminal '{cmd_key}' is missing required field '{field['key']}'.",
+                        }
+                    )
+    else:
+        issues.append(
+            {
+                "severity": "error",
+                "node_id": node_id,
+                "message": f"Unknown node type '{ntype}'.",
+            }
+        )
+
+
 class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
-    """JSON CRUD endpoints for the pathway builder SPA."""
+    """JSON-document CRUD + catalog endpoints for the pathway builder SPA."""
 
     PREFIX = "/builder"
 
@@ -138,7 +206,7 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/pathways")
     def list_pathways(self) -> list[Response | Effect]:
         rows = [
-            _serialize_pathway(pw)
+            _serialize_pathway_summary(pw)
             for pw in Pathway.objects.filter(is_active=True).order_by("title")
         ]
         return [JSONResponse({"pathways": rows})]
@@ -146,264 +214,170 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/pathways")
     def create_pathway(self) -> list[Response | Effect]:
         body = self.request.json() or {}
-        title = (body.get("title") or "").strip()
-        if not title:
-            return [_bad_request("title is required")]
+        title = (body.get("title") or "Untitled pathway").strip() or "Untitled pathway"
         pw = Pathway(
             title=title,
             description=body.get("description", ""),
-            recommendation=body.get("recommendation", ""),
+            status="draft",
+            definition=_empty_definition(),
         )
         pw.save()
-        return [JSONResponse(_serialize_pathway(pw, deep=True), status_code=HTTPStatus.CREATED)]
+        return [JSONResponse(_serialize_pathway_full(pw), status_code=HTTPStatus.CREATED)]
 
     @api.get("/pathways/<pathway_dbid>")
     def get_pathway(self) -> list[Response | Effect]:
         dbid = _parse_int(self.request.path_params.get("pathway_dbid"))
         pw = Pathway.objects.filter(dbid=dbid).first()
         if not pw:
-            return [_not_found("Pathway")]
-        return [JSONResponse(_serialize_pathway(pw, deep=True))]
+            return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        return [JSONResponse(_serialize_pathway_full(pw))]
 
-    @api.patch("/pathways/<pathway_dbid>")
-    def update_pathway(self) -> list[Response | Effect]:
+    @api.put("/pathways/<pathway_dbid>")
+    def replace_pathway(self) -> list[Response | Effect]:
         dbid = _parse_int(self.request.path_params.get("pathway_dbid"))
         pw = Pathway.objects.filter(dbid=dbid).first()
         if not pw:
-            return [_not_found("Pathway")]
+            return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
         body = self.request.json() or {}
-        for field in ("title", "description", "recommendation"):
-            if field in body:
-                setattr(pw, field, body[field])
-        if "is_active" in body:
-            pw.is_active = bool(body["is_active"])
+        if "title" in body:
+            pw.title = (body["title"] or "").strip() or pw.title
+        if "description" in body:
+            pw.description = body.get("description") or ""
+        if "definition" in body:
+            definition = body["definition"]
+            if not isinstance(definition, dict):
+                return [
+                    JSONResponse(
+                        {"error": "definition must be a JSON object"},
+                        status_code=HTTPStatus.BAD_REQUEST,
+                    )
+                ]
+            pw.definition = definition
         pw.save()
-        return [JSONResponse(_serialize_pathway(pw, deep=True))]
+        return [JSONResponse(_serialize_pathway_full(pw))]
 
     @api.delete("/pathways/<pathway_dbid>")
     def delete_pathway(self) -> list[Response | Effect]:
         dbid = _parse_int(self.request.path_params.get("pathway_dbid"))
         pw = Pathway.objects.filter(dbid=dbid).first()
         if not pw:
-            return [_not_found("Pathway")]
+            return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
         pw.is_active = False
+        pw.status = "draft"
         pw.save()
         return [JSONResponse({"deleted": True})]
 
-    # ---------- Segments ----------
-
-    @api.post("/pathways/<pathway_dbid>/segments")
-    def create_segment(self) -> list[Response | Effect]:
+    @api.post("/pathways/<pathway_dbid>/publish")
+    def publish_pathway(self) -> list[Response | Effect]:
         dbid = _parse_int(self.request.path_params.get("pathway_dbid"))
         pw = Pathway.objects.filter(dbid=dbid).first()
         if not pw:
-            return [_not_found("Pathway")]
-        body = self.request.json() or {}
-        existing = Segment.objects.filter(pathway__dbid=pw.dbid).count()
-        seg = Segment(
-            pathway=pw,
-            title=body.get("title", "Untitled segment"),
-            display_order=body.get("display_order", existing),
-            is_entry=existing == 0,
+            return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        issues = _validate_pathway(pw.definition or {})
+        errors = [i for i in issues if i["severity"] == "error"]
+        if errors:
+            return [
+                JSONResponse(
+                    {"published": False, "issues": issues},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        pw.status = "published"
+        pw.save()
+        return [JSONResponse({"published": True, "issues": issues})]
+
+    @api.post("/pathways/<pathway_dbid>/unpublish")
+    def unpublish_pathway(self) -> list[Response | Effect]:
+        dbid = _parse_int(self.request.path_params.get("pathway_dbid"))
+        pw = Pathway.objects.filter(dbid=dbid).first()
+        if not pw:
+            return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        pw.status = "draft"
+        pw.save()
+        return [JSONResponse({"unpublished": True})]
+
+    @api.post("/pathways/<pathway_dbid>/validate")
+    def validate_pathway(self) -> list[Response | Effect]:
+        dbid = _parse_int(self.request.path_params.get("pathway_dbid"))
+        pw = Pathway.objects.filter(dbid=dbid).first()
+        if not pw:
+            return [JSONResponse({"error": "Pathway not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        issues = _validate_pathway(pw.definition or {})
+        return [JSONResponse({"issues": issues})]
+
+    # ---------- Catalog: questionnaires + response options ----------
+
+    @api.get("/catalog/questionnaires")
+    def list_questionnaires(self) -> list[Response | Effect]:
+        q = (self.request.query_params.get("q") or "").strip()
+        qs = Questionnaire.objects.filter(
+            status="AC",
+            can_originate_in_charting=True,
         )
-        seg.save()
-        return [JSONResponse(_serialize_segment(seg), status_code=HTTPStatus.CREATED)]
-
-    @api.patch("/segments/<segment_dbid>")
-    def update_segment(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("segment_dbid"))
-        seg = Segment.objects.filter(dbid=dbid).first()
-        if not seg:
-            return [_not_found("Segment")]
-        body = self.request.json() or {}
-        if "title" in body:
-            seg.title = body["title"]
-        if "display_order" in body:
-            seg.display_order = int(body["display_order"])
-        if "is_entry" in body and body["is_entry"]:
-            Segment.objects.filter(pathway__dbid=seg.pathway_id, is_entry=True).exclude(
-                dbid=seg.dbid
-            ).update(is_entry=False)
-            seg.is_entry = True
-        seg.save()
-        return [JSONResponse(_serialize_segment(seg))]
-
-    @api.delete("/segments/<segment_dbid>")
-    def delete_segment(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("segment_dbid"))
-        seg = Segment.objects.filter(dbid=dbid).first()
-        if not seg:
-            return [_not_found("Segment")]
-        BranchRule.objects.filter(from_segment__dbid=seg.dbid).delete()
-        BranchRule.objects.filter(to_segment__dbid=seg.dbid).delete()
-        for q in Question.objects.filter(segment__dbid=seg.dbid):
-            Option.objects.filter(question__dbid=q.dbid).delete()
-            q.delete()
-        seg.delete()
-        return [JSONResponse({"deleted": True})]
-
-    # ---------- Questions ----------
-
-    @api.post("/segments/<segment_dbid>/questions")
-    def create_question(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("segment_dbid"))
-        seg = Segment.objects.filter(dbid=dbid).first()
-        if not seg:
-            return [_not_found("Segment")]
-        body = self.request.json() or {}
-        response_type = body.get("response_type", ResponseType.FREE_TEXT)
-        if response_type not in ResponseType.ALL:
-            return [_bad_request(f"response_type must be one of {ResponseType.ALL}")]
-        q = Question(
-            segment=seg,
-            text=body.get("text", ""),
-            response_type=response_type,
-            display_order=body.get(
-                "display_order", Question.objects.filter(segment__dbid=seg.dbid).count()
-            ),
-            required=bool(body.get("required", True)),
-        )
-        q.save()
-        if response_type == ResponseType.YES_NO:
-            Option(question=q, label="Yes", display_order=0).save()
-            Option(question=q, label="No", display_order=1).save()
-        return [JSONResponse(_serialize_question(q), status_code=HTTPStatus.CREATED)]
-
-    @api.patch("/questions/<question_dbid>")
-    def update_question(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("question_dbid"))
-        q = Question.objects.filter(dbid=dbid).first()
-        if not q:
-            return [_not_found("Question")]
-        body = self.request.json() or {}
-        if "text" in body:
-            q.text = body["text"]
-        if "response_type" in body:
-            rt = body["response_type"]
-            if rt not in ResponseType.ALL:
-                return [_bad_request(f"response_type must be one of {ResponseType.ALL}")]
-            q.response_type = rt
-        if "display_order" in body:
-            q.display_order = int(body["display_order"])
-        if "required" in body:
-            q.required = bool(body["required"])
-        q.save()
-        return [JSONResponse(_serialize_question(q))]
-
-    @api.delete("/questions/<question_dbid>")
-    def delete_question(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("question_dbid"))
-        q = Question.objects.filter(dbid=dbid).first()
-        if not q:
-            return [_not_found("Question")]
-        Option.objects.filter(question__dbid=q.dbid).delete()
-        q.delete()
-        return [JSONResponse({"deleted": True})]
-
-    # ---------- Options ----------
-
-    @api.post("/questions/<question_dbid>/options")
-    def create_option(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("question_dbid"))
-        q = Question.objects.filter(dbid=dbid).first()
-        if not q:
-            return [_not_found("Question")]
-        body = self.request.json() or {}
-        opt = Option(
-            question=q,
-            label=body.get("label", ""),
-            display_order=body.get(
-                "display_order", Option.objects.filter(question__dbid=q.dbid).count()
-            ),
-        )
-        opt.save()
-        return [JSONResponse(_serialize_option(opt), status_code=HTTPStatus.CREATED)]
-
-    @api.patch("/options/<option_dbid>")
-    def update_option(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("option_dbid"))
-        opt = Option.objects.filter(dbid=dbid).first()
-        if not opt:
-            return [_not_found("Option")]
-        body = self.request.json() or {}
-        if "label" in body:
-            opt.label = body["label"]
-        if "display_order" in body:
-            opt.display_order = int(body["display_order"])
-        opt.save()
-        return [JSONResponse(_serialize_option(opt))]
-
-    @api.delete("/options/<option_dbid>")
-    def delete_option(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("option_dbid"))
-        opt = Option.objects.filter(dbid=dbid).first()
-        if not opt:
-            return [_not_found("Option")]
-        opt.delete()
-        return [JSONResponse({"deleted": True})]
-
-    # ---------- Branch rules ----------
-
-    @api.get("/segments/<segment_dbid>/branches")
-    def list_branches(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("segment_dbid"))
-        seg = Segment.objects.filter(dbid=dbid).first()
-        if not seg:
-            return [_not_found("Segment")]
-        rules = [
-            _serialize_branch(r)
-            for r in BranchRule.objects.filter(from_segment__dbid=seg.dbid).order_by("priority")
+        if q:
+            qs = qs.filter(name__icontains=q)
+        rows = [
+            {"id": str(item.id), "name": item.name, "code": item.code}
+            for item in qs.order_by("name")[:50]
         ]
-        return [JSONResponse({"branches": rules})]
+        return [JSONResponse({"questionnaires": rows})]
 
-    @api.post("/segments/<segment_dbid>/branches")
-    def create_branch(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("segment_dbid"))
-        seg = Segment.objects.filter(dbid=dbid).first()
-        if not seg:
-            return [_not_found("Segment")]
-        body = self.request.json() or {}
-        to_dbid = _parse_int(body.get("to_segment_dbid"))
-        target = Segment.objects.filter(dbid=to_dbid).first() if to_dbid else None
-        if not target:
-            return [_bad_request("to_segment_dbid is required and must reference a segment")]
-        rule = BranchRule(
-            from_segment=seg,
-            to_segment=target,
-            conditions=body.get("conditions", []),
-            priority=int(body.get("priority", 0)),
-            label=body.get("label", ""),
-        )
-        rule.save()
-        return [JSONResponse(_serialize_branch(rule), status_code=HTTPStatus.CREATED)]
+    @api.get("/catalog/questionnaires/<questionnaire_id>")
+    def get_questionnaire_detail(self) -> list[Response | Effect]:
+        qid = self.request.path_params.get("questionnaire_id")
+        questionnaire = Questionnaire.objects.filter(id=qid).first()
+        if not questionnaire:
+            return [
+                JSONResponse(
+                    {"error": "Questionnaire not found"}, status_code=HTTPStatus.NOT_FOUND
+                )
+            ]
+        questions = []
+        for question in questionnaire.questions.all():
+            opt_set = question.response_option_set
+            options = []
+            if opt_set is not None:
+                for opt in opt_set.options.all():
+                    options.append(
+                        {
+                            "id": str(opt.id),
+                            "value": opt.value,
+                            "name": opt.name,
+                        }
+                    )
+            questions.append(
+                {
+                    "id": str(question.id),
+                    "name": question.name,
+                    "code": question.code,
+                    "response_set_type": (opt_set.type if opt_set else None),
+                    "response_set_name": (opt_set.name if opt_set else None),
+                    "options": options,
+                }
+            )
+        return [
+            JSONResponse(
+                {
+                    "id": str(questionnaire.id),
+                    "name": questionnaire.name,
+                    "code": questionnaire.code,
+                    "questions": questions,
+                }
+            )
+        ]
 
-    @api.patch("/branches/<branch_dbid>")
-    def update_branch(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("branch_dbid"))
-        rule = BranchRule.objects.filter(dbid=dbid).first()
-        if not rule:
-            return [_not_found("BranchRule")]
-        body = self.request.json() or {}
-        if "to_segment_dbid" in body:
-            to_dbid = _parse_int(body.get("to_segment_dbid"))
-            target = Segment.objects.filter(dbid=to_dbid).first() if to_dbid else None
-            if not target:
-                return [_bad_request("to_segment_dbid must reference a segment")]
-            rule.to_segment = target
-        if "conditions" in body:
-            rule.conditions = body["conditions"]
-        if "priority" in body:
-            rule.priority = int(body["priority"])
-        if "label" in body:
-            rule.label = body["label"]
-        rule.save()
-        return [JSONResponse(_serialize_branch(rule))]
+    # ---------- Catalog: terminal command schemas ----------
 
-    @api.delete("/branches/<branch_dbid>")
-    def delete_branch(self) -> list[Response | Effect]:
-        dbid = _parse_int(self.request.path_params.get("branch_dbid"))
-        rule = BranchRule.objects.filter(dbid=dbid).first()
-        if not rule:
-            return [_not_found("BranchRule")]
-        rule.delete()
-        return [JSONResponse({"deleted": True})]
+    @api.get("/catalog/terminal-commands")
+    def list_terminal_commands(self) -> list[Response | Effect]:
+        return [JSONResponse({"terminal_commands": terminal_command_catalog()})]
+
+    # ---------- Node/branch id helpers ----------
+
+    @api.post("/ids/node")
+    def mint_node_id(self) -> list[Response | Effect]:
+        return [JSONResponse({"node_id": _new_node_id()})]
+
+    @api.post("/ids/branch")
+    def mint_branch_id(self) -> list[Response | Effect]:
+        return [JSONResponse({"branch_id": _new_branch_id()})]

@@ -9,20 +9,20 @@ _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 class PathwayRunnerButton(ActionButton):
-    """Note-header button that opens the clinical pathway runner in a side panel.
+    """Note-header button that opens a small picker modal.
 
-    The button shows for editable notes. On click it launches the runner SPA in
-    the right chart pane, passing the note's external UUID + patient UUID so the
-    SPA can POST `/complete` and originate the Q&A + recommendation custom
-    commands back onto this note.
+    The picker lets the provider pick a published pathway. On select the
+    plugin auto-inserts the pathway's starting `QuestionnaireCommand` into
+    the open note and closes the modal. The runtime evaluator (BaseProtocol)
+    listens for the resulting `INTERVIEW_UPDATED` event and advances the
+    pathway from there — no multi-step side-panel UI.
     """
 
     BUTTON_TITLE = "Clinical Pathways"
     BUTTON_KEY = "CLINICAL_PATHWAYS_RUNNER"
     BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_HEADER
 
-    # Editable note states: NEW=Created, PSH=Pushed, ULK=Unlocked, RST=Restored,
-    # UND=Undeleted, CVD=Converted.
+    # Editable note states: NEW, PSH, ULK, RST, UND, CVD.
     _EDITABLE_NOTE_STATES = {"NEW", "PSH", "ULK", "RST", "UND", "CVD"}
 
     def visible(self) -> bool:
@@ -44,13 +44,13 @@ class PathwayRunnerButton(ActionButton):
             return []
         note_uuid = note.id
         url = (
-            "/plugin-io/api/clinical_pathways/runner/"
+            "/plugin-io/api/clinical_pathways/picker/"
             f"?note_uuid={note_uuid}&patient_id={patient_id}&v={_CACHE_BUST}"
         )
         return [
             LaunchModalEffect(
                 url=url,
-                target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE_LARGE,
-                title="Clinical Pathways",
+                target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
+                title="Pick a clinical pathway",
             ).apply()
         ]

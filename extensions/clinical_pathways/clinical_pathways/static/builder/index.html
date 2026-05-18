@@ -10,7 +10,7 @@
     <h1>Pathway Builder</h1>
     <div class="topbar-right">
       <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
-      <button id="new-pathway-btn" class="primary">+ New Pathway</button>
+      <button id="new-pathway-btn" class="primary">+ New pathway</button>
     </div>
   </header>
 
@@ -21,106 +21,45 @@
     </aside>
 
     <section id="pathway-detail" class="pane wide">
-      <div id="empty-state" class="empty">Select a pathway on the left, or create a new one.</div>
-      <form id="pathway-form" class="hidden">
-        <input type="hidden" id="pathway-dbid" />
-        <label>Title <input type="text" id="pathway-title" required /></label>
-        <label>Description <textarea id="pathway-description" rows="2"></textarea></label>
-        <label>Recommendation (shown at completion)
-          <textarea id="pathway-recommendation" rows="4"></textarea>
-        </label>
-        <div class="row">
-          <button type="submit" class="primary">Save pathway</button>
-          <button type="button" id="delete-pathway-btn" class="danger">Delete pathway</button>
-        </div>
+      <div id="empty-state" class="empty">
+        Pick a pathway from the list, or create a new one to begin.
+      </div>
 
-        <h2>Segments</h2>
-        <div id="segments-container"></div>
-        <button type="button" id="add-segment-btn" class="secondary">+ Add segment</button>
-      </form>
+      <div id="pathway-editor" class="hidden">
+        <header class="editor-header">
+          <div class="header-fields">
+            <label class="block">
+              Pathway name
+              <input type="text" id="pathway-title" />
+            </label>
+            <label class="block">
+              Description (optional)
+              <textarea id="pathway-description" rows="2"></textarea>
+            </label>
+          </div>
+          <div class="header-actions">
+            <span id="status-pill" class="status-pill"></span>
+            <button type="button" id="publish-btn" class="primary">Publish</button>
+            <button type="button" id="unpublish-btn" class="secondary hidden">Unpublish</button>
+            <button type="button" id="delete-pathway-btn" class="danger">Delete</button>
+          </div>
+        </header>
+
+        <section class="root-picker block">
+          <h3>Starting questionnaire</h3>
+          <p class="hint">The first questionnaire that will be auto-inserted into the note when this pathway is started.</p>
+          <div id="root-picker-host"></div>
+        </section>
+
+        <section id="tree-host" class="tree-host"></section>
+
+        <section id="validation-issues" class="validation hidden">
+          <h3>Validation</h3>
+          <ul id="validation-list"></ul>
+        </section>
+      </div>
     </section>
   </main>
-
-  <template id="segment-template">
-    <article class="segment" data-segment-dbid="">
-      <header class="segment-header">
-        <input type="text" class="segment-title" placeholder="Segment title" />
-        <label class="entry-toggle"><input type="radio" name="entry-segment" class="is-entry" /> Entry</label>
-        <button type="button" class="delete-segment danger">Delete segment</button>
-      </header>
-      <ul class="questions"></ul>
-      <button type="button" class="add-question secondary">+ Add question</button>
-
-      <details class="branches">
-        <summary>Branch rules</summary>
-        <ul class="branch-list"></ul>
-        <button type="button" class="add-branch secondary">+ Add branch rule</button>
-      </details>
-    </article>
-  </template>
-
-  <template id="question-template">
-    <li class="question" data-question-dbid="">
-      <div class="question-row">
-        <input type="text" class="q-text" placeholder="Question text" />
-        <select class="q-response-type">
-          <option value="yes_no">Yes / No</option>
-          <option value="multi">Multiple choice</option>
-          <option value="free_text">Free text</option>
-          <option value="numeric">Numeric</option>
-        </select>
-        <label class="required-toggle"><input type="checkbox" class="q-required" checked /> Required</label>
-        <button type="button" class="delete-question danger">×</button>
-      </div>
-      <ul class="options hidden"></ul>
-      <button type="button" class="add-option secondary hidden">+ Add option</button>
-    </li>
-  </template>
-
-  <template id="option-template">
-    <li class="option" data-option-dbid="">
-      <input type="text" class="opt-label" placeholder="Option label" />
-      <button type="button" class="delete-option danger">×</button>
-    </li>
-  </template>
-
-  <template id="branch-template">
-    <li class="branch" data-branch-dbid="">
-      <div class="branch-row">
-        <span class="branch-label-display"></span>
-        <button type="button" class="edit-branch secondary">Edit</button>
-        <button type="button" class="delete-branch danger">×</button>
-      </div>
-      <div class="branch-editor hidden">
-        <label>Label <input type="text" class="b-label" /></label>
-        <label>Target segment
-          <select class="b-target"></select>
-        </label>
-        <label>Priority <input type="number" class="b-priority" value="0" /></label>
-        <div class="conditions"></div>
-        <button type="button" class="add-condition secondary">+ Add condition</button>
-        <div class="row">
-          <button type="button" class="save-branch primary">Save rule</button>
-          <button type="button" class="cancel-branch secondary">Cancel</button>
-        </div>
-      </div>
-    </li>
-  </template>
-
-  <template id="condition-template">
-    <div class="condition">
-      <select class="c-question"></select>
-      <select class="c-operator">
-        <option value="eq">equals</option>
-        <option value="contains">contains</option>
-        <option value="gte">≥</option>
-        <option value="lte">≤</option>
-        <option value="in">is one of</option>
-      </select>
-      <input type="text" class="c-value" placeholder="value (comma-separated for is one of)" />
-      <button type="button" class="delete-condition danger">×</button>
-    </div>
-  </template>
 
   <script src="{{ api_base }}/main.js?v={{ cache_bust }}"></script>
 </body>
