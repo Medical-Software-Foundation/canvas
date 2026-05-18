@@ -32,7 +32,7 @@ cd dea_prescriber_filter
 canvas install . --host <your-instance>
 ```
 
-After install, the Prescriber Assist app appears in the app drawer for authenticated staff. Before anyone can open the admin UI, configure the `ADMIN_STAFF_IDS` secret (see [Configuration options](#configuration-options)) — without it, all admin-UI requests return 403 Forbidden.
+After install, the Prescriber Assist app appears in the app drawer for authenticated staff. Any logged-in Canvas staff member can open the admin UI by default; to restrict access to a named subset of admins, configure the `ADMIN_STAFF_IDS` secret (see [Configuration options](#configuration-options)).
 
 ## Important: disable `RESTRICT_MEDICATION_ORDERS_TO_PRESCRIBER`
 
@@ -46,16 +46,16 @@ With the built-in setting disabled and the plugin installed:
 
 ## Configuration options
 
-### `ADMIN_STAFF_IDS` (required plugin secret)
+### `ADMIN_STAFF_IDS` (optional plugin secret)
 
-The Prescriber Assist admin UI controls prescribing-delegation, which decides who can sign controlled-substance prescriptions on behalf of a provider. Access is denied unless `ADMIN_STAFF_IDS` is set to a comma-separated list of staff UUIDs.
+The Prescriber Assist admin UI controls prescribing-delegation, which decides who can sign controlled-substance prescriptions on behalf of a provider. By default, any authenticated Canvas staff member can access the admin UI. Set `ADMIN_STAFF_IDS` to a comma-separated list of staff UUIDs to restrict access to a named subset.
 
 **Example:**
 ```
 ADMIN_STAFF_IDS=57f3668ea9f84f3980e772ea8451af38,a1b2c3d4e5f6...
 ```
 
-- Empty or unset → all callers get 403 Forbidden (a warning is logged pointing at this secret)
+- Empty or unset → any authenticated Canvas staff member can access the admin UI
 - Set to UUIDs → only listed staff can access the admin UI; all others get 403 Forbidden
 
 Configure this in the Canvas admin panel: **Plugins → dea_prescriber_filter → Secrets**.
