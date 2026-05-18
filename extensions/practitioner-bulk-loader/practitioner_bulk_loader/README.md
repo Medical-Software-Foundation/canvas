@@ -133,7 +133,17 @@ Behavioral defaults (not currently configurable without code changes):
 
 ## Screenshots
 
-> **TODO before merge:** add screenshots of (1) the upload screen, (2) the preview screen with a row that has a field conflict expanded, (3) the results screen after import. Save to `docs/screenshots/` and reference them here.
+**1. Upload screen** — drag-and-drop or click-to-browse CSV upload, with a Download Template button.
+
+![Upload screen](../docs/screenshots/01-upload.png)
+
+**2. Preview screen** — after validation. Banners across the top summarise the batch ("7 staff ready · 2 new · 5 existing"), the placeholder-NPI defaulting, field-conflict counts across rows, and any soft warnings. Each row shows status (New / Existing / Existing by NPI), name, role, email, phone, NPI (with red ⚠ and "existing: …" beneath when there's a real-vs-real NPI mismatch), location, license summary ("3 · 3 new", "1 · 1 renewal", "1 on file"), and an Action dropdown defaulting to a safe value. NPI-tier matches surface a full-width warning row explaining the same-NPI-different-person case so the admin can verify before merging.
+
+![Preview screen with NPI conflict expanded](../docs/screenshots/02-preview-with-conflict.png)
+
+**3. Results screen** — after Import. Counts up top, then a per-row table with status (created / merged / skipped / error), the resulting Canvas staff key, and notes describing what happened ("Added 1 new license.", "updated 1 renewal.", "Skipped at user request."). Buttons for Copy Staff Keys (clipboard) and Download Results CSV.
+
+![Results screen](../docs/screenshots/03-results.png)
 
 ## Testing
 
