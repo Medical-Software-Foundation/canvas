@@ -93,18 +93,35 @@ def _build_interval_html_table(rows: list[dict[str, str]], bp_placement: str = "
     return header + body_rows + footer
 
 
-def _parse_vitals_datetime(time_str: str) -> datetime.datetime:
-    """Combine a time string (HH:MM:SS or HH:MM) with today's date."""
-    today = datetime.date.today()
-    for fmt in ("%H:%M:%S", "%H:%M"):
+_TRUTHY_SECRET_VALUES = {"1", "true", "yes", "on", "enabled"}
+
+
+def _parse_bool_secret(value: str | None) -> bool:
+    """Parse a string secret as a boolean. Accepts 1/true/yes/on/enabled (case-insensitive)."""
+    return (value or "").strip().lower() in _TRUTHY_SECRET_VALUES
+
+
+def _parse_vitals_datetime(timestamp: str) -> datetime.datetime:
+    """Parse an ISO8601 timestamp from the client into a TZ-aware UTC datetime.
+
+    The wire format from the JS client is `Date.toISOString()` (always UTC,
+    "Z"-suffixed). Falls back to the current UTC time for malformed input so
+    saved observations remain on the actual reading day.
+    """
+    if timestamp:
+        # `datetime.fromisoformat` only learned to accept the "Z" suffix in
+        # Python 3.11. Normalize so older runtimes still parse cleanly.
+        normalized = timestamp.strip()
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
         try:
-            t = datetime.datetime.strptime(time_str, fmt).time()
-            return datetime.datetime.combine(today, t)
+            dt = datetime.datetime.fromisoformat(normalized)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            return dt
         except (ValueError, TypeError):
-            continue
-    # datetime.time is not in Canvas sandbox ALLOWED_MODULES, so use strptime
-    fallback_t = datetime.datetime.strptime("00:00", "%H:%M").time()
-    return datetime.datetime.combine(today, fallback_t)
+            pass
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 def _create_interval_observations(
@@ -114,11 +131,11 @@ def _create_interval_observations(
     effects: list[Effect] = []
 
     for row in rows:
-        time_str = row.get("time", "")
-        if not time_str:
+        timestamp = row.get("timestamp", "")
+        if not timestamp:
             continue
 
-        effective_dt = _parse_vitals_datetime(time_str)
+        effective_dt = _parse_vitals_datetime(timestamp)
         label = row.get("label", "Vitals")
 
         hr = row.get("hr", "")
@@ -323,11 +340,11 @@ def _create_summary_observations(
     effects: list[Effect] = []
 
     for bucket in buckets:
-        time_str = bucket.get("time", "")
-        if not time_str:
+        timestamp = bucket.get("timestamp", "")
+        if not timestamp:
             continue
 
-        effective_dt = _parse_vitals_datetime(time_str)
+        effective_dt = _parse_vitals_datetime(timestamp)
         label = bucket.get("label", "Vitals")
 
         hr = bucket.get("hr", "")
@@ -472,12 +489,12 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
         check = (
             ((note_type.name if note_type else "") + " " + (note.title or "")).lower()
         )
-        is_spravato = "treatment" in check or "spravato" in check
+        is_spravato = "spravato" in check
 
         context = {
             "session_id": session_id,
             "subdomain": self.environment["CUSTOMER_IDENTIFIER"],
-            "enable_mock_vitals": bool(self.secrets.get("ENABLE_MOCK_VITALS")),
+            "enable_mock_vitals": _parse_bool_secret(self.secrets.get("ENABLE_MOCK_VITALS")),
             "treatment_intervals": TREATMENT_INTERVALS,
             "is_spravato": is_spravato,
         }
@@ -502,7 +519,7 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        if not self.secrets.get("ENABLE_MOCK_VITALS"):
+        if not _parse_bool_secret(self.secrets.get("ENABLE_MOCK_VITALS")):
             return [
                 JSONResponse(
                     {"error": "Mock vitals not enabled"},
@@ -606,11 +623,14 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                     )
 
         # Notify the Spravato charting app via WebSocket so it can
-        # live-reload the vitals section without a page refresh.
-        log.info(f"[VitalStream] Broadcasting vitals_saved on spravato_notify for note {note.id}")
+        # live-reload the vitals section without a page refresh. The channel is
+        # scoped per-note (UUID acts as the capability token) so saves on one
+        # patient's note don't leak to staff viewing other patients.
+        note_channel = f"spravato_notify_{str(note.id).replace('-', '_')}"
+        log.info(f"[VitalStream] Broadcasting vitals_saved on {note_channel}")
         effects.append(
             Broadcast(
-                channel="spravato_notify",
+                channel=note_channel,
                 message={
                     "event_type": "vitals_saved",
                     "note_uuid": str(note.id),

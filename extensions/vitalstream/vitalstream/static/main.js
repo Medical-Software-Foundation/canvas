@@ -161,9 +161,11 @@ function handleNewDiscreteMeasurement(timestamp, data) {
   var elapsedMin = (dt.getTime() - sessionStartTime) / 60000;
   var displayTime = dt.toLocaleTimeString("en-US");
   var hhmmTime = toHHMM(dt);
+  var isoTimestamp = dt.toISOString();
 
   allReadings.push({
     elapsedMin: elapsedMin,
+    timestamp: isoTimestamp,
     time: hhmmTime,
     displayTime: displayTime,
     hr: data.hr,
@@ -173,7 +175,7 @@ function handleNewDiscreteMeasurement(timestamp, data) {
     spo2: data.spo2,
   });
 
-  appendLiveRow(displayTime, hhmmTime, data);
+  appendLiveRow(displayTime, hhmmTime, isoTimestamp, data);
   updateLiveCount();
   recomputeAverages();
 }
@@ -185,7 +187,7 @@ function formatBPDisplay(sys, dia) {
   return sys + '/' + dia;
 }
 
-function appendLiveRow(displayTime, hhmmTime, data) {
+function appendLiveRow(displayTime, hhmmTime, isoTimestamp, data) {
   var tbody = document.querySelector('#live-readings-table tbody');
   if (!tbody) return;
 
@@ -196,6 +198,7 @@ function appendLiveRow(displayTime, hhmmTime, data) {
   row.appendChild(createTableCell(data.resp));
   row.appendChild(createTableCell(data.spo2));
 
+  row.dataset.timestamp = isoTimestamp || '';
   row.dataset.time = hhmmTime;
   row.dataset.displayTime = displayTime;
   row.dataset.hr = data.hr !== undefined ? data.hr : '';
@@ -209,6 +212,7 @@ function appendLiveRow(displayTime, hhmmTime, data) {
     if (prev) prev.classList.remove('selected');
     row.classList.add('selected');
     selectedRow = {
+      timestamp: row.dataset.timestamp,
       time: row.dataset.time,
       displayTime: row.dataset.displayTime,
       hr: row.dataset.hr,
@@ -287,16 +291,22 @@ function computeIncrementBuckets() {
     if (windowCount === 0) continue;
 
     var timeStr = '';
+    var timestampStr = '';
     if (sessionStartTime) {
-      timeStr = toHHMM(new Date(sessionStartTime + t * 60 * 1000));
+      var bucketDate = new Date(sessionStartTime + t * 60 * 1000);
+      timeStr = toHHMM(bucketDate);
+      timestampStr = bucketDate.toISOString();
     } else if (firstReading) {
       timeStr = firstReading.time || '';
+      timestampStr = firstReading.timestamp || '';
     }
 
     buckets.push({
       label: t + ' min',
       count: String(windowCount),
+      timestamp: timestampStr,
       time: timeStr,
+      elapsedMin: t,
       hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
       bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
       bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
@@ -325,13 +335,39 @@ function recomputeAverages() {
   });
 }
 
-// Bucket time string is 'HH:MM' (24-hr); treatment-start/end inputs are also
-// 24-hr 'HH:MM', so direct lexicographic comparison gives correct ordering.
-function classifyPhase(bucketTime, treatmentStart, treatmentEnd) {
-  if (!treatmentStart && !treatmentEnd) return '';
-  if (!bucketTime) return '';
-  if (treatmentStart && bucketTime < treatmentStart) return 'pre';
-  if (treatmentEnd && bucketTime > treatmentEnd) return 'post';
+// Convert a wall-clock HH:MM (from the treatment-start/end inputs) into elapsed
+// minutes since sessionStartTime. Anchors to sessionStartTime's calendar day
+// and rolls forward one day if the HH:MM would otherwise sit unreasonably far
+// in the past — that's the case when the treatment window crosses midnight
+// (e.g. start=22:30, end=00:15 next day).
+function hhmmToElapsedMin(hhmm) {
+  if (!hhmm || !sessionStartTime) return null;
+  var parts = hhmm.split(':');
+  if (parts.length < 2) return null;
+  var hours = parseInt(parts[0], 10);
+  var mins = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(mins)) return null;
+
+  var session = new Date(sessionStartTime);
+  var candidate = new Date(
+    session.getFullYear(), session.getMonth(), session.getDate(), hours, mins, 0, 0
+  );
+  // If the candidate is more than 12 hours before session start, it's the
+  // next-day occurrence (midnight crossover).
+  if (candidate.getTime() < session.getTime() - 12 * 60 * 60 * 1000) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return (candidate.getTime() - session.getTime()) / 60000;
+}
+
+// Classify a bucket by its elapsed-minute offset from sessionStartTime against
+// the treatment window. elapsedMin is monotonic across midnight; the previous
+// HH:MM lexicographic comparison was not.
+function classifyPhase(bucketElapsedMin, startElapsedMin, endElapsedMin) {
+  if (startElapsedMin === null && endElapsedMin === null) return '';
+  if (typeof bucketElapsedMin !== 'number' || isNaN(bucketElapsedMin)) return '';
+  if (startElapsedMin !== null && bucketElapsedMin < startElapsedMin) return 'pre';
+  if (endElapsedMin !== null && bucketElapsedMin > endElapsedMin) return 'post';
   return 'during';
 }
 
@@ -368,7 +404,9 @@ function computeDischargeAverage() {
   return {
     label: 'Discharge',
     count: String(n),
+    timestamp: lastReading ? (lastReading.timestamp || '') : '',
     time: lastReading ? lastReading.time : '',
+    elapsedMin: lastReading ? lastReading.elapsedMin : null,
     hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
     bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
     bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
@@ -470,16 +508,20 @@ async function saveSummaryToChart(session_id, subdomain) {
 
   var treatmentStart = (document.getElementById('treatment-start').value || '').trim();
   var treatmentEnd = (document.getElementById('treatment-end').value || '').trim();
+  // Resolve the HH:MM inputs to elapsed-minute offsets so cross-midnight
+  // windows (e.g. start=22:30, end=00:15 next day) classify correctly.
+  var startElapsedMin = treatmentStart ? hhmmToElapsedMin(treatmentStart) : null;
+  var endElapsedMin = treatmentEnd ? hhmmToElapsedMin(treatmentEnd) : null;
 
   summaryBuckets.forEach(function (b) {
-    b.phase = classifyPhase(b.time, treatmentStart, treatmentEnd);
+    b.phase = classifyPhase(b.elapsedMin, startElapsedMin, endElapsedMin);
   });
 
   // Append a discharge row averaging the last 30 seconds of readings — only
   // when treatment end is set and there are readings recorded after it.
-  if (treatmentEnd) {
+  if (treatmentEnd && endElapsedMin !== null) {
     var discharge = computeDischargeAverage();
-    if (discharge && discharge.time && discharge.time > treatmentEnd) {
+    if (discharge && typeof discharge.elapsedMin === 'number' && discharge.elapsedMin > endElapsedMin) {
       discharge.phase = 'discharge';
       summaryBuckets.push(discharge);
     }

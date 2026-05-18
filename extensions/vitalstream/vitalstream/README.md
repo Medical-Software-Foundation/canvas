@@ -31,9 +31,11 @@ This plugin provides an integration for the VitalStream device by Caretaker Medi
 
 ## Configuration
 
-The plugin requires the following secret:
+The plugin uses the following secrets:
 
-- `AUTHORIZED_SERIAL_NUMBERS`: A newline-separated list of authorized VitalStream device serial numbers. You can get the device's serial number from the "About" section of the Settings screen in the VitalStream app.
+- `AUTHORIZED_SERIAL_NUMBERS` (required): A newline-separated list of authorized VitalStream device serial numbers. You can get the device's serial number from the "About" section of the Settings screen in the VitalStream app.
+
+- `ENABLE_MOCK_VITALS` (optional, default disabled): When enabled, exposes a "Mock Vitals" button in the chart pane and the `/mock-vitals/` endpoint, which generate random vitals for development/testing. Accepted truthy values (case-insensitive): `1`, `true`, `yes`, `on`, `enabled`. Any other value (including `false`, `0`, `disabled`, or unset) leaves the feature off. Do not enable in production.
 
 In the VitalStream app on the tablet:
 
@@ -55,6 +57,14 @@ In the VitalStream app on the tablet:
   - For each increment mark (0, N, 2N, ... minutes from session start), readings in the 1-minute window around that mark (±30 seconds) are averaged
   - Averaged readings are saved as Observations
   - A command is inserted into the note summarizing the measurements
+
+## Spravato workflow
+
+The UI offers a Spravato "Treatment Intervals" workflow (pre-administration, 40-minute post, and pre-discharge BP intervals) in addition to the standard windowed-averaging summary. This workflow is enabled by inspecting the note's type name and title — if either contains `spravato` (case-insensitive), the Treatment Intervals panel is shown and the treatment-type dropdown defaults to Spravato.
+
+This is intentionally name-based so customers can opt note types into the Spravato workflow without a code change. To enable it, name the note type (or set the note title) to include `spravato` — e.g. "Spravato Session", "Spravato Treatment". Note types that should _not_ surface the Spravato workflow must avoid that substring in their display name.
+
+When intervals are assigned and saved via "Save Intervals to Chart", the plugin writes `spravato:vitals_data` and `spravato:bp_pre_admin` / `spravato:bp_40min_post` / `spravato:bp_pre_completion` metadata on the note, which the Spravato charting app and REMS extractor consume.
 
 ## Opportunities for enhancement
 

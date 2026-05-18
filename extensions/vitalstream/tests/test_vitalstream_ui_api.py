@@ -17,6 +17,7 @@ from vitalstream.routes.vitalstream_ui_api import (
     _build_summary_html_table,
     _create_interval_observations,
     _create_summary_observations,
+    _parse_bool_secret,
     _parse_vitals_datetime,
 )
 
@@ -52,29 +53,55 @@ def _make_handler(
 
 
 # ---------------------------------------------------------------------------
+# _parse_bool_secret
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "True", "yes", "on", " enabled "])
+def test_parse_bool_secret_truthy(value: str) -> None:
+    assert _parse_bool_secret(value) is True
+
+
+@pytest.mark.parametrize("value", ["", None, "0", "false", "False", "no", "off", "disabled", "anything-else"])
+def test_parse_bool_secret_falsy(value: str | None) -> None:
+    assert _parse_bool_secret(value) is False
+
+
+# ---------------------------------------------------------------------------
 # _parse_vitals_datetime
 # ---------------------------------------------------------------------------
 
 
-def test_parse_vitals_datetime_hhmmss() -> None:
-    dt = _parse_vitals_datetime("14:30:45")
+def test_parse_vitals_datetime_iso_with_z_suffix() -> None:
+    dt = _parse_vitals_datetime("2026-05-17T14:30:45Z")
+    assert dt.year == 2026 and dt.month == 5 and dt.day == 17
     assert dt.hour == 14 and dt.minute == 30 and dt.second == 45
-    assert dt.date() == datetime.date.today()
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
 
 
-def test_parse_vitals_datetime_hhmm() -> None:
-    dt = _parse_vitals_datetime("09:05")
-    assert dt.hour == 9 and dt.minute == 5 and dt.second == 0
+def test_parse_vitals_datetime_iso_with_offset() -> None:
+    dt = _parse_vitals_datetime("2026-05-17T09:05:00+00:00")
+    assert dt.year == 2026 and dt.hour == 9 and dt.minute == 5
+    assert dt.tzinfo is not None
 
 
-def test_parse_vitals_datetime_invalid_falls_back_to_midnight() -> None:
+def test_parse_vitals_datetime_naive_iso_is_treated_as_utc() -> None:
+    dt = _parse_vitals_datetime("2026-05-17T09:05:00")
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
+
+
+def test_parse_vitals_datetime_invalid_falls_back_to_now_utc() -> None:
     dt = _parse_vitals_datetime("not-a-time")
-    assert dt.hour == 0 and dt.minute == 0
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
 
 
-def test_parse_vitals_datetime_empty_string_falls_back() -> None:
+def test_parse_vitals_datetime_empty_falls_back_to_now_utc() -> None:
     dt = _parse_vitals_datetime("")
-    assert dt.hour == 0 and dt.minute == 0
+    assert dt.tzinfo is not None
+    assert dt.utcoffset() == datetime.timedelta(0)
 
 
 # ---------------------------------------------------------------------------
@@ -200,9 +227,9 @@ def test_build_summary_html_table_escapes_html_in_cell_values() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_create_interval_observations_skips_rows_missing_time() -> None:
+def test_create_interval_observations_skips_rows_missing_timestamp() -> None:
     effects = _create_interval_observations(
-        [{"label": "x", "time": "", "hr": "70"}], "p1", 1
+        [{"label": "x", "time": "09:00", "timestamp": "", "hr": "70"}], "p1", 1
     )
     assert effects == []
 
@@ -214,6 +241,7 @@ def test_create_interval_observations_creates_expected_number_of_effects(monkeyp
         {
             "label": "Pre-administration",
             "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
             "hr": "70",
             "bp_sys": "118",
             "bp_dia": "76",
@@ -234,6 +262,13 @@ def test_create_interval_observations_creates_expected_number_of_effects(monkeyp
         "Respiratory Rate (Pre-administration)",
     ]
 
+    # Effective datetime should reflect the ISO timestamp, not today's date.
+    effective_dts = [c.kwargs["effective_datetime"] for c in obs_ctor.call_args_list]
+    for dt in effective_dts:
+        assert dt.year == 2026 and dt.month == 5 and dt.day == 17
+        assert dt.hour == 9 and dt.minute == 0
+        assert dt.tzinfo is not None
+
 
 def test_create_summary_observations_creates_mean_observations(monkeypatch: pytest.MonkeyPatch) -> None:
     obs_ctor = MagicMock()
@@ -242,6 +277,7 @@ def test_create_summary_observations_creates_mean_observations(monkeypatch: pyte
         {
             "label": "0 min",
             "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
             "hr": "72",
             "bp_sys": "120",
             "bp_dia": "80",
@@ -260,9 +296,9 @@ def test_create_summary_observations_creates_mean_observations(monkeypatch: pyte
     ]
 
 
-def test_create_summary_observations_skips_bucket_without_time() -> None:
+def test_create_summary_observations_skips_bucket_without_timestamp() -> None:
     effects = _create_summary_observations(
-        [{"label": "x", "time": "", "hr": "70"}], "p1", 1
+        [{"label": "x", "time": "09:00", "timestamp": "", "hr": "70"}], "p1", 1
     )
     assert effects == []
 
@@ -300,55 +336,75 @@ def test_index_missing_session_returns_404() -> None:
     assert responses[0].status_code == HTTPStatus.NOT_FOUND
 
 
-def test_index_detects_spravato_from_note_type() -> None:
-    handler = _make_handler(
-        session={"staff_id": "staff-1", "note_id": 42},
-        path_params={"session_id": "s1"},
-    )
-    note = MagicMock()
-    note.note_type_version = SimpleNamespace(name="Spravato Treatment")
-    note.title = "Visit 3"
-    note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
-    note_mgr.get.return_value = note
-    note_mgr.select_related.return_value.get.return_value = note
-
+def _render_context(handler: VitalstreamUIAPI) -> dict:
     templates_mod = sys.modules["canvas_sdk.templates"]
     templates_mod.render_to_string.reset_mock()
     templates_mod.render_to_string.return_value = "<html/>"
-
     handler.index()
-
-    # Context passed to render_to_string should mark spravato true.
-    _, kwargs = templates_mod.render_to_string.call_args
-    # render_to_string(path, context) — context is positional 2nd arg.
     args, _ = templates_mod.render_to_string.call_args
-    context = args[1] if len(args) > 1 else kwargs.get("context", {})
+    return args[1]
+
+
+def _make_index_handler(note_type_name: str, note_title: str, secrets: dict | None = None) -> VitalstreamUIAPI:
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        secrets=secrets,
+    )
+    note = MagicMock()
+    note.note_type_version = SimpleNamespace(name=note_type_name)
+    note.title = note_title
+    note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
+    note_mgr.get.return_value = note
+    note_mgr.select_related.return_value.get.return_value = note
+    return handler
+
+
+def test_index_detects_spravato_from_note_type_name() -> None:
+    handler = _make_index_handler("Spravato Treatment", "Visit 3")
+    context = _render_context(handler)
     assert context["is_spravato"] is True
     assert context["subdomain"] == "testsub"
     assert context["treatment_intervals"] == TREATMENT_INTERVALS
 
 
-def test_index_non_spravato_context() -> None:
-    handler = _make_handler(
-        session={"staff_id": "staff-1", "note_id": 42},
-        path_params={"session_id": "s1"},
-    )
-    note = MagicMock()
-    note.note_type_version = SimpleNamespace(name="Follow-up")
-    note.title = "Checkup"
-    note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
-    note_mgr.get.return_value = note
-    note_mgr.select_related.return_value.get.return_value = note
+def test_index_detects_spravato_from_note_title_case_insensitive() -> None:
+    handler = _make_index_handler("Follow-up", "SPRAVATO session")
+    context = _render_context(handler)
+    assert context["is_spravato"] is True
 
-    templates_mod = sys.modules["canvas_sdk.templates"]
-    templates_mod.render_to_string.reset_mock()
-    templates_mod.render_to_string.return_value = "<html/>"
 
-    handler.index()
-
-    args, _ = templates_mod.render_to_string.call_args
-    context = args[1]
+def test_index_treatment_alone_does_not_match() -> None:
+    # Regression: "treatment" used to match alongside "spravato". It must not,
+    # because non-Spravato treatment notes (e.g. IV ketamine) would otherwise
+    # default to the Spravato workflow.
+    handler = _make_index_handler("IV Ketamine Treatment", "")
+    context = _render_context(handler)
     assert context["is_spravato"] is False
+
+
+def test_index_treatment_plan_does_not_match() -> None:
+    handler = _make_index_handler("Treatment Plan", "")
+    context = _render_context(handler)
+    assert context["is_spravato"] is False
+
+
+def test_index_non_spravato_context() -> None:
+    handler = _make_index_handler("Follow-up", "Checkup")
+    context = _render_context(handler)
+    assert context["is_spravato"] is False
+
+
+def test_index_enable_mock_vitals_only_for_truthy_secret() -> None:
+    enabled = _render_context(_make_index_handler("Follow-up", "", secrets={"ENABLE_MOCK_VITALS": "true"}))
+    assert enabled["enable_mock_vitals"] is True
+
+    # The pre-fix behavior would have treated "false" as truthy. It must not.
+    disabled = _render_context(_make_index_handler("Follow-up", "", secrets={"ENABLE_MOCK_VITALS": "false"}))
+    assert disabled["enable_mock_vitals"] is False
+
+    unset = _render_context(_make_index_handler("Follow-up", "", secrets={}))
+    assert unset["enable_mock_vitals"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +423,18 @@ def test_mock_vitals_disabled_returns_forbidden() -> None:
         session={"staff_id": "staff-1", "note_id": 42},
         path_params={"session_id": "s1"},
         secrets={},
+    )
+    responses = handler.mock_vitals()
+    assert responses[0].status_code == HTTPStatus.FORBIDDEN
+
+
+def test_mock_vitals_false_string_secret_still_rejects() -> None:
+    # Regression: the previous truthiness check enabled mock vitals when the
+    # operator set ENABLE_MOCK_VITALS="false" to try to disable it.
+    handler = _make_handler(
+        session={"staff_id": "staff-1", "note_id": 42},
+        path_params={"session_id": "s1"},
+        secrets={"ENABLE_MOCK_VITALS": "false"},
     )
     responses = handler.mock_vitals()
     assert responses[0].status_code == HTTPStatus.FORBIDDEN
@@ -415,6 +483,7 @@ def test_save_intervals_happy_path_produces_effects_and_json_ok() -> None:
         {
             "label": "Pre-administration",
             "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
             "hr": "70",
             "bp_sys": "120",
             "bp_dia": "80",
@@ -424,6 +493,7 @@ def test_save_intervals_happy_path_produces_effects_and_json_ok() -> None:
         {
             "label": "40-min post",
             "time": "09:40",
+            "timestamp": "2026-05-17T09:40:00Z",
             "hr": "72",
             "bp_sys": "118",
             "bp_dia": "78",
@@ -433,6 +503,7 @@ def test_save_intervals_happy_path_produces_effects_and_json_ok() -> None:
         {
             "label": "Pre-discharge",
             "time": "10:00",
+            "timestamp": "2026-05-17T10:00:00Z",
             "hr": "70",
             "bp_sys": "116",
             "bp_dia": "76",
@@ -446,7 +517,7 @@ def test_save_intervals_happy_path_produces_effects_and_json_ok() -> None:
         body={"rows": rows, "bp_placement": "right_wrist"},
     )
     note = MagicMock()
-    note.id = "note-uuid"
+    note.id = "abcd-1234"
     note.dbid = 42
     note.patient.id = "patient-1"
     note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
@@ -463,13 +534,16 @@ def test_save_intervals_happy_path_produces_effects_and_json_ok() -> None:
     assert effects[-1].status_code == 200
     assert effects[-1].data == {"status": "ok"}
 
-    # A broadcast should be queued on the spravato_notify channel.
+    # The broadcast must be scoped to the note (hyphens replaced with
+    # underscores). The previous global `spravato_notify` channel leaked note
+    # UUIDs to every staff in the org.
     broadcast_channels = [
         e.kwargs.get("channel")
         for e in effects
         if hasattr(e, "kwargs") and isinstance(e.kwargs, dict) and "channel" in e.kwargs
     ]
-    assert "spravato_notify" in broadcast_channels
+    assert "spravato_notify_abcd_1234" in broadcast_channels
+    assert "spravato_notify" not in broadcast_channels
 
     # The CustomCommand was constructed with the spravato vitals schema.
     assert custom_cmd_ctor.call_args.kwargs["schema_key"] == "spravatoVitals"
@@ -502,6 +576,7 @@ def test_save_summary_happy_path() -> None:
             "label": "0 min",
             "count": "5",
             "time": "09:00",
+            "timestamp": "2026-05-17T09:00:00Z",
             "hr": "72",
             "bp_sys": "120",
             "bp_dia": "80",
