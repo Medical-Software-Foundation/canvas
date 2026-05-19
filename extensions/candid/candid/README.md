@@ -34,6 +34,7 @@ Encounter (encounter_id)            <- we create via POST, fetch via GET
               +-- primary_paid_amount_cents
               +-- allowed_amount_cents
               +-- deductible_cents, coinsurance_cents, copay_cents
+              +-- service_line_era_data.service_line_adjustments[]
               +-- service_line_manual_adjustments[]
 ```
 
@@ -110,12 +111,22 @@ The application uses the `/claim-detail` SimpleAPI endpoint (authenticated via C
 
 **Real-time updates:** The application opens a WebSocket to `/plugin-io/ws/candid/claim-<claim_id>/` (`CandidTimelineWebSocket`). Whenever the plugin posts effects to a claim (submit, sync, patient-payment-reported) it emits a `Broadcast({"refresh": true})` to that channel via `notify_claim_updated`, and the client re-fetches `/claim-detail`. If the WebSocket fails or closes, the client falls back to polling every 10s while the panel is visible, and attempts to reconnect every 5s.
 
+### Candid Dashboard Application
+
+A full-page application launched from the Canvas provider menu that lists all claims submitted to Candid with their current status. Backed by the `/dashboard` SimpleAPI endpoint (session-authenticated).
+
+- Shows patient name, Candid status, submission date, last sync date, current queue
+- Highlights errors (submission failures) and denied claims
+- Supports `?errors_only=true` filter to show only problematic claims
+- Paginated with configurable limit (default 100, max 500)
+
 ## Architecture
 
 ```
 candid/
   applications/
     claim_timeline.py         # Application: Candid activity timeline on claim pages
+    candid_dashboard.py       # Application: full-page Candid claims dashboard (provider menu)
   handlers/
     on_queue_moved.py         # CLAIM_QUEUE_MOVED -> async POST to /submit or /sync-patient-payments
     on_patient_payment.py     # PATIENT_PAYMENT_PROCESSED -> async POST to /report-payment
@@ -124,6 +135,7 @@ candid/
     client.py                 # CandidClient: OAuth, submit_claim, submit_payment,
                               #   get_encounter, get_patient_payments
     claim_detail.py           # SimpleAPI: timeline data (GET) + manual full sync (POST) (/claim-detail)
+    dashboard.py              # SimpleAPI: aggregated claim list for dashboard (/dashboard)
     payload_builder.py        # Build Candid encounter payloads with claim splitting
     report_payment.py         # SimpleAPI: report patient payment to Candid (/report-payment)
     submit.py                 # SimpleAPI: async claim submission (/submit)
@@ -138,16 +150,18 @@ candid/
   effect_helpers.py           # Shared: banners, metadata keys, success/failure handlers
 ```
 
-## Secrets
+## Variables
 
-| Secret | Description |
-|--------|-------------|
-| `CANDID_CLIENT_ID` | Candid OAuth2 client ID |
-| `CANDID_CLIENT_SECRET` | Candid OAuth2 client secret — also used as the shared API key on the plugin's own `/submit`, `/sync`, and `/sync-patient-payments` SimpleAPI routes |
-| `CANDID_BASE_URL` | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
-| `namespace_read_write_access_key` | Access key for the `canvas__candid` custom_data namespace (declared in `CANVAS_MANIFEST.json`) |
+Declared in `CANVAS_MANIFEST.json` under `"variables"`. Sensitive values are encrypted at rest.
 
-The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no secret needed. The internal SimpleAPI routes use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`), while `/claim-detail` is authenticated via the Canvas user session (`SessionCredentials`).
+| Variable | Sensitive | Description |
+|----------|-----------|-------------|
+| `CANDID_CLIENT_ID` | Yes | Candid OAuth2 client ID |
+| `CANDID_CLIENT_SECRET` | Yes | Candid OAuth2 client secret — also used as the shared API key on the plugin's own `/submit`, `/sync`, `/sync-patient-payments`, and `/report-payment` SimpleAPI routes |
+| `CANDID_BASE_URL` | No | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
+| `namespace_read_write_access_key` | Yes | Access key for the `canvas__candid` custom_data namespace (auto-generated on first install) |
+
+The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no variable needed. The internal SimpleAPI routes use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`), while `/claim-detail` and `/dashboard` are authenticated via the Canvas user session (`SessionCredentials`).
 
 ## Claim Metadata Keys
 

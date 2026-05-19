@@ -552,7 +552,23 @@ def _date_of_service(claim: Claim, tz: ZoneInfo = DEFAULT_TZ) -> Any:
 
 
 def _place_of_service(claim: Claim) -> str | None:
+    """Determine place of service from line items, falling back to the note.
+
+    Fallback chain:
+    1. First line item's ``place_of_service``
+    2. Note's ``place_of_service``
+    3. Note type's ``default_place_of_service``
+    """
     first_line = claim.line_items.first()
     if first_line and first_line.place_of_service:
         return first_line.place_of_service
+
+    note = claim.note
+    if note:
+        if getattr(note, "place_of_service", None):
+            return note.place_of_service
+        note_type = getattr(note, "note_type_version", None)
+        if note_type and getattr(note_type, "default_place_of_service", None):
+            return note_type.default_place_of_service
+
     return None
