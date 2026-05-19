@@ -1,0 +1,40 @@
+[project]
+name = "order-sets"
+version = "0.0.32"
+description = "Predefined order sets for labs, imaging, and POC in-office tests. Select bundles of orders with one click from the patient chart."
+authors = [
+    { name = "Amanda Peterson", email = "amanda.peterson@canvasmedical.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["order_sets"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
