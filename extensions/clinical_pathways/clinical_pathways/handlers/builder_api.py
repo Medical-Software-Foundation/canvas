@@ -345,9 +345,16 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
             options = []
             if opt_set is not None:
                 for opt in opt_set.options.all():
+                    # ResponseOption does NOT expose `.id` (UUID) in the Canvas
+                    # SDK — its primary key is `dbid`. Using `.id` returns
+                    # Python None, which stringifies to "None" and silently
+                    # collapses every option into the same identifier. Stick
+                    # with `dbid` (integer PK, always present). The runtime
+                    # evaluator reads `InterviewQuestionResponse.response_option_id`
+                    # which is this same column, so both sides match.
                     options.append(
                         {
-                            "id": str(opt.id),
+                            "id": str(opt.dbid),
                             "value": opt.value,
                             "name": opt.name,
                         }
