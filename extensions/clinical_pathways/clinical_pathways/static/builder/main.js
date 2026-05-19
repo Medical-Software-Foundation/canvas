@@ -4,7 +4,7 @@
   const apiBase = document.body.dataset.apiBase;
   // Boot marker — verifiable from devtools console to confirm the new bundle
   // is loaded (cache-bust hand-check).
-  console.log('clinical_pathways builder v0.2.3 loaded');
+  console.log('clinical_pathways builder v0.2.4 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -795,6 +795,10 @@
     const options = (question && question.options) || [];
 
     if (type === 'SING') {
+      console.log('clinical_pathways: renderValueWidget SING', {
+        value_option_id: comp.value_option_id,
+        option_ids: options.map((o) => o.id),
+      });
       const sel = document.createElement('select');
       const ph = document.createElement('option');
       ph.value = '';
@@ -804,19 +808,24 @@
         const opt = document.createElement('option');
         opt.value = o.id;
         opt.textContent = o.name || o.value;
+        // Belt: set the `selected` attribute on the matching option.
+        if (o.id === comp.value_option_id) opt.selected = true;
         sel.appendChild(opt);
       });
-      // Set value AFTER all options are appended — the canonical way to
-      // programmatically select. `opt.selected = true` set at insertion time
-      // is unreliable across browsers, especially when the select is already
-      // in the DOM (which it is by the time renderValueWidget runs from the
-      // async hydration path).
+      // Suspenders: also set sel.value after appending.
       sel.value = comp.value_option_id || '';
       sel.addEventListener('change', (ev) => {
         comp.value_option_id = ev.target.value;
         onChange(comp);
       });
       host.appendChild(sel);
+      // Microtask fallback: some browser builds re-evaluate select state on
+      // DOM attachment; re-apply once the current microtask queue drains.
+      queueMicrotask(() => {
+        if (comp.value_option_id && sel.value !== comp.value_option_id) {
+          sel.value = comp.value_option_id;
+        }
+      });
       return;
     }
     if (type === 'MULT') {

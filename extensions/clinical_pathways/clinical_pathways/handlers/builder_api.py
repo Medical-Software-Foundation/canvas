@@ -103,11 +103,18 @@ def _walk_node(
             )
         branches = node.get("branches", []) or []
         if not branches:
+            # Soft termination: a questionnaire node with no branches simply
+            # ends the pathway without emitting a classification. Allowed but
+            # called out so the configurator doesn't ship by accident.
             issues.append(
                 {
-                    "severity": "error",
+                    "severity": "warning",
                     "node_id": node_id,
-                    "message": "Questionnaire node has no branches; every arm must terminate.",
+                    "message": (
+                        "Questionnaire node has no branches — this arm will end "
+                        "after the questionnaire is committed, without emitting "
+                        "a classification command."
+                    ),
                 }
             )
         for b in branches:

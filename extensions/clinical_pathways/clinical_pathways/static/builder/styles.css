@@ -78,9 +78,30 @@ button.small { padding: 4px 8px; font-size: 12px; }
 .condition-group.depth-1 { background: #f7fafc; }
 .condition-group.depth-2 { background: #edf2f7; }
 
-.comparison { display: grid; grid-template-columns: 1fr 1fr 130px 1fr auto; gap: 6px; align-items: center; margin-bottom: 4px; }
+.comparison {
+  display: grid;
+  /* minmax(0, 1fr) lets grid columns shrink below intrinsic content width.
+     Without it, a long question/option name expands the column and pushes
+     siblings off-screen. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(110px, 130px) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
 .comparison .questionnaire-select { font-size: 12px; }
-.comparison select, .comparison input { font: inherit; padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 3px; }
+.comparison select, .comparison input {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 3px;
+  min-width: 0;
+  max-width: 100%;
+  /* The closed state truncates long option text; opening the menu still
+     shows the full content. */
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
 .comparison .value-cell select, .comparison .value-cell input { width: 100%; }
 .comparison .delete-comparison { padding: 2px 6px; }
 
