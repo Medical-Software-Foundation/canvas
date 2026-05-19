@@ -1,13 +1,99 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.1.0",
     "name": "cms_access_fhir_client",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Canvas-side integration with the CMS ACCESS Model FHIR APIs. Provides eligibility checking, patient alignment and unalignment (tracks eCKM, CKM, MSK, BH), webhook reception for CMS subscription events, async submission polling, banner alerts, and a real-time chart summary section.",
     "components": {
         "handlers": [
             {
-                "class": "cms_access_fhir_client.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "cms_access_fhir_client.handlers.action_buttons:EligibilityActionButton",
+                "description": "Chart header button that opens the ACCESS eligibility check modal",
+                "data_access": {
+                    "event": "ACTION_BUTTON_CLICKED",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.handlers.action_buttons:AlignActionButton",
+                "description": "Chart header button that opens the ACCESS enrollment modal",
+                "data_access": {
+                    "event": "ACTION_BUTTON_CLICKED",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.handlers.action_buttons:UnalignActionButton",
+                "description": "Chart header button that opens the ACCESS unalignment modal",
+                "data_access": {
+                    "event": "ACTION_BUTTON_CLICKED",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.handlers.banner:AccessBannerHandler",
+                "description": "Emits AddBannerAlert when a patient chart loads (gated by ACCESS_SHOW_BANNER)",
+                "data_access": {
+                    "event": "PATIENT_CHART_SUMMARY__SECTION_CONFIGURATION",
+                    "read": ["ACCESSAlignment"],
+                    "write": []
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.handlers.chart_summary:AccessChartSummaryConfiguration",
+                "description": "Registers the ACCESS alignment section in the chart summary layout (gated by ACCESS_SHOW_CHART_SUMMARY)",
+                "data_access": {
+                    "event": "PATIENT_CHART_SUMMARY__SECTION_CONFIGURATION",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.handlers.chart_summary:AccessChartSummarySection",
+                "description": "Renders ACCESS alignment state in a custom chart summary section with real-time WebSocket updates",
+                "data_access": {
+                    "event": "PATIENT_CHART_SUMMARY__GET_CUSTOM_SECTION",
+                    "read": ["ACCESSAlignment"],
+                    "write": []
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.api.operations_api:AccessOperationsApi",
+                "description": "Internal API endpoints called by chart-button modals to invoke CMS operations",
+                "data_access": {
+                    "event": "SIMPLE_API_REQUEST",
+                    "read": ["Patient"],
+                    "write": ["ACCESSAlignment"]
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.api.webhook_api:AccessWebhookApi",
+                "description": "Public CMS-facing webhook endpoint receiving FHIR Subscription notifications",
+                "data_access": {
+                    "event": "SIMPLE_API_REQUEST",
+                    "read": ["Patient"],
+                    "write": ["ACCESSAlignment", "ACCESSWebhookEvent"]
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.api.websocket_api:AccessChartSummaryWebSocket",
+                "description": "WebSocket handler authenticating chart summary real-time connections",
+                "data_access": {
+                    "event": "SIMPLE_API_WEBSOCKET",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "cms_access_fhir_client.cron.submission_status_poller:SubmissionStatusPoller",
+                "description": "Polls outstanding CMS submission-status URLs with exponential backoff",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["ACCESSAlignment"],
+                    "write": ["ACCESSAlignment"]
+                }
             }
         ],
         "commands": [],
@@ -15,10 +101,21 @@
         "effects": [],
         "views": []
     },
-    "variables": [],
+    "secrets": [],
+    "variables": [
+        {"name": "ACCESS_BASE_URL", "sensitive": false},
+        {"name": "ACCESS_OAUTH_CLIENT_ID", "sensitive": true},
+        {"name": "ACCESS_OAUTH_CLIENT_SECRET", "sensitive": true},
+        {"name": "ACCESS_OAUTH_TOKEN_URL", "sensitive": false},
+        {"name": "ACCESS_PARTICIPANT_ID", "sensitive": false},
+        {"name": "ACCESS_WEBHOOK_SECRET", "sensitive": true},
+        {"name": "ACCESS_SHOW_BANNER", "sensitive": false},
+        {"name": "ACCESS_SHOW_CHART_SUMMARY", "sensitive": false},
+        {"name": "ACCESS_SHOW_PROFILE_FIELD", "sensitive": false}
+    ],
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }

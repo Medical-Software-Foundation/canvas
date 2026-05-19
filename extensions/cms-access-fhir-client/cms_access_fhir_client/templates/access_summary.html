@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body {
+    margin: 0; padding: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+    background: transparent;
+  }
+  .section { margin-bottom: 8px; }
+  .label { color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .value { font-weight: 500; margin-top: 2px; }
+  .status-aligned { color: #16a34a; }
+  .status-pending { color: #d97706; }
+  .status-unaligned, .status-error { color: #dc2626; }
+  .status-eligible { color: #2563eb; }
+  .no-data { color: #9ca3af; font-style: italic; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .col { min-width: 120px; }
+</style>
+</head>
+<body>
+{% if alignment %}
+<div class="section">
+  <div class="row">
+    <div class="col">
+      <div class="label">Status</div>
+      <div class="value status-{{ alignment.status }}">{{ alignment.status|title }}</div>
+    </div>
+    <div class="col">
+      <div class="label">Track</div>
+      <div class="value">{{ alignment.track }}</div>
+    </div>
+    {% if alignment.tier %}
+    <div class="col">
+      <div class="label">Tier</div>
+      <div class="value">{{ alignment.tier|title }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% if alignment.care_start_date or alignment.care_end_date %}
+<div class="section">
+  <div class="row">
+    {% if alignment.care_start_date %}
+    <div class="col">
+      <div class="label">Care Period Start</div>
+      <div class="value">{{ alignment.care_start_date }}</div>
+    </div>
+    {% endif %}
+    {% if alignment.care_end_date %}
+    <div class="col">
+      <div class="label">Care Period End</div>
+      <div class="value">{{ alignment.care_end_date }}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% if alignment.submission_state == "in-progress" %}
+<div class="section">
+  <div class="label">Pending Submission</div>
+  <div class="value status-pending">{{ alignment.submission_op }} — polling...</div>
+</div>
+{% endif %}
+{% if alignment.alignment_id %}
+<div class="section">
+  <div class="label">Alignment ID</div>
+  <div class="value">{{ alignment.alignment_id }}</div>
+</div>
+{% endif %}
+{% else %}
+<div class="no-data">No ACCESS alignment on record for this patient.</div>
+{% endif %}
+
+<script>
+(function () {
+  var PLUGIN = "cms_access_fhir_client";
+  var PATIENT_ID = "{{ patient_id }}";
+  var channel = "access-" + PLUGIN + "-" + PATIENT_ID;
+  var wsUrl = "wss://" + location.host + "/plugin-io/ws/" + PLUGIN + "/" + channel + "/";
+  var ws;
+
+  function connect() {
+    ws = new WebSocket(wsUrl);
+    ws.onmessage = function () {
+      // Reload iframe content when state changes
+      window.location.reload();
+    };
+    ws.onclose = function () {
+      // Reconnect with backoff
+      setTimeout(connect, 5000);
+    };
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>
