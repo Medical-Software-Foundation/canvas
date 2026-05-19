@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#5ab5c4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Person silhouette (head + shoulders) -->
+  <circle cx="22" cy="17" r="6" />
+  <path d="M9 41 C 9 32, 14 27, 22 27 C 30 27, 35 32, 35 41" />
+  <!-- Clock badge, lower-right. White fill occludes the silhouette beneath. -->
+  <circle cx="36" cy="36" r="9" fill="#ffffff" stroke-width="2.25" />
+  <!-- Clock hands (pointing roughly 12 and 3) -->
+  <line x1="36" y1="36" x2="36" y2="31" stroke-width="2.25" />
+  <line x1="36" y1="36" x2="40" y2="36" stroke-width="2.25" />
+  <!-- Clock center pip -->
+  <circle cx="36" cy="36" r="0.75" fill="#5ab5c4" stroke="none" />
+</svg>

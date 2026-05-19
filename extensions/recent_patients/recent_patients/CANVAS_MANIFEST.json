@@ -1,0 +1,59 @@
+{
+    "sdk_version": "0.150.0",
+    "plugin_version": "0.1.15",
+    "name": "recent_patients",
+    "description": "Per-staff list of recently interacted patients. Closes the lost-context gap after inbox-style workflows like signing a result, replying to a message, or completing a task.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "recent_patients.applications.recent_patients_app:RecentPatientsApp",
+                "name": "Recent Patients",
+                "description": "Open the modal showing the patients you've most recently touched.",
+                "scope": "global",
+                "icon": "assets/icon.png"
+            },
+            {
+                "class": "recent_patients.applications.recent_patients_app:RecentPatientsPatientApp",
+                "name": "Recent Patients",
+                "description": "Open the modal from inside a patient chart.",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "recent_patients.protocols.track_interactions:TrackChartView",
+                "description": "Capture a chart open as a patient touch."
+            },
+            {
+                "class": "recent_patients.protocols.track_interactions:TrackProfileView",
+                "description": "Capture a profile open as a patient touch."
+            },
+            {
+                "class": "recent_patients.protocols.track_interactions:TrackChartReviewSign",
+                "description": "Capture chart-review note sign-offs (the inbox result-review path for labs / imaging / consults / uncategorized documents) as a chart touch."
+            },
+            {
+                "class": "recent_patients.protocols.prune_history:PruneOldInteractions",
+                "description": "Nightly prune of interactions older than 7 days."
+            }
+        ],
+        "handlers": [
+            {
+                "class": "recent_patients.handlers.recent_patients_api:RecentPatientsAPI",
+                "description": "Serves the Recent Patients UI and JSON endpoints."
+            }
+        ]
+    },
+    "custom_data": {
+        "namespace": "custom_data__recent_patients",
+        "access": "read_write"
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "README.md"
+}

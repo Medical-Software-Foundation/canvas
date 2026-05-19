@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#0055CC"/>
+  <!-- CSV/document base -->
+  <rect x="22" y="18" width="40" height="50" rx="4" fill="#ffffff" opacity="0.95"/>
+  <!-- Document lines representing CSV rows -->
+  <rect x="28" y="28" width="28" height="3" rx="1.5" fill="#0055CC"/>
+  <rect x="28" y="34" width="22" height="3" rx="1.5" fill="#0055CC" opacity="0.6"/>
+  <rect x="28" y="40" width="25" height="3" rx="1.5" fill="#0055CC" opacity="0.6"/>
+  <rect x="28" y="46" width="20" height="3" rx="1.5" fill="#0055CC" opacity="0.6"/>
+  <!-- Upload arrow on document -->
+  <path d="M42 55 L42 65" stroke="#0055CC" stroke-width="3" stroke-linecap="round"/>
+  <path d="M37 60 L42 55 L47 60" stroke="#0055CC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Group of people icon (right side, indicating bulk/multiple) -->
+  <!-- Person 1 -->
+  <circle cx="68" cy="58" r="7" fill="#16A34A"/>
+  <path d="M58 78 Q58 68 68 68 Q78 68 78 78" fill="#16A34A"/>
+  <!-- Person 2 (slightly behind) -->
+  <circle cx="58" cy="55" r="6" fill="#ffffff" opacity="0.9"/>
+  <path d="M49 74 Q49 65 58 65 Q62 65 65 67" fill="#ffffff" opacity="0.9"/>
+</svg>
