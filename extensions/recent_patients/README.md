@@ -61,8 +61,14 @@ CustomModel table is pruned nightly at 03:00 UTC by the included CronTask.
 
 ## Screenshots
 
-_Coming soon — screenshots and short screen recordings of the panel in use
-will be added in a follow-up._
+The launcher icon in the Canvas app drawer:
+
+![Recent Patients icon in the Canvas app launcher](./screenshots/launcher.png)
+
+The panel itself — patients grouped by day with the chart icon for chart
+opens and the person icon for profile opens:
+
+![Recent Patients panel showing patients grouped under Today and This Week](./screenshots/panel.png)
 
 ## What gets captured
 
