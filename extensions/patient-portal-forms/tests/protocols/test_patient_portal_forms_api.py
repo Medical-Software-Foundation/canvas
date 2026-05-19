@@ -74,6 +74,42 @@ class TestProviderQuestionnaireAPI:
             api.get_patient_forms()
         assert mock_html.call_args.kwargs["status_code"] == HTTPStatus.NOT_FOUND
 
+    def test_get_patient_forms_404_when_staff_session_no_longer_resolves(self):
+        """The session header's staff id can become unresolvable mid-flight
+        if the Staff record is deactivated/deleted between session
+        establishment and the request. Render a graceful 404 rather than
+        500-ing the chart pane."""
+        class _DNE(Exception):
+            pass
+
+        api = _build_provider_api()
+        with patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.Patient.objects"
+        ) as mock_patient_objects, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.Staff"
+        ) as mock_staff_cls, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.QuestionnaireAssignmentService"
+        ) as mock_service, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.Questionnaire.objects"
+        ) as mock_q_objects, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.render_to_string",
+            return_value="<html>404</html>",
+        ), patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.HTMLResponse"
+        ) as mock_html:
+            mock_patient_objects.filter.return_value.exists.return_value = True
+            mock_staff_cls.DoesNotExist = _DNE
+            mock_staff_cls.objects.get.side_effect = _DNE
+            mock_html.return_value = MagicMock(type=EffectType.SIMPLE_API_RESPONSE)
+
+            result = api.get_patient_forms()
+
+        # 404 returned, no downstream work attempted.
+        assert mock_html.call_args.kwargs["status_code"] == HTTPStatus.NOT_FOUND
+        assert len(result) == 1
+        mock_service.list_grouped.assert_not_called()
+        mock_q_objects.filter.assert_not_called()
+
     def test_get_patient_forms_passes_grouped_assignments_to_template(self):
         api = _build_provider_api()
         grouped = {
@@ -461,6 +497,70 @@ class TestPatientQuestionnaireSubmit:
         assert captured["status_code"] == HTTPStatus.UNPROCESSABLE_ENTITY
         assert "missing an assigning provider" in captured["payload"]["error"]
         mock_service.mark_completed.assert_not_called()
+
+    def test_submit_returns_422_when_assigning_provider_has_no_primary_practice_location(self):
+        """Canvas Staff records can legitimately have
+        primary_practice_location=None — common for MAs and care coordinators
+        who can also assign forms per the README. Without an early guard,
+        building NoteEffect would dereference ``staff.primary_practice_location.id``
+        and raise AttributeError after the patient already filled out the
+        form, while leaving the row outstanding so retries loop forever.
+        Fail closed with 422 instead so the patient sees a clear error and
+        the assignment stays in a recoverable state."""
+        patient_id = str(uuid.uuid4())
+        staff_id = str(uuid.uuid4())
+        api = self._api(
+            patient_id,
+            staff_id,
+            [{"question_id": "q1", "question_type": "TEXT", "answer": "ok"}],
+        )
+
+        with patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.Questionnaire.objects"
+        ) as mock_q_objects, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.QuestionnaireAssignmentService"
+        ) as mock_service, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.NoteType.objects"
+        ) as mock_nt_objects, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.NoteEffect"
+        ) as mock_note_effect_cls, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.QuestionnaireCommand"
+        ) as mock_qc_cls, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.DailyNoteService"
+        ) as mock_daily, patch(
+            "patient_portal_forms.protocols.patient_portal_forms_api.JSONResponse"
+        ) as mock_json_cls:
+            # Outstanding row with an assigning provider that has no primary location.
+            provider = MagicMock(id=staff_id, primary_practice_location=None)
+            row = MagicMock()
+            row.assigning_provider = provider
+            mock_service.get_outstanding_row.return_value = row
+            mock_q_objects.filter.return_value.first.return_value = MagicMock(id=uuid.uuid4())
+
+            captured = {}
+
+            def capture(payload, status_code):
+                captured["status_code"] = status_code
+                captured["payload"] = payload
+                return MagicMock(type=EffectType.SIMPLE_API_RESPONSE)
+
+            mock_json_cls.side_effect = capture
+            result = api.submit_questionnaire()
+
+        # Early-exit 422 with a clear, operator-facing message.
+        assert captured["status_code"] == HTTPStatus.UNPROCESSABLE_ENTITY
+        assert "primary practice location" in captured["payload"]["error"]
+
+        # The crucial assertions — no effects built, no row stamped, no
+        # downstream DB I/O. The assignment must remain outstanding so a
+        # later retry (after the staff record is fixed) can succeed.
+        mock_service.mark_completed.assert_not_called()
+        mock_note_effect_cls.assert_not_called()
+        mock_qc_cls.assert_not_called()
+        mock_nt_objects.filter.assert_not_called()
+        mock_daily.resolve.assert_not_called()
+        # Only the 422 response is returned.
+        assert len(result) == 1
 
     def test_submit_returns_422_when_no_active_questionnaire_matches_name(self):
         """If the questionnaire_name on the outstanding row no longer matches

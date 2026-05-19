@@ -46,7 +46,14 @@ class QuestionnaireAssignment(CustomModel):
     # when the patient completes the questionnaire. Historical rows are
     # retained so a patient can take the same questionnaire repeatedly
     # (e.g. a monthly screen).
-    completed_at = DateTimeField(default=None)
+    #
+    # ``null=True`` is load-bearing — the outstanding/completed lifecycle is
+    # keyed off ``completed_at IS NULL`` (see the partial UniqueConstraint
+    # below and every ``completed_at__isnull=True`` filter in the service).
+    # Without it, Django renders the column as NOT NULL and the first
+    # ``update_or_create(completed_at=None, ...)`` in ``assign()`` would
+    # raise IntegrityError.
+    completed_at = DateTimeField(null=True, blank=True, default=None)
     # Snapshot of the question_id / question_type / answer triples the
     # patient submitted. Populated alongside completed_at so the review
     # template can render the answers as they were at submission time

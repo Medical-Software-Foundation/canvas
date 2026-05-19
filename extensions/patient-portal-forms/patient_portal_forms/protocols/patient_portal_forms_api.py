@@ -48,7 +48,18 @@ class ProviderQuestionnaireAPI(StaffSessionAuthMixin, SimpleAPI):
             ]
 
         staff_id = self.event.context["headers"]["canvas-logged-in-user-id"]
-        staff = Staff.objects.get(id=staff_id)
+        try:
+            staff = Staff.objects.get(id=staff_id)
+        except Staff.DoesNotExist:
+            # The session header pointed to a Staff that no longer resolves
+            # (deactivated/deleted between session establishment and this
+            # request). Render a 404 rather than 500-ing the chart pane.
+            return [
+                HTMLResponse(
+                    render_to_string("templates/404.html"),
+                    status_code=HTTPStatus.NOT_FOUND,
+                )
+            ]
 
         grouped = QuestionnaireAssignmentService.list_grouped(patient_id)
 
@@ -386,6 +397,21 @@ class PatientQuestionnaireAPI(SimpleAPI):
             ]
 
         staff = outstanding_row.assigning_provider
+
+        # Canvas Staff records can legitimately have primary_practice_location=None
+        # (commonly the case for MAs and care coordinators who haven't been
+        # tied to a location). Without this guard, building NoteEffect below
+        # would dereference ``staff.primary_practice_location.id`` and raise
+        # AttributeError after the patient has already filled out the whole
+        # form — and because ``mark_completed`` hasn't run yet, the assignment
+        # stays outstanding and every retry loops on the same failure.
+        if staff.primary_practice_location is None:
+            return [
+                JSONResponse(
+                    {"error": "Assigning provider has no primary practice location configured"},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
 
         # Prefer the operator-configured "Patient Portal Form" note type. If
         # it isn't set up, fall back to a Data Import note. The two paths
