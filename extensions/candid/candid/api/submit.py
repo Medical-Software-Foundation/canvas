@@ -12,11 +12,18 @@ from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.api.payload_builder import build_split_payloads
 from candid.effect_helpers import (
+    META_ENCOUNTERS,
+    get_claim_metadata,
     handle_submit_failure,
     handle_submit_success,
 )
 
 SUBMISSION_QUEUE = ClaimQueues.QUEUED_FOR_SUBMISSION
+
+# Fields from the POST /encounters/v4 payload that are not accepted by
+# PATCH /encounters/v4/{encounter_id}. The PATCH schema (EncounterUpdate)
+# uses diagnosis_ids instead of diagnoses, and does not accept service_lines.
+PATCH_EXCLUDED_FIELDS = {"diagnoses", "service_lines"}
 
 
 class CandidSubmitAPI(SimpleAPIRoute):
@@ -33,7 +40,9 @@ class CandidSubmitAPI(SimpleAPIRoute):
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
         # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
-        return credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
+        return (
+            credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
+        )
 
     def _get_claim(self) -> Claim | None:
         body = self.request.json()
@@ -89,6 +98,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
             split_label = (
                 f"split {split_num}/{total_splits}" if total_splits > 1 else "claim"
             )
+            ext_id = payload.get("external_id", "")
 
             try:
                 success, message = client.submit_claim(payload)
@@ -99,6 +109,35 @@ class CandidSubmitAPI(SimpleAPIRoute):
                 return handle_submit_failure(
                     claim_effect, f"Candid submission failed ({split_label}): {e}"
                 )
+
+            # If POST failed due to duplicate external_id, look up the
+            # existing encounter and PATCH it instead.
+            if not success and "EncounterExternalIdUniquenessError" in message:
+                encounter_id = client.find_encounter_by_external_id(ext_id)
+                if encounter_id:
+                    log.info(
+                        f"Candid: {split_label} of claim {claim_id} already exists "
+                        f"(encounter_id={encounter_id}) — updating via PATCH"
+                    )
+                    # PATCH accepts a different schema than POST — remove
+                    # fields that are only valid on create.
+                    patch_payload = {
+                        k: v
+                        for k, v in payload.items()
+                        if k not in PATCH_EXCLUDED_FIELDS
+                    }
+                    try:
+                        success, message = client.update_claim(
+                            encounter_id, patch_payload
+                        )
+                    except Exception as e:
+                        log.exception(
+                            f"Candid: update failed for {split_label} of claim {claim_id}"
+                        )
+                        return handle_submit_failure(
+                            claim_effect,
+                            f"Candid update failed ({split_label}): {e}",
+                        )
 
             if not success:
                 log.warning(
@@ -113,7 +152,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
                 {
                     "split": split_num,
                     "candid_encounter_id": message,
-                    "external_id": payload.get("external_id", ""),
+                    "external_id": ext_id,
                 }
             )
             log.info(

@@ -1,5 +1,6 @@
 import requests
 from logger import log
+import json
 
 CACHE_KEY = "candid_bearer_token"
 # Candid tokens expire after 5 hours (18000s). Cache for 4.5 hours to
@@ -82,6 +83,46 @@ class CandidClient:
         )
         if response.ok:
             return True, response.json().get("encounter_id", "")
+        return False, self._format_error(response)
+
+    def find_encounter_by_external_id(self, external_id: str) -> str | None:
+        """Look up an encounter_id by its external_id.
+
+        Uses ``GET /api/encounters/v4?external_id=...``. Returns the
+        encounter_id if found, or None.
+        """
+        response = requests.get(
+            f"{self.base_url}/api/encounters/v4",
+            params={"external_id": external_id, "limit": 1},
+            headers=self._auth_headers(),
+            timeout=30,
+        )
+        if not response.ok:
+            return None
+        data = response.json()
+        items = data.get("items", [data] if "encounter_id" in data else [])
+        if items:
+            return items[0].get("encounter_id")
+        return None
+
+    def update_claim(self, encounter_id: str, claim_payload: dict) -> tuple[bool, str]:
+        """Update an existing encounter via PATCH /encounters/v4/{encounter_id}.
+
+        Used when re-submitting a claim that was already filed — the encounter
+        exists on Candid's side and needs its data updated rather than a new
+        encounter created.
+
+        Returns ``(was_successful, message)``. On success, ``message`` is the
+        Candid encounter ID. On failure, ``message`` is a human-readable error.
+        """
+        response = requests.patch(
+            f"{self.base_url}/api/encounters/v4/{encounter_id}",
+            json=claim_payload,
+            headers=self._auth_headers(json_body=True),
+            timeout=30,
+        )
+        if response.ok:
+            return True, response.json().get("encounter_id", encounter_id)
         return False, self._format_error(response)
 
     # ------------------------------------------------------------------
