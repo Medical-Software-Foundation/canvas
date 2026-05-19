@@ -16,9 +16,24 @@ from recent_patients.models.recent_patient_interaction import RecentPatientInter
 ROW_LIMIT = 50
 
 
+def _staff_id_candidates(staff_id: str) -> set[str]:
+    """Both dashed and undashed UUID forms for matching.
+
+    `Staff.id` is a UUIDField, so `str(staff.id)` always emits the canonical
+    dashed form on the write side. The `canvas-logged-in-user-id` header,
+    however, may arrive in either form depending on session conditions. Our
+    `staff_id` column is a `TextField` (no UUID-aware normalization), so we
+    have to match both forms explicitly. See `staff_directory`'s
+    `services/profiles.py` for the same defense.
+    """
+    return {staff_id, staff_id.replace("-", "")}
+
+
 def _fetch_recent_rows(staff_id: str, limit: int) -> list[RecentPatientInteraction]:
     return list(
-        RecentPatientInteraction.objects.filter(staff_id=staff_id)
+        RecentPatientInteraction.objects.filter(
+            staff_id__in=_staff_id_candidates(staff_id)
+        )
         .order_by("-occurred_at")[:limit]
     )
 

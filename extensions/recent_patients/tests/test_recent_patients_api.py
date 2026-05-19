@@ -180,10 +180,19 @@ class TestData:
 
             pt_mgr.filter.return_value.only.return_value = [patient]
 
-            response = _api({"canvas-logged-in-user-id": "staff-9"}).data()[0]
+            response = _api(
+                {"canvas-logged-in-user-id": "abcd1234-5678-90ab-cdef-1234567890ab"}
+            ).data()[0]
 
-            # Filter is scoped to the calling staff member.
-            int_mgr.filter.assert_called_once_with(staff_id="staff-9")
+            # Filter is scoped to the calling staff member AND tolerates both
+            # the dashed and undashed UUID forms of the header value, since
+            # Canvas can deliver either.
+            int_mgr.filter.assert_called_once()
+            kwargs = int_mgr.filter.call_args.kwargs
+            assert kwargs["staff_id__in"] == {
+                "abcd1234-5678-90ab-cdef-1234567890ab",
+                "abcd1234567890abcdef1234567890ab",
+            }
             # The result slice respects ROW_LIMIT.
             ordered.__getitem__.assert_called_once_with(slice(None, ROW_LIMIT))
 
@@ -195,6 +204,33 @@ class TestData:
         assert row["dob"] == "1972-03-15"
         assert row["interaction_type"] == "chart_review"
         assert "server_time" in body
+
+    def test_undashed_staff_id_header_still_matches(self) -> None:
+        # Canvas may deliver `canvas-logged-in-user-id` with or without
+        # dashes. The write path always stores the dashed form
+        # (str(UUID)), so the read path must accept either.
+        with (
+            patch(
+                "recent_patients.handlers.recent_patients_api"
+                ".RecentPatientInteraction.objects"
+            ) as int_mgr,
+            patch(
+                "recent_patients.handlers.recent_patients_api.Patient.objects"
+            ) as pt_mgr,
+        ):
+            ordered = MagicMock()
+            ordered.__getitem__.return_value = []
+            int_mgr.filter.return_value.order_by.return_value = ordered
+
+            _api(
+                {"canvas-logged-in-user-id": "abcd1234567890abcdef1234567890ab"}
+            ).data()
+
+            kwargs = int_mgr.filter.call_args.kwargs
+            assert kwargs["staff_id__in"] == {
+                "abcd1234567890abcdef1234567890ab",
+                "abcd1234567890abcdef1234567890ab",  # no dashes to strip
+            }
 
     def test_empty_results(self) -> None:
         with (

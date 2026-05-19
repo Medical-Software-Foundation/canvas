@@ -1,6 +1,6 @@
 [project]
 name = "recent-patients"
-version = "0.1.13"
+version = "0.1.14"
 description = "Per-staff list of recently interacted patients. Closes the lost-context gap after inbox-style workflows like signing a result, replying to a message, or completing a task."
 authors = [{ name = "Alyssa Yandura", email = "alyssa.yandura@canvasmedical.com" }]
 license = "MIT"

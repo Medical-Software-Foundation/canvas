@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-05-11T17:41:14.902862Z"
+exclude-newer = "2026-05-12T00:00:18.253163Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -1515,7 +1515,7 @@ wheels = [
 
 [[package]]
 name = "recent-patients"
-version = "0.1.13"
+version = "0.1.14"
 source = { virtual = "." }
 dependencies = [
     { name = "canvas", extra = ["test-utils"] },
