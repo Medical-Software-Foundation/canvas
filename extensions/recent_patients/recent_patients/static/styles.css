@@ -1,0 +1,186 @@
+/* Recent Patients — chart-search design system.
+   Light theme with navy + teal accents, DM Sans body, DM Serif Display headings. */
+
+:root {
+    /* Colors */
+    --navy: #0d203c;
+    --teal: #96D3DD;
+    --teal-deep: #5ab5c4;
+    --bg: #EFF5F7;
+    --surface: #ffffff;
+    --surface-alt: #F4F8FA;
+    --border: #dce8ec;
+    --text-head: #0d203c;
+    --text-body: #2c4155;
+    --text-dim: #5e7a8a;
+    --text-muted: #8ea8b5;
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 400;
+    color: var(--text-body);
+    background: var(--bg);
+    font-size: 14px;
+    line-height: 1.5;
+    accent-color: var(--teal-deep);
+}
+
+.app-header {
+    flex-shrink: 0;
+    padding: 18px 22px 14px;
+    background: var(--surface);
+    border-bottom: 1.5px solid var(--border);
+}
+
+.app-header .title {
+    font-family: "DM Serif Display", Georgia, "Times New Roman", serif;
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--text-head);
+    letter-spacing: -0.005em;
+    line-height: 1.1;
+}
+
+.app-header .subtitle {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+
+.filter-bar {
+    flex-shrink: 0;
+    padding: 12px 22px 14px;
+    background: var(--surface);
+    border-bottom: 1.5px solid var(--border);
+}
+
+#search-input {
+    width: 100%;
+    padding: 9px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text-body);
+    background: var(--surface-alt);
+    border: 1.5px solid var(--border);
+    border-radius: 9px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+#search-input::placeholder {
+    color: var(--text-muted);
+}
+
+#search-input:focus {
+    background: var(--surface);
+    border-color: var(--teal-deep);
+    box-shadow: 0 0 0 3px rgba(150, 211, 221, 0.2);
+}
+
+.content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 22px 28px;
+}
+
+.bucket {
+    margin-bottom: 20px;
+}
+
+.bucket-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin: 0 0 8px 4px;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 150ms ease, box-shadow 150ms ease,
+        transform 100ms ease;
+    box-shadow: 0 1px 4px rgba(13, 32, 60, 0.07);
+}
+
+.row:hover,
+.row:focus-visible {
+    border-color: var(--teal);
+    box-shadow: 0 4px 16px rgba(13, 32, 60, 0.10);
+    outline: none;
+}
+
+.row:active {
+    transform: translateY(1px);
+}
+
+.row .interaction-icon {
+    color: var(--teal-deep);
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.row .interaction-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.row .body {
+    flex: 1;
+    min-width: 0;
+}
+
+.row .patient-name {
+    font-weight: 600;
+    color: var(--text-head);
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.row .meta {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 3px;
+}
+
+.row .time {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.empty-state,
+.loading {
+    padding: 36px 16px;
+    text-align: center;
+    font-style: italic;
+    color: var(--text-muted);
+}

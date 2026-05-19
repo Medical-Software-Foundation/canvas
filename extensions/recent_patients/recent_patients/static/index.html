@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Recent Patients</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap">
+        <link rel="stylesheet" href="styles.css?v={{cache_bust}}">
+        <script type="text/javascript" src="main.js?v={{cache_bust}}" defer></script>
+    </head>
+    <body>
+        <header class="app-header">
+            <div class="title">Recent Patients</div>
+            <div class="subtitle" id="results-summary">Loading&hellip;</div>
+        </header>
+
+        <div class="filter-bar">
+            <input
+                id="search-input"
+                type="search"
+                placeholder="Search by patient name"
+                autocomplete="off"
+                spellcheck="false"
+            />
+        </div>
+
+        <main id="content" class="content" aria-live="polite">
+            <div class="loading">Loading&hellip;</div>
+        </main>
+    </body>
+</html>
