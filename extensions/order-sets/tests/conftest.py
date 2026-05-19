@@ -55,13 +55,19 @@ class _LaunchModalEffect:
         DEFAULT_MODAL = "DEFAULT_MODAL"
         PAGE = "PAGE"
 
-    def __init__(self, content=None, target=None, title=None):
+    def __init__(self, url=None, content=None, target=None, title=None):
+        self.url = url
         self.content = content
         self.target = target
         self.title = title
 
     def apply(self):
-        return MagicMock(content=self.content, target=self.target, title=self.title)
+        return MagicMock(
+            url=self.url,
+            content=self.content,
+            target=self.target,
+            title=self.title,
+        )
 
 
 _launch_modal_mod = MagicMock()
