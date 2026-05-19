@@ -76,11 +76,12 @@ function relativeTime(occurredAt, now) {
     return occurred.toLocaleDateString();
 }
 
-function formatDob(dobIso) {
-    if (!dobIso) return null;
-    const d = new Date(dobIso);
-    if (isNaN(d)) return null;
-    return d.toLocaleDateString();
+function formatDob(dob) {
+    // Server emits DOB pre-formatted (e.g. "3/15/1972"). Don't parse it
+    // with `new Date(dob)` — JS treats a date-only string as UTC midnight
+    // and `toLocaleDateString()` then shifts it back one day in U.S.
+    // timezones.
+    return dob || null;
 }
 
 function renderRow(row, now) {

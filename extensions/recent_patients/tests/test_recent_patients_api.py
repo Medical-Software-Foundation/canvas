@@ -26,6 +26,7 @@ from recent_patients.handlers.recent_patients_api import (
     _format_dob,
     _hydrate_patients,
     _serialize_row,
+    _staff_id_candidates,
 )
 
 
@@ -69,8 +70,14 @@ class TestFormatDob:
     def test_string_returned_unchanged(self) -> None:
         assert _format_dob("1972-03-15") == "1972-03-15"
 
-    def test_date_object_isoformatted(self) -> None:
-        assert _format_dob(date(1972, 3, 15)) == "1972-03-15"
+    def test_date_object_formatted_as_m_d_y(self) -> None:
+        # NOT ISO. JS new Date("YYYY-MM-DD") parses as UTC midnight and
+        # toLocaleDateString() then shifts the date back one day in U.S.
+        # timezones — pre-formatting here bypasses the JS Date constructor.
+        assert _format_dob(date(1972, 3, 15)) == "3/15/1972"
+
+    def test_single_digit_month_and_day(self) -> None:
+        assert _format_dob(date(2000, 1, 5)) == "1/5/2000"
 
     def test_unrecognized_type_returns_none(self) -> None:
         assert _format_dob(42) is None
@@ -97,7 +104,7 @@ class TestSerializeRow:
         assert result == {
             "patient_id": "pt-1",
             "name": "Jane Doe",
-            "dob": "1972-03-15",
+            "dob": "3/15/1972",
             "interaction_type": "chart_review",
             "occurred_at": "2026-05-14T12:00:00+00:00",
         }
@@ -114,6 +121,34 @@ class TestSerializeRow:
         result = _serialize_row(self._interaction(), patient)  # type: ignore[arg-type]
         assert result["name"] == "(no name)"
         assert result["dob"] is None
+
+
+class TestStaffIdCandidates:
+    """The candidate set must always contain the dashed canonical UUID
+    form, because the write path stores str(UUID) which is always dashed.
+    Both dashed and undashed inputs must produce a set containing the
+    dashed form."""
+
+    UUID_DASHED = "abcd1234-5678-90ab-cdef-1234567890ab"
+    UUID_UNDASHED = "abcd1234567890abcdef1234567890ab"
+
+    def test_dashed_input_includes_dashed_form(self) -> None:
+        candidates = _staff_id_candidates(self.UUID_DASHED)
+        assert self.UUID_DASHED in candidates
+        assert self.UUID_UNDASHED in candidates
+
+    def test_undashed_input_includes_dashed_form(self) -> None:
+        # The original bug: undashed input produced {undashed} only,
+        # leaving the dashed-form stored row unreachable.
+        candidates = _staff_id_candidates(self.UUID_UNDASHED)
+        assert self.UUID_DASHED in candidates
+        assert self.UUID_UNDASHED in candidates
+
+    def test_non_uuid_input_returns_just_the_input(self) -> None:
+        # Non-UUID values (test fixtures, etc.) don't get UUID
+        # canonicalization but still go in the set as-is.
+        candidates = _staff_id_candidates("not-a-uuid")
+        assert "not-a-uuid" in candidates
 
 
 class TestHydratePatients:
@@ -201,14 +236,15 @@ class TestData:
         row = body["rows"][0]
         assert row["patient_id"] == "pt-1"
         assert row["name"] == "Jane Doe"
-        assert row["dob"] == "1972-03-15"
+        assert row["dob"] == "3/15/1972"
         assert row["interaction_type"] == "chart_review"
         assert "server_time" in body
 
-    def test_undashed_staff_id_header_still_matches(self) -> None:
-        # Canvas may deliver `canvas-logged-in-user-id` with or without
-        # dashes. The write path always stores the dashed form
-        # (str(UUID)), so the read path must accept either.
+    def test_undashed_staff_id_header_still_matches_dashed_row(self) -> None:
+        # The write path always stores the dashed canonical form (via
+        # str(UUID)). If Canvas delivers the header undashed, the
+        # candidate set must STILL contain the dashed form so the
+        # TextField byte-exact filter matches the stored row.
         with (
             patch(
                 "recent_patients.handlers.recent_patients_api"
@@ -227,10 +263,13 @@ class TestData:
             ).data()
 
             kwargs = int_mgr.filter.call_args.kwargs
-            assert kwargs["staff_id__in"] == {
-                "abcd1234567890abcdef1234567890ab",
-                "abcd1234567890abcdef1234567890ab",  # no dashes to strip
-            }
+            candidates = kwargs["staff_id__in"]
+            assert "abcd1234-5678-90ab-cdef-1234567890ab" in candidates, (
+                "Undashed header must canonicalize to dashed form so the "
+                "byte-exact TextField filter matches the row stored via "
+                "str(UUID)."
+            )
+            assert "abcd1234567890abcdef1234567890ab" in candidates
 
     def test_empty_results(self) -> None:
         with (

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, date, datetime
 from http import HTTPStatus
 from typing import Any
 
@@ -17,16 +18,26 @@ ROW_LIMIT = 50
 
 
 def _staff_id_candidates(staff_id: str) -> set[str]:
-    """Both dashed and undashed UUID forms for matching.
+    """All UUID-shaped forms of `staff_id` that should match a stored row.
 
     `Staff.id` is a UUIDField, so `str(staff.id)` always emits the canonical
-    dashed form on the write side. The `canvas-logged-in-user-id` header,
-    however, may arrive in either form depending on session conditions. Our
-    `staff_id` column is a `TextField` (no UUID-aware normalization), so we
-    have to match both forms explicitly. See `staff_directory`'s
-    `services/profiles.py` for the same defense.
+    dashed form on the write side. The `canvas-logged-in-user-id` header
+    can arrive in either dashed or undashed form depending on session
+    conditions. Our `staff_id` column is a `TextField` (byte-exact match,
+    no UUID-aware normalization), so we must put both forms in the
+    candidate set regardless of which form the header had.
+
+    The naive `{value, value.replace("-", "")}` only generates two forms
+    when the input is dashed; an undashed input yields a one-element set
+    that doesn't contain the dashed form stored in the DB. Parsing through
+    `uuid.UUID()` produces the canonical dashed form no matter what.
     """
-    return {staff_id, staff_id.replace("-", "")}
+    candidates: set[str] = {staff_id, staff_id.replace("-", "")}
+    try:
+        candidates.add(str(uuid.UUID(staff_id)))
+    except ValueError:
+        pass
+    return candidates
 
 
 def _fetch_recent_rows(staff_id: str, limit: int) -> list[RecentPatientInteraction]:
@@ -48,15 +59,22 @@ def _hydrate_patients(patient_ids: list[str]) -> dict[str, Any]:
 
 
 def _format_dob(birth_date: Any) -> str | None:
+    """Format a patient DOB as `M/D/YYYY` server-side.
+
+    Important: don't return ISO `YYYY-MM-DD`. JavaScript's
+    `new Date("YYYY-MM-DD")` parses date-only strings as UTC midnight
+    (per ECMA-262), and `toLocaleDateString()` then renders in local
+    time, shifting the date back one day for any user west of UTC
+    (i.e. all U.S. timezones). Pre-formatting server-side bypasses
+    the JS Date constructor entirely.
+    """
     if birth_date is None:
         return None
     if isinstance(birth_date, str):
         return birth_date
-    try:
-        result: str = birth_date.isoformat()
-        return result
-    except AttributeError:
-        return None
+    if isinstance(birth_date, date):
+        return f"{birth_date.month}/{birth_date.day}/{birth_date.year}"
+    return None
 
 
 def _serialize_row(

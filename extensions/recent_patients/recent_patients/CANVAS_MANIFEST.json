@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.150.0",
-    "plugin_version": "0.1.14",
+    "plugin_version": "0.1.15",
     "name": "recent_patients",
     "description": "Per-staff list of recently interacted patients. Closes the lost-context gap after inbox-style workflows like signing a result, replying to a message, or completing a task.",
     "url_permissions": [],
