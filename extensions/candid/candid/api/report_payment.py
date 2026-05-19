@@ -114,16 +114,19 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
                         "amount_cents": cp_cents,
                     }
                 )
-                unallocated_cents -= cp_cents
                 reportable_claims.append((claim_ext_id, reported_set))
             else:
                 log.info(
                     f"Candid: claim {claim_ext_id} has no encounter metadata — "
                     f"allocating ${cp_cents / 100:.2f} as unattributed"
                 )
+                allocations.append(_unattributed(cp_cents))
+            unallocated_cents -= cp_cents
 
         if not allocations:
             if claim_ids:
+                # Every claim was skipped via the embedded-ID dedup above —
+                # this payment originated in Candid; reporting it back would loop.
                 log.info("Candid: skipping payment report — all claims already synced")
                 return []
             allocations.append(_unattributed(total_cents))

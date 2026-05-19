@@ -134,6 +134,43 @@ def test_endpoint_partial_allocation_remainder_unattributed() -> None:
     assert payload["allocations"][1]["amount_cents"] == 5000
 
 
+def test_endpoint_unattributed_when_claim_has_no_encounter_metadata() -> None:
+    """Claims without Candid encounter metadata still send payment as unattributed."""
+    from candid.api.report_payment import CandidReportPaymentAPI
+
+    mock_claim = MagicMock()
+    mock_claim.id = "abc-123"
+
+    with (
+        patch("candid.api.report_payment.CandidClient") as MockClient,
+        patch("candid.api.report_payment.ClaimEffect"),
+        patch("candid.api.report_payment.SyncLog"),
+        patch("candid.api.report_payment.Claim") as MockClaim,
+        patch("candid.api.report_payment.get_claim_metadata", return_value=None),
+        patch("candid.api.report_payment.get_claim_metadata_set", return_value=set()),
+        patch("candid.api.report_payment.notify_claim_updated", return_value=MagicMock()),
+    ):
+        client = MockClient.from_secrets.return_value
+        client.submit_payment.return_value = (True, "pay-id-456")
+        MockClaim.objects.filter.return_value = [mock_claim]
+
+        handler = CandidReportPaymentAPI.__new__(CandidReportPaymentAPI)
+        handler.secrets = MOCK_SECRETS
+        handler.request = MagicMock()
+        handler.request.json.return_value = _payment_context(
+            total_cents="10000.00",
+            claim_payments=[{"claim_id": "abc-123", "allocated_cents": "10000.00"}],
+        )
+
+        handler.post()
+
+    client.submit_payment.assert_called_once()
+    payload = client.submit_payment.call_args[0][0]
+    assert len(payload["allocations"]) == 1
+    assert payload["allocations"][0]["target"]["type"] == "unattributed"
+    assert payload["allocations"][0]["amount_cents"] == 10000
+
+
 def test_endpoint_skips_candid_originated_payments() -> None:
     """Payments with an embedded ID that's already synced are not re-reported."""
     from candid.api.report_payment import CandidReportPaymentAPI
