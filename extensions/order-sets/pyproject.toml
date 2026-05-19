@@ -6,7 +6,7 @@ authors = [
     { name = "Amanda Peterson", email = "amanda.peterson@canvasmedical.com" },
 ]
 license = "MIT"
-readme = "README.md"
+readme = "order_sets/README.md"
 requires-python = ">=3.12"
 dependencies = []
 
