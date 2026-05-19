@@ -1,8 +1,9 @@
 {
-    "sdk_version": "0.123.1",
+    "sdk_version": "0.1.4",
     "plugin_version": "0.0.32",
     "name": "order_sets",
     "description": "Predefined order sets for labs, imaging, and POC in-office tests. Select bundles of orders with one click from the patient chart.",
+    "url_permissions": [],
     "components": {
         "protocols": [
             {
@@ -11,13 +12,13 @@
                 "data_access": {
                     "event": "",
                     "read": [
-                        "canvas_sdk.v1.data.lab.LabPartner",
-                        "canvas_sdk.v1.data.lab.LabPartnerTest",
-                        "canvas_sdk.v1.data.staff.Staff",
-                        "canvas_sdk.v1.data.staff.StaffRole",
-                        "canvas_sdk.v1.data.note.Note",
-                        "canvas_sdk.v1.data.note.CurrentNoteStateEvent",
-                        "canvas_sdk.v1.data.charge_description_master.ChargeDescriptionMaster"
+                        "LabPartner",
+                        "LabPartnerTest",
+                        "Staff",
+                        "StaffRole",
+                        "Note",
+                        "CurrentNoteStateEvent",
+                        "ChargeDescriptionMaster"
                     ],
                     "write": []
                 }
@@ -53,5 +54,5 @@
     "references": [],
     "license": "MIT",
     "diagram": false,
-    "readme": "../README.md"
+    "readme": "./README.md"
 }
