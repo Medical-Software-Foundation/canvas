@@ -4,7 +4,7 @@
     "name": "order_sets",
     "description": "Predefined order sets for labs, imaging, and POC in-office tests. Select bundles of orders with one click from the patient chart.",
     "components": {
-        "handlers": [
+        "protocols": [
             {
                 "class": "order_sets.api.endpoints:OrderSetsAPI",
                 "description": "API endpoints for order set management and execution",
