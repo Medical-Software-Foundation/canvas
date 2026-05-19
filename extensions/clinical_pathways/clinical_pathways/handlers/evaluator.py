@@ -87,14 +87,25 @@ def _op_contains_none(answer_list: list[str], expected_list: list[str]) -> bool:
 
 
 def _collect_responses_for_interview(interview: Interview) -> dict[str, dict[str, Any]]:
-    """Return {question_id_str: {"text": str, "option_ids": [str], "values": [str]}}."""
+    """Return {question_uuid_str: {"text": str, "option_ids": [dbid_str], "values": [str]}}.
+
+    Keyed by the Question's UUID (not its dbid) because the builder stores
+    `comp.question_id` as `str(question.id)`. `r.question_id` on the response
+    is the FK column value (dbid integer), so we resolve the related
+    Question instance once per response to obtain its UUID.
+    """
     responses: dict[str, dict[str, Any]] = {}
     for r in interview.interview_responses.all():
-        question_id = str(r.question_id) if r.question_id else None
-        if not question_id:
+        if not r.question_id:
+            continue
+        try:
+            question_uuid = str(r.question.id) if r.question else None
+        except Exception:
+            question_uuid = None
+        if not question_uuid:
             continue
         bucket = responses.setdefault(
-            question_id,
+            question_uuid,
             {"text": "", "option_ids": [], "values": []},
         )
         if r.response_option_id:
