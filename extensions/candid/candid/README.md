@@ -49,6 +49,7 @@ When a claim is moved to the **QueuedForSubmission** queue, the plugin schedules
 - Diagnoses are split in rank order (first 12, next 12, etc.) without reordering -- the Canvas UI's Claim Review Records (CRR) workflow lets users review and assign diagnoses across splits before submission
 - Payload errors are caught per-section (patient, billing provider, etc.) and surfaced as claim comments rather than crashing the handler
 - Stores Candid encounter IDs in claim metadata for traceability
+- **Resubmission handling:** If the POST fails with `EncounterExternalIdUniquenessError` (the encounter already exists in Candid), the plugin looks up the existing encounter by `external_id` and PATCHes it instead. The PATCH payload excludes `diagnoses` and `service_lines` (Candid's update schema uses `diagnosis_ids` instead and does not accept service lines)
 - On success: adds a claim comment with the submission date and Candid encounter IDs, adds a status banner, and moves claim to **FiledAwaitingResponse**
 - On failure: adds an error comment, writes a `candid_submission_error` metadata entry, and moves claim to **NeedsCodingReview**
 

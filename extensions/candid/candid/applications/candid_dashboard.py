@@ -55,7 +55,8 @@ def _html() -> str:
   }
   .filters input[type="checkbox"] { margin: 0; }
 
-  .summary { font-size: 12px; color: #6b7280; margin-left: auto; }
+  .filters-right { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+  .summary { font-size: 12px; color: #6b7280; }
 
   .table-wrap { background: white; border: 1px solid #e5e7eb; border-radius: 8px; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -147,6 +148,28 @@ def _html() -> str:
     padding: 14px; background: #fef2f2; color: #991b1b;
     border: 1px solid #fecaca; border-radius: 8px; font-size: 13px;
   }
+  .pagination-bar { display: flex; align-items: center; gap: 12px; }
+  .pagination {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .page-btn {
+    min-width: 32px; height: 32px; padding: 0 8px;
+    font-size: 12px; font-weight: 500; border: 1px solid #d1d5db;
+    border-radius: 6px; background: white; color: #374151;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .page-btn:hover { background: #f9fafb; border-color: #93c5fd; }
+  .page-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .page-btn.ellipsis { border: none; background: none; cursor: default; }
+  .page-btn.ellipsis:hover { background: none; }
+  .page-jump {
+    display: flex; align-items: center; gap: 6px; margin-left: 12px; font-size: 12px; color: #6b7280;
+  }
+  .page-jump select {
+    padding: 4px 6px; font-size: 12px;
+    border: 1px solid #d1d5db; border-radius: 4px; background: white;
+  }
 </style>
 </head>
 <body>
@@ -155,19 +178,11 @@ def _html() -> str:
 
   <div class="header">
     <h1>Candid Claims Dashboard</h1>
-    <button class="refresh-btn" onclick="loadDashboard()">Refresh</button>
+    <button class="refresh-btn" onclick="resetAndLoad()">Refresh</button>
   </div>
 
   <div class="filters">
-    <label><input type="checkbox" id="filter-errors" onchange="loadDashboard()"> Errors / denials only</label>
-    <label>Limit
-      <select id="filter-limit" onchange="loadDashboard()">
-        <option value="50">50</option>
-        <option value="100" selected>100</option>
-        <option value="200">200</option>
-        <option value="500">500</option>
-      </select>
-    </label>
+    <label><input type="checkbox" id="filter-errors" onchange="resetAndLoad()"> Errors / denials only</label>
     <label>Sorted by
       <select id="filter-sort" onchange="onSortChange(this.value)">
         <option value="activity" selected>most recent activity</option>
@@ -181,7 +196,10 @@ def _html() -> str:
         <option value="asc">asc</option>
       </select>
     </label>
-    <div id="summary" class="summary"></div>
+    <div class="filters-right">
+      <span id="pagination-bar" class="pagination-bar"></span>
+      <div id="summary" class="summary"></div>
+    </div>
   </div>
 
   <div id="content"><div class="loading">Loading...</div></div>
@@ -191,7 +209,15 @@ def _html() -> str:
 <script>
 const API_BASE = "/plugin-io/api/candid/dashboard";
 
-let cachedClaims = [];
+const PAGE_SIZE = 50;
+let allClaims = [];       // full dataset when client-filtering
+let cachedClaims = [];    // current page's claims for rendering
+let allStatuses = [];     // distinct statuses across ALL claims (from server)
+let allQueues = [];       // distinct queues across ALL claims (from server)
+let currentPage = 1;
+let totalPages = 1;
+let totalClaims = 0;
+let clientMode = false;   // true when client-side filters are active
 let patientSearchQuery = "";
 let sortKey = "activity";
 let sortDirection = "desc";
@@ -210,20 +236,48 @@ const filters = {
   queue:  {selected: new Set(), keyFn: c => queueKey(c),  labelFn: queueLabel},
 };
 
-async function loadDashboard() {
+function hasClientFilters() {
+  return !!patientSearchQuery || Object.values(filters).some(f => f.selected.size > 0);
+}
+
+async function loadDashboard(page = 1) {
   const errorsOnly = document.getElementById("filter-errors").checked;
-  const limit = document.getElementById("filter-limit").value;
+  const useClientMode = hasClientFilters();
 
   const qs = new URLSearchParams();
   if (errorsOnly) qs.set("errors_only", "1");
-  if (limit) qs.set("limit", limit);
+
+  if (useClientMode) {
+    // Fetch everything so we can filter + paginate client-side
+    qs.set("page", "all");
+  } else {
+    qs.set("page", String(page));
+  }
 
   document.getElementById("content").innerHTML = '<div class="loading">Loading...</div>';
   try {
     const resp = await fetch(`${API_BASE}?${qs.toString()}`, {credentials: "same-origin"});
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
-    cachedClaims = data.claims || [];
+
+    // Store global filter options from the server
+    if (data.filter_options) {
+      allStatuses = data.filter_options.statuses || [];
+      allQueues = data.filter_options.queues || [];
+    }
+
+    if (useClientMode) {
+      allClaims = data.claims || [];
+      clientMode = true;
+      clientPaginate(page);
+    } else {
+      allClaims = [];
+      clientMode = false;
+      cachedClaims = data.claims || [];
+      currentPage = data.page || 1;
+      totalPages = data.total_pages || 1;
+      totalClaims = data.total || 0;
+    }
     render();
   } catch (e) {
     document.getElementById("content").innerHTML =
@@ -232,9 +286,102 @@ async function loadDashboard() {
   }
 }
 
+function clientPaginate(page = 1) {
+  const filtered = allClaims.filter(claimVisible);
+  totalClaims = filtered.length;
+  totalPages = Math.max(Math.ceil(filtered.length / PAGE_SIZE), 1);
+  currentPage = Math.min(Math.max(page, 1), totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  cachedClaims = filtered.slice(start, start + PAGE_SIZE);
+}
+
+function resetAndLoad() {
+  loadDashboard(1);
+}
+
+function goToPage(page) {
+  if (page < 1 || page > totalPages || page === currentPage) return;
+  if (clientMode) {
+    clientPaginate(page);
+    render();
+  } else {
+    loadDashboard(page);
+  }
+}
+
+function buildPagination() {
+  const btns = [];
+  // Prev
+  btns.push(`<button class="page-btn" ${currentPage <= 1 ? "disabled" : ""} onclick="goToPage(${currentPage - 1})">←</button>`);
+
+  // Page numbers with ellipsis
+  const pages = paginationRange(currentPage, totalPages);
+  for (const p of pages) {
+    if (p === "...") {
+      btns.push(`<button class="page-btn ellipsis" disabled>…</button>`);
+    } else {
+      const active = p === currentPage ? " active" : "";
+      btns.push(`<button class="page-btn${active}" onclick="goToPage(${p})">${p}</button>`);
+    }
+  }
+
+  // Next
+  btns.push(`<button class="page-btn" ${currentPage >= totalPages ? "disabled" : ""} onclick="goToPage(${currentPage + 1})">→</button>`);
+
+  return btns.join("");
+}
+
+function updatePaginationBar() {
+  const container = document.getElementById("pagination-bar");
+  if (!container) return;
+  const options = Array.from({length: totalPages}, (_, i) => {
+    const p = i + 1;
+    const sel = p === currentPage ? " selected" : "";
+    return `<option value="${p}"${sel}>${p}</option>`;
+  }).join("");
+  const jumpHtml = `<span class="page-jump">Page <select onchange="goToPage(Number(this.value))">${options}</select> of ${totalPages}</span>`;
+  container.innerHTML = `<span class="pagination">${buildPagination()}</span>${jumpHtml}`;
+}
+
+function paginationRange(current, total) {
+  // Always show first, last, and a window around current
+  const delta = 2;
+  const range = [];
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || (i >= current - delta && i <= current + delta)) {
+      range.push(i);
+    }
+  }
+  // Insert ellipsis
+  const result = [];
+  let prev = 0;
+  for (const p of range) {
+    if (prev && p - prev > 1) result.push("...");
+    result.push(p);
+    prev = p;
+  }
+  return result;
+}
+
 function uniqueValues(claims, keyFn) {
   const set = new Set();
   claims.forEach(c => set.add(keyFn(c)));
+  return Array.from(set).sort();
+}
+
+function allStatusOptions() {
+  // Combine server-provided statuses with synthetic keys
+  const set = new Set(allStatuses);
+  // Add synthetic entries that might apply
+  const claims = clientMode ? allClaims : cachedClaims;
+  claims.forEach(c => set.add(statusKey(c)));
+  return Array.from(set).sort();
+}
+
+function allQueueOptions() {
+  const set = new Set(allQueues);
+  const claims = clientMode ? allClaims : cachedClaims;
+  claims.forEach(c => set.add(queueKey(c)));
   return Array.from(set).sort();
 }
 
@@ -287,31 +434,66 @@ function toggleFilterPopup(filterId) {
   }
 }
 
+function onClientFilterChange() {
+  if (!clientMode || allClaims.length === 0) {
+    // First time a filter is applied — need to fetch all data
+    loadDashboard(1);
+    return;
+  }
+  // Already have all data — re-paginate and update just the table + pagination
+  clientPaginate(1);
+  renderBody();
+  updatePaginationBar();
+  updateSummary();
+}
+
 function toggleFilterValue(filterId, value) {
   const set = filters[filterId].selected;
   if (set.has(value)) set.delete(value); else set.add(value);
-  refreshHeader();
-  renderBody();
-  updateSummary();
+  // Update just the filter button appearance, not the whole header
+  const trigger = document.querySelector(`[onclick="toggleFilterPopup('${filterId}')"]`);
+  if (trigger) {
+    const label = set.size === 0 ? "All" : `${set.size} selected`;
+    trigger.textContent = `${label} ▾`;
+    trigger.classList.toggle("active", set.size > 0);
+  }
+  onClientFilterChange();
 }
 
 function clearFilter(filterId) {
   filters[filterId].selected.clear();
   refreshHeader();
-  renderBody();
-  updateSummary();
+  if (hasClientFilters()) {
+    onClientFilterChange();
+  } else {
+    clientMode = false;
+    allClaims = [];
+    loadDashboard(1);
+  }
 }
 
 function onPatientSearchInput(value) {
   patientSearchQuery = value;
-  // Update only the trigger button in-place so the input keeps focus.
   const trigger = document.getElementById("filter-trigger-patient");
   if (trigger) {
     trigger.classList.toggle("active", !!value);
     trigger.firstChild.textContent = value ? `"${value}"` : "Search";
   }
-  renderBody();
-  updateSummary();
+  if (clientMode && allClaims.length > 0) {
+    clientPaginate(1);
+    renderBody();
+    updatePaginationBar();
+    updateSummary();
+  } else {
+    // First keystroke — need to fetch all data; restore focus after
+    openFilter = "patient";
+    loadDashboard(1).then(() => {
+      requestAnimationFrame(() => {
+        const input = document.getElementById("patient-search-input");
+        if (input) { input.focus(); input.selectionStart = input.selectionEnd = input.value.length; }
+      });
+    });
+  }
 }
 
 function onSortChange(value) {
@@ -346,9 +528,14 @@ function sortClaims(claims) {
 function clearPatientSearch() {
   patientSearchQuery = "";
   refreshHeader();
-  renderBody();
-  updateSummary();
-  // Re-focus the input so the user can keep typing.
+  if (hasClientFilters()) {
+    onClientFilterChange();
+  } else {
+    // No more filters — go back to server-side pagination
+    clientMode = false;
+    allClaims = [];
+    loadDashboard(1);
+  }
   requestAnimationFrame(() => {
     const input = document.getElementById("patient-search-input");
     if (input) input.focus();
@@ -412,8 +599,8 @@ function buildPatientSearchWidget() {
 function headerCellsHtml() {
   return `
     <th>Patient${buildPatientSearchWidget()}</th>
-    <th>Candid Status${buildFilterWidget("status", uniqueValues(cachedClaims, statusKey))}</th>
-    <th>Canvas Queue${buildFilterWidget("queue", uniqueValues(cachedClaims, queueKey))}</th>
+    <th>Candid Status${buildFilterWidget("status", allStatusOptions())}</th>
+    <th>Canvas Queue${buildFilterWidget("queue", allQueueOptions())}</th>
     <th>Submitted</th>
     <th>Last Sync</th>`;
 }
@@ -456,6 +643,8 @@ function escapeHtml(s) {
 function render() {
   pruneStaleSelections();
   const content = document.getElementById("content");
+
+  updatePaginationBar();
 
   if (cachedClaims.length === 0) {
     updateSummary();
@@ -511,12 +700,11 @@ function renderBody() {
 
 function updateSummary() {
   const summary = document.getElementById("summary");
-  const total = cachedClaims.length;
-  const hasFilter = !!patientSearchQuery || Object.values(filters).some(f => f.selected.size > 0);
-  const visible = hasFilter ? cachedClaims.filter(claimVisible).length : total;
-  const countText = hasFilter
-    ? `${visible} of ${total} claim${total === 1 ? "" : "s"}`
-    : `${total} claim${total === 1 ? "" : "s"}`;
+  const hasClientFilter = !!patientSearchQuery || Object.values(filters).some(f => f.selected.size > 0);
+  const visible = hasClientFilter ? cachedClaims.filter(claimVisible).length : cachedClaims.length;
+  const countText = hasClientFilter
+    ? `${visible} of ${totalClaims} claim${totalClaims === 1 ? "" : "s"}`
+    : `${totalClaims} claim${totalClaims === 1 ? "" : "s"}`;
   summary.textContent = countText;
 }
 
@@ -527,7 +715,7 @@ document.addEventListener("click", (e) => {
   }
 });
 
-loadDashboard();
+resetAndLoad();
 </script>
 </body>
 </html>"""

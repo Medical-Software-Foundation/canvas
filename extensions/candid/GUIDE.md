@@ -21,6 +21,8 @@ After the grace period:
 
 For claims with more than 12 diagnosis codes, the plugin automatically splits into multiple Candid encounters (primary + supplemental) to stay within CMS-1500 limits. You'll see a comment like "Claim submitted to Candid on 2026-05-01 across 2 encounters."
 
+**Resubmissions:** If you move a claim back to the Submission queue after it was previously submitted, the plugin detects that the encounter already exists in Candid and automatically updates it in Candid instead of creating a duplicate. You don't need to do anything special — just move the claim to the Submission queue again and the plugin handles it.
+
 ### Claim Splitting (>12 Diagnoses)
 
 CMS-1500 forms limit claims to 12 diagnosis codes per encounter. When a claim has more than 12, the plugin automatically splits it:
@@ -208,6 +210,9 @@ Look for a Task labeled "Candid Integration" — it will contain the error detai
 
 **Duplicate postings:**
 This shouldn't happen — the plugin tracks all synced IDs. If it does, check the claim metadata for `candid_synced_adjudication_ids` and `candid_synced_payment_ids` to see what's been recorded.
+
+**Need to resubmit a claim after making corrections:**
+Move the claim back to the Submission queue. The plugin will detect the existing encounter in Candid and update it automatically — no need to delete anything in Candid first.
 
 **Plugin not handling submissions (built-in is running instead):**
 Verify the plugin is enabled in Canvas admin. When enabled, the built-in Candid integration automatically stands down.
