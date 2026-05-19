@@ -12,8 +12,6 @@ from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.api.payload_builder import build_split_payloads
 from candid.effect_helpers import (
-    META_ENCOUNTERS,
-    get_claim_metadata,
     handle_submit_failure,
     handle_submit_success,
 )
