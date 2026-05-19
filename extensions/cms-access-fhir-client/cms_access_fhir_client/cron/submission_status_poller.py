@@ -75,12 +75,12 @@ class SubmissionStatusPoller(CronTask):
                 result = poll_submission_status(self.secrets, alignment.submission_status_url)
             except RuntimeError as exc:
                 log.error(f"[cms-access] Poll HTTP error for dbid={alignment.dbid}: {exc}")
-                alignment.poll_attempts += 1
+                alignment.poll_attempts = alignment.poll_attempts + 1
                 alignment.last_poll_at = now
                 alignment.save()
                 continue
 
-            alignment.poll_attempts += 1
+            alignment.poll_attempts = alignment.poll_attempts + 1
             alignment.last_poll_at = now
             _apply_poll_result(alignment, result)
             alignment.save()
