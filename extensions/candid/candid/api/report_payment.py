@@ -15,8 +15,10 @@ from candid.adjudication_sync import PATIENT_PAYMENT_DESC_PREFIX
 from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.effect_helpers import (
+    META_ENCOUNTERS,
     META_REPORTED_PAYMENT_IDS,
     META_SYNCED_PAYMENT_IDS,
+    get_claim_metadata,
     get_claim_metadata_set,
 )
 from candid.models.sync_state import LOG_TYPE_PAYMENT_REPORTED, SyncLog
@@ -44,6 +46,16 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
         claim_payments = body.get("claim_payments", [])
 
         total_cents = int(Decimal(total_amount_cents))
+
+        # Skip refunds (negative amounts). Candid's /patient-payments/v4
+        # only accepts positive amounts — refunds/reversals require a
+        # separate workflow on Candid's side.
+        if total_cents <= 0:
+            log.info(
+                f"Candid: skipping refund/zero payment for patient {patient_id} "
+                f"(amount_cents={total_cents})"
+            )
+            return []
 
         # Extract embedded payment_id if this looks like a Candid-originated payment.
         # The event's payment_method_and_description is e.g.
@@ -86,17 +98,29 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
                     )
                     continue
 
-            allocations.append(
-                {
-                    "target": {
-                        "type": "claim_by_encounter_external_id",
-                        "value": f"canvas:{claim_ext_id}",
-                    },
-                    "amount_cents": cp_cents,
-                }
+            # Only allocate to a Candid encounter if the claim was actually
+            # submitted to Candid (has encounter metadata). Claims that predate
+            # the plugin won't have this — send their portion as unattributed.
+            has_encounter = bool(
+                claim and get_claim_metadata(claim, META_ENCOUNTERS)
             )
-            unallocated_cents -= cp_cents
-            reportable_claims.append((claim_ext_id, reported_set))
+            if has_encounter:
+                allocations.append(
+                    {
+                        "target": {
+                            "type": "claim_by_encounter_external_id",
+                            "value": f"canvas:{claim_ext_id}",
+                        },
+                        "amount_cents": cp_cents,
+                    }
+                )
+                unallocated_cents -= cp_cents
+                reportable_claims.append((claim_ext_id, reported_set))
+            else:
+                log.info(
+                    f"Candid: claim {claim_ext_id} has no encounter metadata — "
+                    f"allocating ${cp_cents / 100:.2f} as unattributed"
+                )
 
         if not allocations:
             if claim_ids:
