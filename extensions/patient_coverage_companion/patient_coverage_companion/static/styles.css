@@ -1,0 +1,174 @@
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  background: #f6f7f9;
+  margin: 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+#root {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 16px 96px;
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  color: #444;
+}
+
+.loading {
+  text-align: center;
+  color: #777;
+  padding: 32px 0;
+}
+
+.banner {
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.banner.error { background: #fde7e9; color: #8a1c2b; }
+.banner.success { background: #e6f4ea; color: #1f6630; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #c8c8d0;
+  background: #fff;
+  color: #1a1a1a;
+}
+
+button.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+button.danger {
+  background: #fff;
+  border-color: #c44;
+  color: #c44;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.coverage-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.coverage-card {
+  background: #fff;
+  border: 1px solid #e1e3e8;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.coverage-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.coverage-card-title { font-weight: 600; }
+.coverage-card-meta { color: #777; font-size: 13px; }
+
+.coverage-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .form-grid { grid-template-columns: 1fr; }
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 13px; color: #555; }
+.field input,
+.field select,
+.field textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #c8c8d0;
+  background: #fff;
+}
+.field textarea { resize: vertical; min-height: 70px; }
+
+.card-photos {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.card-photo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+}
+
+.card-photo label { font-size: 13px; color: #555; font-weight: 600; }
+.card-photo .preview {
+  width: 100%;
+  aspect-ratio: 1.6 / 1;
+  background: #f0f1f4;
+  border: 1px dashed #c8c8d0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  font-size: 13px;
+  overflow: hidden;
+}
+.card-photo .preview img { width: 100%; height: 100%; object-fit: cover; }
+
+.form-actions {
+  position: sticky;
+  bottom: 0;
+  background: #f6f7f9;
+  padding: 10px 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid #e1e3e8;
+}
+
+.empty {
+  text-align: center;
+  color: #777;
+  padding: 32px 0;
+}
