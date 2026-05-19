@@ -61,17 +61,13 @@ class TestFindOpenNote:
 
 
 class TestOrderSetsApp:
-    def test_on_open_emits_modal_with_patient_id(self):
+    def test_on_open_emits_modal_url_with_patient_id(self):
         app = OrderSetsApp.__new__(OrderSetsApp)
         app.event = MagicMock()
         app.event.context = {"patient": {"id": "patient-42"}}
 
         effect = app.on_open()
-        # The mocked LaunchModalEffect.apply() returns a MagicMock with the
-        # original content/target, so we can re-derive the HTML.
-        # The test conftest's _LaunchModalEffect stores content/target on the
-        # apply() return.
-        assert "patient-42" in effect.content
+        assert effect.url == "/plugin-io/api/order_sets/ui?patient_id=patient-42"
 
     def test_on_open_handles_missing_patient_id(self):
         app = OrderSetsApp.__new__(OrderSetsApp)
@@ -79,24 +75,18 @@ class TestOrderSetsApp:
         app.event.context = {}
 
         effect = app.on_open()
-        # json.dumps("") → '""'; should appear in the script
-        assert '""' in effect.content
+        assert effect.url == "/plugin-io/api/order_sets/ui?patient_id="
 
-    def test_on_open_blocks_script_tag_breakout(self):
-        """Inline-script breakout via `</script>` must be escaped.
-
-        `json.dumps` alone does NOT escape `</script>`; the HTML tokenizer
-        terminates the script element at the literal closing tag regardless
-        of JS string context. The application's `_js_safe` helper has to
-        replace `</` with `<\\/` so the tokenizer never sees a closing tag.
+    def test_on_open_url_encodes_unsafe_chars_in_patient_id(self):
+        """Patient id is interpolated into a URL query string and must be
+        percent-encoded so reserved characters can't break the request.
         """
         app = OrderSetsApp.__new__(OrderSetsApp)
         app.event = MagicMock()
-        app.event.context = {"patient": {"id": '</script><script>alert(1)//'}}
+        app.event.context = {"patient": {"id": "a&b=c#d"}}
 
         effect = app.on_open()
-        assert effect.content.count("</script>") == 1
-        assert "<\\/script>" in effect.content
+        assert effect.url == "/plugin-io/api/order_sets/ui?patient_id=a%26b%3Dc%23d"
 
 
 class TestOrderSetsAdminApp:
@@ -110,6 +100,4 @@ class TestOrderSetsAdminApp:
         # Deliberately do NOT set app.event — on_open must not read patient context.
         effect = app.on_open()
 
-        # Fetches /admin-ui directly with no patient_id query string
-        assert "/admin-ui" in effect.content
-        assert "patient_id" not in effect.content
+        assert effect.url == "/plugin-io/api/order_sets/admin-ui"
