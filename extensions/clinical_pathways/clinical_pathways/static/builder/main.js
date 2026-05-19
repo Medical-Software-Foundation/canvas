@@ -4,7 +4,7 @@
   const apiBase = document.body.dataset.apiBase;
   // Boot marker — verifiable from devtools console to confirm the new bundle
   // is loaded (cache-bust hand-check).
-  console.log('clinical_pathways builder v0.2.4 loaded');
+  console.log('clinical_pathways builder v0.2.5 loaded (value-debug build)');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -795,9 +795,13 @@
     const options = (question && question.options) || [];
 
     if (type === 'SING') {
-      console.log('clinical_pathways: renderValueWidget SING', {
-        value_option_id: comp.value_option_id,
+      console.log('[cp] renderValueWidget SING start', {
+        comp_value_option_id: comp.value_option_id,
+        comp_question_id: comp.question_id,
+        question_name: question && question.name,
+        option_count: options.length,
         option_ids: options.map((o) => o.id),
+        match_found: options.some((o) => o.id === comp.value_option_id),
       });
       const sel = document.createElement('select');
       const ph = document.createElement('option');
@@ -808,22 +812,32 @@
         const opt = document.createElement('option');
         opt.value = o.id;
         opt.textContent = o.name || o.value;
-        // Belt: set the `selected` attribute on the matching option.
         if (o.id === comp.value_option_id) opt.selected = true;
         sel.appendChild(opt);
       });
-      // Suspenders: also set sel.value after appending.
       sel.value = comp.value_option_id || '';
+      console.log('[cp] renderValueWidget SING after set', {
+        requested: comp.value_option_id,
+        sel_value: sel.value,
+        selectedIndex: sel.selectedIndex,
+      });
       sel.addEventListener('change', (ev) => {
+        console.log('[cp] value sel.change', {
+          new_value: ev.target.value,
+          prior_value_option_id: comp.value_option_id,
+        });
         comp.value_option_id = ev.target.value;
         onChange(comp);
       });
       host.appendChild(sel);
-      // Microtask fallback: some browser builds re-evaluate select state on
-      // DOM attachment; re-apply once the current microtask queue drains.
       queueMicrotask(() => {
+        console.log('[cp] microtask check', {
+          requested: comp.value_option_id,
+          sel_value: sel.value,
+        });
         if (comp.value_option_id && sel.value !== comp.value_option_id) {
           sel.value = comp.value_option_id;
+          console.log('[cp] microtask reapplied', { sel_value: sel.value });
         }
       });
       return;
