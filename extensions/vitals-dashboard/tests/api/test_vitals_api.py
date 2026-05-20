@@ -472,6 +472,24 @@ class TestRenderSummaryHTML:
         assert "Orthostatic" not in html
         assert "Urine Output" not in html
 
+    def test_user_text_is_html_escaped(self, mock_session, measurement_factory):
+        """Stored XSS regression: clinician-entered text must be HTML-escaped
+        before it reaches the CustomCommand `content` field, which is rendered
+        as HTML when the Vitals note is viewed."""
+        payload = '<img src=x onerror="alert(1)">'
+        t1 = datetime(2026, 4, 22, 9, 0, tzinfo=timezone.utc)
+        measurements = [
+            measurement_factory("urine_output", value_numeric=200, value_text=payload, recorded_at=t1, dbid=1),
+            measurement_factory("edema", value_text=payload, dbid=2),
+        ]
+        rendered = _render_summary_html(mock_session, measurements, payload)
+
+        # The raw `<img>` tag must never reach the rendered output — every sink
+        # (session-header date, urine value_text, edema value_text) must escape.
+        assert "<img" not in rendered
+        # Escaped form must be present in each of the three sinks.
+        assert rendered.count("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;") >= 3
+
 
 # ---------- VitalsAPI ----------
 

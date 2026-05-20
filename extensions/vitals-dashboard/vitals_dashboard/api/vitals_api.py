@@ -1,5 +1,6 @@
 """SimpleAPI: Vitals session capture + end-of-session note creation."""
 
+import html
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -339,6 +340,10 @@ def _render_summary_html(session, measurements, display_dt_str):
 
     Uses ASCII-only characters (no em-dash/middle-dot) to avoid UTF-8 double-encoding
     in the Canvas CustomCommand content pipeline.
+
+    All interpolated values are HTML-escaped — the rendered string is stored as
+    `content` on a CustomCommand and re-rendered as HTML when the note is viewed,
+    so any unescaped staff-entered text would be a stored-XSS sink in the chart.
     """
     by_type = {}
     for m in measurements:
@@ -346,7 +351,7 @@ def _render_summary_html(session, measurements, display_dt_str):
 
     parts = [
         '<div style="font-family:system-ui,sans-serif;color:#1a1a1a;">',
-        f'<p style="margin:0 0 .5rem;"><strong>Vitals Session:</strong> {display_dt_str}</p>',
+        f'<p style="margin:0 0 .5rem;"><strong>Vitals Session:</strong> {html.escape(display_dt_str)}</p>',
     ]
 
     # Standard (non-positional) BP first
@@ -354,15 +359,15 @@ def _render_summary_html(session, measurements, display_dt_str):
     std_dia = [m for m in by_type.get("bp_diastolic", []) if not m.position]
     std_hr_pos = [m for m in by_type.get("heart_rate", []) if not m.position]
     if std_sys or std_dia or std_hr_pos:
-        ssys = _fmt_num(std_sys[0].value_numeric) if std_sys else "-"
-        sdia = _fmt_num(std_dia[0].value_numeric) if std_dia else "-"
-        shr = _fmt_num(std_hr_pos[0].value_numeric) if std_hr_pos else "-"
+        ssys = html.escape(_fmt_num(std_sys[0].value_numeric)) if std_sys else "-"
+        sdia = html.escape(_fmt_num(std_dia[0].value_numeric)) if std_dia else "-"
+        shr = html.escape(_fmt_num(std_hr_pos[0].value_numeric)) if std_hr_pos else "-"
         std_cuff = ""
         for src in (std_sys, std_dia, std_hr_pos):
             if src and getattr(src[0], "cuff_location", ""):
                 std_cuff = CUFF_LABEL.get(src[0].cuff_location, "")
                 break
-        cuff_suffix = f" ({std_cuff})" if std_cuff else ""
+        cuff_suffix = f" ({html.escape(std_cuff)})" if std_cuff else ""
         parts.append(f'<p style="margin:.5rem 0;"><strong>Blood Pressure{cuff_suffix}:</strong> {ssys}/{sdia} mmHg | HR {shr} bpm</p>')
 
     bp_rows = []
@@ -378,14 +383,14 @@ def _render_summary_html(session, measurements, display_dt_str):
                 if src and getattr(src[0], "cuff_location", ""):
                     ortho_cuff = CUFF_LABEL.get(src[0].cuff_location, "")
                     break
-        sys_val = _fmt_num(sys_ms[0].value_numeric) if sys_ms else "-"
-        dia_val = _fmt_num(dia_ms[0].value_numeric) if dia_ms else "-"
-        hr_val = _fmt_num(hr_ms[0].value_numeric) if hr_ms else "-"
+        sys_val = html.escape(_fmt_num(sys_ms[0].value_numeric)) if sys_ms else "-"
+        dia_val = html.escape(_fmt_num(dia_ms[0].value_numeric)) if dia_ms else "-"
+        hr_val = html.escape(_fmt_num(hr_ms[0].value_numeric)) if hr_ms else "-"
         bp_rows.append(f"<li>{pos_label}: {sys_val}/{dia_val} mmHg | HR {hr_val} bpm</li>")
     if bp_rows:
         header = "Orthostatic BP &amp; HR"
         if ortho_cuff:
-            header += f" ({ortho_cuff})"
+            header += f" ({html.escape(ortho_cuff)})"
         parts.append(f'<p style="margin:.75rem 0 .25rem;"><strong>{header}</strong></p><ul style="margin:0;padding-left:1.25rem;">')
         parts.extend(bp_rows)
         parts.append("</ul>")
@@ -393,8 +398,8 @@ def _render_summary_html(session, measurements, display_dt_str):
     weight_cur = by_type.get("weight_current", [])
     weight_dry = by_type.get("weight_dry", [])
     if weight_cur or weight_dry:
-        cur = _fmt_num(weight_cur[0].value_numeric) if weight_cur else "-"
-        dry = _fmt_num(weight_dry[0].value_numeric) if weight_dry else "-"
+        cur = html.escape(_fmt_num(weight_cur[0].value_numeric)) if weight_cur else "-"
+        dry = html.escape(_fmt_num(weight_dry[0].value_numeric)) if weight_dry else "-"
         parts.append(f'<p style="margin:.5rem 0;"><strong>Weight:</strong> Current {cur} lbs | Dry {dry} lbs</p>')
 
     urine = sorted(by_type.get("urine_output", []), key=lambda m: m.recorded_at or session.session_datetime)
@@ -403,22 +408,22 @@ def _render_summary_html(session, measurements, display_dt_str):
         total = Decimal("0")
         for m in urine:
             t = m.recorded_at.strftime("%H:%M") if m.recorded_at else "-"
-            vol = _fmt_num(m.value_numeric)
-            desc = f" ({m.value_text})" if m.value_text else ""
-            parts.append(f"<li>{t} - {vol} mL{desc}</li>")
+            vol = html.escape(_fmt_num(m.value_numeric))
+            desc = f" ({html.escape(m.value_text)})" if m.value_text else ""
+            parts.append(f"<li>{html.escape(t)} - {vol} mL{desc}</li>")
             if m.value_numeric is not None:
                 total += m.value_numeric
-        parts.append(f'<li style="list-style:none;margin-top:.25rem;"><em>Total: {_fmt_num(total)} mL</em></li>')
+        parts.append(f'<li style="list-style:none;margin-top:.25rem;"><em>Total: {html.escape(_fmt_num(total))} mL</em></li>')
         parts.append("</ul>")
 
     other_labels = []
     for vt in ("oxygen_saturation", "respiration_rate", "temperature", "pain_score"):
         rows = by_type.get(vt, [])
         if rows and rows[0].value_numeric is not None:
-            other_labels.append(f"{LABEL_BY_TYPE[vt]}: {_fmt_num(rows[0].value_numeric)} {UNIT_BY_TYPE[vt]}".strip())
+            other_labels.append(f"{LABEL_BY_TYPE[vt]}: {html.escape(_fmt_num(rows[0].value_numeric))} {UNIT_BY_TYPE[vt]}".strip())
     edema = by_type.get("edema", [])
     if edema and edema[0].value_text:
-        other_labels.append(f"Edema: {edema[0].value_text}")
+        other_labels.append(f"Edema: {html.escape(edema[0].value_text)}")
     if other_labels:
         parts.append('<p style="margin:.75rem 0 .25rem;"><strong>Other Vitals</strong></p><ul style="margin:0;padding-left:1.25rem;">')
         parts.extend(f"<li>{label}</li>" for label in other_labels)
@@ -708,28 +713,22 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
             return [JSONResponse({"error": "patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
 
         patient_phone = ""
-        try:
-            for cp in patient.telecom.all()[:10]:
-                if getattr(cp, "system", "") and "phone" in cp.system.lower() and cp.value:
-                    patient_phone = cp.value
-                    break
-        except Exception:
-            pass
+        for cp in patient.telecom.all()[:10]:
+            if getattr(cp, "system", "") and "phone" in cp.system.lower() and cp.value:
+                patient_phone = cp.value
+                break
 
         patient_address_lines = []
-        try:
-            addr = patient.addresses.first()
-            if addr:
-                line = (addr.line1 or "").strip()
-                if getattr(addr, "line2", ""):
-                    line = f"{line} {addr.line2}".strip()
-                if line:
-                    patient_address_lines.append(line)
-                csz = ", ".join([p for p in [getattr(addr, "city", ""), getattr(addr, "state_code", ""), getattr(addr, "postal_code", "")] if p])
-                if csz:
-                    patient_address_lines.append(csz)
-        except Exception:
-            pass
+        addr = patient.addresses.first()
+        if addr:
+            line = (addr.line1 or "").strip()
+            if getattr(addr, "line2", ""):
+                line = f"{line} {addr.line2}".strip()
+            if line:
+                patient_address_lines.append(line)
+            csz = ", ".join([p for p in [getattr(addr, "city", ""), getattr(addr, "state_code", ""), getattr(addr, "postal_code", "")] if p])
+            if csz:
+                patient_address_lines.append(csz)
 
         age = None
         if patient.birth_date:
@@ -751,25 +750,19 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
         if location:
             practice_name = getattr(location, "full_name", "") or ""
             practice_logo = getattr(location, "background_image_url", "") or ""
-            try:
-                ptel = location.telecom.first()
-                if ptel:
-                    practice_phone = ptel.value or ""
-            except Exception:
-                pass
-            try:
-                paddr = location.addresses.first()
-                if paddr:
-                    line = (paddr.line1 or "").strip()
-                    if getattr(paddr, "line2", ""):
-                        line = f"{line} {paddr.line2}".strip()
-                    if line:
-                        practice_address_lines.append(line)
-                    csz = ", ".join([p for p in [getattr(paddr, "city", ""), getattr(paddr, "state_code", ""), getattr(paddr, "postal_code", "")] if p])
-                    if csz:
-                        practice_address_lines.append(csz)
-            except Exception:
-                pass
+            ptel = location.telecom.first()
+            if ptel:
+                practice_phone = ptel.value or ""
+            paddr = location.addresses.first()
+            if paddr:
+                line = (paddr.line1 or "").strip()
+                if getattr(paddr, "line2", ""):
+                    line = f"{line} {paddr.line2}".strip()
+                if line:
+                    practice_address_lines.append(line)
+                csz = ", ".join([p for p in [getattr(paddr, "city", ""), getattr(paddr, "state_code", ""), getattr(paddr, "postal_code", "")] if p])
+                if csz:
+                    practice_address_lines.append(csz)
 
         return [JSONResponse({
             "patient": {
