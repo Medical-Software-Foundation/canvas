@@ -5,6 +5,7 @@
 name = "hospitalization-tracker"
 version = "0.0.0"
 requires-python = ">=3.12"
+license = "MIT"
 dependencies = [
     "django>=4.2.0",
     "canvas[test-utils]",

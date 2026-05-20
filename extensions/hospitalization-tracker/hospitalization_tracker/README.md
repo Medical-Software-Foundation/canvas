@@ -2,12 +2,28 @@
 
 Track inpatient stays (ICU admissions, long stays) with structured data entry from a note tab and a live-updating chart summary section.
 
+## Problem it solves
+
+Inpatient history — especially ICU admissions and long stays — is critical context for assessing a patient's disease complexity, but Canvas has no dedicated structured entry point for it. Providers currently document hospitalizations as free text in surgical history or progress notes, making it impossible to query, summarize, or flag patterns like frequent readmissions. This plugin adds a first-class, structured hospitalization record with a dedicated chart summary section.
+
+## Who it's for
+
+Physicians and advanced practice providers in any specialty who need to capture and review a patient's inpatient history at the point of care — particularly useful in primary care, internal medicine, and complex care management settings.
+
 ## What it does
 
 - Adds an **"Add Hospitalization"** tab inside any Canvas note (NoteApplication)
 - Providers fill in a form capturing: admission/discharge dates, hospital name, reason for admission, principal diagnosis, ICU stay (with duration), discharge disposition, treating physician, readmission within 30 days, and free-text notes
 - On save, inserts an **"Inpatient Stay History"** CustomCommand into the note's History section showing the record just entered
 - Displays all past hospitalizations in a **chart summary section** on the patient chart, with real-time WebSocket updates whenever a new record is added
+
+## Screenshots
+
+<!-- Add at least one screenshot here before publishing. Suggested screenshots:
+     1. The "Add Hospitalization" form inside a note tab
+     2. The "Inpatient Stay History" chart summary section showing past stays
+     3. The inserted note command in the History section
+-->
 
 ## Components
 
