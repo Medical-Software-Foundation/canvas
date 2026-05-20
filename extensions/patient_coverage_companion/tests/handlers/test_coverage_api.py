@@ -23,7 +23,8 @@ PATIENT_UUID = "00000000-0000-0000-0000-0000000000aa"
 def _make_api(
     query_params: dict | None = None,
     body: dict | None = None,
-    form_data: list | None = None,
+    form_data: dict | None = None,
+    upload_failures: list | None = None,
     headers: dict | None = None,
 ) -> CoverageAPI:
     """Build a CoverageAPI instance with a stubbed request — no auth flow,
@@ -33,7 +34,11 @@ def _make_api(
         headers=headers or {"canvas-logged-in-user-id": STAFF_UUID},
         query_params=query_params or {},
         json=lambda: body,
-        form_data=lambda: form_data or [],
+        # form_data() in production returns a MultiDict[str, FormPart] where
+        # iteration yields keys and form[key] yields the part. A plain dict
+        # satisfies both behaviors in the test.
+        form_data=lambda: form_data or {},
+        upload_failures=lambda: upload_failures or [],
     )
     return api
 
@@ -129,11 +134,33 @@ class TestPayersSearch:
 # ---------- coverage CRUD endpoints ----------
 
 
+@pytest.fixture(autouse=True)
+def _no_rank_conflict():
+    """By default, pretend the patient has no existing coverages so the
+    handler's rank-uniqueness check passes. Tests that exercise the
+    conflict path can re-patch this themselves."""
+    with patch.object(coverage_api, "_has_rank_conflict", return_value=False) as p:
+        yield p
+
+
 class TestCreateCoverage:
     def test_missing_patient_id_returns_400(self) -> None:
         api = _make_api(body={"issuer_id": "x"})
         (response,) = api.create_coverage()
         assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_blank_body_returns_field_errors(self) -> None:
+        """A blank create payload returns 400 with per-field error messages
+        for each missing required field — not a generic 'Save failed'."""
+        api = _make_api(body={"patient_id": PATIENT_UUID})
+        (response,) = api.create_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert "field_errors" in body
+        for required in ("issuer_id", "id_number", "coverage_rank", "plan_type"):
+            assert required in body["field_errors"], (
+                f"expected {required!r} in field_errors, got {body['field_errors']!r}"
+            )
 
     def test_create_emits_create_effect(self) -> None:
         """A valid create body produces a CREATE_COVERAGE effect plus a 202
@@ -162,6 +189,55 @@ class TestCreateCoverage:
         assert kwargs["id_number"] == "MEM-1"
         # Response is the 202
         assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+    def test_rank_conflict_returns_400(self, _no_rank_conflict) -> None:
+        """An existing same-rank coverage produces an inline field error,
+        not a 202 'submitted' that silently fails async."""
+        _no_rank_conflict.return_value = True
+        api = _make_api(
+            body={
+                "patient_id": PATIENT_UUID,
+                "issuer_id": "issuer-uuid",
+                "coverage_rank": 1,
+                "plan_type": "commercial",
+                "id_number": "MEM-1",
+                "patient_relationship_to_subscriber": "18",
+            }
+        )
+        (response,) = api.create_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert "coverage_rank" in body["field_errors"]
+
+    def test_sdk_validation_error_returns_400(self) -> None:
+        """If the SDK effect raises ValidationError during .create(), the
+        handler translates it into a structured 400 instead of letting it
+        bubble up as a 500."""
+        from pydantic_core import InitErrorDetails, PydanticCustomError, ValidationError
+
+        api = _make_api(
+            body={
+                "patient_id": PATIENT_UUID,
+                "issuer_id": "issuer-uuid",
+                "coverage_rank": 1,
+                "plan_type": "commercial",
+                "id_number": "MEM-1",
+                "patient_relationship_to_subscriber": "18",
+            }
+        )
+        details = [
+            InitErrorDetails(
+                {"type": PydanticCustomError("value", "bad"), "loc": ("issuer_id",), "input": "x"}
+            )
+        ]
+        with patch.object(coverage_api, "CoverageEffect") as eff_cls:
+            eff_cls.return_value.create.side_effect = ValidationError.from_exception_data(
+                "Coverage", details
+            )
+            (response,) = api.create_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert body["field_errors"].get("issuer_id")
 
 
 class TestUpdateCoverage:
@@ -267,14 +343,14 @@ class TestReorder:
 
 class TestUploadCards:
     def test_missing_files_returns_400(self) -> None:
-        api = _make_api(form_data=[])
+        api = _make_api(form_data={})
         (response,) = api.upload_cards()
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_returns_keys_for_supplied_parts(self) -> None:
         front_part = SimpleNamespace(name="front", key="plugin-uploads/x/front.jpg")
         back_part = SimpleNamespace(name="back", key="plugin-uploads/x/back.jpg")
-        api = _make_api(form_data=[front_part, back_part])
+        api = _make_api(form_data={"front": front_part, "back": back_part})
         (response,) = api.upload_cards()
         body = json.loads(response.content)
         assert body == {

@@ -27,6 +27,8 @@ from datetime import date, datetime, timezone
 from http import HTTPStatus
 from typing import Any
 
+from pydantic import ValidationError as PydanticValidationError
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.coverage import Coverage as CoverageEffect, CoverageReorder
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
@@ -57,13 +59,62 @@ _RANK_CHOICES = [
     for value, label in CoverageRank.choices
 ]
 
+# Fields the user must supply to create a new coverage. Mirrors the SDK's
+# Coverage._validate_create checks; surfacing them here lets us return a
+# structured field-level 400 before invoking the SDK (which would otherwise
+# raise a hard-to-parse pydantic ValidationError).
+_CREATE_REQUIRED_FIELDS = {
+    "issuer_id": "Payer",
+    "id_number": "Member ID",
+    "coverage_rank": "Rank",
+    "plan_type": "Plan type",
+    "patient_relationship_to_subscriber": "Relationship to subscriber",
+}
+
+
+def _has_rank_conflict(
+    *, patient_id: str, coverage_rank: int, stack: str
+) -> bool:
+    """Return True if an active coverage already occupies (rank, stack) for
+    the patient. Mirrors the interpreter's rank-uniqueness check so we can
+    surface the conflict as an inline field error before the async effect
+    fires (otherwise the user sees a misleading 'Saved.' banner)."""
+    return (
+        Coverage.objects.filter(
+            patient__id=patient_id,
+            coverage_rank=coverage_rank,
+            stack=stack,
+        )
+        .exclude(stack="REMOVED")
+        .exists()
+    )
+
+
+def _field_errors_from_pydantic(exc: PydanticValidationError) -> dict[str, str]:
+    """Map a pydantic ValidationError into a {field_name: message} dict.
+
+    Pydantic surfaces each error with a ``loc`` tuple — for our flat models
+    the first element is the field name. For multi-field rules (which use a
+    synthetic ``loc``) we fall back to a generic ``__form__`` key.
+    """
+    field_errors: dict[str, str] = {}
+    for err in exc.errors():
+        loc = err.get("loc") or ()
+        msg = err.get("msg") or "invalid"
+        key = str(loc[0]) if loc else "__form__"
+        # First error wins per field; collapse duplicates from nested rules.
+        field_errors.setdefault(key, msg)
+    return field_errors
+
 
 def _serialize_coverage(coverage: Coverage) -> dict[str, Any]:
     """Serialize a Coverage for the form's initial state."""
     snapshot = coverage.snapshot
     front_url = back_url = None
     if snapshot is not None:
-        for image in snapshot.snapshotimage_set.all():
+        # The SDK declares SnapshotImage.snapshot FK with related_name="images",
+        # so the reverse manager is `snapshot.images`, not `snapshotimage_set`.
+        for image in snapshot.images.all():
             if image.tag == "FRONT_IMAGE" and image.image:
                 front_url = image.image.url
             elif image.tag == "BACK_IMAGE" and image.image:
@@ -240,15 +291,16 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         q = (self.request.query_params.get("q") or "").strip()
         if len(q) < 2:
             return [JSONResponse({"results": []})]
-        results = (
-            Transactor.objects.filter(name__icontains=q)
-            .order_by("name")[:20]
-        )
+        results = Transactor.objects.filter(name__icontains=q).order_by("name")[:20]
+        # The SDK Transactor's PK is `dbid` (BigAutoField), not `id` — there's
+        # no UUID externally-exposable identifier on Transactor at the SDK
+        # surface, so we ship the numeric PK back to the browser and the
+        # interpreter resolves it by Transactor.id lookup.
         return [
             JSONResponse(
                 {
                     "results": [
-                        {"id": str(t.id), "name": t.name, "payer_id": t.payer_id or ""}
+                        {"id": str(t.dbid), "name": t.name, "payer_id": t.payer_id or ""}
                         for t in results
                     ]
                 }
@@ -261,13 +313,26 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
     def upload_cards(self) -> list[Response | Effect]:
         """Accept 'front' and/or 'back' file parts; return S3 keys to the browser
         so the next save call can attach them to the Coverage."""
-        parts = {p.name: p.key for p in self.request.form_data()}
-        front = parts.get("front")
-        back = parts.get("back")
+        form = self.request.form_data()
+        # MultiDict iterates over keys; pull each named part and look for a .key
+        # (UploadedFilePart). String form_fields don't have .key.
+        keys: dict[str, str] = {}
+        for name in form:
+            part = form[name]
+            key = getattr(part, "key", None)
+            if key:
+                keys[name] = key
+        failures = self.request.upload_failures()
+        front = keys.get("front")
+        back = keys.get("back")
         if not front and not back:
             return [
                 JSONResponse(
-                    {"error": "expected at least one of 'front' or 'back' file parts"},
+                    {
+                        "error": "expected at least one of 'front' or 'back' file parts",
+                        "received": list(keys.keys()) or None,
+                        "failures": failures or None,
+                    },
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
@@ -288,11 +353,62 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         fields, err = _build_effect_fields(body)
         if err:
             return [JSONResponse({"error": err}, status_code=HTTPStatus.BAD_REQUEST)]
-        effect = CoverageEffect(patient_id=patient_id, **fields)
-        return [
-            effect.create(),
-            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
-        ]
+
+        missing = {
+            name: f"{label} is required."
+            for name, label in _CREATE_REQUIRED_FIELDS.items()
+            if not fields.get(name)
+        }
+        if missing:
+            return [
+                JSONResponse(
+                    {
+                        "error": "Please fill in the required fields.",
+                        "field_errors": missing,
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        # Pre-validate the rank/stack collision the interpreter will check.
+        # Without this the effect interpreter rejects async, the browser
+        # has already gotten a 202, and the user sees a success banner
+        # for a write that silently never happened.
+        rank_conflict = _has_rank_conflict(
+            patient_id=patient_id,
+            coverage_rank=fields["coverage_rank"],
+            stack=fields.get("stack") or "IN_USE",
+        )
+        if rank_conflict:
+            return [
+                JSONResponse(
+                    {
+                        "error": "Rank already taken.",
+                        "field_errors": {
+                            "coverage_rank": (
+                                f"Patient already has a rank-{fields['coverage_rank']} "
+                                f"coverage in stack {fields.get('stack') or 'IN_USE'}. "
+                                f"Pick a different rank, or remove the existing one first."
+                            ),
+                        },
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        try:
+            effect = CoverageEffect(patient_id=patient_id, **fields).create()
+        except PydanticValidationError as exc:
+            return [
+                JSONResponse(
+                    {
+                        "error": "Coverage could not be created.",
+                        "field_errors": _field_errors_from_pydantic(exc),
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
 
     @api.post("/coverage/<coverage_id>")
     def update_coverage(self, coverage_id: str) -> list[Response | Effect]:
@@ -300,11 +416,19 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         fields, err = _build_effect_fields(body)
         if err:
             return [JSONResponse({"error": err}, status_code=HTTPStatus.BAD_REQUEST)]
-        effect = CoverageEffect(coverage_id=coverage_id, **fields)
-        return [
-            effect.update(),
-            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
-        ]
+        try:
+            effect = CoverageEffect(coverage_id=coverage_id, **fields).update()
+        except PydanticValidationError as exc:
+            return [
+                JSONResponse(
+                    {
+                        "error": "Coverage could not be updated.",
+                        "field_errors": _field_errors_from_pydantic(exc),
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
 
     @api.post("/coverage/<coverage_id>/remove")
     def remove_coverage(self, coverage_id: str) -> list[Response | Effect]:
