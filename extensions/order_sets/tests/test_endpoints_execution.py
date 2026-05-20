@@ -1,14 +1,27 @@
 """Tests for execute_set / execute_custom and the _execute_order_set helper.
 
 ``_execute_order_set`` now takes an OrderSet model instance (mocked via
-``make_order_set``) rather than a dict pulled from the cache.
+``make_order_set``) rather than a dict pulled from the cache. Both execute
+endpoints require an authenticated caller and a creator-or-shared
+authorization check — closing the gap that the update/delete paths already
+enforced via ``_can_modify``.
 """
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import MagicMock
 
-from .conftest import make_order_set, make_request, patch_order_set_query
+from .conftest import make_order_set, make_request, make_staff, patch_order_set_query
+
+
+# Real-shape staff ids — uuid4().hex matches what Canvas stores in Staff.id.
+CALLER_ID = uuid.uuid4().hex
+OTHER_USER_ID = uuid.uuid4().hex
+
+
+def _set_staff(api_instance: Any, mocker: MagicMock, staff: Any | None) -> None:
+    mocker.patch.object(api_instance, "_current_staff", return_value=staff)
 
 
 def _stub_open_note(
@@ -28,9 +41,23 @@ def _stub_resolve_provider(
 # ── execute_set ──────────────────────────────────────────────────────────────
 
 
+def test_execute_set_returns_401_when_no_staff(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    """Anonymous execute is rejected; the set is never looked up."""
+    _set_staff(api_instance, mocker, None)
+    filter_mock, _ = patch_order_set_query(mocker, first=None)
+    api_instance.request = make_request(path="/execute/whatever", body=b"")
+
+    responses = api_instance.execute_set()
+    assert len(responses) == 1
+    filter_mock.assert_not_called()
+
+
 def test_execute_set_returns_404_when_set_id_missing(
     api_instance: Any, mocker: MagicMock
 ) -> None:
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
     patch_order_set_query(mocker, first=None)
     api_instance.request = make_request(path="/execute/missing", body=b"")
 
@@ -38,13 +65,93 @@ def test_execute_set_returns_404_when_set_id_missing(
     assert len(responses) == 1
 
 
+def test_execute_set_returns_403_on_other_users_personal_set(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    """Knowing a UUID doesn't grant the right to execute someone else's
+    personal set against your own patient — closes the gap that the
+    update/delete handlers already enforced via _can_modify."""
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
+    target = make_order_set(
+        set_id="s1",
+        items=[{"code": "CBC", "name": "CBC"}],
+        order_type="lab",
+        is_shared=False,
+        created_by=OTHER_USER_ID,
+    )
+    patch_order_set_query(mocker, first=target)
+    spy = mocker.patch.object(
+        api_instance, "_execute_order_set", return_value=[MagicMock()]
+    )
+    api_instance.request = make_request(
+        path="/execute/s1",
+        body=b'{"patient_id":"pt-1"}',
+        json_body={"patient_id": "pt-1"},
+    )
+
+    responses = api_instance.execute_set()
+    assert len(responses) == 1
+    spy.assert_not_called()  # we never reached the order-placement logic
+
+
+def test_execute_set_allows_caller_to_execute_their_own_personal_set(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
+    target = make_order_set(
+        set_id="s1",
+        items=[{"code": "CBC", "name": "CBC"}],
+        order_type="lab",
+        is_shared=False,
+        created_by=CALLER_ID,
+    )
+    patch_order_set_query(mocker, first=target)
+    spy = mocker.patch.object(
+        api_instance, "_execute_order_set", return_value=[MagicMock()]
+    )
+    api_instance.request = make_request(
+        path="/execute/s1",
+        body=b'{"patient_id":"pt-1"}',
+        json_body={"patient_id": "pt-1"},
+    )
+
+    api_instance.execute_set()
+    spy.assert_called_once()
+
+
+def test_execute_set_allows_any_authenticated_caller_for_shared_set(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
+    target = make_order_set(
+        set_id="s1",
+        items=[{"code": "CBC", "name": "CBC"}],
+        order_type="lab",
+        is_shared=True,
+        created_by=OTHER_USER_ID,
+    )
+    patch_order_set_query(mocker, first=target)
+    spy = mocker.patch.object(
+        api_instance, "_execute_order_set", return_value=[MagicMock()]
+    )
+    api_instance.request = make_request(
+        path="/execute/s1",
+        body=b'{"patient_id":"pt-1"}',
+        json_body={"patient_id": "pt-1"},
+    )
+
+    api_instance.execute_set()
+    spy.assert_called_once()
+
+
 def test_execute_set_with_empty_body_executes_no_items(
     api_instance: Any, mocker: MagicMock
 ) -> None:
-    """A set with an empty items array should short-circuit with a 400."""
-    target = make_order_set(set_id="s1", items=[], order_type="lab")
+    """A set with an empty items array short-circuits to a 400. Caller must
+    be authenticated and have read access; we use a shared set + caller."""
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
+    target = make_order_set(set_id="s1", items=[], order_type="lab", is_shared=True)
     patch_order_set_query(mocker, first=target)
-    # body is empty bytes — code path uses `self.request.body` truthiness
     api_instance.request = make_request(path="/execute/s1", body=b"")
 
     responses = api_instance.execute_set()
@@ -54,10 +161,15 @@ def test_execute_set_with_empty_body_executes_no_items(
 def test_execute_set_calls_helper_with_set_items(
     api_instance: Any, mocker: MagicMock
 ) -> None:
-    """execute_set should delegate to _execute_order_set with the set's items."""
+    """execute_set delegates to _execute_order_set with the set's items."""
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
     item = {"code": "CBC", "name": "CBC"}
     target = make_order_set(
-        set_id="s1", items=[item], order_type="lab", lab_partner="lp"
+        set_id="s1",
+        items=[item],
+        order_type="lab",
+        lab_partner="lp",
+        is_shared=True,
     )
     patch_order_set_query(mocker, first=target)
     spy = mocker.patch.object(
@@ -82,12 +194,54 @@ def test_execute_set_calls_helper_with_set_items(
 # ── execute_custom ───────────────────────────────────────────────────────────
 
 
-def test_execute_custom_filters_items_to_selected_codes(
+def test_execute_custom_returns_401_when_no_staff(
     api_instance: Any, mocker: MagicMock
 ) -> None:
+    _set_staff(api_instance, mocker, None)
+    api_instance.request = make_request(
+        json_body={"set_id": "s1", "selected_codes": ["CBC"]}
+    )
+    responses = api_instance.execute_custom()
+    assert len(responses) == 1
+
+
+def test_execute_custom_returns_403_on_other_users_personal_set(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
     target = make_order_set(
         set_id="s1",
         order_type="lab",
+        items=[{"code": "CBC", "name": "CBC"}],
+        is_shared=False,
+        created_by=OTHER_USER_ID,
+    )
+    patch_order_set_query(mocker, first=target)
+    spy = mocker.patch.object(
+        api_instance, "_execute_order_set", return_value=[MagicMock()]
+    )
+    api_instance.request = make_request(
+        json_body={
+            "set_id": "s1",
+            "selected_codes": ["CBC"],
+            "patient_id": "pt",
+            "provider_id": "prov",
+        }
+    )
+
+    responses = api_instance.execute_custom()
+    assert len(responses) == 1
+    spy.assert_not_called()
+
+
+def test_execute_custom_filters_items_to_selected_codes(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
+    target = make_order_set(
+        set_id="s1",
+        order_type="lab",
+        is_shared=True,
         items=[
             {"code": "CBC", "name": "CBC"},
             {"code": "LIPID", "name": "Lipid"},
@@ -116,6 +270,7 @@ def test_execute_custom_filters_items_to_selected_codes(
 def test_execute_custom_returns_404_when_set_missing(
     api_instance: Any, mocker: MagicMock
 ) -> None:
+    _set_staff(api_instance, mocker, make_staff(staff_id=CALLER_ID))
     patch_order_set_query(mocker, first=None)
     api_instance.request = make_request(
         json_body={"set_id": "missing", "selected_codes": []}

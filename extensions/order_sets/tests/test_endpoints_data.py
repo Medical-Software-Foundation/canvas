@@ -1,6 +1,7 @@
 """Tests for the provider / lab / CPT lookup endpoints + their helpers."""
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -12,90 +13,65 @@ from .conftest import (
     make_note,
     make_request,
     make_staff,
-    make_staff_role,
 )
 
 
 # ── list_providers ───────────────────────────────────────────────────────────
 
 
-def _patch_provider_roles(
-    mocker: MagicMock, roles: list[Any]
-) -> None:
-    """Stub ``StaffRole.objects.filter(role_type="PROVIDER")`` to yield ``roles``.
+def _patch_provider_staff_query(
+    mocker: MagicMock, staff_list: list[Any]
+) -> MagicMock:
+    """Stub the canonical Staff-side provider query.
 
-    Each role only needs a ``staff_id`` attribute now — the endpoint no longer
-    dereferences ``role.staff`` (that was the N+1 path).
+    The endpoint now uses ``Staff.objects.filter(active=True,
+    roles__role_type="PROVIDER").distinct().order_by(...)`` — a single query
+    from the Staff side, matched against ``Staff.id`` (the hex key callers
+    actually use). We must NOT mock from the StaffRole side: ``role.staff_id``
+    is the dbid integer FK column, not ``Staff.id``, and would silently never
+    match callers' UUID strings in production.
     """
-    role_filter = MagicMock()
-    role_filter.__iter__ = lambda self: iter(roles)
-    mocker.patch(
-        "order_sets.api.endpoints.StaffRole.objects.filter", return_value=role_filter
+    chain = MagicMock()
+    chain.distinct.return_value = chain
+    chain.order_by.return_value = staff_list
+    return mocker.patch(
+        "order_sets.api.endpoints.Staff.objects.filter", return_value=chain
     )
 
 
-def _patch_active_staff(mocker: MagicMock, staff_list: list[Any]) -> None:
-    """Stub ``Staff.objects.filter(active=True)`` to yield ``staff_list``."""
-    staff_filter = MagicMock()
-    staff_filter.__iter__ = lambda self: iter(staff_list)
-    mocker.patch(
-        "order_sets.api.endpoints.Staff.objects.filter", return_value=staff_filter
+def test_list_providers_queries_staff_side_with_roles_traversal(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    """``list_providers`` issues a single Staff-side query that joins through
+    ``roles__role_type``. Asserting on the filter kwargs is what catches the
+    regression where ``role.staff_id`` (dbid int) was used in place of
+    ``Staff.id`` (hex key) and the endpoint silently returned ``[]``."""
+    s1 = make_staff(staff_id=uuid.uuid4().hex, first_name="Zoe", last_name="Z")
+    s2 = make_staff(staff_id=uuid.uuid4().hex, first_name="Amy", last_name="A")
+    filter_mock = _patch_provider_staff_query(mocker, [s2, s1])
+
+    responses = api_instance.list_providers()
+    assert len(responses) == 1
+    # The filter must include both kwargs together — that's what the SDK
+    # convention requires (see dea_prescriber_filter.engine.lookups).
+    filter_mock.assert_called_once_with(
+        active=True, roles__role_type="PROVIDER"
     )
 
 
-def test_list_providers_returns_active_provider_staff_sorted(
+def test_list_providers_orders_results_at_the_database(
     api_instance: Any, mocker: MagicMock
 ) -> None:
-    s1 = make_staff(staff_id="s1", first_name="Zoe", last_name="Z")
-    s2 = make_staff(staff_id="s2", first_name="Amy", last_name="A")
-    inactive = make_staff(staff_id="s3", first_name="In", last_name="Active", active=False)
+    """Sorting happens in SQL, not Python, so we don't burn cycles on the
+    Python side for large staff lists."""
+    s = make_staff(staff_id=uuid.uuid4().hex)
+    filter_mock = _patch_provider_staff_query(mocker, [s])
 
-    _patch_provider_roles(
-        mocker, [make_staff_role(s1), make_staff_role(s2), make_staff_role(inactive)]
+    api_instance.list_providers()
+    filter_mock.return_value.distinct.assert_called_once()
+    filter_mock.return_value.distinct.return_value.order_by.assert_called_once_with(
+        "first_name", "last_name"
     )
-    _patch_active_staff(mocker, [s1, s2])  # only active ones
-
-    responses = api_instance.list_providers()
-    assert len(responses) == 1
-
-
-def test_list_providers_skips_staff_without_provider_role(
-    api_instance: Any, mocker: MagicMock
-) -> None:
-    """Active staff that aren't PROVIDERs must not appear in the result."""
-    s_provider = make_staff(staff_id="p1")
-    s_nurse = make_staff(staff_id="n1")
-
-    _patch_provider_roles(mocker, [make_staff_role(s_provider)])
-    _patch_active_staff(mocker, [s_provider, s_nurse])
-
-    responses = api_instance.list_providers()
-    assert len(responses) == 1
-
-
-def test_list_providers_avoids_n_plus_1_by_reading_staff_id_directly(
-    api_instance: Any, mocker: MagicMock
-) -> None:
-    """The role objects in the loop expose ``staff_id`` so the endpoint never
-    dereferences ``role.staff`` (which would trigger a per-row Staff SELECT).
-
-    We assert this by giving the mock role a ``staff`` attribute that raises if
-    accessed — the endpoint must not touch it.
-    """
-    s1 = make_staff(staff_id="p1")
-
-    class _BoobyTrappedRole:
-        staff_id = "p1"
-
-        @property
-        def staff(self) -> object:
-            raise AssertionError("role.staff was accessed — N+1 regression")
-
-    _patch_provider_roles(mocker, [_BoobyTrappedRole()])
-    _patch_active_staff(mocker, [s1])
-
-    responses = api_instance.list_providers()
-    assert len(responses) == 1
 
 
 def test_list_providers_propagates_unexpected_errors(
@@ -103,7 +79,7 @@ def test_list_providers_propagates_unexpected_errors(
 ) -> None:
     """Unexpected exceptions must reach Sentry — handler no longer swallows them."""
     mocker.patch(
-        "order_sets.api.endpoints.StaffRole.objects.filter",
+        "order_sets.api.endpoints.Staff.objects.filter",
         side_effect=RuntimeError("db down"),
     )
     with pytest.raises(RuntimeError):
@@ -389,35 +365,41 @@ def test_resolve_provider_returns_none_when_empty(api_instance: Any) -> None:
     assert api_instance._resolve_provider("") is None
 
 
-def test_resolve_provider_returns_id_when_active_provider_role_exists(
+def test_resolve_provider_queries_staff_side_with_id_active_and_roles(
     api_instance: Any, mocker: MagicMock
 ) -> None:
-    """Single ``.exists()`` filtered on (role_type, staff_id, staff__active).
-    The ``staff__active=True`` join is required — without it we'd happily
-    return the id of a since-deactivated provider (e.g. on an old open note)."""
+    """Single ``Staff.objects.filter(id=..., active=True, roles__role_type=...)
+    .exists()`` — query from the Staff side so we match against the actual
+    hex key callers send, not the dbid integer FK column.
+
+    All three kwargs must be present. Without ``active=True`` we'd happily
+    return the id of a since-deactivated provider (e.g. on an old open note);
+    without ``roles__role_type`` we'd accept any active staff member.
+    """
+    provider_id = uuid.uuid4().hex
     exists_chain = MagicMock()
     exists_chain.exists.return_value = True
-    role_filter = mocker.patch(
-        "order_sets.api.endpoints.StaffRole.objects.filter",
+    staff_filter = mocker.patch(
+        "order_sets.api.endpoints.Staff.objects.filter",
         return_value=exists_chain,
     )
 
-    assert api_instance._resolve_provider("prov-1") == "prov-1"
-    role_filter.assert_called_once_with(
-        role_type="PROVIDER", staff_id="prov-1", staff__active=True
+    assert api_instance._resolve_provider(provider_id) == provider_id
+    staff_filter.assert_called_once_with(
+        id=provider_id, active=True, roles__role_type="PROVIDER"
     )
 
 
-def test_resolve_provider_returns_none_when_role_missing_or_staff_inactive(
+def test_resolve_provider_returns_none_when_no_match(
     api_instance: Any, mocker: MagicMock
 ) -> None:
-    """Whether the role doesn't exist or the staff is deactivated, the DB
-    returns ``exists() == False`` for the joined filter and we refuse."""
+    """Whether the staff doesn't exist, is deactivated, or has no PROVIDER
+    role, the joined filter's ``.exists()`` is False and we refuse."""
     exists_chain = MagicMock()
     exists_chain.exists.return_value = False
     mocker.patch(
-        "order_sets.api.endpoints.StaffRole.objects.filter",
+        "order_sets.api.endpoints.Staff.objects.filter",
         return_value=exists_chain,
     )
 
-    assert api_instance._resolve_provider("prov-1") is None
+    assert api_instance._resolve_provider(uuid.uuid4().hex) is None

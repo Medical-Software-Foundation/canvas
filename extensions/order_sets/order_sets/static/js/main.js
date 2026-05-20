@@ -274,8 +274,12 @@
             return;
         }
 
+        // Capture the id before closePreview() nulls currentPreviewSet —
+        // otherwise the next line reads .id off null and throws TypeError,
+        // the preview just disappears and no order is placed.
+        var setId = currentPreviewSet.id;
         closePreview();
-        startOrder("custom", currentPreviewSet.id, selectedCodes);
+        startOrder("custom", setId, selectedCodes);
     }
 
     // ── Order Execution ──────────────────────────────────────────────

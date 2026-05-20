@@ -44,10 +44,12 @@ Comma-separated list of staff UUIDs allowed to modify or delete order sets they 
 ADMIN_STAFF_IDS=57f3668ea9f84f3980e772ea8451af38,a1b2c3d4e5f6...
 ```
 
+Either form (32-char undashed hex or dashed 8-4-4-4-12 UUID) is accepted — the plugin canonicalizes both sides through `uuid.UUID(...)` before comparing against `Staff.id`.
+
 Authorization model:
 
 - **Create:** any authenticated staff member can create an order set (shared or personal).
-- **Read:** every authenticated staff member sees all `is_shared=true` sets plus their own personal sets.
+- **Read / execute:** every authenticated staff member can read and execute all `is_shared=true` sets plus their own personal sets. Attempting to read or execute someone else's personal set (e.g. by knowing the UUID) returns 403.
 - **Update / delete:** allowed only if the caller is the original `created_by` *or* their id appears in `ADMIN_STAFF_IDS`. Fails closed: if the secret is unset or empty, only the creator can modify a set — shared sets stay editable by their original author until an admin list is configured.
 
 The plugin also reads lab tests from the instance's configured lab partners and CPT codes from `ChargeDescriptionMaster` (when available in the SDK version installed). No other configuration is required.

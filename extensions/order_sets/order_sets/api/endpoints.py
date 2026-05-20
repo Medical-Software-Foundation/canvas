@@ -61,6 +61,23 @@ def _not_found_error() -> list[JSONResponse | Effect]:
     ]
 
 
+def _canonical_id(value: str) -> str:
+    """Return ``value`` as a 32-char hex UUID when possible, else verbatim.
+
+    ``Staff.id`` is stored as ``uuid.uuid4().hex`` (undashed). Operators
+    sometimes paste dashed UUIDs into ``ADMIN_STAFF_IDS`` or other config —
+    canonicalizing both sides through ``uuid.UUID(...)`` makes those forms
+    compare equal. Non-UUID strings (older test fixtures, internal codes)
+    are returned unchanged.
+    """
+    if not value:
+        return value
+    try:
+        return uuid.UUID(value).hex
+    except ValueError:
+        return value
+
+
 def _serialize(order_set: OrderSet) -> dict[str, Any]:
     """Render an OrderSet for the JSON API.
 
@@ -237,23 +254,25 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
     def list_providers(self) -> list[JSONResponse | Effect]:
         """Return active staff who have a PROVIDER role type (can place orders).
 
-        Uses ``role.staff_id`` (the FK column already on the row) to avoid the
-        per-row Staff lookup that ``role.staff.id`` would trigger.
+        Queries from the Staff side via the ``roles`` reverse relation so we
+        match against ``Staff.id`` (32-char hex key) directly. The FK column
+        ``StaffRole.staff_id`` targets ``Staff.dbid`` (BigAutoField PK), not
+        ``Staff.id`` — using it for identity comparisons would yield a silent
+        type mismatch. Pattern matches ``dea_prescriber_filter.engine.lookups``.
         """
-        provider_staff_ids = {
-            str(role.staff_id)
-            for role in StaffRole.objects.filter(role_type="PROVIDER")
-        }
         providers = [
             {
                 "id": str(s.id),
                 "name": f"{s.first_name} {s.last_name}".strip(),
                 "credentials": getattr(s, "top_role_abbreviation", "") or "",
             }
-            for s in Staff.objects.filter(active=True)
-            if str(s.id) in provider_staff_ids
+            for s in (
+                Staff.objects
+                .filter(active=True, roles__role_type="PROVIDER")
+                .distinct()
+                .order_by("first_name", "last_name")
+            )
         ]
-        providers.sort(key=lambda p: p["name"])
         return [JSONResponse(providers, status_code=HTTPStatus.OK)]
 
     @api.get("/note-provider")
@@ -353,10 +372,15 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/execute/<set_id>")
     def execute_set(self) -> list[JSONResponse | Effect]:
+        staff = self._current_staff()
+        if not staff:
+            return _auth_error()
         set_id = self.request.path.split("/execute/")[-1].split("?")[0]
         order_set = OrderSet.objects.filter(set_id=set_id).first()
         if order_set is None:
             return _not_found_error()
+        if not self._can_read(order_set, staff):
+            return _forbidden_error()
         body = self.request.json() if self.request.body else {}
         patient_id = body.get("patient_id", "")
         provider_id = body.get("provider_id", "")
@@ -366,11 +390,16 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/execute-custom")
     def execute_custom(self) -> list[JSONResponse | Effect]:
+        staff = self._current_staff()
+        if not staff:
+            return _auth_error()
         body = self.request.json()
         set_id = body.get("set_id", "")
         order_set = OrderSet.objects.filter(set_id=set_id).first()
         if order_set is None:
             return _not_found_error()
+        if not self._can_read(order_set, staff):
+            return _forbidden_error()
         selected_codes = set(body.get("selected_codes", []))
         selected_items = [
             item for item in order_set.items if item["code"] in selected_codes
@@ -390,13 +419,24 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         return Staff.objects.filter(id=staff_id).first()
 
     def _admin_staff_ids(self) -> set[str]:
-        """Return the configured admin staff IDs as a set.
+        """Return the configured admin staff IDs in canonical (.hex) form.
 
-        Fails closed: if ``ADMIN_STAFF_IDS`` is unset or empty, no caller is
-        treated as an admin and only the creator can modify a set.
+        ``Staff.id`` is a 32-char hex string (``uuid.uuid4().hex``); operators
+        sometimes paste dashed UUIDs into the secret. Canonicalize both sides
+        through ``uuid.UUID(...)`` so dashed/undashed forms compare equal. Any
+        value that isn't a UUID is kept verbatim — older tests and non-UUID
+        staff ids still work.
+
+        Fails closed: if the secret is unset or empty, no caller is treated as
+        an admin and only the creator can modify a set.
         """
         raw = self.secrets.get("ADMIN_STAFF_IDS", "") or ""
-        admin_ids = {sid.strip() for sid in raw.split(",") if sid.strip()}
+        admin_ids: set[str] = set()
+        for sid in raw.split(","):
+            sid = sid.strip()
+            if not sid:
+                continue
+            admin_ids.add(_canonical_id(sid))
         if not admin_ids:
             log.warning(
                 "ADMIN_STAFF_IDS is not configured; only set creators can modify "
@@ -411,12 +451,29 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         Allowed if the caller created the set, or if their id appears in
         ``ADMIN_STAFF_IDS``. Empty ``created_by`` never matches (defense in
         depth against legacy rows that pre-date the create-time auth gate).
+        Identifiers are canonicalized to ``.hex`` form on both sides so a
+        dashed-UUID secret and an undashed ``Staff.id`` compare equal.
         """
-        staff_id = str(staff.id)
-        created_by = order_set.created_by
+        staff_id = _canonical_id(str(staff.id))
+        created_by = _canonical_id(order_set.created_by or "")
         if created_by and created_by == staff_id:
             return True
         return staff_id in self._admin_staff_ids()
+
+    def _can_read(self, order_set: OrderSet, staff: Staff) -> bool:
+        """Authorize a read against an existing order set.
+
+        Mirrors the predicate ``list_sets`` enforces: any caller can read a
+        shared set; only the creator can read their own personal set. Used by
+        the execute endpoints to plug the gap that allowed any logged-in staff
+        to apply another user's personal set to a patient just by knowing the
+        UUID.
+        """
+        if order_set.is_shared:
+            return True
+        staff_id = _canonical_id(str(staff.id))
+        created_by = _canonical_id(order_set.created_by or "")
+        return bool(created_by) and created_by == staff_id
 
     def _find_open_note(self, patient_id: str) -> tuple[str | None, str]:
         """Find the most recent open note for a patient. Returns (note_uuid, provider_key)."""
@@ -448,18 +505,22 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
     def _resolve_provider(self, provider_id: str) -> str | None:
         """Return ``provider_id`` if it belongs to an *active* PROVIDER, else None.
 
-        ``staff__active=True`` is the critical join: deactivated staff keep
-        their PROVIDER role rows for audit/historical reasons, so without the
-        active filter we'd happily originate orders under a since-disabled
-        provider (e.g. an old open note whose original provider has left).
+        Single ``.exists()`` query from the Staff side. We match against
+        ``Staff.id`` (the 32-char hex key everyone else in the codebase uses)
+        and traverse to PROVIDER roles through the reverse relation —
+        ``StaffRole.staff_id`` is the dbid integer column and would silently
+        not match a hex string. Same pattern as ``list_providers`` above.
 
-        Single ``.exists()`` query — no row iteration, no per-row Staff fetch.
+        Note: deactivated providers retain their PROVIDER role rows for
+        historical reasons, so the ``active=True`` filter is what gates an
+        old open note from originating new orders under a since-disabled
+        provider.
         """
         if not provider_id:
             return None
         exists = (
-            StaffRole.objects
-            .filter(role_type="PROVIDER", staff_id=provider_id, staff__active=True)
+            Staff.objects
+            .filter(id=provider_id, active=True, roles__role_type="PROVIDER")
             .exists()
         )
         return provider_id if exists else None

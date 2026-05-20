@@ -12,6 +12,7 @@ Auth invariants preserved from the prior round:
 """
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -25,9 +26,12 @@ from .conftest import (
 )
 
 
-DEFAULT_STAFF_ID = "staff-me"
-ADMIN_ID = "admin-1"
-OTHER_USER_ID = "staff-other"
+# Use real-shape staff ids. ``Staff.id`` is stored as ``uuid.uuid4().hex``
+# (32-char undashed); using arbitrary strings like "admin-1" let earlier
+# rounds slip through bugs where production id math diverged from tests.
+DEFAULT_STAFF_ID = uuid.uuid4().hex
+ADMIN_ID = uuid.uuid4().hex
+OTHER_USER_ID = uuid.uuid4().hex
 
 
 def _set_staff(api_instance: Any, mocker: MagicMock, staff: Any | None) -> None:
@@ -318,9 +322,78 @@ def test_update_set_admin_secret_tolerates_whitespace(
 ) -> None:
     """``ADMIN_STAFF_IDS`` tolerates whitespace around each comma-separated id."""
     _set_staff(api_instance, mocker, make_staff(staff_id=ADMIN_ID))
-    _set_admins(api_instance, admin_ids=f"  someone-else  ,  {ADMIN_ID}  ")
+    other_admin = uuid.uuid4().hex
+    _set_admins(api_instance, admin_ids=f"  {other_admin}  ,  {ADMIN_ID}  ")
     target = make_order_set(
         set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True
+    )
+    patch_order_set_query(mocker, first=target)
+    api_instance.request = make_request(
+        path="/sets/abc", json_body={"name": "Edited"}
+    )
+
+    api_instance.update_set()
+    target.save.assert_called_once()
+
+
+def test_update_set_admin_secret_accepts_dashed_uuid(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    """An admin who pastes a dashed UUID into the secret must still match an
+    undashed ``Staff.id``. Both sides canonicalize via ``uuid.UUID(...).hex``.
+
+    This is the bug-class the third review pass caught: arbitrary string ids
+    in tests masked the production form mismatch.
+    """
+    admin_uuid = uuid.uuid4()  # has both .hex (undashed) and str() (dashed)
+    _set_staff(api_instance, mocker, make_staff(staff_id=admin_uuid.hex))
+    _set_admins(api_instance, admin_ids=str(admin_uuid))  # dashed form
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True, name="Original"
+    )
+    patch_order_set_query(mocker, first=target)
+    api_instance.request = make_request(
+        path="/sets/abc", json_body={"name": "Edited by admin"}
+    )
+
+    api_instance.update_set()
+    target.save.assert_called_once()
+    assert target.name == "Edited by admin"
+
+
+def test_update_set_admin_secret_passes_non_uuid_values_verbatim(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    """Non-UUID admin entries (legacy internal codes, free-form ids) are kept
+    as-is — ``_canonical_id`` falls back to the input when ``uuid.UUID(...)``
+    raises ``ValueError``."""
+    legacy_id = "legacy-internal-admin-code"
+    _set_staff(api_instance, mocker, make_staff(staff_id=legacy_id))
+    _set_admins(api_instance, admin_ids=legacy_id)
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True
+    )
+    patch_order_set_query(mocker, first=target)
+    api_instance.request = make_request(
+        path="/sets/abc", json_body={"name": "Edited"}
+    )
+
+    api_instance.update_set()
+    target.save.assert_called_once()
+
+
+def test_update_set_admin_secret_accepts_undashed_uuid(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    """The opposite shape of the same canonicalization: undashed in the
+    secret, dashed in ``str(staff.id)`` (defense in depth against any future
+    Staff model that emits dashed form). Currently ``Staff.id`` is already
+    undashed, so both cases must converge."""
+    admin_uuid = uuid.uuid4()
+    _set_staff(api_instance, mocker, make_staff(staff_id=str(admin_uuid)))
+    _set_admins(api_instance, admin_ids=admin_uuid.hex)
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True, name="Original"
     )
     patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(
