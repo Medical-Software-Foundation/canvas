@@ -1,0 +1,44 @@
+{
+    "sdk_version": "0.136.0",
+    "plugin_version": "0.13.3",
+    "name": "vitals_dashboard",
+    "description": "Cardiology vitals dashboard tab \u2014 orthostatic BP, dry/current weight, urine output, trend charts, audit log.",
+    "components": {
+        "protocols": [
+            {
+                "class": "vitals_dashboard.api.vitals_api:VitalsAPI",
+                "description": "SimpleAPI endpoints for reading and writing vitals sessions."
+            }
+        ],
+        "applications": [
+            {
+                "class": "vitals_dashboard.applications.vitals_dashboard:VitalsDashboardApp",
+                "name": "Vitals",
+                "description": "Patient vitals dashboard with orthostatic BP, weight, urine output, and trend charts.",
+                "scope": "full_chart",
+                "icon": "assets/vitals-icon.png"
+            }
+        ],
+        "commands": [
+            {
+                "name": "VitalsSummary",
+                "label": "Vitals Summary",
+                "schema_key": "vitalsSummary",
+                "section": "objective"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "vitals__dashboard",
+        "access": "read_write"
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
