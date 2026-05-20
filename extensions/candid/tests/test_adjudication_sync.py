@@ -11,7 +11,6 @@ from candid.adjudication_sync import (
     ERA_DESC_PREFIX,
     PATIENT_PAYMENT_DESC_PREFIX,
     _build_insurance_transactions,
-    _build_patient_responsibility_transactions,
     _cents_to_dollars,
     _determine_target_queue,
     _match_line_item,
@@ -210,10 +209,14 @@ def test_insurance_payment_from_service_line() -> None:
         _candid_service_line(primary_paid_amount_cents=7000, allowed_amount_cents=9500)
     ]
     txns = _build_insurance_transactions(service_lines, [li], CANVAS_CLAIM_ID)
-    assert len(txns) == 1
+    assert len(txns) == 2
     assert txns[0].charged == Decimal("100.00")
     assert txns[0].allowed == Decimal("95.00")
     assert txns[0].payment == Decimal("70.00")
+    # Contractual adjustment: $100 charged - $95 allowed = $5 write-off
+    assert txns[1].adjustment == Decimal("5.00")
+    assert txns[1].adjustment_code == "CO-45"
+    assert txns[1].write_off is True
 
 
 def test_insurance_manual_adjustments() -> None:
@@ -291,74 +294,24 @@ def test_insurance_multi_service_line() -> None:
         ),
     ]
     txns = _build_insurance_transactions(service_lines, [li_1, li_2], CANVAS_CLAIM_ID)
-    # 2 payment txns + 2 adjustment txns = 4 total
-    assert len(txns) == 4
+    # Per service line: payment + contractual CO-45 + ERA CO-45 = 3 txns × 2 lines = 6
+    assert len(txns) == 6
     # First service line → li-1
     assert txns[0].claim_line_item_id == "li-1"
     assert txns[0].charged == Decimal("100.00")
     assert txns[0].payment == Decimal("70.00")
-    assert txns[1].claim_line_item_id == "li-1"
-    assert txns[1].adjustment == Decimal("5.00")
+    assert txns[1].adjustment == Decimal("5.00")  # contractual write-off
     assert txns[1].adjustment_code == "CO-45"
+    assert txns[1].write_off is True
+    assert txns[2].adjustment == Decimal("5.00")  # ERA adjustment
+    assert txns[2].adjustment_code == "CO-45"
     # Second service line → li-2
-    assert txns[2].claim_line_item_id == "li-2"
-    assert txns[2].charged == Decimal("150.00")
-    assert txns[2].payment == Decimal("120.00")
     assert txns[3].claim_line_item_id == "li-2"
-    assert txns[3].adjustment == Decimal("10.00")
-
-
-def test_patient_responsibility_multi_service_line() -> None:
-    """Patient responsibility transactions are created per service line."""
-    li_1 = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
-    li_2 = _fake_line_item("99214", Decimal("150.00"), "2026-01-15", "li-2")
-    service_lines = [
-        _candid_service_line(
-            procedure_code="99213",
-            charge_amount_cents=10000,
-            deductible_cents=1500,
-            coinsurance_cents=500,
-        ),
-        _candid_service_line(
-            procedure_code="99214",
-            charge_amount_cents=15000,
-            copay_cents=2000,
-        ),
-    ]
-    txns = _build_patient_responsibility_transactions(
-        service_lines, [li_1, li_2], CANVAS_CLAIM_ID
-    )
-    # li-1: deductible + coinsurance = 2 txns; li-2: copay = 1 txn
-    assert len(txns) == 3
-    assert txns[0].claim_line_item_id == "li-1"
-    assert txns[0].adjustment_code == PR_DEDUCTIBLE
-    assert txns[0].adjustment == Decimal("15.00")
-    assert txns[0].payment == Decimal("0.00")  # first txn per line item
-    assert txns[1].claim_line_item_id == "li-1"
-    assert txns[1].adjustment_code == PR_COINSURANCE
-    assert txns[2].claim_line_item_id == "li-2"
-    assert txns[2].adjustment_code == PR_COPAY
-    assert txns[2].payment == Decimal("0.00")  # first txn for this line item
-
-
-# ---------------------------------------------------------------------------
-# _build_patient_responsibility_transactions
-# ---------------------------------------------------------------------------
-
-
-def test_patient_responsibility() -> None:
-    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
-    service_lines = [
-        _candid_service_line(
-            deductible_cents=1500, coinsurance_cents=500, copay_cents=2000
-        )
-    ]
-    txns = _build_patient_responsibility_transactions(service_lines, [li], CANVAS_CLAIM_ID)
-    assert len(txns) == 3
-    assert txns[0].adjustment_code == PR_DEDUCTIBLE
-    assert txns[0].payment == Decimal("0.00")
-    assert txns[1].adjustment_code == PR_COINSURANCE
-    assert txns[2].adjustment_code == PR_COPAY
+    assert txns[3].charged == Decimal("150.00")
+    assert txns[3].payment == Decimal("120.00")
+    assert txns[4].adjustment == Decimal("10.00")  # contractual write-off
+    assert txns[4].write_off is True
+    assert txns[5].adjustment == Decimal("10.00")  # ERA adjustment
 
 
 # ---------------------------------------------------------------------------
@@ -727,8 +680,12 @@ def test_sync_skips_secondary_when_no_secondary_coverage() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_sync_posts_patient_responsibility_under_patient_coverage() -> None:
-    """ERA with deductible/coinsurance/copay produces a post_payment under the patient coverage."""
+def test_sync_does_not_create_separate_patient_posting_for_pr() -> None:
+    """Patient responsibility (deductible/coinsurance/copay) does NOT create a separate patient posting.
+
+    The balance transfer to patient is handled by ``transfer_remaining_balance_to="patient"``
+    on the insurance posting's adjustments, not by a separate patient posting.
+    """
     li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
     claim = _fake_claim(
         [li],
@@ -758,15 +715,19 @@ def test_sync_posts_patient_responsibility_under_patient_coverage() -> None:
 
         sync_claim_adjudications(claim, MOCK_SECRETS)
 
+        # Only insurance posting, no separate patient posting
         patient_calls = [
             c for c in ce.post_payment.call_args_list
             if c.kwargs["claim_coverage_id"] == "patient"
         ]
-        assert len(patient_calls) == 1
-        codes = [
-            t.adjustment_code for t in patient_calls[0].kwargs["line_item_transactions"]
+        assert len(patient_calls) == 0
+
+        # Insurance posting should exist
+        insurance_calls = [
+            c for c in ce.post_payment.call_args_list
+            if c.kwargs["claim_coverage_id"] != "patient"
         ]
-        assert codes == [PR_DEDUCTIBLE, PR_COINSURANCE, PR_COPAY]
+        assert len(insurance_calls) == 1
 
 
 # ---------------------------------------------------------------------------

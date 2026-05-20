@@ -1,0 +1,380 @@
+{
+  "external_id": "canvas:a0ed69f4-a6bd-4ff7-8e0b-cf91ed6867f5",
+  "date_of_service": "2026-02-28",
+  "end_date_of_service": "2026-02-28",
+  "patient_authorized_release": true,
+  "benefits_assigned_to_provider": true,
+  "provider_accepts_assignment": true,
+  "appointment_type": null,
+  "existing_medications": [],
+  "interventions": [],
+  "pay_to_address": null,
+  "synchronicity": null,
+  "vitals": null,
+  "billable_status": "BILLABLE",
+  "additional_information": null,
+  "service_authorization_exception_code": null,
+  "admission_date": null,
+  "discharge_date": null,
+  "onset_of_current_illness_or_symptom_date": null,
+  "last_menstrual_period_date": null,
+  "delay_reason_code": null,
+  "accident_state_or_province_code": null,
+  "claim_creation_id": null,
+  "patient_control_number": "6WEIWK6RI7UXYC",
+  "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+  "claims": [
+    {
+      "claim_id": "655c3de0-0524-409a-994b-f147755a6f26",
+      "status": "rejected",
+      "clearinghouse": "AVAILITY",
+      "clearinghouse_claim_id": null,
+      "payer_claim_id": "1126070190570",
+      "clia_number": null,
+      "service_lines": [
+        {
+          "created_at": "2026-03-10T18:07:18.460369Z",
+          "modifiers": [],
+          "charge_amount_cents": 10000,
+          "allowed_amount_cents": 5157,
+          "insurance_balance_cents": null,
+          "patient_balance_cents": 0,
+          "paid_amount_cents": 4043,
+          "primary_paid_amount_cents": 4043,
+          "secondary_paid_amount_cents": 0,
+          "tertiary_paid_amount_cents": 0,
+          "patient_responsibility_cents": 1031,
+          "copay_cents": 0,
+          "coinsurance_cents": 1031,
+          "deductible_cents": 0,
+          "diagnosis_id_zero": "2fc06ecc-c8d7-4cd5-a8ea-3136622d4c5b",
+          "diagnosis_id_one": "68b04464-0bbc-4738-a6a0-7b16eeb71af3",
+          "diagnosis_id_two": "ca86e909-2793-4d43-828d-60aaf303e48c",
+          "diagnosis_id_three": "10427dc1-943a-4aad-aa14-53c96c89116f",
+          "drug_identification": null,
+          "service_line_era_data": {
+            "service_line_adjustments": [],
+            "remittance_advice_remark_codes": []
+          },
+          "service_line_manual_adjustments": [],
+          "related_invoices": [],
+          "related_invoice_info": [],
+          "denial_reason": null,
+          "place_of_service_code": null,
+          "place_of_service_code_as_submitted": null,
+          "service_line_id": "53a8ec22-373d-47cf-95d7-6e301fd0a9c5",
+          "procedure_code": "G0557",
+          "ordering_provider": null,
+          "revenue_code": null,
+          "quantity": "1",
+          "units": "UN",
+          "claim_id": "655c3de0-0524-409a-994b-f147755a6f26",
+          "date_of_service_range": {
+            "start_date": "2026-02-28",
+            "end_date": null
+          },
+          "description": null,
+          "date_of_service": "2026-02-28",
+          "end_date_of_service": null,
+          "test_results": null,
+          "has_epsdt_indicator": null,
+          "has_family_planning_indicator": null,
+          "note": null,
+          "prior_authorization_number": null,
+          "external_id": null
+        }
+      ],
+      "eras": [
+        {
+          "check_number": "816199668",
+          "check_date": "2026-03-25",
+          "era_id": "fc07b5a1-f24c-4928-b468-7b9fe288580c"
+        }
+      ]
+    }
+  ],
+  "patient": {
+    "first_name": "Florence",
+    "last_name": "Avakian",
+    "gender": "female",
+    "external_id": "canvas:7ee8bd94ca4b44bbb20c9208f68fb4ec",
+    "date_of_birth": "1937-07-23",
+    "address": {
+      "address1": "201 East 30th St",
+      "address2": "Apt 35",
+      "city": "New York",
+      "state": "NY",
+      "zip_code": "10016",
+      "zip_plus_four_code": null
+    },
+    "individual_id": "e018b7e6-50fe-468f-9b77-2ae423b7e1a4",
+    "phone_numbers": [],
+    "phone_consent": false,
+    "email": null,
+    "email_consent": false,
+    "auto_charge_consent": false,
+    "non_insurance_payers": [],
+    "non_insurance_payers_info": []
+  },
+  "guarantor": null,
+  "billing_provider": {
+    "first_name": null,
+    "last_name": null,
+    "organization_name": "EAST COAST HEALTH MEDICAL SERVICES PC",
+    "provider_id": "ba41d880-02d2-4a2f-8ae3-aa54f0a63501",
+    "address": {
+      "address1": "109 W 27th St Suite 4N",
+      "address2": null,
+      "city": "New York",
+      "state": "NY",
+      "zip_code": "10001",
+      "zip_plus_four_code": "0265"
+    },
+    "tax_id": "331793967",
+    "npi": "1841015153",
+    "taxonomy_code": "207R00000X",
+    "qualifier": null,
+    "provider_commercial_license_type": null,
+    "secondary_identification": null
+  },
+  "rendering_provider": {
+    "first_name": "Donna",
+    "last_name": "McCabe",
+    "organization_name": null,
+    "provider_id": "77232d3e-21a2-4ac1-a889-f73fc612e880",
+    "address": {
+      "address1": "109 W 27th St Suite 4N",
+      "address2": null,
+      "city": "New York",
+      "state": "NY",
+      "zip_code": "10001",
+      "zip_plus_four_code": "0265"
+    },
+    "tax_id": null,
+    "npi": "1619214814",
+    "taxonomy_code": "363LG0600X",
+    "qualifier": null,
+    "provider_commercial_license_type": null,
+    "secondary_identification": null
+  },
+  "attending_provider": null,
+  "admission_hour": null,
+  "admission_type_code": null,
+  "admission_source_code": null,
+  "discharge_hour": null,
+  "discharge_status": null,
+  "operating_provider": null,
+  "other_operating_provider": null,
+  "treating_provider": null,
+  "related_causes_information": null,
+  "property_casualty_claim_number": null,
+  "accident_date": null,
+  "property_casualty_patient_identifier": null,
+  "submission_expectation": "TARGET_PROFESSIONAL",
+  "type_of_bill": null,
+  "referring_provider": null,
+  "initial_referring_provider": null,
+  "supervising_provider": null,
+  "service_facility": {
+    "service_facility_id": "afd339b9-99c3-4d77-a28e-caed0093e172",
+    "organization_name": "EAST COAST HEALTH MEDICAL SERVICES PC",
+    "npi": "1841015153",
+    "address": {
+      "address1": "109 W 27th St Suite 4N",
+      "address2": null,
+      "city": "New York",
+      "state": "NY",
+      "zip_code": "10001",
+      "zip_plus_four_code": "0265"
+    },
+    "secondary_identification": null,
+    "mammography_certification_number": null
+  },
+  "subscriber_primary": {
+    "first_name": "Florence",
+    "last_name": "Avakian",
+    "gender": "female",
+    "patient_relationship_to_subscriber_code": "18",
+    "date_of_birth": "1937-07-23",
+    "address": {
+      "address1": " 201 East 30th St ",
+      "address2": "Apt 35",
+      "city": "New York",
+      "state": "NY",
+      "zip_code": "10016",
+      "zip_plus_four_code": null
+    },
+    "individual_id": "0d03be04-50ee-4ab7-9276-317b7fef9ac7",
+    "insurance_card": {
+      "group_number": null,
+      "plan_name": null,
+      "plan_type": null,
+      "insurance_type": null,
+      "payer_plan_group_id": null,
+      "payer_address": null,
+      "insurance_card_id": "3dbb1325-afc4-4054-93fa-ac1ef6db1659",
+      "member_id": "1P74XE9JN96",
+      "payer_name": "NEW YORK EMPIRE MEDICARE",
+      "payer_id": "13202",
+      "rx_bin": null,
+      "rx_pcn": null,
+      "image_url_front": null,
+      "image_url_back": null
+    }
+  },
+  "subscriber_secondary": {
+    "first_name": "Florence",
+    "last_name": "Avakian",
+    "gender": "female",
+    "patient_relationship_to_subscriber_code": "18",
+    "date_of_birth": "1937-07-23",
+    "address": {
+      "address1": " 201 East 30th St ",
+      "address2": "Apt 35",
+      "city": "New York",
+      "state": "NY",
+      "zip_code": "10016",
+      "zip_plus_four_code": null
+    },
+    "individual_id": "a3a9ace6-6de6-4c7a-94b2-0c1322a74d5f",
+    "insurance_card": {
+      "group_number": null,
+      "plan_name": null,
+      "plan_type": null,
+      "insurance_type": null,
+      "payer_plan_group_id": null,
+      "payer_address": null,
+      "insurance_card_id": "a1aba6a0-9067-4a20-8855-5df402891e13",
+      "member_id": "K90243229",
+      "payer_name": "INTEGRA MANAGED LONG TERM CARE",
+      "payer_id": "45302",
+      "rx_bin": null,
+      "rx_pcn": null,
+      "image_url_front": null,
+      "image_url_back": null
+    }
+  },
+  "subscriber_tertiary": null,
+  "prior_authorization_number": null,
+  "responsible_party": "INSURANCE_PAY",
+  "url": "https://app.joincandidhealth.com/a9c60f82-1031-445c-a544-c764c2bd1507/claims/685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+  "diagnoses": [
+    {
+      "name": null,
+      "code_type": "ABK",
+      "code": "I10",
+      "present_on_admission_indicator": null,
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "diagnosis_id": "10427dc1-943a-4aad-aa14-53c96c89116f",
+      "created_at": "2026-03-10T18:07:18.436759Z",
+      "updated_at": "2026-03-10T18:07:18.436765Z"
+    },
+    {
+      "name": null,
+      "code_type": "ABF",
+      "code": "M150",
+      "present_on_admission_indicator": null,
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "diagnosis_id": "2fc06ecc-c8d7-4cd5-a8ea-3136622d4c5b",
+      "created_at": "2026-03-10T18:07:18.436788Z",
+      "updated_at": "2026-03-10T18:07:18.436788Z"
+    },
+    {
+      "name": null,
+      "code_type": "ABF",
+      "code": "Z853",
+      "present_on_admission_indicator": null,
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "diagnosis_id": "68b04464-0bbc-4738-a6a0-7b16eeb71af3",
+      "created_at": "2026-03-10T18:07:18.436793Z",
+      "updated_at": "2026-03-10T18:07:18.436794Z"
+    },
+    {
+      "name": null,
+      "code_type": "ABF",
+      "code": "Z609",
+      "present_on_admission_indicator": null,
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "diagnosis_id": "ca86e909-2793-4d43-828d-60aaf303e48c",
+      "created_at": "2026-03-10T18:07:18.436797Z",
+      "updated_at": "2026-03-10T18:07:18.436798Z"
+    }
+  ],
+  "clinical_notes": [],
+  "billing_notes": [
+    {
+      "text": "New task added.\nTask type: CUSTOMER_DATA_REQUEST (held_by_customer)\nNote: Context:\nHold All Claims-Onboarding  has failed validation. Onboarding test phase- holding all claims for manual review \n\nAction Required:\nPlease review claim and add the tag \"test-claim.\" Once you add the tag, you can re-run the claim through the rules engine to submit. ",
+      "billing_note_id": "68900362-8863-4bfb-93c4-4abb042b9f43",
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "created_at": "2026-03-10T18:07:45.568655Z",
+      "author_auth0_id": null,
+      "author_name": "Candid Health"
+    },
+    {
+      "text": "Claim added to the **Held** queue",
+      "billing_note_id": "d7d07e0a-f2af-4fcb-8360-ed74f10f01f0",
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "created_at": "2026-03-10T18:07:45.818193Z",
+      "author_auth0_id": "Candid Health",
+      "author_name": "Candid Health"
+    },
+    {
+      "text": "New task added.\nTask type: CLAIM_FOLLOW_UP (submit_to_secondary)\nNote: Candid has received an ERA from the primary payer with outstanding patient responsibility and this patient has secondary insurance. Candid will submit the secondary claim, no action is needed.",
+      "billing_note_id": "c1292302-a0f5-4b59-83be-37aa0510ec35",
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "created_at": "2026-03-26T04:15:42.133514Z",
+      "author_auth0_id": null,
+      "author_name": "Candid Health"
+    },
+    {
+      "text": "Claim added to the **Pending Secondary Submission** queue",
+      "billing_note_id": "dfdace6a-bfdf-4ad4-9269-70eb7fef85ae",
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "created_at": "2026-03-26T04:15:42.341109Z",
+      "author_auth0_id": "Candid Health",
+      "author_name": "Candid Health"
+    },
+    {
+      "text": "New task added.\nTask type: CUSTOMER_DATA_REQUEST (unknown_eligibility_or_patient_not_found)\nNote: Rejection Reason: INCORRECT_OR_MISSING_INSURANCE_INFORMATION\nRejection Description: Payer unable to identify patient through provided insurance information\nResolution: Please check insurance information, including that the Member/Subscriber ID submitted is valid for the Date of Service and the claim is being sent to the correct payer\nAdditional Clearinghouse Detail: \n\n\nDetails for claim submission on 03/27/2026:\nCode 1: \nCategory code: A7 - Acknowledgement/Rejected for Invalid Information - The claim/encounter has invalid information as specified in the Status details and has been rejected.\nStatus code: 33 - Subscriber and subscriber id not found.\nSource: Clearinghouse\nFree Form Message Text: SUBSCRIBER AND SUBSCRIBER ID NOT FOUND.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+      "billing_note_id": "a40eff71-f481-4cf6-a934-0f1453e49804",
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "created_at": "2026-04-03T13:25:18.896093Z",
+      "author_auth0_id": null,
+      "author_name": "Candid Health"
+    },
+    {
+      "text": "Claim added to the **Medicare Payer Rejection** queue",
+      "billing_note_id": "b8481d7c-e5f4-4c42-8dfc-59af19bf50dd",
+      "encounter_id": "685e952a-4c4b-4bd6-aeee-f2bf6bc84ecd",
+      "created_at": "2026-04-03T13:25:19.113914Z",
+      "author_auth0_id": "Candid Health",
+      "author_name": "Candid Health"
+    }
+  ],
+  "place_of_service_code": "12",
+  "place_of_service_code_as_submitted": "12",
+  "patient_histories": [],
+  "patient_payments": [],
+  "tags": [
+    {
+      "tag_id": "test-claim",
+      "description": "testing out new billing rules/providers for our customers",
+      "color": "gray",
+      "creator_id": "auth0|5f690db64cc6680076d07dd7"
+    }
+  ],
+  "coding_attribution": "CUSTOMER",
+  "work_queue_id": "37",
+  "work_queue_membership_activated_at": "2026-04-03T13:25:18.966339Z",
+  "owner_of_next_action": "CUSTOMER",
+  "submission_origin": "CANDID",
+  "schema_instances": [],
+  "referral_number": null,
+  "epsdt_referral": null,
+  "claim_supplemental_information": [],
+  "secondary_payer_carrier_code": null,
+  "last_submitted_at": "2026-03-27T04:03:29.538845Z",
+  "created_at": "2026-03-10T18:07:18.407004Z",
+  "next_responsible_party": "secondary",
+  "organization_id": "a9c60f82-1031-445c-a544-c764c2bd1507"
+}

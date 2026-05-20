@@ -27,6 +27,7 @@ from candid.effect_helpers import (
     META_LAST_SYNC,
     META_REPORTED_PAYMENT_IDS,
     META_SUBMITTED_AT,
+    META_SYNCED_AMOUNTS,
     META_SYNCED_ERA_IDS,
     META_SYNCED_PAYMENT_IDS,
     PATIENT_COVERAGE_ID,
@@ -105,6 +106,28 @@ def _match_line_item(
 
 
 # ---------------------------------------------------------------------------
+# Delta computation for cumulative service-line amounts
+# ---------------------------------------------------------------------------
+
+
+def _compute_synced_amounts(service_lines: list[dict]) -> dict[str, int]:
+    """Sum the current cumulative amounts across all service lines.
+
+    Returns ``{"primary": N, "secondary": N, "tertiary": N}`` in cents.
+    """
+    return {
+        "primary": sum(sl.get("primary_paid_amount_cents") or 0 for sl in service_lines),
+        "secondary": sum(sl.get("secondary_paid_amount_cents") or 0 for sl in service_lines),
+        "tertiary": sum(sl.get("tertiary_paid_amount_cents") or 0 for sl in service_lines),
+    }
+
+
+def _has_delta(current: dict[str, int], previously_synced: dict[str, int], tier: str) -> bool:
+    """Check if a payer tier has new amounts to post."""
+    return current.get(tier, 0) > previously_synced.get(tier, 0)
+
+
+# ---------------------------------------------------------------------------
 # Transaction builders — from encounter service lines
 # ---------------------------------------------------------------------------
 
@@ -113,13 +136,13 @@ def _build_insurance_transactions(
     service_lines: list[dict],
     line_items: list,
     canvas_claim_id: str,
-    transfer_to_patient: bool = False,
+    transfer_to: str | None = None,
 ) -> list[LineItemTransaction]:
     """Build insurance payment + adjustment transactions from encounter service lines.
 
-    When ``transfer_to_patient`` is True, adjustment transactions include
-    ``transfer_remaining_balance_to="patient"`` so the remaining balance
-    moves to the patient after insurance pays.
+    When ``transfer_to`` is set (e.g. ``"patient"`` or a coverage UUID),
+    adjustment transactions include ``transfer_remaining_balance_to`` so the
+    remaining balance moves to the appropriate payer after insurance pays.
     """
     txns: list[LineItemTransaction] = []
 
@@ -139,6 +162,19 @@ def _build_insurance_transactions(
                     charged=charged,
                     allowed=allowed,
                     payment=payment or Decimal("0.00"),
+                )
+            )
+
+        # Contractual adjustment: difference between charged and allowed is
+        # the write-off the provider agreed to per their payer contract.
+        if charged and allowed and charged > allowed:
+            contractual = charged - allowed
+            txns.append(
+                LineItemTransaction(
+                    claim_line_item_id=line_item_id,
+                    adjustment=contractual,
+                    adjustment_code="CO-45",
+                    write_off=True,
                 )
             )
 
@@ -164,46 +200,29 @@ def _build_insurance_transactions(
                         claim_line_item_id=line_item_id,
                         adjustment=adj_amount,
                         adjustment_code=adj_code,
-                        transfer_remaining_balance_to="patient"
-                        if transfer_to_patient
-                        else None,
+                        transfer_remaining_balance_to=transfer_to,
                     )
                 )
 
-    return txns
-
-
-def _build_patient_responsibility_transactions(
-    service_lines: list[dict], line_items: list, canvas_claim_id: str
-) -> list[LineItemTransaction]:
-    """Build patient responsibility transactions (PR-1, PR-2, PR-3)."""
-    txns: list[LineItemTransaction] = []
-
-    for sl in service_lines:
-        line_item_id = _match_line_item(sl, line_items, canvas_claim_id)
-        if not line_item_id:
-            continue
-
-        deductible = _cents_to_dollars(sl.get("deductible_cents"))
-        coinsurance = _cents_to_dollars(sl.get("coinsurance_cents"))
-        copay = _cents_to_dollars(sl.get("copay_cents"))
-
-        is_first = True
-        for amount, code in [
-            (deductible, PR_DEDUCTIBLE),
-            (coinsurance, PR_COINSURANCE),
-            (copay, PR_COPAY),
-        ]:
-            if amount:
-                txn_kwargs: dict = {
-                    "claim_line_item_id": line_item_id,
-                    "adjustment": amount,
-                    "adjustment_code": code,
-                }
-                if is_first:
-                    txn_kwargs["payment"] = Decimal("0.00")
-                    is_first = False
-                txns.append(LineItemTransaction(**txn_kwargs))
+        # Patient responsibility (deductible, coinsurance, copay) as
+        # transfer adjustments on the insurance posting. These transfer
+        # to whoever is next responsible (patient, secondary, etc.).
+        if transfer_to:
+            for cents_field, pr_code in (
+                ("deductible_cents", PR_DEDUCTIBLE),
+                ("coinsurance_cents", PR_COINSURANCE),
+                ("copay_cents", PR_COPAY),
+            ):
+                amount = _cents_to_dollars(sl.get(cents_field))
+                if amount:
+                    txns.append(
+                        LineItemTransaction(
+                            claim_line_item_id=line_item_id,
+                            adjustment=amount,
+                            adjustment_code=pr_code,
+                            transfer_remaining_balance_to=transfer_to,
+                        )
+                    )
 
     return txns
 
@@ -344,6 +363,9 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     synced_pmt_ids = get_claim_metadata_set(claim, META_SYNCED_PAYMENT_IDS)
     reported_pmt_ids = get_claim_metadata_set(claim, META_REPORTED_PAYMENT_IDS)
     known_payment_ids = synced_pmt_ids | reported_pmt_ids
+    prev_synced_amounts = get_claim_metadata(claim, META_SYNCED_AMOUNTS) or {
+        "primary": 0, "secondary": 0, "tertiary": 0,
+    }
 
     effects: list[Effect] = []
     attempted_era_ids: list[str] = []
@@ -368,8 +390,17 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
             continue
 
         last_encounter_data = encounter_data
-        next_responsible = encounter_data.get("next_responsible_party") or ""
-        transfer_to_patient = next_responsible.lower() == "patient"
+        next_responsible = (encounter_data.get("next_responsible_party") or "").lower()
+
+        # Determine where to transfer the remaining balance
+        if next_responsible == "patient":
+            transfer_to = "patient"
+        elif next_responsible == "secondary" and secondary_id:
+            transfer_to = secondary_id
+        elif next_responsible == "tertiary" and tertiary_id:
+            transfer_to = tertiary_id
+        else:
+            transfer_to = None
 
         for candid_claim in encounter_data.get("claims", []):
             candid_claim_id = candid_claim.get("claim_id", "")
@@ -379,96 +410,109 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
 
             service_lines = candid_claim.get("service_lines", [])
 
-            for era in candid_claim.get("eras", []):
-                era_id = str(era.get("era_id") or "")
-                if not era_id or era_id in synced_era_ids:
-                    continue
+            # Collect new (unsynced) ERA IDs for this Candid claim.
+            new_eras = [
+                era
+                for era in candid_claim.get("eras", [])
+                if (era_id := str(era.get("era_id") or ""))
+                and era_id not in synced_era_ids
+            ]
 
-                description = f"{ERA_DESC_PREFIX}{era_id}"
+            if new_eras:
+                # ERAs are ordered: index 0 = primary, 1 = secondary, 2 = tertiary.
+                # Use the full eras array (not just new) so position maps to payer tier.
+                all_eras = candid_claim.get("eras", [])
 
-                # Sum total paid across all service lines for this ERA
-                era_paid_cents = sum(
-                    (sl.get("primary_paid_amount_cents") or 0)
-                    + (sl.get("secondary_paid_amount_cents") or 0)
-                    + (sl.get("tertiary_paid_amount_cents") or 0)
-                    for sl in service_lines
-                )
-                era_totals[era_id] = era_paid_cents
+                # Compute delta: what's new since last sync?
+                current_amounts = _compute_synced_amounts(service_lines)
 
-                # Insurance payment (primary)
-                insurance_txns = _build_insurance_transactions(
-                    service_lines,
-                    line_items,
-                    canvas_claim_id,
-                    transfer_to_patient=transfer_to_patient,
-                )
-                if insurance_txns and primary_id:
-                    era_kwargs: dict = {}
+                for era in new_eras:
+                    eid = str(era["era_id"])
+                    era_totals[eid] = (
+                        current_amounts["primary"]
+                        + current_amounts["secondary"]
+                        + current_amounts["tertiary"]
+                    )
+                    attempted_era_ids.append(eid)
+
+                def _era_kwargs(era: dict) -> dict:
+                    """Extract check info from an ERA for the post_payment call."""
+                    kwargs: dict = {}
                     if era.get("check_number"):
-                        era_kwargs["check_number"] = str(era["check_number"])
+                        kwargs["check_number"] = str(era["check_number"])
                     if era.get("check_date"):
                         try:
-                            era_kwargs["check_date"] = date.fromisoformat(
-                                era["check_date"]
-                            )
+                            kwargs["check_date"] = date.fromisoformat(era["check_date"])
                         except (ValueError, TypeError):
                             pass
+                    return kwargs
 
-                    method = (
-                        PaymentMethod.CHECK
-                        if era.get("check_number")
-                        else PaymentMethod.OTHER
+                def _era_at(index: int) -> dict:
+                    """Get the ERA at the given position, or the last one as fallback."""
+                    if index < len(all_eras):
+                        return all_eras[index]
+                    return all_eras[-1]
+
+                # Primary insurance (ERA index 0)
+                if _has_delta(current_amounts, prev_synced_amounts, "primary"):
+                    primary_era = _era_at(0)
+                    description = f"{ERA_DESC_PREFIX}{primary_era.get('era_id', '')}"
+                    insurance_txns = _build_insurance_transactions(
+                        service_lines,
+                        line_items,
+                        canvas_claim_id,
+                        transfer_to=transfer_to,
                     )
-                    effects.append(
-                        claim_effect.post_payment(
-                            claim_coverage_id=primary_id,
-                            line_item_transactions=insurance_txns,
-                            method=method,
-                            claim_description=description,
-                            payment_description=description,
-                            **era_kwargs,
+                    if insurance_txns and primary_id:
+                        method = (
+                            PaymentMethod.CHECK
+                            if primary_era.get("check_number")
+                            else PaymentMethod.OTHER
                         )
-                    )
-                    payment_effect_count += 1
+                        effects.append(
+                            claim_effect.post_payment(
+                                claim_coverage_id=primary_id,
+                                line_item_transactions=insurance_txns,
+                                method=method,
+                                claim_description=description,
+                                payment_description=description,
+                                **_era_kwargs(primary_era),
+                            )
+                        )
+                        payment_effect_count += 1
 
-                for coverage_id, field in (
-                    (secondary_id, "secondary_paid_amount_cents"),
-                    (tertiary_id, "tertiary_paid_amount_cents"),
+                # Secondary (ERA index 1) / Tertiary (ERA index 2)
+                for coverage_id, field, tier, era_index in (
+                    (secondary_id, "secondary_paid_amount_cents", "secondary", 1),
+                    (tertiary_id, "tertiary_paid_amount_cents", "tertiary", 2),
                 ):
                     if not coverage_id:
+                        continue
+                    if not _has_delta(current_amounts, prev_synced_amounts, tier):
                         continue
                     txns = _build_secondary_transactions(
                         service_lines, line_items, canvas_claim_id, field
                     )
                     if not txns:
                         continue
+                    tier_era = _era_at(era_index)
+                    tier_description = f"{ERA_DESC_PREFIX}{tier_era.get('era_id', '')}"
                     effects.append(
                         claim_effect.post_payment(
                             claim_coverage_id=coverage_id,
                             line_item_transactions=txns,
-                            method=PaymentMethod.OTHER,
-                            claim_description=description,
-                            payment_description=description,
+                            method=PaymentMethod.CHECK
+                            if tier_era.get("check_number")
+                            else PaymentMethod.OTHER,
+                            claim_description=tier_description,
+                            payment_description=tier_description,
+                            **_era_kwargs(tier_era),
                         )
                     )
                     payment_effect_count += 1
 
-                pr_txns = _build_patient_responsibility_transactions(
-                    service_lines, line_items, canvas_claim_id
-                )
-                if pr_txns:
-                    effects.append(
-                        claim_effect.post_payment(
-                            claim_coverage_id=PATIENT_COVERAGE_ID,
-                            line_item_transactions=pr_txns,
-                            method=PaymentMethod.OTHER,
-                            claim_description=description,
-                            payment_description=description,
-                        )
-                    )
-                    payment_effect_count += 1
-
-                attempted_era_ids.append(era_id)
+                # Update synced amounts to current for next sync
+                prev_synced_amounts = current_amounts
 
             # Patient payments (queried by Candid's claim_id, not encounter_id)
             try:
@@ -518,6 +562,13 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
             claim_effect.upsert_metadata(
                 key=META_SYNCED_ERA_IDS,
                 value=json.dumps(updated_era_ids),
+            )
+        )
+        # Store cumulative amounts so the next sync can compute deltas
+        effects.append(
+            claim_effect.upsert_metadata(
+                key=META_SYNCED_AMOUNTS,
+                value=json.dumps(prev_synced_amounts),
             )
         )
     if attempted_payment_ids:

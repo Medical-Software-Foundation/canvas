@@ -53,6 +53,7 @@ META_ENCOUNTERS = "candid_encounters"
 META_REPORTED_PAYMENT_IDS = "candid_reported_payment_ids"
 META_SYNCED_ERA_IDS = "candid_synced_adjudication_ids"
 META_SYNCED_PAYMENT_IDS = "candid_synced_payment_ids"
+META_SYNCED_AMOUNTS = "candid_synced_amounts"
 META_SUBMISSION_ERROR = "candid_submission_error"
 
 PATIENT_COVERAGE_ID = "patient"
