@@ -1,0 +1,36 @@
+[project]
+authors = [
+  {email = "allison.leitner@canvasmedical.com", name = "Allison Leitner"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Bulk-load Compound Medications into a Canvas instance. Provides an authenticated POST endpoint for programmatic loads and an app-drawer page for staff to upload a CSV, review the parsed rows, and load them into the formulary."
+license = "MIT"
+name = "compound-medication-loader"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.3.8"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_tests.py", "tests.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["compound_medication_loader"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+branch = true
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.1.0",
+]
