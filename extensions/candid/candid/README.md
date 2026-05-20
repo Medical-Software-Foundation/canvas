@@ -65,12 +65,18 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 **Insurance adjudication (ERA data):**
 - Fetches each encounter stored in claim metadata via `GET /encounters/v4/{candid_encounter_id}`
 - Iterates `claims[].eras[]` to find new ERA IDs not yet synced
-- For each new ERA, maps Candid service line amounts to Canvas `LineItemTransaction` objects
-- Posts payments via `ClaimEffect.post_payment()` for each payer tier:
-  - **Primary insurance** -- charged, allowed, payment, ERA + manual adjustments (CO-45, etc.)
-  - **Secondary/Tertiary insurance** -- separate `post_payment` per payer
-  - **Patient responsibility** -- deductible (PR-1), coinsurance (PR-2), copay (PR-3), posted under the patient coverage
-- When the encounter's `next_responsible_party` is `patient`, primary insurance adjustments include `transfer_remaining_balance_to="patient"` so any remaining balance moves to the patient
+- **Delta-based posting:** Service line amounts (`primary_paid_amount_cents`, etc.) are cumulative across all ERAs. The plugin stores previously synced amounts in `candid_synced_amounts` metadata and only posts the delta for each payer tier. This correctly handles primary and secondary ERAs arriving at different times without double-posting.
+- Posts payments via `ClaimEffect.post_payment()` for each payer tier where new amounts are detected:
+  - **Primary insurance** -- charged, allowed, payment, contractual CO-45 write-off (charged minus allowed), ERA + manual adjustments
+  - **Secondary/Tertiary insurance** -- separate `post_payment` per payer, only when that tier's amounts increase
+- **Contractual adjustment:** The difference between `charge_amount_cents` and `allowed_amount_cents` is posted as a CO-45 write-off on the insurance posting
+- **Patient responsibility:** Deductible (PR-1), coinsurance (PR-2), and copay (PR-3) amounts from the service lines are posted as transfer adjustments on the insurance posting (not as separate patient postings)
+- **Balance transfers:** Based on the encounter's `next_responsible_party`, remaining balance is transferred to the appropriate party:
+  - `"patient"` → transfers to patient
+  - `"secondary"` → transfers to secondary coverage
+  - `"tertiary"` → transfers to tertiary coverage
+  - `"none"` / `"primary"` → no transfer
+- **ERA-to-payer mapping:** ERAs are ordered by payer tier (index 0 = primary, 1 = secondary, 2 = tertiary). Each posting uses the correct ERA's check number, check date, and era_id for its description
 - After payments post, the claim is moved to **PatientBalance** (if only patient balance remains) or **AdjudicatedOpenBalance** based on the encounter's per-service-line `insurance_balance_cents` and `patient_balance_cents` totals
 - Each sync attempt writes a `SyncLog` row (custom model) so the timeline UI can show sync history
 
@@ -174,6 +180,7 @@ The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is de
 | `candid_last_sync_at` | ISO timestamp | Adjudication sync (and patient-payment-only sync, when it posts effects) |
 | `candid_claim_status` | Candid claim status string (e.g. `era_received`, `finalized_paid`) | Adjudication sync |
 | `candid_synced_adjudication_ids` | JSON list of ERA IDs already posted | Adjudication sync |
+| `candid_synced_amounts` | JSON `{primary, secondary, tertiary}` cumulative paid cents posted so far | Adjudication sync |
 | `candid_synced_payment_ids` | JSON list of patient payment IDs synced from Candid | Adjudication sync / patient-payment sync |
 | `candid_reported_payment_ids` | JSON list of patient payment IDs we reported to Candid | Patient payment handler |
 
@@ -181,10 +188,9 @@ The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is de
 
 ### Insurance adjudications
 
-The sync deduplicates by Candid's `era_id` (a unique identifier per remittance advice event):
-- Before posting payments for an ERA, the plugin checks if the `era_id` appears in `candid_synced_adjudication_ids` metadata
-- After posting, the `era_id` is written to metadata in the same effect batch
-- Multiple ERAs on the same claim (e.g., primary then secondary adjudication) each get their own `era_id` and are processed independently
+The sync uses two dedup mechanisms:
+- **ERA ID dedup:** Before processing, the plugin checks if all `era_id`s appear in `candid_synced_adjudication_ids` metadata. If all are already synced, the claim is skipped. New ERA IDs are written to metadata in the same effect batch.
+- **Amount-based delta:** Service line amounts are cumulative across all ERAs. The plugin stores previously synced totals in `candid_synced_amounts` (`{primary, secondary, tertiary}` in cents) and only posts a payer tier when its total has increased since the last sync. This handles primary and secondary ERAs arriving weeks apart — the primary payment is posted on the first sync, and only the secondary delta is posted on the second sync without re-posting primary.
 
 ### Patient payments
 

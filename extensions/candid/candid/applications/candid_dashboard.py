@@ -118,13 +118,23 @@ def _html() -> str:
     padding: 12px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; vertical-align: top;
     word-break: break-word;
   }
-  tbody tr { cursor: pointer; transition: background 0.1s; }
+  tbody tr { transition: background 0.1s; }
   tbody tr:hover { background: #f9fafb; }
   tbody tr.error { background: #fef2f2; }
   tbody tr.error:hover { background: #fee2e2; }
   tbody tr.denied { background: #fffbeb; }
   tbody tr.denied:hover { background: #fef3c7; }
   tbody tr:last-child td { border-bottom: none; }
+
+  .row-link {
+    display: grid;
+    grid-template-columns: 30% 20% 20% 15% 15%;
+    text-decoration: none; color: inherit; cursor: pointer;
+  }
+  .row-link .cell { padding: 12px 14px; font-size: 13px; }
+  .row-link .cell:first-child .patient,
+  .row-link .cell:first-child { font-weight: 600; color: #111827; }
+  .row-link .cell.queue, .row-link .cell.date { color: #4b5563; font-size: 12px; }
 
   .patient { font-weight: 600; color: #111827; }
   .queue, .date { color: #4b5563; font-size: 12px; }
@@ -686,14 +696,16 @@ function renderBody() {
   tbody.innerHTML = visible.map(c => {
     const cls = c.has_error ? "error" : (c.is_denied ? "denied" : "");
     return `
-      <tr class="${cls}" onclick="openClaim('${escapeHtml(c.dbid)}')">
-        <td>
-          <div class="patient">${escapeHtml(c.patient_name)}</div>
+      <tr class="${cls}">
+        <td colspan="5" style="padding:0;">
+          <a href="/revenue/claims/${escapeHtml(c.dbid)}" class="row-link" target="_top">
+            <span class="cell">${escapeHtml(c.patient_name)}</span>
+            <span class="cell">${statusPill(c.candid_status, c.is_denied, c.has_error)}</span>
+            <span class="cell queue">${escapeHtml(c.current_queue || "—")}</span>
+            <span class="cell date">${formatDate(c.submitted_at)}</span>
+            <span class="cell date">${formatDate(c.last_sync_at)}</span>
+          </a>
         </td>
-        <td>${statusPill(c.candid_status, c.is_denied, c.has_error)}</td>
-        <td class="queue">${escapeHtml(c.current_queue || "—")}</td>
-        <td class="date">${formatDate(c.submitted_at)}</td>
-        <td class="date">${formatDate(c.last_sync_at)}</td>
       </tr>`;
   }).join("");
 }
