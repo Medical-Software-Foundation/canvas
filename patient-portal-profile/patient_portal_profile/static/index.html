@@ -88,14 +88,14 @@
         <section class="info-section">
             <h3 class="section-title">Preferred pharmacy</h3>
             <div class="pharmacy-details">
-                {% if preferred_pharmacy.name %}
-                <p class="pharmacy-name">{{ preferred_pharmacy.name }}</p>
+                {% if preferred_pharmacy.pharmacy_name %}
+                <p class="pharmacy-name">{{ preferred_pharmacy.pharmacy_name }}</p>
                 {% endif %}
-                {% if preferred_pharmacy.address %}
-                <p class="pharmacy-address">{{ preferred_pharmacy.address }}</p>
+                {% if preferred_pharmacy.pharmacy_address %}
+                <p class="pharmacy-address">{{ preferred_pharmacy.pharmacy_address }}</p>
                 {% endif %}
-                {% if preferred_pharmacy.phone %}
-                <p class="pharmacy-phone">{{ preferred_pharmacy.phone }}</p>
+                {% if preferred_pharmacy.pharmacy_phone_number %}
+                <p class="pharmacy-phone">{{ preferred_pharmacy.pharmacy_phone_number }}</p>
                 {% endif %}
             </div>
         </section>

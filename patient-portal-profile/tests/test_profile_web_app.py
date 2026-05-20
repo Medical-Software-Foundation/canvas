@@ -145,9 +145,11 @@ def test_get_profile_renders_patient_data() -> None:
     patient = _make_patient(
         addresses=[address],
         preferred_pharmacy={
-            "name": "CVS Pharmacy #1234",
-            "address": "500 Boylston St, Boston MA 02116",
-            "phone": "(617) 555-0100",
+            "pharmacy_name": "CVS Pharmacy #1234",
+            "pharmacy_address": "500 Boylston St, Boston MA 02116",
+            "pharmacy_phone_number": "(617) 555-0100",
+            "pharmacy_ncpdp_id": "2382163",
+            "default": True,
         },
     )
     care_team_rows = [
@@ -181,6 +183,8 @@ def test_get_profile_renders_patient_data() -> None:
     assert "Dr. Steven Magee" in html
     assert "Primary care physician" in html
     assert "CVS Pharmacy #1234" in html
+    assert "500 Boylston St, Boston MA 02116" in html
+    assert "(617) 555-0100" in html
     assert 'src="https://cdn.example.com/avatar.png"' in html
 
 
