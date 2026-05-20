@@ -23,7 +23,7 @@ class ProfileWebApp(PatientSessionAuthMixin, SimpleAPI):
 
         patient = (
             Patient.objects.select_related("user")
-            .prefetch_related("addresses")
+            .prefetch_related("addresses", "photos", "settings")
             .get(id=patient_id)
         )
 

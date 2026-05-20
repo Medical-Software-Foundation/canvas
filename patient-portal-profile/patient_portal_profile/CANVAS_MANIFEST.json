@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.154.1",
-    "plugin_version": "0.0.2",
+    "plugin_version": "0.0.3",
     "name": "patient_portal_profile",
     "description": "Patient portal application that lets patients view their own profile: photo, name, birthdate, registration email, registration phone, addresses, care team, and preferred pharmacy.",
     "url_permissions": [],
