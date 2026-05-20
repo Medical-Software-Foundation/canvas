@@ -13,7 +13,12 @@ Adds a **Vitals** tab to the patient chart (`full_chart` application scope) that
 - View the patient's recent vitals (24h / 7d / 30d / 90d / all) as tables and trend charts
 - Carry forward the most recent finished session as defaults for a new session
 - Export the view to CSV or a print-formatted report
-- Mark a committed measurement as Entered-in-Error
+- Mark a committed measurement as Entered-in-Error (excluded from this dashboard's
+  trend charts, CSV, and Print Report; the row remains visible in the audit table
+  with strikethrough. Note: retraction is dashboard-scoped — it does not propagate
+  to the FHIR `Observation` already emitted to the chart-summary sidebar / CCDA
+  export. To correct the chart-wide record, start a new session with the corrected
+  values.)
 
 Clicking **Finish Session** emits a Canvas `Vitals` note with a read-only `VitalsSummary` custom command summarizing the session, then immediately calls `POST /sync_observations`. That endpoint resolves the new note's dbid and emits native FHIR `Observation` records for every captured measurement so they appear on the chart-summary sidebar and in CCDA exports. The dashboard remains the source of truth; the note + Observations are documentation.
 

@@ -649,9 +649,63 @@ class TestCreateSession:
             resp = api.create_session()
 
         existing.save.assert_called()
-        mock_meas.objects.filter.assert_any_call(session_id=str(existing.dbid))
+        # is_deleted=False clause preserves soft-deleted audit rows on update.
+        mock_meas.objects.filter.assert_any_call(
+            session_id=str(existing.dbid), is_deleted=False,
+        )
 
         assert resp[0].status_code == HTTPStatus.CREATED
+
+    def test_update_session_preserves_soft_deleted_rows(self):
+        """Entered-in-Error rows (is_deleted=True) must survive a draft-update
+        autosave. The dashboard surfaces them strikethrough in the audit table
+        and the confirm dialog promised the record would be preserved."""
+        api = self._api({
+            "patient_key": "p-1",
+            "measurements": [{"vital_type": "heart_rate", "value_numeric": 72}],
+            "update_session_id": "99",
+        })
+        existing = MagicMock(dbid=99, patient_key="p-1", note_id="")
+        delete_qs = MagicMock()
+        with patch("vitals_dashboard.api.vitals_api.VitalsSession") as mock_sess, \
+             patch("vitals_dashboard.api.vitals_api.VitalsMeasurement") as mock_meas:
+            mock_sess.objects.filter.return_value.first.return_value = existing
+            mock_meas.objects.filter.return_value = delete_qs
+            mock_meas.objects.bulk_create.side_effect = lambda rows: rows
+
+            api.create_session()
+
+        # The delete filter must include is_deleted=False — without it, any
+        # previously-soft-deleted measurement on this session would be wiped.
+        delete_filter_calls = [
+            c for c in mock_meas.objects.filter.call_args_list
+            if c.kwargs.get("session_id") == str(existing.dbid)
+        ]
+        assert delete_filter_calls, "expected a filter call against session_id"
+        for c in delete_filter_calls:
+            assert c.kwargs.get("is_deleted") is False, (
+                f"delete filter must include is_deleted=False, got: {c.kwargs}"
+            )
+
+    def test_body_supplied_note_id_is_ignored_on_create(self):
+        """A caller must not be able to plant an arbitrary Note UUID on a fresh
+        session — /sync_observations would then link emitted Observations to a
+        foreign note (potentially another patient's). The legitimate finish flow
+        sets note_id server-side; the body field must be dropped."""
+        api = self._api({
+            "patient_key": "p-1",
+            "measurements": [{"vital_type": "heart_rate", "value_numeric": 72}],
+            "note_id": "<victim-note-uuid>",
+            "finish": False,
+        })
+        with patch("vitals_dashboard.api.vitals_api.VitalsSession") as mock_sess, \
+             patch("vitals_dashboard.api.vitals_api.VitalsMeasurement") as mock_meas:
+            mock_sess.objects.create.return_value = MagicMock(dbid=70)
+            mock_meas.objects.bulk_create.side_effect = lambda rows: rows
+            api.create_session()
+
+        # note_id must not appear in the kwargs passed to VitalsSession.objects.create
+        assert "note_id" not in mock_sess.objects.create.call_args.kwargs
 
     def test_update_finished_session_rejected(self):
         """A finished session (note_id populated) backs a signed Vitals note and
@@ -1142,18 +1196,42 @@ class TestUpdateMeasurement:
         measurement = MagicMock(
             dbid=42,
             patient_key="p-OWNER",
+            session_id="100",
             value_numeric=None,
             value_text="",
             recorded_at=None,
         )
-        with patch("vitals_dashboard.api.vitals_api.VitalsMeasurement") as mock_meas:
+        parent_session = MagicMock(dbid=100, note_id="")  # draft
+        with patch("vitals_dashboard.api.vitals_api.VitalsMeasurement") as mock_meas, \
+             patch("vitals_dashboard.api.vitals_api.VitalsSession") as mock_sess:
             mock_meas.objects.filter.return_value.first.return_value = measurement
+            mock_sess.objects.filter.return_value.first.return_value = parent_session
             resp = api.update_measurement()
 
         assert resp[0].status_code == HTTPStatus.OK
         measurement.save.assert_called()
         assert measurement.value_numeric == Decimal("130")
         assert measurement.value_text == "updated"
+
+    def test_update_on_finished_session_rejected(self):
+        """A measurement whose parent VitalsSession.note_id is populated backs
+        a signed Vitals note + emitted FHIR Observations. Editing the row would
+        let the dashboard/CSV diverge from the signed clinical record with no
+        audit signal. Mirrors the create_session finished-session guard."""
+        api = self._api({"measurement_id": "42"}, {"value_numeric": "999"})
+        measurement = MagicMock(
+            dbid=42, patient_key="p-OWNER", session_id="100",
+            value_numeric=Decimal("130"), value_text="", recorded_at=None,
+        )
+        parent_session = MagicMock(dbid=100, note_id="note-abc")  # finished
+        with patch("vitals_dashboard.api.vitals_api.VitalsMeasurement") as mock_meas, \
+             patch("vitals_dashboard.api.vitals_api.VitalsSession") as mock_sess:
+            mock_meas.objects.filter.return_value.first.return_value = measurement
+            mock_sess.objects.filter.return_value.first.return_value = parent_session
+            resp = api.update_measurement()
+
+        assert resp[0].status_code == HTTPStatus.CONFLICT
+        measurement.save.assert_not_called()
 
 
 class TestDeleteMeasurement:

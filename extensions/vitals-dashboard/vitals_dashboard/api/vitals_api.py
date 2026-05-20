@@ -497,11 +497,21 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
             session.session_datetime = session_dt
             session.entered_by_staff_key = entered_by
             session.save()
-            VitalsMeasurement.objects.filter(session_id=str(session.dbid)).delete()
+            # Hard-delete only active draft rows; soft-deleted (Entered-in-Error)
+            # rows must survive autosave updates — the dashboard surfaces them
+            # struck-through in the audit table, and the confirm dialog promised
+            # the user the record would be preserved.
+            VitalsMeasurement.objects.filter(
+                session_id=str(session.dbid), is_deleted=False
+            ).delete()
         else:
+            # note_id is intentionally NOT accepted from the request body — accepting
+            # it would let a caller plant any Note UUID (including another patient's)
+            # onto a fresh session, which /sync_observations would then link
+            # Observations to. The legitimate finish flow sets note_id server-side
+            # from the just-generated uuid4 below.
             session = VitalsSession.objects.create(
                 patient_key=patient_key,
-                note_id=(data.get("note_id") or "").strip(),
                 entered_by_staff_key=entered_by,
                 provider_of_record_key=(data.get("provider_of_record_key") or "").strip(),
                 session_datetime=session_dt,
@@ -977,6 +987,18 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
             return [JSONResponse({"error": "measurement not found"}, status_code=HTTPStatus.NOT_FOUND)]
         if m.patient_key != requested_patient_key:
             return [JSONResponse({"error": "measurement not found"}, status_code=HTTPStatus.NOT_FOUND)]
+
+        # Mirror the create_session finished-session guard: once a session is signed,
+        # its measurements back the stored VitalsSummaryCommand HTML and the FHIR
+        # Observations already emitted to chart-summary/CCDA. Editing the row would
+        # let the dashboard/CSV diverge from the signed note with no audit signal.
+        if m.session_id and m.session_id.isdigit():
+            parent = VitalsSession.objects.filter(dbid=int(m.session_id)).first()
+            if parent and parent.note_id:
+                return [JSONResponse(
+                    {"error": "measurement belongs to a finished session; values cannot be edited"},
+                    status_code=HTTPStatus.CONFLICT,
+                )]
 
         data = self.request.json() or {}
 
