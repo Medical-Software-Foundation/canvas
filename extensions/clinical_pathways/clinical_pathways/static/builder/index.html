@@ -45,11 +45,7 @@
           </div>
         </header>
 
-        <section id="nodes-host" class="nodes-host"></section>
-
-        <div class="row">
-          <button type="button" id="add-node-btn" class="secondary">+ Add questionnaire</button>
-        </div>
+        <section id="steps-host" class="steps-host"></section>
 
         <section id="validation-issues" class="validation hidden">
           <h3>Validation</h3>
@@ -59,10 +55,16 @@
     </section>
 
     <aside id="right-rail" class="pane right-rail">
-      <section id="questions-section">
-        <h2>Questions</h2>
-        <p class="hint">Questions available from referenced questionnaires.</p>
-        <ul id="questions-list" class="rail-list"></ul>
+      <section id="questionnaires-section">
+        <div class="rail-header">
+          <h2>Questionnaires</h2>
+        </div>
+        <p class="hint">Load questionnaires, then add their questions as steps in the center.</p>
+        <div class="add-questionnaire-row">
+          <select id="add-questionnaire-select"></select>
+          <button type="button" id="add-questionnaire-btn" class="secondary small">Load</button>
+        </div>
+        <div id="loaded-questionnaires" class="loaded-questionnaires"></div>
       </section>
 
       <section id="recommendations-section">

@@ -2,7 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  console.log('clinical_pathways builder v0.3.1 loaded');
+  console.log('clinical_pathways builder v0.4.0 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -15,12 +15,13 @@
     publishBtn: document.getElementById('publish-btn'),
     unpublishBtn: document.getElementById('unpublish-btn'),
     deleteBtn: document.getElementById('delete-pathway-btn'),
-    nodesHost: document.getElementById('nodes-host'),
-    addNodeBtn: document.getElementById('add-node-btn'),
+    stepsHost: document.getElementById('steps-host'),
     validation: document.getElementById('validation-issues'),
     validationList: document.getElementById('validation-list'),
     saveStatus: document.getElementById('save-status'),
-    questionsList: document.getElementById('questions-list'),
+    addQSelect: document.getElementById('add-questionnaire-select'),
+    addQBtn: document.getElementById('add-questionnaire-btn'),
+    loadedQ: document.getElementById('loaded-questionnaires'),
     recommendationsList: document.getElementById('recommendations-list'),
     addRecBtn: document.getElementById('add-recommendation-btn'),
     recModal: document.getElementById('recommendation-modal'),
@@ -67,10 +68,8 @@
 
   // ---------- ID minting ----------
 
-  function newId(prefix) {
-    return prefix + Math.random().toString(36).slice(2, 12);
-  }
-  const newNodeId = () => newId('n_');
+  function newId(prefix) { return prefix + Math.random().toString(36).slice(2, 12); }
+  const newStepId = () => newId('s_');
   const newRuleId = () => newId('r_');
   const newRecommendationId = () => newId('rec_');
 
@@ -79,15 +78,19 @@
   let _saveTimer = null;
   function scheduleSave() {
     if (_saveTimer) clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(() => {
-      _saveTimer = null;
-      void flushSave();
-    }, 400);
+    _saveTimer = setTimeout(() => { _saveTimer = null; void flushSave(); }, 400);
   }
   async function flushSave() {
     if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
     if (!state.pathway || !state.pathway.dbid) return;
     try {
+      // Keep start_step_id in sync with the first step.
+      const def = state.pathway.definition;
+      if (def && def.steps && def.steps[0]) {
+        def.start_step_id = def.steps[0].step_id;
+      } else if (def) {
+        def.start_step_id = null;
+      }
       await api('/pathways/' + state.pathway.dbid, {
         method: 'PUT',
         body: {
@@ -126,16 +129,30 @@
   async function loadPathway(dbid) {
     const pw = await api('/pathways/' + dbid);
     state.pathway = upgradeDefinitionIfNeeded(pw);
+    // Preload details for any loaded questionnaires so the rail can render
+    // their questions immediately.
+    await Promise.all(
+      (state.pathway.definition.loaded_questionnaires || []).map(
+        (q) => getQuestionnaireDetail(q.questionnaire_id).catch(() => null),
+      ),
+    );
     renderEditor();
     await reloadList();
   }
 
   function upgradeDefinitionIfNeeded(pw) {
-    // v0.2 pathways have version 1 (or no version). The new builder
-    // doesn't migrate them — the user re-authors.
-    if (!pw.definition || pw.definition.version !== 2) {
-      pw.definition = { version: 2, start_node_id: null, nodes: [], recommendations: [] };
+    if (!pw.definition || pw.definition.version !== 3) {
+      pw.definition = {
+        version: 3,
+        start_step_id: null,
+        loaded_questionnaires: [],
+        steps: [],
+        recommendations: [],
+      };
     }
+    pw.definition.loaded_questionnaires = pw.definition.loaded_questionnaires || [];
+    pw.definition.steps = pw.definition.steps || [];
+    pw.definition.recommendations = pw.definition.recommendations || [];
     return pw;
   }
 
@@ -167,6 +184,7 @@
     return state.questionnaires;
   }
   async function getQuestionnaireDetail(id) {
+    if (!id) return null;
     if (state.questionnaireDetails[id]) return state.questionnaireDetails[id];
     const detail = await api('/catalog/questionnaires/' + encodeURIComponent(id));
     state.questionnaireDetails[id] = detail;
@@ -196,7 +214,7 @@
     els.statusPill.className = 'status-pill ' + status;
     els.publishBtn.classList.toggle('hidden', status === 'published');
     els.unpublishBtn.classList.toggle('hidden', status !== 'published');
-    renderNodes();
+    renderSteps();
     renderRightRail();
     els.validation.classList.add('hidden');
   }
@@ -210,156 +228,147 @@
     return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
   }
 
-  // ---------- Nodes ----------
+  // ---------- Steps ----------
 
-  function renderNodes() {
-    els.nodesHost.innerHTML = '';
-    const definition = state.pathway.definition;
-    const nodes = definition.nodes || [];
-    if (!nodes.length) {
+  function renderSteps() {
+    els.stepsHost.innerHTML = '';
+    const def = state.pathway.definition;
+    const steps = def.steps || [];
+    if (!steps.length) {
       const empty = document.createElement('div');
-      empty.className = 'hint';
-      empty.textContent = 'Add the first questionnaire below to begin.';
-      els.nodesHost.appendChild(empty);
+      empty.className = 'empty-steps';
+      empty.textContent = 'Add a question from the Questionnaires panel on the right to create your first step.';
+      els.stepsHost.appendChild(empty);
       return;
     }
-    nodes.forEach((node, idx) => {
-      els.nodesHost.appendChild(renderNodeCard(node, idx));
+    steps.forEach((step, idx) => {
+      els.stepsHost.appendChild(renderStepCard(step, idx));
     });
   }
 
-  function renderNodeCard(node, idx) {
-    const definition = state.pathway.definition;
+  function renderStepCard(step, idx) {
+    const def = state.pathway.definition;
     const card = document.createElement('article');
-    card.className = 'node-card';
-    if (node.node_id === definition.start_node_id) card.classList.add('is-start');
+    card.className = 'step-card';
+    if (idx === 0) card.classList.add('is-start');
 
     const header = document.createElement('header');
-    header.className = 'node-card-header';
-
+    header.className = 'step-card-header';
     const letter = document.createElement('span');
-    letter.className = 'node-card-letter';
+    letter.className = 'step-card-letter';
     letter.textContent = letterFor(idx);
     header.appendChild(letter);
 
-    const title = document.createElement('div');
-    title.className = 'node-card-title';
-    title.textContent = node.questionnaire_name_snapshot || '(no questionnaire picked yet)';
-    header.appendChild(title);
+    const titleBlock = document.createElement('div');
+    titleBlock.className = 'step-card-title';
+    const qText = document.createElement('div');
+    qText.className = 'question-text';
+    qText.textContent = step.question_name_snapshot || '(unknown question)';
+    titleBlock.appendChild(qText);
+    const qnMeta = document.createElement('div');
+    qnMeta.className = 'questionnaire-meta';
+    qnMeta.textContent = 'From: ' + (step.questionnaire_name_snapshot || '(unknown questionnaire)');
+    titleBlock.appendChild(qnMeta);
+    header.appendChild(titleBlock);
 
-    if (node.node_id === definition.start_node_id) {
+    if (idx === 0) {
       const startMarker = document.createElement('span');
       startMarker.className = 'start-marker';
       startMarker.textContent = 'Start';
       header.appendChild(startMarker);
-    } else {
-      const makeStart = document.createElement('button');
-      makeStart.type = 'button';
-      makeStart.className = 'ghost small';
-      makeStart.textContent = 'Make start';
-      makeStart.addEventListener('click', () => {
-        definition.start_node_id = node.node_id;
-        savePathway();
-        renderEditor();
-      });
-      header.appendChild(makeStart);
     }
 
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'ghost small';
-    removeBtn.textContent = 'Remove';
-    removeBtn.title = 'Remove this questionnaire from the pathway';
-    removeBtn.addEventListener('click', () => removeNode(node));
-    header.appendChild(removeBtn);
+    const actions = document.createElement('div');
+    actions.className = 'step-card-actions';
+    const upBtn = document.createElement('button');
+    upBtn.type = 'button';
+    upBtn.className = 'ghost small';
+    upBtn.textContent = '↑';
+    upBtn.title = 'Move up';
+    upBtn.disabled = idx === 0;
+    upBtn.addEventListener('click', () => moveStep(idx, idx - 1));
+    actions.appendChild(upBtn);
+    const downBtn = document.createElement('button');
+    downBtn.type = 'button';
+    downBtn.className = 'ghost small';
+    downBtn.textContent = '↓';
+    downBtn.title = 'Move down';
+    downBtn.disabled = idx === def.steps.length - 1;
+    downBtn.addEventListener('click', () => moveStep(idx, idx + 1));
+    actions.appendChild(downBtn);
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'ghost small';
+    delBtn.textContent = '×';
+    delBtn.title = 'Remove step';
+    delBtn.addEventListener('click', () => removeStep(step));
+    actions.appendChild(delBtn);
+    header.appendChild(actions);
 
     card.appendChild(header);
 
-    // Questionnaire picker
-    const pickerRow = document.createElement('div');
-    pickerRow.className = 'picker-row';
-    const sel = document.createElement('select');
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = '— Choose a questionnaire —';
-    sel.appendChild(placeholder);
-    if (node.questionnaire_id) {
-      const opt = document.createElement('option');
-      opt.value = node.questionnaire_id;
-      opt.textContent = node.questionnaire_name_snapshot || node.questionnaire_id.slice(0, 8);
-      sel.appendChild(opt);
-    }
-    state.questionnaires.forEach((q) => {
-      if (q.id === node.questionnaire_id) return;
-      const opt = document.createElement('option');
-      opt.value = q.id;
-      opt.textContent = q.name + (q.code ? ' (' + q.code + ')' : '');
-      sel.appendChild(opt);
-    });
-    sel.value = node.questionnaire_id || '';
-    sel.addEventListener('change', async (ev) => {
-      const id = ev.target.value;
-      if (!id) {
-        node.questionnaire_id = '';
-        node.questionnaire_name_snapshot = '';
-      } else {
-        const detail = await getQuestionnaireDetail(id);
-        node.questionnaire_id = id;
-        node.questionnaire_name_snapshot = detail.name;
-      }
+    const rulesHost = document.createElement('div');
+    rulesHost.className = 'rules-host';
+    (step.rules || []).forEach((rule) => rulesHost.appendChild(renderRuleCard(step, rule)));
+    card.appendChild(rulesHost);
+
+    const addRule = document.createElement('button');
+    addRule.type = 'button';
+    addRule.className = 'secondary small';
+    addRule.textContent = '+ Add rule';
+    addRule.style.marginTop = '8px';
+    addRule.addEventListener('click', () => {
+      step.rules = step.rules || [];
+      step.rules.push({
+        rule_id: newRuleId(),
+        combinator: 'all',
+        conditions: [],
+        then: null,
+      });
       savePathway();
       renderEditor();
     });
-    pickerRow.appendChild(sel);
-    card.appendChild(pickerRow);
+    card.appendChild(addRule);
 
-    const hint = document.createElement('p');
-    hint.className = 'hint';
-    hint.textContent = node.node_id === definition.start_node_id
-      ? 'Auto-inserts into the note when the pathway is started.'
-      : 'Auto-inserts when a rule on an earlier questionnaire routes here.';
-    card.appendChild(hint);
-
-    if (node.questionnaire_id) {
-      const rulesHost = document.createElement('div');
-      rulesHost.className = 'rules-host';
-      (node.rules || []).forEach((rule) => {
-        rulesHost.appendChild(renderRuleCard(node, rule));
-      });
-      card.appendChild(rulesHost);
-
-      const addRule = document.createElement('button');
-      addRule.type = 'button';
-      addRule.className = 'secondary small';
-      addRule.textContent = '+ Add rule';
-      addRule.addEventListener('click', () => {
-        node.rules = node.rules || [];
-        node.rules.push({
-          rule_id: newRuleId(),
-          label: '',
-          combinator: 'all',
-          conditions: [],
-          then: null,
-        });
-        savePathway();
-        renderEditor();
-      });
-      card.appendChild(addRule);
-    }
+    // Otherwise row
+    const otherwiseRow = document.createElement('div');
+    otherwiseRow.className = 'otherwise-row';
+    const otherwiseLabel = document.createElement('span');
+    otherwiseLabel.className = 'then-label';
+    otherwiseLabel.textContent = 'Otherwise go to';
+    otherwiseRow.appendChild(otherwiseLabel);
+    const otherwiseSel = buildTargetSelect(step, step.otherwise, /*includeNoneOption*/ true);
+    otherwiseSel.addEventListener('change', (ev) => {
+      step.otherwise = parseTargetValue(ev.target.value);
+      savePathway();
+    });
+    otherwiseRow.appendChild(otherwiseSel);
+    card.appendChild(otherwiseRow);
 
     return card;
   }
 
-  function removeNode(node) {
-    const definition = state.pathway.definition;
-    if (!confirm('Remove this questionnaire and its rules?')) return;
-    definition.nodes = (definition.nodes || []).filter((n) => n.node_id !== node.node_id);
-    if (definition.start_node_id === node.node_id) {
-      definition.start_node_id = definition.nodes[0] ? definition.nodes[0].node_id : null;
-    }
-    (definition.nodes || []).forEach((n) => {
-      (n.rules || []).forEach((r) => {
-        if (r.then && r.then.type === 'node' && r.then.target_id === node.node_id) {
+  function moveStep(fromIdx, toIdx) {
+    const def = state.pathway.definition;
+    const steps = def.steps || [];
+    if (toIdx < 0 || toIdx >= steps.length) return;
+    const [moved] = steps.splice(fromIdx, 1);
+    steps.splice(toIdx, 0, moved);
+    savePathway();
+    renderEditor();
+  }
+
+  function removeStep(step) {
+    if (!confirm('Remove this step?')) return;
+    const def = state.pathway.definition;
+    def.steps = (def.steps || []).filter((s) => s.step_id !== step.step_id);
+    // Drop any rule.then / step.otherwise that pointed at the removed step.
+    (def.steps || []).forEach((s) => {
+      if (s.otherwise && s.otherwise.type === 'step' && s.otherwise.target_id === step.step_id) {
+        s.otherwise = null;
+      }
+      (s.rules || []).forEach((r) => {
+        if (r.then && r.then.type === 'step' && r.then.target_id === step.step_id) {
           r.then = null;
         }
       });
@@ -368,10 +377,62 @@
     renderEditor();
   }
 
+  // ---------- Target selectors (used by Then and Otherwise) ----------
+
+  function buildTargetSelect(step, currentTarget, includeNoneOption) {
+    const def = state.pathway.definition;
+    const sel = document.createElement('select');
+    if (includeNoneOption) {
+      const noneOpt = document.createElement('option');
+      noneOpt.value = '';
+      noneOpt.textContent = '— end of pathway —';
+      sel.appendChild(noneOpt);
+    } else {
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '— Choose target —';
+      sel.appendChild(placeholder);
+    }
+    const stepGroup = document.createElement('optgroup');
+    stepGroup.label = 'Next step';
+    (def.steps || []).forEach((s) => {
+      if (s.step_id === step.step_id) return;
+      const o = document.createElement('option');
+      o.value = 'step:' + s.step_id;
+      o.textContent = s.question_name_snapshot || '(unnamed)';
+      stepGroup.appendChild(o);
+    });
+    if (stepGroup.children.length) sel.appendChild(stepGroup);
+
+    const recGroup = document.createElement('optgroup');
+    recGroup.label = 'Recommendation';
+    (def.recommendations || []).forEach((r) => {
+      const o = document.createElement('option');
+      o.value = 'rec:' + r.recommendation_id;
+      o.textContent = r.name || '(unnamed)';
+      recGroup.appendChild(o);
+    });
+    if (recGroup.children.length) sel.appendChild(recGroup);
+
+    if (currentTarget && currentTarget.type && currentTarget.target_id) {
+      const prefix = currentTarget.type === 'step' ? 'step:' : 'rec:';
+      sel.value = prefix + currentTarget.target_id;
+    } else {
+      sel.value = '';
+    }
+    return sel;
+  }
+
+  function parseTargetValue(v) {
+    if (!v) return null;
+    if (v.startsWith('step:')) return { type: 'step', target_id: v.slice(5) };
+    if (v.startsWith('rec:')) return { type: 'recommendation', target_id: v.slice(4) };
+    return null;
+  }
+
   // ---------- Rules ----------
 
-  function renderRuleCard(node, rule) {
-    const definition = state.pathway.definition;
+  function renderRuleCard(step, rule) {
     const card = document.createElement('div');
     card.className = 'rule-card';
     card.dataset.ruleId = rule.rule_id;
@@ -410,7 +471,7 @@
     delBtn.title = 'Delete rule';
     delBtn.addEventListener('click', () => {
       if (!confirm('Delete this rule?')) return;
-      node.rules = (node.rules || []).filter((r) => r.rule_id !== rule.rule_id);
+      step.rules = (step.rules || []).filter((r) => r.rule_id !== rule.rule_id);
       savePathway();
       renderEditor();
     });
@@ -437,8 +498,10 @@
     addCondBtn.addEventListener('click', () => {
       rule.conditions = rule.conditions || [];
       const allQs = collectAvailableQuestions();
+      // Default condition references this step's own question if available.
+      const defaultQid = step.question_id || (allQs[0] ? allQs[0].question_id : '');
       rule.conditions.push({
-        question_id: allQs[0] ? allQs[0].question_id : '',
+        question_id: defaultQid,
         operator: 'eq',
         value_option_id: '',
         value_option_ids: [],
@@ -457,50 +520,9 @@
     thenLabel.className = 'then-label';
     thenLabel.textContent = 'Then go to';
     thenRow.appendChild(thenLabel);
-
-    const thenSel = document.createElement('select');
-    const placeholderOpt = document.createElement('option');
-    placeholderOpt.value = '';
-    placeholderOpt.textContent = '— Choose target —';
-    thenSel.appendChild(placeholderOpt);
-
-    const nodeGroup = document.createElement('optgroup');
-    nodeGroup.label = 'Questionnaires';
-    (definition.nodes || []).forEach((n) => {
-      if (n.node_id === node.node_id) return;
-      const o = document.createElement('option');
-      o.value = 'node:' + n.node_id;
-      o.textContent = n.questionnaire_name_snapshot || '(unnamed)';
-      nodeGroup.appendChild(o);
-    });
-    if (nodeGroup.children.length) thenSel.appendChild(nodeGroup);
-
-    const recGroup = document.createElement('optgroup');
-    recGroup.label = 'Recommendations';
-    (definition.recommendations || []).forEach((r) => {
-      const o = document.createElement('option');
-      o.value = 'rec:' + r.recommendation_id;
-      o.textContent = r.name || '(unnamed)';
-      recGroup.appendChild(o);
-    });
-    if (recGroup.children.length) thenSel.appendChild(recGroup);
-
-    if (rule.then && rule.then.type && rule.then.target_id) {
-      thenSel.value = rule.then.type === 'node'
-        ? 'node:' + rule.then.target_id
-        : 'rec:' + rule.then.target_id;
-    } else {
-      thenSel.value = '';
-    }
+    const thenSel = buildTargetSelect(step, rule.then, /*includeNoneOption*/ false);
     thenSel.addEventListener('change', (ev) => {
-      const v = ev.target.value;
-      if (!v) {
-        rule.then = null;
-      } else if (v.startsWith('node:')) {
-        rule.then = { type: 'node', target_id: v.slice(5) };
-      } else if (v.startsWith('rec:')) {
-        rule.then = { type: 'recommendation', target_id: v.slice(4) };
-      }
+      rule.then = parseTargetValue(ev.target.value);
       savePathway();
     });
     thenRow.appendChild(thenSel);
@@ -512,11 +534,13 @@
   // ---------- Conditions ----------
 
   function collectAvailableQuestions() {
+    // All questions from all loaded questionnaires, regardless of whether
+    // they've been added as steps. Rule conditions can reference any
+    // captured-by-the-time-it-runs question.
     const out = [];
     const seen = new Set();
-    (state.pathway.definition.nodes || []).forEach((n) => {
-      if (!n.questionnaire_id) return;
-      const detail = state.questionnaireDetails[n.questionnaire_id];
+    (state.pathway.definition.loaded_questionnaires || []).forEach((lq) => {
+      const detail = state.questionnaireDetails[lq.questionnaire_id];
       if (!detail || !detail.questions) return;
       detail.questions.forEach((q) => {
         if (seen.has(q.id)) return;
@@ -524,7 +548,7 @@
         out.push({
           question_id: q.id,
           question_name: q.name,
-          questionnaire_id: n.questionnaire_id,
+          questionnaire_id: lq.questionnaire_id,
           questionnaire_name: detail.name,
           response_set_type: q.response_set_type,
           options: q.options || [],
@@ -543,8 +567,7 @@
     const qSel = document.createElement('select');
     if (!cond.question_id) {
       const ph = document.createElement('option');
-      ph.value = '';
-      ph.textContent = '— question —';
+      ph.value = ''; ph.textContent = '— question —';
       qSel.appendChild(ph);
     }
     allQs.forEach((q) => {
@@ -600,13 +623,10 @@
     const type = (question && question.response_set_type) || 'TXT';
     const ops = operatorsForType(type);
     const validKeys = ops.map(([v]) => v);
-    if (!validKeys.includes(cond.operator)) {
-      cond.operator = ops[0] ? ops[0][0] : 'eq';
-    }
+    if (!validKeys.includes(cond.operator)) cond.operator = ops[0] ? ops[0][0] : 'eq';
     ops.forEach(([v, lbl]) => {
       const o = document.createElement('option');
-      o.value = v;
-      o.textContent = lbl;
+      o.value = v; o.textContent = lbl;
       opSel.appendChild(o);
     });
     opSel.value = cond.operator;
@@ -619,21 +639,9 @@
   }
 
   function operatorsForType(type) {
-    if (type === 'SING') {
-      return [['eq', 'equals'], ['neq', 'does not equal'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
-    }
-    if (type === 'MULT') {
-      return [
-        ['contains_any', 'contains any of'],
-        ['contains_all', 'contains all of'],
-        ['contains_none', 'contains none of'],
-        ['any_answer', 'any answer'],
-        ['no_answer', 'no answer'],
-      ];
-    }
-    if (type === 'INT') {
-      return [['eq', '='], ['neq', '≠'], ['lt', '<'], ['lte', '≤'], ['gt', '>'], ['gte', '≥'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
-    }
+    if (type === 'SING') return [['eq', 'equals'], ['neq', 'does not equal'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
+    if (type === 'MULT') return [['contains_any', 'contains any of'], ['contains_all', 'contains all of'], ['contains_none', 'contains none of'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
+    if (type === 'INT') return [['eq', '='], ['neq', '≠'], ['lt', '<'], ['lte', '≤'], ['gt', '>'], ['gte', '≥'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
     return [['eq', 'equals'], ['neq', 'does not equal'], ['contains', 'contains'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
   }
 
@@ -656,10 +664,7 @@
         sel.appendChild(opt);
       });
       sel.value = cond.value_option_id || '';
-      sel.addEventListener('change', (ev) => {
-        cond.value_option_id = ev.target.value;
-        onChange();
-      });
+      sel.addEventListener('change', (ev) => { cond.value_option_id = ev.target.value; onChange(); });
       host.appendChild(sel);
       queueMicrotask(() => {
         if (cond.value_option_id && sel.value !== cond.value_option_id) sel.value = cond.value_option_id;
@@ -696,54 +701,153 @@
       const inp = document.createElement('input');
       inp.type = 'number';
       inp.value = cond.value_number != null ? cond.value_number : '';
-      inp.addEventListener('input', (ev) => {
-        cond.value_number = ev.target.value === '' ? null : Number(ev.target.value);
-        onChange();
-      });
+      inp.addEventListener('input', (ev) => { cond.value_number = ev.target.value === '' ? null : Number(ev.target.value); onChange(); });
       host.appendChild(inp);
       return;
     }
     const inp = document.createElement('input');
     inp.type = 'text';
     inp.value = cond.value_text || '';
-    inp.addEventListener('input', (ev) => {
-      cond.value_text = ev.target.value;
-      onChange();
-    });
+    inp.addEventListener('input', (ev) => { cond.value_text = ev.target.value; onChange(); });
     host.appendChild(inp);
   }
 
-  // ---------- Right rail: questions + recommendations ----------
+  // ---------- Right rail: questionnaires + recommendations ----------
 
   function renderRightRail() {
-    renderQuestionsList();
+    renderAddQuestionnaireSelect();
+    renderLoadedQuestionnaires();
     renderRecommendationsList();
   }
 
-  function renderQuestionsList() {
-    els.questionsList.innerHTML = '';
-    const allQs = collectAvailableQuestions();
-    if (!allQs.length) {
-      const empty = document.createElement('li');
-      empty.className = 'empty-message';
-      empty.textContent = 'Pick a questionnaire to populate this list.';
-      els.questionsList.appendChild(empty);
+  function renderAddQuestionnaireSelect() {
+    els.addQSelect.innerHTML = '';
+    const def = state.pathway.definition;
+    const loadedIds = new Set((def.loaded_questionnaires || []).map((q) => q.questionnaire_id));
+    const ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '— Pick a questionnaire —';
+    els.addQSelect.appendChild(ph);
+    state.questionnaires.forEach((q) => {
+      if (loadedIds.has(q.id)) return;
+      const o = document.createElement('option');
+      o.value = q.id;
+      o.textContent = q.name + (q.code ? ' (' + q.code + ')' : '');
+      els.addQSelect.appendChild(o);
+    });
+    els.addQSelect.value = '';
+    els.addQBtn.disabled = els.addQSelect.options.length <= 1;
+  }
+
+  function renderLoadedQuestionnaires() {
+    els.loadedQ.innerHTML = '';
+    const def = state.pathway.definition;
+    const loaded = def.loaded_questionnaires || [];
+    if (!loaded.length) {
+      const empty = document.createElement('div');
+      empty.className = 'rail-list';
+      const li = document.createElement('div');
+      li.className = 'empty-message';
+      li.textContent = 'No questionnaires loaded yet.';
+      empty.appendChild(li);
+      els.loadedQ.appendChild(empty);
       return;
     }
-    allQs.forEach((q, idx) => {
-      const li = document.createElement('li');
-      li.className = 'question-item';
-      const letter = document.createElement('span');
-      letter.className = 'letter-badge';
-      letter.textContent = letterFor(idx);
-      const text = document.createElement('span');
-      text.className = 'item-text';
-      text.textContent = q.question_name;
-      text.title = q.questionnaire_name + ' — ' + q.question_name;
-      li.appendChild(letter);
-      li.appendChild(text);
-      els.questionsList.appendChild(li);
+    let letterIdx = 0;
+    loaded.forEach((lq) => {
+      const detail = state.questionnaireDetails[lq.questionnaire_id];
+      const card = document.createElement('div');
+      card.className = 'loaded-questionnaire';
+
+      const header = document.createElement('div');
+      header.className = 'loaded-questionnaire-header';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = lq.questionnaire_name_snapshot || (detail ? detail.name : '(loading…)');
+      header.appendChild(name);
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'ghost small';
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove from rail';
+      removeBtn.addEventListener('click', () => removeLoadedQuestionnaire(lq.questionnaire_id));
+      header.appendChild(removeBtn);
+      card.appendChild(header);
+
+      const qList = document.createElement('ul');
+      qList.className = 'loaded-questionnaire-questions';
+      if (detail && detail.questions) {
+        detail.questions.forEach((q) => {
+          const li = document.createElement('li');
+          const letter = document.createElement('span');
+          letter.className = 'q-letter';
+          letter.textContent = letterFor(letterIdx++);
+          const text = document.createElement('span');
+          text.className = 'q-text';
+          text.textContent = q.name;
+          text.title = q.name;
+          const addBtn = document.createElement('button');
+          addBtn.type = 'button';
+          addBtn.className = 'ghost small';
+          addBtn.textContent = '+';
+          addBtn.title = 'Add as step';
+          addBtn.addEventListener('click', () => addStepFromQuestion(lq, detail, q));
+          li.appendChild(letter);
+          li.appendChild(text);
+          li.appendChild(addBtn);
+          qList.appendChild(li);
+        });
+      } else {
+        const li = document.createElement('li');
+        li.className = 'empty-message';
+        li.textContent = 'Loading questions…';
+        qList.appendChild(li);
+      }
+      card.appendChild(qList);
+      els.loadedQ.appendChild(card);
     });
+  }
+
+  async function addQuestionnaireFromSelect() {
+    const id = els.addQSelect.value;
+    if (!id) return;
+    const detail = await getQuestionnaireDetail(id);
+    const def = state.pathway.definition;
+    def.loaded_questionnaires = def.loaded_questionnaires || [];
+    if (!def.loaded_questionnaires.find((lq) => lq.questionnaire_id === id)) {
+      def.loaded_questionnaires.push({
+        questionnaire_id: id,
+        questionnaire_name_snapshot: detail ? detail.name : '',
+      });
+    }
+    savePathway();
+    renderEditor();
+  }
+
+  function removeLoadedQuestionnaire(questionnaire_id) {
+    if (!confirm('Remove this questionnaire from the rail? Any steps using its questions stay but lose their snapshot.')) return;
+    const def = state.pathway.definition;
+    def.loaded_questionnaires = (def.loaded_questionnaires || []).filter(
+      (lq) => lq.questionnaire_id !== questionnaire_id,
+    );
+    savePathway();
+    renderEditor();
+  }
+
+  function addStepFromQuestion(loaded, detail, question) {
+    const def = state.pathway.definition;
+    def.steps = def.steps || [];
+    def.steps.push({
+      step_id: newStepId(),
+      questionnaire_id: loaded.questionnaire_id,
+      questionnaire_name_snapshot: detail.name || loaded.questionnaire_name_snapshot || '',
+      question_id: question.id,
+      question_name_snapshot: question.name || '',
+      rules: [],
+      otherwise: null,
+    });
+    savePathway();
+    renderEditor();
   }
 
   function renderRecommendationsList() {
@@ -788,17 +892,15 @@
     state.editingRecommendationId = null;
     els.recModal.classList.add('hidden');
   }
-
   function renderRecommendationForm() {
     els.recForm.innerHTML = '';
     const rec = (state.pathway.definition.recommendations || []).find(
       (r) => r.recommendation_id === state.editingRecommendationId,
     );
     if (!rec) return;
-
     const nameField = document.createElement('label');
     nameField.className = 'field';
-    nameField.textContent = 'Name (shown in the right rail)';
+    nameField.textContent = 'Name (shown in the rail)';
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = rec.name || '';
@@ -810,35 +912,30 @@
     nameField.appendChild(nameInput);
     els.recForm.appendChild(nameField);
 
-    const cmd = state.terminalCommands.find((c) => c.key === rec.command_key)
-      || state.terminalCommands[0];
+    const cmd = state.terminalCommands.find((c) => c.key === rec.command_key) || state.terminalCommands[0];
     if (!rec.command_key && cmd) rec.command_key = cmd.key;
 
     (cmd ? cmd.fields : []).forEach((field) => {
       const lbl = document.createElement('label');
       lbl.className = 'field';
       lbl.textContent = field.label + (field.required ? ' *' : '');
-
       rec.params = rec.params || {};
       const v = rec.params[field.key] != null ? rec.params[field.key] : '';
       let input;
       if (field.type === 'textarea') {
         input = document.createElement('textarea');
-        input.rows = 3;
-        input.value = v;
+        input.rows = 3; input.value = v;
       } else if (field.type === 'select') {
         input = document.createElement('select');
         (field.options || []).forEach((opt) => {
           const o = document.createElement('option');
-          o.value = opt.value;
-          o.textContent = opt.label;
+          o.value = opt.value; o.textContent = opt.label;
           input.appendChild(o);
         });
         input.value = v;
       } else {
         input = document.createElement('input');
-        input.type = 'text';
-        input.value = v;
+        input.type = 'text'; input.value = v;
       }
       const evt = field.type === 'select' ? 'change' : 'input';
       input.addEventListener(evt, (ev) => {
@@ -847,12 +944,10 @@
         renderRecommendationsList();
       });
       lbl.appendChild(input);
-
       const hint = document.createElement('div');
       hint.className = 'field-hint';
       hint.textContent = 'Use {{question_id}} to interpolate an answer from earlier in this pathway.';
       lbl.appendChild(hint);
-
       els.recForm.appendChild(lbl);
     });
   }
@@ -869,8 +964,7 @@
     state.pathway.definition.recommendations = state.pathway.definition.recommendations || [];
     state.pathway.definition.recommendations.push(rec);
     savePathway();
-    renderRightRail();
-    renderNodes();
+    renderEditor();
     openRecommendationModal(rec.recommendation_id);
   }
 
@@ -880,8 +974,11 @@
     if (!confirm('Delete this recommendation? Any rules pointing to it will lose their target.')) return;
     const def = state.pathway.definition;
     def.recommendations = (def.recommendations || []).filter((r) => r.recommendation_id !== recId);
-    (def.nodes || []).forEach((n) => {
-      (n.rules || []).forEach((r) => {
+    (def.steps || []).forEach((s) => {
+      if (s.otherwise && s.otherwise.type === 'recommendation' && s.otherwise.target_id === recId) {
+        s.otherwise = null;
+      }
+      (s.rules || []).forEach((r) => {
         if (r.then && r.then.type === 'recommendation' && r.then.target_id === recId) {
           r.then = null;
         }
@@ -889,24 +986,6 @@
     });
     savePathway();
     closeRecommendationModal();
-    renderEditor();
-  }
-
-  // ---------- Add node ----------
-
-  async function addNode() {
-    await searchQuestionnaires('');
-    const def = state.pathway.definition;
-    const node = {
-      node_id: newNodeId(),
-      questionnaire_id: '',
-      questionnaire_name_snapshot: '',
-      rules: [],
-    };
-    def.nodes = def.nodes || [];
-    def.nodes.push(node);
-    if (!def.start_node_id) def.start_node_id = node.node_id;
-    savePathway();
     renderEditor();
   }
 
@@ -927,7 +1006,7 @@
 
   els.newBtn.addEventListener('click', createPathway);
   els.deleteBtn.addEventListener('click', deletePathway);
-  els.addNodeBtn.addEventListener('click', addNode);
+  els.addQBtn.addEventListener('click', addQuestionnaireFromSelect);
   els.addRecBtn.addEventListener('click', addRecommendation);
   els.closeRecModalBtn.addEventListener('click', closeRecommendationModal);
   els.saveRecBtn.addEventListener('click', closeRecommendationModal);
@@ -948,10 +1027,7 @@
       renderValidation(res.issues || []);
     } catch (err) {
       let issues = [];
-      try {
-        const parsed = JSON.parse(err.message);
-        issues = parsed.issues || [];
-      } catch (_) { /* leave empty */ }
+      try { const parsed = JSON.parse(err.message); issues = parsed.issues || []; } catch (_) {}
       renderValidation(issues);
     }
   });
@@ -966,10 +1042,7 @@
 
   function renderValidation(issues) {
     els.validationList.innerHTML = '';
-    if (!issues.length) {
-      els.validation.classList.add('hidden');
-      return;
-    }
+    if (!issues.length) { els.validation.classList.add('hidden'); return; }
     issues.forEach((i) => {
       const li = document.createElement('li');
       li.className = i.severity || 'error';

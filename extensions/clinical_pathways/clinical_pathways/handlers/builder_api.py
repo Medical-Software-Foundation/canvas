@@ -30,8 +30,8 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _new_node_id() -> str:
-    return "n_" + _uuid_lib.uuid4().hex[:10]
+def _new_step_id() -> str:
+    return "s_" + _uuid_lib.uuid4().hex[:10]
 
 
 def _new_rule_id() -> str:
@@ -59,21 +59,29 @@ def _serialize_pathway_full(pw: Pathway) -> dict[str, Any]:
 
 
 def _empty_definition() -> dict[str, Any]:
-    """Empty v2 pathway document.
+    """Empty v3 pathway document.
 
     Shape:
       {
-        "version": 2,
-        "start_node_id": null | "n_...",
-        "nodes": [
-          { "node_id": "n_...", "questionnaire_id": "<uuid>",
+        "version": 3,
+        "start_step_id": null | "s_...",
+        "loaded_questionnaires": [
+          { "questionnaire_id": "<uuid>",
+            "questionnaire_name_snapshot": "..." }
+        ],
+        "steps": [
+          { "step_id": "s_...",
+            "questionnaire_id": "<uuid>",
             "questionnaire_name_snapshot": "...",
+            "question_id": "<uuid>",
+            "question_name_snapshot": "...",
             "rules": [
               { "rule_id": "r_...", "combinator": "all"|"any",
                 "conditions": [{question_id, operator, value_*...}],
-                "then": { "type": "node"|"recommendation", "target_id": "..." }
+                "then": { "type": "step"|"recommendation", "target_id": "..." }
               }
-            ] }
+            ],
+            "otherwise": { "type": "step"|"recommendation", "target_id": "..." } | null }
         ],
         "recommendations": [
           { "recommendation_id": "rec_...", "name": "...",
@@ -83,9 +91,10 @@ def _empty_definition() -> dict[str, Any]:
       }
     """
     return {
-        "version": 2,
-        "start_node_id": None,
-        "nodes": [],
+        "version": 3,
+        "start_step_id": None,
+        "loaded_questionnaires": [],
+        "steps": [],
         "recommendations": [],
     }
 
@@ -96,7 +105,7 @@ def _validate_pathway(definition: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(definition, dict):
         issues.append({"severity": "error", "message": "Pathway has no definition yet."})
         return issues
-    if definition.get("version") != 2:
+    if definition.get("version") != 3:
         issues.append(
             {
                 "severity": "error",
@@ -108,127 +117,79 @@ def _validate_pathway(definition: dict[str, Any]) -> list[dict[str, Any]]:
         )
         return issues
 
-    nodes = definition.get("nodes") or []
+    steps = definition.get("steps") or []
     recommendations = definition.get("recommendations") or []
-    start_node_id = definition.get("start_node_id")
-    node_ids = {n.get("node_id") for n in nodes if isinstance(n, dict)}
+    start_step_id = definition.get("start_step_id")
+    step_ids = {s.get("step_id") for s in steps if isinstance(s, dict)}
     recommendation_ids = {
         r.get("recommendation_id") for r in recommendations if isinstance(r, dict)
     }
 
-    if not nodes:
+    def _check_target(target: Any, ctx: dict[str, str]) -> None:
+        if not isinstance(target, dict):
+            issues.append({**ctx, "severity": "error", "message": "Routing target is missing."})
+            return
+        ttype = target.get("type")
+        tid = target.get("target_id")
+        if ttype == "step":
+            if tid not in step_ids:
+                issues.append({**ctx, "severity": "error", "message": "Routes to a step that's not in this pathway."})
+        elif ttype == "recommendation":
+            if tid not in recommendation_ids:
+                issues.append({**ctx, "severity": "error", "message": "Routes to a recommendation that's not in this pathway."})
+        else:
+            issues.append({**ctx, "severity": "error", "message": "Routing target has an unknown type."})
+
+    if not steps:
         issues.append(
-            {"severity": "error", "message": "Add a starting questionnaire to the pathway."}
+            {"severity": "error", "message": "Add at least one step to the pathway."}
         )
-    elif not start_node_id or start_node_id not in node_ids:
+    elif not start_step_id or start_step_id not in step_ids:
         issues.append(
-            {
-                "severity": "error",
-                "message": "Pick which questionnaire the pathway starts with.",
-            }
+            {"severity": "error", "message": "Pick which step the pathway starts with."}
         )
 
-    for node in nodes:
-        if not isinstance(node, dict):
-            issues.append({"severity": "error", "message": "Malformed node entry."})
+    for step in steps:
+        if not isinstance(step, dict):
+            issues.append({"severity": "error", "message": "Malformed step entry."})
             continue
-        node_id = node.get("node_id", "?")
-        qid = node.get("questionnaire_id")
+        step_id = step.get("step_id", "?")
+        qnid = step.get("questionnaire_id")
+        qid = step.get("question_id")
+        if not qnid:
+            issues.append({"severity": "error", "step_id": step_id, "message": "Step is missing its questionnaire reference."})
+        elif not Questionnaire.objects.filter(id=qnid).exists():
+            issues.append({"severity": "warning", "step_id": step_id, "message": "Referenced questionnaire is no longer available."})
         if not qid:
-            issues.append(
-                {
-                    "severity": "error",
-                    "node_id": node_id,
-                    "message": "Node is missing a questionnaire reference.",
-                }
-            )
-        elif not Questionnaire.objects.filter(id=qid).exists():
+            issues.append({"severity": "error", "step_id": step_id, "message": "Step is missing its question reference."})
+
+        rules = step.get("rules") or []
+        otherwise = step.get("otherwise")
+        if not rules and not otherwise:
             issues.append(
                 {
                     "severity": "warning",
-                    "node_id": node_id,
+                    "step_id": step_id,
                     "message": (
-                        "Referenced questionnaire is no longer available. "
-                        "Rules that condition on it will not evaluate."
+                        "Step has no rules and no Otherwise target — the "
+                        "pathway will end after this step."
                     ),
                 }
             )
-        rules = node.get("rules") or []
-        if not rules:
-            issues.append(
-                {
-                    "severity": "warning",
-                    "node_id": node_id,
-                    "message": (
-                        "Questionnaire has no rules — this arm will end after "
-                        "the questionnaire is committed without emitting a "
-                        "recommendation."
-                    ),
-                }
-            )
+        if otherwise is not None:
+            _check_target(otherwise, {"step_id": step_id, "context": "otherwise"})
         for rule in rules:
             if not isinstance(rule, dict):
-                issues.append(
-                    {
-                        "severity": "error",
-                        "node_id": node_id,
-                        "message": "Malformed rule entry.",
-                    }
-                )
+                issues.append({"severity": "error", "step_id": step_id, "message": "Malformed rule entry."})
                 continue
             rule_id = rule.get("rule_id", "?")
             combinator = rule.get("combinator")
             if combinator not in ("all", "any"):
-                issues.append(
-                    {
-                        "severity": "error",
-                        "node_id": node_id,
-                        "rule_id": rule_id,
-                        "message": "Rule combinator must be either 'all' or 'any'.",
-                    }
-                )
+                issues.append({"severity": "error", "step_id": step_id, "rule_id": rule_id, "message": "Rule combinator must be 'all' or 'any'."})
             conditions = rule.get("conditions") or []
             if not conditions:
-                issues.append(
-                    {
-                        "severity": "error",
-                        "node_id": node_id,
-                        "rule_id": rule_id,
-                        "message": "Rule has no conditions.",
-                    }
-                )
-            then = rule.get("then") or {}
-            target_type = then.get("type")
-            target_id = then.get("target_id")
-            if target_type == "node":
-                if target_id not in node_ids:
-                    issues.append(
-                        {
-                            "severity": "error",
-                            "node_id": node_id,
-                            "rule_id": rule_id,
-                            "message": "Rule routes to a questionnaire that's not in this pathway.",
-                        }
-                    )
-            elif target_type == "recommendation":
-                if target_id not in recommendation_ids:
-                    issues.append(
-                        {
-                            "severity": "error",
-                            "node_id": node_id,
-                            "rule_id": rule_id,
-                            "message": "Rule routes to a recommendation that's not in this pathway.",
-                        }
-                    )
-            else:
-                issues.append(
-                    {
-                        "severity": "error",
-                        "node_id": node_id,
-                        "rule_id": rule_id,
-                        "message": "Rule is missing its 'then' target.",
-                    }
-                )
+                issues.append({"severity": "error", "step_id": step_id, "rule_id": rule_id, "message": "Rule has no conditions."})
+            _check_target(rule.get("then"), {"step_id": step_id, "rule_id": rule_id})
 
     for rec in recommendations:
         if not isinstance(rec, dict):

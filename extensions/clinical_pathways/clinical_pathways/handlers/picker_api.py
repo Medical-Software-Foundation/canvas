@@ -110,7 +110,7 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
         definition = pw.definition or {}
-        if definition.get("version") != 2:
+        if definition.get("version") != 3:
             return [
                 JSONResponse(
                     {
@@ -122,20 +122,21 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
-        start_node_id = definition.get("start_node_id")
-        nodes = definition.get("nodes") or []
-        start_node = next(
-            (n for n in nodes if isinstance(n, dict) and n.get("node_id") == start_node_id),
+        start_step_id = definition.get("start_step_id")
+        steps = definition.get("steps") or []
+        start_step = next(
+            (s for s in steps if isinstance(s, dict) and s.get("step_id") == start_step_id),
             None,
         )
-        if not start_node or not start_node.get("questionnaire_id"):
+        if not start_step or not start_step.get("questionnaire_id"):
             return [
                 JSONResponse(
-                    {"error": "Pathway has no starting questionnaire configured."},
+                    {"error": "Pathway has no starting step configured."},
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
 
+        start_questionnaire_id = str(start_step["questionnaire_id"])
         # Use pathway_id (column accessor) instead of the instance to dodge a
         # Canvas SDK quirk where the same model class can be loaded under two
         # different module references inside the plugin runner; the FK
@@ -144,7 +145,8 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
         run = PathwayRun(
             note_uuid=note_uuid,
             pathway_id=pw.dbid,
-            current_node_id=start_node_id,
+            current_step_id=start_step_id,
+            inserted_questionnaires=[start_questionnaire_id],
             status="active",
             captured_responses={},
         )
@@ -153,7 +155,7 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
         questionnaire = QuestionnaireCommand()
         questionnaire.note_uuid = note_uuid
         questionnaire.command_uuid = str(uuid4())
-        questionnaire.questionnaire_id = start_node["questionnaire_id"]
+        questionnaire.questionnaire_id = start_questionnaire_id
 
         return [
             BatchOriginateCommandEffect(commands=[questionnaire]).apply(),

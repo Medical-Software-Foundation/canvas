@@ -25,9 +25,8 @@ main#app { display: flex; height: calc(100vh - 53px); }
 .list li .badge.published { background: #c6f6d5; color: #22543d; }
 
 .pane.wide { flex: 1; min-width: 0; max-width: 880px; }
-/* Push the right rail flush to the right edge of the viewport so the
-   space between the center pane and the rail isn't dead space. */
 .right-rail { margin-left: auto; }
+
 .empty { color: #718096; padding: 60px 0; text-align: center; }
 .hidden { display: none !important; }
 
@@ -59,22 +58,26 @@ button.small { padding: 4px 8px; font-size: 12px; }
 
 .row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
 
-.nodes-host { display: flex; flex-direction: column; gap: 14px; }
+/* Steps list */
+.steps-host { display: flex; flex-direction: column; gap: 14px; }
 
-.node-card {
+.step-card {
   background: #fff; border: 1px solid #e2e8f0; border-left: 3px solid #4299e1;
   border-radius: 6px; padding: 14px 16px;
 }
-.node-card.is-start { border-left-color: #38a169; }
-.node-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-.node-card-letter { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; background: #ebf8ff; color: #2c5282; font-size: 12px; font-weight: 600; }
-.node-card.is-start .node-card-letter { background: #c6f6d5; color: #22543d; }
-.node-card-title { flex: 1; font-weight: 600; font-size: 14px; }
-.node-card .picker-row { display: flex; gap: 8px; align-items: center; }
-.node-card .picker-row select { flex: 1; padding: 6px 10px; border: 1px solid #cbd5e0; border-radius: 4px; font: inherit; background: #fff; min-width: 0; }
-.node-card .start-marker { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; background: #c6f6d5; color: #22543d; font-size: 11px; text-transform: uppercase; font-weight: 600; }
+.step-card.is-start { border-left-color: #38a169; }
+.step-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.step-card-letter { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; background: #ebf8ff; color: #2c5282; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.step-card.is-start .step-card-letter { background: #c6f6d5; color: #22543d; }
+.step-card-title { flex: 1; min-width: 0; }
+.step-card-title .question-text { font-weight: 600; font-size: 14px; }
+.step-card-title .questionnaire-meta { font-size: 11px; color: #718096; margin-top: 2px; }
+.step-card .start-marker { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; background: #c6f6d5; color: #22543d; font-size: 11px; text-transform: uppercase; font-weight: 600; }
+.step-card-actions { display: flex; gap: 4px; align-items: center; }
 
-.node-card .rules-host { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.empty-steps { color: #718096; font-size: 13px; padding: 30px; text-align: center; background: #fff; border: 1px dashed #cbd5e0; border-radius: 6px; }
+
+.rules-host { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .rule-card { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; }
 .rule-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .rule-header .rule-if-label { font-size: 13px; color: #4a5568; font-weight: 500; }
@@ -83,7 +86,6 @@ button.small { padding: 4px 8px; font-size: 12px; }
 .conditions-host { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .condition-row {
   display: grid;
-  /* question takes ~2x the room of the value cell; operator is fixed. */
   grid-template-columns: minmax(0, 2.2fr) minmax(100px, 120px) minmax(0, 1fr) auto;
   gap: 6px; align-items: center;
 }
@@ -97,9 +99,11 @@ button.small { padding: 4px 8px; font-size: 12px; }
 .condition-row .value-cell > * { width: 100%; }
 .connector-label { font-size: 12px; color: #718096; padding-left: 4px; font-style: italic; }
 
-.then-row { display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; flex-wrap: wrap; }
-.then-row .then-label { font-size: 13px; color: #4a5568; font-weight: 500; }
-.then-row select { padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 3px; font: inherit; background: #fff; flex: 1; min-width: 120px; }
+.then-row, .otherwise-row { display: flex; align-items: center; gap: 8px; padding-top: 6px; flex-wrap: wrap; }
+.then-row { border-top: 1px solid #e2e8f0; }
+.otherwise-row { margin-top: 8px; padding: 8px 10px; background: #fffaf0; border: 1px dashed #fbd38d; border-radius: 4px; padding-top: 8px; }
+.then-row .then-label, .otherwise-row .then-label { font-size: 13px; color: #4a5568; font-weight: 500; }
+.then-row select, .otherwise-row select { padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 3px; font: inherit; background: #fff; flex: 1; min-width: 120px; }
 
 .validation { background: #fffaf0; border: 1px solid #fbd38d; border-radius: 6px; padding: 12px; margin-top: 18px; }
 .validation h3 { margin: 0 0 8px; font-size: 14px; color: #7b341e; }
@@ -108,16 +112,29 @@ button.small { padding: 4px 8px; font-size: 12px; }
 .validation li.warning { color: #7b341e; }
 
 /* Right rail */
-.right-rail { width: 280px; background: #fff; border-left: 1px solid #e2e8f0; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px; }
-.right-rail .rail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.right-rail .rail-header h2 { margin: 0; }
+.right-rail { width: 300px; background: #fff; border-left: 1px solid #e2e8f0; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px; }
+.rail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.rail-header h2 { margin: 0; }
+
+.add-questionnaire-row { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; }
+.add-questionnaire-row select { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid #cbd5e0; border-radius: 3px; font: inherit; background: #fff; }
+
+.loaded-questionnaires { display: flex; flex-direction: column; gap: 8px; }
+.loaded-questionnaire { border: 1px solid #e2e8f0; border-radius: 4px; background: #f7fafc; }
+.loaded-questionnaire-header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #ebf8ff; border-bottom: 1px solid #e2e8f0; border-radius: 4px 4px 0 0; }
+.loaded-questionnaire-header .name { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; color: #2c5282; overflow: hidden; text-overflow: ellipsis; }
+.loaded-questionnaire-questions { list-style: none; padding: 6px 8px; margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.loaded-questionnaire-questions li { display: flex; align-items: center; gap: 6px; padding: 4px 4px; border-radius: 3px; }
+.loaded-questionnaire-questions li:hover { background: #edf2f7; }
+.loaded-questionnaire-questions .q-letter { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; background: #ebf8ff; color: #2c5282; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+.loaded-questionnaire-questions .q-text { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.loaded-questionnaire-questions button { padding: 2px 6px; font-size: 11px; }
+
 .rail-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .rail-list li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; }
-.rail-list li.question-item { cursor: default; }
 .rail-list li.recommendation-item { cursor: pointer; }
 .rail-list li.recommendation-item:hover { background: #edf2f7; }
-.rail-list .letter-badge { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 3px; background: #ebf8ff; color: #2c5282; font-size: 11px; font-weight: 600; flex-shrink: 0; }
-.rail-list .recommendation-item .letter-badge { background: #fefcbf; color: #744210; }
+.rail-list .letter-badge { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 3px; background: #fefcbf; color: #744210; font-size: 11px; font-weight: 600; flex-shrink: 0; }
 .rail-list .item-text { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rail-list .item-meta { font-size: 11px; color: #718096; }
 .rail-list .empty-message { color: #a0aec0; font-size: 12px; padding: 4px 8px; font-style: italic; }

@@ -1,38 +1,44 @@
-"""Pathway runtime evaluator.
+"""Pathway runtime evaluator (v0.4).
 
-Subscribes to `INTERVIEW_UPDATED` and advances any active `PathwayRun` for
-the note the interview belongs to. When the run's current questionnaire is
-committed, evaluates the active node's rules against the captured
-responses, and emits the next questionnaire — or the recommendation
-custom command — via `BatchOriginateCommandEffect`.
+Subscribes to `INTERVIEW_UPDATED` and advances any active `PathwayRun`
+attached to the note the interview belongs to.
 
-Pathway definition shape (v2):
+Step-by-step semantics:
+- Each step in the pathway references one Canvas (questionnaire, question)
+  pair. A step is "answered" once its questionnaire has been committed.
+- The evaluator walks forward from `run.current_step_id` after each
+  commit, consuming steps whose answers are now captured, routing per
+  each step's rules / otherwise. It pauses when it hits a step whose
+  questionnaire has not yet been inserted into the note (it inserts the
+  questionnaire and waits for the next commit).
+- Multiple consecutive steps that share a questionnaire are processed in
+  a single commit — the runtime only inserts a new questionnaire when
+  the next step actually requires one that isn't already in the note.
+
+Pathway definition shape (v3):
     {
-      "version": 2,
-      "start_node_id": "n_...",
-      "nodes": [
-        { "node_id": "n_...", "questionnaire_id": "<uuid>",
+      "version": 3,
+      "start_step_id": "s_...",
+      "loaded_questionnaires": [{ "questionnaire_id", "questionnaire_name_snapshot" }],
+      "steps": [
+        { "step_id": "s_...",
+          "questionnaire_id": "<uuid>",
+          "question_id": "<uuid>",
           "rules": [
-            { "rule_id": "r_...", "combinator": "all"|"any",
-              "conditions": [
-                { "question_id": "<uuid>", "operator": "eq"|"neq"|...,
-                  "value_option_id": ?, "value_option_ids": [?],
-                  "value_text": ?, "value_number": ? }
-              ],
-              "then": { "type": "node"|"recommendation", "target_id": "..." }
-            }
-          ] }
+            { "rule_id": "r_...",
+              "combinator": "all"|"any",
+              "conditions": [{question_id, operator, value_*...}],
+              "then": { "type": "step"|"recommendation", "target_id": "..." } }
+          ],
+          "otherwise": { "type": "step"|"recommendation", "target_id": "..." } | null }
       ],
       "recommendations": [
-        { "recommendation_id": "rec_...", "name": "...",
-          "command_key": "pathway_classification",
-          "params": { title, severity, body, recommended_action } }
+        { "recommendation_id", "name", "command_key", "params" }
       ]
     }
 
-On-commit semantics: the evaluator gates strictly on
-`interview.committer_id` being set; events during in-progress edits are
-ignored.
+On-commit semantics: the evaluator gates on `interview.committer_id`
+being set; in-progress edits are ignored.
 """
 
 from __future__ import annotations
@@ -62,9 +68,8 @@ from clinical_pathways.terminal_commands import TERMINAL_COMMANDS
 def _collect_responses_for_interview(interview: Interview) -> dict[str, dict[str, Any]]:
     """Return {question_uuid_str: {"text": str, "option_ids": [dbid_str], "values": [str]}}.
 
-    Keyed by the Question's UUID to match the builder's storage. `r.question_id`
-    on the response is the FK column value (Question.dbid), so we resolve the
-    related Question instance to obtain its UUID.
+    Keyed by the Question's UUID. `r.question_id` is the FK column (Question.dbid),
+    so we resolve the related Question to obtain its UUID.
     """
     responses: dict[str, dict[str, Any]] = {}
     for r in interview.interview_responses.all():
@@ -127,20 +132,15 @@ def _set_superset(actuals: list[str], expected: list[str]) -> bool:
 
 
 def _evaluate_condition(comp: dict[str, Any], captured: dict[str, dict[str, Any]]) -> bool:
-    """Evaluate a single condition against the captured responses."""
     qid = str(comp.get("question_id") or "")
     if not qid:
         return False
     op = comp.get("operator", "eq")
     bucket = captured.get(qid)
     if op == "any_answer":
-        return bucket is not None and (
-            bool(bucket.get("text")) or bool(bucket.get("option_ids"))
-        )
+        return bucket is not None and (bool(bucket.get("text")) or bool(bucket.get("option_ids")))
     if op == "no_answer":
-        return bucket is None or (
-            not bucket.get("text") and not bucket.get("option_ids")
-        )
+        return bucket is None or (not bucket.get("text") and not bucket.get("option_ids"))
     if bucket is None:
         return False
 
@@ -172,36 +172,31 @@ def _evaluate_condition(comp: dict[str, Any], captured: dict[str, dict[str, Any]
 
 
 def _evaluate_rule(rule: dict[str, Any], captured: dict[str, dict[str, Any]]) -> bool:
-    """Evaluate a single rule's flat conditions list under the rule's combinator."""
     conditions = rule.get("conditions") or []
     if not conditions:
         return False
-    combinator = rule.get("combinator", "all")
-    if combinator == "any":
+    if rule.get("combinator", "all") == "any":
         return any(_evaluate_condition(c, captured) for c in conditions)
-    # default: all
     return all(_evaluate_condition(c, captured) for c in conditions)
 
 
 # ---------- Definition lookups ----------
 
 
-def _find_node(definition: dict[str, Any], node_id: str) -> dict[str, Any] | None:
-    if not node_id:
+def _find_step(definition: dict[str, Any], step_id: str) -> dict[str, Any] | None:
+    if not step_id:
         return None
-    for n in definition.get("nodes") or []:
-        if isinstance(n, dict) and n.get("node_id") == node_id:
-            return n
+    for s in definition.get("steps") or []:
+        if isinstance(s, dict) and s.get("step_id") == step_id:
+            return s
     return None
 
 
-def _find_recommendation(
-    definition: dict[str, Any], recommendation_id: str
-) -> dict[str, Any] | None:
-    if not recommendation_id:
+def _find_recommendation(definition: dict[str, Any], rec_id: str) -> dict[str, Any] | None:
+    if not rec_id:
         return None
     for r in definition.get("recommendations") or []:
-        if isinstance(r, dict) and r.get("recommendation_id") == recommendation_id:
+        if isinstance(r, dict) and r.get("recommendation_id") == rec_id:
             return r
     return None
 
@@ -249,9 +244,7 @@ def _recommendation_command(
     cmd_key = recommendation.get("command_key") or ""
     spec = TERMINAL_COMMANDS.get(cmd_key)
     if not spec:
-        log.warning(
-            "clinical_pathways: unknown recommendation command_key '%s'", cmd_key
-        )
+        log.warning("clinical_pathways: unknown recommendation command_key '%s'", cmd_key)
         return None
     params = recommendation.get("params") or {}
     resolved: dict[str, Any] = {}
@@ -283,14 +276,11 @@ def _recommendation_command(
     return cmd
 
 
-def _questionnaire_command(target_node: dict[str, Any], note_uuid: str) -> QuestionnaireCommand | None:
-    qid = target_node.get("questionnaire_id")
-    if not qid:
-        return None
+def _questionnaire_command(questionnaire_id: str, note_uuid: str) -> QuestionnaireCommand:
     cmd = QuestionnaireCommand()
     cmd.note_uuid = note_uuid
     cmd.command_uuid = str(uuid4())
-    cmd.questionnaire_id = str(qid)
+    cmd.questionnaire_id = str(questionnaire_id)
     return cmd
 
 
@@ -324,10 +314,8 @@ class PathwayEvaluator(BaseHandler):
         if not runs.exists():
             return []
 
-        captured = _collect_responses_for_interview(interview)
-        interview_questionnaire_ids = {
-            str(q.id) for q in interview.questionnaires.all()
-        }
+        new_captured = _collect_responses_for_interview(interview)
+        interview_questionnaire_ids = {str(q.id) for q in interview.questionnaires.all()}
 
         effects: list[Effect] = []
         for run in runs:
@@ -335,97 +323,170 @@ class PathwayEvaluator(BaseHandler):
             if not pathway:
                 continue
             definition = pathway.definition or {}
-            if definition.get("version") != 2:
+            if definition.get("version") != 3:
                 log.info(
-                    "clinical_pathways: skipping run %s — pathway %s uses an "
-                    "unsupported (pre-v2) definition format",
+                    "clinical_pathways: skipping run %s — pathway %s uses pre-v3 definition",
                     run.dbid,
                     pathway.dbid,
                 )
                 continue
 
-            current_node = _find_node(definition, run.current_node_id)
-            if not current_node:
-                continue
-            node_questionnaire_id = str(current_node.get("questionnaire_id") or "")
-            if node_questionnaire_id not in interview_questionnaire_ids:
-                # The interview that committed wasn't the one this run was
-                # waiting on — ignore and let other runs handle it.
-                continue
-
+            # Merge this interview's responses into the run's accumulator.
             merged = dict(run.captured_responses or {})
-            merged.update(captured)
+            merged.update(new_captured)
             run.captured_responses = merged
 
-            # First-match rule evaluation.
+            inserted = list(run.inserted_questionnaires or [])
+            committed = set(run.committed_questionnaires or [])
+            # Anything the user just committed counts as fully-committed
+            # going forward, even if specific questions were left blank.
+            committed.update(interview_questionnaire_ids)
+            current_step_id = run.current_step_id or definition.get("start_step_id")
+            run_effects = self._advance(
+                run,
+                pathway,
+                definition,
+                current_step_id,
+                merged,
+                interview_questionnaire_ids,
+                committed,
+                inserted,
+                note_uuid,
+            )
+            run.inserted_questionnaires = inserted
+            run.committed_questionnaires = sorted(committed)
+            run.save()
+            effects.extend(run_effects)
+
+        return effects
+
+    def _advance(
+        self,
+        run: PathwayRun,
+        pathway: Pathway,
+        definition: dict[str, Any],
+        start_step_id: str | None,
+        merged: dict[str, dict[str, Any]],
+        committed_this_event_ids: set[str],
+        committed_ever: set[str],
+        inserted: list[str],
+        note_uuid: str,
+    ) -> list[Effect]:
+        """Walk forward through the step list, emitting effects for each
+        questionnaire to insert and for any recommendation reached. Mutates
+        `run.current_step_id`, `run.status`, and `inserted`.
+        """
+        effects: list[Effect] = []
+        current_step_id: str | None = start_step_id
+        safety_counter = 0
+        while True:
+            safety_counter += 1
+            if safety_counter > 256:
+                log.warning(
+                    "clinical_pathways: evaluator advance loop guard tripped on run %s",
+                    run.dbid,
+                )
+                run.status = "completed"
+                return effects
+
+            if not current_step_id:
+                run.current_step_id = ""
+                run.status = "completed"
+                return effects
+
+            step = _find_step(definition, current_step_id)
+            if not step:
+                # Walk fell off the end; nothing to do.
+                run.current_step_id = ""
+                run.status = "completed"
+                return effects
+
+            questionnaire_id = str(step.get("questionnaire_id") or "")
+            question_id = str(step.get("question_id") or "")
+            if not questionnaire_id or not question_id:
+                # Malformed step — stop here rather than thrash.
+                run.current_step_id = step.get("step_id", "")
+                run.status = "completed"
+                return effects
+
+            answered = question_id in merged
+            committed_ever_q = questionnaire_id in committed_ever
+            already_inserted = questionnaire_id in inserted
+
+            if not answered and not committed_ever_q:
+                # The step's questionnaire has never been committed. Insert
+                # it (if not already in the note) and wait for the user.
+                run.current_step_id = step.get("step_id", "")
+                if not already_inserted:
+                    effects.append(
+                        BatchOriginateCommandEffect(
+                            commands=[_questionnaire_command(questionnaire_id, note_uuid)]
+                        ).apply()
+                    )
+                    inserted.append(questionnaire_id)
+                return effects
+
+            # The questionnaire has been committed at some point.
+            # Treat the step's question as "answered" (possibly blank).
             matched_rule: dict[str, Any] | None = None
-            for rule in current_node.get("rules") or []:
+            for rule in step.get("rules") or []:
                 if _evaluate_rule(rule, merged):
                     matched_rule = rule
                     break
 
-            if matched_rule is None:
-                log.info(
-                    "clinical_pathways: no rule matched for node %s in pathway %s",
-                    run.current_node_id,
-                    pathway.dbid,
-                )
-                run.status = "completed"
-                run.save()
-                continue
-
-            then = matched_rule.get("then") or {}
-            target_type = then.get("type")
-            target_id = then.get("target_id")
-            new_command: Any = None
-            advance_to_node_id: str | None = None
-            mark_completed = False
-
-            if target_type == "node":
-                target_node = _find_node(definition, target_id)
-                if not target_node:
-                    log.warning(
-                        "clinical_pathways: rule %s points to missing node %s",
-                        matched_rule.get("rule_id"),
-                        target_id,
-                    )
-                    run.status = "completed"
-                    run.save()
-                    continue
-                new_command = _questionnaire_command(target_node, note_uuid)
-                advance_to_node_id = target_id
-            elif target_type == "recommendation":
-                recommendation = _find_recommendation(definition, target_id)
-                if not recommendation:
-                    log.warning(
-                        "clinical_pathways: rule %s points to missing recommendation %s",
-                        matched_rule.get("rule_id"),
-                        target_id,
-                    )
-                    run.status = "completed"
-                    run.save()
-                    continue
-                new_command = _recommendation_command(
-                    recommendation, pathway, note_uuid, merged
-                )
-                mark_completed = True
+            target: dict[str, Any] | None
+            if matched_rule is not None:
+                target = matched_rule.get("then")
             else:
-                log.warning(
-                    "clinical_pathways: rule %s has invalid then.type '%s'",
-                    matched_rule.get("rule_id"),
-                    target_type,
-                )
-                run.save()
-                continue
+                target = step.get("otherwise")
 
-            if new_command is None:
-                run.save()
-                continue
-            effects.append(BatchOriginateCommandEffect(commands=[new_command]).apply())
-            if mark_completed:
+            if not target or not isinstance(target, dict):
+                run.current_step_id = step.get("step_id", "")
                 run.status = "completed"
-            if advance_to_node_id:
-                run.current_node_id = advance_to_node_id
-            run.save()
+                return effects
 
-        return effects
+            target_type = target.get("type")
+            target_id = target.get("target_id")
+            if target_type == "recommendation":
+                rec = _find_recommendation(definition, target_id)
+                if rec is None:
+                    log.warning(
+                        "clinical_pathways: missing recommendation %s referenced by step %s",
+                        target_id,
+                        step.get("step_id"),
+                    )
+                    run.current_step_id = step.get("step_id", "")
+                    run.status = "completed"
+                    return effects
+                cmd = _recommendation_command(rec, pathway, note_uuid, merged)
+                if cmd is None:
+                    run.current_step_id = step.get("step_id", "")
+                    run.status = "completed"
+                    return effects
+                effects.append(BatchOriginateCommandEffect(commands=[cmd]).apply())
+                run.current_step_id = step.get("step_id", "")
+                run.status = "completed"
+                return effects
+
+            if target_type == "step":
+                if not _find_step(definition, target_id):
+                    log.warning(
+                        "clinical_pathways: missing step %s referenced by step %s",
+                        target_id,
+                        step.get("step_id"),
+                    )
+                    run.current_step_id = step.get("step_id", "")
+                    run.status = "completed"
+                    return effects
+                current_step_id = target_id
+                continue
+
+            # Unknown target type — terminate to avoid looping.
+            log.warning(
+                "clinical_pathways: unknown target type '%s' on step %s",
+                target_type,
+                step.get("step_id"),
+            )
+            run.current_step_id = step.get("step_id", "")
+            run.status = "completed"
+            return effects
