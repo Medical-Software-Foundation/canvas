@@ -7,6 +7,70 @@
     {
       "input": "/cpa:new-plugin",
       "type": "slash_command"
+    },
+    {
+      "input": "/cpa:new-plugin",
+      "type": "slash_command"
+    },
+    {
+      "input": "try again",
+      "type": "free_text"
+    },
+    {
+      "input": "try again",
+      "type": "free_text"
+    },
+    {
+      "input": "try again",
+      "type": "free_text"
+    },
+    {
+      "input": "try again",
+      "type": "free_text"
+    },
+    {
+      "input": "try again",
+      "type": "free_text"
+    },
+    {
+      "input": "/cpa:deploy",
+      "type": "slash_command"
+    },
+    {
+      "input": "check the logs, prefered pharmacy doesn't seem to work",
+      "type": "free_text"
+    },
+    {
+      "input": "done, all good",
+      "type": "free_text"
+    },
+    {
+      "input": "/cpa:coverage",
+      "type": "slash_command"
+    },
+    {
+      "input": "/cpa:security-review",
+      "type": "slash_command"
+    },
+    {
+      "input": "/cpa:database-performance-review",
+      "type": "slash_command"
+    },
+    {
+      "input": "/cpa:wrap-up",
+      "type": "slash_command"
+    },
+    {
+      "input": "open a PR",
+      "type": "free_text"
+    },
+    {
+      "input": "open a PR against the original repo, not the forked one",
+      "type": "free_text"
+    },
+    {
+      "input": "/exit",
+      "type": "slash_command"
     }
   ]
 }
