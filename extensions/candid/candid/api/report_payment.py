@@ -11,13 +11,14 @@ from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPIRoute
 from canvas_sdk.v1.data import Claim
 from logger import log
 
-from candid.adjudication_sync import PATIENT_PAYMENT_DESC_PREFIX
 from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.effect_helpers import (
     META_ENCOUNTERS,
     META_REPORTED_PAYMENT_IDS,
     META_SYNCED_PAYMENT_IDS,
+    PATIENT_PAYMENT_DESC_PREFIX,
+    check_internal_auth,
     get_claim_metadata,
     get_claim_metadata_set,
 )
@@ -34,8 +35,7 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
     PATH = "/report-payment"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
-        return credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
+        return check_internal_auth(credentials.key, self.secrets)
 
     def post(self) -> list[Response | Effect]:
         body = self.request.json()

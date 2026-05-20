@@ -1,8 +1,7 @@
 import requests
 from logger import log
-import json
 
-CACHE_KEY = "candid_bearer_token"
+CACHE_KEY_PREFIX = "candid_bearer_token:"
 # Candid tokens expire after 5 hours (18000s). Cache for 4.5 hours to
 # refresh before expiry.
 CACHE_TTL_SECONDS = 16200
@@ -30,12 +29,16 @@ class CandidClient:
         if self._instance_token:
             return self._instance_token
 
+        # Per-client_id cache key so secret rotation or multiple Candid environments
+        # don't share a stale token across installs.
+        cache_key = f"{CACHE_KEY_PREFIX}{self.client_id}"
+
         # Plugin cache (shared across handler invocations)
         try:
             from canvas_sdk.caching.plugins import get_cache
 
             cache = get_cache()
-            token = cache.get(CACHE_KEY)
+            token = cache.get(cache_key)
             if token:
                 self._instance_token = token
                 return token
@@ -47,7 +50,7 @@ class CandidClient:
 
         if cache:
             try:
-                cache.set(CACHE_KEY, token, timeout_seconds=CACHE_TTL_SECONDS)
+                cache.set(cache_key, token, timeout_seconds=CACHE_TTL_SECONDS)
             except Exception:
                 log.warning("Candid: failed to cache bearer token")
 

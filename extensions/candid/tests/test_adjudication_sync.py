@@ -8,8 +8,6 @@ from candid.adjudication_sync import (
     PR_COINSURANCE,
     PR_COPAY,
     PR_DEDUCTIBLE,
-    ERA_DESC_PREFIX,
-    PATIENT_PAYMENT_DESC_PREFIX,
     _build_insurance_transactions,
     _cents_to_dollars,
     _determine_target_queue,
@@ -17,7 +15,12 @@ from candid.adjudication_sync import (
     sync_claim_adjudications,
 )
 from canvas_sdk.v1.data.claim import ClaimQueues
-from candid.effect_helpers import META_SYNCED_ERA_IDS, META_SYNCED_PAYMENT_IDS
+from candid.effect_helpers import (
+    ERA_DESC_PREFIX,
+    META_SYNCED_ERA_IDS,
+    META_SYNCED_PAYMENT_IDS,
+    PATIENT_PAYMENT_DESC_PREFIX,
+)
 
 from tests.conftest import MOCK_SECRETS
 

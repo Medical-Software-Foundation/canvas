@@ -97,7 +97,7 @@ class CandidDashboardAPI(SimpleAPIRoute):
 
 def _get_filter_options(base_qs) -> dict:
     """Return distinct statuses and queues across all matching claims."""
-    from canvas_sdk.v1.data.claim import ClaimMetadata, ClaimQueue
+    from canvas_sdk.v1.data.claim import ClaimMetadata
 
     statuses = set(
         ClaimMetadata.objects.filter(

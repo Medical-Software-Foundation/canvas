@@ -9,8 +9,10 @@ in the same effect batch as the postings they cover.
 """
 
 import json
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect, LineItemTransaction, PaymentMethod
@@ -22,6 +24,7 @@ from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.effect_helpers import (
     DEFAULT_CLAIM_STATUS,
+    ERA_DESC_PREFIX,
     META_CLAIM_STATUS,
     META_ENCOUNTERS,
     META_LAST_SYNC,
@@ -31,6 +34,7 @@ from candid.effect_helpers import (
     META_SYNCED_ERA_IDS,
     META_SYNCED_PAYMENT_IDS,
     PATIENT_COVERAGE_ID,
+    PATIENT_PAYMENT_DESC_PREFIX,
     active_coverages_ordered,
     get_claim_metadata,
     get_claim_metadata_set,
@@ -42,10 +46,6 @@ from candid.models.sync_state import SyncLog
 PR_DEDUCTIBLE = "PR-1"
 PR_COINSURANCE = "PR-2"
 PR_COPAY = "PR-3"
-
-# Description prefixes for dedup verification
-ERA_DESC_PREFIX = "Candid ERA "
-PATIENT_PAYMENT_DESC_PREFIX = "Candid patient payment "
 
 
 def _cents_to_dollars(cents: int | None) -> Decimal | None:
@@ -228,7 +228,7 @@ def _build_insurance_transactions(
 
 
 def _build_secondary_transactions(
-    service_lines: list[dict], line_items: list, canvas_claim_id: str, field: str
+    service_lines: list[dict], line_items: list, canvas_claim_id: str, paid_field: str
 ) -> list[LineItemTransaction]:
     """Build payment transactions for secondary/tertiary payer."""
     txns: list[LineItemTransaction] = []
@@ -236,7 +236,7 @@ def _build_secondary_transactions(
         line_item_id = _match_line_item(sl, line_items, canvas_claim_id)
         if not line_item_id:
             continue
-        payment = _cents_to_dollars(sl.get(field))
+        payment = _cents_to_dollars(sl.get(paid_field))
         if payment:
             txns.append(
                 LineItemTransaction(claim_line_item_id=line_item_id, payment=payment)
@@ -298,6 +298,26 @@ def _post_patient_payments(
     return effects, attempted
 
 
+def _era_kwargs(era: dict) -> dict:
+    """Extract check_number / check_date kwargs for ``post_payment`` from an ERA."""
+    kwargs: dict = {}
+    if era.get("check_number"):
+        kwargs["check_number"] = str(era["check_number"])
+    if era.get("check_date"):
+        try:
+            kwargs["check_date"] = date.fromisoformat(era["check_date"])
+        except (ValueError, TypeError):
+            pass
+    return kwargs
+
+
+def _era_at(all_eras: list[dict], index: int) -> dict:
+    """Get the ERA at the given payer-tier index, falling back to the last one."""
+    if index < len(all_eras):
+        return all_eras[index]
+    return all_eras[-1]
+
+
 def _determine_target_queue(encounter_data: dict) -> str:
     """Determine which Canvas queue the claim should move to based on balances.
 
@@ -323,6 +343,272 @@ def _determine_target_queue(encounter_data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class _SyncState:
+    """Accumulates effects and metadata while syncing a single Canvas claim.
+
+    Holds both the read-once configuration (coverages, dedup ID sets, line
+    items) and the mutable accumulators that build up across the encounters /
+    Candid claims being processed.
+    """
+
+    canvas_claim_id: str
+    claim_effect: ClaimEffect
+    line_items: list
+    first_line: Any | None
+    primary_id: str | None
+    secondary_id: str | None
+    tertiary_id: str | None
+    synced_era_ids: set[str]
+    synced_pmt_ids: set[str]
+    known_payment_ids: set[str]
+    prev_synced_amounts: dict[str, int]
+
+    effects: list[Effect] = field(default_factory=list)
+    attempted_era_ids: list[str] = field(default_factory=list)
+    attempted_payment_ids: list[str] = field(default_factory=list)
+    era_totals: dict[str, int] = field(default_factory=dict)
+    payment_effect_count: int = 0
+    claim_status: str = DEFAULT_CLAIM_STATUS
+    last_encounter_data: dict | None = None
+
+
+def _init_sync_state(claim: Claim) -> _SyncState:
+    """Read the claim's coverages, line items, and dedup metadata into a state object."""
+    canvas_claim_id = str(claim.id)
+    line_items = list(claim.get_active_claim_line_items())
+    coverages_ordered = active_coverages_ordered(claim)
+    synced_pmt_ids = get_claim_metadata_set(claim, META_SYNCED_PAYMENT_IDS)
+    reported_pmt_ids = get_claim_metadata_set(claim, META_REPORTED_PAYMENT_IDS)
+
+    return _SyncState(
+        canvas_claim_id=canvas_claim_id,
+        claim_effect=ClaimEffect(claim_id=canvas_claim_id),
+        line_items=line_items,
+        first_line=line_items[0] if line_items else None,
+        primary_id=_coverage_id_at(coverages_ordered, 0),
+        secondary_id=_coverage_id_at(coverages_ordered, 1),
+        tertiary_id=_coverage_id_at(coverages_ordered, 2),
+        synced_era_ids=get_claim_metadata_set(claim, META_SYNCED_ERA_IDS),
+        synced_pmt_ids=synced_pmt_ids,
+        known_payment_ids=synced_pmt_ids | reported_pmt_ids,
+        prev_synced_amounts=get_claim_metadata(claim, META_SYNCED_AMOUNTS) or {
+            "primary": 0, "secondary": 0, "tertiary": 0,
+        },
+    )
+
+
+def _resolve_transfer_target(state: _SyncState, next_responsible: str) -> str | None:
+    """Determine where the remaining balance transfers after this insurance posting."""
+    if next_responsible == "patient":
+        return "patient"
+    if next_responsible == "secondary" and state.secondary_id:
+        return state.secondary_id
+    if next_responsible == "tertiary" and state.tertiary_id:
+        return state.tertiary_id
+    return None
+
+
+def _post_era_payments(
+    state: _SyncState,
+    candid_claim: dict,
+    service_lines: list[dict],
+    new_eras: list[dict],
+    transfer_to: str | None,
+) -> None:
+    """Post primary/secondary/tertiary insurance payments for the new ERAs on a Candid claim."""
+    # ERAs are ordered: index 0 = primary, 1 = secondary, 2 = tertiary.
+    # Use the full eras array (not just new) so position maps to payer tier.
+    all_eras = candid_claim.get("eras", [])
+
+    # Compute delta: what's new since last sync?
+    current_amounts = _compute_synced_amounts(service_lines)
+
+    cumulative_total = (
+        current_amounts["primary"] + current_amounts["secondary"] + current_amounts["tertiary"]
+    )
+    for era in new_eras:
+        eid = str(era["era_id"])
+        state.era_totals[eid] = cumulative_total
+        state.attempted_era_ids.append(eid)
+
+    # Primary insurance (ERA index 0)
+    if _has_delta(current_amounts, state.prev_synced_amounts, "primary") and state.primary_id:
+        primary_era = _era_at(all_eras, 0)
+        insurance_txns = _build_insurance_transactions(
+            service_lines,
+            state.line_items,
+            state.canvas_claim_id,
+            transfer_to=transfer_to,
+        )
+        if insurance_txns:
+            _append_payment_effect(state, state.primary_id, insurance_txns, primary_era)
+
+    # Secondary (ERA index 1) / Tertiary (ERA index 2)
+    for coverage_id, paid_field, tier, era_index in (
+        (state.secondary_id, "secondary_paid_amount_cents", "secondary", 1),
+        (state.tertiary_id, "tertiary_paid_amount_cents", "tertiary", 2),
+    ):
+        if not coverage_id:
+            continue
+        if not _has_delta(current_amounts, state.prev_synced_amounts, tier):
+            continue
+        txns = _build_secondary_transactions(
+            service_lines, state.line_items, state.canvas_claim_id, paid_field
+        )
+        if not txns:
+            continue
+        _append_payment_effect(state, coverage_id, txns, _era_at(all_eras, era_index))
+
+    # Roll the cumulative amounts forward so the next sync computes against this point
+    state.prev_synced_amounts = current_amounts
+
+
+def _append_payment_effect(
+    state: _SyncState,
+    coverage_id: str,
+    txns: list[LineItemTransaction],
+    era: dict,
+) -> None:
+    """Build and append a ``post_payment`` effect for one payer/ERA, bumping the counter."""
+    description = f"{ERA_DESC_PREFIX}{era.get('era_id', '')}"
+    method = PaymentMethod.CHECK if era.get("check_number") else PaymentMethod.OTHER
+    state.effects.append(
+        state.claim_effect.post_payment(
+            claim_coverage_id=coverage_id,
+            line_item_transactions=txns,
+            method=method,
+            claim_description=description,
+            payment_description=description,
+            **_era_kwargs(era),
+        )
+    )
+    state.payment_effect_count += 1
+
+
+def _post_patient_payments_for_candid_claim(
+    state: _SyncState, client: CandidClient, candid_claim_id: str
+) -> None:
+    """Fetch and post patient payments for one Candid claim. No-op without line items or a claim_id."""
+    if not (state.first_line and candid_claim_id):
+        return
+
+    try:
+        candid_payments = client.get_patient_payments(candid_claim_id)
+    except Exception as e:
+        log.warning(
+            f"Candid sync: failed to fetch patient payments for "
+            f"Candid claim {candid_claim_id} on claim {state.canvas_claim_id}: {e}"
+        )
+        return
+
+    payment_effects, attempted = _post_patient_payments(
+        state.claim_effect,
+        candid_payments,
+        state.known_payment_ids,
+        str(state.first_line.id),
+    )
+    state.effects.extend(payment_effects)
+    state.payment_effect_count += len(payment_effects)
+    state.attempted_payment_ids.extend(attempted)
+
+
+def _process_encounter(
+    state: _SyncState, encounter_data: dict, client: CandidClient
+) -> None:
+    """Process all Candid claims inside one Candid encounter response."""
+    state.last_encounter_data = encounter_data
+    next_responsible = (encounter_data.get("next_responsible_party") or "").lower()
+    transfer_to = _resolve_transfer_target(state, next_responsible)
+
+    for candid_claim in encounter_data.get("claims", []):
+        candid_claim_id = candid_claim.get("claim_id", "")
+        if candid_claim_status := candid_claim.get("status"):
+            state.claim_status = candid_claim_status
+
+        service_lines = candid_claim.get("service_lines", [])
+
+        new_eras = [
+            era
+            for era in candid_claim.get("eras", [])
+            if (era_id := str(era.get("era_id") or ""))
+            and era_id not in state.synced_era_ids
+        ]
+        if new_eras:
+            _post_era_payments(state, candid_claim, service_lines, new_eras, transfer_to)
+
+        _post_patient_payments_for_candid_claim(state, client, candid_claim_id)
+
+
+def _finalize_effects(state: _SyncState, claim: Claim) -> None:
+    """Append metadata, banner, queue-move, and dedup-list effects after all encounters processed."""
+    now = datetime.now(UTC).isoformat()
+    state.effects.append(state.claim_effect.upsert_metadata(key=META_LAST_SYNC, value=now))
+    state.effects.append(
+        state.claim_effect.upsert_metadata(key=META_CLAIM_STATUS, value=state.claim_status)
+    )
+
+    submitted_at = get_claim_metadata(claim, META_SUBMITTED_AT)
+    state.effects.append(
+        sync_banner(
+            claim_id=state.canvas_claim_id,
+            claim_status=state.claim_status,
+            last_sync_at=now,
+            submitted_at=submitted_at if isinstance(submitted_at, str) else None,
+        )
+    )
+
+    if state.payment_effect_count > 0 and state.last_encounter_data:
+        target_queue = _determine_target_queue(state.last_encounter_data)
+        state.effects.append(state.claim_effect.move_to_queue(target_queue))
+        log.info(f"Candid sync: moving claim {state.canvas_claim_id} to {target_queue}")
+
+    if state.attempted_era_ids:
+        updated_era_ids = sorted(state.synced_era_ids | set(state.attempted_era_ids))
+        state.effects.append(
+            state.claim_effect.upsert_metadata(
+                key=META_SYNCED_ERA_IDS,
+                value=json.dumps(updated_era_ids),
+            )
+        )
+        # Cumulative amounts so the next sync can compute deltas
+        state.effects.append(
+            state.claim_effect.upsert_metadata(
+                key=META_SYNCED_AMOUNTS,
+                value=json.dumps(state.prev_synced_amounts),
+            )
+        )
+    if state.attempted_payment_ids:
+        updated_pmt_ids = sorted(state.synced_pmt_ids | set(state.attempted_payment_ids))
+        state.effects.insert(
+            0,
+            state.claim_effect.upsert_metadata(
+                key=META_SYNCED_PAYMENT_IDS,
+                value=json.dumps(updated_pmt_ids),
+            ),
+        )
+
+
+def _record_sync_log(state: _SyncState) -> None:
+    """Write one SyncLog row capturing what this sync attempted."""
+    era_details = [
+        f"{eid}: ${state.era_totals.get(eid, 0) / 100:.2f}"
+        for eid in state.attempted_era_ids
+    ]
+    try:
+        SyncLog.objects.create(
+            canvas_claim_id=state.canvas_claim_id,
+            candid_claim_status=state.claim_status,
+            payment_effects_count=state.payment_effect_count,
+            era_ids=",".join(state.attempted_era_ids),
+            detail=" | ".join(era_details) if era_details else "",
+        )
+    except Exception:
+        log.warning(
+            f"Candid sync: failed to write SyncLog for claim {state.canvas_claim_id}"
+        )
+
+
 def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     """Pull adjudication and patient payment data from Candid for a single claim.
 
@@ -339,269 +625,41 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
 
     Dedup IDs are appended to claim metadata in the same effect batch.
     """
-    canvas_claim_id = str(claim.id)
-    claim_effect = ClaimEffect(claim_id=canvas_claim_id)
-
     encounters_meta = get_claim_metadata(claim, META_ENCOUNTERS)
     if not encounters_meta:
         log.info(
             f"Candid sync: no candid_encounters metadata for claim "
-            f"{canvas_claim_id}, skipping"
+            f"{claim.id}, skipping"
         )
         return []
 
     client = CandidClient.from_secrets(secrets)
-
-    line_items = list(claim.get_active_claim_line_items())
-    first_line = line_items[0] if line_items else None
-    coverages_ordered = active_coverages_ordered(claim)
-    primary_id = _coverage_id_at(coverages_ordered, 0)
-    secondary_id = _coverage_id_at(coverages_ordered, 1)
-    tertiary_id = _coverage_id_at(coverages_ordered, 2)
-
-    synced_era_ids = get_claim_metadata_set(claim, META_SYNCED_ERA_IDS)
-    synced_pmt_ids = get_claim_metadata_set(claim, META_SYNCED_PAYMENT_IDS)
-    reported_pmt_ids = get_claim_metadata_set(claim, META_REPORTED_PAYMENT_IDS)
-    known_payment_ids = synced_pmt_ids | reported_pmt_ids
-    prev_synced_amounts = get_claim_metadata(claim, META_SYNCED_AMOUNTS) or {
-        "primary": 0, "secondary": 0, "tertiary": 0,
-    }
-
-    effects: list[Effect] = []
-    attempted_era_ids: list[str] = []
-    attempted_payment_ids: list[str] = []
-    era_totals: dict[str, int] = {}
-    payment_effect_count = 0
-    claim_status = DEFAULT_CLAIM_STATUS
-    last_encounter_data: dict | None = None
+    state = _init_sync_state(claim)
 
     for encounter_record in encounters_meta:
         candid_encounter_id = encounter_record.get("candid_encounter_id")
         if not candid_encounter_id:
             continue
-
         try:
             encounter_data = client.get_encounter(candid_encounter_id)
         except Exception as e:
             log.warning(
                 f"Candid sync: failed to fetch encounter {candid_encounter_id} "
-                f"for claim {canvas_claim_id}: {e}"
+                f"for claim {state.canvas_claim_id}: {e}"
             )
             continue
+        _process_encounter(state, encounter_data, client)
 
-        last_encounter_data = encounter_data
-        next_responsible = (encounter_data.get("next_responsible_party") or "").lower()
-
-        # Determine where to transfer the remaining balance
-        if next_responsible == "patient":
-            transfer_to = "patient"
-        elif next_responsible == "secondary" and secondary_id:
-            transfer_to = secondary_id
-        elif next_responsible == "tertiary" and tertiary_id:
-            transfer_to = tertiary_id
-        else:
-            transfer_to = None
-
-        for candid_claim in encounter_data.get("claims", []):
-            candid_claim_id = candid_claim.get("claim_id", "")
-            candid_claim_status = candid_claim.get("status")
-            if candid_claim_status:
-                claim_status = candid_claim_status
-
-            service_lines = candid_claim.get("service_lines", [])
-
-            # Collect new (unsynced) ERA IDs for this Candid claim.
-            new_eras = [
-                era
-                for era in candid_claim.get("eras", [])
-                if (era_id := str(era.get("era_id") or ""))
-                and era_id not in synced_era_ids
-            ]
-
-            if new_eras:
-                # ERAs are ordered: index 0 = primary, 1 = secondary, 2 = tertiary.
-                # Use the full eras array (not just new) so position maps to payer tier.
-                all_eras = candid_claim.get("eras", [])
-
-                # Compute delta: what's new since last sync?
-                current_amounts = _compute_synced_amounts(service_lines)
-
-                for era in new_eras:
-                    eid = str(era["era_id"])
-                    era_totals[eid] = (
-                        current_amounts["primary"]
-                        + current_amounts["secondary"]
-                        + current_amounts["tertiary"]
-                    )
-                    attempted_era_ids.append(eid)
-
-                def _era_kwargs(era: dict) -> dict:
-                    """Extract check info from an ERA for the post_payment call."""
-                    kwargs: dict = {}
-                    if era.get("check_number"):
-                        kwargs["check_number"] = str(era["check_number"])
-                    if era.get("check_date"):
-                        try:
-                            kwargs["check_date"] = date.fromisoformat(era["check_date"])
-                        except (ValueError, TypeError):
-                            pass
-                    return kwargs
-
-                def _era_at(index: int) -> dict:
-                    """Get the ERA at the given position, or the last one as fallback."""
-                    if index < len(all_eras):
-                        return all_eras[index]
-                    return all_eras[-1]
-
-                # Primary insurance (ERA index 0)
-                if _has_delta(current_amounts, prev_synced_amounts, "primary"):
-                    primary_era = _era_at(0)
-                    description = f"{ERA_DESC_PREFIX}{primary_era.get('era_id', '')}"
-                    insurance_txns = _build_insurance_transactions(
-                        service_lines,
-                        line_items,
-                        canvas_claim_id,
-                        transfer_to=transfer_to,
-                    )
-                    if insurance_txns and primary_id:
-                        method = (
-                            PaymentMethod.CHECK
-                            if primary_era.get("check_number")
-                            else PaymentMethod.OTHER
-                        )
-                        effects.append(
-                            claim_effect.post_payment(
-                                claim_coverage_id=primary_id,
-                                line_item_transactions=insurance_txns,
-                                method=method,
-                                claim_description=description,
-                                payment_description=description,
-                                **_era_kwargs(primary_era),
-                            )
-                        )
-                        payment_effect_count += 1
-
-                # Secondary (ERA index 1) / Tertiary (ERA index 2)
-                for coverage_id, field, tier, era_index in (
-                    (secondary_id, "secondary_paid_amount_cents", "secondary", 1),
-                    (tertiary_id, "tertiary_paid_amount_cents", "tertiary", 2),
-                ):
-                    if not coverage_id:
-                        continue
-                    if not _has_delta(current_amounts, prev_synced_amounts, tier):
-                        continue
-                    txns = _build_secondary_transactions(
-                        service_lines, line_items, canvas_claim_id, field
-                    )
-                    if not txns:
-                        continue
-                    tier_era = _era_at(era_index)
-                    tier_description = f"{ERA_DESC_PREFIX}{tier_era.get('era_id', '')}"
-                    effects.append(
-                        claim_effect.post_payment(
-                            claim_coverage_id=coverage_id,
-                            line_item_transactions=txns,
-                            method=PaymentMethod.CHECK
-                            if tier_era.get("check_number")
-                            else PaymentMethod.OTHER,
-                            claim_description=tier_description,
-                            payment_description=tier_description,
-                            **_era_kwargs(tier_era),
-                        )
-                    )
-                    payment_effect_count += 1
-
-                # Update synced amounts to current for next sync
-                prev_synced_amounts = current_amounts
-
-            # Patient payments (queried by Candid's claim_id, not encounter_id)
-            try:
-                candid_payments = client.get_patient_payments(candid_claim_id)
-            except Exception as e:
-                log.warning(
-                    f"Candid sync: failed to fetch patient payments for "
-                    f"Candid claim {candid_claim_id} on claim {canvas_claim_id}: {e}"
-                )
-                candid_payments = []
-
-            if first_line:
-                payment_effects, attempted = _post_patient_payments(
-                    claim_effect,
-                    candid_payments,
-                    known_payment_ids,
-                    str(first_line.id),
-                )
-                effects.extend(payment_effects)
-                payment_effect_count += len(payment_effects)
-                attempted_payment_ids.extend(attempted)
-
-    now = datetime.now(UTC).isoformat()
-    effects.append(claim_effect.upsert_metadata(key=META_LAST_SYNC, value=now))
-    effects.append(
-        claim_effect.upsert_metadata(key=META_CLAIM_STATUS, value=claim_status)
-    )
-
-    submitted_at = get_claim_metadata(claim, META_SUBMITTED_AT)
-    effects.append(
-        sync_banner(
-            claim_id=canvas_claim_id,
-            claim_status=claim_status,
-            last_sync_at=now,
-            submitted_at=submitted_at if isinstance(submitted_at, str) else None,
-        )
-    )
-
-    if payment_effect_count > 0 and last_encounter_data:
-        target_queue = _determine_target_queue(last_encounter_data)
-        effects.append(claim_effect.move_to_queue(target_queue))
-        log.info(f"Candid sync: moving claim {canvas_claim_id} to {target_queue}")
-
-    if attempted_era_ids:
-        updated_era_ids = sorted(synced_era_ids | set(attempted_era_ids))
-        effects.append(
-            claim_effect.upsert_metadata(
-                key=META_SYNCED_ERA_IDS,
-                value=json.dumps(updated_era_ids),
-            )
-        )
-        # Store cumulative amounts so the next sync can compute deltas
-        effects.append(
-            claim_effect.upsert_metadata(
-                key=META_SYNCED_AMOUNTS,
-                value=json.dumps(prev_synced_amounts),
-            )
-        )
-    if attempted_payment_ids:
-        updated_pmt_ids = sorted(synced_pmt_ids | set(attempted_payment_ids))
-        effects.insert(
-            0,
-            claim_effect.upsert_metadata(
-                key=META_SYNCED_PAYMENT_IDS,
-                value=json.dumps(updated_pmt_ids),
-            ),
-        )
+    _finalize_effects(state, claim)
 
     log.info(
-        f"Candid sync: generated {payment_effect_count} payment effects "
-        f"for claim {canvas_claim_id} (status={claim_status})"
+        f"Candid sync: generated {state.payment_effect_count} payment effects "
+        f"for claim {state.canvas_claim_id} (status={state.claim_status})"
     )
 
-    era_details = [
-        f"{eid}: ${era_totals.get(eid, 0) / 100:.2f}" for eid in attempted_era_ids
-    ]
-    try:
-        SyncLog.objects.create(
-            canvas_claim_id=canvas_claim_id,
-            candid_claim_status=claim_status,
-            payment_effects_count=payment_effect_count,
-            era_ids=",".join(attempted_era_ids),
-            detail=" | ".join(era_details) if era_details else "",
-        )
-    except Exception:
-        log.warning(f"Candid sync: failed to write SyncLog for claim {canvas_claim_id}")
-
-    effects.append(notify_claim_updated(canvas_claim_id))
-    return effects
+    _record_sync_log(state)
+    state.effects.append(notify_claim_updated(state.canvas_claim_id))
+    return state.effects
 
 
 def sync_patient_payments(claim: Claim, secrets: dict) -> list[Effect]:

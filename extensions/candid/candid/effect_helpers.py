@@ -1,5 +1,6 @@
 """Candid claim banner, metadata, and shared lookup helpers."""
 
+import hmac
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -15,6 +16,21 @@ def get_instance_url(environment: dict) -> str:
     """Derive the Canvas instance URL from the plugin environment."""
     customer_id = environment.get("CUSTOMER_IDENTIFIER", "")
     return f"https://{customer_id}.canvasmedical.com"
+
+
+def check_internal_auth(provided_key: str, secrets: dict) -> bool:
+    """Constant-time check that an inbound SimpleAPI request used our shared secret.
+
+    Returns False (fail-closed) when ``CANDID_CLIENT_SECRET`` is missing or empty,
+    so a misconfigured install can't let arbitrary callers in.
+
+    The sender %2C-encodes commas to work around the SDK's separate_headers
+    comma-splitting (see ``schedule_async_post``); decode before comparing.
+    """
+    expected = secrets.get("CANDID_CLIENT_SECRET", "")
+    if not expected:
+        return False
+    return hmac.compare_digest(provided_key.replace("%2C", ","), expected)
 
 
 def schedule_async_post(
@@ -59,6 +75,10 @@ META_SUBMISSION_ERROR = "candid_submission_error"
 PATIENT_COVERAGE_ID = "patient"
 DEFAULT_CLAIM_STATUS = "synced"
 DENIED_STATUSES = {"denied", "finalized_denied", "rejected", "failed"}
+
+# Description prefixes used to dedupe Candid postings against existing ones
+ERA_DESC_PREFIX = "Candid ERA "
+PATIENT_PAYMENT_DESC_PREFIX = "Candid patient payment "
 
 PAYER_ORDER_RANK = {
     ClaimPayerOrder.PRIMARY: 1,

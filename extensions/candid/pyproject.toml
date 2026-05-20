@@ -5,7 +5,7 @@ authors = [
 dependencies = [
   "canvas[test-utils]"
 ]
-description = "Some description of your project."
+description = "Canvas plugin that integrates with Candid Health: submits claims, syncs adjudication and patient payment data, and reports patient payments."
 license = "MIT"
 name = "candid"
 readme = "candid/README.md"

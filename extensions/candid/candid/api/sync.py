@@ -21,6 +21,7 @@ from canvas_sdk.v1.data.claim import Claim
 from logger import log
 
 from candid.adjudication_sync import sync_claim_adjudications, sync_patient_payments
+from candid.effect_helpers import check_internal_auth
 
 
 def _sync_handler(
@@ -55,8 +56,7 @@ class CandidSyncAPI(SimpleAPIRoute):
     PATH = "/sync"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
-        return credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
+        return check_internal_auth(credentials.key, self.secrets)
 
     post = _sync_handler(sync_claim_adjudications, "sync")
 
@@ -67,7 +67,6 @@ class CandidSyncPatientPaymentsAPI(SimpleAPIRoute):
     PATH = "/sync-patient-payments"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
-        return credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
+        return check_internal_auth(credentials.key, self.secrets)
 
     post = _sync_handler(sync_patient_payments, "patient payment sync")

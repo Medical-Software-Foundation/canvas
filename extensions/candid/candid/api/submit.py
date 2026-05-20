@@ -12,6 +12,7 @@ from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.api.payload_builder import build_split_payloads
 from candid.effect_helpers import (
+    check_internal_auth,
     handle_submit_failure,
     handle_submit_success,
 )
@@ -37,10 +38,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
     PATH = "/submit"
 
     def authenticate(self, credentials: APIKeyCredentials) -> bool:
-        # Sender %2C-encodes commas; see candid.effect_helpers.schedule_async_post.
-        return (
-            credentials.key.replace("%2C", ",") == self.secrets["CANDID_CLIENT_SECRET"]
-        )
+        return check_internal_auth(credentials.key, self.secrets)
 
     def _get_claim(self) -> Claim | None:
         body = self.request.json()

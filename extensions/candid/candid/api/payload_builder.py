@@ -308,9 +308,10 @@ def _add_patient(claim: Claim, payload: dict, errors: list[str]) -> None:
         "city": claim_patient.city,
         "state": claim_patient.state,
         "zip": claim_patient.zip,
+        "sex": claim_patient.sex,
     }
     missing = [k for k, v in required.items() if not v]
-    if missing or claim_patient.sex is None:
+    if missing:
         errors.append(
             f"The following items were missing for the patient: {', '.join(missing)}"
         )

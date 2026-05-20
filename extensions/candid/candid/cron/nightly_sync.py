@@ -49,7 +49,7 @@ class NightlyCandidSync(CronTask):
         claims = Claim.objects.filter(
             current_queue__queue_sort_ordering__in=queue_values,
             metadata__key=META_ENCOUNTERS,
-        )
+        ).prefetch_related("metadata", "coverages", "line_items")
 
         count = claims.count()
         if count == 0:
