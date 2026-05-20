@@ -19,11 +19,15 @@ Physicians and advanced practice providers in any specialty who need to capture 
 
 ## Screenshots
 
-<!-- Add at least one screenshot here before publishing. Suggested screenshots:
-     1. The "Add Hospitalization" form inside a note tab
-     2. The "Inpatient Stay History" chart summary section showing past stays
-     3. The inserted note command in the History section
--->
+**Inpatient Stay History — chart summary section**
+
+![Inpatient Stay History chart summary section](screenshots/chart-summary-section.png)
+
+**Add Hospitalization — note tab form**
+
+![Add Hospitalization form](screenshots/add-hospitalization-form.png)
+
+> Replace the images above with real screenshots before publishing.
 
 ## Components
 

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 560" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif">
+  <!-- Background -->
+  <rect width="420" height="560" fill="#ffffff" rx="4"/>
+  <rect x="1" y="1" width="418" height="558" fill="none" stroke="#e2e8f0" stroke-width="1" rx="4"/>
+
+  <!-- Form header -->
+  <text x="16" y="30" font-size="16" font-weight="600" fill="#2d3748">Add Hospitalization</text>
+  <line x1="16" y1="42" x2="404" y2="42" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Admission Date / Discharge Date row -->
+  <text x="16" y="62" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">ADMISSION DATE *</text>
+  <rect x="16" y="67" width="180" height="28" rx="3" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="28" y="85" font-size="13" fill="#1a202c">2026-05-12</text>
+
+  <text x="216" y="62" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">DISCHARGE DATE</text>
+  <rect x="216" y="67" width="188" height="28" rx="3" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="228" y="85" font-size="13" fill="#1a202c">2026-05-17</text>
+
+  <!-- Hospital Name -->
+  <text x="16" y="117" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">HOSPITAL NAME *</text>
+  <rect x="16" y="122" width="388" height="28" rx="3" fill="#fff" stroke="#4299e1" stroke-width="1.5"/>
+  <text x="28" y="140" font-size="13" fill="#1a202c">General Hospital</text>
+
+  <!-- Reason for Admission -->
+  <text x="16" y="172" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">REASON FOR ADMISSION *</text>
+  <rect x="16" y="177" width="388" height="28" rx="3" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="28" y="195" font-size="13" fill="#1a202c">Chest pain</text>
+
+  <!-- Principal Diagnosis -->
+  <text x="16" y="227" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">PRINCIPAL DIAGNOSIS</text>
+  <rect x="16" y="232" width="388" height="28" rx="3" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="28" y="250" font-size="13" fill="#1a202c">STEMI</text>
+
+  <!-- Treating Physician -->
+  <text x="16" y="282" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">TREATING PHYSICIAN</text>
+  <rect x="16" y="287" width="388" height="28" rx="3" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="28" y="305" font-size="13" fill="#1a202c">Dr. Martinez</text>
+
+  <!-- ICU Stay checkbox -->
+  <rect x="16" y="331" width="14" height="14" rx="2" fill="#3182ce" stroke="#3182ce" stroke-width="1"/>
+  <!-- Checkmark -->
+  <polyline points="18,338 21,341 27,334" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="36" y="343" font-size="13" fill="#1a202c">ICU Stay</text>
+
+  <!-- ICU Duration (shown because ICU stay checked) -->
+  <text x="16" y="370" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">ICU DURATION (DAYS)</text>
+  <rect x="16" y="375" width="388" height="28" rx="3" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="28" y="393" font-size="13" fill="#1a202c">3</text>
+
+  <!-- Discharge Disposition -->
+  <text x="16" y="425" font-size="10" font-weight="600" fill="#4a5568" letter-spacing="0.05em">DISCHARGE DISPOSITION</text>
+  <rect x="16" y="430" width="388" height="28" rx="3" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="28" y="448" font-size="13" fill="#1a202c">Home</text>
+
+  <!-- Readmission checkbox (unchecked) -->
+  <rect x="16" y="475" width="14" height="14" rx="2" fill="#fff" stroke="#cbd5e0" stroke-width="1"/>
+  <text x="36" y="487" font-size="13" fill="#1a202c">Readmission within 30 days</text>
+
+  <!-- Action buttons -->
+  <line x1="16" y1="510" x2="404" y2="510" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="296" y="522" width="56" height="28" rx="3" fill="#edf2f7"/>
+  <text x="324" y="540" font-size="13" font-weight="500" fill="#4a5568" text-anchor="middle">Cancel</text>
+  <rect x="360" y="522" width="48" height="28" rx="3" fill="#3182ce"/>
+  <text x="384" y="540" font-size="13" font-weight="500" fill="#ffffff" text-anchor="middle">Save</text>
+
+  <!-- Placeholder watermark -->
+  <text x="210" y="556" font-size="9" fill="#cbd5e0" text-anchor="middle">Replace with real screenshot</text>
+</svg>

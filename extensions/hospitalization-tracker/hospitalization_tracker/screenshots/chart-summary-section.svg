@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 320" font-family="Lato, Helvetica Neue, Arial, sans-serif">
+  <!-- Background -->
+  <rect width="520" height="320" fill="#ffffff" rx="4"/>
+  <!-- Card border -->
+  <rect x="1" y="1" width="518" height="318" fill="none" stroke="#e2e8f0" stroke-width="1" rx="4"/>
+
+  <!-- Section header -->
+  <!-- Bed icon -->
+  <g transform="translate(16, 16)" stroke="#555555" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 14v-6a1.5 1.5 0 0 1 1.5-1.5h12a1.5 1.5 0 0 1 1.5 1.5v6"/>
+    <line x1="1" y1="14" x2="15" y2="14"/>
+    <path d="M1 8.5V4a1.5 1.5 0 0 1 1.5-1.5h2.25"/>
+    <path d="M4.5 8.5v-1.5a1.5 1.5 0 0 1 1.5-1.5h6a1.5 1.5 0 0 1 1.5 1.5v1.5"/>
+  </g>
+  <text x="38" y="27" font-size="13" font-weight="700" fill="#1a1a1a">Inpatient Stay History</text>
+
+  <!-- Divider -->
+  <line x1="16" y1="42" x2="504" y2="42" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Entry 1 -->
+  <!-- Top row: hospital name + badges -->
+  <text x="16" y="64" font-size="12" font-weight="700" fill="#1a1a1a">General Hospital</text>
+  <!-- ICU badge -->
+  <rect x="354" y="52" width="38" height="15" rx="8" fill="#fed7d7"/>
+  <text x="373" y="63" font-size="10" font-weight="700" fill="#c53030" text-anchor="middle">ICU 3d</text>
+  <!-- LOS badge -->
+  <rect x="398" y="52" width="50" height="15" rx="8" fill="#e9d8fd"/>
+  <text x="423" y="63" font-size="10" font-weight="700" fill="#553c9a" text-anchor="middle">5d stay</text>
+
+  <text x="16" y="80" font-size="12" fill="#555555">May 12, 2026 – May 17, 2026</text>
+  <text x="16" y="95" font-size="12" fill="#555555">Chest pain</text>
+  <text x="16" y="110" font-size="12" fill="#555555">Dx: STEMI</text>
+  <text x="16" y="125" font-size="12" fill="#555555">Dr: Dr. Martinez</text>
+
+  <!-- Divider between entries -->
+  <line x1="16" y1="138" x2="504" y2="138" stroke="#f0f4f8" stroke-width="1"/>
+
+  <!-- Entry 2 -->
+  <text x="16" y="158" font-size="12" font-weight="700" fill="#1a1a1a">St. Mary Medical Center</text>
+  <!-- LOS badge only -->
+  <rect x="416" y="146" width="50" height="15" rx="8" fill="#e9d8fd"/>
+  <text x="441" y="157" font-size="10" font-weight="700" fill="#553c9a" text-anchor="middle">8d stay</text>
+
+  <text x="16" y="174" font-size="12" fill="#555555">Jan 3, 2025 – Jan 11, 2025</text>
+  <text x="16" y="189" font-size="12" fill="#555555">Pneumonia, hypoxic respiratory failure</text>
+  <text x="16" y="204" font-size="12" fill="#555555">Dx: Community-acquired pneumonia</text>
+  <text x="16" y="219" font-size="12" fill="#555555">Dr: Dr. Patel</text>
+  <!-- 30d Readmit badge -->
+  <rect x="16" y="228" width="88" height="15" rx="8" fill="#fefcbf"/>
+  <text x="60" y="239" font-size="10" font-weight="700" fill="#744210" text-anchor="middle">30d Readmit</text>
+
+  <!-- Divider between entries -->
+  <line x1="16" y1="252" x2="504" y2="252" stroke="#f0f4f8" stroke-width="1"/>
+
+  <!-- Entry 3 (partial) -->
+  <text x="16" y="272" font-size="12" font-weight="700" fill="#1a1a1a">Valley View Hospital</text>
+  <rect x="430" y="260" width="50" height="15" rx="8" fill="#e9d8fd"/>
+  <text x="455" y="271" font-size="10" font-weight="700" fill="#553c9a" text-anchor="middle">2d stay</text>
+  <text x="16" y="288" font-size="12" fill="#555555">Aug 14, 2023 – Aug 16, 2023</text>
+  <text x="16" y="303" font-size="12" fill="#555555">Observation for arrhythmia</text>
+
+  <!-- Placeholder watermark -->
+  <text x="260" y="314" font-size="9" fill="#cbd5e0" text-anchor="middle">Replace with real screenshot</text>
+</svg>
