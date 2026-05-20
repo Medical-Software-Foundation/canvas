@@ -483,7 +483,7 @@ def _append_payment_effect(
             **_era_kwargs(era),
         )
     )
-    state.payment_effect_count += 1
+    state.payment_effect_count = state.payment_effect_count + 1
 
 
 def _post_patient_payments_for_candid_claim(
@@ -509,7 +509,7 @@ def _post_patient_payments_for_candid_claim(
         str(state.first_line.id),
     )
     state.effects.extend(payment_effects)
-    state.payment_effect_count += len(payment_effects)
+    state.payment_effect_count = state.payment_effect_count + len(payment_effects)
     state.attempted_payment_ids.extend(attempted)
 
 
