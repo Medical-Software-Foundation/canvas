@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.1.1",
     "name": "provider_availability_manager",
     "description": "Drag-and-schedule provider availability manager that filters slots in the native Canvas appointment book.",
     "url_permissions": [],

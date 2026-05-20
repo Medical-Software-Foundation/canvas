@@ -272,7 +272,7 @@
     }
     async function refreshEvents(excludedIds, truncations) {
         try {
-            const url = '/plugin-io/api/scheduling_with_rooms/events?tz=' + encodeURIComponent(state.viewTimezone || 'UTC');
+            const url = '/plugin-io/api/provider_availability_manager/events?tz=' + encodeURIComponent(state.viewTimezone || 'UTC');
             const data = await apiCall(url);
             // Filter any IDs we just deleted in case the read path is lagging
             // behind the write — without this guard, a stale GET re-introduces
@@ -312,7 +312,7 @@
             type: typeLabel,
             description: String(provider),
         };
-        const result = await apiCall('/plugin-io/api/scheduling_with_rooms/calendar', {
+        const result = await apiCall('/plugin-io/api/provider_availability_manager/calendar', {
             method: 'POST',
             body: JSON.stringify(body),
         });
@@ -961,7 +961,7 @@
         try {
             if (scope === 'all' || !isRecurring) {
                 for (const rec of records) {
-                    await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+                    await apiCall('/plugin-io/api/provider_availability_manager/events', {
                         method: 'DELETE',
                         body: JSON.stringify({ eventId: rec.id }),
                     });
@@ -1426,7 +1426,7 @@
         try {
             if (scope === 'all' || !isRecurring) {
                 for (const rec of records) {
-                    await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+                    await apiCall('/plugin-io/api/provider_availability_manager/events', {
                         method: 'DELETE',
                         body: JSON.stringify({ eventId: rec.id }),
                     });
@@ -1465,7 +1465,7 @@
         const recurrence = buildRecurrencePayload(f);
         for (const provId of f.providers) {
             const calendarId = await ensureCalendar(provId, f.type, state.locationId);
-            await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+            await apiCall('/plugin-io/api/provider_availability_manager/events', {
                 method: 'POST',
                 body: JSON.stringify(eventBody(f, calendarId)),
             });
@@ -1486,7 +1486,7 @@
                 // PATCH all underlying records for this provider
                 for (const rec of existingByProvider[provId]) {
                     const body = Object.assign({}, eventBodyForPatch(f, rec.calendarId), { eventId: rec.id });
-                    await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+                    await apiCall('/plugin-io/api/provider_availability_manager/events', {
                         method: 'PATCH',
                         body: JSON.stringify(body),
                     });
@@ -1494,7 +1494,7 @@
             } else {
                 // Delete all records for this provider
                 for (const rec of existingByProvider[provId]) {
-                    await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+                    await apiCall('/plugin-io/api/provider_availability_manager/events', {
                         method: 'DELETE',
                         body: JSON.stringify({ eventId: rec.id }),
                     });
@@ -1505,7 +1505,7 @@
         for (const provId of newProviderIds) {
             if (!existingByProvider[provId]) {
                 const calendarId = await ensureCalendar(provId, f.type, state.locationId);
-                await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+                await apiCall('/plugin-io/api/provider_availability_manager/events', {
                     method: 'POST',
                     body: JSON.stringify(eventBody(f, calendarId)),
                 });
@@ -1548,7 +1548,7 @@
         const newForm = Object.assign({}, f, { date: dateOnly(occurrenceDate) });
         for (const provId of newProviderIds) {
             const calendarId = await ensureCalendar(provId, f.type, state.locationId);
-            await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+            await apiCall('/plugin-io/api/provider_availability_manager/events', {
                 method: 'POST',
                 body: JSON.stringify(eventBody(newForm, calendarId)),
             });
@@ -1576,7 +1576,7 @@
                 // No existing record for this provider: just create the one-off
                 const calendarId = await ensureCalendar(provId, f.type, state.locationId);
                 const oneOff = Object.assign({}, f, { recurrence: { mode: 'none' } });
-                await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+                await apiCall('/plugin-io/api/provider_availability_manager/events', {
                     method: 'POST',
                     body: JSON.stringify(eventBody(oneOff, calendarId)),
                 });
@@ -1608,7 +1608,7 @@
     async function truncateBefore(record, occurrenceDate) {
         const dayBefore = addDays(startOfDay(occurrenceDate), -1);
         const truncatedEnd = dateOnly(dayBefore) + 'T23:59';
-        await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+        await apiCall('/plugin-io/api/provider_availability_manager/events', {
             method: 'PATCH',
             body: JSON.stringify({
                 eventId: record.id,
@@ -1649,7 +1649,7 @@
             recurrenceEndsAt: truncatedEnd,
             allowedNoteTypes: record.allowedNoteTypes || [],
         };
-        await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+        await apiCall('/plugin-io/api/provider_availability_manager/events', {
             method: 'PATCH',
             body: JSON.stringify(truncatedBody),
         });
@@ -1659,7 +1659,7 @@
             const calendarId = record.calendarId
                 || (await ensureCalendar(record.provider, replacementForm.type, state.locationId));
             const oneOff = Object.assign({}, replacementForm, { recurrence: { mode: 'none' } });
-            await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+            await apiCall('/plugin-io/api/provider_availability_manager/events', {
                 method: 'POST',
                 body: JSON.stringify(eventBody(oneOff, calendarId)),
             });
@@ -1687,7 +1687,7 @@
                 recurrenceEndsAt: record.recurrence.endDate || null,
                 allowedNoteTypes: record.allowedNoteTypes || [],
             };
-            await apiCall('/plugin-io/api/scheduling_with_rooms/events', {
+            await apiCall('/plugin-io/api/provider_availability_manager/events', {
                 method: 'POST',
                 body: JSON.stringify(continuationBody),
             });
