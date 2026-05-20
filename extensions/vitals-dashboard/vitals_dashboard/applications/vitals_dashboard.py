@@ -358,6 +358,9 @@ def _render_page(bootstrap_json: str) -> str:
         value_numeric: v === "" ? null : parseFloat(v),
         value_text: desc,
         recorded_at: recorded,
+        // Preserve the clinician-entered local HH:MM so the Vitals note renders
+        // wall-clock time rather than the UTC-shifted form of recorded_at.
+        recorded_at_display: t,
       });
     });
     return ms;
@@ -1100,12 +1103,12 @@ def _render_page(bootstrap_json: str) -> str:
       const errStyle = r.is_deleted ? ' style="color:#9ca3af;text-decoration:line-through;"' : '';
       return `
       <tr${errStyle}>
-        <td>${fmtDateTime(r.recorded_at)}</td>
-        <td>${VITAL_LABEL[r.vital_type] || r.vital_type}</td>
-        <td>${posAndCuffLabel(r)}</td>
-        <td>${fmtValue(r)}</td>
-        <td>${(r.entered_by && (r.entered_by.name || r.entered_by.id)) || ""}</td>
-        <td>${(r.provider_of_record && r.provider_of_record.name) || ""}</td>
+        <td>${esc(fmtDateTime(r.recorded_at))}</td>
+        <td>${esc(VITAL_LABEL[r.vital_type] || r.vital_type)}</td>
+        <td>${esc(posAndCuffLabel(r))}</td>
+        <td>${esc(fmtValue(r))}</td>
+        <td>${esc((r.entered_by && (r.entered_by.name || r.entered_by.id)) || "")}</td>
+        <td>${esc((r.provider_of_record && r.provider_of_record.name) || "")}</td>
         <td>${r.note_id ? "Yes" : ""}${r.is_deleted ? " (entered in error)" : ""}</td>
       </tr>`;
     }).join("");

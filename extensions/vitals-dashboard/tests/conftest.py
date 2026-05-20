@@ -33,6 +33,7 @@ def make_measurement(
     position="",
     cuff_location="",
     recorded_at=None,
+    recorded_at_display="",
     session_id="101",
     patient_key="patient-abc",
     dbid=1,
@@ -51,6 +52,7 @@ def make_measurement(
     m.value_text = value_text
     m.unit = unit
     m.recorded_at = recorded_at
+    m._recorded_at_display = recorded_at_display
     m.is_deleted = is_deleted
     m.entered_by_staff_key = entered_by_staff_key
     return m

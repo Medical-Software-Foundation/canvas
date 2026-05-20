@@ -407,7 +407,17 @@ def _render_summary_html(session, measurements, display_dt_str):
         parts.append('<p style="margin:.75rem 0 .25rem;"><strong>Urine Output</strong></p><ul style="margin:0;padding-left:1.25rem;">')
         total = Decimal("0")
         for m in urine:
-            t = m.recorded_at.strftime("%H:%M") if m.recorded_at else "-"
+            # Prefer the clinician-entered local HH:MM (transient attribute set in
+            # create_session); fall back to UTC wall-clock only when missing —
+            # without the display string, recorded_at is UTC and would disagree
+            # with the locally-formatted session header in non-UTC clinics.
+            display = getattr(m, "_recorded_at_display", "") or ""
+            if display:
+                t = display
+            elif m.recorded_at:
+                t = m.recorded_at.strftime("%H:%M")
+            else:
+                t = "-"
             vol = html.escape(_fmt_num(m.value_numeric))
             desc = f" ({html.escape(m.value_text)})" if m.value_text else ""
             parts.append(f"<li>{html.escape(t)} - {vol} mL{desc}</li>")
@@ -473,6 +483,15 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
                     {"error": "update_session_id belongs to a different patient"},
                     status_code=HTTPStatus.FORBIDDEN,
                 )]
+            # Once a session is finished (note_id populated), its measurements back the
+            # signed note's stored summary HTML and the FHIR Observations already emitted
+            # by /sync_observations. Mutating them silently corrupts the audit trail.
+            # Matches the contract enforced by /sync_observations below.
+            if session and session.note_id:
+                return [JSONResponse(
+                    {"error": "session is already finished; start a new session"},
+                    status_code=HTTPStatus.CONFLICT,
+                )]
 
         if session is not None:
             session.session_datetime = session_dt
@@ -507,7 +526,7 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
             if value_numeric is None and not value_text:
                 continue
 
-            rows_to_create.append(VitalsMeasurement(
+            row = VitalsMeasurement(
                 session_id=str(session.dbid),
                 patient_key=patient_key,
                 vital_type=vital_type,
@@ -518,7 +537,15 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
                 unit=UNIT_BY_TYPE.get(vital_type, ""),
                 recorded_at=_parse_datetime(m.get("recorded_at"), default=session_dt),
                 entered_by_staff_key=entered_by,
-            ))
+            )
+            # Transient attribute (not persisted) — clinician-entered local HH:MM
+            # for the urine-void renderer. recorded_at is stored as UTC, so without
+            # this the rendered note disagrees with the session header in any
+            # non-UTC clinic.
+            display = (m.get("recorded_at_display") or "").strip()
+            if display:
+                row._recorded_at_display = display
+            rows_to_create.append(row)
 
         created = VitalsMeasurement.objects.bulk_create(rows_to_create) if rows_to_create else []
 
@@ -660,10 +687,10 @@ class VitalsAPI(StaffSessionAuthMixin, SimpleAPI):
 
         provider_id = entered_by
         if not Staff.objects.filter(id=provider_id).exists():
-            fallback_staff = Staff.objects.first()
-            if not fallback_staff:
-                raise _FinishError("No Staff records available to assign as provider.")
-            provider_id = str(fallback_staff.id)
+            # Don't substitute an arbitrary other Staff row — that misattributes the
+            # signed note to a real, identifiable other clinician with no audit trail.
+            # Per REVIEW.md, return an error rather than write placeholder/wrong data.
+            raise _FinishError("Authenticated staff not found.")
 
         practice_location = PracticeLocation.objects.first()
         if not practice_location:

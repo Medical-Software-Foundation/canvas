@@ -472,6 +472,36 @@ class TestRenderSummaryHTML:
         assert "Orthostatic" not in html
         assert "Urine Output" not in html
 
+    def test_urine_time_uses_local_display_string(self, mock_session, measurement_factory):
+        """Per-void timestamps must render in clinic-local wall-clock time,
+        matching the session header. recorded_at is stored as UTC, so the
+        renderer must prefer the frontend-supplied local HH:MM string."""
+        # 14:30 EST stored as 19:30 UTC. The note must show 14:30, not 19:30.
+        utc_time = datetime(2026, 4, 22, 19, 30, tzinfo=timezone.utc)
+        measurements = [
+            measurement_factory(
+                "urine_output",
+                value_numeric=250,
+                recorded_at=utc_time,
+                recorded_at_display="14:30",
+                dbid=1,
+            ),
+        ]
+        rendered = _render_summary_html(mock_session, measurements, "2026-04-22 14:30")
+
+        assert "14:30 - 250 mL" in rendered
+        assert "19:30" not in rendered
+
+    def test_urine_time_falls_back_to_utc_when_no_display(self, mock_session, measurement_factory):
+        """Backwards-compat: older payloads without recorded_at_display still
+        render — they'll show UTC wall-clock, the pre-fix behavior."""
+        utc_time = datetime(2026, 4, 22, 9, 0, tzinfo=timezone.utc)
+        measurements = [
+            measurement_factory("urine_output", value_numeric=200, recorded_at=utc_time, dbid=1),
+        ]
+        rendered = _render_summary_html(mock_session, measurements, "2026-04-22")
+        assert "09:00 - 200 mL" in rendered
+
     def test_user_text_is_html_escaped(self, mock_session, measurement_factory):
         """Stored XSS regression: clinician-entered text must be HTML-escaped
         before it reaches the CustomCommand `content` field, which is rendered
@@ -610,7 +640,7 @@ class TestCreateSession:
             "measurements": [{"vital_type": "heart_rate", "value_numeric": 72}],
             "update_session_id": "99",
         })
-        existing = MagicMock(dbid=99, patient_key="p-1")
+        existing = MagicMock(dbid=99, patient_key="p-1", note_id="")
         with patch("vitals_dashboard.api.vitals_api.VitalsSession") as mock_sess, \
              patch("vitals_dashboard.api.vitals_api.VitalsMeasurement") as mock_meas:
             mock_sess.objects.filter.return_value.first.return_value = existing
@@ -622,6 +652,26 @@ class TestCreateSession:
         mock_meas.objects.filter.assert_any_call(session_id=str(existing.dbid))
 
         assert resp[0].status_code == HTTPStatus.CREATED
+
+    def test_update_finished_session_rejected(self):
+        """A finished session (note_id populated) backs a signed Vitals note and
+        the FHIR Observations already emitted by /sync_observations. Allowing the
+        measurements to be silently overwritten would corrupt the audit trail —
+        the note's stored summary would lie. Must return 409."""
+        api = self._api({
+            "patient_key": "p-1",
+            "measurements": [{"vital_type": "heart_rate", "value_numeric": 72}],
+            "update_session_id": "99",
+        })
+        existing = MagicMock(dbid=99, patient_key="p-1", note_id="note-abc")
+        with patch("vitals_dashboard.api.vitals_api.VitalsSession") as mock_sess, \
+             patch("vitals_dashboard.api.vitals_api.VitalsMeasurement") as mock_meas:
+            mock_sess.objects.filter.return_value.first.return_value = existing
+            resp = api.create_session()
+
+        assert resp[0].status_code == HTTPStatus.CONFLICT
+        existing.save.assert_not_called()
+        mock_meas.objects.filter.assert_not_called()
 
     def test_unknown_vital_type_skipped(self):
         api = self._api({
@@ -752,18 +802,6 @@ class TestBuildFinishEffects:
             with pytest.raises(_FinishError, match="No 'Vitals' NoteType"):
                 api._build_finish_effects(session, [], "s-1", "2026-04-22")
 
-    def test_no_staff_at_all_raises(self):
-        api = _make_api()
-        session = MagicMock(patient_key="p-1", session_datetime=datetime(2026, 4, 22, tzinfo=timezone.utc))
-
-        with patch("vitals_dashboard.api.vitals_api.NoteType") as mock_nt, \
-             patch("vitals_dashboard.api.vitals_api.Staff") as mock_staff:
-            mock_nt.objects.filter.return_value.first.return_value = MagicMock(id="nt-1")
-            mock_staff.objects.filter.return_value.exists.return_value = False
-            mock_staff.objects.first.return_value = None
-            with pytest.raises(_FinishError, match="No Staff"):
-                api._build_finish_effects(session, [], "s-UNKNOWN", "2026-04-22")
-
     def test_no_practice_location_raises(self):
         api = _make_api()
         session = MagicMock(patient_key="p-1", session_datetime=datetime(2026, 4, 22, tzinfo=timezone.utc))
@@ -803,7 +841,10 @@ class TestBuildFinishEffects:
         assert cmd_eff == "cmd-effect"
         assert isinstance(note_uuid, str) and len(note_uuid) > 0
 
-    def test_fallback_staff_used_when_provider_missing(self):
+    def test_finish_errors_when_authenticated_staff_missing(self):
+        """Per REVIEW.md: don't substitute an arbitrary other Staff row when the
+        authenticated staff id doesn't resolve — that would misattribute the signed
+        note. The handler must raise _FinishError instead."""
         api = _make_api()
         session = MagicMock(
             patient_key="p-1",
@@ -812,21 +853,13 @@ class TestBuildFinishEffects:
 
         with patch("vitals_dashboard.api.vitals_api.NoteType") as mock_nt, \
              patch("vitals_dashboard.api.vitals_api.Staff") as mock_staff, \
-             patch("vitals_dashboard.api.vitals_api.PracticeLocation") as mock_loc, \
-             patch("vitals_dashboard.api.vitals_api.NoteEffect") as mock_note_eff, \
-             patch("vitals_dashboard.api.vitals_api.VitalsSummaryCommand") as mock_cmd:
+             patch("vitals_dashboard.api.vitals_api.PracticeLocation") as mock_loc:
             mock_nt.objects.filter.return_value.first.return_value = MagicMock(id="nt-1")
             mock_staff.objects.filter.return_value.exists.return_value = False
-            mock_staff.objects.first.return_value = MagicMock(id="fallback-s")
             mock_loc.objects.first.return_value = MagicMock(id="loc-1")
-            mock_note_eff.return_value.create.return_value = "note-effect"
-            mock_cmd.return_value.originate.return_value = "cmd-effect"
 
-            api._build_finish_effects(session, [], "s-unknown", "2026-04-22")
-
-        # NoteEffect constructed with fallback provider id
-        kwargs = mock_note_eff.call_args.kwargs
-        assert kwargs["provider_id"] == "fallback-s"
+            with pytest.raises(_FinishError, match="Authenticated staff not found"):
+                api._build_finish_effects(session, [], "s-unknown", "2026-04-22")
 
     def test_title_uses_session_datetime_when_no_display(self):
         api = _make_api()
