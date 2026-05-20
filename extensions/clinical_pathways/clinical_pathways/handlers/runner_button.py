@@ -9,13 +9,13 @@ _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 class PathwayRunnerButton(ActionButton):
-    """Note-header button that opens a small picker modal.
+    """Note-header button that opens the pathway picker in the right chart pane.
 
     The picker lets the provider pick a published pathway. On select the
     plugin auto-inserts the pathway's starting `QuestionnaireCommand` into
-    the open note and closes the modal. The runtime evaluator (BaseProtocol)
-    listens for the resulting `INTERVIEW_UPDATED` event and advances the
-    pathway from there — no multi-step side-panel UI.
+    the open note and closes the side pane. The runtime evaluator
+    (BaseProtocol) listens for the resulting `INTERVIEW_UPDATED` event and
+    advances the pathway from there — no multi-step side-panel UI.
     """
 
     BUTTON_TITLE = "Clinical Pathways"
@@ -50,7 +50,7 @@ class PathwayRunnerButton(ActionButton):
         return [
             LaunchModalEffect(
                 url=url,
-                target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
+                target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE,
                 title="Pick a clinical pathway",
             ).apply()
         ]
