@@ -125,6 +125,16 @@ def event_occurs_on_date(
             }
             if target_date.weekday() not in allowed_days:
                 return False
+        else:
+            # RFC 5545: FREQ=WEEKLY without BYDAY matches only the weekday of
+            # DTSTART. The JS UI (``expandOccurrences`` in main.js, fallback
+            # at ``days.length === 0 ? d.getDay() === startDt.getDay() : ...``)
+            # follows the same semantic — without this arm, Python would
+            # surface windows on every weekday in matching weeks, opening
+            # bookable slots on days the provider never opened (fail-OPEN on
+            # an Available calendar).
+            if target_date.weekday() != local_start_date.weekday():
+                return False
 
         if interval > 1:
             # Count Sunday-anchored calendar weeks, matching the JS UI's

@@ -236,6 +236,15 @@
         const hhEnd = endDt ? pad2(endDt.getHours()) + ':' + pad2(endDt.getMinutes()) : '';
         const rule = ruleOf(event);
         const ntKey = (event.allowedNoteTypes || []).slice().sort().join(',');
+        // Non-recurring events share a key only when they are literally the
+        // same event (same date too). The hh:mm-only key was intentional for
+        // recurring series (so multi-provider rolls up; so this-only
+        // overrides stay grouped with the parent) — but for one-offs, two
+        // distinct dates would collapse into one logical series and a
+        // single delete or edit would silently affect both.
+        const dateComponent = rule.type === ''
+            ? (startDt ? [startDt.getFullYear(), pad2(startDt.getMonth() + 1), pad2(startDt.getDate())].join('-') : '')
+            : '';
         return [
             event.location || '',
             event.calendarType || '',
@@ -243,6 +252,7 @@
             hhStart, hhEnd,
             rule.type, rule.interval, rule.days.join(','),
             ntKey,
+            dateComponent,
         ].join('||');
     }
     function seriesFor(masterEventId) {
@@ -1413,9 +1423,16 @@
 
         try {
             let truncations = {};
+            const isRecurring = !!state.modal.seriesRecords?.[0]?.recurrence?.type;
             if (state.modal.mode === 'create') {
                 await createSeries(f);
-            } else if (state.modal.scope === 'all') {
+            } else if (state.modal.scope === 'all' || !isRecurring) {
+                // Mirror the doScopedDelete guard. Without `!isRecurring`,
+                // non-recurring events fall into editThisOnly →
+                // splitOutOccurrence, which PATCHes the original with its
+                // OWN values (no-op for the user-visible content) and POSTs
+                // a brand-new one-off — silently duplicating the event on
+                // every save.
                 await editAll(f, state.modal.seriesRecords);
             } else if (state.modal.scope === 'following') {
                 truncations = await editThisAndFollowing(f, state.modal.seriesRecords, state.modal.occurrenceDate);
@@ -1438,7 +1455,16 @@
         const records = state.modal.seriesRecords;
         const isRecurring = !!records[0]?.recurrence?.type;
         const scope = state.modal.scope || 'all';
-        if (!confirm('Delete ' + (scope === 'this' ? 'this occurrence' : (isRecurring ? 'the whole series' : 'this event')) + '? This cannot be undone.')) return;
+        // Confirm message must match what the code is about to do.
+        // Pre-fix, 'following' had no branch here and fell through to a
+        // misleading "Delete the whole series?" prompt while the code
+        // only removed the clicked occurrence.
+        const confirmMsg = scope === 'this'
+            ? 'Delete this occurrence?'
+            : scope === 'following'
+                ? 'Delete this occurrence and all following occurrences?'
+                : (isRecurring ? 'Delete the whole series?' : 'Delete this event?');
+        if (!confirm(confirmMsg + ' This cannot be undone.')) return;
         state.saving = true;
         renderAll();
         const deletedIds = new Set();
@@ -1451,6 +1477,25 @@
                         body: JSON.stringify({ eventId: rec.id }),
                     });
                     deletedIds.add(String(rec.id));
+                }
+            } else if (scope === 'following') {
+                // this-and-following: truncate the covering segment per
+                // provider to end the day before the clicked occurrence.
+                // No continuation — mirrors doScopedDelete's following
+                // branch. Pre-fix this scope fell through to the else
+                // branch which created a continuation series and removed
+                // only the one occurrence.
+                const byProvider = {};
+                for (const r of records) {
+                    const key = String(r.provider || '');
+                    (byProvider[key] = byProvider[key] || []).push(r);
+                }
+                for (const key of Object.keys(byProvider)) {
+                    const target = byProvider[key].find(r => recordCovers(r, state.modal.occurrenceDate));
+                    if (target) {
+                        const t = await truncateBefore(target, state.modal.occurrenceDate);
+                        if (t) truncations[t.id] = t.endDate;
+                    }
                 }
             } else {
                 // this-only: only split the segment per provider that covers
@@ -1690,9 +1735,21 @@
         const recEndDt = parseLocalISO(record.recurrence?.endDate);
         const hasContinuation = record.recurrence?.type && (!recEndDt || recEndDt > dayAfter);
         if (hasContinuation) {
-            // Continuation should preserve the original schedule with same time-of-day, same rule,
-            // but starting at dayAfter (or the next valid occurrence on/after dayAfter).
-            const newStart = new Date(dayAfter.getFullYear(), dayAfter.getMonth(), dayAfter.getDate(),
+            // Continuation DTSTART must be a real occurrence of the original
+            // rule on or after dayAfter — not just dayAfter itself. WEEKLY
+            // and DAILY INTERVAL math anchors at DTSTART, so picking an
+            // arbitrary date (e.g. the day right after the edited
+            // occurrence) shifts the WKST anchor for any INTERVAL>1 rule
+            // and inverts every future occurrence's active/skipped parity.
+            // Walk forward from dayAfter using the SAME expandOccurrences
+            // the UI uses, so the continuation lines up exactly with what
+            // the user sees in the calendar.
+            let anchorDate = dayAfter;
+            for (let i = 0; i < 366; i++) {
+                if (expandOccurrences(record, anchorDate, anchorDate).length > 0) break;
+                anchorDate = addDays(anchorDate, 1);
+            }
+            const newStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate(),
                 startDt.getHours(), startDt.getMinutes());
             const newEnd = new Date(newStart.getTime() + duration);
             const continuationBody = {

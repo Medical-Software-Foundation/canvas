@@ -137,11 +137,28 @@ def test_event_occurs_on_date_weekly_byday_match():
     assert event_occurs_on_date(event, datetime.date(2026, 5, 5)) is False
 
 
-def test_event_occurs_on_date_weekly_no_byday_always_matches():
+def test_event_occurs_on_date_weekly_no_byday_matches_only_start_weekday():
+    """RFC 5545 + JS UI: FREQ=WEEKLY without BYDAY matches only the weekday
+    of DTSTART, not every day in matching weeks.
+
+    Regression: the previous implementation skipped the BYDAY check entirely
+    when BYDAY was empty and returned True for every weekday, surfacing
+    slots on days the provider never opened (fail-OPEN on an Available
+    calendar). The old test was named ``..._always_matches`` and only
+    asserted Mon → True on a Mon DTSTART, so it passed whether the
+    semantic was "every day" or "match start weekday".
+    """
     event = MagicMock()
-    event.starts_at = datetime.datetime(2026, 5, 4, 9, 0)
+    event.starts_at = datetime.datetime(2026, 5, 4, 9, 0)  # Monday
     event.recurrence = "FREQ=WEEKLY"
+    # Following Monday — same weekday as DTSTART — must match.
     assert event_occurs_on_date(event, datetime.date(2026, 5, 11)) is True
+    # The next *Tuesday* (2026-05-05) is a different weekday — must NOT
+    # match. Pre-fix this returned True.
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 5)) is False
+    # Wed–Sun also must not match.
+    for day in range(6, 11):
+        assert event_occurs_on_date(event, datetime.date(2026, 5, day)) is False
 
 
 def test_event_occurs_on_date_weekly_interval_skip():
