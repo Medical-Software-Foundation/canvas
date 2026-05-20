@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compound Medication Loader</title>
+  <style>
+    /* Matches the staff_credentialing plugin's design language:
+       navy banner with Canvas-blue 4px bottom stripe, Inter font,
+       cool off-white page, white bordered cards with subtle shadow,
+       Canvas brand gradient on the primary CTA, info-blue pills. */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --c-page: #F5F8FC;
+      --c-surface: #FFFFFF;
+      --c-surface-alt: #F7FAFD;
+      --c-navy: #0B2545;
+      --c-navy-soft: #1E3A66;
+      --c-primary: #01A4FF;
+      --c-secondary: #01ECFF;
+      --c-grad: linear-gradient(135deg, #01A4FF, #01ECFF);
+      --c-text: #1B2A3E;
+      --c-text-strong: #0B2545;
+      --c-text-muted: #5C6B7A;
+      --c-text-faint: #8496AA;
+      --c-border: #E2E8EE;
+      --c-border-soft: #EEF2F6;
+      --c-border-hover: #C8D2DD;
+      --c-focus: #01A4FF;
+      --c-success: #1F6F48;
+      --c-success-bg: #E3F4EC;
+      --c-warn: #8A5A00;
+      --c-warn-bg: #FFF4E1;
+      --c-bad: #A82A16;
+      --c-bad-bg: #FDE4E1;
+      --c-info-bg: #E6F4FD;
+      --c-info-border: #B8DEF7;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+      color: var(--c-text);
+      background: var(--c-page);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Navy banner with brand-blue stripe (matches staff_credentialing) */
+    header {
+      background: var(--c-navy);
+      color: white;
+      padding: 1.5rem 2rem;
+      border-bottom: 4px solid var(--c-primary);
+    }
+    header h1 {
+      font-size: 1.5rem;
+      margin: 0;
+      font-weight: 600;
+      color: white;
+      letter-spacing: -0.01em;
+    }
+    header .subtitle { color: #C9D7E6; font-size: 0.875rem; margin-top: 0.15rem; }
+
+    main {
+      flex: 1;
+      padding: 1.25rem 2rem 4rem;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    section.card {
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(11, 37, 69, 0.04);
+      padding: 1.1rem;
+    }
+    section.card h2 {
+      margin: -1.1rem -1.1rem 1rem;
+      padding: 0.85rem 1.1rem;
+      border-bottom: 1px solid var(--c-border-soft);
+      background: var(--c-surface-alt);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--c-navy);
+    }
+    section.card > .actions { margin: 1.1rem -1.1rem -1.1rem; }
+
+    .helptext { color: var(--c-text-muted); font-size: 0.875rem; margin-bottom: 0.9rem; }
+    .helptext code {
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 0.85em;
+      background: var(--c-surface-alt);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      color: var(--c-navy);
+      border: 1px solid var(--c-border);
+    }
+
+    /* Drop zone */
+    .dropzone {
+      border: 1.5px dashed var(--c-border-hover);
+      border-radius: 10px;
+      padding: 2.25rem 1.25rem;
+      text-align: center;
+      cursor: pointer;
+      background: var(--c-surface-alt);
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .dropzone:hover { border-color: var(--c-primary); background: #F0F8FE; }
+    .dropzone.drag {
+      border-color: var(--c-primary);
+      background: var(--c-info-bg);
+      box-shadow: 0 0 0 3px rgba(1, 164, 255, 0.15);
+    }
+    .dropzone p { color: var(--c-text-muted); margin: 0 0 0.4rem; }
+    .dropzone p strong { color: var(--c-text-strong); font-weight: 600; }
+    .dropzone .filename {
+      color: var(--c-primary);
+      font-weight: 500;
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 0.875rem;
+    }
+    .dropzone input[type=file] { display: none; }
+
+    /* Buttons */
+    button {
+      display: inline-block;
+      padding: 0.45rem 0.95rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: 6px;
+      border: 1px solid var(--c-border);
+      background: white;
+      color: var(--c-text-strong);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.1s;
+    }
+    button:hover { border-color: var(--c-border-hover); background: var(--c-surface-alt); }
+    button.primary {
+      background: var(--c-grad);
+      color: white;
+      border-color: transparent;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(1, 164, 255, 0.25);
+    }
+    button.primary:hover:not(:disabled) {
+      filter: brightness(1.05);
+      box-shadow: 0 4px 10px rgba(1, 164, 255, 0.35);
+      border-color: transparent;
+    }
+    button.primary:disabled {
+      background: #C8D2DD;
+      color: white;
+      box-shadow: none;
+      cursor: not-allowed;
+      border-color: transparent;
+    }
+    button.secondary { /* default outline style above */ }
+    button.link {
+      background: transparent;
+      border: none;
+      color: var(--c-primary);
+      padding: 0.15rem 0.4rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    button.link:hover { color: var(--c-navy); text-decoration: underline; background: transparent; border: none; }
+    button:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(1, 164, 255, 0.20);
+    }
+
+    /* Reference panel */
+    .reference {
+      margin-top: 0.75rem;
+      padding: 0.85rem 1rem;
+      background: var(--c-surface-alt);
+      border: 1px solid var(--c-border);
+      border-radius: 8px;
+      display: none;
+    }
+    .reference.open { display: block; }
+    .reference h3 {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--c-navy);
+      margin: 0 0 0.4rem;
+    }
+    .reference table { width: 100%; border-collapse: collapse; margin-bottom: 0.85rem; font-size: 0.825rem; }
+    .reference td { padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--c-border-soft); color: var(--c-text); }
+    .reference td:first-child {
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      color: var(--c-primary);
+      width: 30%;
+    }
+
+    /* Preview / results table */
+    table.preview {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: transparent;
+    }
+    table.preview thead th {
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--c-navy-soft);
+      padding: 0.7rem 0.95rem;
+      background: var(--c-surface-alt);
+      border-bottom: 1px solid var(--c-border);
+      white-space: nowrap;
+    }
+    table.preview tbody td {
+      padding: 0.7rem 0.95rem;
+      border-bottom: 1px solid var(--c-border-soft);
+      font-size: 0.92rem;
+      vertical-align: top;
+      color: var(--c-text);
+    }
+    table.preview tbody tr:last-child td { border-bottom: none; }
+    table.preview tbody tr.row-error td { background: var(--c-bad-bg); }
+    table.preview tbody tr.row-skipped td { background: var(--c-warn-bg); }
+    table.preview tbody tr.row-created td { background: var(--c-success-bg); }
+
+    /* Pills — info-blue by default, then semantic variants */
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      vertical-align: middle;
+      border: 1px solid var(--c-info-border);
+      background: var(--c-info-bg);
+      color: var(--c-primary);
+      white-space: nowrap;
+    }
+    .pill.info { background: var(--c-info-bg); color: var(--c-primary); border-color: var(--c-info-border); }
+    .pill.ok   { background: var(--c-success-bg); color: var(--c-success); border-color: #BFE3CD; }
+    .pill.warn { background: var(--c-warn-bg); color: var(--c-warn); border-color: #F5C97B; }
+    .pill.error{ background: var(--c-bad-bg); color: var(--c-bad); border-color: #F4B7AB; }
+    .errlist { color: var(--c-bad); font-size: 0.8rem; margin-top: 0.35rem; }
+    .errlist li { margin-left: 1rem; list-style: disc; }
+
+    /* Summary stat cards */
+    .summary {
+      display: flex;
+      gap: 0.85rem;
+      margin-bottom: 1.1rem;
+      flex-wrap: wrap;
+    }
+    .stat {
+      flex: 1;
+      min-width: 140px;
+      background: var(--c-surface);
+      border: 1px solid var(--c-border);
+      border-radius: 10px;
+      padding: 0.9rem 1.1rem;
+      box-shadow: 0 1px 2px rgba(11, 37, 69, 0.04);
+    }
+    .stat .label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--c-text-muted);
+      font-weight: 600;
+    }
+    .stat .value {
+      font-size: 1.65rem;
+      font-weight: 600;
+      color: var(--c-text-strong);
+      margin-top: 0.2rem;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+    }
+    .stat.created .value { color: var(--c-success); }
+    .stat.skipped .value { color: var(--c-warn); }
+    .stat.errors  .value { color: var(--c-bad); }
+
+    /* Action bar */
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.9rem 1.1rem;
+      border-top: 1px solid var(--c-border-soft);
+      background: var(--c-surface-alt);
+    }
+    .actions label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--c-text-muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .actions input[type=checkbox] {
+      accent-color: var(--c-primary);
+      width: 15px;
+      height: 15px;
+    }
+
+    .empty {
+      padding: 3rem 1rem;
+      text-align: center;
+      color: var(--c-text-muted);
+      background: var(--c-surface);
+      border: 1px dashed var(--c-border);
+      border-radius: 10px;
+    }
+
+    /* Toast — matches staff_credentialing bottom-right navy chip */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 0.85rem 1.1rem;
+      border-radius: 8px;
+      background: var(--c-navy);
+      color: white;
+      font-size: 0.88rem;
+      box-shadow: 0 8px 24px rgba(11, 37, 69, 0.25);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .toast.error { background: var(--c-bad); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Compound Medication Loader</h1>
+      <div class="subtitle">Upload a CSV to bulk-add compound medications to this instance's formulary.</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="upload-section">
+      <h2>1. Upload CSV</h2>
+      <div class="helptext">
+        Required columns: <code>formulation</code>, <code>potency_unit_code</code>, <code>controlled_substance</code>.
+        Optional: <code>controlled_substance_ndc</code>, <code>active</code>.
+        Codes can be the SDK code (e.g. <code>C48155</code>) or the human label (e.g. <code>Gram</code>) &mdash; both are accepted.
+      </div>
+      <div class="dropzone" id="dropzone">
+        <p><strong>Drop a CSV file here</strong> or click to browse</p>
+        <p class="filename" id="filename">No file selected</p>
+        <input type="file" id="file" accept=".csv,text/csv" />
+      </div>
+      <div style="margin-top: 0.75rem; display: flex; gap: 1rem; align-items: center;">
+        <button class="link" id="download-template">Download CSV template</button>
+        <button class="link" id="toggle-ref">Show reference codes</button>
+      </div>
+      <div class="reference" id="reference">
+        <h3>Potency Unit Codes</h3>
+        <table id="potency-table"></table>
+        <h3>Controlled Substance Codes</h3>
+        <table id="controlled-table"></table>
+      </div>
+    </section>
+
+    <section class="card" id="preview-section" style="display: none;">
+      <h2>2. Review</h2>
+      <div class="summary">
+        <div class="stat"><div class="label">Total rows</div><div class="value" id="total-count">0</div></div>
+        <div class="stat created"><div class="label">Ready to load</div><div class="value" id="ready-count">0</div></div>
+        <div class="stat skipped"><div class="label">Already in Canvas</div><div class="value" id="dupe-count">0</div></div>
+        <div class="stat errors"><div class="label">Errors</div><div class="value" id="error-count">0</div></div>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="preview" id="preview-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Formulation</th>
+              <th>Potency Unit</th>
+              <th>Controlled</th>
+              <th>NDC</th>
+              <th>Active</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="preview-body"></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <label><input type="checkbox" id="skip-existing" checked /> Skip rows whose formulation already exists</label>
+        <div style="flex: 1"></div>
+        <button class="secondary" id="reset-btn">Start over</button>
+        <button class="primary" id="load-btn" disabled>Load 0 compounds</button>
+      </div>
+    </section>
+
+    <section class="card" id="results-section" style="display: none;">
+      <h2>3. Results</h2>
+      <div class="summary">
+        <div class="stat created"><div class="label">Created</div><div class="value" id="r-created">0</div></div>
+        <div class="stat skipped"><div class="label">Skipped</div><div class="value" id="r-skipped">0</div></div>
+        <div class="stat errors"><div class="label">Errors</div><div class="value" id="r-errors">0</div></div>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="preview" id="results-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Formulation</th>
+              <th>Status</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const API_BASE = "{{ api_base }}";
+    const NEWLINE_RE = /\r?\n/;
+
+    let labelToPotency = new Map();
+    let validPotencyCodes = new Set();
+    let labelToControlled = new Map();
+    let validControlledCodes = new Set();
+    let existingCompounds = new Map(); // formulation -> active (boolean)
+    let parsedRows = [];
+
+    // ---------- Toast ----------
+    function toast(msg, isError) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.toggle("error", !!isError);
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 3000);
+    }
+
+    // ---------- Enums fetch ----------
+    async function loadEnums() {
+      try {
+        const res = await fetch(API_BASE + "/enums", { credentials: "include" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+
+        const potTable = document.getElementById("potency-table");
+        potTable.innerHTML = "";
+        data.potency_unit_code.forEach(c => {
+          labelToPotency.set(c.label.toLowerCase(), c.code);
+          validPotencyCodes.add(c.code);
+          const tr = document.createElement("tr");
+          tr.innerHTML = "<td>" + c.code + "</td><td>" + c.label + "</td>";
+          potTable.appendChild(tr);
+        });
+
+        const conTable = document.getElementById("controlled-table");
+        conTable.innerHTML = "";
+        data.controlled_substance.forEach(c => {
+          labelToControlled.set(c.label.toLowerCase(), c.code);
+          validControlledCodes.add(c.code);
+          const tr = document.createElement("tr");
+          tr.innerHTML = "<td>" + c.code + "</td><td>" + c.label + "</td>";
+          conTable.appendChild(tr);
+        });
+      } catch (e) {
+        toast("Could not load reference codes: " + e.message, true);
+      }
+    }
+
+    // ---------- Existing compounds (for dedup status in step 2) ----------
+    async function loadExisting() {
+      try {
+        const res = await fetch(API_BASE + "/existing", { credentials: "include" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        existingCompounds = new Map(Object.entries(data.compounds || {}));
+        // If a CSV was already uploaded before this resolved, backfill dedup info.
+        if (parsedRows.length) {
+          parsedRows.forEach(r => {
+            const ea = r.formulation ? existingCompounds.get(r.formulation) : undefined;
+            r.alreadyExists = ea !== undefined;
+            r.existingActive = r.alreadyExists ? !!ea : null;
+          });
+          renderPreview(parsedRows);
+        }
+      } catch (e) {
+        // Non-fatal — the review just won't show dedup status, but Load still works.
+        toast("Could not load existing-compound list: " + e.message, true);
+      }
+    }
+
+    // ---------- CSV parser (handles quoted fields with escaped quotes) ----------
+    function parseCSV(text) {
+      const lines = [];
+      let row = [];
+      let field = "";
+      let inQuotes = false;
+      let i = 0;
+      while (i < text.length) {
+        const ch = text[i];
+        if (inQuotes) {
+          if (ch === '"' && text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          if (ch === '"') { inQuotes = false; i++; continue; }
+          field += ch; i++; continue;
+        }
+        if (ch === '"') { inQuotes = true; i++; continue; }
+        if (ch === ',') { row.push(field); field = ""; i++; continue; }
+        if (ch === '\r') { i++; continue; }
+        if (ch === '\n') { row.push(field); lines.push(row); row = []; field = ""; i++; continue; }
+        field += ch; i++;
+      }
+      if (field !== "" || row.length > 0) { row.push(field); lines.push(row); }
+      return lines.filter(r => r.length > 1 || (r.length === 1 && r[0] !== ""));
+    }
+
+    function normalizeBool(v) {
+      if (v === undefined || v === null) return true;
+      const s = String(v).trim().toLowerCase();
+      if (s === "" || s === "true" || s === "1" || s === "yes" || s === "y") return true;
+      if (s === "false" || s === "0" || s === "no" || s === "n") return false;
+      return true;
+    }
+
+    function resolveCode(value, labelMap, codeSet) {
+      if (!value) return { code: null, error: null };
+      const v = String(value).trim();
+      if (v === "") return { code: null, error: null };
+      if (codeSet.has(v)) return { code: v, error: null };
+      const mapped = labelMap.get(v.toLowerCase());
+      if (mapped) return { code: mapped, error: null };
+      return { code: null, error: "unknown value " + JSON.stringify(v) };
+    }
+
+    function validateRow(row) {
+      const errors = [];
+      const formulation = (row.formulation || "").trim();
+      if (!formulation) errors.push("formulation is required");
+      else if (formulation.length > 105) errors.push("formulation must be <= 105 characters");
+
+      const potRes = resolveCode(row.potency_unit_code, labelToPotency, validPotencyCodes);
+      if (potRes.error) errors.push("potency_unit_code: " + potRes.error);
+      else if (!potRes.code) errors.push("potency_unit_code is required");
+
+      // controlled_substance is required — don't silently default to "N".
+      // A Schedule II compound loaded as uncontrolled has prescribing/DEA
+      // consequences, so a missing column or blank cell must surface as an
+      // error rather than auto-correcting to Not Scheduled.
+      const conRes = resolveCode(row.controlled_substance, labelToControlled, validControlledCodes);
+      if (conRes.error) errors.push("controlled_substance: " + conRes.error);
+      else if (!conRes.code) errors.push("controlled_substance is required (use 'N' for Not scheduled)");
+      const controlledCode = conRes.code;
+      const ndc = (row.controlled_substance_ndc || "").trim();
+      if (controlledCode && controlledCode !== "N" && !ndc) {
+        errors.push("controlled_substance_ndc required when controlled");
+      }
+
+      const existingActive = formulation ? existingCompounds.get(formulation) : undefined;
+      const alreadyExists = existingActive !== undefined;
+
+      return {
+        formulation,
+        potency_unit_code: potRes.code,
+        controlled_substance: controlledCode,
+        controlled_substance_ndc: ndc || null,
+        active: normalizeBool(row.active),
+        errors,
+        alreadyExists,
+        existingActive: alreadyExists ? !!existingActive : null,
+      };
+    }
+
+    function renderPreview(rows) {
+      parsedRows = rows;
+      const body = document.getElementById("preview-body");
+      body.innerHTML = "";
+      let valid = 0, dupes = 0, errors = 0;
+      rows.forEach((r, idx) => {
+        const tr = document.createElement("tr");
+        let statusCell;
+        if (r.errors.length) {
+          errors++;
+          tr.className = "row-error";
+          statusCell = '<span class="pill error">Error</span><ul class="errlist">' +
+              r.errors.map(e => "<li>" + escapeHtml(e) + "</li>").join("") + "</ul>";
+        } else if (r.alreadyExists) {
+          dupes++;
+          tr.className = "row-skipped";
+          const label = r.existingActive
+            ? "Already in Canvas (active)"
+            : "Already in Canvas (inactive)";
+          statusCell = '<span class="pill warn">' + label + '</span>';
+        } else {
+          valid++;
+          statusCell = '<span class="pill ok">Ready</span>';
+        }
+        tr.innerHTML =
+          "<td>" + (idx + 1) + "</td>" +
+          "<td>" + escapeHtml(r.formulation || "") + "</td>" +
+          "<td>" + escapeHtml(r.potency_unit_code || "") + "</td>" +
+          "<td>" + escapeHtml(r.controlled_substance || "") + "</td>" +
+          "<td>" + escapeHtml(r.controlled_substance_ndc || "") + "</td>" +
+          "<td>" + (r.active ? "Yes" : "No") + "</td>" +
+          "<td>" + statusCell + "</td>";
+        body.appendChild(tr);
+      });
+
+      document.getElementById("total-count").textContent = rows.length;
+      document.getElementById("ready-count").textContent = valid;
+      document.getElementById("dupe-count").textContent = dupes;
+      document.getElementById("error-count").textContent = errors;
+      document.getElementById("preview-section").style.display = "block";
+      document.getElementById("results-section").style.display = "none";
+      updateLoadButton();
+    }
+
+    function updateLoadButton() {
+      const loadBtn = document.getElementById("load-btn");
+      const skip = document.getElementById("skip-existing").checked;
+      const candidates = parsedRows.filter(r => r.errors.length === 0 && (!skip || !r.alreadyExists));
+      loadBtn.disabled = candidates.length === 0;
+      loadBtn.textContent = "Load " + candidates.length + " compound" + (candidates.length === 1 ? "" : "s");
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    // ---------- File handling ----------
+    function handleFile(file) {
+      document.getElementById("filename").textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const text = e.target.result;
+        const rows = parseCSV(text);
+        if (rows.length === 0) { toast("CSV is empty", true); return; }
+        const headers = rows[0].map(h => h.trim().toLowerCase());
+        const dataRows = rows.slice(1);
+        const objs = dataRows.map(r => {
+          const o = {};
+          headers.forEach((h, i) => { o[h] = r[i]; });
+          return o;
+        });
+        const validated = objs.map(validateRow);
+        renderPreview(validated);
+      };
+      reader.onerror = () => toast("Could not read file", true);
+      reader.readAsText(file);
+    }
+
+    // ---------- Load action ----------
+    async function loadCompounds() {
+      const validRows = parsedRows.filter(r => r.errors.length === 0).map(r => ({
+        formulation: r.formulation,
+        potency_unit_code: r.potency_unit_code,
+        controlled_substance: r.controlled_substance,
+        controlled_substance_ndc: r.controlled_substance_ndc,
+        active: r.active,
+      }));
+      const skipExisting = document.getElementById("skip-existing").checked;
+
+      const loadBtn = document.getElementById("load-btn");
+      loadBtn.disabled = true;
+      loadBtn.textContent = "Loading...";
+
+      try {
+        const res = await fetch(API_BASE + "/compound-medications", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skip_existing: skipExisting, compounds: validRows }),
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        renderResults(data);
+        toast("Loaded " + data.summary.created + " compound" + (data.summary.created === 1 ? "" : "s"));
+      } catch (e) {
+        toast("Load failed: " + e.message, true);
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = "Load " + validRows.length + " compound" + (validRows.length === 1 ? "" : "s");
+      }
+    }
+
+    function renderResults(data) {
+      document.getElementById("r-created").textContent = data.summary.created;
+      document.getElementById("r-skipped").textContent = data.summary.skipped;
+      document.getElementById("r-errors").textContent = data.summary.errors;
+
+      const body = document.getElementById("results-body");
+      body.innerHTML = "";
+      data.results.forEach(r => {
+        const tr = document.createElement("tr");
+        let pillClass = "info", pillText = r.status;
+        if (r.status === "created") { tr.className = "row-created"; pillClass = "ok"; }
+        else if (r.status === "skipped") { tr.className = "row-skipped"; pillClass = "warn"; }
+        else if (r.status === "error") { tr.className = "row-error"; pillClass = "error"; }
+
+        const detail = r.errors ? r.errors.join("; ")
+                     : r.reason ? r.reason
+                     : "";
+        tr.innerHTML =
+          "<td>" + (r.index + 1) + "</td>" +
+          "<td>" + escapeHtml(r.formulation || "") + "</td>" +
+          "<td><span class='pill " + pillClass + "'>" + pillText + "</span></td>" +
+          "<td>" + escapeHtml(detail) + "</td>";
+        body.appendChild(tr);
+      });
+      document.getElementById("results-section").style.display = "block";
+      document.getElementById("results-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // ---------- Wire up ----------
+    document.addEventListener("DOMContentLoaded", () => {
+      loadEnums();
+      loadExisting();
+      document.getElementById("skip-existing").addEventListener("change", updateLoadButton);
+
+      const dz = document.getElementById("dropzone");
+      const fileInput = document.getElementById("file");
+      dz.addEventListener("click", () => fileInput.click());
+      dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
+      dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+      dz.addEventListener("drop", e => {
+        e.preventDefault();
+        dz.classList.remove("drag");
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener("change", e => {
+        if (e.target.files.length) handleFile(e.target.files[0]);
+      });
+
+      document.getElementById("toggle-ref").addEventListener("click", () => {
+        const ref = document.getElementById("reference");
+        ref.classList.toggle("open");
+        document.getElementById("toggle-ref").textContent =
+          ref.classList.contains("open") ? "Hide reference codes" : "Show reference codes";
+      });
+
+      document.getElementById("download-template").addEventListener("click", () => {
+        const lines = [
+          "formulation,potency_unit_code,controlled_substance,controlled_substance_ndc,active",
+          "Lidocaine 2% / Prilocaine 2.5% topical cream,Gram,N,,true",
+          "Magic Mouthwash (lidocaine/diphenhydramine/maalox),Milliliter,N,,true",
+          "Compounded testosterone cream 200mg/g,Gram,Schedule III,12345678901,true",
+        ];
+        const csv = lines.join("\n") + "\n";
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "compound-medications-template.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById("load-btn").addEventListener("click", loadCompounds);
+      document.getElementById("reset-btn").addEventListener("click", () => {
+        parsedRows = [];
+        document.getElementById("filename").textContent = "No file selected";
+        document.getElementById("preview-section").style.display = "none";
+        document.getElementById("results-section").style.display = "none";
+        document.getElementById("file").value = "";
+      });
+    });
+  </script>
+</body>
+</html>

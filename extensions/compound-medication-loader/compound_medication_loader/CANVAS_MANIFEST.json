@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.141.0",
+    "plugin_version": "0.3.9",
+    "name": "compound_medication_loader",
+    "description": "Bulk-load Compound Medications into a Canvas instance. Provides an authenticated POST endpoint for programmatic loads and an app-drawer page for staff to upload a CSV, review the parsed rows, and load them into the formulary.",
+    "components": {
+        "protocols": [
+            {
+                "class": "compound_medication_loader.api.loader:CompoundMedicationLoaderAPI",
+                "description": "SimpleAPI endpoint that accepts a JSON payload of compound medications and emits CreateCompoundMedication effects. Hybrid auth: Canvas staff session (in-app) or Bearer token (programmatic)."
+            }
+        ],
+        "applications": [
+            {
+                "class": "compound_medication_loader.applications.loader_app:CompoundMedicationLoaderApp",
+                "name": "Compound Medication Loader",
+                "description": "Upload and load compound medications from a CSV.",
+                "scope": "global",
+                "icon": "assets/compound-medication-loader-icon.png",
+                "menu_position": "top",
+                "menu_order": 100,
+                "show_in_panel": false
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "BULK_LOAD_API_KEY"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
