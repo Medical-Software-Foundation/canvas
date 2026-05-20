@@ -38,6 +38,10 @@
         "views": []
     },
     "secrets": ["ADMIN_STAFF_IDS"],
+    "custom_data": {
+        "namespace": "custom__order_sets",
+        "access": "read_write"
+    },
     "tags": {},
     "references": [],
     "license": "MIT",

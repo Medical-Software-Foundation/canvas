@@ -6,6 +6,7 @@ basis with ``pytest-mock``.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -130,30 +131,55 @@ def make_cdm(
     return SimpleNamespace(cpt_code=cpt_code, name=name)
 
 
-# ── In-memory cache replacement ───────────────────────────────────────────────
+# ── OrderSet (plugin's own CustomModel) ───────────────────────────────────────
 
-class FakeCache:
-    """Behaves like the Canvas plugin cache for the ops the plugin uses."""
+def make_order_set(**overrides: Any) -> MagicMock:
+    """Build a MagicMock that looks like an OrderSet instance.
 
-    def __init__(self) -> None:
-        self._store: dict[str, Any] = {}
+    Fields default to the plugin's expected schema. ``save()`` and ``delete()``
+    are real MagicMock methods so tests can assert on call_count / call_args.
+    """
+    defaults: dict[str, Any] = {
+        "set_id": "set-1",
+        "name": "Test Set",
+        "description": "",
+        "order_type": "lab",
+        "is_shared": False,
+        "created_by": "",
+        "created_by_name": "",
+        "diagnosis_codes": [],
+        "lab_partner": "",
+        "lab_partner_name": "",
+        "items": [],
+        "fasting_required": False,
+        "comment": "",
+        "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+        "updated_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+    }
+    defaults.update(overrides)
+    instance = MagicMock()
+    for key, value in defaults.items():
+        setattr(instance, key, value)
+    return instance
 
-    def get(self, key: str) -> Any:
-        return self._store.get(key)
 
-    def set(self, key: str, value: Any, timeout_seconds: int = 0) -> None:
-        self._store[key] = value
+def patch_order_set_query(
+    mocker: Any, *, first: Any | None = None, all_results: list[Any] | None = None
+) -> tuple[MagicMock, MagicMock]:
+    """Patch ``OrderSet.objects.filter`` to return a configured chain.
 
-    def clear(self) -> None:
-        self._store.clear()
+    Returns ``(filter_mock, chain_mock)`` so tests can assert on call args.
 
-
-@pytest.fixture
-def fake_cache(mocker: Any) -> FakeCache:
-    """Patch ``get_cache`` in endpoints.py to return a fresh in-memory cache."""
-    cache = FakeCache()
-    mocker.patch("order_sets.api.endpoints.get_cache", return_value=cache)
-    return cache
+    - ``first``: what ``.filter(...).first()`` returns (used by update/delete/execute)
+    - ``all_results``: what ``.filter(...).order_by(...)`` returns (used by list_sets)
+    """
+    chain = MagicMock()
+    chain.first.return_value = first
+    chain.order_by.return_value = all_results if all_results is not None else []
+    filter_mock = mocker.patch(
+        "order_sets.api.endpoints.OrderSet.objects.filter", return_value=chain
+    )
+    return filter_mock, chain
 
 
 # ── Request / API instance helpers ────────────────────────────────────────────

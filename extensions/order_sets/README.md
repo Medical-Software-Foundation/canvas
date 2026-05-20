@@ -55,10 +55,11 @@ The plugin also reads lab tests from the instance's configured lab partners and 
 ## Architecture
 
 - **Application handler** — 9-box app drawer entry point (`patient_specific` scope)
-- **SimpleAPI handler** — REST endpoints for CRUD on order sets and order execution; persists via the plugin cache
+- **SimpleAPI handler** — REST endpoints for CRUD on order sets and order execution
+- **Persistence** — order-set definitions live in the plugin's own `OrderSet` custom table (declared via `custom_data` in the manifest), not in the plugin cache. Reference data shouldn't carry a TTL.
 - **Vanilla JS frontend** — Interactive UI for browsing, managing, and executing order sets
 
-Order execution requires an open note on the patient. The plugin uses the note's ordering provider when present, and falls back to an explicit provider selection from the UI.
+Order execution requires an open note on the patient. The plugin uses the note's ordering provider when present, and falls back to an explicit provider selection from the UI. Only providers whose `Staff.active=True` are considered valid for placing orders — deactivated staff retain their `StaffRole` rows but can no longer originate new orders.
 
 ## Screenshots
 

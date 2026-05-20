@@ -1,9 +1,13 @@
 """Tests for the order-set CRUD endpoints (list/create/update/delete).
 
-After the auth refactor:
+After the storage refactor, persistence is via the ``OrderSet`` CustomModel
+instead of the plugin cache (which had a 14-day TTL — the wrong tool for
+durable reference data).
+
+Auth invariants preserved from the prior round:
   * create_set requires an authenticated staff (else 401).
   * update_set / delete_set require staff + (creator-or-admin) authorization.
-  * Handlers no longer wrap themselves in ``try / except Exception`` —
+  * Handlers do not wrap themselves in ``try / except Exception`` —
     unexpected errors propagate so Sentry sees them.
 """
 from __future__ import annotations
@@ -13,7 +17,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from .conftest import FakeCache, make_request, make_staff
+from .conftest import (
+    make_order_set,
+    make_request,
+    make_staff,
+    patch_order_set_query,
+)
 
 
 DEFAULT_STAFF_ID = "staff-me"
@@ -34,51 +43,32 @@ def _set_admins(api_instance: Any, admin_ids: str = "") -> None:
 # ── list_sets ────────────────────────────────────────────────────────────────
 
 
-def test_list_sets_returns_shared_and_own_sets_sorted(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+def test_list_sets_queries_orderset_with_visibility_filter(
+    api_instance: Any, mocker: MagicMock
 ) -> None:
+    """``list_sets`` should issue a single ``OrderSet.objects.filter(...).order_by('name')``
+    chain — never load the whole table and filter in Python."""
     _set_staff(api_instance, mocker, make_staff(staff_id="me"))
-
-    fake_cache.set(
-        "order_sets_data",
-        [
-            {"id": "1", "name": "Z-shared", "is_shared": True, "created_by": "other"},
-            {"id": "2", "name": "A-mine", "is_shared": False, "created_by": "me"},
-            {"id": "3", "name": "B-private", "is_shared": False, "created_by": "other"},
-        ],
-    )
+    rows = [
+        make_order_set(set_id="2", name="A-mine", is_shared=False, created_by="me"),
+        make_order_set(set_id="1", name="Z-shared", is_shared=True, created_by="other"),
+    ]
+    filter_mock, chain = patch_order_set_query(mocker, all_results=rows)
 
     responses = api_instance.list_sets()
     assert len(responses) == 1
-
-    # Read-only op — cache state is unchanged. Re-run the filter math to verify
-    # the public contract (shared OR own) without depending on JSONResponse
-    # internals.
-    sets = fake_cache.get("order_sets_data")
-    visible = [s for s in sets if s["is_shared"] or s["created_by"] == "me"]
-    assert {s["id"] for s in visible} == {"1", "2"}
+    assert filter_mock.call_count == 1
+    chain.order_by.assert_called_once_with("name")
 
 
-def test_list_sets_with_anonymous_caller_sees_only_shared(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+def test_list_sets_with_anonymous_caller(
+    api_instance: Any, mocker: MagicMock
 ) -> None:
-    """No logged-in staff is allowed to read shared sets but not personal ones."""
+    """Anonymous caller still gets a single filtered query — the empty
+    ``staff_id`` is what we pass into the OR clause, not a Python post-filter."""
     _set_staff(api_instance, mocker, None)
-    fake_cache.set(
-        "order_sets_data",
-        [
-            {"id": "1", "name": "Shared", "is_shared": True, "created_by": "x"},
-            {"id": "2", "name": "Private", "is_shared": False, "created_by": "x"},
-        ],
-    )
-    responses = api_instance.list_sets()
-    assert len(responses) == 1
+    patch_order_set_query(mocker, all_results=[])
 
-
-def test_list_sets_with_empty_cache(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
-) -> None:
-    _set_staff(api_instance, mocker, make_staff())
     responses = api_instance.list_sets()
     assert len(responses) == 1
 
@@ -98,22 +88,29 @@ def test_list_sets_propagates_unexpected_errors(
 
 
 def test_create_set_returns_401_when_no_staff(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
-    """Anonymous create is rejected; nothing is persisted."""
+    """Anonymous create is rejected; ``OrderSet.objects.create`` is never called."""
     _set_staff(api_instance, mocker, None)
+    create_mock = mocker.patch("order_sets.api.endpoints.OrderSet.objects.create")
     api_instance.request = make_request(json_body={"name": "X"})
 
     responses = api_instance.create_set()
     assert len(responses) == 1
-    assert fake_cache.get("order_sets_data") in (None, [])
+    create_mock.assert_not_called()
 
 
-def test_create_set_persists_with_generated_id_and_timestamps(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+def test_create_set_persists_with_generated_id(
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(
-        api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID, first_name="A", last_name="B")
+        api_instance,
+        mocker,
+        make_staff(staff_id=DEFAULT_STAFF_ID, first_name="A", last_name="B"),
+    )
+    new_row = make_order_set(set_id="generated", name="Diabetes Workup")
+    create_mock = mocker.patch(
+        "order_sets.api.endpoints.OrderSet.objects.create", return_value=new_row
     )
     api_instance.request = make_request(
         json_body={
@@ -130,305 +127,309 @@ def test_create_set_persists_with_generated_id_and_timestamps(
 
     api_instance.create_set()
 
-    sets = fake_cache.get("order_sets_data")
-    assert len(sets) == 1
-    created = sets[0]
-    assert created["name"] == "Diabetes Workup"
-    assert created["is_shared"] is True
-    assert created["created_by"] == DEFAULT_STAFF_ID
-    assert created["created_by_name"] == "A B"
-    assert created["fasting_required"] is True
-    assert created["items"][0]["code"] == "CBC"
-    assert "id" in created and len(created["id"]) > 0
-    assert created["created_at"] == created["updated_at"]
+    create_mock.assert_called_once()
+    kwargs = create_mock.call_args.kwargs
+    assert kwargs["name"] == "Diabetes Workup"
+    assert kwargs["is_shared"] is True
+    assert kwargs["created_by"] == DEFAULT_STAFF_ID
+    assert kwargs["created_by_name"] == "A B"
+    assert kwargs["fasting_required"] is True
+    assert kwargs["items"] == [{"code": "CBC", "name": "CBC"}]
+    # A UUID was generated for the public id.
+    assert "set_id" in kwargs and len(kwargs["set_id"]) >= 32
 
 
 def test_create_set_applies_sensible_defaults_for_minimal_body(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     """A logged-in caller submitting an empty body gets the documented defaults."""
     _set_staff(
-        api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID, first_name="A", last_name="B")
+        api_instance,
+        mocker,
+        make_staff(staff_id=DEFAULT_STAFF_ID, first_name="A", last_name="B"),
+    )
+    create_mock = mocker.patch(
+        "order_sets.api.endpoints.OrderSet.objects.create",
+        return_value=make_order_set(),
     )
     api_instance.request = make_request(json_body={})
 
     api_instance.create_set()
-    sets = fake_cache.get("order_sets_data")
-    assert len(sets) == 1
-    created = sets[0]
-    assert created["name"] == "Untitled"
-    assert created["order_type"] == "lab"
-    assert created["is_shared"] is False
+    kwargs = create_mock.call_args.kwargs
+    assert kwargs["name"] == "Untitled"
+    assert kwargs["order_type"] == "lab"
+    assert kwargs["is_shared"] is False
     # created_by is always the authenticated staff id — never an empty string.
-    assert created["created_by"] == DEFAULT_STAFF_ID
-    assert created["items"] == []
-    assert created["diagnosis_codes"] == []
-
-
-def test_create_set_appends_to_existing_cache(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
-) -> None:
-    fake_cache.set("order_sets_data", [{"id": "pre-1", "name": "Existing"}])
-    _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
-    api_instance.request = make_request(json_body={"name": "New"})
-
-    api_instance.create_set()
-    sets = fake_cache.get("order_sets_data")
-    assert [s["name"] for s in sets] == ["Existing", "New"]
+    assert kwargs["created_by"] == DEFAULT_STAFF_ID
+    assert kwargs["items"] == []
+    assert kwargs["diagnosis_codes"] == []
 
 
 def test_create_set_returns_400_when_body_json_fails(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     """ValueError from request.json() is the only narrowly-caught exception."""
     _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
+    create_mock = mocker.patch("order_sets.api.endpoints.OrderSet.objects.create")
     req = make_request()
     req.json = MagicMock(side_effect=ValueError("bad json"))
     api_instance.request = req
 
     responses = api_instance.create_set()
     assert len(responses) == 1
-    assert fake_cache.get("order_sets_data") in (None, [])
+    create_mock.assert_not_called()
 
 
 # ── update_set ───────────────────────────────────────────────────────────────
 
 
-def _seed_set(
-    fake_cache: FakeCache,
-    *,
-    set_id: str = "abc",
-    created_by: str = DEFAULT_STAFF_ID,
-    is_shared: bool = False,
-    name: str = "Old",
-) -> None:
-    fake_cache.set(
-        "order_sets_data",
-        [
-            {
-                "id": set_id,
-                "name": name,
-                "description": "",
-                "order_type": "lab",
-                "is_shared": is_shared,
-                "created_by": created_by,
-                "created_by_name": "Original Author",
-                "diagnosis_codes": [],
-                "lab_partner": "",
-                "lab_partner_name": "",
-                "items": [],
-                "fasting_required": False,
-                "comment": "",
-                "created_at": "2024-01-01T00:00:00+00:00",
-                "updated_at": "2024-01-01T00:00:00+00:00",
-            }
-        ],
-    )
-
-
 def test_update_set_returns_401_when_no_staff(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, None)
-    _seed_set(fake_cache)
+    target = make_order_set(set_id="abc", created_by=DEFAULT_STAFF_ID, name="Old")
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(path="/sets/abc", json_body={"name": "X"})
 
     responses = api_instance.update_set()
     assert len(responses) == 1
-    assert fake_cache.get("order_sets_data")[0]["name"] == "Old"
+    target.save.assert_not_called()
+    assert target.name == "Old"
 
 
 def test_update_set_returns_400_when_body_json_fails(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
     _set_admins(api_instance)
-    _seed_set(fake_cache)
+    target = make_order_set(set_id="abc", created_by=DEFAULT_STAFF_ID, name="Old")
+    patch_order_set_query(mocker, first=target)
     req = make_request(path="/sets/abc")
     req.json = MagicMock(side_effect=ValueError("bad json"))
     api_instance.request = req
 
     responses = api_instance.update_set()
     assert len(responses) == 1
-    assert fake_cache.get("order_sets_data")[0]["name"] == "Old"
+    target.save.assert_not_called()
 
 
 def test_update_set_returns_404_when_id_not_found(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
     _set_admins(api_instance)
-    fake_cache.set("order_sets_data", [{"id": "other", "name": "x"}])
+    patch_order_set_query(mocker, first=None)
     api_instance.request = make_request(path="/sets/missing", json_body={"name": "X"})
 
     responses = api_instance.update_set()
     assert len(responses) == 1
-    assert fake_cache.get("order_sets_data") == [{"id": "other", "name": "x"}]
 
 
 def test_update_set_returns_403_when_not_creator_and_not_admin(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     """Defends shared sets from being overwritten by any random authenticated caller."""
     _set_staff(api_instance, mocker, make_staff(staff_id=OTHER_USER_ID))
     _set_admins(api_instance)  # empty admin list — fail closed
-    _seed_set(fake_cache, created_by=DEFAULT_STAFF_ID, is_shared=True, name="Original")
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True, name="Original"
+    )
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(
         path="/sets/abc", json_body={"name": "Hijacked"}
     )
 
     responses = api_instance.update_set()
     assert len(responses) == 1
-    assert fake_cache.get("order_sets_data")[0]["name"] == "Original"  # untouched
+    target.save.assert_not_called()
+    assert target.name == "Original"
 
 
 def test_update_set_modifies_matching_set_when_caller_is_creator(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
     _set_admins(api_instance)
-    _seed_set(fake_cache, created_by=DEFAULT_STAFF_ID)
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, name="Old", comment=""
+    )
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(
         path="/sets/abc", json_body={"name": "New Name", "comment": "Updated"}
     )
 
     api_instance.update_set()
-    sets = fake_cache.get("order_sets_data")
-    assert sets[0]["name"] == "New Name"
-    assert sets[0]["comment"] == "Updated"
-    assert sets[0]["order_type"] == "lab"
-    assert sets[0]["updated_at"] != "2024-01-01T00:00:00+00:00"
+    assert target.name == "New Name"
+    assert target.comment == "Updated"
+    target.save.assert_called_once()
+
+
+def test_update_set_only_writes_fields_present_in_body(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    """Partial updates preserve unmentioned fields — the body is treated as a
+    patch, not a put."""
+    _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
+    _set_admins(api_instance)
+    target = make_order_set(
+        set_id="abc",
+        created_by=DEFAULT_STAFF_ID,
+        name="Old",
+        order_type="lab",
+        lab_partner="lp-1",
+    )
+    patch_order_set_query(mocker, first=target)
+    api_instance.request = make_request(
+        path="/sets/abc", json_body={"name": "Renamed"}
+    )
+
+    api_instance.update_set()
+    assert target.name == "Renamed"
+    # untouched fields keep their values
+    assert target.order_type == "lab"
+    assert target.lab_partner == "lp-1"
+    target.save.assert_called_once()
 
 
 def test_update_set_allows_admin_to_modify_other_users_set(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     """An ADMIN_STAFF_IDS member can edit a shared set someone else created."""
     _set_staff(api_instance, mocker, make_staff(staff_id=ADMIN_ID))
     _set_admins(api_instance, admin_ids=ADMIN_ID)
-    _seed_set(fake_cache, created_by=DEFAULT_STAFF_ID, is_shared=True, name="Practice-wide")
+    target = make_order_set(
+        set_id="abc",
+        created_by=DEFAULT_STAFF_ID,
+        is_shared=True,
+        name="Practice-wide",
+    )
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(
         path="/sets/abc", json_body={"name": "Practice-wide v2"}
     )
 
     api_instance.update_set()
-    assert fake_cache.get("order_sets_data")[0]["name"] == "Practice-wide v2"
+    assert target.name == "Practice-wide v2"
+    target.save.assert_called_once()
 
 
 def test_update_set_admin_secret_tolerates_whitespace(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     """``ADMIN_STAFF_IDS`` tolerates whitespace around each comma-separated id."""
     _set_staff(api_instance, mocker, make_staff(staff_id=ADMIN_ID))
     _set_admins(api_instance, admin_ids=f"  someone-else  ,  {ADMIN_ID}  ")
-    _seed_set(fake_cache, created_by=DEFAULT_STAFF_ID, is_shared=True)
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True
+    )
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(
         path="/sets/abc", json_body={"name": "Edited"}
     )
 
     api_instance.update_set()
-    assert fake_cache.get("order_sets_data")[0]["name"] == "Edited"
+    target.save.assert_called_once()
 
 
 def test_update_set_strips_querystring_from_path(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
     _set_admins(api_instance)
-    _seed_set(fake_cache, created_by=DEFAULT_STAFF_ID)
+    target = make_order_set(set_id="abc", created_by=DEFAULT_STAFF_ID, name="Old")
+    filter_mock, _ = patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(
         path="/sets/abc?cache_bust=1", json_body={"name": "Renamed"}
     )
+
     api_instance.update_set()
-    assert fake_cache.get("order_sets_data")[0]["name"] == "Renamed"
+    # The querystring was stripped — the query was on `set_id="abc"`.
+    filter_mock.assert_called_once_with(set_id="abc")
 
 
 # ── delete_set ───────────────────────────────────────────────────────────────
 
 
 def test_delete_set_returns_401_when_no_staff(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, None)
-    _seed_set(fake_cache)
+    target = make_order_set(set_id="abc", created_by=DEFAULT_STAFF_ID)
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(path="/sets/abc")
 
     responses = api_instance.delete_set()
     assert len(responses) == 1
-    assert len(fake_cache.get("order_sets_data")) == 1
+    target.delete.assert_not_called()
 
 
 def test_delete_set_returns_404_when_not_found(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
     _set_admins(api_instance)
-    fake_cache.set("order_sets_data", [{"id": "a", "name": "A"}])
+    patch_order_set_query(mocker, first=None)
     api_instance.request = make_request(path="/sets/missing")
 
     responses = api_instance.delete_set()
     assert len(responses) == 1
-    assert fake_cache.get("order_sets_data") == [{"id": "a", "name": "A"}]
 
 
 def test_delete_set_returns_403_when_not_creator_and_not_admin(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, make_staff(staff_id=OTHER_USER_ID))
     _set_admins(api_instance)
-    _seed_set(fake_cache, created_by=DEFAULT_STAFF_ID, is_shared=True)
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True
+    )
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(path="/sets/abc")
 
     responses = api_instance.delete_set()
     assert len(responses) == 1
-    # set still present — not wiped
-    assert len(fake_cache.get("order_sets_data")) == 1
+    target.delete.assert_not_called()
 
 
 def test_delete_set_removes_set_when_caller_is_creator(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
     _set_staff(api_instance, mocker, make_staff(staff_id=DEFAULT_STAFF_ID))
     _set_admins(api_instance)
-    fake_cache.set(
-        "order_sets_data",
-        [
-            {"id": "a", "name": "Mine", "created_by": DEFAULT_STAFF_ID},
-            {"id": "b", "name": "Other", "created_by": "someone-else"},
-        ],
-    )
-    api_instance.request = make_request(path="/sets/a")
-
-    api_instance.delete_set()
-    sets = fake_cache.get("order_sets_data")
-    assert len(sets) == 1
-    assert sets[0]["id"] == "b"
-
-
-def test_delete_set_allows_admin_to_remove_other_users_set(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
-) -> None:
-    _set_staff(api_instance, mocker, make_staff(staff_id=ADMIN_ID))
-    _set_admins(api_instance, admin_ids=ADMIN_ID)
-    _seed_set(fake_cache, created_by=DEFAULT_STAFF_ID, is_shared=True)
+    target = make_order_set(set_id="abc", created_by=DEFAULT_STAFF_ID)
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(path="/sets/abc")
 
     api_instance.delete_set()
-    assert fake_cache.get("order_sets_data") == []
+    target.delete.assert_called_once()
+
+
+def test_delete_set_allows_admin_to_remove_other_users_set(
+    api_instance: Any, mocker: MagicMock
+) -> None:
+    _set_staff(api_instance, mocker, make_staff(staff_id=ADMIN_ID))
+    _set_admins(api_instance, admin_ids=ADMIN_ID)
+    target = make_order_set(
+        set_id="abc", created_by=DEFAULT_STAFF_ID, is_shared=True
+    )
+    patch_order_set_query(mocker, first=target)
+    api_instance.request = make_request(path="/sets/abc")
+
+    api_instance.delete_set()
+    target.delete.assert_called_once()
 
 
 def test_delete_set_rejects_legacy_row_with_empty_created_by(
-    api_instance: Any, mocker: MagicMock, fake_cache: FakeCache
+    api_instance: Any, mocker: MagicMock
 ) -> None:
-    """A row persisted before the create-time auth gate (``created_by=""``) must
-    not match a caller whose id is also ``""`` — defense in depth."""
+    """A row with ``created_by=""`` must not match a caller whose id is also
+    ``""`` — defense in depth."""
     _set_staff(api_instance, mocker, make_staff(staff_id=""))
     _set_admins(api_instance)
-    fake_cache.set(
-        "order_sets_data", [{"id": "x", "name": "Legacy", "created_by": ""}]
-    )
+    target = make_order_set(set_id="x", created_by="")
+    patch_order_set_query(mocker, first=target)
     api_instance.request = make_request(path="/sets/x")
 
     responses = api_instance.delete_set()
     assert len(responses) == 1
-    assert len(fake_cache.get("order_sets_data")) == 1
+    target.delete.assert_not_called()

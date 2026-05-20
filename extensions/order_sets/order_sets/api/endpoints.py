@@ -1,9 +1,10 @@
-import json
 import uuid
 from datetime import datetime, timezone
 from http import HTTPStatus
+from typing import Any
 
-from canvas_sdk.caching.plugins import get_cache
+from django.db.models import Q
+
 from canvas_sdk.commands import LabOrderCommand, PerformCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
@@ -14,33 +15,14 @@ from canvas_sdk.v1.data.note import CurrentNoteStateEvent, Note, NoteStates
 from canvas_sdk.v1.data.staff import Staff, StaffRole
 from logger import log
 
+from order_sets.models.order_set import OrderSet
+
 try:
     from canvas_sdk.v1.data.charge_description_master import ChargeDescriptionMaster
 except ImportError:  # CDM path varies across SDK versions
     ChargeDescriptionMaster = None  # type: ignore[assignment,misc,unused-ignore]
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
-_CACHE_KEY = "order_sets_data"
-_CACHE_TTL = 14 * 24 * 3600  # 14 days (max allowed)
-
-
-def _get_all_sets() -> list[dict]:
-    """Load all order sets from cache."""
-    cache = get_cache()
-    data = cache.get(_CACHE_KEY)
-    if data is None:
-        return []
-    if isinstance(data, str):
-        loaded: list[dict] = json.loads(data)
-        return loaded
-    sets: list[dict] = data
-    return sets
-
-
-def _save_all_sets(sets: list[dict]) -> None:
-    """Save all order sets to cache."""
-    cache = get_cache()
-    cache.set(_CACHE_KEY, sets, timeout_seconds=_CACHE_TTL)
 
 
 def _auth_error() -> list[JSONResponse | Effect]:
@@ -77,6 +59,31 @@ def _not_found_error() -> list[JSONResponse | Effect]:
             status_code=HTTPStatus.NOT_FOUND,
         )
     ]
+
+
+def _serialize(order_set: OrderSet) -> dict[str, Any]:
+    """Render an OrderSet for the JSON API.
+
+    The frontend looks for ``id`` (not ``set_id``) on every set in
+    list/create/update responses; keep that contract stable.
+    """
+    return {
+        "id": order_set.set_id,
+        "name": order_set.name,
+        "description": order_set.description,
+        "order_type": order_set.order_type,
+        "is_shared": order_set.is_shared,
+        "created_by": order_set.created_by,
+        "created_by_name": order_set.created_by_name,
+        "diagnosis_codes": order_set.diagnosis_codes,
+        "lab_partner": order_set.lab_partner,
+        "lab_partner_name": order_set.lab_partner_name,
+        "items": order_set.items,
+        "fasting_required": order_set.fasting_required,
+        "comment": order_set.comment,
+        "created_at": order_set.created_at.isoformat() if order_set.created_at else None,
+        "updated_at": order_set.updated_at.isoformat() if order_set.updated_at else None,
+    }
 
 
 class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
@@ -142,13 +149,13 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
     def list_sets(self) -> list[JSONResponse | Effect]:
         staff = self._current_staff()
         staff_id = str(staff.id) if staff else ""
-        all_sets = _get_all_sets()
-        results = [
-            s for s in all_sets
-            if s.get("is_shared") or s.get("created_by") == staff_id
-        ]
-        results.sort(key=lambda x: x.get("name", ""))
-        return [JSONResponse(results, status_code=HTTPStatus.OK)]
+        # Indexed lookup: every result is either shared OR created by this caller.
+        sets = (
+            OrderSet.objects
+            .filter(Q(is_shared=True) | Q(created_by=staff_id))
+            .order_by("name")
+        )
+        return [JSONResponse([_serialize(s) for s in sets], status_code=HTTPStatus.OK)]
 
     @api.post("/sets")
     def create_set(self) -> list[JSONResponse | Effect]:
@@ -159,28 +166,22 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
             body = self.request.json()
         except ValueError:
             return _bad_json_error()
-        now = datetime.now(timezone.utc).isoformat()
-        new_set = {
-            "id": str(uuid.uuid4()),
-            "name": body.get("name", "Untitled"),
-            "description": body.get("description", ""),
-            "order_type": body.get("order_type", "lab"),
-            "is_shared": body.get("is_shared", False),
-            "created_by": str(staff.id),
-            "created_by_name": f"{staff.first_name} {staff.last_name}",
-            "diagnosis_codes": body.get("diagnosis_codes", []),
-            "lab_partner": body.get("lab_partner", ""),
-            "lab_partner_name": body.get("lab_partner_name", ""),
-            "items": body.get("items", []),
-            "fasting_required": body.get("fasting_required", False),
-            "comment": body.get("comment", ""),
-            "created_at": now,
-            "updated_at": now,
-        }
-        all_sets = _get_all_sets()
-        all_sets.append(new_set)
-        _save_all_sets(all_sets)
-        return [JSONResponse(new_set, status_code=HTTPStatus.CREATED)]
+        order_set = OrderSet.objects.create(
+            set_id=str(uuid.uuid4()),
+            name=body.get("name", "Untitled"),
+            description=body.get("description", ""),
+            order_type=body.get("order_type", "lab"),
+            is_shared=body.get("is_shared", False),
+            created_by=str(staff.id),
+            created_by_name=f"{staff.first_name} {staff.last_name}",
+            diagnosis_codes=body.get("diagnosis_codes", []),
+            lab_partner=body.get("lab_partner", ""),
+            lab_partner_name=body.get("lab_partner_name", ""),
+            items=body.get("items", []),
+            fasting_required=body.get("fasting_required", False),
+            comment=body.get("comment", ""),
+        )
+        return [JSONResponse(_serialize(order_set), status_code=HTTPStatus.CREATED)]
 
     @api.put("/sets/<set_id>")
     def update_set(self) -> list[JSONResponse | Effect]:
@@ -192,26 +193,29 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         except ValueError:
             return _bad_json_error()
         set_id = self.request.path.split("/sets/")[-1].split("?")[0]
-        all_sets = _get_all_sets()
-        for s in all_sets:
-            if s["id"] != set_id:
-                continue
-            if not self._can_modify(s, staff):
-                return _forbidden_error()
-            s["name"] = body.get("name", s["name"])
-            s["description"] = body.get("description", s["description"])
-            s["order_type"] = body.get("order_type", s["order_type"])
-            s["is_shared"] = body.get("is_shared", s["is_shared"])
-            s["diagnosis_codes"] = body.get("diagnosis_codes", s["diagnosis_codes"])
-            s["lab_partner"] = body.get("lab_partner", s["lab_partner"])
-            s["lab_partner_name"] = body.get("lab_partner_name", s["lab_partner_name"])
-            s["items"] = body.get("items", s["items"])
-            s["fasting_required"] = body.get("fasting_required", s["fasting_required"])
-            s["comment"] = body.get("comment", s["comment"])
-            s["updated_at"] = datetime.now(timezone.utc).isoformat()
-            _save_all_sets(all_sets)
-            return [JSONResponse(s, status_code=HTTPStatus.OK)]
-        return _not_found_error()
+        order_set = OrderSet.objects.filter(set_id=set_id).first()
+        if order_set is None:
+            return _not_found_error()
+        if not self._can_modify(order_set, staff):
+            return _forbidden_error()
+        # Only fields actually present in the body get overwritten — the rest
+        # keep their stored values.
+        for field in (
+            "name",
+            "description",
+            "order_type",
+            "is_shared",
+            "diagnosis_codes",
+            "lab_partner",
+            "lab_partner_name",
+            "items",
+            "fasting_required",
+            "comment",
+        ):
+            if field in body:
+                setattr(order_set, field, body[field])
+        order_set.save()
+        return [JSONResponse(_serialize(order_set), status_code=HTTPStatus.OK)]
 
     @api.delete("/sets/<set_id>")
     def delete_set(self) -> list[JSONResponse | Effect]:
@@ -219,13 +223,12 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         if not staff:
             return _auth_error()
         set_id = self.request.path.split("/sets/")[-1].split("?")[0]
-        all_sets = _get_all_sets()
-        target = next((s for s in all_sets if s["id"] == set_id), None)
-        if target is None:
+        order_set = OrderSet.objects.filter(set_id=set_id).first()
+        if order_set is None:
             return _not_found_error()
-        if not self._can_modify(target, staff):
+        if not self._can_modify(order_set, staff):
             return _forbidden_error()
-        _save_all_sets([s for s in all_sets if s["id"] != set_id])
+        order_set.delete()
         return [JSONResponse({"status": "deleted"}, status_code=HTTPStatus.OK)]
 
     # ── Provider & Lab Data Endpoints ─────────────────────────────────
@@ -335,7 +338,6 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         query = self.request.query_params.get("q", "").strip()
         qs = ChargeDescriptionMaster.objects.all()
         if query:
-            from django.db.models import Q
             qs = qs.filter(Q(name__icontains=query) | Q(cpt_code__icontains=query))
         qs = qs.order_by("name")[:50]
         data = []
@@ -352,30 +354,32 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/execute/<set_id>")
     def execute_set(self) -> list[JSONResponse | Effect]:
         set_id = self.request.path.split("/execute/")[-1].split("?")[0]
-        all_sets = _get_all_sets()
-        order_set = next((s for s in all_sets if s["id"] == set_id), None)
-        if not order_set:
+        order_set = OrderSet.objects.filter(set_id=set_id).first()
+        if order_set is None:
             return _not_found_error()
         body = self.request.json() if self.request.body else {}
         patient_id = body.get("patient_id", "")
         provider_id = body.get("provider_id", "")
-        return self._execute_order_set(order_set, order_set["items"], patient_id, provider_id)
+        return self._execute_order_set(
+            order_set, order_set.items, patient_id, provider_id
+        )
 
     @api.post("/execute-custom")
     def execute_custom(self) -> list[JSONResponse | Effect]:
         body = self.request.json()
         set_id = body.get("set_id", "")
-        all_sets = _get_all_sets()
-        order_set = next((s for s in all_sets if s["id"] == set_id), None)
-        if not order_set:
+        order_set = OrderSet.objects.filter(set_id=set_id).first()
+        if order_set is None:
             return _not_found_error()
         selected_codes = set(body.get("selected_codes", []))
         selected_items = [
-            item for item in order_set["items"] if item["code"] in selected_codes
+            item for item in order_set.items if item["code"] in selected_codes
         ]
         patient_id = body.get("patient_id", "")
         provider_id = body.get("provider_id", "")
-        return self._execute_order_set(order_set, selected_items, patient_id, provider_id)
+        return self._execute_order_set(
+            order_set, selected_items, patient_id, provider_id
+        )
 
     # ── Helpers ───────────────────────────────────────────────────────
 
@@ -401,7 +405,7 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         return admin_ids
 
-    def _can_modify(self, order_set: dict, staff: Staff) -> bool:
+    def _can_modify(self, order_set: OrderSet, staff: Staff) -> bool:
         """Authorize a write against an existing order set.
 
         Allowed if the caller created the set, or if their id appears in
@@ -409,7 +413,7 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         depth against legacy rows that pre-date the create-time auth gate).
         """
         staff_id = str(staff.id)
-        created_by = order_set.get("created_by", "")
+        created_by = order_set.created_by
         if created_by and created_by == staff_id:
             return True
         return staff_id in self._admin_staff_ids()
@@ -442,7 +446,12 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         return None, ""
 
     def _resolve_provider(self, provider_id: str) -> str | None:
-        """Validate that the given provider_id has a PROVIDER role type.
+        """Return ``provider_id`` if it belongs to an *active* PROVIDER, else None.
+
+        ``staff__active=True`` is the critical join: deactivated staff keep
+        their PROVIDER role rows for audit/historical reasons, so without the
+        active filter we'd happily originate orders under a since-disabled
+        provider (e.g. an old open note whose original provider has left).
 
         Single ``.exists()`` query — no row iteration, no per-row Staff fetch.
         """
@@ -450,13 +459,17 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
             return None
         exists = (
             StaffRole.objects
-            .filter(role_type="PROVIDER", staff_id=provider_id)
+            .filter(role_type="PROVIDER", staff_id=provider_id, staff__active=True)
             .exists()
         )
         return provider_id if exists else None
 
     def _execute_order_set(
-        self, order_set: dict, items: list[dict], patient_id: str, provider_id: str = ""
+        self,
+        order_set: OrderSet,
+        items: list[dict],
+        patient_id: str,
+        provider_id: str = "",
     ) -> list[JSONResponse | Effect]:
         if not items:
             return [
@@ -490,15 +503,15 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        order_type = order_set.get("order_type", "lab")
+        order_type = order_set.order_type or "lab"
         effects: list[JSONResponse | Effect] = []
 
         if order_type == "lab":
-            lab_partner = order_set.get("lab_partner", "")
+            lab_partner = order_set.lab_partner or ""
             test_codes = [item["code"] for item in items]
-            diagnosis_codes = order_set.get("diagnosis_codes", [])
-            fasting = order_set.get("fasting_required", False)
-            comment = order_set.get("comment", "")
+            diagnosis_codes = order_set.diagnosis_codes or []
+            fasting = bool(order_set.fasting_required)
+            comment = order_set.comment or ""
 
             command = LabOrderCommand(
                 note_uuid=note_uuid,
@@ -516,7 +529,7 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
                         "status": "ordered",
                         "order_type": "lab",
                         "items_count": len(test_codes),
-                        "set_name": order_set.get("name", ""),
+                        "set_name": order_set.name,
                     },
                     status_code=HTTPStatus.OK,
                 )
@@ -531,8 +544,8 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
                     note_uuid=note_uuid,
                     image_code=item["code"],
                     ordering_provider_key=provider_key,
-                    diagnosis_codes=order_set.get("diagnosis_codes", []),
-                    comment=order_set.get("comment", ""),
+                    diagnosis_codes=order_set.diagnosis_codes or [],
+                    comment=order_set.comment or "",
                 )
                 effects.append(command.originate())
                 ordered_count += 1
@@ -543,14 +556,14 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
                         "status": "ordered",
                         "order_type": "imaging",
                         "items_count": ordered_count,
-                        "set_name": order_set.get("name", ""),
+                        "set_name": order_set.name,
                     },
                     status_code=HTTPStatus.OK,
                 )
             )
 
         elif order_type == "poc":
-            comment = order_set.get("comment", "")
+            comment = order_set.comment or ""
             ordered_count = 0
             for item in items:
                 notes = item.get("name", "")
@@ -570,7 +583,7 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
                         "status": "ordered",
                         "order_type": "poc",
                         "items_count": ordered_count,
-                        "set_name": order_set.get("name", ""),
+                        "set_name": order_set.name,
                     },
                     status_code=HTTPStatus.OK,
                 )

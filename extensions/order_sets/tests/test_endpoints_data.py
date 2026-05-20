@@ -389,11 +389,12 @@ def test_resolve_provider_returns_none_when_empty(api_instance: Any) -> None:
     assert api_instance._resolve_provider("") is None
 
 
-def test_resolve_provider_returns_id_when_role_exists(
+def test_resolve_provider_returns_id_when_active_provider_role_exists(
     api_instance: Any, mocker: MagicMock
 ) -> None:
-    """The query is a single ``.exists()`` filtered on (role_type, staff_id) —
-    no row iteration, no per-row Staff fetch."""
+    """Single ``.exists()`` filtered on (role_type, staff_id, staff__active).
+    The ``staff__active=True`` join is required — without it we'd happily
+    return the id of a since-deactivated provider (e.g. on an old open note)."""
     exists_chain = MagicMock()
     exists_chain.exists.return_value = True
     role_filter = mocker.patch(
@@ -402,15 +403,16 @@ def test_resolve_provider_returns_id_when_role_exists(
     )
 
     assert api_instance._resolve_provider("prov-1") == "prov-1"
+    role_filter.assert_called_once_with(
+        role_type="PROVIDER", staff_id="prov-1", staff__active=True
+    )
 
-    # Verify the filter call shape — both kwargs must be present so the DB
-    # doesn't return any random PROVIDER row.
-    role_filter.assert_called_once_with(role_type="PROVIDER", staff_id="prov-1")
 
-
-def test_resolve_provider_returns_none_when_role_missing(
+def test_resolve_provider_returns_none_when_role_missing_or_staff_inactive(
     api_instance: Any, mocker: MagicMock
 ) -> None:
+    """Whether the role doesn't exist or the staff is deactivated, the DB
+    returns ``exists() == False`` for the joined filter and we refuse."""
     exists_chain = MagicMock()
     exists_chain.exists.return_value = False
     mocker.patch(
