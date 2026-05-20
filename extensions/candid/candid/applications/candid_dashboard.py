@@ -126,18 +126,15 @@ def _html() -> str:
   tbody tr.denied:hover { background: #fef3c7; }
   tbody tr:last-child td { border-bottom: none; }
 
+  td.row-link-cell { padding: 0; }
   .row-link {
     display: grid;
     grid-template-columns: 30% 20% 20% 15% 15%;
-    text-decoration: none; color: inherit; cursor: pointer;
+    text-decoration: none; color: inherit;
   }
   .row-link .cell { padding: 12px 14px; font-size: 13px; }
-  .row-link .cell:first-child .patient,
   .row-link .cell:first-child { font-weight: 600; color: #111827; }
   .row-link .cell.queue, .row-link .cell.date { color: #4b5563; font-size: 12px; }
-
-  .patient { font-weight: 600; color: #111827; }
-  .queue, .date { color: #4b5563; font-size: 12px; }
 
   .pill {
     display: inline-block; padding: 3px 8px; border-radius: 4px;
@@ -636,14 +633,6 @@ function formatDate(iso) {
   } catch { return iso.slice(0, 10); }
 }
 
-function openClaim(claimId) {
-  try {
-    window.parent.location.href = `/revenue/claims/${claimId}`;
-  } catch {
-    window.location.href = `/revenue/claims/${claimId}`;
-  }
-}
-
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => (
     {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]
@@ -697,7 +686,7 @@ function renderBody() {
     const cls = c.has_error ? "error" : (c.is_denied ? "denied" : "");
     return `
       <tr class="${cls}">
-        <td colspan="5" style="padding:0;">
+        <td colspan="5" class="row-link-cell">
           <a href="/revenue/claims/${escapeHtml(c.dbid)}" class="row-link" target="_top">
             <span class="cell">${escapeHtml(c.patient_name)}</span>
             <span class="cell">${statusPill(c.candid_status, c.is_denied, c.has_error)}</span>
