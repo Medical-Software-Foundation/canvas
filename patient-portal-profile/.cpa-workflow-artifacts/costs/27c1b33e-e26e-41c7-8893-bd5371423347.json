@@ -1,0 +1,12 @@
+{
+  "session_id": "27c1b33e-e26e-41c7-8893-bd5371423347",
+  "timestamp": "2026-05-20T13:16:55.017268+00:00",
+  "exit_reason": "prompt_input_exit",
+  "working_directory": "/Users/jmagalhaes/canvas/repos/msf-canvas",
+  "transcript_path": "/Users/jmagalhaes/.claude/projects/-Users-jmagalhaes-canvas-repos-msf-canvas/27c1b33e-e26e-41c7-8893-bd5371423347.jsonl",
+  "cost_data": {
+    "message_count": 5,
+    "duration_seconds": 0.0,
+    "duration_formatted": "0s"
+  }
+}

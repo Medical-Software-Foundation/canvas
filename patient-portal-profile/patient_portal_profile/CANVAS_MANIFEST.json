@@ -2,12 +2,22 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "patient_portal_profile",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Patient portal application that lets patients view their own profile: photo, name, birthdate, registration email, registration phone, addresses, care team, and preferred pharmacy.",
+    "url_permissions": [],
     "components": {
+        "applications": [
+            {
+                "class": "patient_portal_profile.applications.profile_application:ProfileApplication",
+                "name": "My Profile",
+                "description": "View your personal information on file.",
+                "scope": "portal_menu_item",
+                "icon": "assets/icon.png"
+            }
+        ],
         "handlers": [
             {
-                "class": "patient_portal_profile.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "patient_portal_profile.handlers.profile_web_app:ProfileWebApp",
+                "description": "Serves the profile HTML/JS/CSS for the My Profile menu item."
             }
         ],
         "commands": [],
@@ -15,7 +25,7 @@
         "effects": [],
         "views": []
     },
-    "variables": [],
+    "secrets": [],
     "tags": {},
     "references": [],
     "license": "",

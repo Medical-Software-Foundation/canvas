@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    {
+      "input": "/exit",
+      "type": "slash_command"
+    },
+    {
+      "input": "/cpa:new-plugin",
+      "type": "slash_command"
+    }
+  ]
+}

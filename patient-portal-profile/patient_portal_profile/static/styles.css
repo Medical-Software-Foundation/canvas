@@ -1,0 +1,235 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    color: #1a1a1a;
+    background-color: #f8f9fa;
+    line-height: 1.5;
+}
+
+.profile-container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+}
+
+.page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #111;
+    margin: 0 0 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+/* Identity section */
+.identity-section {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 32px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.photo-wrapper {
+    flex-shrink: 0;
+}
+
+.patient-photo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #e0e0e0;
+}
+
+.identity-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.patient-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: #111;
+}
+
+.preferred-name {
+    font-size: 0.9rem;
+    color: #555;
+    margin: 0 0 4px;
+}
+
+.birthdate {
+    font-size: 0.9rem;
+    color: #555;
+    margin: 0;
+}
+
+/* Generic info sections */
+.info-section {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* Definition list for registration info */
+.info-list {
+    margin: 0;
+    padding: 0;
+}
+
+.info-row {
+    display: flex;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row dt {
+    min-width: 80px;
+    font-weight: 500;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.info-row dd {
+    margin: 0;
+    color: #1a1a1a;
+    font-size: 0.9rem;
+    word-break: break-all;
+}
+
+/* Address list */
+.address-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.address-item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f5f5f5;
+    font-size: 0.9rem;
+}
+
+.address-item:last-child {
+    border-bottom: none;
+}
+
+.address-label {
+    font-weight: 500;
+    color: #555;
+    text-transform: capitalize;
+}
+
+.address-text {
+    color: #1a1a1a;
+}
+
+/* Care team list */
+.care-team-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.care-team-member {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.care-team-member:last-child {
+    border-bottom: none;
+}
+
+.member-photo {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #e0e0e0;
+    flex-shrink: 0;
+}
+
+.member-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.member-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #1a1a1a;
+}
+
+.member-role {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Pharmacy details */
+.pharmacy-details {
+    font-size: 0.9rem;
+}
+
+.pharmacy-name {
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0 0 4px;
+}
+
+.pharmacy-address,
+.pharmacy-phone {
+    color: #555;
+    margin: 0 0 4px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .identity-section {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .info-row {
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .info-row dt {
+        min-width: unset;
+    }
+}
