@@ -2,7 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  console.log('clinical_pathways builder v0.3.0 loaded');
+  console.log('clinical_pathways builder v0.3.1 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -378,25 +378,10 @@
 
     const header = document.createElement('header');
     header.className = 'rule-header';
-    const strong = document.createElement('strong');
-    strong.textContent = 'Rule';
-    header.appendChild(strong);
-
-    const labelInput = document.createElement('input');
-    labelInput.type = 'text';
-    labelInput.className = 'rule-label-input';
-    labelInput.placeholder = 'Optional rule name';
-    labelInput.value = rule.label || '';
-    labelInput.addEventListener('input', (ev) => {
-      rule.label = ev.target.value;
-      savePathway();
-    });
-    header.appendChild(labelInput);
 
     const ifSpan = document.createElement('span');
+    ifSpan.className = 'rule-if-label';
     ifSpan.textContent = 'If';
-    ifSpan.style.fontSize = '12px';
-    ifSpan.style.color = '#4a5568';
     header.appendChild(ifSpan);
 
     const combSel = document.createElement('select');
@@ -413,6 +398,10 @@
       renderEditor();
     });
     header.appendChild(combSel);
+
+    const spacer = document.createElement('span');
+    spacer.style.flex = '1';
+    header.appendChild(spacer);
 
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
@@ -477,21 +466,21 @@
 
     const nodeGroup = document.createElement('optgroup');
     nodeGroup.label = 'Questionnaires';
-    (definition.nodes || []).forEach((n, idx) => {
+    (definition.nodes || []).forEach((n) => {
       if (n.node_id === node.node_id) return;
       const o = document.createElement('option');
       o.value = 'node:' + n.node_id;
-      o.textContent = letterFor(idx) + '  ' + (n.questionnaire_name_snapshot || '(unnamed)');
+      o.textContent = n.questionnaire_name_snapshot || '(unnamed)';
       nodeGroup.appendChild(o);
     });
     if (nodeGroup.children.length) thenSel.appendChild(nodeGroup);
 
     const recGroup = document.createElement('optgroup');
     recGroup.label = 'Recommendations';
-    (definition.recommendations || []).forEach((r, idx) => {
+    (definition.recommendations || []).forEach((r) => {
       const o = document.createElement('option');
       o.value = 'rec:' + r.recommendation_id;
-      o.textContent = letterFor(idx) + '  ' + (r.name || '(unnamed)');
+      o.textContent = r.name || '(unnamed)';
       recGroup.appendChild(o);
     });
     if (recGroup.children.length) thenSel.appendChild(recGroup);

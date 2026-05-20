@@ -25,6 +25,9 @@ main#app { display: flex; height: calc(100vh - 53px); }
 .list li .badge.published { background: #c6f6d5; color: #22543d; }
 
 .pane.wide { flex: 1; min-width: 0; max-width: 880px; }
+/* Push the right rail flush to the right edge of the viewport so the
+   space between the center pane and the rail isn't dead space. */
+.right-rail { margin-left: auto; }
 .empty { color: #718096; padding: 60px 0; text-align: center; }
 .hidden { display: none !important; }
 
@@ -73,14 +76,15 @@ button.small { padding: 4px 8px; font-size: 12px; }
 
 .node-card .rules-host { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .rule-card { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; }
-.rule-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.rule-header .rule-label-input { flex: 1; min-width: 120px; padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 3px; font: inherit; }
+.rule-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.rule-header .rule-if-label { font-size: 13px; color: #4a5568; font-weight: 500; }
 .rule-header .combinator-select { padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 3px; font: inherit; background: #fff; }
 
 .conditions-host { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .condition-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(110px, 130px) minmax(0, 1.4fr) auto;
+  /* question takes ~2x the room of the value cell; operator is fixed. */
+  grid-template-columns: minmax(0, 2.2fr) minmax(100px, 120px) minmax(0, 1fr) auto;
   gap: 6px; align-items: center;
 }
 .condition-row select, .condition-row input {
