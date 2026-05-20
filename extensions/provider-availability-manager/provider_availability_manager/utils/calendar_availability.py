@@ -44,16 +44,41 @@ def _parse_rrule(rrule_str: str) -> dict[str, str]:
     return result
 
 
-def event_occurs_on_date(event: Event, target_date: datetime.date) -> bool:
-    """Check if a (possibly recurring) calendar event occurs on target_date."""
+def event_occurs_on_date(
+    event: Event,
+    target_date: datetime.date,
+    calendar_tz: ZoneInfo = ZoneInfo("UTC"),
+) -> bool:
+    """Check if a (possibly recurring) calendar event occurs on ``target_date``.
+
+    ``Event.starts_at`` is stored as a tz-aware UTC datetime by canvas_sdk +
+    Django USE_TZ. ``target_date`` is derived from the slot's *local* date by
+    the slot filter. Calling ``.date()`` on the UTC datetime returns the UTC
+    date, which can be one day off the calendar's local date for evening
+    events in west-of-UTC zones (PST/MST/CST/EST) or morning events in
+    positive-offset zones (Asia/Tokyo etc.). Convert to the calendar's
+    timezone first so both sides of every comparison live in the same zone.
+
+    ``calendar_tz`` defaults to UTC for backward compatibility with naive
+    datetime fixtures in older tests. Production callers
+    (``get_availability_windows``, ``get_blocking_calendar_events``) always
+    pass the calendar's own timezone.
+    """
     if not event.starts_at:
         return False
 
+    # Naive datetimes are treated as already-local (older test fixtures);
+    # aware datetimes are converted into the calendar's local zone.
+    if event.starts_at.tzinfo is None:
+        local_start_date = event.starts_at.date()
+    else:
+        local_start_date = event.starts_at.astimezone(calendar_tz).date()
+
     if not event.recurrence:
-        return bool(event.starts_at.date() == target_date)
+        return bool(local_start_date == target_date)
 
     # Event must have started on or before the target date.
-    if target_date < event.starts_at.date():
+    if target_date < local_start_date:
         return False
 
     rule = _parse_rrule(event.recurrence)
@@ -74,7 +99,7 @@ def event_occurs_on_date(event: Event, target_date: datetime.date) -> bool:
     if freq == "DAILY":
         if interval == 1:
             return True
-        days_diff = (target_date - event.starts_at.date()).days
+        days_diff = (target_date - local_start_date).days
         return bool(days_diff % interval == 0)
 
     if freq == "WEEKLY":
@@ -89,7 +114,7 @@ def event_occurs_on_date(event: Event, target_date: datetime.date) -> bool:
                 return False
 
         if interval > 1:
-            weeks_diff = (target_date - event.starts_at.date()).days // 7
+            weeks_diff = (target_date - local_start_date).days // 7
             if weeks_diff % interval != 0:
                 return False
 
@@ -313,7 +338,7 @@ def get_availability_windows(
             calendar_tz = ZoneInfo("UTC")
 
         for event in events_by_cal.get(cal.pk, []):
-            if event_occurs_on_date(event, date_obj):
+            if event_occurs_on_date(event, date_obj, calendar_tz):
                 window = _event_window_on_date(event, date_obj, calendar_tz)
                 if window:
                     windows.append(window)
@@ -381,7 +406,7 @@ def get_blocking_calendar_events(
             events_by_cal.setdefault(ev.calendar_id, []).append(ev)
     for cal in admin_calendars:
         for event in events_by_cal.get(cal.pk, []):
-            if event_occurs_on_date(event, date_obj):
+            if event_occurs_on_date(event, date_obj, tz):
                 window = _event_window_on_date(event, date_obj, tz)
                 if window:
                     blocks.append(window)

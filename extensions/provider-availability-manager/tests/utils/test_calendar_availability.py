@@ -161,6 +161,76 @@ def test_event_occurs_on_date_unsupported_freq():
     assert event_occurs_on_date(event, datetime.date(2027, 5, 1)) is False
 
 
+# Timezone regression: evening events in west-of-UTC zones are stored on the
+# next UTC day. Without converting to the calendar's local tz before .date(),
+# the matcher misses the user's intended local day and the slot filter
+# silently drops every evening slot.
+
+def test_event_occurs_on_date_pst_evening_matches_local_monday():
+    """A 21:00 Monday PDT event is stored as 04:00 Tuesday UTC. The matcher
+    must return True for the local Monday (the user's intent) and False for
+    the UTC Tuesday."""
+    pdt = ZoneInfo("America/Los_Angeles")
+    event = MagicMock()
+    # 04:00 UTC on Tuesday May 5 == 21:00 PDT on Monday May 4.
+    event.starts_at = datetime.datetime(
+        2026, 5, 5, 4, 0, tzinfo=datetime.timezone.utc
+    )
+    event.recurrence = None
+
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 4), pdt) is True
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 5), pdt) is False
+
+
+def test_event_occurs_on_date_pst_evening_recurring_first_occurrence_not_missed():
+    """The recurring-event start guard must compare local dates too. A
+    weekly-recurring 'Monday 21:00 PDT' event whose UTC starts_at lands on
+    Tuesday must still match its first local Monday."""
+    pdt = ZoneInfo("America/Los_Angeles")
+    event = MagicMock()
+    event.starts_at = datetime.datetime(
+        2026, 5, 5, 4, 0, tzinfo=datetime.timezone.utc
+    )
+    event.recurrence = "FREQ=WEEKLY;BYDAY=MO"
+
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 4), pdt) is True
+    # Next Monday should also match.
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 11), pdt) is True
+
+
+def test_event_occurs_on_date_tokyo_morning_matches_local_tuesday():
+    """The mirror case: a 07:00 Tuesday Tokyo event is stored as 22:00 Monday
+    UTC. The matcher must return True for the local Tuesday."""
+    tokyo = ZoneInfo("Asia/Tokyo")
+    event = MagicMock()
+    # 22:00 UTC on Monday May 4 == 07:00 JST on Tuesday May 5.
+    event.starts_at = datetime.datetime(
+        2026, 5, 4, 22, 0, tzinfo=datetime.timezone.utc
+    )
+    event.recurrence = None
+
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 5), tokyo) is True
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 4), tokyo) is False
+
+
+def test_event_occurs_on_date_daily_interval_uses_local_dates():
+    """DAILY interval arithmetic must compute the day delta from the local
+    date, not the UTC date. With interval=3 starting 'Monday May 4 PDT'
+    (stored as Tuesday May 5 UTC), the next occurrences are Thu May 7 and
+    Sun May 10 PDT — not Wed May 6 / Sat May 9."""
+    pdt = ZoneInfo("America/Los_Angeles")
+    event = MagicMock()
+    event.starts_at = datetime.datetime(
+        2026, 5, 5, 4, 0, tzinfo=datetime.timezone.utc
+    )
+    event.recurrence = "FREQ=DAILY;INTERVAL=3"
+
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 4), pdt) is True
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 5), pdt) is False
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 7), pdt) is True
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 10), pdt) is True
+
+
 # _event_window_on_date --------------------------------------------------
 
 def test_event_window_no_dates():

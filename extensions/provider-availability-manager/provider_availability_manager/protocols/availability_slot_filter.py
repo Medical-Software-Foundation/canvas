@@ -23,6 +23,7 @@ from canvas_sdk.effects import Effect, EffectType
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers.base import BaseHandler
 from canvas_sdk.v1.data import PracticeLocation
+from django.core.exceptions import ValidationError
 from logger import log
 
 from provider_availability_manager.utils.calendar_availability import (
@@ -42,6 +43,13 @@ def _resolve_location_name(selected_values: dict) -> str:
     The exact shape is undocumented; try the keys we've seen on related
     appointment-form events first, then fall back to a PracticeLocation
     lookup by id.
+
+    ``PracticeLocation.id`` is a UUIDField — Django raises ``ValidationError``
+    during query construction for non-UUID input (e.g. a human-readable
+    location label that slipped through ``selected_values``). Catch that so
+    the slot filter stays fail-closed via its own fallbacks instead of
+    letting the exception propagate out of ``compute()``, which would
+    suppress the filter effect entirely and silently fail-OPEN.
     """
     if not isinstance(selected_values, dict):
         return ""
@@ -54,11 +62,17 @@ def _resolve_location_name(selected_values: dict) -> str:
                 return value.strip()
         loc_id = location.get("id") or location.get("value")
         if isinstance(loc_id, str) and loc_id:
-            loc = PracticeLocation.objects.filter(id=loc_id).first()
+            try:
+                loc = PracticeLocation.objects.filter(id=loc_id).first()
+            except (ValueError, ValidationError):
+                loc = None
             if loc:
                 return loc.full_name
     elif isinstance(location, str) and location.strip():
-        loc = PracticeLocation.objects.filter(id=location).first()
+        try:
+            loc = PracticeLocation.objects.filter(id=location).first()
+        except (ValueError, ValidationError):
+            loc = None
         return loc.full_name if loc else location.strip()
 
     return ""

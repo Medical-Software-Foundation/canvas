@@ -31,6 +31,54 @@ class TestResolveLocationName:
             practice_loc.objects.filter.return_value.first.return_value = None
             assert _resolve_location_name({"location": "raw-string"}) == "raw-string"
 
+    def test_non_uuid_string_location_falls_through_without_crashing(self):
+        """Regression: PracticeLocation.id is a UUIDField; Django raises
+        ValidationError when ``.filter(id=<non-uuid>)`` is constructed.
+
+        Letting that propagate out of ``_resolve_location_name`` would crash
+        ``compute()``, no APPOINTMENT__SLOTS__POST_SEARCH_RESULTS effect would
+        be emitted, and Canvas would silently show the original unfiltered
+        slot list — converting the README's fail-closed guarantee into
+        fail-OPEN. The lookup must be wrapped so we fall through to the
+        ``.strip()`` fallback instead.
+        """
+        from django.core.exceptions import ValidationError
+
+        with patch.object(
+            availability_slot_filter, "PracticeLocation"
+        ) as practice_loc:
+            practice_loc.objects.filter.side_effect = ValidationError(
+                "Main Clinic is not a valid UUID."
+            )
+            # Must not raise; must return the stripped fallback.
+            assert _resolve_location_name({"location": "Main Clinic"}) == "Main Clinic"
+
+    def test_non_uuid_dict_id_falls_through_without_crashing(self):
+        """Same regression on the dict-shape branch when only id/value is
+        present and the string isn't a UUID. The function must return ""
+        (the dict-branch's fall-through), not raise."""
+        from django.core.exceptions import ValidationError
+
+        with patch.object(
+            availability_slot_filter, "PracticeLocation"
+        ) as practice_loc:
+            practice_loc.objects.filter.side_effect = ValidationError(
+                "main-clinic-slug is not a valid UUID."
+            )
+            assert _resolve_location_name(
+                {"location": {"id": "main-clinic-slug"}}
+            ) == ""
+
+    def test_value_error_from_filter_also_caught(self):
+        """Older Django versions raised ValueError instead of ValidationError
+        from UUIDField.to_python. The except clause catches both so we
+        survive the SDK upgrading Django under our feet."""
+        with patch.object(
+            availability_slot_filter, "PracticeLocation"
+        ) as practice_loc:
+            practice_loc.objects.filter.side_effect = ValueError("bad uuid")
+            assert _resolve_location_name({"location": "Main Clinic"}) == "Main Clinic"
+
     def test_missing_location_returns_empty(self):
         assert _resolve_location_name({}) == ""
 
