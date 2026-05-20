@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Sets</title>
+    <link rel="stylesheet" href="/plugin-io/api/order_sets/static/css/styles.css?v={{ cache_bust }}">
+</head>
+<body>
+    <div id="app" data-patient-id="{{ patient_id }}" data-staff-id="{{ staff_id }}" data-staff-name="{{ staff_name }}">
+
+        <!-- Header -->
+        <div class="header">
+            <h1>Order Sets</h1>
+            <button class="btn-icon" id="btn-admin" title="Manage Order Sets">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 13a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M17.4 12.3a1.3 1.3 0 00.26 1.43l.05.05a1.58 1.58 0 11-2.24 2.24l-.05-.05a1.3 1.3 0 00-1.43-.26 1.3 1.3 0 00-.79 1.19v.14a1.58 1.58 0 01-3.16 0v-.07a1.3 1.3 0 00-.85-1.19 1.3 1.3 0 00-1.43.26l-.05.05a1.58 1.58 0 11-2.24-2.24l.05-.05a1.3 1.3 0 00.26-1.43 1.3 1.3 0 00-1.19-.79h-.14a1.58 1.58 0 010-3.16h.07a1.3 1.3 0 001.19-.85 1.3 1.3 0 00-.26-1.43l-.05-.05a1.58 1.58 0 112.24-2.24l.05.05a1.3 1.3 0 001.43.26h.06a1.3 1.3 0 00.79-1.19v-.14a1.58 1.58 0 013.16 0v.07a1.3 1.3 0 00.79 1.19 1.3 1.3 0 001.43-.26l.05-.05a1.58 1.58 0 112.24 2.24l-.05.05a1.3 1.3 0 00-.26 1.43v.06a1.3 1.3 0 001.19.79h.14a1.58 1.58 0 010 3.16h-.07a1.3 1.3 0 00-1.19.79z" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Search -->
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Search order sets..." />
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="shared">Shared Sets</button>
+            <button class="tab" data-tab="personal">My Favorites</button>
+        </div>
+
+        <!-- Type filter -->
+        <div class="type-filter">
+            <button class="type-btn active" data-type="all">All</button>
+            <button class="type-btn" data-type="lab">Labs</button>
+            <button class="type-btn" data-type="imaging">Imaging</button>
+            <button class="type-btn" data-type="poc">POC</button>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Loading order sets...</p>
+        </div>
+
+        <!-- Empty state -->
+        <div id="empty-state" class="empty-state hidden">
+            <p>No order sets found.</p>
+            <p class="subtle">Click the gear icon to create one.</p>
+        </div>
+
+        <!-- Order set cards -->
+        <div id="sets-list" class="sets-list"></div>
+
+        <!-- Preview overlay -->
+        <div id="preview-overlay" class="overlay hidden">
+            <div class="preview-panel">
+                <div class="preview-header">
+                    <h2 id="preview-title"></h2>
+                    <button class="btn-icon" id="btn-close-preview">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M5 5l10 10M15 5l-10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <p id="preview-description" class="preview-description"></p>
+                <div id="preview-meta" class="preview-meta"></div>
+                <div class="preview-items-header">
+                    <span>Items</span>
+                    <label class="check-all">
+                        <input type="checkbox" id="check-all" checked /> Select All
+                    </label>
+                </div>
+                <div id="preview-items" class="preview-items"></div>
+                <div class="preview-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-preview">Cancel</button>
+                    <button class="btn btn-primary" id="btn-confirm-order">Confirm Order</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Provider selector overlay -->
+        <div id="provider-overlay" class="overlay hidden">
+            <div class="provider-panel">
+                <h2>Select Ordering Provider</h2>
+                <p class="provider-note">This patient's note does not have a clinical provider assigned. Please select the ordering provider for this order.</p>
+                <select id="provider-select" class="provider-select">
+                    <option value="">-- Select a provider --</option>
+                </select>
+                <div class="preview-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-provider">Cancel</button>
+                    <button class="btn btn-primary" id="btn-confirm-provider">Order with Provider</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status toast -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="/plugin-io/api/order_sets/static/js/main.js?v={{ cache_bust }}"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="46" fill="#EEF2FF" stroke="#4F46E5" stroke-width="2"/>
+
+  <!-- Clipboard body -->
+  <rect x="28" y="22" width="44" height="56" rx="4" fill="white" stroke="#4F46E5" stroke-width="2.5"/>
+
+  <!-- Clipboard clip -->
+  <rect x="38" y="18" width="24" height="10" rx="3" fill="#4F46E5"/>
+  <circle cx="50" cy="23" r="3" fill="white"/>
+
+  <!-- Checklist line 1 - checked -->
+  <rect x="34" y="36" width="8" height="8" rx="1.5" fill="#4F46E5"/>
+  <polyline points="36,40 38.5,42.5 42,37.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="46" y1="40" x2="64" y2="40" stroke="#6B7280" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Checklist line 2 - checked -->
+  <rect x="34" y="48" width="8" height="8" rx="1.5" fill="#4F46E5"/>
+  <polyline points="36,52 38.5,54.5 42,49.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="46" y1="52" x2="64" y2="52" stroke="#6B7280" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Checklist line 3 - checked -->
+  <rect x="34" y="60" width="8" height="8" rx="1.5" fill="#4F46E5"/>
+  <polyline points="36,64 38.5,66.5 42,61.5" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="46" y1="64" x2="64" y2="64" stroke="#6B7280" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Small medical cross accent -->
+  <circle cx="72" cy="72" r="12" fill="#4F46E5"/>
+  <line x1="72" y1="66" x2="72" y2="78" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <line x1="66" y1="72" x2="78" y2="72" stroke="white" stroke-width="3" stroke-linecap="round"/>
+</svg>
