@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Order Sets</title>
+    <link rel="stylesheet" href="/plugin-io/api/order_sets/static/css/styles.css?v={{ cache_bust }}">
+</head>
+<body>
+    <div id="admin-app" data-staff-id="{{ staff_id }}" data-staff-name="{{ staff_name }}">
+
+        <!-- Header -->
+        <div class="header">
+            <h1>Manage Order Sets</h1>
+            <button class="btn btn-primary btn-sm" id="btn-new-set">+ New Set</button>
+        </div>
+
+        <!-- Existing sets list -->
+        <div id="admin-loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+        <div id="admin-empty" class="empty-state hidden">
+            <p>No order sets yet.</p>
+            <p class="subtle">Create your first order set above.</p>
+        </div>
+        <div id="admin-sets-list" class="admin-sets-list"></div>
+
+        <!-- Create/Edit form overlay -->
+        <div id="form-overlay" class="overlay hidden">
+            <div class="form-panel">
+                <div class="form-header">
+                    <h2 id="form-title">New Order Set</h2>
+                    <button class="btn-icon" id="btn-close-form">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M5 5l10 10M15 5l-10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <form id="set-form">
+                    <input type="hidden" id="form-set-id" value="" />
+
+                    <div class="form-group">
+                        <label for="form-name">Name *</label>
+                        <input type="text" id="form-name" required placeholder="e.g., New Patient Complete" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="form-description">Description</label>
+                        <textarea id="form-description" rows="2" placeholder="Brief description of this order set"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="form-order-type">Order Type *</label>
+                            <select id="form-order-type">
+                                <option value="lab">Lab (Send-Out)</option>
+                                <option value="imaging">Imaging</option>
+                                <option value="poc">POC (In-Office)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="form-shared">Visibility</label>
+                            <select id="form-shared">
+                                <option value="false">Personal Favorite</option>
+                                <option value="true">Shared (Practice-wide)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Lab-specific fields -->
+                    <div id="lab-fields">
+                        <div class="form-group">
+                            <label for="form-lab-partner">Lab Partner *</label>
+                            <select id="form-lab-partner">
+                                <option value="">Select lab partner...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Lab Tests *</label>
+                            <input type="text" id="test-search" placeholder="Search tests..." />
+                            <div id="test-results" class="test-results hidden"></div>
+                            <div id="selected-tests" class="selected-tests"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="form-fasting" />
+                                Fasting Required
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Imaging-specific fields -->
+                    <div id="imaging-fields" class="hidden">
+                        <div class="form-group">
+                            <label>Imaging Orders</label>
+                            <div id="imaging-items" class="selected-tests"></div>
+                            <div class="form-row">
+                                <input type="text" id="imaging-code" placeholder="Image code" />
+                                <input type="text" id="imaging-name" placeholder="Order name" />
+                                <button type="button" class="btn btn-sm btn-secondary" id="btn-add-imaging">Add</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- POC-specific fields -->
+                    <div id="poc-fields" class="hidden">
+                        <div class="form-group">
+                            <label>POC Tests (CPT) *</label>
+                            <input type="text" id="cpt-search" placeholder="Search CPT code or procedure name..." />
+                            <div id="cpt-results" class="test-results hidden"></div>
+                            <div id="poc-items" class="selected-tests"></div>
+                            <p class="subtle" style="margin-top:8px">
+                                Can't find a code? Enter it manually:
+                            </p>
+                            <div class="form-row">
+                                <input type="text" id="poc-manual-code" placeholder="CPT code (e.g., 87880)" />
+                                <input type="text" id="poc-manual-name" placeholder="Test name (e.g., Rapid Strep)" />
+                                <button type="button" class="btn btn-sm btn-secondary" id="btn-add-poc-manual">Add</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Common fields -->
+                    <div class="form-group">
+                        <label for="form-diagnosis">Diagnosis Codes (ICD-10, comma-separated)</label>
+                        <input type="text" id="form-diagnosis" placeholder="e.g., Z00.00, E11.9" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="form-comment">Comment</label>
+                        <textarea id="form-comment" rows="2" placeholder="Optional comment for orders"></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="btn-cancel-form">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="btn-save-form">Save Order Set</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Delete confirmation -->
+        <div id="delete-overlay" class="overlay hidden">
+            <div class="confirm-dialog">
+                <h3>Delete Order Set</h3>
+                <p>Are you sure you want to delete "<span id="delete-name"></span>"?</p>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="btn-cancel-delete">Cancel</button>
+                    <button class="btn btn-danger" id="btn-confirm-delete">Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="/plugin-io/api/order_sets/static/js/admin.js?v={{ cache_bust }}"></script>
+</body>
+</html>
