@@ -39,9 +39,11 @@ def make_staff_role(
     domain: str = "",
     internal_code: str = "",
 ) -> SimpleNamespace:
-    """Mimic a StaffRole record."""
+    """Mimic a StaffRole record. Includes ``staff_id`` so callers can read the
+    FK column directly without dereferencing ``role.staff``."""
     return SimpleNamespace(
         staff=staff,
+        staff_id=staff.id,
         role_type=role_type,
         name=name,
         domain=domain,

@@ -36,7 +36,21 @@ After install, the **Order Sets** icon appears in the 9-box app drawer on every 
 
 ## Configuration
 
-No secrets or environment variables are required. The plugin reads lab tests from the instance's configured lab partners and CPT codes from `ChargeDescriptionMaster` (when available in the SDK version installed).
+### `ADMIN_STAFF_IDS` (optional plugin secret)
+
+Comma-separated list of staff UUIDs allowed to modify or delete order sets they did not create — for example, an operations admin maintaining the practice's shared sets.
+
+```
+ADMIN_STAFF_IDS=57f3668ea9f84f3980e772ea8451af38,a1b2c3d4e5f6...
+```
+
+Authorization model:
+
+- **Create:** any authenticated staff member can create an order set (shared or personal).
+- **Read:** every authenticated staff member sees all `is_shared=true` sets plus their own personal sets.
+- **Update / delete:** allowed only if the caller is the original `created_by` *or* their id appears in `ADMIN_STAFF_IDS`. Fails closed: if the secret is unset or empty, only the creator can modify a set — shared sets stay editable by their original author until an admin list is configured.
+
+The plugin also reads lab tests from the instance's configured lab partners and CPT codes from `ChargeDescriptionMaster` (when available in the SDK version installed). No other configuration is required.
 
 ## Architecture
 

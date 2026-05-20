@@ -37,7 +37,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["ADMIN_STAFF_IDS"],
     "tags": {},
     "references": [],
     "license": "MIT",

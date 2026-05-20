@@ -12,6 +12,7 @@ from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.lab import LabPartner, LabPartnerTest
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, Note, NoteStates
 from canvas_sdk.v1.data.staff import Staff, StaffRole
+from logger import log
 
 try:
     from canvas_sdk.v1.data.charge_description_master import ChargeDescriptionMaster
@@ -42,12 +43,40 @@ def _save_all_sets(sets: list[dict]) -> None:
     cache.set(_CACHE_KEY, sets, timeout_seconds=_CACHE_TTL)
 
 
-def _is_active_staff(staff: Staff) -> bool:
-    """Check if a staff member is active."""
-    try:
-        return bool(staff.active)
-    except Exception:
-        return False
+def _auth_error() -> list[JSONResponse | Effect]:
+    return [
+        JSONResponse(
+            {"error": "Authentication required"},
+            status_code=HTTPStatus.UNAUTHORIZED,
+        )
+    ]
+
+
+def _forbidden_error() -> list[JSONResponse | Effect]:
+    return [
+        JSONResponse(
+            {"error": "Forbidden"},
+            status_code=HTTPStatus.FORBIDDEN,
+        )
+    ]
+
+
+def _bad_json_error() -> list[JSONResponse | Effect]:
+    return [
+        JSONResponse(
+            {"error": "Invalid JSON body"},
+            status_code=HTTPStatus.BAD_REQUEST,
+        )
+    ]
+
+
+def _not_found_error() -> list[JSONResponse | Effect]:
+    return [
+        JSONResponse(
+            {"error": "Order set not found"},
+            status_code=HTTPStatus.NOT_FOUND,
+        )
+    ]
 
 
 class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
@@ -111,135 +140,156 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/sets")
     def list_sets(self) -> list[JSONResponse | Effect]:
-        try:
-            staff = self._current_staff()
-            staff_id = str(staff.id) if staff else ""
-            all_sets = _get_all_sets()
-            results = [
-                s for s in all_sets
-                if s.get("is_shared") or s.get("created_by") == staff_id
-            ]
-            results.sort(key=lambda x: x.get("name", ""))
-            return [JSONResponse(results, status_code=HTTPStatus.OK)]
-        except Exception as e:
-            return [JSONResponse({"error": f"list_sets: {type(e).__name__}: {e}"}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
+        staff = self._current_staff()
+        staff_id = str(staff.id) if staff else ""
+        all_sets = _get_all_sets()
+        results = [
+            s for s in all_sets
+            if s.get("is_shared") or s.get("created_by") == staff_id
+        ]
+        results.sort(key=lambda x: x.get("name", ""))
+        return [JSONResponse(results, status_code=HTTPStatus.OK)]
 
     @api.post("/sets")
     def create_set(self) -> list[JSONResponse | Effect]:
+        staff = self._current_staff()
+        if not staff:
+            return _auth_error()
         try:
             body = self.request.json()
-            staff = self._current_staff()
-            now = datetime.now(timezone.utc).isoformat()
-            new_set = {
-                "id": str(uuid.uuid4()),
-                "name": body.get("name", "Untitled"),
-                "description": body.get("description", ""),
-                "order_type": body.get("order_type", "lab"),
-                "is_shared": body.get("is_shared", False),
-                "created_by": str(staff.id) if staff else "",
-                "created_by_name": f"{staff.first_name} {staff.last_name}" if staff else "",
-                "diagnosis_codes": body.get("diagnosis_codes", []),
-                "lab_partner": body.get("lab_partner", ""),
-                "lab_partner_name": body.get("lab_partner_name", ""),
-                "items": body.get("items", []),
-                "fasting_required": body.get("fasting_required", False),
-                "comment": body.get("comment", ""),
-                "created_at": now,
-                "updated_at": now,
-            }
-            all_sets = _get_all_sets()
-            all_sets.append(new_set)
-            _save_all_sets(all_sets)
-            return [JSONResponse(new_set, status_code=HTTPStatus.CREATED)]
-        except Exception as e:
-            return [JSONResponse({"error": f"create_set: {type(e).__name__}: {e}"}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
+        except ValueError:
+            return _bad_json_error()
+        now = datetime.now(timezone.utc).isoformat()
+        new_set = {
+            "id": str(uuid.uuid4()),
+            "name": body.get("name", "Untitled"),
+            "description": body.get("description", ""),
+            "order_type": body.get("order_type", "lab"),
+            "is_shared": body.get("is_shared", False),
+            "created_by": str(staff.id),
+            "created_by_name": f"{staff.first_name} {staff.last_name}",
+            "diagnosis_codes": body.get("diagnosis_codes", []),
+            "lab_partner": body.get("lab_partner", ""),
+            "lab_partner_name": body.get("lab_partner_name", ""),
+            "items": body.get("items", []),
+            "fasting_required": body.get("fasting_required", False),
+            "comment": body.get("comment", ""),
+            "created_at": now,
+            "updated_at": now,
+        }
+        all_sets = _get_all_sets()
+        all_sets.append(new_set)
+        _save_all_sets(all_sets)
+        return [JSONResponse(new_set, status_code=HTTPStatus.CREATED)]
 
     @api.put("/sets/<set_id>")
     def update_set(self) -> list[JSONResponse | Effect]:
+        staff = self._current_staff()
+        if not staff:
+            return _auth_error()
         try:
-            set_id = self.request.path.split("/sets/")[-1].split("?")[0]
             body = self.request.json()
-            all_sets = _get_all_sets()
-            for s in all_sets:
-                if s["id"] == set_id:
-                    s["name"] = body.get("name", s["name"])
-                    s["description"] = body.get("description", s["description"])
-                    s["order_type"] = body.get("order_type", s["order_type"])
-                    s["is_shared"] = body.get("is_shared", s["is_shared"])
-                    s["diagnosis_codes"] = body.get("diagnosis_codes", s["diagnosis_codes"])
-                    s["lab_partner"] = body.get("lab_partner", s["lab_partner"])
-                    s["lab_partner_name"] = body.get("lab_partner_name", s["lab_partner_name"])
-                    s["items"] = body.get("items", s["items"])
-                    s["fasting_required"] = body.get("fasting_required", s["fasting_required"])
-                    s["comment"] = body.get("comment", s["comment"])
-                    s["updated_at"] = datetime.now(timezone.utc).isoformat()
-                    _save_all_sets(all_sets)
-                    return [JSONResponse(s, status_code=HTTPStatus.OK)]
-            return [JSONResponse({"error": "Order set not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        except Exception as e:
-            return [JSONResponse({"error": f"update_set: {type(e).__name__}: {e}"}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
+        except ValueError:
+            return _bad_json_error()
+        set_id = self.request.path.split("/sets/")[-1].split("?")[0]
+        all_sets = _get_all_sets()
+        for s in all_sets:
+            if s["id"] != set_id:
+                continue
+            if not self._can_modify(s, staff):
+                return _forbidden_error()
+            s["name"] = body.get("name", s["name"])
+            s["description"] = body.get("description", s["description"])
+            s["order_type"] = body.get("order_type", s["order_type"])
+            s["is_shared"] = body.get("is_shared", s["is_shared"])
+            s["diagnosis_codes"] = body.get("diagnosis_codes", s["diagnosis_codes"])
+            s["lab_partner"] = body.get("lab_partner", s["lab_partner"])
+            s["lab_partner_name"] = body.get("lab_partner_name", s["lab_partner_name"])
+            s["items"] = body.get("items", s["items"])
+            s["fasting_required"] = body.get("fasting_required", s["fasting_required"])
+            s["comment"] = body.get("comment", s["comment"])
+            s["updated_at"] = datetime.now(timezone.utc).isoformat()
+            _save_all_sets(all_sets)
+            return [JSONResponse(s, status_code=HTTPStatus.OK)]
+        return _not_found_error()
 
     @api.delete("/sets/<set_id>")
     def delete_set(self) -> list[JSONResponse | Effect]:
-        try:
-            set_id = self.request.path.split("/sets/")[-1].split("?")[0]
-            all_sets = _get_all_sets()
-            new_sets = [s for s in all_sets if s["id"] != set_id]
-            if len(new_sets) == len(all_sets):
-                return [JSONResponse({"error": "Order set not found"}, status_code=HTTPStatus.NOT_FOUND)]
-            _save_all_sets(new_sets)
-            return [JSONResponse({"status": "deleted"}, status_code=HTTPStatus.OK)]
-        except Exception as e:
-            return [JSONResponse({"error": f"delete_set: {type(e).__name__}: {e}"}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
+        staff = self._current_staff()
+        if not staff:
+            return _auth_error()
+        set_id = self.request.path.split("/sets/")[-1].split("?")[0]
+        all_sets = _get_all_sets()
+        target = next((s for s in all_sets if s["id"] == set_id), None)
+        if target is None:
+            return _not_found_error()
+        if not self._can_modify(target, staff):
+            return _forbidden_error()
+        _save_all_sets([s for s in all_sets if s["id"] != set_id])
+        return [JSONResponse({"status": "deleted"}, status_code=HTTPStatus.OK)]
 
     # ── Provider & Lab Data Endpoints ─────────────────────────────────
 
     @api.get("/providers")
     def list_providers(self) -> list[JSONResponse | Effect]:
-        """Return active staff who have a PROVIDER role type (can place orders)."""
-        try:
-            # Collect staff IDs that have a PROVIDER role by iterating roles directly
-            provider_staff_ids = set()
-            for role in StaffRole.objects.filter(role_type="PROVIDER"):
-                provider_staff_ids.add(str(role.staff.id))
-            providers = []
-            for s in Staff.objects.filter(active=True):
-                if str(s.id) in provider_staff_ids:
-                    providers.append({
-                        "id": str(s.id),
-                        "name": f"{s.first_name} {s.last_name}".strip(),
-                        "credentials": getattr(s, "top_role_abbreviation", "") or "",
-                    })
-            providers.sort(key=lambda p: p["name"])
-            return [JSONResponse(providers, status_code=HTTPStatus.OK)]
-        except Exception as e:
-            return [JSONResponse({"error": f"list_providers: {type(e).__name__}: {e}"}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
+        """Return active staff who have a PROVIDER role type (can place orders).
+
+        Uses ``role.staff_id`` (the FK column already on the row) to avoid the
+        per-row Staff lookup that ``role.staff.id`` would trigger.
+        """
+        provider_staff_ids = {
+            str(role.staff_id)
+            for role in StaffRole.objects.filter(role_type="PROVIDER")
+        }
+        providers = [
+            {
+                "id": str(s.id),
+                "name": f"{s.first_name} {s.last_name}".strip(),
+                "credentials": getattr(s, "top_role_abbreviation", "") or "",
+            }
+            for s in Staff.objects.filter(active=True)
+            if str(s.id) in provider_staff_ids
+        ]
+        providers.sort(key=lambda p: p["name"])
+        return [JSONResponse(providers, status_code=HTTPStatus.OK)]
 
     @api.get("/note-provider")
     def get_note_provider(self) -> list[JSONResponse | Effect]:
         """Check if the patient's open note has a valid clinical provider."""
-        try:
-            patient_id = self.request.query_params.get("patient_id", "")
-            note_uuid, provider_key = self._find_open_note(patient_id)
-            if not note_uuid:
-                return [JSONResponse({"note_uuid": None, "provider_id": None, "provider_name": None}, status_code=HTTPStatus.OK)]
+        patient_id = self.request.query_params.get("patient_id", "")
+        note_uuid, provider_key = self._find_open_note(patient_id)
+        if not note_uuid:
+            return [
+                JSONResponse(
+                    {"note_uuid": None, "provider_id": None, "provider_name": None},
+                    status_code=HTTPStatus.OK,
+                )
+            ]
 
-            if provider_key:
-                provider = Staff.objects.filter(id=provider_key).first()
-                if provider and _is_active_staff(provider):
-                    return [JSONResponse({
-                        "note_uuid": note_uuid,
-                        "provider_id": provider_key,
-                        "provider_name": f"{provider.first_name} {provider.last_name}".strip(),
-                    }, status_code=HTTPStatus.OK)]
+        if provider_key:
+            provider = Staff.objects.filter(id=provider_key).first()
+            if provider and provider.active:
+                return [
+                    JSONResponse(
+                        {
+                            "note_uuid": note_uuid,
+                            "provider_id": provider_key,
+                            "provider_name": f"{provider.first_name} {provider.last_name}".strip(),
+                        },
+                        status_code=HTTPStatus.OK,
+                    )
+                ]
 
-            return [JSONResponse({
-                "note_uuid": note_uuid,
-                "provider_id": None,
-                "provider_name": None,
-            }, status_code=HTTPStatus.OK)]
-        except Exception as e:
-            return [JSONResponse({"error": f"get_note_provider: {type(e).__name__}: {e}"}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
+        return [
+            JSONResponse(
+                {
+                    "note_uuid": note_uuid,
+                    "provider_id": None,
+                    "provider_name": None,
+                },
+                status_code=HTTPStatus.OK,
+            )
+        ]
 
     @api.get("/lab-partners")
     def list_lab_partners(self) -> list[JSONResponse | Effect]:
@@ -305,11 +355,7 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         all_sets = _get_all_sets()
         order_set = next((s for s in all_sets if s["id"] == set_id), None)
         if not order_set:
-            return [
-                JSONResponse(
-                    {"error": "Order set not found"}, status_code=HTTPStatus.NOT_FOUND
-                )
-            ]
+            return _not_found_error()
         body = self.request.json() if self.request.body else {}
         patient_id = body.get("patient_id", "")
         provider_id = body.get("provider_id", "")
@@ -322,11 +368,7 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         all_sets = _get_all_sets()
         order_set = next((s for s in all_sets if s["id"] == set_id), None)
         if not order_set:
-            return [
-                JSONResponse(
-                    {"error": "Order set not found"}, status_code=HTTPStatus.NOT_FOUND
-                )
-            ]
+            return _not_found_error()
         selected_codes = set(body.get("selected_codes", []))
         selected_items = [
             item for item in order_set["items"] if item["code"] in selected_codes
@@ -342,6 +384,35 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         if not staff_id:
             return None
         return Staff.objects.filter(id=staff_id).first()
+
+    def _admin_staff_ids(self) -> set[str]:
+        """Return the configured admin staff IDs as a set.
+
+        Fails closed: if ``ADMIN_STAFF_IDS`` is unset or empty, no caller is
+        treated as an admin and only the creator can modify a set.
+        """
+        raw = self.secrets.get("ADMIN_STAFF_IDS", "") or ""
+        admin_ids = {sid.strip() for sid in raw.split(",") if sid.strip()}
+        if not admin_ids:
+            log.warning(
+                "ADMIN_STAFF_IDS is not configured; only set creators can modify "
+                "their own order sets. Set this secret to a comma-separated list "
+                "of staff UUIDs to allow admins to manage shared sets."
+            )
+        return admin_ids
+
+    def _can_modify(self, order_set: dict, staff: Staff) -> bool:
+        """Authorize a write against an existing order set.
+
+        Allowed if the caller created the set, or if their id appears in
+        ``ADMIN_STAFF_IDS``. Empty ``created_by`` never matches (defense in
+        depth against legacy rows that pre-date the create-time auth gate).
+        """
+        staff_id = str(staff.id)
+        created_by = order_set.get("created_by", "")
+        if created_by and created_by == staff_id:
+            return True
+        return staff_id in self._admin_staff_ids()
 
     def _find_open_note(self, patient_id: str) -> tuple[str | None, str]:
         """Find the most recent open note for a patient. Returns (note_uuid, provider_key)."""
@@ -371,13 +442,18 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
         return None, ""
 
     def _resolve_provider(self, provider_id: str) -> str | None:
-        """Validate that the given provider_id has a PROVIDER role type. Returns ID or None."""
+        """Validate that the given provider_id has a PROVIDER role type.
+
+        Single ``.exists()`` query — no row iteration, no per-row Staff fetch.
+        """
         if not provider_id:
             return None
-        for role in StaffRole.objects.filter(role_type="PROVIDER"):
-            if str(role.staff.id) == str(provider_id):
-                return provider_id
-        return None
+        exists = (
+            StaffRole.objects
+            .filter(role_type="PROVIDER", staff_id=provider_id)
+            .exists()
+        )
+        return provider_id if exists else None
 
     def _execute_order_set(
         self, order_set: dict, items: list[dict], patient_id: str, provider_id: str = ""
@@ -398,7 +474,7 @@ class OrderSetsAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        # Determine ordering provider: note provider > explicit provider_id
+        # Ordering provider precedence: note provider > explicit provider_id.
         provider_key = self._resolve_provider(note_provider_key)
         if not provider_key and provider_id:
             provider_key = self._resolve_provider(provider_id)
