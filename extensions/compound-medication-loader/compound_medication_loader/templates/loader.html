@@ -559,11 +559,16 @@
       if (potRes.error) errors.push("potency_unit_code: " + potRes.error);
       else if (!potRes.code) errors.push("potency_unit_code is required");
 
+      // controlled_substance is required — don't silently default to "N".
+      // A Schedule II compound loaded as uncontrolled has prescribing/DEA
+      // consequences, so a missing column or blank cell must surface as an
+      // error rather than auto-correcting to Not Scheduled.
       const conRes = resolveCode(row.controlled_substance, labelToControlled, validControlledCodes);
       if (conRes.error) errors.push("controlled_substance: " + conRes.error);
-      const controlledCode = conRes.code || "N";
+      else if (!conRes.code) errors.push("controlled_substance is required (use 'N' for Not scheduled)");
+      const controlledCode = conRes.code;
       const ndc = (row.controlled_substance_ndc || "").trim();
-      if (controlledCode !== "N" && !ndc) {
+      if (controlledCode && controlledCode !== "N" && !ndc) {
         errors.push("controlled_substance_ndc required when controlled");
       }
 

@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.141.0",
-    "plugin_version": "0.3.8",
+    "plugin_version": "0.3.9",
     "name": "compound_medication_loader",
     "description": "Bulk-load Compound Medications into a Canvas instance. Provides an authenticated POST endpoint for programmatic loads and an app-drawer page for staff to upload a CSV, review the parsed rows, and load them into the formulary.",
     "components": {

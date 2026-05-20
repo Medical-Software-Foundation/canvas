@@ -48,6 +48,7 @@ even when they choose to attempt the create.
 # this entirely. See `reference_canvas_sdk_gotchas.md`.
 from __future__ import annotations
 
+import hmac
 import json
 from http import HTTPStatus
 
@@ -81,12 +82,15 @@ class CompoundMedicationLoaderAPI(SimpleAPI):
         if self.request.headers.get("canvas-logged-in-user-type") == "Staff":
             return True
 
-        # Path 2: Bearer token (programmatic CLI/script use).
+        # Path 2: Bearer token (programmatic CLI/script use). Constant-time
+        # compare prevents leaking the secret via response-time differences,
+        # matching the repo-wide convention (patient_tags, sticky_note,
+        # nutrition_charting, extend_lab_intake).
         expected = (self.secrets.get("BULK_LOAD_API_KEY") or "").strip()
         if not expected:
             return False
         provided = self.request.headers.get("Authorization", "")
-        return provided == f"Bearer {expected}"
+        return hmac.compare_digest(provided, f"Bearer {expected}")
 
     @api.get("/ping")
     def ping(self) -> list[Response | Effect]:
@@ -215,7 +219,14 @@ def _process_row(
 
     formulation = (row.get("formulation") or "").strip()
     potency_unit_code = row.get("potency_unit_code")
-    controlled_substance = row.get("controlled_substance", NOT_SCHEDULED)
+    # Don't default controlled_substance — a missing/blank value must surface
+    # as a validation error rather than silently classifying as "Not scheduled".
+    # Loading a Schedule II compound as uncontrolled would have real prescribing
+    # / DEA-compliance consequences.
+    raw_controlled = row.get("controlled_substance")
+    controlled_substance = (
+        str(raw_controlled).strip() if raw_controlled is not None else ""
+    )
     controlled_substance_ndc = (row.get("controlled_substance_ndc") or "").strip() or None
     active = row.get("active", True)
 
@@ -268,20 +279,13 @@ def _process_row(
     }
     if controlled_substance_ndc:
         payload["controlled_substance_ndc"] = controlled_substance_ndc.replace("-", "")
-    try:
-        effect = Effect(
-            type="CREATE_COMPOUND_MEDICATION",
-            payload=json.dumps(payload),
-        )
-    except Exception as exc:
-        return {
-            "index": idx,
-            "formulation": formulation,
-            "already_exists": already_exists,
-            "existing_active": existing_active,
-            "status": "error",
-            "errors": [str(exc)],
-        }
+    # Effect() is internal pydantic construction over already-validated data
+    # — any failure here is a real bug that should propagate to Canvas logs
+    # and Sentry, not be silently flattened to a per-row error.
+    effect = Effect(
+        type="CREATE_COMPOUND_MEDICATION",
+        payload=json.dumps(payload),
+    )
 
     existing_compounds[formulation] = bool(active)
 
@@ -316,7 +320,11 @@ def _validate_row(
             f"invalid potency_unit_code {potency_unit_code!r} (see GET /enums)"
         )
 
-    if controlled_substance not in valid_controlled:
+    if not controlled_substance:
+        errors.append(
+            "controlled_substance is required (see GET /enums; use 'N' for Not scheduled)"
+        )
+    elif controlled_substance not in valid_controlled:
         errors.append(
             f"invalid controlled_substance {controlled_substance!r} (see GET /enums)"
         )

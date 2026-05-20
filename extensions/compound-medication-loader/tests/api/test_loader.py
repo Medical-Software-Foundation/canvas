@@ -82,6 +82,14 @@ class TestValidateRow:
         errors = _validate_row("Cream", "C48155", "Z", None, valid_pot, valid_con)
         assert errors == ["invalid controlled_substance 'Z' (see GET /enums)"]
 
+    def test_empty_controlled_errors(self):
+        """controlled_substance must be required, not defaulted to N."""
+        valid_pot, valid_con = self._valid_sets()
+        errors = _validate_row("Cream", "C48155", "", None, valid_pot, valid_con)
+        assert errors == [
+            "controlled_substance is required (see GET /enums; use 'N' for Not scheduled)"
+        ]
+
     def test_controlled_without_ndc_errors(self):
         valid_pot, valid_con = self._valid_sets()
         errors = _validate_row("Cream", "C48155", "3", None, valid_pot, valid_con)
@@ -123,7 +131,11 @@ class TestProcessRow:
     def test_validation_error_carries_already_exists_flag(self, valid_sets):
         valid_pot, valid_con = valid_sets
         existing = {"Some Cream": True}
-        row = {"formulation": "Some Cream", "potency_unit_code": "BOGUS"}
+        row = {
+            "formulation": "Some Cream",
+            "potency_unit_code": "BOGUS",
+            "controlled_substance": "N",
+        }
         result = _process_row(row, 1, existing, True, valid_pot, valid_con)
 
         assert result["index"] == 1
@@ -132,8 +144,37 @@ class TestProcessRow:
         assert result["existing_active"] is True
         assert result["errors"] == [
             "invalid potency_unit_code 'BOGUS' (see GET /enums)",
-            "controlled_substance 'N' is not allowed",  # never hit, see next assert
-        ][:1]  # only the first error fires
+        ]
+
+    def test_missing_controlled_substance_row_errors(self, valid_sets):
+        """A CSV row that omits the controlled_substance column must NOT
+        silently classify the compound as Not Scheduled (DEA-safety)."""
+        valid_pot, valid_con = valid_sets
+        existing: dict[str, bool] = {}
+        # No controlled_substance key at all
+        row = {"formulation": "Loosey Goosey Cream", "potency_unit_code": "C48155"}
+        result = _process_row(row, 0, existing, True, valid_pot, valid_con)
+
+        assert result["status"] == "error"
+        assert result["errors"] == [
+            "controlled_substance is required (see GET /enums; use 'N' for Not scheduled)"
+        ]
+
+    def test_blank_controlled_substance_row_errors(self, valid_sets):
+        """A blank-string controlled_substance value triggers the same error."""
+        valid_pot, valid_con = valid_sets
+        existing: dict[str, bool] = {}
+        row = {
+            "formulation": "Blank-cell Cream",
+            "potency_unit_code": "C48155",
+            "controlled_substance": "   ",
+        }
+        result = _process_row(row, 0, existing, True, valid_pot, valid_con)
+
+        assert result["status"] == "error"
+        assert result["errors"] == [
+            "controlled_substance is required (see GET /enums; use 'N' for Not scheduled)"
+        ]
 
     def test_skip_existing_active_marks_skipped(self, valid_sets):
         valid_pot, valid_con = valid_sets
@@ -247,36 +288,6 @@ class TestProcessRow:
         with patch.object(loader_mod, "Effect"):
             _process_row(row, 0, existing, True, valid_pot, valid_con)
         assert existing == {"Inactive Loaded": False}
-
-    def test_effect_construction_error_returns_error_row(self, valid_sets):
-        valid_pot, valid_con = valid_sets
-        existing: dict[str, bool] = {}
-        row = {
-            "formulation": "Boom",
-            "potency_unit_code": "C48155",
-            "controlled_substance": "N",
-        }
-        with patch.object(loader_mod, "Effect") as mock_effect:
-            mock_effect.side_effect = RuntimeError("kapow")
-
-            result = _process_row(row, 7, existing, True, valid_pot, valid_con)
-
-            calls = [
-                call(
-                    type="CREATE_COMPOUND_MEDICATION",
-                    payload=json.dumps({
-                        "formulation": "Boom",
-                        "potency_unit_code": "C48155",
-                        "controlled_substance": "N",
-                        "active": True,
-                    }),
-                )
-            ]
-            assert mock_effect.mock_calls == calls
-
-        assert result["status"] == "error"
-        assert result["index"] == 7
-        assert result["errors"] == ["kapow"]
 
 
 # ---------- API handler — bypass __init__ to test methods in isolation ----------
