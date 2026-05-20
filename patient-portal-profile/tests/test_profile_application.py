@@ -17,5 +17,5 @@ def test_on_open_returns_launch_modal_effect_for_page() -> None:
 
     assert effect.type == EffectType.LAUNCH_MODAL
     data = json.loads(effect.payload)["data"]
-    assert data["url"] == "/plugin-io/api/patient_portal_profile/app/profile"
+    assert data["url"].startswith("/plugin-io/api/patient_portal_profile/app/profile?v=")
     assert data["target"] == LaunchModalEffect.TargetType.PAGE.value

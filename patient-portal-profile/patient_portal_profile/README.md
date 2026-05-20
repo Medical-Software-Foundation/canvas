@@ -31,7 +31,9 @@ v1 is read-only.
 - The care-team membership list is fetched with a single
   `CareTeamMembership.objects.values(...).filter(...)` call to avoid N+1.
 - Patient data is loaded once via
-  `Patient.objects.select_related("user").prefetch_related("addresses").get(...)`.
+  `Patient.objects.select_related("user").prefetch_related("addresses", "photos", "settings").get(...)`,
+  so `patient.photo_url` and `patient.preferred_pharmacy` don't trigger
+  extra queries.
 
 ## Layout
 
