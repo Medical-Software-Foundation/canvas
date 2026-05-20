@@ -41,6 +41,29 @@ def test_calendar_tz_invalid_falls_back_to_utc():
         assert _calendar_tz("cid").key == "UTC"
 
 
+def test_calendar_tz_non_uuid_id_falls_back_to_utc():
+    """Regression: ``Calendar.id`` is a UUIDField. Non-UUID input in the
+    request body would raise ``ValidationError`` during query construction;
+    if uncaught, the POST/PATCH handler crashes. The function must catch
+    that and fall back to UTC like any other resolution failure."""
+    from django.core.exceptions import ValidationError
+
+    with patch("provider_availability_manager.api.events.Calendar") as mock_cal:
+        mock_cal.objects.filter.side_effect = ValidationError(
+            "not-a-uuid is not a valid UUID."
+        )
+        assert _calendar_tz("not-a-uuid").key == "UTC"
+
+
+def test_calendar_tz_value_error_falls_back_to_utc():
+    """Older Django raised ``ValueError`` from UUIDField.to_python instead
+    of ValidationError. Catch both so SDK upgrades don't reintroduce the
+    crash."""
+    with patch("provider_availability_manager.api.events.Calendar") as mock_cal:
+        mock_cal.objects.filter.side_effect = ValueError("bad uuid")
+        assert _calendar_tz("not-a-uuid").key == "UTC"
+
+
 # _calendar_tz_for_event ------------------------------------------------
 
 def test_calendar_tz_for_event_empty_id():
@@ -74,6 +97,25 @@ def test_calendar_tz_for_event_returns_tz():
         cal.timezone = "America/Chicago"
         mock_cal.objects.filter.return_value.first.return_value = cal
         assert _calendar_tz_for_event("eid").key == "America/Chicago"
+
+
+def test_calendar_tz_for_event_non_uuid_id_falls_back_to_utc():
+    """Same UUIDField guard for the event-lookup path. Request bodies in
+    PATCH/DELETE pass ``eventId`` through directly — a malformed value
+    must not crash the handler."""
+    from django.core.exceptions import ValidationError
+
+    with patch("provider_availability_manager.api.events.EventModel") as mock_em:
+        mock_em.objects.filter.side_effect = ValidationError(
+            "not-a-uuid is not a valid UUID."
+        )
+        assert _calendar_tz_for_event("not-a-uuid").key == "UTC"
+
+
+def test_calendar_tz_for_event_value_error_falls_back_to_utc():
+    with patch("provider_availability_manager.api.events.EventModel") as mock_em:
+        mock_em.objects.filter.side_effect = ValueError("bad uuid")
+        assert _calendar_tz_for_event("not-a-uuid").key == "UTC"
 
 
 # _parse_dt -------------------------------------------------------------

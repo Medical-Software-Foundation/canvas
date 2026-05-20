@@ -14,15 +14,25 @@ from canvas_sdk.handlers.simple_api import SimpleAPIRoute, StaffSessionAuthMixin
 from canvas_sdk.v1.data import Calendar, PracticeLocation
 from canvas_sdk.v1.data.calendar import Event as EventModel
 from canvas_sdk.v1.data.staff import Staff
+from django.core.exceptions import ValidationError
 
 from provider_availability_manager.utils.staff_lookup import parse_schedulable_roles
 
 
 def _calendar_tz(calendar_id: str) -> ZoneInfo:
-    """Resolve a calendar's timezone, falling back to UTC."""
+    """Resolve a calendar's timezone, falling back to UTC.
+
+    ``Calendar.id`` is a UUIDField — Django raises ``ValidationError`` for
+    non-UUID input during query construction. ``calendar_id`` comes from
+    request body in POST/PATCH handlers, so a malformed value should yield
+    the UTC fallback rather than crashing the whole handler.
+    """
     if not calendar_id:
         return ZoneInfo("UTC")
-    cal = Calendar.objects.filter(id=calendar_id).first()
+    try:
+        cal = Calendar.objects.filter(id=calendar_id).first()
+    except (ValueError, ValidationError):
+        return ZoneInfo("UTC")
     tz_name = str(cal.timezone) if cal and cal.timezone else "UTC"
     try:
         return ZoneInfo(tz_name)
@@ -31,9 +41,17 @@ def _calendar_tz(calendar_id: str) -> ZoneInfo:
 
 
 def _calendar_tz_for_event(event_id: str) -> ZoneInfo:
+    """Resolve a calendar's timezone via the event's id, falling back to UTC.
+
+    Same UUIDField guard as ``_calendar_tz`` — ``event_id`` originates in
+    request body and a malformed value should not crash the handler.
+    """
     if not event_id:
         return ZoneInfo("UTC")
-    ev = EventModel.objects.filter(id=event_id).select_related("calendar").first()
+    try:
+        ev = EventModel.objects.filter(id=event_id).select_related("calendar").first()
+    except (ValueError, ValidationError):
+        return ZoneInfo("UTC")
     if not ev or not ev.calendar:
         return ZoneInfo("UTC")
     return _calendar_tz(str(ev.calendar.id))

@@ -7,11 +7,24 @@ from zoneinfo import ZoneInfo
 
 from canvas_sdk.v1.data.calendar import Calendar, Event
 from canvas_sdk.v1.data.staff import Staff
+from django.core.exceptions import ValidationError
 from logger import log
 
 
 # Map RRULE BYDAY abbreviations to Python weekday numbers (Monday=0).
 _DAY_MAP = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+
+
+def _sunday_of(d: datetime.date) -> datetime.date:
+    """Return the Sunday on or before ``d``.
+
+    Matches the JS frontend's ``weekStartOf`` in ``static/availability/main.js``
+    (``s.setDate(s.getDate() - s.getDay())``), so WEEKLY+INTERVAL math agrees
+    between the UI and the slot filter. Python's ``weekday()`` is 0..6 with
+    Monday=0; Sunday=6, so we shift by ``(weekday() + 1) % 7`` to land on
+    Sunday.
+    """
+    return d - datetime.timedelta(days=(d.weekday() + 1) % 7)
 
 
 def parse_calendar_title(title: str) -> tuple[str, str, str | None]:
@@ -114,7 +127,16 @@ def event_occurs_on_date(
                 return False
 
         if interval > 1:
-            weeks_diff = (target_date - local_start_date).days // 7
+            # Count Sunday-anchored calendar weeks, matching the JS UI's
+            # ``weekStartOf`` (which shifts by ``getDay()`` to Sunday).
+            # Rolling 7-day chunks from DTSTART would drift off the
+            # calendar-week cadence whenever DTSTART falls on a weekday
+            # other than the WKST anchor — so a Tuesday DTSTART with
+            # BYDAY=MO,TH would invert every Monday's match relative to
+            # what the UI displays.
+            weeks_diff = (
+                _sunday_of(target_date) - _sunday_of(local_start_date)
+            ).days // 7
             if weeks_diff % interval != 0:
                 return False
 
@@ -215,12 +237,22 @@ def _staff_calendars(staff, type_keyword: str = "Clinic"):
 
 
 def _resolve_staff(provider_id: str, staff_cache: dict | None):
-    """Resolve a Staff object, optionally caching results across calls."""
+    """Resolve a Staff object, optionally caching results across calls.
+
+    ``Staff.id`` is a UUIDField — Django raises ``ValidationError`` during
+    query construction for non-UUID input. ``provider_id`` ultimately comes
+    from the undocumented ``selected_values`` / ``slots_by_provider`` payload
+    on ``APPOINTMENT__SLOTS__POST_SEARCH``; if a non-UUID value sneaks
+    through, letting the exception propagate would crash ``compute()``,
+    suppress the filter effect entirely, and silently flip the fail-closed
+    handler into fail-OPEN. Treat malformed input the same as a missing
+    Staff and return None.
+    """
     if staff_cache is not None and provider_id in staff_cache:
         return staff_cache[provider_id]
     try:
         staff = Staff.objects.get(id=provider_id)
-    except Staff.DoesNotExist:
+    except (Staff.DoesNotExist, ValueError, ValidationError):
         staff = None
     if staff_cache is not None:
         staff_cache[provider_id] = staff

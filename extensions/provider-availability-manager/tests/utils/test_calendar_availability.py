@@ -213,6 +213,46 @@ def test_event_occurs_on_date_tokyo_morning_matches_local_tuesday():
     assert event_occurs_on_date(event, datetime.date(2026, 5, 4), tokyo) is False
 
 
+def test_event_occurs_on_date_weekly_interval_matches_js_sunday_anchor():
+    """WEEKLY+INTERVAL math anchors to Sunday-start calendar weeks (matching
+    ``weekStartOf`` in the JS UI), not to rolling 7-day chunks from DTSTART.
+
+    Regression: with DTSTART Tue 2026-05-05 and
+    FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH, every Monday's match was inverted
+    relative to the UI. The UI rendered Mon 2026-05-11 as a *skipped*
+    week and Mon 2026-05-18 as an *active* week; the Python filter saw
+    the opposite, so either fail-closed dropped every Monday slot for
+    the active week or fail-open exposed slots the user never opened on
+    the skipped week.
+    """
+    event = MagicMock()
+    # DTSTART on Tue 2026-05-05 at 09:00 (naive keeps the test focused on
+    # the WKST anchor question rather than tz conversion).
+    event.starts_at = datetime.datetime(2026, 5, 5, 9, 0)
+    event.recurrence = "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH"
+
+    # Per the RFC 5545 / JS interpretation, Mon 2026-05-11 is the *skipped*
+    # week (next Sunday-anchored calendar week after DTSTART), and Mon
+    # 2026-05-18 is the active week.
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 11)) is False
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 18)) is True
+    # The Thursday in DTSTART's own week still matches (the original
+    # DTSTART week is "week 0", always active).
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 7)) is True
+
+
+def test_event_occurs_on_date_weekly_interval_dtstart_monday_aligned():
+    """Sanity: the existing 'Monday DTSTART, INTERVAL=2' case is preserved
+    because the Sunday anchor matches the rolling-chunk answer when
+    DTSTART itself lands on Sun/Mon (the alignment the older test
+    depended on)."""
+    event = MagicMock()
+    event.starts_at = datetime.datetime(2026, 5, 4, 9, 0)  # Monday
+    event.recurrence = "FREQ=WEEKLY;INTERVAL=2"
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 11)) is False
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 18)) is True
+
+
 def test_event_occurs_on_date_daily_interval_uses_local_dates():
     """DAILY interval arithmetic must compute the day delta from the local
     date, not the UTC date. With interval=3 starting 'Monday May 4 PDT'
@@ -774,6 +814,46 @@ def test_resolve_staff_does_not_exist_caches_none():
         result = _resolve_staff("p-bad", cache)
         assert result is None
         assert cache == {"p-bad": None}
+
+
+def test_resolve_staff_validation_error_falls_through():
+    """Regression: ``Staff.id`` is a UUIDField; Django raises
+    ``ValidationError`` for non-UUID input. provider_id ultimately comes
+    from the undocumented APPOINTMENT__SLOTS__POST_SEARCH payload — if a
+    non-UUID value sneaks in, letting the exception propagate would crash
+    compute(), suppress the filter effect, and silently flip fail-closed
+    into fail-OPEN."""
+    from django.core.exceptions import ValidationError
+
+    cache: dict = {}
+    with patch(
+        "provider_availability_manager.utils.calendar_availability.Staff"
+    ) as mock_staff:
+        from canvas_sdk.v1.data.staff import Staff as StaffCls
+
+        mock_staff.DoesNotExist = StaffCls.DoesNotExist
+        mock_staff.objects.get.side_effect = ValidationError(
+            "main-clinic-slug is not a valid UUID."
+        )
+        result = _resolve_staff("main-clinic-slug", cache)
+        assert result is None
+        # Cached as None so subsequent lookups don't re-trigger the crash.
+        assert cache == {"main-clinic-slug": None}
+
+
+def test_resolve_staff_value_error_falls_through():
+    """Older Django versions raised ``ValueError`` from UUIDField.to_python
+    instead of ValidationError. The except clause catches both."""
+    cache: dict = {}
+    with patch(
+        "provider_availability_manager.utils.calendar_availability.Staff"
+    ) as mock_staff:
+        from canvas_sdk.v1.data.staff import Staff as StaffCls
+
+        mock_staff.DoesNotExist = StaffCls.DoesNotExist
+        mock_staff.objects.get.side_effect = ValueError("bad uuid")
+        result = _resolve_staff("not-a-uuid", cache)
+        assert result is None
 
 
 def test_resolve_calendars_cache_hit():

@@ -1082,9 +1082,29 @@
             state.modal.error ? el('div', { class: 'av-error' }, state.modal.error) : null,
             el('div', { class: 'av-form-row' }, [
                 el('label', {}, 'Type'),
+                // Type drives which calendar (Clinic vs Administrative) the
+                // event lives on. The edit paths (editAll PATCH, splitOutOccurrence)
+                // don't move events between calendars, so changing Type here
+                // would be a silent no-op — the slot filter classifies windows
+                // by calendar, not title, and the toggle would mislead the user
+                // into thinking they marked a window Busy when slots stay
+                // bookable. Lock it in edit mode; to change Type, delete and
+                // recreate.
                 el('div', { class: 'av-toggle' }, [
-                    el('button', { type: 'button', class: f.type === TYPE_AVAILABLE ? 'active' : '', onclick: () => setForm({ type: TYPE_AVAILABLE }) }, 'Available'),
-                    el('button', { type: 'button', class: f.type === TYPE_BLOCK ? 'active' : '', onclick: () => setForm({ type: TYPE_BLOCK }) }, 'Block'),
+                    el('button', {
+                        type: 'button',
+                        class: f.type === TYPE_AVAILABLE ? 'active' : '',
+                        disabled: isEdit,
+                        title: isEdit ? 'Delete and recreate to change type' : '',
+                        onclick: () => { if (!isEdit) setForm({ type: TYPE_AVAILABLE }); },
+                    }, 'Available'),
+                    el('button', {
+                        type: 'button',
+                        class: f.type === TYPE_BLOCK ? 'active' : '',
+                        disabled: isEdit,
+                        title: isEdit ? 'Delete and recreate to change type' : '',
+                        onclick: () => { if (!isEdit) setForm({ type: TYPE_BLOCK }); },
+                    }, 'Block'),
                 ]),
             ]),
             !isAvail ? el('div', { class: 'av-form-row' }, [
