@@ -2,9 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  // Boot marker — verifiable from devtools console to confirm the new bundle
-  // is loaded (cache-bust hand-check).
-  console.log('clinical_pathways builder v0.2.6 loaded');
+  console.log('clinical_pathways builder v0.3.0 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -17,21 +15,30 @@
     publishBtn: document.getElementById('publish-btn'),
     unpublishBtn: document.getElementById('unpublish-btn'),
     deleteBtn: document.getElementById('delete-pathway-btn'),
-    rootPickerHost: document.getElementById('root-picker-host'),
-    treeHost: document.getElementById('tree-host'),
+    nodesHost: document.getElementById('nodes-host'),
+    addNodeBtn: document.getElementById('add-node-btn'),
     validation: document.getElementById('validation-issues'),
     validationList: document.getElementById('validation-list'),
     saveStatus: document.getElementById('save-status'),
+    questionsList: document.getElementById('questions-list'),
+    recommendationsList: document.getElementById('recommendations-list'),
+    addRecBtn: document.getElementById('add-recommendation-btn'),
+    recModal: document.getElementById('recommendation-modal'),
+    recForm: document.getElementById('recommendation-form'),
+    closeRecModalBtn: document.getElementById('close-recommendation-modal'),
+    saveRecBtn: document.getElementById('save-recommendation-btn'),
+    deleteRecBtn: document.getElementById('delete-recommendation-btn'),
   };
 
   const state = {
-    pathway: null, // {dbid, title, description, status, definition: {version, root}}
-    questionnaires: [], // typeahead cache: [{id, name, code}]
-    questionnaireDetails: {}, // id -> {questions: [{id, name, response_set_type, options}]}
-    terminalCommands: [], // [{key, schema_key, name, fields}]
+    pathway: null,
+    questionnaires: [],
+    questionnaireDetails: {},
+    terminalCommands: [],
+    editingRecommendationId: null,
   };
 
-  // ---------- Status pill ----------
+  // ---------- Status banner ----------
 
   let _statusTimer = null;
   function flashStatus(text, kind) {
@@ -58,13 +65,14 @@
     return res.status === 204 ? null : res.json();
   }
 
-  function debounce(fn, ms) {
-    let t;
-    return (...args) => {
-      clearTimeout(t);
-      t = setTimeout(() => fn.apply(null, args), ms);
-    };
+  // ---------- ID minting ----------
+
+  function newId(prefix) {
+    return prefix + Math.random().toString(36).slice(2, 12);
   }
+  const newNodeId = () => newId('n_');
+  const newRuleId = () => newId('r_');
+  const newRecommendationId = () => newId('rec_');
 
   // ---------- Persistence ----------
 
@@ -77,10 +85,7 @@
     }, 400);
   }
   async function flushSave() {
-    if (_saveTimer) {
-      clearTimeout(_saveTimer);
-      _saveTimer = null;
-    }
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
     if (!state.pathway || !state.pathway.dbid) return;
     try {
       await api('/pathways/' + state.pathway.dbid, {
@@ -91,30 +96,13 @@
           definition: state.pathway.definition,
         },
       });
-      // Critical: do NOT assign `state.pathway = serverResponse` here. Every
-      // DOM closure (terminal editor, condition rows, radio handlers) holds
-      // direct references into the pathway tree; replacing the root object
-      // would detach them, causing the very next keystroke or click to land
-      // on an orphan and silently lose data.
       flashStatus('Saved');
       await reloadList();
-    } catch (_) {
-      /* flashStatus already shown */
-    }
+    } catch (_) { /* flashStatus already shown */ }
   }
-  // Backward-compatible alias used throughout the file.
   const savePathway = scheduleSave;
 
-  // ---------- ID helpers (local) ----------
-
-  function newNodeId() {
-    return 'n_' + Math.random().toString(36).slice(2, 12);
-  }
-  function newBranchId() {
-    return 'b_' + Math.random().toString(36).slice(2, 12);
-  }
-
-  // ---------- List + load + create + delete ----------
+  // ---------- Pathway list ----------
 
   async function reloadList() {
     const { pathways } = await api('/pathways');
@@ -136,14 +124,24 @@
   }
 
   async function loadPathway(dbid) {
-    state.pathway = await api('/pathways/' + dbid);
+    const pw = await api('/pathways/' + dbid);
+    state.pathway = upgradeDefinitionIfNeeded(pw);
     renderEditor();
     await reloadList();
   }
 
+  function upgradeDefinitionIfNeeded(pw) {
+    // v0.2 pathways have version 1 (or no version). The new builder
+    // doesn't migrate them — the user re-authors.
+    if (!pw.definition || pw.definition.version !== 2) {
+      pw.definition = { version: 2, start_node_id: null, nodes: [], recommendations: [] };
+    }
+    return pw;
+  }
+
   async function createPathway() {
     const pw = await api('/pathways', { method: 'POST', body: { title: 'Untitled pathway' } });
-    state.pathway = pw;
+    state.pathway = upgradeDefinitionIfNeeded(pw);
     flashStatus('New pathway created');
     await reloadList();
     renderEditor();
@@ -168,14 +166,12 @@
     state.questionnaires = res.questionnaires || [];
     return state.questionnaires;
   }
-
   async function getQuestionnaireDetail(id) {
     if (state.questionnaireDetails[id]) return state.questionnaireDetails[id];
     const detail = await api('/catalog/questionnaires/' + encodeURIComponent(id));
     state.questionnaireDetails[id] = detail;
     return detail;
   }
-
   async function loadTerminalCommands() {
     if (state.terminalCommands.length) return state.terminalCommands;
     const res = await api('/catalog/terminal-commands');
@@ -183,7 +179,7 @@
     return state.terminalCommands;
   }
 
-  // ---------- Editor render ----------
+  // ---------- Top-level editor render ----------
 
   function renderEditor() {
     if (!state.pathway) {
@@ -200,350 +196,108 @@
     els.statusPill.className = 'status-pill ' + status;
     els.publishBtn.classList.toggle('hidden', status === 'published');
     els.unpublishBtn.classList.toggle('hidden', status !== 'published');
-    renderRootPicker();
-    renderTree();
+    renderNodes();
+    renderRightRail();
     els.validation.classList.add('hidden');
   }
 
-  // ---------- Root picker ----------
+  // ---------- Letter labels ----------
 
-  async function renderRootPicker() {
-    els.rootPickerHost.innerHTML = '';
-    const def = state.pathway.definition || { version: 1, root: null };
-    const wrap = document.createElement('div');
-    const select = document.createElement('select');
-    select.id = 'root-questionnaire-select';
-    wrap.appendChild(select);
-
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = '— Choose a starting questionnaire —';
-    select.appendChild(placeholder);
-
-    // Pre-populate with the currently-selected questionnaire's snapshot so it
-    // shows even if the typeahead cache hasn't loaded it yet.
-    const currentId = def.root && def.root.questionnaire_id;
-    if (currentId) {
-      const opt = document.createElement('option');
-      opt.value = currentId;
-      opt.selected = true;
-      opt.textContent = (def.root.questionnaire_name_snapshot || 'Selected') + ' (' + currentId.slice(0, 8) + '…)';
-      select.appendChild(opt);
-    }
-
-    await searchQuestionnaires('');
-    state.questionnaires.forEach((q) => {
-      if (currentId && q.id === currentId) return; // already added
-      const opt = document.createElement('option');
-      opt.value = q.id;
-      opt.textContent = q.name + (q.code ? ' (' + q.code + ')' : '');
-      select.appendChild(opt);
-    });
-
-    select.addEventListener('change', async (ev) => {
-      const id = ev.target.value;
-      if (!id) {
-        state.pathway.definition.root = null;
-        savePathway();
-        renderTree();
-        return;
-      }
-      const detail = await getQuestionnaireDetail(id);
-      state.pathway.definition.root = {
-        node_id: (def.root && def.root.node_id) || newNodeId(),
-        type: 'questionnaire',
-        questionnaire_id: id,
-        questionnaire_name_snapshot: detail.name,
-        match_mode: 'first',
-        branches: (def.root && def.root.branches) || [],
-      };
-      savePathway();
-      renderTree();
-    });
-
-    els.rootPickerHost.appendChild(wrap);
+  function letterFor(index) {
+    if (index < 26) return String.fromCharCode(65 + index);
+    const first = Math.floor(index / 26) - 1;
+    const second = index % 26;
+    return String.fromCharCode(65 + first) + String.fromCharCode(65 + second);
   }
 
-  // ---------- Tree ----------
+  // ---------- Nodes ----------
 
-  function renderTree() {
-    els.treeHost.innerHTML = '';
-    const root = state.pathway.definition && state.pathway.definition.root;
-    if (!root) {
+  function renderNodes() {
+    els.nodesHost.innerHTML = '';
+    const definition = state.pathway.definition;
+    const nodes = definition.nodes || [];
+    if (!nodes.length) {
       const empty = document.createElement('div');
       empty.className = 'hint';
-      empty.textContent = 'Pick a starting questionnaire above to begin defining branches.';
-      els.treeHost.appendChild(empty);
+      empty.textContent = 'Add the first questionnaire below to begin.';
+      els.nodesHost.appendChild(empty);
       return;
     }
-    const tree = renderNode(root, /*ancestors*/ []);
-    els.treeHost.appendChild(tree);
+    nodes.forEach((node, idx) => {
+      els.nodesHost.appendChild(renderNodeCard(node, idx));
+    });
   }
 
-  function renderNode(node, ancestors) {
-    if (node.type === 'terminal') return renderTerminalNode(node, ancestors);
-    const el = document.createElement('div');
-    el.className = 'node';
-    el.dataset.nodeId = node.node_id;
+  function renderNodeCard(node, idx) {
+    const definition = state.pathway.definition;
+    const card = document.createElement('article');
+    card.className = 'node-card';
+    if (node.node_id === definition.start_node_id) card.classList.add('is-start');
 
-    const header = document.createElement('div');
-    header.className = 'node-header';
-    const badge = document.createElement('span');
-    badge.className = 'node-type-badge';
-    badge.textContent = 'Questionnaire';
-    header.appendChild(badge);
+    const header = document.createElement('header');
+    header.className = 'node-card-header';
+
+    const letter = document.createElement('span');
+    letter.className = 'node-card-letter';
+    letter.textContent = letterFor(idx);
+    header.appendChild(letter);
+
     const title = document.createElement('div');
-    title.className = 'node-title';
-    title.textContent = node.questionnaire_name_snapshot || '(no questionnaire selected)';
+    title.className = 'node-card-title';
+    title.textContent = node.questionnaire_name_snapshot || '(no questionnaire picked yet)';
     header.appendChild(title);
-    el.appendChild(header);
 
-    const hint = document.createElement('div');
-    hint.className = 'node-auto-insert-hint';
-    hint.textContent = 'Auto-inserts into the note when the pathway reaches this step.';
-    el.appendChild(hint);
-
-    // Branches
-    const branchesSection = document.createElement('div');
-    branchesSection.className = 'branches-section';
-    const label = document.createElement('div');
-    label.className = 'branches-label';
-    label.textContent = 'Branches (top to bottom, first match wins)';
-    branchesSection.appendChild(label);
-
-    (node.branches || []).forEach((b, idx) => {
-      branchesSection.appendChild(renderBranch(node, b, idx, ancestors));
-    });
-
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'secondary small';
-    addBtn.textContent = '+ Add branch';
-    addBtn.addEventListener('click', () => {
-      const newBranch = {
-        branch_id: newBranchId(),
-        label: '',
-        when: { kind: 'group', combinator: 'all', children: [] },
-        then: null,
-      };
-      node.branches = node.branches || [];
-      node.branches.push(newBranch);
-      savePathway();
-      renderTree();
-    });
-    branchesSection.appendChild(addBtn);
-
-    el.appendChild(branchesSection);
-    return el;
-  }
-
-  function renderTerminalNode(node, ancestors) {
-    const el = document.createElement('div');
-    el.className = 'node terminal';
-    el.dataset.nodeId = node.node_id;
-
-    const header = document.createElement('div');
-    header.className = 'node-header';
-    const badge = document.createElement('span');
-    badge.className = 'node-type-badge';
-    badge.textContent = 'Terminal';
-    header.appendChild(badge);
-    const title = document.createElement('div');
-    title.className = 'node-title';
-    const cmd = state.terminalCommands.find((c) => c.key === node.command_key);
-    title.textContent = cmd ? cmd.name : '(pick a command)';
-    header.appendChild(title);
-    el.appendChild(header);
-
-    const hint = document.createElement('div');
-    hint.className = 'node-auto-insert-hint';
-    hint.textContent = 'Inserts as the leaf command on this arm.';
-    el.appendChild(hint);
-
-    el.appendChild(renderTerminalEditor(node, ancestors));
-    return el;
-  }
-
-  function renderBranch(parentNode, branch, idx, ancestors) {
-    const el = document.createElement('div');
-    el.className = 'branch';
-    el.dataset.branchId = branch.branch_id;
-
-    const header = document.createElement('div');
-    header.className = 'branch-header';
-    const lbl = document.createElement('strong');
-    lbl.textContent = 'Branch ' + (idx + 1);
-    header.appendChild(lbl);
-    const labelInput = document.createElement('input');
-    labelInput.type = 'text';
-    labelInput.className = 'branch-label-input';
-    labelInput.placeholder = 'Branch label (optional)';
-    labelInput.value = branch.label || '';
-    labelInput.addEventListener('input', (ev) => {
-      branch.label = ev.target.value;
-      savePathway();
-    });
-    header.appendChild(labelInput);
-
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'ghost small';
-    delBtn.textContent = '×';
-    delBtn.title = 'Delete branch';
-    delBtn.addEventListener('click', () => {
-      if (!confirm('Delete this branch?')) return;
-      parentNode.branches.splice(idx, 1);
-      savePathway();
-      renderTree();
-    });
-    header.appendChild(delBtn);
-    el.appendChild(header);
-
-    // When
-    const whenSec = document.createElement('div');
-    whenSec.className = 'branch-section';
-    const whenH = document.createElement('h4');
-    whenH.textContent = 'When';
-    whenSec.appendChild(whenH);
-    const ctx = collectQuestionnaireContext(parentNode, ancestors);
-    whenSec.appendChild(
-      renderCondition(branch.when || { kind: 'group', combinator: 'all', children: [] }, ctx, /*depth*/ 1, (newWhen, shouldRerender) => {
-        branch.when = newWhen;
-        savePathway();
-        if (shouldRerender) renderTree();
-      })
-    );
-    el.appendChild(whenSec);
-
-    // Then
-    const thenSec = document.createElement('div');
-    thenSec.className = 'branch-section';
-    const thenH = document.createElement('h4');
-    thenH.textContent = 'Then';
-    thenSec.appendChild(thenH);
-    thenSec.appendChild(renderThenPicker(branch, ancestors.concat([parentNode])));
-    el.appendChild(thenSec);
-
-    return el;
-  }
-
-  function collectQuestionnaireContext(node, ancestors) {
-    // Returns [{id, name}] of questionnaires whose questions are available to
-    // condition on at this point in the tree: the current node + all ancestors.
-    const out = [];
-    const seen = new Set();
-    [node, ...ancestors].forEach((n) => {
-      if (n && n.type === 'questionnaire' && n.questionnaire_id && !seen.has(n.questionnaire_id)) {
-        seen.add(n.questionnaire_id);
-        out.push({ id: n.questionnaire_id, name: n.questionnaire_name_snapshot || '(unknown)' });
-      }
-    });
-    return out;
-  }
-
-  // ---------- Then picker ----------
-
-  function renderThenPicker(branch, ancestorsIncludingParent) {
-    const wrap = document.createElement('div');
-    const then = branch.then;
-    const currentType = then ? then.type : null;
-
-    const picker = document.createElement('div');
-    picker.className = 'then-picker';
-
-    const optQ = document.createElement('label');
-    const rQ = document.createElement('input');
-    rQ.type = 'radio';
-    rQ.name = 'then-' + branch.branch_id;
-    rQ.checked = currentType === 'questionnaire';
-    rQ.addEventListener('change', () => {
-      // Guard: only reset the subtree when the user is actually switching
-      // type. Re-clicking the already-selected radio must not wipe data.
-      if (branch.then && branch.then.type === 'questionnaire') return;
-      branch.then = {
-        node_id: newNodeId(),
-        type: 'questionnaire',
-        questionnaire_id: '',
-        questionnaire_name_snapshot: '',
-        match_mode: 'first',
-        branches: [],
-      };
-      savePathway();
-      renderTree();
-    });
-    optQ.appendChild(rQ);
-    optQ.appendChild(document.createTextNode('Continue to questionnaire'));
-    picker.appendChild(optQ);
-
-    const optT = document.createElement('label');
-    const rT = document.createElement('input');
-    rT.type = 'radio';
-    rT.name = 'then-' + branch.branch_id;
-    rT.checked = currentType === 'terminal';
-    rT.addEventListener('change', async () => {
-      if (branch.then && branch.then.type === 'terminal') return;
-      await loadTerminalCommands();
-      const first = state.terminalCommands[0];
-      branch.then = {
-        node_id: newNodeId(),
-        type: 'terminal',
-        command_key: first ? first.key : '',
-        params: {},
-      };
-      savePathway();
-      renderTree();
-    });
-    optT.appendChild(rT);
-    optT.appendChild(document.createTextNode('End pathway with custom command'));
-    picker.appendChild(optT);
-
-    wrap.appendChild(picker);
-
-    if (currentType === 'questionnaire') {
-      wrap.appendChild(renderNestedQuestionnairePicker(branch.then, ancestorsIncludingParent));
-      // After the nested picker, recursively render the subtree node so the
-      // user can add deeper branches.
-      wrap.appendChild(renderNode(branch.then, ancestorsIncludingParent));
-    } else if (currentType === 'terminal') {
-      wrap.appendChild(renderTerminalNode(branch.then, ancestorsIncludingParent));
+    if (node.node_id === definition.start_node_id) {
+      const startMarker = document.createElement('span');
+      startMarker.className = 'start-marker';
+      startMarker.textContent = 'Start';
+      header.appendChild(startMarker);
     } else {
-      const hint = document.createElement('div');
-      hint.className = 'hint';
-      hint.textContent = 'Choose where this branch leads.';
-      wrap.appendChild(hint);
+      const makeStart = document.createElement('button');
+      makeStart.type = 'button';
+      makeStart.className = 'ghost small';
+      makeStart.textContent = 'Make start';
+      makeStart.addEventListener('click', () => {
+        definition.start_node_id = node.node_id;
+        savePathway();
+        renderEditor();
+      });
+      header.appendChild(makeStart);
     }
-    return wrap;
-  }
 
-  function renderNestedQuestionnairePicker(node, ancestors) {
-    const wrap = document.createElement('div');
-    wrap.className = 'block';
-    const lbl = document.createElement('div');
-    lbl.className = 'field-label';
-    lbl.textContent = 'Questionnaire';
-    wrap.appendChild(lbl);
-    const select = document.createElement('select');
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'ghost small';
+    removeBtn.textContent = 'Remove';
+    removeBtn.title = 'Remove this questionnaire from the pathway';
+    removeBtn.addEventListener('click', () => removeNode(node));
+    header.appendChild(removeBtn);
 
+    card.appendChild(header);
+
+    // Questionnaire picker
+    const pickerRow = document.createElement('div');
+    pickerRow.className = 'picker-row';
+    const sel = document.createElement('select');
     const placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = '— Choose a questionnaire —';
-    select.appendChild(placeholder);
-
+    sel.appendChild(placeholder);
     if (node.questionnaire_id) {
       const opt = document.createElement('option');
       opt.value = node.questionnaire_id;
-      opt.selected = true;
-      opt.textContent = (node.questionnaire_name_snapshot || 'Selected') + ' (' + node.questionnaire_id.slice(0, 8) + '…)';
-      select.appendChild(opt);
+      opt.textContent = node.questionnaire_name_snapshot || node.questionnaire_id.slice(0, 8);
+      sel.appendChild(opt);
     }
     state.questionnaires.forEach((q) => {
       if (q.id === node.questionnaire_id) return;
       const opt = document.createElement('option');
       opt.value = q.id;
       opt.textContent = q.name + (q.code ? ' (' + q.code + ')' : '');
-      select.appendChild(opt);
+      sel.appendChild(opt);
     });
-    select.addEventListener('change', async (ev) => {
+    sel.value = node.questionnaire_id || '';
+    sel.addEventListener('change', async (ev) => {
       const id = ev.target.value;
       if (!id) {
         node.questionnaire_id = '';
@@ -554,209 +308,330 @@
         node.questionnaire_name_snapshot = detail.name;
       }
       savePathway();
-      renderTree();
+      renderEditor();
     });
-    wrap.appendChild(select);
-    return wrap;
+    pickerRow.appendChild(sel);
+    card.appendChild(pickerRow);
+
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = node.node_id === definition.start_node_id
+      ? 'Auto-inserts into the note when the pathway is started.'
+      : 'Auto-inserts when a rule on an earlier questionnaire routes here.';
+    card.appendChild(hint);
+
+    if (node.questionnaire_id) {
+      const rulesHost = document.createElement('div');
+      rulesHost.className = 'rules-host';
+      (node.rules || []).forEach((rule) => {
+        rulesHost.appendChild(renderRuleCard(node, rule));
+      });
+      card.appendChild(rulesHost);
+
+      const addRule = document.createElement('button');
+      addRule.type = 'button';
+      addRule.className = 'secondary small';
+      addRule.textContent = '+ Add rule';
+      addRule.addEventListener('click', () => {
+        node.rules = node.rules || [];
+        node.rules.push({
+          rule_id: newRuleId(),
+          label: '',
+          combinator: 'all',
+          conditions: [],
+          then: null,
+        });
+        savePathway();
+        renderEditor();
+      });
+      card.appendChild(addRule);
+    }
+
+    return card;
   }
 
-  // ---------- Condition builder ----------
-
-  function renderCondition(cond, contextQuestionnaires, depth, onChange) {
-    if (!cond || cond.kind !== 'group') {
-      cond = { kind: 'group', combinator: 'all', children: [] };
-      onChange(cond);
+  function removeNode(node) {
+    const definition = state.pathway.definition;
+    if (!confirm('Remove this questionnaire and its rules?')) return;
+    definition.nodes = (definition.nodes || []).filter((n) => n.node_id !== node.node_id);
+    if (definition.start_node_id === node.node_id) {
+      definition.start_node_id = definition.nodes[0] ? definition.nodes[0].node_id : null;
     }
-    const group = document.createElement('div');
-    group.className = 'condition-group depth-' + depth;
+    (definition.nodes || []).forEach((n) => {
+      (n.rules || []).forEach((r) => {
+        if (r.then && r.then.type === 'node' && r.then.target_id === node.node_id) {
+          r.then = null;
+        }
+      });
+    });
+    savePathway();
+    renderEditor();
+  }
 
-    const headerRow = document.createElement('div');
-    headerRow.className = 'group-header';
+  // ---------- Rules ----------
+
+  function renderRuleCard(node, rule) {
+    const definition = state.pathway.definition;
+    const card = document.createElement('div');
+    card.className = 'rule-card';
+    card.dataset.ruleId = rule.rule_id;
+
+    const header = document.createElement('header');
+    header.className = 'rule-header';
+    const strong = document.createElement('strong');
+    strong.textContent = 'Rule';
+    header.appendChild(strong);
+
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'rule-label-input';
+    labelInput.placeholder = 'Optional rule name';
+    labelInput.value = rule.label || '';
+    labelInput.addEventListener('input', (ev) => {
+      rule.label = ev.target.value;
+      savePathway();
+    });
+    header.appendChild(labelInput);
+
+    const ifSpan = document.createElement('span');
+    ifSpan.textContent = 'If';
+    ifSpan.style.fontSize = '12px';
+    ifSpan.style.color = '#4a5568';
+    header.appendChild(ifSpan);
+
     const combSel = document.createElement('select');
-    [['all', 'ALL of'], ['any', 'ANY of'], ['none', 'NONE of']].forEach(([v, lbl]) => {
-      const opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = lbl;
-      if (cond.combinator === v) opt.selected = true;
-      combSel.appendChild(opt);
+    combSel.className = 'combinator-select';
+    [['all', 'All of'], ['any', 'Any of']].forEach(([v, lbl]) => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = lbl;
+      combSel.appendChild(o);
     });
+    combSel.value = rule.combinator === 'any' ? 'any' : 'all';
     combSel.addEventListener('change', (ev) => {
-      cond.combinator = ev.target.value;
-      onChange(cond);
+      rule.combinator = ev.target.value;
+      savePathway();
+      renderEditor();
     });
-    headerRow.appendChild(combSel);
-    group.appendChild(headerRow);
+    header.appendChild(combSel);
 
-    (cond.children || []).forEach((child, idx) => {
-      if (child.kind === 'group') {
-        group.appendChild(
-          renderCondition(child, contextQuestionnaires, depth + 1, (updated, shouldRerender) => {
-            cond.children[idx] = updated;
-            onChange(cond, shouldRerender);
-          })
-        );
-      } else {
-        group.appendChild(renderComparison(child, contextQuestionnaires, (updated) => {
-          if (updated === null) {
-            cond.children.splice(idx, 1);
-            onChange(cond, true);
-          } else {
-            cond.children[idx] = updated;
-            onChange(cond, false);
-          }
-        }));
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'ghost small';
+    delBtn.textContent = '×';
+    delBtn.title = 'Delete rule';
+    delBtn.addEventListener('click', () => {
+      if (!confirm('Delete this rule?')) return;
+      node.rules = (node.rules || []).filter((r) => r.rule_id !== rule.rule_id);
+      savePathway();
+      renderEditor();
+    });
+    header.appendChild(delBtn);
+    card.appendChild(header);
+
+    const condsHost = document.createElement('div');
+    condsHost.className = 'conditions-host';
+    (rule.conditions || []).forEach((cond, idx) => {
+      condsHost.appendChild(renderConditionRow(rule, cond, idx));
+      if (idx < (rule.conditions.length - 1)) {
+        const sep = document.createElement('div');
+        sep.className = 'connector-label';
+        sep.textContent = rule.combinator === 'any' ? 'or' : 'and';
+        condsHost.appendChild(sep);
       }
     });
+    card.appendChild(condsHost);
 
-    const actions = document.createElement('div');
-    actions.className = 'condition-actions';
-    const addCompBtn = document.createElement('button');
-    addCompBtn.type = 'button';
-    addCompBtn.className = 'ghost small';
-    addCompBtn.textContent = '+ condition';
-    addCompBtn.addEventListener('click', () => {
-      cond.children = cond.children || [];
-      cond.children.push({
-        kind: 'comparison',
-        questionnaire_id: contextQuestionnaires[0] ? contextQuestionnaires[0].id : '',
-        question_id: '',
+    const addCondBtn = document.createElement('button');
+    addCondBtn.type = 'button';
+    addCondBtn.className = 'ghost small';
+    addCondBtn.textContent = '+ condition';
+    addCondBtn.addEventListener('click', () => {
+      rule.conditions = rule.conditions || [];
+      const allQs = collectAvailableQuestions();
+      rule.conditions.push({
+        question_id: allQs[0] ? allQs[0].question_id : '',
         operator: 'eq',
         value_option_id: '',
+        value_option_ids: [],
         value_text: '',
+        value_number: null,
       });
-      onChange(cond, true);
+      savePathway();
+      renderEditor();
     });
-    actions.appendChild(addCompBtn);
-    const addGroupBtn = document.createElement('button');
-    addGroupBtn.type = 'button';
-    addGroupBtn.className = 'ghost small';
-    addGroupBtn.textContent = '+ nested group';
-    addGroupBtn.addEventListener('click', () => {
-      cond.children = cond.children || [];
-      cond.children.push({ kind: 'group', combinator: 'all', children: [] });
-      onChange(cond, true);
-    });
-    actions.appendChild(addGroupBtn);
-    group.appendChild(actions);
+    card.appendChild(addCondBtn);
 
-    return group;
+    // Then row
+    const thenRow = document.createElement('div');
+    thenRow.className = 'then-row';
+    const thenLabel = document.createElement('span');
+    thenLabel.className = 'then-label';
+    thenLabel.textContent = 'Then go to';
+    thenRow.appendChild(thenLabel);
+
+    const thenSel = document.createElement('select');
+    const placeholderOpt = document.createElement('option');
+    placeholderOpt.value = '';
+    placeholderOpt.textContent = '— Choose target —';
+    thenSel.appendChild(placeholderOpt);
+
+    const nodeGroup = document.createElement('optgroup');
+    nodeGroup.label = 'Questionnaires';
+    (definition.nodes || []).forEach((n, idx) => {
+      if (n.node_id === node.node_id) return;
+      const o = document.createElement('option');
+      o.value = 'node:' + n.node_id;
+      o.textContent = letterFor(idx) + '  ' + (n.questionnaire_name_snapshot || '(unnamed)');
+      nodeGroup.appendChild(o);
+    });
+    if (nodeGroup.children.length) thenSel.appendChild(nodeGroup);
+
+    const recGroup = document.createElement('optgroup');
+    recGroup.label = 'Recommendations';
+    (definition.recommendations || []).forEach((r, idx) => {
+      const o = document.createElement('option');
+      o.value = 'rec:' + r.recommendation_id;
+      o.textContent = letterFor(idx) + '  ' + (r.name || '(unnamed)');
+      recGroup.appendChild(o);
+    });
+    if (recGroup.children.length) thenSel.appendChild(recGroup);
+
+    if (rule.then && rule.then.type && rule.then.target_id) {
+      thenSel.value = rule.then.type === 'node'
+        ? 'node:' + rule.then.target_id
+        : 'rec:' + rule.then.target_id;
+    } else {
+      thenSel.value = '';
+    }
+    thenSel.addEventListener('change', (ev) => {
+      const v = ev.target.value;
+      if (!v) {
+        rule.then = null;
+      } else if (v.startsWith('node:')) {
+        rule.then = { type: 'node', target_id: v.slice(5) };
+      } else if (v.startsWith('rec:')) {
+        rule.then = { type: 'recommendation', target_id: v.slice(4) };
+      }
+      savePathway();
+    });
+    thenRow.appendChild(thenSel);
+    card.appendChild(thenRow);
+
+    return card;
   }
 
-  function renderComparison(comp, contextQuestionnaires, onChange) {
+  // ---------- Conditions ----------
+
+  function collectAvailableQuestions() {
+    const out = [];
+    const seen = new Set();
+    (state.pathway.definition.nodes || []).forEach((n) => {
+      if (!n.questionnaire_id) return;
+      const detail = state.questionnaireDetails[n.questionnaire_id];
+      if (!detail || !detail.questions) return;
+      detail.questions.forEach((q) => {
+        if (seen.has(q.id)) return;
+        seen.add(q.id);
+        out.push({
+          question_id: q.id,
+          question_name: q.name,
+          questionnaire_id: n.questionnaire_id,
+          questionnaire_name: detail.name,
+          response_set_type: q.response_set_type,
+          options: q.options || [],
+        });
+      });
+    });
+    return out;
+  }
+
+  function renderConditionRow(rule, cond, idx) {
     const row = document.createElement('div');
-    row.className = 'comparison';
+    row.className = 'condition-row';
 
-    // Questionnaire dropdown
+    const allQs = collectAvailableQuestions();
+
     const qSel = document.createElement('select');
-    qSel.className = 'questionnaire-select';
-    contextQuestionnaires.forEach((q) => {
-      const opt = document.createElement('option');
-      opt.value = q.id;
-      opt.textContent = q.name;
-      qSel.appendChild(opt);
+    if (!cond.question_id) {
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = '— question —';
+      qSel.appendChild(ph);
+    }
+    allQs.forEach((q) => {
+      const o = document.createElement('option');
+      o.value = q.question_id;
+      o.textContent = q.question_name;
+      o.title = q.questionnaire_name + ' — ' + q.question_name;
+      qSel.appendChild(o);
     });
-    qSel.value = comp.questionnaire_id || '';
-    qSel.addEventListener('change', async (ev) => {
-      comp.questionnaire_id = ev.target.value;
-      comp.question_id = '';
-      onChange(comp);
-    });
-    row.appendChild(qSel);
+    qSel.value = cond.question_id || '';
 
-    // Question dropdown — populated asynchronously
-    const questionSel = document.createElement('select');
-    questionSel.className = 'question-select';
-    const ph = document.createElement('option');
-    ph.value = '';
-    ph.textContent = '— question —';
-    questionSel.appendChild(ph);
-    row.appendChild(questionSel);
-
-    // Operator dropdown
     const opSel = document.createElement('select');
-    row.appendChild(opSel);
-
-    // Value cell (input/select/etc — type-aware)
     const valueCell = document.createElement('span');
     valueCell.className = 'value-cell';
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'ghost small';
+    delBtn.textContent = '×';
+    delBtn.title = 'Delete condition';
+    delBtn.addEventListener('click', () => {
+      rule.conditions = (rule.conditions || []).filter((_, i) => i !== idx);
+      savePathway();
+      renderEditor();
+    });
+
+    row.appendChild(qSel);
+    row.appendChild(opSel);
     row.appendChild(valueCell);
+    row.appendChild(delBtn);
 
-    // Delete
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'ghost small delete-comparison';
-    del.textContent = '×';
-    del.addEventListener('click', () => onChange(null));
-    row.appendChild(del);
+    const currentQuestion = allQs.find((q) => q.question_id === cond.question_id);
+    renderOperatorAndValue(opSel, valueCell, cond, currentQuestion, savePathway);
 
-    // Hydrate the question + operator + value asynchronously
-    (async () => {
-      if (!comp.questionnaire_id) return;
-      const detail = await getQuestionnaireDetail(comp.questionnaire_id);
-      detail.questions.forEach((q) => {
-        const opt = document.createElement('option');
-        opt.value = q.id;
-        opt.textContent = q.name;
-        questionSel.appendChild(opt);
-      });
-      questionSel.value = comp.question_id || '';
-      const currentQuestion = detail.questions.find((q) => q.id === comp.question_id);
-      renderOperatorAndValue(opSel, valueCell, comp, currentQuestion, onChange);
-
-      questionSel.onchange = (ev) => {
-        comp.question_id = ev.target.value;
-        comp.operator = 'eq';
-        comp.value_option_id = '';
-        comp.value_option_ids = [];
-        comp.value_text = '';
-        comp.value_number = null;
-        const q = detail.questions.find((qq) => qq.id === comp.question_id);
-        renderOperatorAndValue(opSel, valueCell, comp, q, onChange);
-        onChange(comp);
-      };
-    })();
+    qSel.addEventListener('change', (ev) => {
+      cond.question_id = ev.target.value;
+      cond.operator = 'eq';
+      cond.value_option_id = '';
+      cond.value_option_ids = [];
+      cond.value_text = '';
+      cond.value_number = null;
+      const q = allQs.find((qq) => qq.question_id === cond.question_id);
+      renderOperatorAndValue(opSel, valueCell, cond, q, savePathway);
+      savePathway();
+    });
 
     return row;
   }
 
-  function renderOperatorAndValue(opSel, valueCell, comp, question, onChange) {
+  function renderOperatorAndValue(opSel, valueCell, cond, question, onChange) {
     opSel.innerHTML = '';
     valueCell.innerHTML = '';
     const type = (question && question.response_set_type) || 'TXT';
-
     const ops = operatorsForType(type);
-    const validOpKeys = ops.map(([v]) => v);
-    if (!validOpKeys.includes(comp.operator)) {
-      // The persisted operator isn't valid for this question's type (e.g.,
-      // the question was changed in a prior session); fall back to the first
-      // operator so the dropdown shows something meaningful.
-      comp.operator = ops[0] ? ops[0][0] : 'eq';
+    const validKeys = ops.map(([v]) => v);
+    if (!validKeys.includes(cond.operator)) {
+      cond.operator = ops[0] ? ops[0][0] : 'eq';
     }
     ops.forEach(([v, lbl]) => {
-      const opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = lbl;
-      opSel.appendChild(opt);
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = lbl;
+      opSel.appendChild(o);
     });
-    opSel.value = comp.operator;
-    // Replace any prior change handler — opSel may be re-decorated when the
-    // question changes, and we don't want duplicate listeners stacking up.
+    opSel.value = cond.operator;
     opSel.onchange = (ev) => {
-      comp.operator = ev.target.value;
-      renderValueWidget(valueCell, comp, question, onChange);
-      onChange(comp);
+      cond.operator = ev.target.value;
+      renderValueWidget(valueCell, cond, question, onChange);
+      onChange();
     };
-    renderValueWidget(valueCell, comp, question, onChange);
+    renderValueWidget(valueCell, cond, question, onChange);
   }
 
   function operatorsForType(type) {
     if (type === 'SING') {
-      return [
-        ['eq', 'equals'],
-        ['neq', 'does not equal'],
-        ['any_answer', 'any answer'],
-        ['no_answer', 'no answer'],
-      ];
+      return [['eq', 'equals'], ['neq', 'does not equal'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
     }
     if (type === 'MULT') {
       return [
@@ -768,69 +643,58 @@
       ];
     }
     if (type === 'INT') {
-      return [
-        ['eq', '='],
-        ['neq', '≠'],
-        ['lt', '<'],
-        ['lte', '≤'],
-        ['gt', '>'],
-        ['gte', '≥'],
-        ['any_answer', 'any answer'],
-        ['no_answer', 'no answer'],
-      ];
+      return [['eq', '='], ['neq', '≠'], ['lt', '<'], ['lte', '≤'], ['gt', '>'], ['gte', '≥'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
     }
-    return [
-      ['eq', 'equals'],
-      ['neq', 'does not equal'],
-      ['contains', 'contains'],
-      ['any_answer', 'any answer'],
-      ['no_answer', 'no answer'],
-    ];
+    return [['eq', 'equals'], ['neq', 'does not equal'], ['contains', 'contains'], ['any_answer', 'any answer'], ['no_answer', 'no answer']];
   }
 
-  function renderValueWidget(host, comp, question, onChange) {
+  function renderValueWidget(host, cond, question, onChange) {
     host.innerHTML = '';
-    if (comp.operator === 'any_answer' || comp.operator === 'no_answer') return;
+    if (cond.operator === 'any_answer' || cond.operator === 'no_answer') return;
     const type = (question && question.response_set_type) || 'TXT';
     const options = (question && question.options) || [];
 
     if (type === 'SING') {
       const sel = document.createElement('select');
       const ph = document.createElement('option');
-      ph.value = '';
-      ph.textContent = '— value —';
+      ph.value = ''; ph.textContent = '— value —';
       sel.appendChild(ph);
       options.forEach((o) => {
         const opt = document.createElement('option');
         opt.value = o.id;
         opt.textContent = o.name || o.value;
-        if (o.id === comp.value_option_id) opt.selected = true;
+        if (o.id === cond.value_option_id) opt.selected = true;
         sel.appendChild(opt);
       });
-      sel.value = comp.value_option_id || '';
+      sel.value = cond.value_option_id || '';
       sel.addEventListener('change', (ev) => {
-        comp.value_option_id = ev.target.value;
-        onChange(comp);
+        cond.value_option_id = ev.target.value;
+        onChange();
       });
       host.appendChild(sel);
+      queueMicrotask(() => {
+        if (cond.value_option_id && sel.value !== cond.value_option_id) sel.value = cond.value_option_id;
+      });
       return;
     }
     if (type === 'MULT') {
       const wrap = document.createElement('span');
-      const ids = comp.value_option_ids || (comp.value_option_id ? [comp.value_option_id] : []);
+      wrap.style.display = 'flex';
+      wrap.style.gap = '6px';
+      wrap.style.flexWrap = 'wrap';
+      const ids = cond.value_option_ids || (cond.value_option_id ? [cond.value_option_id] : []);
       options.forEach((o) => {
         const lbl = document.createElement('label');
-        lbl.style.marginRight = '6px';
         lbl.style.fontSize = '12px';
+        lbl.style.whiteSpace = 'nowrap';
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = ids.includes(o.id);
         cb.addEventListener('change', () => {
-          const next = new Set(comp.value_option_ids || []);
-          if (cb.checked) next.add(o.id);
-          else next.delete(o.id);
-          comp.value_option_ids = Array.from(next);
-          onChange(comp);
+          const next = new Set(cond.value_option_ids || []);
+          if (cb.checked) next.add(o.id); else next.delete(o.id);
+          cond.value_option_ids = Array.from(next);
+          onChange();
         });
         lbl.appendChild(cb);
         lbl.appendChild(document.createTextNode(' ' + (o.name || o.value)));
@@ -842,105 +706,222 @@
     if (type === 'INT') {
       const inp = document.createElement('input');
       inp.type = 'number';
-      inp.value = comp.value_number != null ? comp.value_number : '';
+      inp.value = cond.value_number != null ? cond.value_number : '';
       inp.addEventListener('input', (ev) => {
-        comp.value_number = ev.target.value === '' ? null : Number(ev.target.value);
-        onChange(comp);
+        cond.value_number = ev.target.value === '' ? null : Number(ev.target.value);
+        onChange();
       });
       host.appendChild(inp);
       return;
     }
-    // TEXT
     const inp = document.createElement('input');
     inp.type = 'text';
-    inp.value = comp.value_text || '';
+    inp.value = cond.value_text || '';
     inp.addEventListener('input', (ev) => {
-      comp.value_text = ev.target.value;
-      onChange(comp);
+      cond.value_text = ev.target.value;
+      onChange();
     });
     host.appendChild(inp);
   }
 
-  // ---------- Terminal editor ----------
+  // ---------- Right rail: questions + recommendations ----------
 
-  function renderTerminalEditor(node, ancestors) {
-    const host = document.createElement('div');
-    host.className = 'terminal-editor';
-
-    const cmdRow = document.createElement('div');
-    cmdRow.className = 'terminal-field';
-    const cmdLbl = document.createElement('div');
-    cmdLbl.className = 'field-label';
-    cmdLbl.textContent = 'Command';
-    cmdRow.appendChild(cmdLbl);
-    const cmdSel = document.createElement('select');
-    state.terminalCommands.forEach((c) => {
-      const opt = document.createElement('option');
-      opt.value = c.key;
-      opt.textContent = c.name;
-      if (c.key === node.command_key) opt.selected = true;
-      cmdSel.appendChild(opt);
-    });
-    cmdSel.addEventListener('change', (ev) => {
-      node.command_key = ev.target.value;
-      node.params = {};
-      savePathway();
-      renderTree();
-    });
-    cmdRow.appendChild(cmdSel);
-    host.appendChild(cmdRow);
-
-    const cmd = state.terminalCommands.find((c) => c.key === node.command_key);
-    if (cmd) {
-      cmd.fields.forEach((field) => {
-        const row = document.createElement('div');
-        row.className = 'terminal-field';
-        const lbl = document.createElement('div');
-        lbl.className = 'field-label';
-        lbl.textContent = field.label + (field.required ? ' *' : '');
-        row.appendChild(lbl);
-        node.params = node.params || {};
-        const v = node.params[field.key] != null ? node.params[field.key] : '';
-        let input;
-        if (field.type === 'textarea') {
-          input = document.createElement('textarea');
-          input.rows = 3;
-        } else if (field.type === 'select') {
-          input = document.createElement('select');
-          (field.options || []).forEach((opt) => {
-            const o = document.createElement('option');
-            o.value = opt.value;
-            o.textContent = opt.label;
-            if (opt.value === v) o.selected = true;
-            input.appendChild(o);
-          });
-        } else {
-          input = document.createElement('input');
-          input.type = 'text';
-        }
-        if (field.type !== 'select') input.value = v;
-        input.addEventListener('input', (ev) => {
-          node.params[field.key] = ev.target.value;
-          savePathway();
-        });
-        if (field.type === 'select') {
-          input.addEventListener('change', (ev) => {
-            node.params[field.key] = ev.target.value;
-            savePathway();
-          });
-        }
-        row.appendChild(input);
-        const hint = document.createElement('div');
-        hint.className = 'field-hint';
-        hint.textContent = 'Tip: use {{question_id}} to interpolate an answer from earlier in this pathway.';
-        row.appendChild(hint);
-        host.appendChild(row);
-      });
-    }
-    return host;
+  function renderRightRail() {
+    renderQuestionsList();
+    renderRecommendationsList();
   }
 
-  // ---------- Top-level field handlers ----------
+  function renderQuestionsList() {
+    els.questionsList.innerHTML = '';
+    const allQs = collectAvailableQuestions();
+    if (!allQs.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty-message';
+      empty.textContent = 'Pick a questionnaire to populate this list.';
+      els.questionsList.appendChild(empty);
+      return;
+    }
+    allQs.forEach((q, idx) => {
+      const li = document.createElement('li');
+      li.className = 'question-item';
+      const letter = document.createElement('span');
+      letter.className = 'letter-badge';
+      letter.textContent = letterFor(idx);
+      const text = document.createElement('span');
+      text.className = 'item-text';
+      text.textContent = q.question_name;
+      text.title = q.questionnaire_name + ' — ' + q.question_name;
+      li.appendChild(letter);
+      li.appendChild(text);
+      els.questionsList.appendChild(li);
+    });
+  }
+
+  function renderRecommendationsList() {
+    els.recommendationsList.innerHTML = '';
+    const recs = state.pathway.definition.recommendations || [];
+    if (!recs.length) {
+      const empty = document.createElement('li');
+      empty.className = 'empty-message';
+      empty.textContent = 'No recommendations yet.';
+      els.recommendationsList.appendChild(empty);
+      return;
+    }
+    recs.forEach((r, idx) => {
+      const li = document.createElement('li');
+      li.className = 'recommendation-item';
+      const letter = document.createElement('span');
+      letter.className = 'letter-badge';
+      letter.textContent = letterFor(idx);
+      const text = document.createElement('span');
+      text.className = 'item-text';
+      text.textContent = r.name || '(unnamed recommendation)';
+      const meta = document.createElement('span');
+      meta.className = 'item-meta';
+      if (r.params && r.params.severity) meta.textContent = r.params.severity;
+      li.appendChild(letter);
+      li.appendChild(text);
+      if (meta.textContent) li.appendChild(meta);
+      li.addEventListener('click', () => openRecommendationModal(r.recommendation_id));
+      els.recommendationsList.appendChild(li);
+    });
+  }
+
+  // ---------- Recommendation modal ----------
+
+  async function openRecommendationModal(recommendationId) {
+    await loadTerminalCommands();
+    state.editingRecommendationId = recommendationId;
+    renderRecommendationForm();
+    els.recModal.classList.remove('hidden');
+  }
+  function closeRecommendationModal() {
+    state.editingRecommendationId = null;
+    els.recModal.classList.add('hidden');
+  }
+
+  function renderRecommendationForm() {
+    els.recForm.innerHTML = '';
+    const rec = (state.pathway.definition.recommendations || []).find(
+      (r) => r.recommendation_id === state.editingRecommendationId,
+    );
+    if (!rec) return;
+
+    const nameField = document.createElement('label');
+    nameField.className = 'field';
+    nameField.textContent = 'Name (shown in the right rail)';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = rec.name || '';
+    nameInput.addEventListener('input', (ev) => {
+      rec.name = ev.target.value;
+      savePathway();
+      renderRecommendationsList();
+    });
+    nameField.appendChild(nameInput);
+    els.recForm.appendChild(nameField);
+
+    const cmd = state.terminalCommands.find((c) => c.key === rec.command_key)
+      || state.terminalCommands[0];
+    if (!rec.command_key && cmd) rec.command_key = cmd.key;
+
+    (cmd ? cmd.fields : []).forEach((field) => {
+      const lbl = document.createElement('label');
+      lbl.className = 'field';
+      lbl.textContent = field.label + (field.required ? ' *' : '');
+
+      rec.params = rec.params || {};
+      const v = rec.params[field.key] != null ? rec.params[field.key] : '';
+      let input;
+      if (field.type === 'textarea') {
+        input = document.createElement('textarea');
+        input.rows = 3;
+        input.value = v;
+      } else if (field.type === 'select') {
+        input = document.createElement('select');
+        (field.options || []).forEach((opt) => {
+          const o = document.createElement('option');
+          o.value = opt.value;
+          o.textContent = opt.label;
+          input.appendChild(o);
+        });
+        input.value = v;
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = v;
+      }
+      const evt = field.type === 'select' ? 'change' : 'input';
+      input.addEventListener(evt, (ev) => {
+        rec.params[field.key] = ev.target.value;
+        savePathway();
+        renderRecommendationsList();
+      });
+      lbl.appendChild(input);
+
+      const hint = document.createElement('div');
+      hint.className = 'field-hint';
+      hint.textContent = 'Use {{question_id}} to interpolate an answer from earlier in this pathway.';
+      lbl.appendChild(hint);
+
+      els.recForm.appendChild(lbl);
+    });
+  }
+
+  async function addRecommendation() {
+    await loadTerminalCommands();
+    const cmd = state.terminalCommands[0];
+    const rec = {
+      recommendation_id: newRecommendationId(),
+      name: 'New recommendation',
+      command_key: cmd ? cmd.key : '',
+      params: {},
+    };
+    state.pathway.definition.recommendations = state.pathway.definition.recommendations || [];
+    state.pathway.definition.recommendations.push(rec);
+    savePathway();
+    renderRightRail();
+    renderNodes();
+    openRecommendationModal(rec.recommendation_id);
+  }
+
+  function deleteCurrentRecommendation() {
+    const recId = state.editingRecommendationId;
+    if (!recId) return;
+    if (!confirm('Delete this recommendation? Any rules pointing to it will lose their target.')) return;
+    const def = state.pathway.definition;
+    def.recommendations = (def.recommendations || []).filter((r) => r.recommendation_id !== recId);
+    (def.nodes || []).forEach((n) => {
+      (n.rules || []).forEach((r) => {
+        if (r.then && r.then.type === 'recommendation' && r.then.target_id === recId) {
+          r.then = null;
+        }
+      });
+    });
+    savePathway();
+    closeRecommendationModal();
+    renderEditor();
+  }
+
+  // ---------- Add node ----------
+
+  async function addNode() {
+    await searchQuestionnaires('');
+    const def = state.pathway.definition;
+    const node = {
+      node_id: newNodeId(),
+      questionnaire_id: '',
+      questionnaire_name_snapshot: '',
+      rules: [],
+    };
+    def.nodes = def.nodes || [];
+    def.nodes.push(node);
+    if (!def.start_node_id) def.start_node_id = node.node_id;
+    savePathway();
+    renderEditor();
+  }
+
+  // ---------- Top-level handlers ----------
 
   els.title.addEventListener('input', () => {
     if (!state.pathway) return;
@@ -957,17 +938,18 @@
 
   els.newBtn.addEventListener('click', createPathway);
   els.deleteBtn.addEventListener('click', deletePathway);
+  els.addNodeBtn.addEventListener('click', addNode);
+  els.addRecBtn.addEventListener('click', addRecommendation);
+  els.closeRecModalBtn.addEventListener('click', closeRecommendationModal);
+  els.saveRecBtn.addEventListener('click', closeRecommendationModal);
+  els.deleteRecBtn.addEventListener('click', deleteCurrentRecommendation);
+  els.recModal.querySelector('.modal-backdrop').addEventListener('click', closeRecommendationModal);
 
   els.publishBtn.addEventListener('click', async () => {
     if (!state.pathway || !state.pathway.dbid) return;
-    // Flush any pending debounced edits so the server validates against
-    // the user's latest state, not an in-flight stale version.
     await flushSave();
     try {
-      const res = await api('/pathways/' + state.pathway.dbid + '/publish', {
-        method: 'POST',
-        body: {},
-      });
+      const res = await api('/pathways/' + state.pathway.dbid + '/publish', { method: 'POST', body: {} });
       if (res.published) {
         state.pathway.status = 'published';
         flashStatus('Published');
@@ -976,18 +958,14 @@
       }
       renderValidation(res.issues || []);
     } catch (err) {
-      // Try to parse JSON error body for issues
       let issues = [];
       try {
         const parsed = JSON.parse(err.message);
         issues = parsed.issues || [];
-      } catch (_) {
-        /* leave issues empty */
-      }
+      } catch (_) { /* leave empty */ }
       renderValidation(issues);
     }
   });
-
   els.unpublishBtn.addEventListener('click', async () => {
     if (!state.pathway || !state.pathway.dbid) return;
     await api('/pathways/' + state.pathway.dbid + '/unpublish', { method: 'POST', body: {} });
@@ -1015,7 +993,7 @@
   // ---------- Boot ----------
 
   (async () => {
-    await loadTerminalCommands();
+    await Promise.all([searchQuestionnaires(''), loadTerminalCommands()]);
     await reloadList();
     renderEditor();
   })();

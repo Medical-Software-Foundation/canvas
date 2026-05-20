@@ -1,14 +1,38 @@
 """Pathway runtime evaluator.
 
-Subscribes to `INTERVIEW_UPDATED` and advances any active `PathwayRun` for the
-note the interview belongs to. When the run's current questionnaire is
-committed, evaluates the active node's branches against the captured
-responses, and emits the next questionnaire — or the terminal CustomCommand —
-via `BatchOriginateCommandEffect`.
+Subscribes to `INTERVIEW_UPDATED` and advances any active `PathwayRun` for
+the note the interview belongs to. When the run's current questionnaire is
+committed, evaluates the active node's rules against the captured
+responses, and emits the next questionnaire — or the recommendation
+custom command — via `BatchOriginateCommandEffect`.
 
-On-commit semantics: events fire while a questionnaire is being filled in,
-not just on commit. We gate strictly on `interview.committer_id` being set,
-which is how Canvas marks a finalized interview.
+Pathway definition shape (v2):
+    {
+      "version": 2,
+      "start_node_id": "n_...",
+      "nodes": [
+        { "node_id": "n_...", "questionnaire_id": "<uuid>",
+          "rules": [
+            { "rule_id": "r_...", "combinator": "all"|"any",
+              "conditions": [
+                { "question_id": "<uuid>", "operator": "eq"|"neq"|...,
+                  "value_option_id": ?, "value_option_ids": [?],
+                  "value_text": ?, "value_number": ? }
+              ],
+              "then": { "type": "node"|"recommendation", "target_id": "..." }
+            }
+          ] }
+      ],
+      "recommendations": [
+        { "recommendation_id": "rec_...", "name": "...",
+          "command_key": "pathway_classification",
+          "params": { title, severity, body, recommended_action } }
+      ]
+    }
+
+On-commit semantics: the evaluator gates strictly on
+`interview.committer_id` being set; events during in-progress edits are
+ignored.
 """
 
 from __future__ import annotations
@@ -32,67 +56,15 @@ from clinical_pathways.models import Pathway, PathwayRun
 from clinical_pathways.terminal_commands import TERMINAL_COMMANDS
 
 
-# Operator implementations. Operator key matches what the builder emits.
-def _op_eq(answer: Any, expected: Any) -> bool:
-    return str(answer or "").strip().lower() == str(expected or "").strip().lower()
-
-
-def _op_neq(answer: Any, expected: Any) -> bool:
-    return not _op_eq(answer, expected)
-
-
-def _op_contains(answer: Any, expected: Any) -> bool:
-    return str(expected or "").strip().lower() in str(answer or "").strip().lower()
-
-
-def _op_num(answer: Any, expected: Any, cmp: str) -> bool:
-    try:
-        a = float(answer)
-        e = float(expected)
-    except (TypeError, ValueError):
-        return False
-    if cmp == "lt":
-        return a < e
-    if cmp == "lte":
-        return a <= e
-    if cmp == "gt":
-        return a > e
-    if cmp == "gte":
-        return a >= e
-    return False
-
-
-def _op_any_answer(answer: Any) -> bool:
-    return str(answer or "").strip() != ""
-
-
-def _op_no_answer(answer: Any) -> bool:
-    return not _op_any_answer(answer)
-
-
-def _op_contains_any(answer_list: list[str], expected_list: list[str]) -> bool:
-    a = {str(x).strip().lower() for x in answer_list or []}
-    e = {str(x).strip().lower() for x in expected_list or []}
-    return bool(a & e)
-
-
-def _op_contains_all(answer_list: list[str], expected_list: list[str]) -> bool:
-    a = {str(x).strip().lower() for x in answer_list or []}
-    e = {str(x).strip().lower() for x in expected_list or []}
-    return e.issubset(a)
-
-
-def _op_contains_none(answer_list: list[str], expected_list: list[str]) -> bool:
-    return not _op_contains_any(answer_list, expected_list)
+# ---------- Captured responses ----------
 
 
 def _collect_responses_for_interview(interview: Interview) -> dict[str, dict[str, Any]]:
     """Return {question_uuid_str: {"text": str, "option_ids": [dbid_str], "values": [str]}}.
 
-    Keyed by the Question's UUID (not its dbid) because the builder stores
-    `comp.question_id` as `str(question.id)`. `r.question_id` on the response
-    is the FK column value (dbid integer), so we resolve the related
-    Question instance once per response to obtain its UUID.
+    Keyed by the Question's UUID to match the builder's storage. `r.question_id`
+    on the response is the FK column value (Question.dbid), so we resolve the
+    related Question instance to obtain its UUID.
     """
     responses: dict[str, dict[str, Any]] = {}
     for r in interview.interview_responses.all():
@@ -117,16 +89,58 @@ def _collect_responses_for_interview(interview: Interview) -> dict[str, dict[str
     return responses
 
 
-def _evaluate_comparison(comp: dict[str, Any], captured: dict[str, dict[str, Any]]) -> bool:
+# ---------- Condition evaluation ----------
+
+
+def _op_eq(answer: Any, expected: Any) -> bool:
+    return str(answer or "").strip().lower() == str(expected or "").strip().lower()
+
+
+def _op_contains(answer: Any, expected: Any) -> bool:
+    return str(expected or "").strip().lower() in str(answer or "").strip().lower()
+
+
+def _op_num(answer: Any, expected: Any, cmp: str) -> bool:
+    try:
+        a = float(answer)
+        e = float(expected)
+    except (TypeError, ValueError):
+        return False
+    return {
+        "lt": a < e,
+        "lte": a <= e,
+        "gt": a > e,
+        "gte": a >= e,
+    }.get(cmp, False)
+
+
+def _set_overlap(actuals: list[str], expected: list[str]) -> bool:
+    a = {str(x).strip().lower() for x in actuals or []}
+    e = {str(x).strip().lower() for x in expected or []}
+    return bool(a & e)
+
+
+def _set_superset(actuals: list[str], expected: list[str]) -> bool:
+    a = {str(x).strip().lower() for x in actuals or []}
+    e = {str(x).strip().lower() for x in expected or []}
+    return e.issubset(a)
+
+
+def _evaluate_condition(comp: dict[str, Any], captured: dict[str, dict[str, Any]]) -> bool:
+    """Evaluate a single condition against the captured responses."""
     qid = str(comp.get("question_id") or "")
     if not qid:
         return False
     op = comp.get("operator", "eq")
     bucket = captured.get(qid)
     if op == "any_answer":
-        return bucket is not None and (bool(bucket.get("text")) or bool(bucket.get("option_ids")))
+        return bucket is not None and (
+            bool(bucket.get("text")) or bool(bucket.get("option_ids"))
+        )
     if op == "no_answer":
-        return bucket is None or (not bucket.get("text") and not bucket.get("option_ids"))
+        return bucket is None or (
+            not bucket.get("text") and not bucket.get("option_ids")
+        )
     if bucket is None:
         return False
 
@@ -136,22 +150,20 @@ def _evaluate_comparison(comp: dict[str, Any], captured: dict[str, dict[str, Any
             expected = [comp["value_option_id"]]
         actuals = bucket.get("option_ids", [])
         if op == "contains_any":
-            return _op_contains_any(actuals, expected)
+            return _set_overlap(actuals, expected)
         if op == "contains_all":
-            return _op_contains_all(actuals, expected)
-        return _op_contains_none(actuals, expected)
+            return _set_superset(actuals, expected)
+        return not _set_overlap(actuals, expected)
 
     answer_text = bucket.get("text", "")
     if op == "eq":
-        value_option_id = comp.get("value_option_id")
-        if value_option_id:
-            return value_option_id in bucket.get("option_ids", [])
+        if comp.get("value_option_id"):
+            return comp["value_option_id"] in bucket.get("option_ids", [])
         return _op_eq(answer_text, comp.get("value_text"))
     if op == "neq":
-        value_option_id = comp.get("value_option_id")
-        if value_option_id:
-            return value_option_id not in bucket.get("option_ids", [])
-        return _op_neq(answer_text, comp.get("value_text"))
+        if comp.get("value_option_id"):
+            return comp["value_option_id"] not in bucket.get("option_ids", [])
+        return not _op_eq(answer_text, comp.get("value_text"))
     if op == "contains":
         return _op_contains(answer_text, comp.get("value_text"))
     if op in ("lt", "lte", "gt", "gte"):
@@ -159,37 +171,42 @@ def _evaluate_comparison(comp: dict[str, Any], captured: dict[str, dict[str, Any
     return False
 
 
-def _evaluate_condition(node: dict[str, Any], captured: dict[str, dict[str, Any]]) -> bool:
-    if not isinstance(node, dict):
+def _evaluate_rule(rule: dict[str, Any], captured: dict[str, dict[str, Any]]) -> bool:
+    """Evaluate a single rule's flat conditions list under the rule's combinator."""
+    conditions = rule.get("conditions") or []
+    if not conditions:
         return False
-    if node.get("kind") == "comparison":
-        return _evaluate_comparison(node, captured)
-    if node.get("kind") == "group":
-        combinator = node.get("combinator", "all")
-        children = node.get("children", []) or []
-        if not children:
-            return False
-        if combinator == "all":
-            return all(_evaluate_condition(c, captured) for c in children)
-        if combinator == "any":
-            return any(_evaluate_condition(c, captured) for c in children)
-        if combinator == "none":
-            return not any(_evaluate_condition(c, captured) for c in children)
-    return False
+    combinator = rule.get("combinator", "all")
+    if combinator == "any":
+        return any(_evaluate_condition(c, captured) for c in conditions)
+    # default: all
+    return all(_evaluate_condition(c, captured) for c in conditions)
 
 
-def _find_node(root: dict[str, Any] | None, node_id: str) -> dict[str, Any] | None:
-    if not root or not node_id:
+# ---------- Definition lookups ----------
+
+
+def _find_node(definition: dict[str, Any], node_id: str) -> dict[str, Any] | None:
+    if not node_id:
         return None
-    if root.get("node_id") == node_id:
-        return root
-    if root.get("type") == "questionnaire":
-        for b in root.get("branches", []) or []:
-            found = _find_node(b.get("then"), node_id)
-            if found:
-                return found
+    for n in definition.get("nodes") or []:
+        if isinstance(n, dict) and n.get("node_id") == node_id:
+            return n
     return None
 
+
+def _find_recommendation(
+    definition: dict[str, Any], recommendation_id: str
+) -> dict[str, Any] | None:
+    if not recommendation_id:
+        return None
+    for r in definition.get("recommendations") or []:
+        if isinstance(r, dict) and r.get("recommendation_id") == recommendation_id:
+            return r
+    return None
+
+
+# ---------- Templating ----------
 
 _TEMPLATE_REF = re.compile(r"\{\{\s*([^}|]+?)\s*\}\}")
 
@@ -199,8 +216,7 @@ def _resolve_template(value: Any, captured: dict[str, dict[str, Any]]) -> str:
         return "" if value is None else str(value)
 
     def _replace(match: re.Match[str]) -> str:
-        ref = match.group(1)
-        question_id = ref.strip()
+        question_id = match.group(1).strip()
         bucket = captured.get(question_id)
         if not bucket:
             return ""
@@ -209,21 +225,6 @@ def _resolve_template(value: Any, captured: dict[str, dict[str, Any]]) -> str:
         return ", ".join(bucket.get("values", []) or [])
 
     return _TEMPLATE_REF.sub(_replace, value)
-
-
-def _next_node_for_branches(
-    branches: list[dict[str, Any]],
-    match_mode: str,
-    captured: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    matched: list[dict[str, Any]] = []
-    for b in branches or []:
-        when = b.get("when")
-        if when and _evaluate_condition(when, captured):
-            matched.append(b)
-            if match_mode != "all":
-                break
-    return matched
 
 
 def _severity_label(spec: dict[str, Any], severity_value: str) -> str:
@@ -236,14 +237,23 @@ def _severity_label(spec: dict[str, Any], severity_value: str) -> str:
     return severity_value.title() if severity_value else ""
 
 
-def _classification_command(
-    node: dict[str, Any],
+# ---------- Command construction ----------
+
+
+def _recommendation_command(
+    recommendation: dict[str, Any],
     pathway: Pathway,
     note_uuid: str,
     captured: dict[str, dict[str, Any]],
-) -> CustomCommand:
-    spec = TERMINAL_COMMANDS.get(node.get("command_key") or "") or {}
-    params = node.get("params", {}) or {}
+) -> CustomCommand | None:
+    cmd_key = recommendation.get("command_key") or ""
+    spec = TERMINAL_COMMANDS.get(cmd_key)
+    if not spec:
+        log.warning(
+            "clinical_pathways: unknown recommendation command_key '%s'", cmd_key
+        )
+        return None
+    params = recommendation.get("params") or {}
     resolved: dict[str, Any] = {}
     for field in spec.get("fields", []):
         key = field["key"]
@@ -251,6 +261,7 @@ def _classification_command(
 
     template_context = {
         "pathway_title": pathway.title,
+        "recommendation_name": recommendation.get("name", ""),
         "title": resolved.get("title", ""),
         "severity": resolved.get("severity", ""),
         "severity_label": _severity_label(spec, resolved.get("severity", "")),
@@ -270,6 +281,20 @@ def _classification_command(
     cmd.command_uuid = str(uuid4())
     cmd.note_uuid = note_uuid
     return cmd
+
+
+def _questionnaire_command(target_node: dict[str, Any], note_uuid: str) -> QuestionnaireCommand | None:
+    qid = target_node.get("questionnaire_id")
+    if not qid:
+        return None
+    cmd = QuestionnaireCommand()
+    cmd.note_uuid = note_uuid
+    cmd.command_uuid = str(uuid4())
+    cmd.questionnaire_id = str(qid)
+    return cmd
+
+
+# ---------- Handler ----------
 
 
 class PathwayEvaluator(BaseHandler):
@@ -310,26 +335,38 @@ class PathwayEvaluator(BaseHandler):
             if not pathway:
                 continue
             definition = pathway.definition or {}
-            current_node = _find_node(definition.get("root"), run.current_node_id)
-            if not current_node or current_node.get("type") != "questionnaire":
+            if definition.get("version") != 2:
+                log.info(
+                    "clinical_pathways: skipping run %s — pathway %s uses an "
+                    "unsupported (pre-v2) definition format",
+                    run.dbid,
+                    pathway.dbid,
+                )
+                continue
+
+            current_node = _find_node(definition, run.current_node_id)
+            if not current_node:
                 continue
             node_questionnaire_id = str(current_node.get("questionnaire_id") or "")
             if node_questionnaire_id not in interview_questionnaire_ids:
+                # The interview that committed wasn't the one this run was
+                # waiting on — ignore and let other runs handle it.
                 continue
 
-            # Merge this interview's responses into the run's captured set so
-            # later nodes can interpolate against earlier answers.
             merged = dict(run.captured_responses or {})
             merged.update(captured)
             run.captured_responses = merged
 
-            match_mode = current_node.get("match_mode") or "first"
-            matched = _next_node_for_branches(
-                current_node.get("branches", []) or [], match_mode, merged
-            )
-            if not matched:
+            # First-match rule evaluation.
+            matched_rule: dict[str, Any] | None = None
+            for rule in current_node.get("rules") or []:
+                if _evaluate_rule(rule, merged):
+                    matched_rule = rule
+                    break
+
+            if matched_rule is None:
                 log.info(
-                    "clinical_pathways: no branch matched for node %s in pathway %s",
+                    "clinical_pathways: no rule matched for node %s in pathway %s",
                     run.current_node_id,
                     pathway.dbid,
                 )
@@ -337,36 +374,58 @@ class PathwayEvaluator(BaseHandler):
                 run.save()
                 continue
 
-            new_commands: list[Any] = []
-            next_node_id_for_run: str | None = None
-            run_completed = False
-            for branch in matched:
-                then = branch.get("then") or {}
-                if then.get("type") == "questionnaire":
-                    qid = then.get("questionnaire_id")
-                    if not qid:
-                        continue
-                    cmd = QuestionnaireCommand()
-                    cmd.note_uuid = note_uuid
-                    cmd.command_uuid = str(uuid4())
-                    cmd.questionnaire_id = str(qid)
-                    new_commands.append(cmd)
-                    if next_node_id_for_run is None:
-                        next_node_id_for_run = then.get("node_id", "")
-                elif then.get("type") == "terminal":
-                    new_commands.append(
-                        _classification_command(then, pathway, note_uuid, merged)
-                    )
-                    run_completed = True
+            then = matched_rule.get("then") or {}
+            target_type = then.get("type")
+            target_id = then.get("target_id")
+            new_command: Any = None
+            advance_to_node_id: str | None = None
+            mark_completed = False
 
-            if not new_commands:
+            if target_type == "node":
+                target_node = _find_node(definition, target_id)
+                if not target_node:
+                    log.warning(
+                        "clinical_pathways: rule %s points to missing node %s",
+                        matched_rule.get("rule_id"),
+                        target_id,
+                    )
+                    run.status = "completed"
+                    run.save()
+                    continue
+                new_command = _questionnaire_command(target_node, note_uuid)
+                advance_to_node_id = target_id
+            elif target_type == "recommendation":
+                recommendation = _find_recommendation(definition, target_id)
+                if not recommendation:
+                    log.warning(
+                        "clinical_pathways: rule %s points to missing recommendation %s",
+                        matched_rule.get("rule_id"),
+                        target_id,
+                    )
+                    run.status = "completed"
+                    run.save()
+                    continue
+                new_command = _recommendation_command(
+                    recommendation, pathway, note_uuid, merged
+                )
+                mark_completed = True
+            else:
+                log.warning(
+                    "clinical_pathways: rule %s has invalid then.type '%s'",
+                    matched_rule.get("rule_id"),
+                    target_type,
+                )
                 run.save()
                 continue
-            effects.append(BatchOriginateCommandEffect(commands=new_commands).apply())
-            if run_completed and not next_node_id_for_run:
+
+            if new_command is None:
+                run.save()
+                continue
+            effects.append(BatchOriginateCommandEffect(commands=[new_command]).apply())
+            if mark_completed:
                 run.status = "completed"
-            elif next_node_id_for_run:
-                run.current_node_id = next_node_id_for_run
+            if advance_to_node_id:
+                run.current_node_id = advance_to_node_id
             run.save()
 
         return effects

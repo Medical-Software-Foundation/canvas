@@ -109,8 +109,26 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
                     status_code=HTTPStatus.NOT_FOUND,
                 )
             ]
-        root = (pw.definition or {}).get("root")
-        if not root or root.get("type") != "questionnaire" or not root.get("questionnaire_id"):
+        definition = pw.definition or {}
+        if definition.get("version") != 2:
+            return [
+                JSONResponse(
+                    {
+                        "error": (
+                            "Pathway uses an older format. Open it in the builder "
+                            "and re-author it before running."
+                        )
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        start_node_id = definition.get("start_node_id")
+        nodes = definition.get("nodes") or []
+        start_node = next(
+            (n for n in nodes if isinstance(n, dict) and n.get("node_id") == start_node_id),
+            None,
+        )
+        if not start_node or not start_node.get("questionnaire_id"):
             return [
                 JSONResponse(
                     {"error": "Pathway has no starting questionnaire configured."},
@@ -126,7 +144,7 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
         run = PathwayRun(
             note_uuid=note_uuid,
             pathway_id=pw.dbid,
-            current_node_id=root.get("node_id", ""),
+            current_node_id=start_node_id,
             status="active",
             captured_responses={},
         )
@@ -135,7 +153,7 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
         questionnaire = QuestionnaireCommand()
         questionnaire.note_uuid = note_uuid
         questionnaire.command_uuid = str(uuid4())
-        questionnaire.questionnaire_id = root["questionnaire_id"]
+        questionnaire.questionnaire_id = start_node["questionnaire_id"]
 
         return [
             BatchOriginateCommandEffect(commands=[questionnaire]).apply(),

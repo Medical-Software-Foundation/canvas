@@ -45,13 +45,11 @@
           </div>
         </header>
 
-        <section class="root-picker block">
-          <h3>Starting questionnaire</h3>
-          <p class="hint">The first questionnaire that will be auto-inserted into the note when this pathway is started.</p>
-          <div id="root-picker-host"></div>
-        </section>
+        <section id="nodes-host" class="nodes-host"></section>
 
-        <section id="tree-host" class="tree-host"></section>
+        <div class="row">
+          <button type="button" id="add-node-btn" class="secondary">+ Add questionnaire</button>
+        </div>
 
         <section id="validation-issues" class="validation hidden">
           <h3>Validation</h3>
@@ -59,7 +57,39 @@
         </section>
       </div>
     </section>
+
+    <aside id="right-rail" class="pane right-rail">
+      <section id="questions-section">
+        <h2>Questions</h2>
+        <p class="hint">Questions available from referenced questionnaires.</p>
+        <ul id="questions-list" class="rail-list"></ul>
+      </section>
+
+      <section id="recommendations-section">
+        <div class="rail-header">
+          <h2>Recommendations</h2>
+          <button type="button" id="add-recommendation-btn" class="ghost small">+ Add</button>
+        </div>
+        <p class="hint">Define once, point to from any rule.</p>
+        <ul id="recommendations-list" class="rail-list"></ul>
+      </section>
+    </aside>
   </main>
+
+  <div id="recommendation-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Edit recommendation">
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel">
+      <header class="modal-header">
+        <h3>Edit recommendation</h3>
+        <button type="button" id="close-recommendation-modal" class="ghost small">×</button>
+      </header>
+      <div id="recommendation-form" class="modal-body"></div>
+      <footer class="modal-footer">
+        <button type="button" id="delete-recommendation-btn" class="danger small">Delete recommendation</button>
+        <button type="button" id="save-recommendation-btn" class="primary">Done</button>
+      </footer>
+    </div>
+  </div>
 
   <script src="{{ api_base }}/main.js?v={{ cache_bust }}"></script>
 </body>

@@ -34,8 +34,12 @@ def _new_node_id() -> str:
     return "n_" + _uuid_lib.uuid4().hex[:10]
 
 
-def _new_branch_id() -> str:
-    return "b_" + _uuid_lib.uuid4().hex[:10]
+def _new_rule_id() -> str:
+    return "r_" + _uuid_lib.uuid4().hex[:10]
+
+
+def _new_recommendation_id() -> str:
+    return "rec_" + _uuid_lib.uuid4().hex[:10]
 
 
 def _serialize_pathway_summary(pw: Pathway) -> dict[str, Any]:
@@ -55,39 +59,87 @@ def _serialize_pathway_full(pw: Pathway) -> dict[str, Any]:
 
 
 def _empty_definition() -> dict[str, Any]:
+    """Empty v2 pathway document.
+
+    Shape:
+      {
+        "version": 2,
+        "start_node_id": null | "n_...",
+        "nodes": [
+          { "node_id": "n_...", "questionnaire_id": "<uuid>",
+            "questionnaire_name_snapshot": "...",
+            "rules": [
+              { "rule_id": "r_...", "combinator": "all"|"any",
+                "conditions": [{question_id, operator, value_*...}],
+                "then": { "type": "node"|"recommendation", "target_id": "..." }
+              }
+            ] }
+        ],
+        "recommendations": [
+          { "recommendation_id": "rec_...", "name": "...",
+            "command_key": "pathway_classification",
+            "params": {title, severity, body, recommended_action} }
+        ]
+      }
+    """
     return {
-        "version": 1,
-        "root": None,  # null until the configurator picks a starting questionnaire
+        "version": 2,
+        "start_node_id": None,
+        "nodes": [],
+        "recommendations": [],
     }
 
 
 def _validate_pathway(definition: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return a list of validation issues. Empty list means publishable."""
+    """Return a list of validation issues. Empty list (errors==0) means publishable."""
     issues: list[dict[str, Any]] = []
-    root = definition.get("root")
-    if not root:
-        issues.append({"severity": "error", "message": "Pick a starting questionnaire."})
+    if not isinstance(definition, dict):
+        issues.append({"severity": "error", "message": "Pathway has no definition yet."})
         return issues
-    _walk_node(root, ancestors=[], issues=issues)
-    return issues
+    if definition.get("version") != 2:
+        issues.append(
+            {
+                "severity": "error",
+                "message": (
+                    "This pathway uses an older format and can't be published. "
+                    "Delete and recreate it."
+                ),
+            }
+        )
+        return issues
 
+    nodes = definition.get("nodes") or []
+    recommendations = definition.get("recommendations") or []
+    start_node_id = definition.get("start_node_id")
+    node_ids = {n.get("node_id") for n in nodes if isinstance(n, dict)}
+    recommendation_ids = {
+        r.get("recommendation_id") for r in recommendations if isinstance(r, dict)
+    }
 
-def _walk_node(
-    node: dict[str, Any], ancestors: list[dict[str, Any]], issues: list[dict[str, Any]]
-) -> None:
-    if not isinstance(node, dict):
-        issues.append({"severity": "error", "message": "Malformed node."})
-        return
-    ntype = node.get("type")
-    node_id = node.get("node_id", "?")
-    if ntype == "questionnaire":
+    if not nodes:
+        issues.append(
+            {"severity": "error", "message": "Add a starting questionnaire to the pathway."}
+        )
+    elif not start_node_id or start_node_id not in node_ids:
+        issues.append(
+            {
+                "severity": "error",
+                "message": "Pick which questionnaire the pathway starts with.",
+            }
+        )
+
+    for node in nodes:
+        if not isinstance(node, dict):
+            issues.append({"severity": "error", "message": "Malformed node entry."})
+            continue
+        node_id = node.get("node_id", "?")
         qid = node.get("questionnaire_id")
         if not qid:
             issues.append(
                 {
                     "severity": "error",
                     "node_id": node_id,
-                    "message": "Questionnaire node is missing a questionnaire reference.",
+                    "message": "Node is missing a questionnaire reference.",
                 }
             )
         elif not Questionnaire.objects.filter(id=qid).exists():
@@ -97,76 +149,129 @@ def _walk_node(
                     "node_id": node_id,
                     "message": (
                         "Referenced questionnaire is no longer available. "
-                        "Branches that condition on it will not evaluate."
+                        "Rules that condition on it will not evaluate."
                     ),
                 }
             )
-        branches = node.get("branches", []) or []
-        if not branches:
-            # Soft termination: a questionnaire node with no branches simply
-            # ends the pathway without emitting a classification. Allowed but
-            # called out so the configurator doesn't ship by accident.
+        rules = node.get("rules") or []
+        if not rules:
             issues.append(
                 {
                     "severity": "warning",
                     "node_id": node_id,
                     "message": (
-                        "Questionnaire node has no branches — this arm will end "
-                        "after the questionnaire is committed, without emitting "
-                        "a classification command."
+                        "Questionnaire has no rules — this arm will end after "
+                        "the questionnaire is committed without emitting a "
+                        "recommendation."
                     ),
                 }
             )
-        for b in branches:
-            then = b.get("then")
-            if not then:
+        for rule in rules:
+            if not isinstance(rule, dict):
                 issues.append(
                     {
                         "severity": "error",
                         "node_id": node_id,
-                        "message": "Branch is missing its 'then' target.",
+                        "message": "Malformed rule entry.",
                     }
                 )
                 continue
-            _walk_node(then, ancestors=ancestors + [node], issues=issues)
-    elif ntype == "terminal":
-        cmd_key = node.get("command_key")
-        if not cmd_key:
-            issues.append(
-                {
-                    "severity": "error",
-                    "node_id": node_id,
-                    "message": "Terminal node is missing a command selection.",
-                }
-            )
-        elif cmd_key not in TERMINAL_COMMANDS:
-            issues.append(
-                {
-                    "severity": "error",
-                    "node_id": node_id,
-                    "message": f"Unknown terminal command '{cmd_key}'.",
-                }
-            )
-        else:
-            spec = TERMINAL_COMMANDS[cmd_key]
-            params = node.get("params", {}) or {}
-            for field in spec["fields"]:
-                if field.get("required") and not str(params.get(field["key"], "")).strip():
+            rule_id = rule.get("rule_id", "?")
+            combinator = rule.get("combinator")
+            if combinator not in ("all", "any"):
+                issues.append(
+                    {
+                        "severity": "error",
+                        "node_id": node_id,
+                        "rule_id": rule_id,
+                        "message": "Rule combinator must be either 'all' or 'any'.",
+                    }
+                )
+            conditions = rule.get("conditions") or []
+            if not conditions:
+                issues.append(
+                    {
+                        "severity": "error",
+                        "node_id": node_id,
+                        "rule_id": rule_id,
+                        "message": "Rule has no conditions.",
+                    }
+                )
+            then = rule.get("then") or {}
+            target_type = then.get("type")
+            target_id = then.get("target_id")
+            if target_type == "node":
+                if target_id not in node_ids:
                     issues.append(
                         {
                             "severity": "error",
                             "node_id": node_id,
-                            "message": f"Terminal '{cmd_key}' is missing required field '{field['key']}'.",
+                            "rule_id": rule_id,
+                            "message": "Rule routes to a questionnaire that's not in this pathway.",
                         }
                     )
-    else:
-        issues.append(
-            {
-                "severity": "error",
-                "node_id": node_id,
-                "message": f"Unknown node type '{ntype}'.",
-            }
-        )
+            elif target_type == "recommendation":
+                if target_id not in recommendation_ids:
+                    issues.append(
+                        {
+                            "severity": "error",
+                            "node_id": node_id,
+                            "rule_id": rule_id,
+                            "message": "Rule routes to a recommendation that's not in this pathway.",
+                        }
+                    )
+            else:
+                issues.append(
+                    {
+                        "severity": "error",
+                        "node_id": node_id,
+                        "rule_id": rule_id,
+                        "message": "Rule is missing its 'then' target.",
+                    }
+                )
+
+    for rec in recommendations:
+        if not isinstance(rec, dict):
+            issues.append(
+                {"severity": "error", "message": "Malformed recommendation entry."}
+            )
+            continue
+        rec_id = rec.get("recommendation_id", "?")
+        cmd_key = rec.get("command_key")
+        if not cmd_key:
+            issues.append(
+                {
+                    "severity": "error",
+                    "recommendation_id": rec_id,
+                    "message": "Recommendation is missing a command type.",
+                }
+            )
+            continue
+        if cmd_key not in TERMINAL_COMMANDS:
+            issues.append(
+                {
+                    "severity": "error",
+                    "recommendation_id": rec_id,
+                    "message": f"Unknown recommendation command '{cmd_key}'.",
+                }
+            )
+            continue
+        spec = TERMINAL_COMMANDS[cmd_key]
+        params = rec.get("params") or {}
+        for field in spec["fields"]:
+            if field.get("required") and not str(params.get(field["key"], "")).strip():
+                issues.append(
+                    {
+                        "severity": "error",
+                        "recommendation_id": rec_id,
+                        "message": (
+                            f"Recommendation '{rec.get('name') or rec_id}' is "
+                            f"missing required field '{field['key']}'."
+                        ),
+                    }
+                )
+
+    return issues
 
 
 class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
@@ -386,12 +491,3 @@ class BuilderAPI(StaffSessionAuthMixin, SimpleAPI):
     def list_terminal_commands(self) -> list[Response | Effect]:
         return [JSONResponse({"terminal_commands": terminal_command_catalog()})]
 
-    # ---------- Node/branch id helpers ----------
-
-    @api.post("/ids/node")
-    def mint_node_id(self) -> list[Response | Effect]:
-        return [JSONResponse({"node_id": _new_node_id()})]
-
-    @api.post("/ids/branch")
-    def mint_branch_id(self) -> list[Response | Effect]:
-        return [JSONResponse({"branch_id": _new_branch_id()})]
