@@ -35,9 +35,10 @@ Open **Manage Availability** from the three-line / hamburger menu.
 | Available (`Clinic`)    | Time is bookable                                    |
 | Busy (`Administrative`) | Time is blocked off (breaks, meetings, OOO, etc.)   |
 
-Each event can be one-off or recurring (daily / weekly) and can be
-restricted to a list of note types — a "well-child only" window will not
-surface for an unrelated visit type.
+Each event can be one-off or recurring (daily / weekly). Windows can
+optionally be tagged with a list of note types via the manager UI; the
+selection is stored on the event and surfaced back in the UI, but the
+slot filter does not currently consult it (see Known limitations).
 
 ## Slot filtering
 
@@ -69,6 +70,15 @@ Optional `BRAND_*` secrets re-skin the UI without forking — see
 - The slot filter assumes the `APPOINTMENT__SLOTS__POST_SEARCH` payload
   exposes a resolvable location in `selected_values`. When it cannot, the
   filter passes slots through unchanged and emits a warning log.
+- **Per-note-type restrictions are not yet enforced by the slot filter.**
+  The UI lets you tag each Available window with a list of note types
+  and the selection persists on the event, but the filter does not read
+  a note type from the slot-search context. A window tagged "well-child
+  only" still surfaces for any visit type. The full slot-search event
+  shape is undocumented; once we confirm where (and whether) Canvas
+  exposes the requested note type in `selected_values`, this can be
+  wired in. The on-event log line in `AvailabilitySlotFilter.compute`
+  prints `selected_values` verbatim to aid that discovery.
 - Appointments that bypass the slot picker (drag-and-drop reschedules,
   API-created appointments) are not validated. The slot filter only
   covers the normal slot-search flow.

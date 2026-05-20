@@ -144,37 +144,45 @@ def _event_window_on_date(
 def _staff_calendars(staff, type_keyword: str = "Clinic"):
     """Return calendars that belong to ``staff`` of the given type.
 
-    Both of these lookups contribute, deduped by id:
-      1. ``description`` contains the staff UUID (dashed or hex form) AND the
-         title contains the type keyword (Clinic / admin). Resilient to staff
-         renames because the binding key is the UUID, not the name.
-      2. ``title`` starts with ``"{staff.full_name}: {type_keyword}"``
-         (case-insensitive). Catches legacy / manually-titled calendars and —
-         critically — calendars created before the manager started writing
-         the staff UUID into ``description``, which often hold the actual
-         events while a separately-created UUID-stamped calendar is empty.
+    Two DB lookups contribute, deduped by id:
+      1. ``description`` contains the staff UUID (dashed or hex form).
+         Resilient to staff renames because the binding key is the UUID,
+         not the name.
+      2. ``title`` starts with ``"{staff.full_name}: "``. Catches legacy
+         or manually-titled calendars, including ones created before the
+         manager started writing the staff UUID into ``description``.
+
+    The ``type_keyword`` is then enforced in Python by parsing each title
+    with ``parse_calendar_title`` and comparing the parsed type field
+    exactly (case-insensitive). The previous implementation scoped the
+    type at the DB layer with ``title__icontains=": {type_keyword}"`` —
+    but a documented title is ``"{Name}: {Type}: {Location}"``, so that
+    substring also matched ``": admin"`` *inside* a location name
+    (e.g. ``"Dr Smith: Clinic: Admin Office"``). Such a Clinic calendar
+    would be pulled into the admin-block lookup, its events would
+    subtract from the windows they produce, and the provider's slots
+    would silently zero out at every location. Filtering on the parsed
+    type field closes that off because the parser distinguishes the type
+    slot from the location slot.
     """
     from django.db.models import Q
 
     staff_id_str = str(staff.id)
     staff_id_hex = staff_id_str.replace("-", "")
-    # Anchor the type keyword to the ": " that parse_calendar_title expects
-    # before the type. Plain icontains would substring-match the keyword
-    # anywhere in the title — including inside a staff name (e.g. "Padmini"
-    # contains "admin"), pulling the staff's Clinic calendar into the
-    # admin-block lookup and silently zeroing out availability.
     qs = Calendar.objects.filter(
-        (
-            (Q(description__icontains=staff_id_str) | Q(description__icontains=staff_id_hex))
-            & Q(title__icontains=f": {type_keyword}")
-        )
-        | Q(title__istartswith=f"{staff.full_name}: {type_keyword}")
+        Q(description__icontains=staff_id_str)
+        | Q(description__icontains=staff_id_hex)
+        | Q(title__istartswith=f"{staff.full_name}: ")
     ).distinct()
 
+    keyword_lower = type_keyword.strip().lower()
     seen_ids: set = set()
     result: list = []
     for cal in qs:
         if cal.id in seen_ids:
+            continue
+        _, cal_type, _ = parse_calendar_title(cal.title or "")
+        if cal_type.strip().lower() != keyword_lower:
             continue
         seen_ids.add(cal.id)
         result.append(cal)

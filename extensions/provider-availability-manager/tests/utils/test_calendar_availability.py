@@ -246,8 +246,10 @@ def test_staff_calendars_dedupes_by_id():
 
     cal_a = MagicMock()
     cal_a.id = "cal-1"
+    cal_a.title = "Bob Smith: Clinic"
     cal_b_dup = MagicMock()
     cal_b_dup.id = "cal-1"  # same ID as cal_a — the in-Python dedup pass should drop it
+    cal_b_dup.title = "Bob Smith: Clinic"
 
     with patch(
         "provider_availability_manager.utils.calendar_availability.Calendar"
@@ -255,6 +257,99 @@ def test_staff_calendars_dedupes_by_id():
         mock_cal.objects.filter.return_value.distinct.return_value = [cal_a, cal_b_dup]
         result = _staff_calendars(staff, "Clinic")
         assert len(result) == 1
+
+
+def test_staff_calendars_does_not_match_admin_substring_in_location_name():
+    """Regression: a Clinic calendar at a location named "Admin Office" must
+    not match a search for type_keyword="admin".
+
+    A documented title is ``"{Name}: {Type}: {Location}"`` — the old DB-side
+    ``title__icontains=": admin"`` matched ``": admin"`` *inside* the
+    location slot, pulling the Clinic calendar into the admin-block lookup
+    and silently zeroing out availability for that provider at every
+    location. The fix parses the title and checks the type field exactly.
+    """
+    staff = MagicMock()
+    staff.id = "staff-uuid"
+    staff.full_name = "Dr Smith"
+
+    clinic_at_admin_office = MagicMock()
+    clinic_at_admin_office.id = "cal-clinic"
+    clinic_at_admin_office.title = "Dr Smith: Clinic: Admin Office"
+
+    real_admin_cal = MagicMock()
+    real_admin_cal.id = "cal-admin"
+    real_admin_cal.title = "Dr Smith: admin"
+
+    with patch(
+        "provider_availability_manager.utils.calendar_availability.Calendar"
+    ) as mock_cal:
+        mock_cal.objects.filter.return_value.distinct.return_value = [
+            clinic_at_admin_office, real_admin_cal,
+        ]
+        result = _staff_calendars(staff, "admin")
+
+    result_ids = [c.id for c in result]
+    assert result_ids == ["cal-admin"], (
+        "Clinic calendar at 'Admin Office' must not be returned for admin lookup"
+    )
+
+
+def test_staff_calendars_finds_clinic_calendar_at_admin_office_when_searching_clinic():
+    """The inverse: a Clinic calendar at "Admin Office" still matches a
+    Clinic lookup (so the fix doesn't accidentally exclude it)."""
+    staff = MagicMock()
+    staff.id = "staff-uuid"
+    staff.full_name = "Dr Smith"
+
+    clinic_at_admin_office = MagicMock()
+    clinic_at_admin_office.id = "cal-clinic"
+    clinic_at_admin_office.title = "Dr Smith: Clinic: Admin Office"
+
+    real_admin_cal = MagicMock()
+    real_admin_cal.id = "cal-admin"
+    real_admin_cal.title = "Dr Smith: admin"
+
+    with patch(
+        "provider_availability_manager.utils.calendar_availability.Calendar"
+    ) as mock_cal:
+        mock_cal.objects.filter.return_value.distinct.return_value = [
+            clinic_at_admin_office, real_admin_cal,
+        ]
+        result = _staff_calendars(staff, "Clinic")
+
+    assert [c.id for c in result] == ["cal-clinic"]
+
+
+def test_staff_calendars_matches_type_case_insensitively():
+    """``type_keyword`` matching is case-insensitive on both sides.
+
+    Titles in the wild use both ``"Clinic"`` and lower-case ``"admin"``
+    (see ``Event.calendar`` SDK constants), and operators sometimes paste
+    mixed-case keywords. Parsing + lower-casing keeps the comparison
+    stable.
+    """
+    staff = MagicMock()
+    staff.id = "staff-uuid"
+    staff.full_name = "Dr Smith"
+
+    cal_lower = MagicMock()
+    cal_lower.id = "cal-1"
+    cal_lower.title = "Dr Smith: clinic"  # lower-case type in title
+
+    cal_upper = MagicMock()
+    cal_upper.id = "cal-2"
+    cal_upper.title = "Dr Smith: CLINIC: Loc"
+
+    with patch(
+        "provider_availability_manager.utils.calendar_availability.Calendar"
+    ) as mock_cal:
+        mock_cal.objects.filter.return_value.distinct.return_value = [
+            cal_lower, cal_upper,
+        ]
+        result = _staff_calendars(staff, "Clinic")
+
+    assert {c.id for c in result} == {"cal-1", "cal-2"}
 
 
 # get_location_timezone --------------------------------------------------
