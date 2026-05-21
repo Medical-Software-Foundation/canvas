@@ -800,7 +800,19 @@
         const allowedProviderIds = recordsOverride && recordsOverride.length < fullSeries.length
             ? providersInSeries(records)
             : null;  // null = unrestricted (single-provider series, or "all providers" picked)
-        const ref = records[0];
+        // ``ref`` is the record the form pre-populates from. After a "this
+        // only" override on a recurring series, ``seriesKeyOf`` groups the
+        // truncated original (A) and the new continuation (C) under one
+        // seriesKey — ``records`` is then [A, C] in insertion order. If
+        // the user clicked a tile in C's range, we MUST pre-populate from C
+        // (open-ended) and not A (whose .recurrence.endDate is the prior
+        // truncation cap). Picking A as the ref made the form's
+        // ``customEndDate`` reflect A's truncation date; after the
+        // preset-endsAt plumbing in 4850c2e, that stale UNTIL flowed onto
+        // the wire and POSTed a "born dead" event with DTSTART > UNTIL —
+        // silently wiping the provider's schedule from the clicked
+        // occurrence onwards.
+        const ref = records.find(r => String(r.id) === String(masterId)) || records[0];
         const startDt = parseLocalISO(ref.startTime);
         // For 'this' and 'following' scopes, the form's date defaults to the
         // clicked occurrence — the new fragment starts from there. For 'all'
@@ -988,19 +1000,25 @@
                     deletedIds.add(String(rec.id));
                 }
             } else if (scope === 'following') {
-                // this-and-following: truncate the covering segment per
-                // provider so it ends the day BEFORE the clicked occurrence.
-                // No continuation, no replacement.
-                const byProvider = {};
-                for (const r of records) {
-                    const key = String(r.provider || '');
-                    (byProvider[key] = byProvider[key] || []).push(r);
-                }
-                for (const key of Object.keys(byProvider)) {
-                    const target = byProvider[key].find(r => recordCovers(r, occurrence.start));
-                    if (target) {
-                        const t = await truncateBefore(target, occurrence.start);
+                // this-and-following: per provider, truncate any segment
+                // covering the clicked occurrence AND delete any segment
+                // produced by an earlier "this only" override that starts
+                // on or after the occurrence (those would otherwise keep
+                // surfacing in the slot filter despite the user's
+                // explicit confirmation). See classifySegmentsForFollowing.
+                const grouped = classifySegmentsForFollowing(records, occurrence.start);
+                for (const key of Object.keys(grouped)) {
+                    const { covering, downstream } = grouped[key];
+                    for (const rec of covering) {
+                        const t = await truncateBefore(rec, occurrence.start);
                         if (t) truncations[t.id] = t.endDate;
+                    }
+                    for (const rec of downstream) {
+                        await apiCall('/plugin-io/api/provider_availability_manager/events', {
+                            method: 'DELETE',
+                            body: JSON.stringify({ eventId: rec.id }),
+                        });
+                        deletedIds.add(String(rec.id));
                     }
                 }
             } else {
@@ -1513,22 +1531,24 @@
                     deletedIds.add(String(rec.id));
                 }
             } else if (scope === 'following') {
-                // this-and-following: truncate the covering segment per
-                // provider to end the day before the clicked occurrence.
-                // No continuation — mirrors doScopedDelete's following
-                // branch. Pre-fix this scope fell through to the else
-                // branch which created a continuation series and removed
-                // only the one occurrence.
-                const byProvider = {};
-                for (const r of records) {
-                    const key = String(r.provider || '');
-                    (byProvider[key] = byProvider[key] || []).push(r);
-                }
-                for (const key of Object.keys(byProvider)) {
-                    const target = byProvider[key].find(r => recordCovers(r, state.modal.occurrenceDate));
-                    if (target) {
-                        const t = await truncateBefore(target, state.modal.occurrenceDate);
+                // Mirrors doScopedDelete's following branch: per provider,
+                // truncate the covering segment AND delete any downstream
+                // segment produced by a prior "this only" override that
+                // starts on or after the clicked occurrence. See
+                // classifySegmentsForFollowing.
+                const grouped = classifySegmentsForFollowing(records, state.modal.occurrenceDate);
+                for (const key of Object.keys(grouped)) {
+                    const { covering, downstream } = grouped[key];
+                    for (const rec of covering) {
+                        const t = await truncateBefore(rec, state.modal.occurrenceDate);
                         if (t) truncations[t.id] = t.endDate;
+                    }
+                    for (const rec of downstream) {
+                        await apiCall('/plugin-io/api/provider_availability_manager/events', {
+                            method: 'DELETE',
+                            body: JSON.stringify({ eventId: rec.id }),
+                        });
+                        deletedIds.add(String(rec.id));
                     }
                 }
             } else {
@@ -1583,21 +1603,33 @@
         for (const provId of Object.keys(existingByProvider)) {
             if (newProviderIds.has(provId)) {
                 // PATCH all underlying records for this provider.
-                // Use the segment-preserving body so that records produced
-                // by an earlier "this only" override (which share the same
-                // seriesKey but have distinct start dates and recurrence
-                // end dates) keep their per-segment boundaries — only the
-                // user-edited fields (title, hh:mm, recurrence rule,
-                // allowed note types) broadcast across the series.
-                for (const rec of existingByProvider[provId]) {
-                    const body = Object.assign(
-                        {},
-                        eventBodyForPatchPreserveSegment(f, rec),
-                        { eventId: rec.id },
-                    );
+                //
+                // Dispatch on segment count: the segment-preserving body
+                // exists for the split-series case (A truncated + C
+                // continuation share a seriesKey, with distinct start
+                // dates and recurrence_ends_at) — applying it
+                // unconditionally silently drops user edits in the much
+                // commoner single-segment cases:
+                //   - Non-recurring edit: f.date is the user's new
+                //     date. The preserve-segment body uses record's
+                //     date, so "move this Block to tomorrow" silently
+                //     no-ops.
+                //   - Single-segment recurring Edit > All: f's
+                //     customEndDate is the user's new end date. The
+                //     preserve-segment body uses record's end date, so
+                //     "extend this series to year-end" silently no-ops.
+                // segments.length > 1 only when a prior "this only"
+                // override actually produced multiple segments under one
+                // seriesKey — exactly the case the helper was designed
+                // for.
+                const segments = existingByProvider[provId];
+                for (const rec of segments) {
+                    const body = segments.length > 1
+                        ? eventBodyForPatchPreserveSegment(f, rec)
+                        : eventBodyForPatch(f, rec.calendarId);
                     await apiCall('/plugin-io/api/provider_availability_manager/events', {
                         method: 'PATCH',
-                        body: JSON.stringify(body),
+                        body: JSON.stringify(Object.assign({}, body, { eventId: rec.id })),
                     });
                 }
             } else {
@@ -1695,12 +1727,25 @@
                 (existingByProvider[String(r.provider)] || []).concat(r);
         }
 
-        // Truncate each existing segment that covers the occurrence date.
-        for (const provId of Object.keys(existingByProvider)) {
-            const target = existingByProvider[provId].find(r => recordCovers(r, occurrenceDate));
-            if (target) {
-                const t = await truncateBefore(target, occurrenceDate);
+        // Per provider, truncate the covering segment AND delete any
+        // downstream segment produced by an earlier "this only" override
+        // that starts on or after the occurrence date. Without the
+        // downstream delete, the new continuation we POST below would
+        // overlap with a stale prior-split continuation — patients then
+        // see duplicate Available windows on the same Monday in the
+        // native scheduler. See classifySegmentsForFollowing.
+        const grouped = classifySegmentsForFollowing(records, occurrenceDate);
+        for (const provId of Object.keys(grouped)) {
+            const { covering, downstream } = grouped[provId];
+            for (const rec of covering) {
+                const t = await truncateBefore(rec, occurrenceDate);
                 if (t) truncations[t.id] = t.endDate;
+            }
+            for (const rec of downstream) {
+                await apiCall('/plugin-io/api/provider_availability_manager/events', {
+                    method: 'DELETE',
+                    body: JSON.stringify({ eventId: rec.id }),
+                });
             }
         }
 
@@ -1761,6 +1806,51 @@
         if (occDate < startOfDay(startDt)) return false;
         if (recEndDt && occDate > recEndDt) return false;
         return true;
+    }
+
+    function classifySegmentsForFollowing(records, occurrenceDate) {
+        // For "this and following" operations on a recurring series that
+        // has been split by a prior "this only" override: a single .find
+        // only locates one segment per provider. After a split,
+        // ``state.events`` may hold A (truncated original) + C
+        // (continuation) under one seriesKey; clicking pre-A and picking
+        // "delete following" used to truncate A and silently leave C —
+        // the slot filter then kept surfacing every post-override Monday
+        // despite the user's explicit confirmation.
+        //
+        // Per provider, classify each record into:
+        //   - covering:   starts before occurrenceDate, includes
+        //                 occurrenceDate in its date range → truncate.
+        //   - downstream: starts on or after occurrenceDate → DELETE
+        //                 (covers both prior-split continuations AND
+        //                 the edge case where the covering segment
+        //                 starts exactly on occurrenceDate, where
+        //                 truncating to dayBefore would yield a
+        //                 degenerate endDate < startTime).
+        //   - earlier:    fully before occurrenceDate, leave alone.
+        const occDay = startOfDay(occurrenceDate);
+        const byProvider = {};
+        for (const r of records) {
+            const key = String(r.provider || '');
+            (byProvider[key] = byProvider[key] || []).push(r);
+        }
+        const result = {};
+        for (const key of Object.keys(byProvider)) {
+            const covering = [];
+            const downstream = [];
+            for (const rec of byProvider[key]) {
+                const startDt = parseLocalISO(rec.startTime);
+                const recStartDay = startDt ? startOfDay(startDt) : null;
+                if (recStartDay && recStartDay.getTime() >= occDay.getTime()) {
+                    downstream.push(rec);
+                } else if (recordCovers(rec, occurrenceDate)) {
+                    covering.push(rec);
+                }
+                // else: segment is fully before occurrenceDate — leave alone.
+            }
+            result[key] = { covering, downstream };
+        }
+        return result;
     }
 
     // Truncate a record's recurrence to end the day BEFORE the given date.
@@ -1847,14 +1937,40 @@
             // same midnight value for both bounds makes
             // ``09:00 <= 00:00`` always false, so the walk returns []
             // every iteration and silently lands DTSTART ~366 days out.
+            //
+            // Bound the walk by the record's original ``recurrence.endDate``
+            // (in-memory still reflects the pre-truncation value): once we
+            // pass it, no further occurrence of the original rule can
+            // exist. Without this bound, splitting inside an already-
+            // truncated segment (e.g. A_truncated produced by a prior
+            // "this only" override) walks forward looking for a match the
+            // rule will never produce — exhausts the 366-iteration cap
+            // and lands DTSTART ~year out. The continuation would then
+            // inherit the original endDate (5/17), making DTSTART > UNTIL
+            // and the new event "born dead" with zero occurrences. The
+            // explicit ``found`` flag lets us skip the POST entirely
+            // when the rule has no remaining occurrences in its window.
             let anchorDate = dayAfter;
+            let found = false;
             for (let i = 0; i < 366; i++) {
+                if (recEndDt && startOfDay(anchorDate).getTime() > recEndDt.getTime()) {
+                    break;
+                }
                 const dayEnd = new Date(
                     anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate(),
                     23, 59, 59, 999,
                 );
-                if (expandOccurrences(record, anchorDate, dayEnd).length > 0) break;
+                if (expandOccurrences(record, anchorDate, dayEnd).length > 0) {
+                    found = true;
+                    break;
+                }
                 anchorDate = addDays(anchorDate, 1);
+            }
+            if (!found) {
+                // No further occurrence inside the original rule's window.
+                // Skip the continuation POST entirely rather than emit a
+                // born-dead event.
+                return { id: String(record.id), endDate: truncatedEnd };
             }
             const newStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate(),
                 startDt.getHours(), startDt.getMinutes());
