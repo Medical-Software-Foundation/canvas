@@ -40,7 +40,7 @@
         "SENDGRID_FROM_EMAIL"
     ],
     "custom_data": {
-        "namespace": "dexcom_cgm_viewer",
+        "namespace": "canvas__dexcom_cgm_viewer",
         "access": "read_write"
     },
     "tags": {},
