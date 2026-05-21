@@ -2,7 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  console.log('clinical_pathways builder v0.4.0 loaded');
+  console.log('clinical_pathways builder v0.4.1 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -307,28 +307,29 @@
 
     card.appendChild(header);
 
-    const rulesHost = document.createElement('div');
-    rulesHost.className = 'rules-host';
-    (step.rules || []).forEach((rule) => rulesHost.appendChild(renderRuleCard(step, rule)));
-    card.appendChild(rulesHost);
-
-    const addRule = document.createElement('button');
-    addRule.type = 'button';
-    addRule.className = 'secondary small';
-    addRule.textContent = '+ Add rule';
-    addRule.style.marginTop = '8px';
-    addRule.addEventListener('click', () => {
-      step.rules = step.rules || [];
-      step.rules.push({
-        rule_id: newRuleId(),
-        combinator: 'all',
-        conditions: [],
-        then: null,
-      });
-      savePathway();
-      renderEditor();
-    });
-    card.appendChild(addRule);
+    // Each step has exactly one implicit rule — auto-create if missing
+    // (e.g., legacy data). No "Add rule" or "Delete rule" affordance.
+    if (!step.rules || !step.rules.length) {
+      step.rules = [
+        {
+          rule_id: newRuleId(),
+          combinator: 'all',
+          conditions: [
+            {
+              question_id: step.question_id || '',
+              operator: 'eq',
+              value_option_id: '',
+              value_option_ids: [],
+              value_text: '',
+              value_number: null,
+            },
+          ],
+          then: null,
+        },
+      ];
+    }
+    const rule = step.rules[0];
+    card.appendChild(renderRuleBody(step, rule));
 
     // Otherwise row
     const otherwiseRow = document.createElement('div');
@@ -432,7 +433,7 @@
 
   // ---------- Rules ----------
 
-  function renderRuleCard(step, rule) {
+  function renderRuleBody(step, rule) {
     const card = document.createElement('div');
     card.className = 'rule-card';
     card.dataset.ruleId = rule.rule_id;
@@ -459,23 +460,6 @@
       renderEditor();
     });
     header.appendChild(combSel);
-
-    const spacer = document.createElement('span');
-    spacer.style.flex = '1';
-    header.appendChild(spacer);
-
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'ghost small';
-    delBtn.textContent = '×';
-    delBtn.title = 'Delete rule';
-    delBtn.addEventListener('click', () => {
-      if (!confirm('Delete this rule?')) return;
-      step.rules = (step.rules || []).filter((r) => r.rule_id !== rule.rule_id);
-      savePathway();
-      renderEditor();
-    });
-    header.appendChild(delBtn);
     card.appendChild(header);
 
     const condsHost = document.createElement('div');
@@ -837,13 +821,32 @@
   function addStepFromQuestion(loaded, detail, question) {
     const def = state.pathway.definition;
     def.steps = def.steps || [];
+    // Auto-create one rule with one condition that references this step's
+    // own question. Users can fill in the operator and value (and route) —
+    // no separate "Add rule" click needed.
     def.steps.push({
       step_id: newStepId(),
       questionnaire_id: loaded.questionnaire_id,
       questionnaire_name_snapshot: detail.name || loaded.questionnaire_name_snapshot || '',
       question_id: question.id,
       question_name_snapshot: question.name || '',
-      rules: [],
+      rules: [
+        {
+          rule_id: newRuleId(),
+          combinator: 'all',
+          conditions: [
+            {
+              question_id: question.id,
+              operator: 'eq',
+              value_option_id: '',
+              value_option_ids: [],
+              value_text: '',
+              value_number: null,
+            },
+          ],
+          then: null,
+        },
+      ],
       otherwise: null,
     });
     savePathway();

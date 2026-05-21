@@ -308,7 +308,10 @@ class PathwayEvaluator(BaseHandler):
         note = Note.objects.filter(dbid=note_id).first()
         if not note:
             return []
-        note_uuid = note.id
+        # `Note.id` is a UUID object; the QuestionnaireCommand and CustomCommand
+        # fields are typed `str`, so stringify here so the downstream pydantic
+        # validation accepts the value.
+        note_uuid = str(note.id)
 
         runs = PathwayRun.objects.filter(note_uuid=note_uuid, status="active")
         if not runs.exists():

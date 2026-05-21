@@ -24,7 +24,11 @@ main#app { display: flex; height: calc(100vh - 53px); }
 .list li .badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; background: #edf2f7; color: #4a5568; text-transform: uppercase; }
 .list li .badge.published { background: #c6f6d5; color: #22543d; }
 
-.pane.wide { flex: 1; min-width: 0; max-width: 880px; }
+.pane.wide { flex: 1; min-width: 0; max-width: 1144px; }
+/* Center the editor inside its pane so it doesn't hug the left rail on
+   wide displays. The 30% wider max-width gives the question dropdowns
+   and rule bodies more room. */
+#pathway-editor { max-width: 1144px; margin: 0 auto; width: 100%; }
 .right-rail { margin-left: auto; }
 
 .empty { color: #718096; padding: 60px 0; text-align: center; }
