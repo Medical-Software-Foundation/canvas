@@ -47,6 +47,9 @@ def _parse_limit(raw: str) -> int:
 class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
     """Search endpoints for the Exam tab dropdowns."""
 
+    # See ExamChartingAPI for the PREFIX rationale — same SDK requirement.
+    PREFIX = ""
+
     @api.get("/exam/search/rfv-codings")
     def search_rfv_codings(self) -> list[Response | Effect]:
         query = (self.request.query_params.get("q") or "").strip()
