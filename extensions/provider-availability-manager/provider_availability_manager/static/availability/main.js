@@ -787,10 +787,19 @@
     function openEditModal(masterId, scope, occurrence, recordsOverride) {
         // recordsOverride lets the scope prompt narrow the edit to a single
         // provider's records on a multi-provider series.
+        const fullSeries = seriesFor(masterId);
         const records = recordsOverride && recordsOverride.length
             ? recordsOverride
-            : seriesFor(masterId);
+            : fullSeries;
         if (!records.length) return;
+        // Detect provider-scope narrowing so the form can restrict chips.
+        // Without this, the chips render from ``state.providers`` and a user
+        // who picked "Edit … for Dr A only" can still click Dr B's chip,
+        // sending the edit paths down their CREATE branch for Dr B while
+        // leaving Dr B's original record untouched — a silent duplicate.
+        const allowedProviderIds = recordsOverride && recordsOverride.length < fullSeries.length
+            ? providersInSeries(records)
+            : null;  // null = unrestricted (single-provider series, or "all providers" picked)
         const ref = records[0];
         const startDt = parseLocalISO(ref.startTime);
         // For 'this' and 'following' scopes, the form's date defaults to the
@@ -825,6 +834,7 @@
             seriesRecords: records,
             originalEvent: ref,
             occurrenceDate: occDate,
+            allowedProviderIds: allowedProviderIds, // null = unrestricted
             form: {
                 date: dateOnly(occDate),
                 startTime: occHHMMStart,
@@ -1034,12 +1044,25 @@
             renderAll();
         };
 
+        // When the scope prompt narrowed the edit to a subset of providers
+        // (e.g. "Edit … for Dr A only" on a multi-provider series), only the
+        // narrowed providers' chips are interactive. Chips outside that set
+        // appear disabled with a tooltip — clicking them used to silently
+        // CREATE a duplicate event because the un-narrowed record stayed in
+        // state.events untouched.
+        const allowedProviderIds = state.modal.allowedProviderIds;  // null = unrestricted
+        const allowedProviderSet = allowedProviderIds ? new Set(allowedProviderIds.map(String)) : null;
         const makeChips = (group) => group.map(p => {
-            const sel = f.providers.includes(String(p.id));
+            const id = String(p.id);
+            const sel = f.providers.includes(id);
+            const restricted = allowedProviderSet && !allowedProviderSet.has(id);
             return el('span', {
-                class: 'av-chip' + (sel ? ' active' : ''),
+                class: 'av-chip' + (sel ? ' active' : '') + (restricted ? ' disabled' : ''),
+                title: restricted
+                    ? 'This provider was not in the edit scope you picked. Edit the whole series or recreate to include them.'
+                    : '',
                 onclick: () => {
-                    const id = String(p.id);
+                    if (restricted) return;
                     const next = sel ? f.providers.filter(x => x !== id) : f.providers.concat(id);
                     setForm({ providers: next });
                 },
@@ -1346,17 +1369,28 @@
         const startDt = parseLocalISO(form.date + 'T' + form.startTime);
         const mode = form.recurrence.mode;
         if (mode === 'none') return {};
-        if (mode === 'daily') return { frequency: 'DAILY', interval: 1, days: [], endsAt: null };
+        // ``openEditModal`` populates ``customEnds`` / ``customEndDate`` for
+        // every recurring scope regardless of mode (lines 843-844). The
+        // preset modes also need to honor that — without this, a finite
+        // weekly series (FREQ=WEEKLY;INTERVAL=1;BYDAY=MO;UNTIL=...) which
+        // ``inferRecurrenceMode`` routes to ``weekly_day`` would silently
+        // lose its end date on every Edit > All / Edit > Following save.
+        const r = form.recurrence;
+        const presetEndsAt = r.customEnds === 'on' && r.customEndDate
+            ? r.customEndDate + 'T23:59'
+            : null;
+        if (mode === 'daily') return {
+            frequency: 'DAILY', interval: 1, days: [], endsAt: presetEndsAt,
+        };
         if (mode === 'weekly_day') return {
             frequency: 'WEEKLY', interval: 1,
-            days: [dayOfWeekCode(startDt)], endsAt: null,
+            days: [dayOfWeekCode(startDt)], endsAt: presetEndsAt,
         };
         if (mode === 'every_weekday') return {
             frequency: 'WEEKLY', interval: 1,
-            days: ['MO', 'TU', 'WE', 'TH', 'FR'], endsAt: null,
+            days: ['MO', 'TU', 'WE', 'TH', 'FR'], endsAt: presetEndsAt,
         };
         // custom
-        const r = form.recurrence;
         const days = r.customRepeatFreq === 'WEEKLY' ? r.customDays.slice() : [];
         let endsAt = null;
         if (r.customEnds === 'on') {
@@ -1548,9 +1582,19 @@
 
         for (const provId of Object.keys(existingByProvider)) {
             if (newProviderIds.has(provId)) {
-                // PATCH all underlying records for this provider
+                // PATCH all underlying records for this provider.
+                // Use the segment-preserving body so that records produced
+                // by an earlier "this only" override (which share the same
+                // seriesKey but have distinct start dates and recurrence
+                // end dates) keep their per-segment boundaries — only the
+                // user-edited fields (title, hh:mm, recurrence rule,
+                // allowed note types) broadcast across the series.
                 for (const rec of existingByProvider[provId]) {
-                    const body = Object.assign({}, eventBodyForPatch(f, rec.calendarId), { eventId: rec.id });
+                    const body = Object.assign(
+                        {},
+                        eventBodyForPatchPreserveSegment(f, rec),
+                        { eventId: rec.id },
+                    );
                     await apiCall('/plugin-io/api/provider_availability_manager/events', {
                         method: 'PATCH',
                         body: JSON.stringify(body),
@@ -1582,6 +1626,58 @@
         // Same shape minus calendar (PATCH expects eventId). The server's PATCH
         // overwrites the recurrence/days/etc to whatever we pass.
         return eventBody(f, calendarId);
+    }
+
+    function eventBodyForPatchPreserveSegment(f, record) {
+        // Build a PATCH body for "Edit > All" that preserves each record's
+        // own *segment* boundaries (start date and recurrence_ends_at) and
+        // only applies the form's fields that are intended to be
+        // edit-broadcast: title, hh:mm time-of-day, recurrence rule,
+        // allowed_note_types.
+        //
+        // Why: after a "this only" override, ``seriesKeyOf`` groups the
+        // truncated original (A: ends day-before override) and the new
+        // continuation (C: starts day-after override) under one logical
+        // series. A later "Edit > All" picks records[0] as the form ref —
+        // but A's start-date and end-date are NOT C's. PATCHing both with
+        // form-derived startTime/recurrenceEndsAt collapses C onto A's
+        // range and destroys the continuation. Preserving per-record
+        // segment boundaries keeps each split segment intact while the
+        // user's title/hh:mm/rule changes still apply across the series.
+        const recStart = parseLocalISO(record.startTime);
+        const recEnd = parseLocalISO(record.endTime);
+        const startDateStr = recStart
+            ? [recStart.getFullYear(), pad2(recStart.getMonth() + 1), pad2(recStart.getDate())].join('-')
+            : f.date;
+        const endDateStr = recEnd
+            ? [recEnd.getFullYear(), pad2(recEnd.getMonth() + 1), pad2(recEnd.getDate())].join('-')
+            : f.date;
+        const recurrence = buildRecurrencePayload(f);
+        const body = {
+            timezone: state.viewTimezone || undefined,
+            title: f.title,
+            startTime: startDateStr + 'T' + f.startTime + ':00',
+            endTime: endDateStr + 'T' + f.endTime + ':00',
+            // Mirror eventBody: TYPE_BLOCK never carries note-type
+            // restrictions; only TYPE_AVAILABLE does.
+            allowedNoteTypes: f.type === TYPE_AVAILABLE ? (f.allowedNoteTypes || []) : [],
+        };
+        if (recurrence.frequency) {
+            body.recurrenceFrequency = recurrence.frequency;
+            body.recurrenceInterval = recurrence.interval || 1;
+            body.recurrenceDays = recurrence.days || [];
+            // Preserve per-record recurrence_ends_at: the form has only
+            // one value but split segments have distinct ones (A finite,
+            // C open-ended). The user can still alter end dates via
+            // "Edit > Following" or by editing the specific segment.
+            body.recurrenceEndsAt = record.recurrence?.endDate || null;
+        } else {
+            body.recurrenceFrequency = null;
+            body.recurrenceInterval = null;
+            body.recurrenceDays = [];
+            body.recurrenceEndsAt = null;
+        }
+        return body;
     }
 
     // "This and following events": truncate each existing provider's covering
@@ -1744,9 +1840,20 @@
             // Walk forward from dayAfter using the SAME expandOccurrences
             // the UI uses, so the continuation lines up exactly with what
             // the user sees in the calendar.
+            //
+            // The range MUST span the whole day: expandOccurrences builds
+            // ``occStart`` at the event's hh:mm (e.g. 09:00) and rejects it
+            // unless it falls inside [rangeStart, rangeEnd]. Passing the
+            // same midnight value for both bounds makes
+            // ``09:00 <= 00:00`` always false, so the walk returns []
+            // every iteration and silently lands DTSTART ~366 days out.
             let anchorDate = dayAfter;
             for (let i = 0; i < 366; i++) {
-                if (expandOccurrences(record, anchorDate, anchorDate).length > 0) break;
+                const dayEnd = new Date(
+                    anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate(),
+                    23, 59, 59, 999,
+                );
+                if (expandOccurrences(record, anchorDate, dayEnd).length > 0) break;
                 anchorDate = addDays(anchorDate, 1);
             }
             const newStart = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), anchorDate.getDate(),
