@@ -500,7 +500,12 @@ class PathwayEvaluator(BaseHandler):
                     run.current_step_id = step.get("step_id", "")
                     run.status = "completed"
                     return effects
-                effects.append(BatchOriginateCommandEffect(commands=[cmd]).apply())
+                # CustomCommand uses its own `.originate()` effect rather
+                # than BatchOriginateCommandEffect (the docs example for
+                # CustomCommand shows it that way, and we hit a frontend
+                # render crash when batching a CustomCommand alongside the
+                # other SDK command types).
+                effects.append(cmd.originate())
                 run.current_step_id = step.get("step_id", "")
                 run.status = "completed"
                 return effects
