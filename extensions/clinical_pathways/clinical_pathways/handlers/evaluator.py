@@ -320,6 +320,19 @@ class PathwayEvaluator(BaseHandler):
         new_captured = _collect_responses_for_interview(interview)
         interview_questionnaire_ids = {str(q.id) for q in interview.questionnaires.all()}
 
+        # Coordinate concurrent workers handling the same event: build a
+        # token unique to this interview-update (interview_id + modified
+        # timestamp), then atomically claim it via UPDATE-where on each run.
+        # Only the worker whose UPDATE changes a row proceeds; the others
+        # skip. Re-edits of the same interview produce a new token via the
+        # updated modified timestamp and re-trigger processing.
+        event_token = str(interview_id)
+        try:
+            if interview.modified:
+                event_token += ":" + interview.modified.isoformat()
+        except Exception:
+            pass
+
         effects: list[Effect] = []
         for run in runs:
             pathway = Pathway.objects.filter(dbid=run.pathway_id).first()
@@ -333,6 +346,27 @@ class PathwayEvaluator(BaseHandler):
                     pathway.dbid,
                 )
                 continue
+
+            prior_token = run.last_processed_event_token or ""
+            if prior_token == event_token:
+                # We already processed this exact event for this run.
+                continue
+            updated_rows = PathwayRun.objects.filter(
+                dbid=run.dbid,
+                last_processed_event_token=prior_token,
+            ).update(last_processed_event_token=event_token)
+            if updated_rows == 0:
+                # Another worker claimed this event first.
+                log.info(
+                    "clinical_pathways: run %s skipped — event %s claimed by another worker",
+                    run.dbid,
+                    event_token,
+                )
+                continue
+            # We won the race; refresh our in-memory copy so subsequent
+            # field updates (current_step_id, inserted_questionnaires, ...)
+            # save on top of the claimed token.
+            run.last_processed_event_token = event_token
 
             # Merge this interview's responses into the run's accumulator.
             merged = dict(run.captured_responses or {})

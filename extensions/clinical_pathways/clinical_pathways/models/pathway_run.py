@@ -43,6 +43,13 @@ class PathwayRun(CustomModel):
     # specific question." Once committed, a step whose question wasn't
     # answered is treated as answered-blank and the pathway advances.
     committed_questionnaires = JSONField(default=list)
+    # Atomicity gate: Canvas dispatches each INTERVIEW_UPDATED to multiple
+    # worker processes; without coordination they all advance the run and
+    # all emit an insert effect, producing duplicate questionnaire commands
+    # in the note. Each compute() call computes a token (interview_id +
+    # modified timestamp) and tries to atomically swap it into this field;
+    # only the worker whose UPDATE actually changes a row proceeds.
+    last_processed_event_token = TextField(default="")
     status = TextField(default="active")  # "active" | "completed"
     captured_responses = JSONField(default=dict)
     created_at = DateTimeField(auto_now_add=True)
