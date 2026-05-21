@@ -1,0 +1,51 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.2.1",
+    "name": "hospitalization_tracker",
+    "description": "Track inpatient stays (ICU admissions, long stays) with structured data entry from a note tab and a chart summary section.",
+    "components": {
+        "handlers": [
+            {
+                "class": "hospitalization_tracker.applications.note_app:HospitalizationTrackerApp",
+                "description": "NoteApplication tab for adding a new hospitalization to the current note."
+            },
+            {
+                "class": "hospitalization_tracker.handlers.api:HospitalizationAPI",
+                "description": "API for creating hospitalization records and inserting the CustomCommand."
+            },
+            {
+                "class": "hospitalization_tracker.handlers.chart_summary_section:HospitalizationSummarySection",
+                "description": "Renders the Inpatient Stay History in the chart summary."
+            },
+            {
+                "class": "hospitalization_tracker.handlers.chart_summary_config:HospitalizationChartSummaryConfig",
+                "description": "Registers the Inpatient Stay History section in the chart summary layout."
+            },
+            {
+                "class": "hospitalization_tracker.handlers.api:HospitalizationWebSocket",
+                "description": "Authenticates WebSocket connections for hospitalization real-time updates."
+            }
+        ],
+        "commands": [
+            {
+                "name": "HospitalizationSummary",
+                "label": "Inpatient Stay History",
+                "schema_key": "hospitalizationSummary",
+                "section": "history"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "msf__hospitalization_tracker",
+        "access": "read_write"
+    },
+    "secrets": ["namespace_read_write_access_key"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

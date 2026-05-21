@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 8px 12px;
+      font-family: Lato, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 12px;
+      color: #1a1a1a;
+      background: transparent;
+    }
+    .section-header {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin: 0 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-header svg {
+      flex-shrink: 0;
+      color: #555;
+    }
+    .entry {
+      margin-bottom: 10px;
+    }
+    .entry:last-child {
+      margin-bottom: 0;
+    }
+    .entry-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 1px;
+    }
+    .top-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .entry-title {
+      font-weight: 700;
+      font-size: 12px;
+      color: #1a1a1a;
+      flex: 1;
+      min-width: 0;
+    }
+    .entry-detail {
+      color: #555;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 3px;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 10px;
+      white-space: nowrap;
+    }
+    .badge-icu { background: #fed7d7; color: #c53030; }
+    .badge-readmit { background: #fefcbf; color: #744210; }
+    .badge-los { background: #e9d8fd; color: #553c9a; }
+    .empty {
+      color: #888;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="section-header">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8"/>
+      <path d="M2 20h20"/>
+      <path d="M2 12V5a2 2 0 0 1 2-2h3"/>
+      <path d="M6 12v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/>
+    </svg>
+    Inpatient Stay History
+  </div>
+
+  {% if hospitalizations %}
+    {% for h in hospitalizations %}
+    <div class="entry">
+      <div class="entry-top">
+        <div class="entry-title">{{ h.hospital_name }}</div>
+        <div class="top-badges">
+          {% if h.icu_stay %}
+          <span class="badge badge-icu">ICU{% if h.icu_duration_days %} {{ h.icu_duration_days }}d{% endif %}</span>
+          {% endif %}
+          {% if h.length_of_stay_days is not None %}
+          <span class="badge badge-los">{{ h.length_of_stay_days }}d stay</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="entry-detail">
+        {{ h.admission_date }}{% if h.discharge_date %} – {{ h.discharge_date }}{% endif %}
+      </div>
+      <div class="entry-detail">{{ h.reason_for_admission }}</div>
+      {% if h.principal_diagnosis %}
+      <div class="entry-detail">Dx: {{ h.principal_diagnosis }}</div>
+      {% endif %}
+      {% if h.treating_physician %}
+      <div class="entry-detail">Dr: {{ h.treating_physician }}</div>
+      {% endif %}
+      {% if h.readmission_within_30_days %}
+      <div class="badges">
+        <span class="badge badge-readmit">30d Readmit</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+  <p class="empty">No hospitalizations on record.</p>
+  {% endif %}
+
+  <script>
+    var resizePort = null;
+
+    function sendResize() {
+      if (resizePort) {
+        resizePort.postMessage({ type: 'RESIZE', height: document.body.scrollHeight });
+      }
+    }
+
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+        resizePort = event.ports[0];
+        sendResize();
+        new ResizeObserver(sendResize).observe(document.body);
+      }
+    });
+
+    var patientId = "{{ patient_id }}";
+    var wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var wsUrl = wsProtocol + '//' + window.location.host + '/plugin-io/ws/hospitalization_tracker/hospitalization-tracker-' + patientId + '/';
+
+    function connectWS() {
+      var ws = new WebSocket(wsUrl);
+      ws.onmessage = function(event) {
+        try {
+          var data = JSON.parse(event.data);
+          if (data.message && data.message.event_type === 'hospitalization_update') {
+            fetch('/plugin-io/api/hospitalization_tracker/section?patient_id=' + patientId)
+              .then(function(r) { return r.text(); })
+              .then(function(html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                document.body.innerHTML = doc.body.innerHTML;
+                sendResize();
+              });
+          }
+        } catch(e) {}
+      };
+      ws.onclose = function() { setTimeout(connectWS, 3000); };
+    }
+
+    connectWS();
+  </script>
+</body>
+</html>
