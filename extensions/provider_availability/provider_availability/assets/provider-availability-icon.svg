@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="46" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+  <!-- Calendar body -->
+  <rect x="22" y="30" width="40" height="38" rx="4" fill="white" stroke="#2563EB" stroke-width="2.5"/>
+  <!-- Calendar header bar -->
+  <rect x="22" y="30" width="40" height="12" rx="4" fill="#2563EB"/>
+  <rect x="22" y="38" width="40" height="4" fill="#2563EB"/>
+  <!-- Calendar hooks -->
+  <line x1="32" y1="26" x2="32" y2="34" stroke="#1E40AF" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="52" y1="26" x2="52" y2="34" stroke="#1E40AF" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Calendar grid lines -->
+  <line x1="28" y1="52" x2="56" y2="52" stroke="#BFDBFE" stroke-width="1"/>
+  <line x1="28" y1="58" x2="56" y2="58" stroke="#BFDBFE" stroke-width="1"/>
+  <line x1="36" y1="46" x2="36" y2="64" stroke="#BFDBFE" stroke-width="1"/>
+  <line x1="48" y1="46" x2="48" y2="64" stroke="#BFDBFE" stroke-width="1"/>
+  <!-- Clock circle -->
+  <circle cx="62" cy="58" r="16" fill="white" stroke="#059669" stroke-width="2.5"/>
+  <!-- Clock face -->
+  <circle cx="62" cy="58" r="13" fill="#ECFDF5"/>
+  <!-- Clock hands -->
+  <line x1="62" y1="58" x2="62" y2="49" stroke="#059669" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="62" y1="58" x2="69" y2="58" stroke="#059669" stroke-width="2" stroke-linecap="round"/>
+  <!-- Clock center dot -->
+  <circle cx="62" cy="58" r="2" fill="#059669"/>
+  <!-- Small checkmark on clock -->
+  <polyline points="56,58 60,62 68,53" fill="none" stroke="#059669" stroke-width="0" opacity="0"/>
+</svg>

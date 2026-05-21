@@ -1,0 +1,76 @@
+{
+    "sdk_version": "0.107.0",
+    "plugin_version": "0.16.1",
+    "name": "provider_availability",
+    "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
+    "components": {
+        "protocols": [
+            {
+                "class": "provider_availability.api.availability_api:AvailabilityAPI",
+                "description": "REST API for querying availability and managing rules"
+            },
+            {
+                "class": "provider_availability.api.provision_api:ProvisionAPI",
+                "description": "API key-authenticated endpoint for provisioning provider calendars"
+            },
+            {
+                "class": "provider_availability.cron.cache_refresh:CacheRefreshTask",
+                "description": "Daily cache TTL refresh for availability rules"
+            },
+            {
+                "class": "provider_availability.protocols.staff_lifecycle:OnStaffActivated",
+                "description": "Creates a Clinic calendar when a new provider is activated"
+            },
+            {
+                "class": "provider_availability.protocols.staff_lifecycle:OnStaffDeactivated",
+                "description": "Cleans up availability rules and calendar events when a provider is deactivated"
+            },
+            {
+                "class": "provider_availability.protocols.staff_lifecycle:OnPluginInstalled",
+                "description": "Syncs all cached rules to Canvas Calendar Events on plugin install or update"
+            },
+            {
+                "class": "provider_availability.protocols.slot_provider:SlotAvailabilityProvider",
+                "description": "Intercepts appointment slot search to inject rule-based availability"
+            },
+            {
+                "class": "provider_availability.protocols.appointment_buffer:OnAppointmentCreated",
+                "description": "Creates buffer events on Administrative calendar when appointment is booked"
+            },
+            {
+                "class": "provider_availability.protocols.appointment_buffer:OnAppointmentRescheduled",
+                "description": "Updates buffer events on Administrative calendar when appointment is rescheduled"
+            },
+            {
+                "class": "provider_availability.protocols.appointment_buffer:OnAppointmentCanceled",
+                "description": "Removes buffer events from Administrative calendar when appointment is canceled"
+            }
+        ],
+        "applications": [
+            {
+                "class": "provider_availability.applications.availability_app:ProviderAvailabilityApp",
+                "name": "Provider Availability",
+                "description": "Configure provider scheduling rules and availability",
+                "icon": "assets/provider-availability-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "simpleapi-api-key",
+        "allowed-staff-keys"
+    ],
+    "tags": {
+        "category": ["scheduling", "administration"],
+        "workflow_stage": ["pre-visit"]
+    },
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
