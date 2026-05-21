@@ -21,13 +21,11 @@ Physicians and advanced practice providers in any specialty who need to capture 
 
 **Inpatient Stay History — chart summary section**
 
-![Inpatient Stay History chart summary section](screenshots/chart-summary-section.png)
+![Inpatient Stay History chart summary section](../screenshots/chart-summary-section.png)
 
 **Add Hospitalization — note tab form**
 
-![Add Hospitalization form](screenshots/add-hospitalization-form.png)
-
-> Replace the images above with real screenshots before publishing.
+![Add Hospitalization form](../screenshots/add-hospitalization-form.png)
 
 ## Components
 
