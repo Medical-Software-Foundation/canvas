@@ -32,16 +32,14 @@ endocrinology, primary care, and remote-monitoring programs.
 
 ## Screenshots
 
-> **TODO — screenshots required before publishing.** Replace this block
-> with at least one PNG showing the disconnected → connected → synced
-> flow. Drop files into `docs/screenshots/` and link them here.
+The plugin tile inside the patient chart:
 
-```
-docs/screenshots/
-├── disconnected.png   # Send-link panel
-├── connected.png      # Latest glucose + chart
-└── connection-flow.gif (optional)
-```
+![Plugin preview in the chart drawer](../screenshots/plugin-preview.png)
+
+After connecting the patient and running a sync — latest glucose, trend
+arrow, time-in-range, and the glucose chart:
+
+![Connected view with synced CGM data](../screenshots/data-synced.png)
 
 ## How to install
 
