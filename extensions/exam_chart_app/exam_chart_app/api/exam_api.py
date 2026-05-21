@@ -23,8 +23,22 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
-from django.db import DatabaseError, OperationalError
 from logger import log
+
+# Class-name filter for DB-class exceptions raised by the AttributeHub
+# ORM layer. ``from django.db import DatabaseError, OperationalError``
+# would be the natural pattern, but the Canvas plugin sandbox rejects
+# that import at module load with ``ImportError: 'django.db' is not an
+# allowed import``. ``django.db.models`` is on the allowlist (the SDK
+# uses it for Q objects), but the exception classes themselves are not.
+# String-name matching is a fragile workaround, but Django's exception
+# class names are stable public API and the alternatives (broad-except
+# with no filter, or building a private exception-class registry) are
+# worse. Verified against canvas_sdk 0.142.0 on 2026-05-21.
+_DB_EXCEPTION_NAMES = frozenset({
+    "DatabaseError", "OperationalError", "IntegrityError",
+    "InterfaceError", "DataError", "NotSupportedError",
+})
 
 from exam_chart_app.api.emitters import (
     _ORDER_EMITTERS,
@@ -550,13 +564,9 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                     f"[ExamChartingAPI] narrative stashed for "
                     f"command_uuid={cmd_uuid} len={len(narrative)}"
                 )
-            except (DatabaseError, OperationalError):
-                # Narrow to DB-class errors: AttributeHub is internal
-                # data access, and AttributeError/KeyError/TypeError from
-                # programming bugs (renamed SDK methods, sandbox attribute
-                # blocks) must reach Sentry rather than be swallowed.
-                # log.exception so on-call gets paged for the genuine DB
-                # blips this swallow is intended to cover.
+            except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see _DB_EXCEPTION_NAMES rationale at module top
+                if exc.__class__.__name__ not in _DB_EXCEPTION_NAMES:
+                    raise  # programming bug (AttributeError, KeyError, TypeError) → 500 + Sentry
                 log.exception(
                     f"[ExamChartingAPI] set_narrative failed for "
                     f"command_uuid={cmd_uuid}"
@@ -577,15 +587,16 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             mark_finalized(note_uuid)
             mark_ever_finalized(note_uuid)
-        except (DatabaseError, OperationalError):
-            # Narrow to DB-class errors so programming bugs reach Sentry.
-            # log.exception pages on-call: a swallowed transient here
-            # leaves finalized=False, the frontend re-enables the
-            # Finalize button on reopen, and a re-click would duplicate
-            # every per-section emit. The narrow catch + page is the
-            # immediate compliance fix; closing the duplicate-emit gap
-            # fully requires frontend-side dedup or backend pre-gate
-            # state read.
+        except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see _DB_EXCEPTION_NAMES rationale at module top
+            if exc.__class__.__name__ not in _DB_EXCEPTION_NAMES:
+                raise  # programming bug → 500 + Sentry
+            # A swallowed transient here leaves finalized=False, the
+            # frontend re-enables the Finalize button on reopen, and a
+            # re-click would duplicate every per-section emit. The
+            # narrow catch + log.exception page is the immediate
+            # compliance fix; closing the duplicate-emit gap fully
+            # requires frontend-side dedup or backend pre-gate state
+            # read.
             log.exception(
                 f"[ExamChartingAPI] mark_finalized failed for note={note_uuid}"
             )
