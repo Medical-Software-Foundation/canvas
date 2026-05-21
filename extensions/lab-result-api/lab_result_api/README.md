@@ -3,89 +3,129 @@ lab-result-api
 
 ## Description
 
-SimpleAPI endpoint that provides read-only access to Canvas lab results with comprehensive data including ordering provider, lab facility, and individual test values. This plugin exposes a GET endpoint that retrieves lab report data with all related test results.
-
-## Features
-
-- Retrieve complete lab report data by lab report ID
-- Include ordering provider information (name, NPI)
-- Include lab facility details
-- Return all individual test values with results, units, and reference ranges
-- Include comprehensive metadata:
-  - Patient information
-  - Lab test values with abnormal flags and observation status
-  - Reference ranges and thresholds
-  - Test codings and display names
+SimpleAPI endpoint that provides read-only access to Canvas lab reports. Returns the report metadata, the patient, and the result tests with their nested lab values. When the report is linked to an originating lab order, the order block is also included (with ordering provider, lab partner, and reason conditions); reports ingested without a Canvas-side order (e.g., external HL7 or FHIR results) will not have this block populated. Values from legacy reports that were ingested without an associated `LabTest` are surfaced separately under `unassigned_values`.
 
 ## API Endpoint
 
-### GET plugin-io/api/lab_result_api/lab-result/<lab_report_id>
+### `GET /plugin-io/api/lab_result_api/lab-result/<lab_report_id>`
 
-Retrieves a lab report by ID and returns all lab data with ordering provider and test results.
+**Authentication:** API key via `APIKeyAuthMixin`. Send your Canvas SimpleAPI key in the `Authorization` header. The expected key is configured by the `simpleapi-api-key` secret on the plugin.
 
-**Authentication:** API Key (via APIKeyAuthMixin)
+**Path Parameters**
 
-**Path Parameters:**
-- `lab_report_id` (required): UUID of the lab report to retrieve
+| Name | Description |
+|------|-------------|
+| `lab_report_id` | UUID of the `LabReport` to retrieve. |
 
-**Headers:**
-- `authorization`: Your Canvas API key (configured via `simpleapi-api-key` secret)
+**Response (200 OK)**
 
-**Response:** JSON object containing:
-- `id`: Lab report UUID
-- `dbid`: Database ID
-- `created`: ISO timestamp
-- `modified`: ISO timestamp
-- `patient`: Patient details (id, first_name, last_name, birth_date)
-- `ordering_provider`: Provider details (id, first_name, last_name, npi)
-- `lab_facility`: Lab facility details (name)
-- `originator`: Report originator details
-- `lab_tests`: Array of individual test results:
-  - `id`: Test value UUID
-  - `test_name`: Display name of the test
-  - `test_code`: Test code
-  - `coding_system`: Coding system (e.g., LOINC)
-  - `value`: Test result value
-  - `units`: Units of measurement
-  - `reference_range`: Reference range string
-  - `abnormal_flag`: Abnormal flag (e.g., "high", "low")
-  - `observation_status`: Status of the observation
-  - `low_threshold`: Lower threshold value
-  - `high_threshold`: Upper threshold value
-  - `comment`: Additional comments
-  - `created`: ISO timestamp
-  - `modified`: ISO timestamp
+```json
+{
+  "id": "788881ce-e451-44c3-b42d-6dbaebc999bb",
+  "dbid": 999,
+  "created": "2025-01-15T08:00:00",
+  "modified": "2025-01-15T10:00:00",
+  "patient": {
+    "id": "patient-uuid",
+    "first_name": "John",
+    "last_name": "Doe",
+    "birth_date": "1980-05-15"
+  },
+  "lab_order": {
+    "ordering_provider": {
+      "id": "provider-uuid",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "npi": "1234567890"
+    },
+    "comment": "Routine check",
+    "date_ordered": "2025-01-14T09:00:00",
+    "reason_conditions": [
+      {
+        "id": "condition-uuid",
+        "codings": [
+          {"code": "E11.9", "display": "Type 2 diabetes mellitus", "system": "ICD-10"}
+        ]
+      }
+    ]
+  },
+  "lab_facility": {
+    "name": "Quest Diagnostics"
+  },
+  "lab_result": {
+    "tests": [
+      {
+        "id": "lab-test-uuid",
+        "name": "Hemoglobin A1c",
+        "ontology_test_code": "4548-4",
+        "values": [
+          {
+            "id": "lab-value-uuid",
+            "value": "6.5",
+            "units": "%",
+            "reference_range": "4.0-5.6",
+            "abnormal_flag": true,
+            "observation_status": "final",
+            "low_threshold": "4.0",
+            "high_threshold": "5.6",
+            "comment": "Elevated A1c",
+            "created": "2025-01-15T10:00:00",
+            "modified": "2025-01-15T10:00:00",
+            "name": "Hemoglobin A1c",
+            "code": "4548-4",
+            "coding_system": "http://loinc.org"
+          }
+        ]
+      }
+    ],
+    "unassigned_values": []
+  }
+}
+```
 
-**Error Responses:**
-- `400 Bad Request`: Missing lab_report_id parameter
-- `404 Not Found`: Lab report does not exist
+**Field notes**
+
+- `patient`, `lab_facility`, and the ordering provider are omitted (set to `null`, or absent from `lab_order`) when the underlying row is missing on the report. The `lab_order` object is `{}` when no `LabOrder` is linked.
+- `lab_order.reason_conditions` contains the conditions captured against the order's `LabOrderReason`, filtered to remove any `Condition` marked `entered_in_error`. Each entry is a condition with its `codings`.
+- `lab_result.tests` is sourced from `LabReport.result_tests` (i.e., `LabTest` rows created for results — *not* the ordered tests). Each test nests its own `values`.
+- `ontology_test_code` on a test is the lab partner's own order code for the test (e.g., Quest or LabCorp's internal catalog code), not a standardized terminology code. For a standardized code on the individual result, see the LOINC-style `code` / `coding_system` under each value (sourced from `LabValueCoding`).
+- `lab_result.unassigned_values` contains lab values attached to the report itself but not linked to any `LabTest` — used for legacy reports ingested before the test/value association was enforced.
+- `abnormal_flag` is a boolean (`true` or `false`).
+- `reference_range` will appear if populated; otherwise it is an empty string.
+- Lab value `name` / `code` / `coding_system` are only present when a `LabValueCoding` row exists for the value. The values come from `LabValueCoding`, which is distinct from the test's own `ontology_test_code`.
+
+**Error responses**
+
+| Status | When | Body |
+|--------|------|------|
+| 400 | `lab_report_id` is missing from the path. | `{"error": "Lab report ID is required"}` |
+| 404 | No `LabReport` exists for the given ID. | `{"error": "Lab report not found", "lab_report_id": "<id>"}` |
 
 ## Example Usage
 
 ```bash
-curl -X GET "https://your-canvas-instance.com/plugin-io/api/lab_result_api/lab-result/788881ce-e451-44c3-b42d-6dbaebc999bb" \
-  -H "authorization: your-api-key-here"
+curl -X GET "https://<your-instance>.canvasmedical.com/plugin-io/api/lab_result_api/lab-result/788881ce-e451-44c3-b42d-6dbaebc999bb" \
+  -H "Authorization: <your-simpleapi-api-key>"
 ```
 
 ## Installation
 
-1. Install the plugin in your Canvas instance
-2. Configure the `simpleapi-api-key` secret with your API key
-3. The endpoint will be available at `/lab-result/<lab_report_id>`
-
-## Testing
-
-Run tests with coverage:
-
-```bash
-uv run pytest tests/protocols/test_lab_result_api.py --cov=lab_result_api --cov-report=term-missing --cov-branch
-```
+1. Install the plugin into your Canvas instance.
+2. Configure the `simpleapi-api-key` secret with the API key callers will use.
+3. The endpoint becomes available at `/plugin-io/api/lab_result_api/lab-result/<lab_report_id>`.
 
 ## Configuration
 
-**Required Secrets:**
-- `simpleapi-api-key`: API key for authentication
+**Required secrets**
 
-### Important Note!
+| Name | Purpose |
+|------|---------|
+| `simpleapi-api-key` | Shared key validated by `APIKeyAuthMixin` against the inbound `Authorization` header. |
 
-The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it gets updated if you add, remove, or rename protocols.
+## Testing
+
+Run the test suite with branch coverage:
+
+```bash
+uv run pytest --cov=lab_result_api --cov-report=term-missing --cov-branch
+```

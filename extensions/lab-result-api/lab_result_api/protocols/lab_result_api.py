@@ -4,7 +4,7 @@ from typing import Any
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyAuthMixin, SimpleAPIRoute
-from canvas_sdk.v1.data.lab import LabReport
+from canvas_sdk.v1.data.lab import LabReport, LabValue
 from logger import log
 
 
@@ -40,7 +40,12 @@ class LabResultAPI(APIKeyAuthMixin, SimpleAPIRoute):
             ]
 
         try:
-            lab_report = LabReport.objects.get(id=lab_report_id)
+            lab_report = (
+                LabReport.objects
+                .with_result_tests_and_values()
+                .prefetch_related("tests__values__codings", "values__codings")
+                .get(id=lab_report_id)
+            )
         except LabReport.DoesNotExist:
             return [
                 JSONResponse(
@@ -58,11 +63,11 @@ class LabResultAPI(APIKeyAuthMixin, SimpleAPIRoute):
         Serialize lab report with all related data.
         """
         # Get ordering provider and lab facility from related lab orders
-        lab_order = {}
+        lab_order: dict[str, Any] = {}
         lab_partner_name = None
 
         # Access lab orders through the reverse relationship
-        lab_orders = lab_report.laborder_set.all()
+        lab_orders = lab_report.laborder_set.select_related("ordering_provider").all()
         if lab_orders:
             first_order = lab_orders[0]
             if first_order.ordering_provider:
@@ -70,46 +75,31 @@ class LabResultAPI(APIKeyAuthMixin, SimpleAPIRoute):
                     "id": str(first_order.ordering_provider.id),
                     "first_name": first_order.ordering_provider.first_name,
                     "last_name": first_order.ordering_provider.last_name,
-                    "npi": first_order.ordering_provider.npi if hasattr(first_order.ordering_provider, 'npi') else None,
+                    "npi": first_order.ordering_provider.npi_number,
                 }
             lab_partner_name = first_order.ontology_lab_partner
             lab_order["comment"] = first_order.comment
             lab_order["date_ordered"] = first_order.date_ordered.isoformat() if first_order.date_ordered else None
-            
+            lab_order["reason_conditions"] = self._serialize_reason_conditions(first_order)
 
-        lab_tests = []
-        for lab_test in lab_report.tests.all():
-            lab_tests.append({
+
+        lab_tests = [
+            {
                 "id": str(lab_test.id),
                 "name": lab_test.ontology_test_name,
-                "code": lab_test.ontology_test_code,
-            })
-
-        # Serialize lab values (individual test results)
-        lab_values = []
-        for lab_value in lab_report.values.all():
-            test_data = {
-                "id": str(lab_value.id),
-                "value": lab_value.value,
-                "units": lab_value.units,
-                "reference_range": lab_value.reference_range,
-                "abnormal_flag": lab_value.abnormal_flag,
-                "observation_status": lab_value.observation_status,
-                "low_threshold": lab_value.low_threshold,
-                "high_threshold": lab_value.high_threshold,
-                "comment": lab_value.comment,
-                "created": lab_value.created.isoformat() if lab_value.created else None,
-                "modified": lab_value.modified.isoformat() if lab_value.modified else None,
+                "ontology_test_code": lab_test.ontology_test_code,
+                "values": [self._serialize_lab_value(v) for v in lab_test.values.all()],
             }
+            for lab_test in lab_report.result_tests
+        ]
 
-            # Add test name from codings if available
-            if lab_value.codings.exists():
-                coding = lab_value.codings.first()
-                test_data["name"] = coding.name
-                test_data["code"] = coding.code
-                test_data["coding_system"] = coding.system
-
-            lab_values.append(test_data)
+        # Legacy reports may have LabValues attached directly to the report with no
+        # associated LabTest. Surface those separately so consumers still see them.
+        unassigned_values = [
+            self._serialize_lab_value(v)
+            for v in lab_report.values.all()
+            if v.test_id is None
+        ]
 
         lab_data = {
             "id": str(lab_report.id),
@@ -126,8 +116,52 @@ class LabResultAPI(APIKeyAuthMixin, SimpleAPIRoute):
             "lab_facility": {
                 "name": lab_partner_name,
             } if lab_partner_name else None,
-            "lab_tests": lab_tests,
-            "lab_values": lab_values,
+            "lab_result": {
+                "tests": lab_tests,
+                "unassigned_values": unassigned_values,
+            },
         }
 
         return lab_data
+
+    def _serialize_reason_conditions(self, order: Any) -> list[dict[str, Any]]:
+        reason_conditions = []
+        reasons = order.reasons.prefetch_related(
+            "reason_conditions__condition__codings"
+        )
+        for reason in reasons:
+            for reason_condition in reason.reason_conditions.all():
+                condition = reason_condition.condition
+                if condition is None or condition.entered_in_error_id is not None:
+                    continue
+                reason_conditions.append({
+                    "id": str(condition.id),
+                    "codings": [
+                        {"code": c.code, "display": c.display, "system": c.system}
+                        for c in condition.codings.all()
+                    ],
+                })
+        return reason_conditions
+
+    def _serialize_lab_value(self, lab_value: LabValue) -> dict[str, Any]:
+        value_data = {
+            "id": str(lab_value.id),
+            "value": lab_value.value,
+            "units": lab_value.units,
+            "reference_range": "" if lab_value.reference_range.strip() == "-" else lab_value.reference_range,
+            "abnormal_flag": bool(lab_value.abnormal_flag),
+            "observation_status": lab_value.observation_status,
+            "low_threshold": lab_value.low_threshold,
+            "high_threshold": lab_value.high_threshold,
+            "comment": lab_value.comment,
+            "created": lab_value.created.isoformat() if lab_value.created else None,
+            "modified": lab_value.modified.isoformat() if lab_value.modified else None,
+        }
+
+        coding = lab_value.codings.first()
+        if coding is not None:
+            value_data["name"] = coding.name
+            value_data["code"] = coding.code
+            value_data["coding_system"] = coding.system
+
+        return value_data

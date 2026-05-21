@@ -1,345 +1,520 @@
-from http import HTTPStatus
-from unittest.mock import MagicMock, patch, call
 import json
+from http import HTTPStatus
+from typing import Any, Callable
+from unittest.mock import MagicMock, call, patch
+
 import pytest
 
 from lab_result_api.protocols.lab_result_api import LabResultAPI
 
 
-class TestLabResultAPI:
-    """Test suite for LabResultAPI SimpleAPI handler."""
+def _invoke_get(
+    handler: LabResultAPI,
+    mock_request: MagicMock,
+    lab_report: MagicMock | None = None,
+    raises: type[BaseException] | None = None,
+) -> tuple[list[Any], MagicMock]:
+    """Patch LabReport with the prefetch chain and invoke handler.get()."""
+    with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
+        # Production chain: LabReport.objects.with_result_tests_and_values()
+        #   .prefetch_related(...).get(id=...)
+        query_chain = (
+            mock_lab_report_class.objects
+            .with_result_tests_and_values.return_value
+            .prefetch_related.return_value
+        )
+        if raises is not None:
+            mock_lab_report_class.DoesNotExist = raises
+            query_chain.get.side_effect = raises()
+        else:
+            query_chain.get.return_value = lab_report
+        handler.request = mock_request
+        responses = handler.get()
+        return responses, mock_lab_report_class
 
-    def test_get_lab_report_success(self, mock_event, mock_request, mock_lab_report):
-        """Test successful GET request returns lab report with all data."""
-        mock_request.path_params.get.return_value = "lab-report-uuid-789"
 
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.objects.get.return_value = mock_lab_report
-
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
-
-            responses = handler.get()
-
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="lab-report-uuid-789")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-            # Verify response
-            assert len(responses) == 1
-            response = responses[0]
-            assert response.status_code == HTTPStatus.OK
-
-            # Verify response data
-            response_data = json.loads(response.content)
-            assert response_data["id"] == "lab-report-uuid-789"
-            assert response_data["dbid"] == 999
-            assert response_data["created"] == "2025-01-15T08:00:00"
-            assert response_data["modified"] == "2025-01-15T10:00:00"
-
-            # Verify patient data
-            assert response_data["patient"]["id"] == "patient-uuid-111"
-            assert response_data["patient"]["first_name"] == "John"
-            assert response_data["patient"]["last_name"] == "Doe"
-            assert response_data["patient"]["birth_date"] == "1980-05-15"
-
-            # Verify ordering provider data
-            assert response_data["ordering_provider"]["id"] == "provider-uuid-456"
-            assert response_data["ordering_provider"]["first_name"] == "Jane"
-            assert response_data["ordering_provider"]["last_name"] == "Smith"
-            assert response_data["ordering_provider"]["npi"] == "1234567890"
-
-            # Verify lab facility data
-            assert response_data["lab_facility"]["name"] == "Quest Diagnostics"
-
-            # Verify originator data
-            assert response_data["originator"]["id"] == "staff-uuid-222"
-            assert response_data["originator"]["first_name"] == "Alice"
-            assert response_data["originator"]["last_name"] == "Johnson"
-            assert response_data["originator"]["is_staff"] is True
-
-            # Verify lab tests (2 test values)
-            assert len(response_data["lab_tests"]) == 2
-
-            # First test with coding
-            test1 = response_data["lab_tests"][0]
-            assert test1["id"] == "lab-value-uuid-1"
-            assert test1["test_name"] == "Hemoglobin A1c"
-            assert test1["test_code"] == "4548-4"
-            assert test1["coding_system"] == "http://loinc.org"
-            assert test1["value"] == "6.5"
-            assert test1["units"] == "%"
-            assert test1["reference_range"] == "4.0-5.6"
-            assert test1["abnormal_flag"] == "high"
-            assert test1["observation_status"] == "final"
-            assert test1["low_threshold"] == "4.0"
-            assert test1["high_threshold"] == "5.6"
-            assert test1["comment"] == "Elevated A1c"
-
-            # Second test without coding
-            test2 = response_data["lab_tests"][1]
-            assert test2["id"] == "lab-value-uuid-2"
-            assert "test_name" not in test2
-            assert "test_code" not in test2
-            assert "coding_system" not in test2
-            assert test2["value"] == "110"
-            assert test2["units"] == "mg/dL"
-
-    def test_get_lab_report_not_found(self, mock_event, mock_request):
-        """Test GET request with non-existent lab report ID returns 404."""
-        mock_request.path_params.get.return_value = "non-existent-uuid"
-
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.DoesNotExist = Exception
-            mock_lab_report_class.objects.get.side_effect = mock_lab_report_class.DoesNotExist()
-
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
-
-            responses = handler.get()
-
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="non-existent-uuid")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-            # Verify response
-            assert len(responses) == 1
-            response = responses[0]
-            assert response.status_code == HTTPStatus.NOT_FOUND
-
-            response_data = json.loads(response.content)
-            assert response_data["error"] == "Lab report not found"
-            assert response_data["lab_report_id"] == "non-existent-uuid"
-
-    def test_get_lab_report_missing_id(self, mock_event, mock_request):
-        """Test GET request without lab_report_id returns 400."""
+class TestPathParamValidation:
+    def test_missing_lab_report_id_returns_400(
+        self, mock_event: MagicMock, mock_request: MagicMock
+    ) -> None:
         mock_request.path_params.get.return_value = None
-
         handler = LabResultAPI(event=mock_event)
         handler.request = mock_request
 
         responses = handler.get()
 
-        # Verify mock calls
-        assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-        # Verify response
+        assert mock_request.path_params.get.mock_calls == [call("lab_report_id")]
         assert len(responses) == 1
-        response = responses[0]
-        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert responses[0].status_code == HTTPStatus.BAD_REQUEST
+        assert json.loads(responses[0].content) == {"error": "Lab report ID is required"}
 
-        response_data = json.loads(response.content)
-        assert response_data["error"] == "Lab report ID is required"
 
-    def test_get_lab_report_no_orders(self, mock_event, mock_request, mock_lab_report):
-        """Test lab report with no associated lab orders."""
+class TestLookup:
+    def test_lab_report_not_found_returns_404(
+        self, mock_event: MagicMock, mock_request: MagicMock
+    ) -> None:
+        mock_request.path_params.get.return_value = "missing-id"
+        handler = LabResultAPI(event=mock_event)
+
+        responses, mock_lab_report_class = _invoke_get(
+            handler, mock_request, raises=Exception
+        )
+
+        assert mock_request.path_params.get.mock_calls == [call("lab_report_id")]
+        assert mock_lab_report_class.objects.with_result_tests_and_values.mock_calls == [
+            call(),
+            call().prefetch_related("tests__values__codings", "values__codings"),
+            call().prefetch_related("tests__values__codings", "values__codings").get(
+                id="missing-id"
+            ),
+        ]
+        assert len(responses) == 1
+        assert responses[0].status_code == HTTPStatus.NOT_FOUND
+        assert json.loads(responses[0].content) == {
+            "error": "Lab report not found",
+            "lab_report_id": "missing-id",
+        }
+
+    def test_successful_lookup_uses_prefetch_helper(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
         mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        handler = LabResultAPI(event=mock_event)
 
-        # Mock empty lab orders
-        mock_laborder_set = MagicMock()
-        mock_laborder_set.all.return_value = []
-        mock_lab_report.laborder_set = mock_laborder_set
+        responses, mock_lab_report_class = _invoke_get(
+            handler, mock_request, lab_report=mock_lab_report
+        )
 
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.objects.get.return_value = mock_lab_report
+        assert mock_request.path_params.get.mock_calls == [call("lab_report_id")]
+        # Downstream chained access on the returned report propagates up, so just verify
+        # the prefetch helper was constructed, codings were prefetched, and .get() was
+        # called with the right id.
+        assert mock_lab_report_class.objects.with_result_tests_and_values.mock_calls[:3] == [
+            call(),
+            call().prefetch_related("tests__values__codings", "values__codings"),
+            call().prefetch_related("tests__values__codings", "values__codings").get(
+                id="lab-report-uuid-789"
+            ),
+        ]
+        assert len(responses) == 1
+        assert responses[0].status_code == HTTPStatus.OK
 
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
 
-            responses = handler.get()
-
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="lab-report-uuid-789")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-            # Verify response
-            assert len(responses) == 1
-            response = responses[0]
-            assert response.status_code == HTTPStatus.OK
-
-            response_data = json.loads(response.content)
-            assert response_data["ordering_provider"] is None
-            assert response_data["lab_facility"] is None
-
-    def test_get_lab_report_no_ordering_provider(self, mock_event, mock_request, mock_lab_report):
-        """Test lab report with lab order but no ordering provider."""
+class TestReportSerialization:
+    def test_full_report_shape(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
         mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        handler = LabResultAPI(event=mock_event)
 
-        # Mock lab order without ordering provider
-        mock_lab_order = MagicMock()
-        mock_lab_order.ordering_provider = None
-        mock_lab_order.ontology_lab_partner = "Quest Diagnostics"
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
 
-        mock_laborder_set = MagicMock()
-        mock_laborder_set.all.return_value = [mock_lab_order]
-        mock_lab_report.laborder_set = mock_laborder_set
+        assert data["id"] == "lab-report-uuid-789"
+        assert data["dbid"] == 999
+        assert data["created"] == "2025-01-15T08:00:00"
+        assert data["modified"] == "2025-01-15T10:00:00"
+        assert data["patient"] == {
+            "id": "patient-uuid-111",
+            "first_name": "John",
+            "last_name": "Doe",
+            "birth_date": "1980-05-15",
+        }
+        assert data["lab_facility"] == {"name": "Quest Diagnostics"}
+        assert set(data.keys()) == {
+            "id",
+            "dbid",
+            "created",
+            "modified",
+            "patient",
+            "lab_order",
+            "lab_facility",
+            "lab_result",
+        }
 
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.objects.get.return_value = mock_lab_report
-
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
-
-            responses = handler.get()
-
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="lab-report-uuid-789")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-            # Verify response
-            assert len(responses) == 1
-            response = responses[0]
-            assert response.status_code == HTTPStatus.OK
-
-            response_data = json.loads(response.content)
-            assert response_data["ordering_provider"] is None
-            assert response_data["lab_facility"]["name"] == "Quest Diagnostics"
-
-    def test_get_lab_report_with_none_values(self, mock_event, mock_request, mock_lab_report):
-        """Test lab report serialization handles None values correctly."""
+    def test_none_timestamps_serialize_as_null(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
         mock_request.path_params.get.return_value = "lab-report-uuid-789"
-
-        # Set optional fields to None
         mock_lab_report.created = None
         mock_lab_report.modified = None
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["created"] is None
+        assert data["modified"] is None
+
+    def test_missing_patient_serializes_as_null(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
         mock_lab_report.patient = None
-        mock_lab_report.originator = None
 
-        # Empty lab values
-        mock_values = MagicMock()
-        mock_values.all.return_value = []
-        mock_lab_report.values = mock_values
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
 
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.objects.get.return_value = mock_lab_report
+        assert data["patient"] is None
 
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
-
-            responses = handler.get()
-
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="lab-report-uuid-789")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-            # Verify response
-            assert len(responses) == 1
-            response = responses[0]
-            assert response.status_code == HTTPStatus.OK
-
-            response_data = json.loads(response.content)
-            assert response_data["created"] is None
-            assert response_data["modified"] is None
-            assert response_data["patient"] is None
-            assert response_data["originator"] is None
-            assert response_data["lab_tests"] == []
-
-    def test_get_lab_report_empty_lab_tests(self, mock_event, mock_request, mock_lab_report):
-        """Test lab report with no lab test values."""
+    def test_patient_without_birth_date(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
         mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        mock_lab_report.patient.birth_date = None
 
-        # Mock empty lab values
-        mock_values = MagicMock()
-        mock_values.all.return_value = []
-        mock_lab_report.values = mock_values
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
 
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.objects.get.return_value = mock_lab_report
+        assert data["patient"]["birth_date"] is None
 
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
 
-            responses = handler.get()
-
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="lab-report-uuid-789")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-            # Verify response
-            assert len(responses) == 1
-            response = responses[0]
-            assert response.status_code == HTTPStatus.OK
-
-            response_data = json.loads(response.content)
-            assert response_data["lab_tests"] == []
-
-    def test_get_lab_report_provider_without_npi(self, mock_event, mock_request, mock_lab_report):
-        """Test lab report with ordering provider that has no NPI attribute."""
+class TestLabOrderBlock:
+    def test_no_lab_orders_yields_empty_lab_order_and_null_facility(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
         mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        mock_lab_report.laborder_set.select_related.return_value.all.return_value = []
 
-        # Mock lab order with provider without NPI
-        mock_lab_order = MagicMock()
-        mock_lab_order.ordering_provider.id = "provider-uuid-456"
-        mock_lab_order.ordering_provider.first_name = "Jane"
-        mock_lab_order.ordering_provider.last_name = "Smith"
-        # Delete npi attribute to simulate provider without NPI
-        del mock_lab_order.ordering_provider.npi
-        mock_lab_order.ontology_lab_partner = "Quest Diagnostics"
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
 
-        mock_laborder_set = MagicMock()
-        mock_laborder_set.all.return_value = [mock_lab_order]
-        mock_lab_report.laborder_set = mock_laborder_set
+        assert data["lab_order"] == {}
+        assert data["lab_facility"] is None
 
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.objects.get.return_value = mock_lab_report
-
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
-
-            responses = handler.get()
-
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="lab-report-uuid-789")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
-
-            # Verify response
-            assert len(responses) == 1
-            response = responses[0]
-            assert response.status_code == HTTPStatus.OK
-
-            response_data = json.loads(response.content)
-            assert response_data["ordering_provider"]["id"] == "provider-uuid-456"
-            assert response_data["ordering_provider"]["first_name"] == "Jane"
-            assert response_data["ordering_provider"]["last_name"] == "Smith"
-            assert response_data["ordering_provider"]["npi"] is None
-
-    def test_serialize_lab_value_all_fields(self, mock_event, mock_request, mock_lab_report, mock_lab_value_with_coding):
-        """Test that all lab value fields are correctly serialized."""
+    def test_lab_order_without_provider_omits_provider(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_order: MagicMock,
+    ) -> None:
         mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        mock_lab_order.ordering_provider = None
 
-        # Mock with only one lab value to test all fields
-        mock_values = MagicMock()
-        mock_values.all.return_value = [mock_lab_value_with_coding]
-        mock_lab_report.values = mock_values
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
 
-        with patch("lab_result_api.protocols.lab_result_api.LabReport") as mock_lab_report_class:
-            mock_lab_report_class.objects.get.return_value = mock_lab_report
+        assert "ordering_provider" not in data["lab_order"]
+        assert data["lab_order"]["comment"] == "Routine check"
 
-            handler = LabResultAPI(event=mock_event)
-            handler.request = mock_request
+    def test_lab_order_includes_provider_partner_and_dates(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        handler = LabResultAPI(event=mock_event)
 
-            responses = handler.get()
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
 
-            # Verify mock calls
-            assert mock_lab_report_class.objects.get.call_args == call(id="lab-report-uuid-789")
-            assert mock_request.path_params.get.call_args == call("lab_report_id")
+        assert data["lab_order"]["ordering_provider"] == {
+            "id": "provider-uuid-456",
+            "first_name": "Jane",
+            "last_name": "Smith",
+            "npi": "1234567890",
+        }
+        assert data["lab_order"]["comment"] == "Routine check"
+        assert data["lab_order"]["date_ordered"] == "2025-01-14T09:00:00"
+        assert data["lab_facility"] == {"name": "Quest Diagnostics"}
 
-            response = responses[0]
-            response_data = json.loads(response.content)
+    def test_lab_order_with_no_date_ordered(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_order: MagicMock,
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        mock_lab_order.date_ordered = None
 
-            # Verify all lab test fields are present
-            test = response_data["lab_tests"][0]
-            assert test["id"] == "lab-value-uuid-1"
-            assert test["value"] == "6.5"
-            assert test["units"] == "%"
-            assert test["reference_range"] == "4.0-5.6"
-            assert test["abnormal_flag"] == "high"
-            assert test["observation_status"] == "final"
-            assert test["low_threshold"] == "4.0"
-            assert test["high_threshold"] == "5.6"
-            assert test["comment"] == "Elevated A1c"
-            assert test["created"] == "2025-01-15T10:00:00"
-            assert test["modified"] == "2025-01-15T10:00:00"
-            assert test["test_name"] == "Hemoglobin A1c"
-            assert test["test_code"] == "4548-4"
-            assert test["coding_system"] == "http://loinc.org"
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["lab_order"]["date_ordered"] is None
+
+    def test_empty_lab_partner_yields_null_facility(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_order: MagicMock,
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        mock_lab_order.ontology_lab_partner = ""
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["lab_facility"] is None
+
+
+class TestReasonConditions:
+    def test_no_reasons_yields_empty_list(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        handler = LabResultAPI(event=mock_event)
+
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["lab_order"]["reason_conditions"] == []
+
+    def test_reason_conditions_serialize_active_conditions(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_order: MagicMock,
+        make_reason_with_conditions: Callable[..., MagicMock],
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        reason = make_reason_with_conditions(
+            [
+                (
+                    "condition-uuid-1",
+                    [("E11.9", "Type 2 diabetes mellitus", "ICD-10")],
+                    None,
+                ),
+            ]
+        )
+        mock_lab_order.reasons.prefetch_related.return_value = [reason]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert mock_lab_order.reasons.prefetch_related.mock_calls == [
+            call("reason_conditions__condition__codings"),
+        ]
+        assert data["lab_order"]["reason_conditions"] == [
+            {
+                "id": "condition-uuid-1",
+                "codings": [
+                    {
+                        "code": "E11.9",
+                        "display": "Type 2 diabetes mellitus",
+                        "system": "ICD-10",
+                    }
+                ],
+            }
+        ]
+
+    def test_entered_in_error_conditions_are_skipped(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_order: MagicMock,
+        make_reason_with_conditions: Callable[..., MagicMock],
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        reason = make_reason_with_conditions(
+            [
+                ("good-condition", [("A00", "Cholera", "ICD-10")], None),
+                ("bad-condition", [("B00", "Herpes", "ICD-10")], "user-uuid"),
+            ]
+        )
+        mock_lab_order.reasons.prefetch_related.return_value = [reason]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert [rc["id"] for rc in data["lab_order"]["reason_conditions"]] == [
+            "good-condition"
+        ]
+
+    def test_null_condition_is_skipped(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_order: MagicMock,
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        rc = MagicMock()
+        rc.condition = None
+        reason = MagicMock()
+        reason.reason_conditions.all.return_value = [rc]
+        mock_lab_order.reasons.prefetch_related.return_value = [reason]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["lab_order"]["reason_conditions"] == []
+
+
+class TestLabResultBlock:
+    def test_tests_nest_values_under_each_test(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        handler = LabResultAPI(event=mock_event)
+
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        tests = data["lab_result"]["tests"]
+        assert len(tests) == 1
+        assert tests[0]["id"] == "lab-test-uuid-1"
+        assert tests[0]["name"] == "Hemoglobin A1c"
+        assert tests[0]["ontology_test_code"] == "4548-4"
+        assert len(tests[0]["values"]) == 1
+        assert tests[0]["values"][0]["value"] == "6.5"
+
+    def test_unassigned_values_only_include_values_without_a_test(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        make_lab_value: Callable[..., MagicMock],
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        attached = make_lab_value(id="attached", test_id="lab-test-uuid-1")
+        orphan = make_lab_value(id="orphan", value="9.9", test_id=None)
+        mock_lab_report.values.all.return_value = [attached, orphan]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        unassigned = data["lab_result"]["unassigned_values"]
+        assert [v["id"] for v in unassigned] == ["orphan"]
+        assert unassigned[0]["value"] == "9.9"
+
+    def test_empty_tests_and_no_unassigned_values(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        mock_lab_report.result_tests = []
+        mock_lab_report.values.all.return_value = []
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["lab_result"] == {"tests": [], "unassigned_values": []}
+
+
+class TestLabValueSerialization:
+    def test_value_with_coding_includes_name_code_system(
+        self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        handler = LabResultAPI(event=mock_event)
+
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+        value = data["lab_result"]["tests"][0]["values"][0]
+
+        assert value["name"] == "Hemoglobin A1c"
+        assert value["code"] == "4548-4"
+        assert value["coding_system"] == "http://loinc.org"
+
+    def test_value_without_coding_omits_coding_fields(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_test: MagicMock,
+        mock_lab_value_no_coding: MagicMock,
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        mock_lab_test.values.all.return_value = [mock_lab_value_no_coding]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+        value = data["lab_result"]["tests"][0]["values"][0]
+
+        assert "name" not in value
+        assert "code" not in value
+        assert "coding_system" not in value
+
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("-", ""),
+            (" - ", ""),
+            ("  -  ", ""),
+            ("4.0-5.6", "4.0-5.6"),
+            ("", ""),
+            ("normal", "normal"),
+        ],
+    )
+    def test_reference_range_dash_normalization(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_test: MagicMock,
+        make_lab_value: Callable[..., MagicMock],
+        raw: str,
+        expected: str,
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        lv = make_lab_value(reference_range=raw)
+        mock_lab_test.values.all.return_value = [lv]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["lab_result"]["tests"][0]["values"][0]["reference_range"] == expected
+
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("", False),
+            ("H", True),
+            ("high", True),
+            ("L", True),
+        ],
+    )
+    def test_abnormal_flag_is_boolean(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_test: MagicMock,
+        make_lab_value: Callable[..., MagicMock],
+        raw: str,
+        expected: bool,
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        lv = make_lab_value(abnormal_flag=raw)
+        mock_lab_test.values.all.return_value = [lv]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        assert data["lab_result"]["tests"][0]["values"][0]["abnormal_flag"] is expected
+
+    def test_value_with_null_timestamps(
+        self,
+        mock_event: MagicMock,
+        mock_request: MagicMock,
+        mock_lab_report: MagicMock,
+        mock_lab_test: MagicMock,
+        make_lab_value: Callable[..., MagicMock],
+    ) -> None:
+        mock_request.path_params.get.return_value = "lab-report-uuid-789"
+        lv = make_lab_value(created=None, modified=None)
+        mock_lab_test.values.all.return_value = [lv]
+
+        handler = LabResultAPI(event=mock_event)
+        responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
+        data = json.loads(responses[0].content)
+
+        v = data["lab_result"]["tests"][0]["values"][0]
+        assert v["created"] is None
+        assert v["modified"] is None

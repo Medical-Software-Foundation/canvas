@@ -1,13 +1,13 @@
 {
-    "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "sdk_version": "0.155.0",
+    "plugin_version": "0.1.0",
     "name": "lab_result_api",
-    "description": "SimpleAPI endpoint that provides read-only access to Canvas lab results with ordering provider, lab facility, and test values",
+    "description": "SimpleAPI endpoint that returns a Canvas lab report with its patient, originating lab order (when linked, including ordering provider, lab partner, and reason conditions), and the report's result tests with nested lab values. Legacy values attached to the report without an associated test are surfaced under unassigned_values.",
     "components": {
         "protocols": [
             {
                 "class": "lab_result_api.protocols.lab_result_api:LabResultAPI",
-                "description": "GET /lab-result/<lab_report_id> - Returns lab result data with ordering provider, lab facility, and individual test results"
+                "description": "GET /lab-result/<lab_report_id> - Returns the lab report with patient, lab_order (when linked) including ordering provider and reason_conditions, lab_facility, and lab_result with tests (each containing nested values) and unassigned_values"
             }
         ],
         "commands": [],
