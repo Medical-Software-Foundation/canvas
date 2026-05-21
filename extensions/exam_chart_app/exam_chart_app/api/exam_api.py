@@ -98,6 +98,14 @@ def _exam_js_bytes() -> bytes:
 class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
     """Form-state + finalize endpoints for the Exam tab."""
 
+    # PREFIX must be explicitly set on every SimpleAPI subclass — without
+    # it, the plugin runner silently fails to register the routes (every
+    # request hits the framework-level 404 fallback, no log line emitted).
+    # Empty string keeps the route paths (``/exam/...``) rooted at the
+    # plugin's ``/plugin-io/api/exam_chart_app/`` base. Verified against
+    # canvas_sdk 0.142.0 on corgi-sandbox 2026-05-21.
+    PREFIX = ""
+
     @api.get("/exam/static/exam.css")
     def get_exam_css(self) -> list[Response | Effect]:
         return [Response(

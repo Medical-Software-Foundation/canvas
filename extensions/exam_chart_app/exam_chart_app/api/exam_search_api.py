@@ -12,7 +12,6 @@ Auth: StaffSessionAuthMixin — staff session only, no API-key fallback.
 from __future__ import annotations
 
 from http import HTTPStatus
-from json import JSONDecodeError
 from typing import Any
 from urllib.parse import urlencode
 
@@ -30,7 +29,6 @@ from canvas_sdk.v1.data import (
 )
 from django.db.models import Q
 from logger import log
-from requests.exceptions import RequestException  # type: ignore[import-untyped]
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
@@ -48,6 +46,9 @@ def _parse_limit(raw: str) -> int:
 
 class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
     """Search endpoints for the Exam tab dropdowns."""
+
+    # See ExamChartingAPI for the PREFIX rationale — same SDK requirement.
+    PREFIX = ""
 
     @api.get("/exam/search/rfv-codings")
     def search_rfv_codings(self) -> list[Response | Effect]:
@@ -139,13 +140,21 @@ class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
                 f"/fdb/grouped-medication/?{urlencode({'search': query})}"
             )
             data = response.json()
-        except (RequestException, JSONDecodeError, ValueError):
+        except (OSError, ValueError):
             # Narrow to network + decode errors so AttributeError /
             # KeyError / TypeError from programming bugs (renamed SDK
             # attrs, wrong response shape) reach Sentry rather than
-            # silently degrade. Expected failures here (transient
-            # network, malformed payload) still degrade to empty results
-            # so the UI stays usable. log.exception pages on-call.
+            # silently degrade. The catch list intentionally uses
+            # builtins rather than ``requests.exceptions.RequestException``
+            # — Canvas's plugin sandbox blocks ``requests.exceptions`` at
+            # the import allowlist, so referencing it at module top
+            # raises ImportError on plugin load. ``RequestException``
+            # inherits from ``IOError`` (which is the ``OSError`` alias
+            # in Python 3), so ``OSError`` catches every real network
+            # failure the SDK can raise from this call. ``ValueError`` is
+            # the parent of ``JSONDecodeError`` and covers the malformed
+            # JSON-body case. Expected failures degrade to empty results
+            # so the UI stays usable; log.exception pages on-call.
             log.exception(
                 "[ExamSearchAPI] ontologies_http /fdb/grouped-medication failed"
             )

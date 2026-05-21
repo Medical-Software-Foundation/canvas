@@ -136,9 +136,15 @@ def test_medications_proxies_ontologies_fdb(mock_http):
 
 @patch("exam_chart_app.api.exam_search_api.ontologies_http")
 def test_medications_returns_empty_on_ontologies_network_error(mock_http):
-    """Network failures degrade to empty results so the UI stays usable."""
-    from requests.exceptions import RequestException  # type: ignore[import-untyped]
-    mock_http.get_json.side_effect = RequestException("ontologies down")
+    """Network failures degrade to empty results so the UI stays usable.
+
+    Uses ``OSError`` to match the production catch (``except (OSError,
+    ValueError)``). ``requests.exceptions.RequestException`` inherits
+    from ``IOError`` (the Python 3 alias for ``OSError``), so a real
+    network failure from ``ontologies_http`` lands in this branch via
+    OSError. The catch list deliberately avoids ``requests.exceptions``
+    because the Canvas sandbox blocks that import at plugin load."""
+    mock_http.get_json.side_effect = OSError("ontologies down")
     responses = _make_api_params({"q": "lisinopril"}).search_medications()
     body = json.loads(responses[0].content.decode())
     assert body == {"results": []}
