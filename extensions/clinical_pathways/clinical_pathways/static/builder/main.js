@@ -2,7 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  console.log('clinical_pathways builder v0.4.1 loaded');
+  console.log('clinical_pathways builder v0.4.4 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -153,6 +153,23 @@
     pw.definition.loaded_questionnaires = pw.definition.loaded_questionnaires || [];
     pw.definition.steps = pw.definition.steps || [];
     pw.definition.recommendations = pw.definition.recommendations || [];
+    // v0.4.4: per-rule combinator → per-condition connector. Translate
+    // 'any' → 'or' on every non-first condition, 'all' (or absent) → 'and',
+    // then drop the rule-level field. New rules write the new shape only.
+    (pw.definition.steps || []).forEach((step) => {
+      (step.rules || []).forEach((rule) => {
+        const conds = rule.conditions || [];
+        const legacy = rule.combinator === 'any' ? 'or' : 'and';
+        conds.forEach((cond, idx) => {
+          if (idx === 0) {
+            delete cond.connector;
+          } else if (!cond.connector) {
+            cond.connector = legacy;
+          }
+        });
+        delete rule.combinator;
+      });
+    });
     return pw;
   }
 
@@ -313,7 +330,6 @@
       step.rules = [
         {
           rule_id: newRuleId(),
-          combinator: 'all',
           conditions: [
             {
               question_id: step.question_id || '',
@@ -396,11 +412,11 @@
     }
     const stepGroup = document.createElement('optgroup');
     stepGroup.label = 'Next step';
-    (def.steps || []).forEach((s) => {
+    (def.steps || []).forEach((s, idx) => {
       if (s.step_id === step.step_id) return;
       const o = document.createElement('option');
       o.value = 'step:' + s.step_id;
-      o.textContent = s.question_name_snapshot || '(unnamed)';
+      o.textContent = letterFor(idx) + ' — ' + (s.question_name_snapshot || '(unnamed)');
       stepGroup.appendChild(o);
     });
     if (stepGroup.children.length) sel.appendChild(stepGroup);
@@ -445,33 +461,13 @@
     ifSpan.className = 'rule-if-label';
     ifSpan.textContent = 'If';
     header.appendChild(ifSpan);
-
-    const combSel = document.createElement('select');
-    combSel.className = 'combinator-select';
-    [['all', 'All of'], ['any', 'Any of']].forEach(([v, lbl]) => {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = lbl;
-      combSel.appendChild(o);
-    });
-    combSel.value = rule.combinator === 'any' ? 'any' : 'all';
-    combSel.addEventListener('change', (ev) => {
-      rule.combinator = ev.target.value;
-      savePathway();
-      renderEditor();
-    });
-    header.appendChild(combSel);
     card.appendChild(header);
 
     const condsHost = document.createElement('div');
     condsHost.className = 'conditions-host';
     (rule.conditions || []).forEach((cond, idx) => {
+      if (idx > 0) condsHost.appendChild(renderConnectorRadios(rule, cond, idx));
       condsHost.appendChild(renderConditionRow(rule, cond, idx));
-      if (idx < (rule.conditions.length - 1)) {
-        const sep = document.createElement('div');
-        sep.className = 'connector-label';
-        sep.textContent = rule.combinator === 'any' ? 'or' : 'and';
-        condsHost.appendChild(sep);
-      }
     });
     card.appendChild(condsHost);
 
@@ -540,6 +536,30 @@
       });
     });
     return out;
+  }
+
+  function renderConnectorRadios(rule, cond, idx) {
+    const wrap = document.createElement('div');
+    wrap.className = 'connector-radios';
+    const groupName = 'conn-' + rule.rule_id + '-' + idx;
+    const current = cond.connector === 'or' ? 'or' : 'and';
+    [['and', 'and'], ['or', 'or']].forEach(([v, lbl]) => {
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = groupName;
+      input.value = v;
+      if (v === current) input.checked = true;
+      input.addEventListener('change', () => {
+        if (!input.checked) return;
+        cond.connector = v;
+        savePathway();
+      });
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(' ' + lbl));
+      wrap.appendChild(label);
+    });
+    return wrap;
   }
 
   function renderConditionRow(rule, cond, idx) {
@@ -737,7 +757,6 @@
       els.loadedQ.appendChild(empty);
       return;
     }
-    let letterIdx = 0;
     loaded.forEach((lq) => {
       const detail = state.questionnaireDetails[lq.questionnaire_id];
       const card = document.createElement('div');
@@ -763,9 +782,6 @@
       if (detail && detail.questions) {
         detail.questions.forEach((q) => {
           const li = document.createElement('li');
-          const letter = document.createElement('span');
-          letter.className = 'q-letter';
-          letter.textContent = letterFor(letterIdx++);
           const text = document.createElement('span');
           text.className = 'q-text';
           text.textContent = q.name;
@@ -776,7 +792,6 @@
           addBtn.textContent = '+';
           addBtn.title = 'Add as step';
           addBtn.addEventListener('click', () => addStepFromQuestion(lq, detail, q));
-          li.appendChild(letter);
           li.appendChild(text);
           li.appendChild(addBtn);
           qList.appendChild(li);
@@ -833,7 +848,6 @@
       rules: [
         {
           rule_id: newRuleId(),
-          combinator: 'all',
           conditions: [
             {
               question_id: question.id,
@@ -863,19 +877,15 @@
       els.recommendationsList.appendChild(empty);
       return;
     }
-    recs.forEach((r, idx) => {
+    recs.forEach((r) => {
       const li = document.createElement('li');
       li.className = 'recommendation-item';
-      const letter = document.createElement('span');
-      letter.className = 'letter-badge';
-      letter.textContent = letterFor(idx);
       const text = document.createElement('span');
       text.className = 'item-text';
       text.textContent = r.name || '(unnamed recommendation)';
       const meta = document.createElement('span');
       meta.className = 'item-meta';
       if (r.params && r.params.severity) meta.textContent = r.params.severity;
-      li.appendChild(letter);
       li.appendChild(text);
       if (meta.textContent) li.appendChild(meta);
       li.addEventListener('click', () => openRecommendationModal(r.recommendation_id));

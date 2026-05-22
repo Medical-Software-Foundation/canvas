@@ -26,8 +26,9 @@ Pathway definition shape (v3):
           "question_id": "<uuid>",
           "rules": [
             { "rule_id": "r_...",
-              "combinator": "all"|"any",
-              "conditions": [{question_id, operator, value_*...}],
+              "conditions": [
+                {question_id, operator, value_*..., "connector": "and"|"or"}
+              ],
               "then": { "type": "step"|"recommendation", "target_id": "..." } }
           ],
           "otherwise": { "type": "step"|"recommendation", "target_id": "..." } | null }
@@ -172,12 +173,40 @@ def _evaluate_condition(comp: dict[str, Any], captured: dict[str, dict[str, Any]
 
 
 def _evaluate_rule(rule: dict[str, Any], captured: dict[str, dict[str, Any]]) -> bool:
+    """Evaluate a rule's conditions with per-pair AND/OR connectors.
+
+    Each non-first condition carries an optional `connector` ("and" | "or",
+    default "and"). AND binds tighter than OR, so `A and B or C and D` groups
+    as `(A and B) or (C and D)`. Implemented by splitting the condition list
+    on `or` boundaries and matching if any AND-group is fully satisfied.
+
+    Legacy v0.4.0–v0.4.3 rules carry a rule-level `combinator` ("all"|"any")
+    instead; honor that when no per-condition connectors are present so
+    pre-migration pathways keep their semantics until they're re-saved.
+    """
     conditions = rule.get("conditions") or []
     if not conditions:
         return False
-    if rule.get("combinator", "all") == "any":
-        return any(_evaluate_condition(c, captured) for c in conditions)
-    return all(_evaluate_condition(c, captured) for c in conditions)
+
+    has_connectors = any("connector" in (c or {}) for c in conditions[1:])
+    if not has_connectors and "combinator" in rule:
+        if rule.get("combinator") == "any":
+            return any(_evaluate_condition(c, captured) for c in conditions)
+        return all(_evaluate_condition(c, captured) for c in conditions)
+
+    groups: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    for idx, cond in enumerate(conditions):
+        if idx > 0 and (cond.get("connector") or "and") == "or":
+            groups.append(current)
+            current = [cond]
+        else:
+            current.append(cond)
+    if current:
+        groups.append(current)
+    return any(
+        all(_evaluate_condition(c, captured) for c in group) for group in groups
+    )
 
 
 # ---------- Definition lookups ----------

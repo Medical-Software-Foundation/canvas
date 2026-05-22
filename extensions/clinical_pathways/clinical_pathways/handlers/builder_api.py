@@ -76,8 +76,10 @@ def _empty_definition() -> dict[str, Any]:
             "question_id": "<uuid>",
             "question_name_snapshot": "...",
             "rules": [
-              { "rule_id": "r_...", "combinator": "all"|"any",
-                "conditions": [{question_id, operator, value_*...}],
+              { "rule_id": "r_...",
+                "conditions": [
+                  {question_id, operator, value_*..., "connector": "and"|"or"}
+                ],
                 "then": { "type": "step"|"recommendation", "target_id": "..." }
               }
             ],
@@ -183,12 +185,22 @@ def _validate_pathway(definition: dict[str, Any]) -> list[dict[str, Any]]:
                 issues.append({"severity": "error", "step_id": step_id, "message": "Malformed rule entry."})
                 continue
             rule_id = rule.get("rule_id", "?")
-            combinator = rule.get("combinator")
-            if combinator not in ("all", "any"):
-                issues.append({"severity": "error", "step_id": step_id, "rule_id": rule_id, "message": "Rule combinator must be 'all' or 'any'."})
             conditions = rule.get("conditions") or []
             if not conditions:
                 issues.append({"severity": "error", "step_id": step_id, "rule_id": rule_id, "message": "Rule has no conditions."})
+            for cidx, cond in enumerate(conditions):
+                if cidx == 0 or not isinstance(cond, dict):
+                    continue
+                connector = cond.get("connector")
+                if connector is not None and connector not in ("and", "or"):
+                    issues.append(
+                        {
+                            "severity": "error",
+                            "step_id": step_id,
+                            "rule_id": rule_id,
+                            "message": "Condition connector must be 'and' or 'or'.",
+                        }
+                    )
             _check_target(rule.get("then"), {"step_id": step_id, "rule_id": rule_id})
 
     for rec in recommendations:

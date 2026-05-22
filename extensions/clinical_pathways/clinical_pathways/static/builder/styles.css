@@ -85,9 +85,11 @@ button.small { padding: 4px 8px; font-size: 12px; }
 .rule-card { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; }
 .rule-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .rule-header .rule-if-label { font-size: 13px; color: #4a5568; font-weight: 500; }
-.rule-header .combinator-select { padding: 4px 8px; border: 1px solid #cbd5e0; border-radius: 3px; font: inherit; background: #fff; }
 
 .conditions-host { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.connector-radios { display: flex; gap: 12px; padding: 2px 0 2px 4px; font-size: 12px; color: #4a5568; }
+.connector-radios label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.connector-radios input[type="radio"] { margin: 0; }
 .condition-row {
   display: grid;
   grid-template-columns: minmax(0, 2.2fr) minmax(100px, 120px) minmax(0, 1fr) auto;
@@ -101,7 +103,6 @@ button.small { padding: 4px 8px; font-size: 12px; }
 }
 .condition-row .value-cell { display: flex; min-width: 0; }
 .condition-row .value-cell > * { width: 100%; }
-.connector-label { font-size: 12px; color: #718096; padding-left: 4px; font-style: italic; }
 
 .then-row, .otherwise-row { display: flex; align-items: center; gap: 8px; padding-top: 6px; flex-wrap: wrap; }
 .then-row { border-top: 1px solid #e2e8f0; }
@@ -130,7 +131,6 @@ button.small { padding: 4px 8px; font-size: 12px; }
 .loaded-questionnaire-questions { list-style: none; padding: 6px 8px; margin: 0; display: flex; flex-direction: column; gap: 3px; }
 .loaded-questionnaire-questions li { display: flex; align-items: center; gap: 6px; padding: 4px 4px; border-radius: 3px; }
 .loaded-questionnaire-questions li:hover { background: #edf2f7; }
-.loaded-questionnaire-questions .q-letter { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; background: #ebf8ff; color: #2c5282; font-size: 10px; font-weight: 600; flex-shrink: 0; }
 .loaded-questionnaire-questions .q-text { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .loaded-questionnaire-questions button { padding: 2px 6px; font-size: 11px; }
 
@@ -138,7 +138,6 @@ button.small { padding: 4px 8px; font-size: 12px; }
 .rail-list li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; }
 .rail-list li.recommendation-item { cursor: pointer; }
 .rail-list li.recommendation-item:hover { background: #edf2f7; }
-.rail-list .letter-badge { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 3px; background: #fefcbf; color: #744210; font-size: 11px; font-weight: 600; flex-shrink: 0; }
 .rail-list .item-text { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rail-list .item-meta { font-size: 11px; color: #718096; }
 .rail-list .empty-message { color: #a0aec0; font-size: 12px; padding: 4px 8px; font-style: italic; }
