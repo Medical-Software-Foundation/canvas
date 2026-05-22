@@ -2,7 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  console.log('clinical_pathways builder v0.4.5 loaded');
+  console.log('clinical_pathways builder v0.4.6 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -37,6 +37,9 @@
     questionnaireDetails: {},
     terminalCommands: [],
     editingRecommendationId: null,
+    // Set of questionnaire_ids whose rail panel the user has collapsed.
+    // Per-session UI state only; not persisted to the pathway document.
+    collapsedQuestionnaires: new Set(),
   };
 
   // ---------- Status banner ----------
@@ -783,9 +786,27 @@
       const detail = state.questionnaireDetails[lq.questionnaire_id];
       const card = document.createElement('div');
       card.className = 'loaded-questionnaire';
+      const isCollapsed = state.collapsedQuestionnaires.has(lq.questionnaire_id);
+      if (isCollapsed) card.classList.add('collapsed');
 
       const header = document.createElement('div');
       header.className = 'loaded-questionnaire-header';
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'toggle-chevron ghost small';
+      toggle.title = 'Show / hide questions';
+      toggle.setAttribute('aria-label', 'Toggle questions');
+      toggle.textContent = '▾';
+      toggle.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (state.collapsedQuestionnaires.has(lq.questionnaire_id)) {
+          state.collapsedQuestionnaires.delete(lq.questionnaire_id);
+        } else {
+          state.collapsedQuestionnaires.add(lq.questionnaire_id);
+        }
+        card.classList.toggle('collapsed');
+      });
+      header.appendChild(toggle);
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = lq.questionnaire_name_snapshot || (detail ? detail.name : '(loading…)');
