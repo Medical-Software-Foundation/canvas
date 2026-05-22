@@ -1,63 +1,69 @@
-# To run the tests, use the command `pytest` in the terminal or uv run pytest.
-# Each test is wrapped inside a transaction that is rolled back at the end of the test.
-# If you want to modify which files are used for testing, check the [tool.pytest.ini_options] section in pyproject.toml.
-# For more information on testing Canvas plugins, see: https://docs.canvasmedical.com/sdk/testing-utils/
+"""Tests for the CuratedCptCode custom data model.
 
-from unittest.mock import Mock
+Covers field defaults, save/round-trip, and ordering behavior.
+"""
 
-import pytest
-from canvas_sdk.effects import EffectType
-from canvas_sdk.events import EventType
-from canvas_sdk.test_utils.factories import PatientFactory
-from canvas_sdk.v1.data.discount import Discount
-
-from curated_cpt_picker.protocols.my_protocol import Protocol
+from curated_cpt_picker.models.curated_cpt_code import CuratedCptCode
 
 
-# Test the protocol's compute method with mocked event data
-def test_protocol_responds_to_assess_command() -> None:
-    """Test that the protocol responds correctly to ASSESS_COMMAND__CONDITION_SELECTED events."""
-    # Create a mock event with the expected structure
-    mock_event = Mock()
-    mock_event.type = EventType.ASSESS_COMMAND__CONDITION_SELECTED
-    mock_event.context = {
-        "note": {
-            "uuid": "test-note-uuid-123",
-        }
-    }
+def test_can_create_and_retrieve_curated_entry() -> None:
+    entry = CuratedCptCode.objects.create(
+        cpt_code="99213",
+        description="Established patient, 15 min",
+    )
+    assert entry.pk is not None
 
-    # Instantiate the protocol with the mock event
-    protocol = Protocol(event=mock_event)
-
-    # Call compute and get the effects
-    effects = protocol.compute()
-
-    # Assert that effects were returned
-    assert len(effects) == 1
-
-    # Assert the effect has the correct type
-    assert effects[0].type == EffectType.LOG
-
-    # Assert the effect contains expected data
-    assert "test-note-uuid-123" in effects[0].payload
-    assert protocol.NARRATIVE_STRING in effects[0].payload
+    fetched = CuratedCptCode.objects.get(pk=entry.pk)
+    assert fetched.cpt_code == "99213"
+    assert fetched.description == "Established patient, 15 min"
 
 
-# Test that the protocol class has the correct event type configured
-def test_protocol_event_configuration() -> None:
-    """Test that the protocol is configured to respond to the correct event type."""
-    assert EventType.Name(EventType.ASSESS_COMMAND__CONDITION_SELECTED) == Protocol.RESPONDS_TO
+def test_default_field_values() -> None:
+    entry = CuratedCptCode.objects.create(
+        cpt_code="99214",
+        description="Established patient, 25 min",
+    )
+    assert entry.default_units == 1
+    assert entry.modifiers == []
+    assert entry.display_order == 0
+    assert entry.enabled is True
+    assert entry.created_at is not None
+    assert entry.updated_at is not None
 
 
-# Example: You can use a factory to create a patient instance for testing purposes.
-def test_factory_example() -> None:
-    """Test that a patient can be created using the PatientFactory."""
-    patient = PatientFactory.create()
-    assert patient.id is not None
+def test_ordering_by_display_order_then_cpt() -> None:
+    CuratedCptCode.objects.create(cpt_code="99214", description="B", display_order=10)
+    CuratedCptCode.objects.create(cpt_code="99213", description="A", display_order=5)
+    CuratedCptCode.objects.create(cpt_code="99215", description="C", display_order=10)
+
+    cpts = [e.cpt_code for e in CuratedCptCode.objects.all()]
+    # display_order=5 first, then both display_order=10 (tied) sorted by cpt_code
+    assert cpts == ["99213", "99214", "99215"]
 
 
-# Example: If a factory is not available, you can create an instance manually with the data model directly.
-def test_model_example() -> None:
-    """Test that a Discount instance can be created."""
-    Discount.objects.create(name="10%", adjustment_group="30", adjustment_code="CO", discount=0.10)
-    assert Discount.objects.first().pk is not None
+def test_modifiers_persisted_as_json_list() -> None:
+    entry = CuratedCptCode.objects.create(
+        cpt_code="99213",
+        description="With modifier",
+        modifiers=[
+            {"code": "25", "system": "http://www.ama-assn.org/go/cpt"},
+            {"code": "59", "system": "http://www.ama-assn.org/go/cpt"},
+        ],
+    )
+    fetched = CuratedCptCode.objects.get(pk=entry.pk)
+    assert len(fetched.modifiers) == 2
+    assert fetched.modifiers[0]["code"] == "25"
+    assert fetched.modifiers[1]["code"] == "59"
+
+
+def test_soft_disable_via_enabled_flag() -> None:
+    entry = CuratedCptCode.objects.create(
+        cpt_code="99213",
+        description="Soft disable test",
+        enabled=False,
+    )
+    assert entry.enabled is False
+    # The entry still exists; the picker filters by enabled=True so disabled
+    # entries stay in the table but become invisible to providers.
+    assert CuratedCptCode.objects.filter(enabled=False).count() == 1
+    assert CuratedCptCode.objects.filter(enabled=True).count() == 0

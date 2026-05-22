@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Quick add codes</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: #1f2937; }
+    h1 { font-size: 18px; margin: 0 0 16px; }
+    p.empty { color: #6b7280; font-style: italic; }
+    .codes { list-style: none; padding: 0; margin: 0 0 24px; max-height: 60vh; overflow-y: auto; }
+    .codes li { display: flex; align-items: center; padding: 8px 4px; border-bottom: 1px solid #e5e7eb; }
+    .codes li:hover { background: #f9fafb; }
+    .codes input[type=checkbox] { margin-right: 12px; }
+    .codes .code { font-weight: 600; font-family: ui-monospace, "SF Mono", monospace; margin-right: 12px; min-width: 64px; }
+    .codes .desc { color: #374151; flex: 1; }
+    .codes .mods { color: #6b7280; font-size: 12px; margin-left: 8px; }
+    .actions { display: flex; gap: 12px; justify-content: flex-end; }
+    button { padding: 8px 16px; border: 0; border-radius: 4px; font-size: 14px; cursor: pointer; }
+    button.primary { background: #2563eb; color: #fff; }
+    button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    button.secondary { background: #e5e7eb; color: #1f2937; }
+    .select-all { margin-bottom: 12px; font-size: 13px; color: #2563eb; cursor: pointer; background: none; border: 0; padding: 0; }
+  </style>
+</head>
+<body data-note-id="{{ note_id }}">
+  <h1>Add curated codes to this note</h1>
+
+  {% if codes %}
+    <button type="button" class="select-all" id="select-all">Select all</button>
+    <ul class="codes">
+      {% for code in codes %}
+        <li>
+          <input type="checkbox" id="code-{{ code.id }}" value="{{ code.id }}">
+          <label for="code-{{ code.id }}" style="display: contents;">
+            <span class="code">{{ code.cpt_code }}</span>
+            <span class="desc">{{ code.description }}</span>
+            {% if code.modifier_summary %}<span class="mods">[{{ code.modifier_summary }}]</span>{% endif %}
+          </label>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="actions">
+      <button type="button" class="secondary" onclick="window.parent.postMessage({type:'closeModal'},'*')">Cancel</button>
+      <button type="button" class="primary" id="apply-btn">Add selected</button>
+    </div>
+  {% else %}
+    <p class="empty">
+      No curated codes are currently available.
+      Your admin may need to update the curated list, or none of the configured codes
+      are currently active in the ChargeDescriptionMaster.
+    </p>
+    <div class="actions">
+      <button type="button" class="secondary" onclick="window.parent.postMessage({type:'closeModal'},'*')">Close</button>
+    </div>
+  {% endif %}
+
+  <script>
+    (function () {
+      const noteId = document.body.dataset.noteId;
+      const selectAllBtn = document.getElementById("select-all");
+      const applyBtn = document.getElementById("apply-btn");
+      const checkboxes = document.querySelectorAll('.codes input[type=checkbox]');
+
+      if (selectAllBtn) {
+        selectAllBtn.addEventListener("click", () => {
+          const anyUnchecked = Array.from(checkboxes).some(cb => !cb.checked);
+          checkboxes.forEach(cb => { cb.checked = anyUnchecked; });
+          selectAllBtn.textContent = anyUnchecked ? "Deselect all" : "Select all";
+        });
+      }
+
+      if (applyBtn) {
+        applyBtn.addEventListener("click", async () => {
+          const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+          if (!selected.length) return;
+          applyBtn.disabled = true;
+          applyBtn.textContent = "Adding…";
+          try {
+            const res = await fetch("/plugin-io/api/curated_cpt_picker/apply", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ note_id: noteId, selected_ids: selected }),
+              credentials: "same-origin",
+            });
+            if (!res.ok) throw new Error(await res.text());
+            window.parent.postMessage({ type: "closeModal" }, "*");
+          } catch (err) {
+            applyBtn.disabled = false;
+            applyBtn.textContent = "Add selected";
+            alert("Could not add codes: " + err.message);
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

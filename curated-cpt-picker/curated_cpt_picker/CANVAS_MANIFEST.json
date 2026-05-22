@@ -1,13 +1,32 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.1.0",
     "name": "curated_cpt_picker",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Adds a 'Quick add codes' button to the note footer that opens a modal with a curated list of CPT codes — and an admin app for practice admins to maintain the curated list. Filters out any code that is not currently active in the ChargeDescriptionMaster.",
     "components": {
         "protocols": [
             {
-                "class": "curated_cpt_picker.protocols.my_protocol:Protocol",
-                "description": "A protocol that does xyz..."
+                "class": "curated_cpt_picker.protocols.footer_button:CuratedCptFooterButton",
+                "description": "Adds a 'Quick add codes' button to the note footer. Opens the curated CPT picker modal."
+            },
+            {
+                "class": "curated_cpt_picker.protocols.picker_api:PickerAPI",
+                "description": "Provider-facing SimpleAPI. GET /picker renders the modal; POST /apply emits AddBillingLineItem effects for selected codes."
+            },
+            {
+                "class": "curated_cpt_picker.protocols.admin_api:AdminAPI",
+                "description": "Admin CRUD SimpleAPI for the curated CPT list (list, add, update, delete). Validates each code against ChargeDescriptionMaster."
+            }
+        ],
+        "applications": [
+            {
+                "class": "curated_cpt_picker.protocols.admin_application:CuratedCptAdminApp",
+                "name": "Curated CPT Picker Admin",
+                "description": "Manage the curated CPT code list shown in the note-footer picker.",
+                "scope": "global",
+                "icon": "assets/icon.png",
+                "menu_position": "top",
+                "menu_order": "100"
             }
         ],
         "commands": [],
@@ -15,7 +34,14 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": [
+        "namespace_read_write_access_key",
+        "ADMIN_STAFF_IDS"
+    ],
+    "custom_data": {
+        "namespace": "canvas_medical__curated_cpt_picker",
+        "access": "read_write"
+    },
     "tags": {},
     "references": [],
     "license": "",

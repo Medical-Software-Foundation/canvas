@@ -6,3 +6,9 @@ __pycache__
 .mypy_cache
 .ruff_cache
 .venv
+
+# Un-ignore our Python lib/ directory (parent repo's .gitignore excludes
+# all lib/ as a Python packaging artifact; ours holds real source).
+!curated_cpt_picker/lib/
+!curated_cpt_picker/lib/*.py
+!curated_cpt_picker/lib/**/*.py

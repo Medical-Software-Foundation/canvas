@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Curated CPT Picker Admin</title>
+  <style>
+    :root { --border: #e5e7eb; --muted: #6b7280; --text: #1f2937; --primary: #2563eb; --danger: #dc2626; --success: #059669; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: var(--text); background: #fff; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p.lede { color: var(--muted); margin: 0 0 24px; }
+    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+    .toolbar input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; }
+    button { padding: 8px 14px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font-size: 13px; cursor: pointer; }
+    button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    button.danger { color: var(--danger); border-color: #fca5a5; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .code-cell { font-family: ui-monospace, "SF Mono", monospace; font-weight: 600; }
+    .row-actions { display: flex; gap: 6px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge.on { background: #d1fae5; color: #065f46; }
+    .badge.off { background: #f3f4f6; color: var(--muted); }
+    .empty { padding: 40px; text-align: center; color: var(--muted); font-style: italic; border: 1px dashed var(--border); border-radius: 6px; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 10; }
+    .modal.open { display: flex; }
+    .modal-card { background: #fff; border-radius: 8px; padding: 24px; max-width: 480px; width: 90%; max-height: 90vh; overflow-y: auto; }
+    .modal-card h2 { margin: 0 0 16px; font-size: 16px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .field input, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; box-sizing: border-box; font-family: inherit; }
+    .field-row { display: flex; gap: 12px; }
+    .field-row .field { flex: 1; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    .error { color: var(--danger); font-size: 13px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Curated CPT Picker</h1>
+  <p class="lede">Codes shown here appear in the "Quick add codes" picker on every note footer. Each save is validated against the ChargeDescriptionMaster.</p>
+
+  <div class="toolbar">
+    <input type="search" id="filter" placeholder="Filter by code or description...">
+    <button type="button" class="primary" id="add-btn">+ Add code</button>
+  </div>
+
+  <div id="table-container">
+    {% if entries %}
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Description</th>
+            <th>Units</th>
+            <th>Modifiers</th>
+            <th>Order</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="entries-tbody">
+          {% for e in entries %}
+            <tr data-id="{{ e.id }}" data-cpt="{{ e.cpt_code }}" data-description="{{ e.description }}" data-units="{{ e.default_units }}" data-order="{{ e.display_order }}" data-enabled="{{ e.enabled|yesno:'true,false' }}">
+              <td class="code-cell">{{ e.cpt_code }}</td>
+              <td>{{ e.description }}</td>
+              <td>{{ e.default_units }}</td>
+              <td>{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+              <td>{{ e.display_order }}</td>
+              <td>
+                {% if e.enabled %}<span class="badge on">Enabled</span>{% else %}<span class="badge off">Disabled</span>{% endif %}
+              </td>
+              <td class="row-actions">
+                <button type="button" data-action="edit">Edit</button>
+                <button type="button" data-action="toggle">{% if e.enabled %}Disable{% else %}Enable{% endif %}</button>
+                <button type="button" class="danger" data-action="delete">Delete</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty">No curated codes yet. Click "+ Add code" to add your first one.</div>
+    {% endif %}
+  </div>
+
+  <div class="modal" id="edit-modal">
+    <div class="modal-card">
+      <h2 id="modal-title">Add code</h2>
+      <form id="edit-form">
+        <input type="hidden" id="edit-id">
+        <div class="field-row">
+          <div class="field">
+            <label for="edit-cpt">CPT code</label>
+            <input type="text" id="edit-cpt" required>
+          </div>
+          <div class="field" style="flex: 0 0 100px;">
+            <label for="edit-units">Units</label>
+            <input type="number" id="edit-units" value="1" min="1">
+          </div>
+        </div>
+        <div class="field">
+          <label for="edit-description">Description</label>
+          <input type="text" id="edit-description" required>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="edit-modifiers">Modifiers (comma-separated, e.g. "25, 59")</label>
+            <input type="text" id="edit-modifiers" placeholder="optional">
+          </div>
+          <div class="field" style="flex: 0 0 100px;">
+            <label for="edit-order">Order</label>
+            <input type="number" id="edit-order" value="0">
+          </div>
+        </div>
+        <div class="error" id="edit-error"></div>
+        <div class="modal-actions">
+          <button type="button" id="modal-cancel">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const BASE = "/plugin-io/api/curated_cpt_picker";
+      const modal = document.getElementById("edit-modal");
+      const form = document.getElementById("edit-form");
+      const errorEl = document.getElementById("edit-error");
+      const titleEl = document.getElementById("modal-title");
+
+      function openModal(entry) {
+        document.getElementById("edit-id").value = entry ? entry.id : "";
+        document.getElementById("edit-cpt").value = entry ? entry.cpt_code : "";
+        document.getElementById("edit-description").value = entry ? entry.description : "";
+        document.getElementById("edit-units").value = entry ? entry.default_units : 1;
+        document.getElementById("edit-modifiers").value = entry && entry.modifiers ? entry.modifiers.join(", ") : "";
+        document.getElementById("edit-order").value = entry ? entry.display_order : 0;
+        errorEl.textContent = "";
+        titleEl.textContent = entry ? "Edit code" : "Add code";
+        modal.classList.add("open");
+      }
+
+      function closeModal() {
+        modal.classList.remove("open");
+      }
+
+      function parseModifiers(raw) {
+        return raw.split(",").map(s => s.trim()).filter(Boolean).map(code => ({ code, system: "http://www.ama-assn.org/go/cpt" }));
+      }
+
+      function rowToEntry(row) {
+        const modifiers = Array.from(row.querySelectorAll("td"))[3].textContent.split(",").map(s => s.trim()).filter(Boolean);
+        return {
+          id: row.dataset.id,
+          cpt_code: row.dataset.cpt,
+          description: row.dataset.description,
+          default_units: parseInt(row.dataset.units, 10),
+          modifiers,
+          display_order: parseInt(row.dataset.order, 10),
+          enabled: row.dataset.enabled === "true",
+        };
+      }
+
+      document.getElementById("add-btn").addEventListener("click", () => openModal(null));
+      document.getElementById("modal-cancel").addEventListener("click", closeModal);
+      modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("edit-id").value;
+        const payload = {
+          cpt_code: document.getElementById("edit-cpt").value.trim(),
+          description: document.getElementById("edit-description").value.trim(),
+          default_units: parseInt(document.getElementById("edit-units").value, 10) || 1,
+          modifiers: parseModifiers(document.getElementById("edit-modifiers").value),
+          display_order: parseInt(document.getElementById("edit-order").value, 10) || 0,
+        };
+        const url = id ? `${BASE}/admin/codes/${id}` : `${BASE}/admin/codes`;
+        const method = id ? "PATCH" : "POST";
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          errorEl.textContent = data.error || `Server returned ${res.status}`;
+          return;
+        }
+        window.location.reload();
+      });
+
+      const tbody = document.getElementById("entries-tbody");
+      if (tbody) {
+        tbody.addEventListener("click", async (e) => {
+          const btn = e.target.closest("button[data-action]");
+          if (!btn) return;
+          const row = btn.closest("tr");
+          const id = row.dataset.id;
+          const action = btn.dataset.action;
+
+          if (action === "edit") {
+            openModal(rowToEntry(row));
+          } else if (action === "delete") {
+            if (!confirm(`Delete ${row.dataset.cpt}?`)) return;
+            await fetch(`${BASE}/admin/codes/${id}`, { method: "DELETE", credentials: "same-origin" });
+            window.location.reload();
+          } else if (action === "toggle") {
+            const currentlyEnabled = row.dataset.enabled === "true";
+            await fetch(`${BASE}/admin/codes/${id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ enabled: !currentlyEnabled }),
+              credentials: "same-origin",
+            });
+            window.location.reload();
+          }
+        });
+      }
+
+      const filterInput = document.getElementById("filter");
+      filterInput.addEventListener("input", () => {
+        const q = filterInput.value.toLowerCase();
+        document.querySelectorAll("#entries-tbody tr").forEach((row) => {
+          const text = `${row.dataset.cpt} ${row.dataset.description}`.toLowerCase();
+          row.style.display = text.includes(q) ? "" : "none";
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
