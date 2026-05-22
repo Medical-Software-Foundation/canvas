@@ -16,7 +16,7 @@ def _modifier_summary(modifiers: list[dict]) -> str:
     return ", ".join(m.get("code", "") for m in modifiers if m.get("code"))
 
 
-def _resolve_note_uuid(note_id_input: object) -> str | None:
+def _resolve_note_uuid(note_id_input) -> str | None:
     """Convert whatever the picker URL carried into a Note UUID.
 
     The footer ActionButton's event context provides note_id as an integer
