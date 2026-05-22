@@ -2,7 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  console.log('clinical_pathways builder v0.4.4 loaded');
+  console.log('clinical_pathways builder v0.4.5 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
@@ -153,6 +153,28 @@
     pw.definition.loaded_questionnaires = pw.definition.loaded_questionnaires || [];
     pw.definition.steps = pw.definition.steps || [];
     pw.definition.recommendations = pw.definition.recommendations || [];
+    // v0.4.5: the standalone "Name" field on recommendations is gone —
+    // title doubles as the rail label. Backfill title from name for legacy
+    // records so the form input isn't blank, and fold any prior
+    // recommended_action text into the body so it isn't lost.
+    (pw.definition.recommendations || []).forEach((rec) => {
+      rec.params = rec.params || {};
+      if (!rec.params.title && rec.name) {
+        rec.params.title = rec.name;
+      }
+      if (rec.params.recommended_action) {
+        const action = String(rec.params.recommended_action).trim();
+        if (action) {
+          const existing = String(rec.params.body || '').trim();
+          rec.params.body = existing
+            ? existing + '\n\nRecommended action: ' + action
+            : 'Recommended action: ' + action;
+        }
+        delete rec.params.recommended_action;
+      }
+      // Keep rail label in sync with title.
+      if (rec.params.title) rec.name = rec.params.title;
+    });
     // v0.4.4: per-rule combinator → per-condition connector. Translate
     // 'any' → 'or' on every non-first condition, 'all' (or absent) → 'and',
     // then drop the rule-level field. New rules write the new shape only.
@@ -792,8 +814,8 @@
           addBtn.textContent = '+';
           addBtn.title = 'Add as step';
           addBtn.addEventListener('click', () => addStepFromQuestion(lq, detail, q));
-          li.appendChild(text);
           li.appendChild(addBtn);
+          li.appendChild(text);
           qList.appendChild(li);
         });
       } else {
@@ -911,19 +933,6 @@
       (r) => r.recommendation_id === state.editingRecommendationId,
     );
     if (!rec) return;
-    const nameField = document.createElement('label');
-    nameField.className = 'field';
-    nameField.textContent = 'Name (shown in the rail)';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.value = rec.name || '';
-    nameInput.addEventListener('input', (ev) => {
-      rec.name = ev.target.value;
-      savePathway();
-      renderRecommendationsList();
-    });
-    nameField.appendChild(nameInput);
-    els.recForm.appendChild(nameField);
 
     const cmd = state.terminalCommands.find((c) => c.key === rec.command_key) || state.terminalCommands[0];
     if (!rec.command_key && cmd) rec.command_key = cmd.key;
@@ -953,6 +962,8 @@
       const evt = field.type === 'select' ? 'change' : 'input';
       input.addEventListener(evt, (ev) => {
         rec.params[field.key] = ev.target.value;
+        // Title doubles as the rail label, so keep rec.name in sync.
+        if (field.key === 'title') rec.name = ev.target.value;
         savePathway();
         renderRecommendationsList();
       });
@@ -972,7 +983,7 @@
       recommendation_id: newRecommendationId(),
       name: 'New recommendation',
       command_key: cmd ? cmd.key : '',
-      params: {},
+      params: { title: 'New recommendation' },
     };
     state.pathway.definition.recommendations = state.pathway.definition.recommendations || [];
     state.pathway.definition.recommendations.push(rec);

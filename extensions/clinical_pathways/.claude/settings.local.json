@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(canvas logs *)",
-      "Bash(uv run *)"
+      "Bash(uv run *)",
+      "Bash(canvas list *)"
     ]
   }
 }

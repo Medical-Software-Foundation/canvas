@@ -47,15 +47,9 @@ TERMINAL_COMMANDS: dict[str, dict[str, Any]] = {
             },
             {
                 "key": "body",
-                "label": "Body",
+                "label": "Recommendation",
                 "type": "textarea",
                 "required": True,
-            },
-            {
-                "key": "recommended_action",
-                "label": "Recommended action",
-                "type": "textarea",
-                "required": False,
             },
         ],
     },

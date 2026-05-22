@@ -21,12 +21,6 @@
     <div class="source">From pathway: {{ pathway_title }}</div>
     {% if severity %}<span class="severity {{ severity }}">{{ severity_label }}</span>{% endif %}
     <div class="body">{{ body }}</div>
-    {% if recommended_action %}
-      <div class="action">
-        <div class="action-label">Recommended action</div>
-        <div>{{ recommended_action }}</div>
-      </div>
-    {% endif %}
   </div>
 </body>
 </html>
