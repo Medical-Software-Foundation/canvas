@@ -2,7 +2,7 @@
   'use strict';
 
   const apiBase = document.body.dataset.apiBase;
-  console.log('clinical_pathways builder v0.4.6 loaded');
+  console.log('clinical_pathways builder v0.4.7 loaded');
 
   const els = {
     list: document.getElementById('pathway-list-items'),
