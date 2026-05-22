@@ -42,6 +42,9 @@ class ACCESSAlignment(CustomModel):
     submission_started_at = DateTimeField(default=None)
     last_poll_at = DateTimeField(default=None)
     poll_attempts = IntegerField(default=0)
+    # Populated when a submission or pre-validation returns an error message
+    # (e.g. OperationOutcome issue detail text or $align 400 detail).
+    status_message = TextField(default="")
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
 

@@ -1,4 +1,10 @@
-"""Tests for SubmissionStatusPoller — backoff schedule, state transitions, abandonment."""
+"""Tests for SubmissionStatusPoller — backoff schedule, state transitions, abandonment.
+
+Polling now branches on HTTP status code (not body content):
+- 202 → in-progress, leave state unchanged
+- 200 + Parameters → completed successfully
+- 200 + OperationOutcome → completed with errors, store detail text
+"""
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, call, patch
@@ -38,6 +44,11 @@ def _make_poller(secrets=None):
         "ACCESS_BASE_URL": "https://cms.gov/fhir",
     }
     return poller
+
+
+# poll_submission_status now returns (status_code, body)
+def _make_poll_result(status_code: int, body: dict) -> tuple:
+    return (status_code, body)
 
 
 class TestSubmissionStatusPollerBackoff:
@@ -84,13 +95,6 @@ class TestSubmissionStatusPollerBackoff:
             last_poll_at=now - timedelta(seconds=90),
         )
 
-        completed_result = {
-            "parameter": [
-                {"name": "status", "valueCode": "completed"},
-                {"name": "alignmentId", "valueString": "align-xyz"},
-            ]
-        }
-
         mock_qs = MagicMock()
         mock_qs.filter.return_value = [alignment]
 
@@ -101,7 +105,12 @@ class TestSubmissionStatusPollerBackoff:
             ),
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller.poll_submission_status",
-                return_value=completed_result,
+                return_value=_make_poll_result(200, {
+                    "resourceType": "Parameters",
+                    "parameter": [
+                        {"name": "alignmentId", "valueString": "align-xyz"},
+                    ],
+                }),
             ) as mock_poll,
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller._utcnow",
@@ -149,7 +158,8 @@ class TestSubmissionStatusPollerBackoff:
 
 
 class TestSubmissionStatusPollerStateTransitions:
-    def test_completed_align_marks_aligned(self):
+    def test_202_leaves_state_as_in_progress(self):
+        """HTTP 202 → still processing; submission_state must not change."""
         poller = _make_poller()
         now = _utcnow()
 
@@ -158,14 +168,6 @@ class TestSubmissionStatusPollerStateTransitions:
             poll_attempts=0,
             last_poll_at=now - timedelta(minutes=2),
         )
-
-        result = {
-            "parameter": [
-                {"name": "status", "valueCode": "completed"},
-                {"name": "alignmentId", "valueString": "align-new-id"},
-                {"name": "careStartDate", "valueDate": "2026-06-01"},
-            ]
-        }
 
         mock_qs = MagicMock()
         mock_qs.filter.return_value = [alignment]
@@ -177,7 +179,47 @@ class TestSubmissionStatusPollerStateTransitions:
             ),
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller.poll_submission_status",
-                return_value=result,
+                return_value=_make_poll_result(202, {}),
+            ),
+            patch(
+                "cms_access_fhir_client.cron.submission_status_poller._utcnow",
+                return_value=now,
+            ),
+        ):
+            poller.execute()
+
+        # State unchanged — 202 means still in flight
+        assert alignment.submission_state == "in-progress"
+        assert alignment.poll_attempts == 1
+
+    def test_200_parameters_marks_align_completed(self):
+        """HTTP 200 + Parameters → completed; extract alignmentId and careStartDate."""
+        poller = _make_poller()
+        now = _utcnow()
+
+        alignment = _make_alignment(
+            submission_op="align",
+            poll_attempts=0,
+            last_poll_at=now - timedelta(minutes=2),
+        )
+
+        mock_qs = MagicMock()
+        mock_qs.filter.return_value = [alignment]
+
+        with (
+            patch(
+                "cms_access_fhir_client.cron.submission_status_poller.ACCESSAlignment.objects",
+                mock_qs,
+            ),
+            patch(
+                "cms_access_fhir_client.cron.submission_status_poller.poll_submission_status",
+                return_value=_make_poll_result(200, {
+                    "resourceType": "Parameters",
+                    "parameter": [
+                        {"name": "alignmentId", "valueString": "align-new-id"},
+                        {"name": "careStartDate", "valueDate": "2026-06-01"},
+                    ],
+                }),
             ),
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller._utcnow",
@@ -190,7 +232,8 @@ class TestSubmissionStatusPollerStateTransitions:
         assert alignment.status == "aligned"
         assert alignment.alignment_id == "align-new-id"
 
-    def test_completed_unalign_marks_unaligned(self):
+    def test_200_parameters_marks_unalign_completed(self):
+        """HTTP 200 + Parameters → unaligned for unalign op."""
         poller = _make_poller()
         now = _utcnow()
 
@@ -199,8 +242,6 @@ class TestSubmissionStatusPollerStateTransitions:
             poll_attempts=0,
             last_poll_at=now - timedelta(minutes=2),
         )
-
-        result = {"parameter": [{"name": "status", "valueCode": "completed"}]}
 
         mock_qs = MagicMock()
         mock_qs.filter.return_value = [alignment]
@@ -212,7 +253,10 @@ class TestSubmissionStatusPollerStateTransitions:
             ),
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller.poll_submission_status",
-                return_value=result,
+                return_value=_make_poll_result(200, {
+                    "resourceType": "Parameters",
+                    "parameter": [],
+                }),
             ),
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller._utcnow",
@@ -224,16 +268,16 @@ class TestSubmissionStatusPollerStateTransitions:
         assert alignment.status == "unaligned"
         assert alignment.submission_state == "completed"
 
-    def test_error_result_marks_alignment_error(self):
+    def test_200_operation_outcome_marks_error_with_detail_text(self):
+        """HTTP 200 + OperationOutcome → error; detail text stored in status_message."""
         poller = _make_poller()
         now = _utcnow()
 
         alignment = _make_alignment(
+            submission_op="align",
             poll_attempts=0,
             last_poll_at=now - timedelta(minutes=2),
         )
-
-        result = {"parameter": [{"name": "status", "valueCode": "error"}]}
 
         mock_qs = MagicMock()
         mock_qs.filter.return_value = [alignment]
@@ -245,7 +289,16 @@ class TestSubmissionStatusPollerStateTransitions:
             ),
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller.poll_submission_status",
-                return_value=result,
+                return_value=_make_poll_result(200, {
+                    "resourceType": "OperationOutcome",
+                    "issue": [
+                        {
+                            "severity": "error",
+                            "code": "invalid",
+                            "details": {"text": "Participant not enrolled in ACCESS"},
+                        }
+                    ],
+                }),
             ),
             patch(
                 "cms_access_fhir_client.cron.submission_status_poller._utcnow",
@@ -256,6 +309,43 @@ class TestSubmissionStatusPollerStateTransitions:
 
         assert alignment.submission_state == "error"
         assert alignment.status == "error"
+        assert alignment.status_message == "Participant not enrolled in ACCESS"
+
+    def test_200_operation_outcome_empty_issues_uses_unknown_error(self):
+        """OperationOutcome with empty issues list → status_message = 'Unknown error'."""
+        poller = _make_poller()
+        now = _utcnow()
+
+        alignment = _make_alignment(
+            submission_op="align",
+            poll_attempts=0,
+            last_poll_at=now - timedelta(minutes=2),
+        )
+
+        mock_qs = MagicMock()
+        mock_qs.filter.return_value = [alignment]
+
+        with (
+            patch(
+                "cms_access_fhir_client.cron.submission_status_poller.ACCESSAlignment.objects",
+                mock_qs,
+            ),
+            patch(
+                "cms_access_fhir_client.cron.submission_status_poller.poll_submission_status",
+                return_value=_make_poll_result(200, {
+                    "resourceType": "OperationOutcome",
+                    "issue": [],
+                }),
+            ),
+            patch(
+                "cms_access_fhir_client.cron.submission_status_poller._utcnow",
+                return_value=now,
+            ),
+        ):
+            poller.execute()
+
+        assert alignment.submission_state == "error"
+        assert alignment.status_message == "Unknown error"
 
     def test_http_error_increments_attempts_without_state_change(self):
         poller = _make_poller()
@@ -319,83 +409,6 @@ class TestSubmissionStatusPollerStateTransitions:
         assert alignment.status == "error"
         assert mock_poll.mock_calls == []
 
-    def test_completed_eligibility_sets_status_from_response(self):
-        poller = _make_poller()
-        now = _utcnow()
-
-        alignment = _make_alignment(
-            submission_op="eligibility",
-            poll_attempts=0,
-            last_poll_at=now - timedelta(minutes=2),
-        )
-
-        result = {
-            "parameter": [
-                {"name": "status", "valueCode": "completed"},
-                {"name": "status", "valueCode": "eligible"},
-            ]
-        }
-
-        mock_qs = MagicMock()
-        mock_qs.filter.return_value = [alignment]
-
-        with (
-            patch(
-                "cms_access_fhir_client.cron.submission_status_poller.ACCESSAlignment.objects",
-                mock_qs,
-            ),
-            patch(
-                "cms_access_fhir_client.cron.submission_status_poller.poll_submission_status",
-                return_value=result,
-            ),
-            patch(
-                "cms_access_fhir_client.cron.submission_status_poller._utcnow",
-                return_value=now,
-            ),
-        ):
-            poller.execute()
-
-        # The completed state is set by _apply_poll_result
-        assert alignment.submission_state == "completed"
-
-    def test_apply_completed_eligibility_uses_status_code(self):
-        from cms_access_fhir_client.cron.submission_status_poller import _apply_completed_result
-        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
-
-        alignment = MagicMock()
-        alignment.submission_op = ACCESSAlignment.SUB_OP_ELIGIBILITY
-
-        result = {"parameter": [{"name": "status", "valueCode": "eligible"}]}
-        _apply_completed_result(alignment, result)
-
-        assert alignment.status == "eligible"
-
-    def test_apply_completed_eligibility_handles_bad_date(self):
-        """careStartDate with invalid date string is silently ignored."""
-        from cms_access_fhir_client.cron.submission_status_poller import _apply_completed_result
-        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
-
-        alignment = MagicMock()
-        alignment.submission_op = ACCESSAlignment.SUB_OP_ALIGN
-
-        result = {
-            "parameter": [
-                {"name": "status", "valueCode": "completed"},
-                {"name": "alignmentId", "valueString": "align-xyz"},
-                {"name": "careStartDate", "valueDate": "not-a-date"},  # invalid
-            ]
-        }
-        # Should not raise — invalid date is silently skipped
-        _apply_completed_result(alignment, result)
-        assert alignment.status == "aligned"
-        assert alignment.alignment_id == "align-xyz"
-
-    def test_extract_submission_status_returns_in_progress_when_absent(self):
-        from cms_access_fhir_client.cron.submission_status_poller import _extract_submission_status
-        # No 'status' parameter → default to in-progress
-        assert _extract_submission_status({}) == "in-progress"
-        assert _extract_submission_status({"parameter": []}) == "in-progress"
-
     def test_skips_alignment_with_no_status_url(self):
         poller = _make_poller()
         now = _utcnow()
@@ -424,7 +437,97 @@ class TestSubmissionStatusPollerStateTransitions:
         ):
             poller.execute()
 
-        # Should skip without polling
         assert mock_poll.mock_calls == []
-        # State unchanged
         assert alignment.submission_state == "in-progress"
+
+
+class TestApplyPollResult:
+    """Unit tests for _apply_poll_result directly."""
+
+    def test_202_is_noop(self):
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_poll_result
+        alignment = MagicMock()
+        alignment.submission_state = "in-progress"
+
+        _apply_poll_result(alignment, 202, {})
+
+        # No attribute write should change submission_state
+        assert alignment.submission_state == "in-progress"
+
+    def test_200_parameters_sets_completed(self):
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_poll_result
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+
+        alignment = MagicMock()
+        alignment.submission_op = ACCESSAlignment.SUB_OP_ALIGN
+
+        _apply_poll_result(alignment, 200, {
+            "resourceType": "Parameters",
+            "parameter": [{"name": "alignmentId", "valueString": "align-done"}],
+        })
+
+        assert alignment.submission_state == "completed"
+        assert alignment.alignment_id == "align-done"
+
+    def test_200_operation_outcome_sets_error_and_message(self):
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_poll_result
+
+        alignment = MagicMock()
+
+        _apply_poll_result(alignment, 200, {
+            "resourceType": "OperationOutcome",
+            "issue": [{"severity": "error", "code": "invalid", "details": {"text": "Bad request"}}],
+        })
+
+        assert alignment.submission_state == "error"
+        assert alignment.status == "error"
+        assert alignment.status_message == "Bad request"
+
+    def test_unexpected_resource_type_sets_error(self):
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_poll_result
+
+        alignment = MagicMock()
+
+        _apply_poll_result(alignment, 200, {"resourceType": "Bundle"})
+
+        assert alignment.submission_state == "error"
+        assert alignment.status == "error"
+
+
+class TestApplyCompletedResult:
+    def test_apply_completed_eligibility_uses_status_code(self):
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_completed_result
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+
+        alignment = MagicMock()
+        alignment.submission_op = ACCESSAlignment.SUB_OP_ELIGIBILITY
+
+        result = {"parameter": [{"name": "status", "valueCode": "eligible"}]}
+        _apply_completed_result(alignment, result)
+
+        assert alignment.status == "eligible"
+
+    def test_apply_completed_eligibility_handles_bad_date(self):
+        """careStartDate with invalid date string is silently ignored."""
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_completed_result
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+
+        alignment = MagicMock()
+        alignment.submission_op = ACCESSAlignment.SUB_OP_ALIGN
+
+        result = {
+            "parameter": [
+                {"name": "alignmentId", "valueString": "align-xyz"},
+                {"name": "careStartDate", "valueDate": "not-a-date"},  # invalid
+            ]
+        }
+        # Should not raise — invalid date is silently skipped
+        _apply_completed_result(alignment, result)
+        assert alignment.status == "aligned"
+        assert alignment.alignment_id == "align-xyz"
+
+    def test_extract_submission_status_returns_in_progress_when_absent(self):
+        from cms_access_fhir_client.cron.submission_status_poller import _extract_submission_status
+        # No 'status' parameter → default to in-progress
+        assert _extract_submission_status({}) == "in-progress"
+        assert _extract_submission_status({"parameter": []}) == "in-progress"

@@ -1,4 +1,12 @@
-"""OAuth 2.0 client-credentials flow with token caching."""
+"""OAuth 2.0 client-credentials flow with token caching.
+
+CMS ACCESS requires HTTP Basic auth: credentials are sent as
+``Authorization: Basic base64(client_id:client_secret)`` and the form
+body must contain only ``grant_type`` and ``scope``.  Sending
+``client_id``/``client_secret`` as form fields is rejected with 401.
+"""
+import base64
+
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.utils import Http
 from logger import log
@@ -13,6 +21,8 @@ def get_access_token(secrets: dict) -> str:
     client_id = secrets.get("ACCESS_OAUTH_CLIENT_ID")
     client_secret = secrets.get("ACCESS_OAUTH_CLIENT_SECRET")
     token_url = secrets.get("ACCESS_OAUTH_TOKEN_URL")
+    # Scope is optional; falls back to the two scopes CMS echoes in practice
+    scope = secrets.get("ACCESS_OAUTH_SCOPE", "cdx/*.read cdx/fhir-resource.write")
 
     if not client_id:
         raise ValueError("Missing required secret: ACCESS_OAUTH_CLIENT_ID")
@@ -28,14 +38,20 @@ def get_access_token(secrets: dict) -> str:
     if cached:
         return cached
 
+    # CMS requires HTTP Basic auth — credentials in the Authorization header,
+    # NOT as form fields.  canvas_sdk.utils.Http does not expose a native
+    # basic-auth shortcut, so we build the header manually.
+    raw = f"{client_id}:{client_secret}".encode()
+    basic_credentials = base64.b64encode(raw).decode()
+
     http = Http()
     response = http.post(
         token_url,
         data={
             "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
+            "scope": scope,
         },
+        headers={"Authorization": f"Basic {basic_credentials}"},
     )
 
     if not response.ok:

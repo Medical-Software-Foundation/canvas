@@ -6,6 +6,11 @@ polls the stored submission_status_url using exponential backoff:
     interval = min(2^poll_attempts minutes, MAX_INTERVAL_MINUTES)
 
 Abandons a submission after MAX_POLL_ATTEMPTS attempts and marks it as error.
+
+Per the CMS User Guide, the poll endpoint signals state via HTTP status code:
+    202 + empty body + X-Progress header  → still processing
+    200 + Parameters body                 → completed successfully
+    200 + OperationOutcome body           → completed with errors
 """
 from datetime import datetime, timezone, timedelta
 
@@ -72,7 +77,7 @@ class SubmissionStatusPoller(CronTask):
             )
 
             try:
-                result = poll_submission_status(self.secrets, alignment.submission_status_url)
+                status_code, body = poll_submission_status(self.secrets, alignment.submission_status_url)
             except RuntimeError as exc:
                 log.error(f"[cms-access] Poll HTTP error for dbid={alignment.dbid}: {exc}")
                 alignment.poll_attempts = alignment.poll_attempts + 1
@@ -82,34 +87,57 @@ class SubmissionStatusPoller(CronTask):
 
             alignment.poll_attempts = alignment.poll_attempts + 1
             alignment.last_poll_at = now
-            _apply_poll_result(alignment, result)
+            _apply_poll_result(alignment, status_code, body)
             alignment.save()
 
         return []
 
 
-def _apply_poll_result(alignment: ACCESSAlignment, result: dict) -> None:
-    """Update alignment fields based on the SubmissionStatus response."""
-    status = _extract_submission_status(result)
+def _apply_poll_result(alignment: ACCESSAlignment, status_code: int, body: dict) -> None:
+    """Update alignment fields based on HTTP status code and response body.
 
-    if status == "completed":
-        alignment.submission_state = ACCESSAlignment.SUB_STATE_COMPLETED
-        alignment.submission_status_url = ""
-        _apply_completed_result(alignment, result)
-        log.info(f"[cms-access] Submission completed for ACCESSAlignment dbid={alignment.dbid}")
+    Per the User Guide:
+    - 202               → in-progress, leave state unchanged
+    - 200 + Parameters  → completed successfully
+    - 200 + OperationOutcome → completed with errors
+    """
+    if status_code == 202:
+        # Still processing — leave submission_state as-is, will retry next run
+        return
 
-    elif status == "error":
+    # status_code == 200
+    resource_type = body.get("resourceType")
+
+    if resource_type == "OperationOutcome":
+        issues = body.get("issue", [])
+        detail = issues[0].get("details", {}).get("text", "Unknown error") if issues else "Unknown error"
         alignment.submission_state = ACCESSAlignment.SUB_STATE_ERROR
         alignment.status = ACCESSAlignment.STATUS_ERROR
+        alignment.status_message = detail
         log.error(
-            f"[cms-access] Submission errored for ACCESSAlignment dbid={alignment.dbid}: "
-            f"{result}"
+            f"[cms-access] Submission OperationOutcome error for "
+            f"ACCESSAlignment dbid={alignment.dbid}: {detail}"
         )
-    # in-progress: leave as-is, will poll again
+        return
+
+    if resource_type == "Parameters":
+        alignment.submission_state = ACCESSAlignment.SUB_STATE_COMPLETED
+        alignment.submission_status_url = ""
+        _apply_completed_result(alignment, body)
+        log.info(f"[cms-access] Submission completed for ACCESSAlignment dbid={alignment.dbid}")
+        return
+
+    # Unexpected shape — treat as error
+    log.error(
+        f"[cms-access] Unexpected poll response shape for "
+        f"ACCESSAlignment dbid={alignment.dbid}: resourceType={resource_type!r}"
+    )
+    alignment.submission_state = ACCESSAlignment.SUB_STATE_ERROR
+    alignment.status = ACCESSAlignment.STATUS_ERROR
 
 
 def _apply_completed_result(alignment: ACCESSAlignment, result: dict) -> None:
-    """Extract final state from a completed submission-status response."""
+    """Extract final state from a completed submission-status Parameters response."""
     op = alignment.submission_op
 
     if op == ACCESSAlignment.SUB_OP_ELIGIBILITY:
@@ -139,7 +167,11 @@ def _apply_completed_result(alignment: ACCESSAlignment, result: dict) -> None:
 
 
 def _extract_submission_status(result: dict) -> str:
-    """Extract the submission status code from a SubmissionStatus Parameters resource."""
+    """Extract the submission status code from a SubmissionStatus Parameters resource.
+
+    Retained for backwards compatibility with any callers; new code should use
+    _apply_poll_result() which branches on HTTP status code instead.
+    """
     for param in result.get("parameter", []):
         if param.get("name") == "status":
             return param.get("valueCode", "in-progress")

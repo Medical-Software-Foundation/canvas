@@ -1,10 +1,23 @@
-"""Tests for OAuth 2.0 client-credentials token acquisition and caching."""
+"""Tests for OAuth 2.0 client-credentials token acquisition and caching.
+
+CMS ACCESS requires HTTP Basic auth: credentials are sent as
+``Authorization: Basic base64(client_id:client_secret)`` and the form body
+must contain only ``grant_type`` and ``scope``.  Sending client_id/client_secret
+as form fields is rejected.
+"""
+import base64
 import pytest
 from unittest.mock import MagicMock, call, patch
 
 
+def _make_basic_header(client_id: str, client_secret: str) -> str:
+    raw = f"{client_id}:{client_secret}".encode()
+    return "Basic " + base64.b64encode(raw).decode()
+
+
 class TestGetAccessToken:
-    def test_fetches_token_when_cache_miss(self, full_secrets):
+    def test_fetches_token_with_basic_auth_header(self, full_secrets):
+        """OAuth POST must include Authorization: Basic ... header, NOT form fields."""
         mock_cache = MagicMock()
         mock_cache.get.return_value = None
 
@@ -23,23 +36,93 @@ class TestGetAccessToken:
             token = get_access_token(full_secrets)
 
         assert token == "tok-abc"
-        assert mock_cache.mock_calls == [
-            call.get("access_oauth_token_test-client-id"),
-            call.set("access_oauth_token_test-client-id", "tok-abc", timeout_seconds=3540),
-        ]
-        # http.post() is called; response.json() is then called on the return value,
-        # which shows up as call.post().json() in mock_http.mock_calls
-        assert mock_http.mock_calls == [
-            call.post(
-                "https://auth.cms.gov/token",
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": "test-client-id",
-                    "client_secret": "test-client-secret",
-                },
-            ),
-            call.post().json(),
-        ]
+
+        post_call = mock_http.post.call_args
+        # First positional arg is the URL
+        assert post_call[0][0] == "https://auth.cms.gov/token"
+
+        # Form body: grant_type + scope only — NO client_id or client_secret
+        form_data = post_call[1]["data"]
+        assert form_data["grant_type"] == "client_credentials"
+        assert "scope" in form_data
+        assert "client_id" not in form_data
+        assert "client_secret" not in form_data
+
+        # Authorization header must be Basic with correct base64
+        headers = post_call[1]["headers"]
+        expected_header = _make_basic_header("test-client-id", "test-client-secret")
+        assert headers["Authorization"] == expected_header
+
+    def test_basic_auth_header_is_correct_base64(self, full_secrets):
+        """The encoded header must decode back to 'client_id:client_secret'."""
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.json.return_value = {"access_token": "tok", "expires_in": 300}
+
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.oauth.get_cache", return_value=mock_cache),
+            patch("cms_access_fhir_client.oauth.Http", return_value=mock_http),
+        ):
+            from cms_access_fhir_client.oauth import get_access_token
+            get_access_token(full_secrets)
+
+        headers = mock_http.post.call_args[1]["headers"]
+        auth = headers["Authorization"]
+        assert auth.startswith("Basic ")
+        decoded = base64.b64decode(auth[len("Basic "):]).decode()
+        assert decoded == "test-client-id:test-client-secret"
+
+    def test_uses_default_scope_when_not_in_secrets(self, full_secrets):
+        """Scope defaults to 'cdx/*.read cdx/fhir-resource.write' when not set."""
+        secrets = {k: v for k, v in full_secrets.items() if k != "ACCESS_OAUTH_SCOPE"}
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.json.return_value = {"access_token": "tok", "expires_in": 300}
+
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.oauth.get_cache", return_value=mock_cache),
+            patch("cms_access_fhir_client.oauth.Http", return_value=mock_http),
+        ):
+            from cms_access_fhir_client.oauth import get_access_token
+            get_access_token(secrets)
+
+        form_data = mock_http.post.call_args[1]["data"]
+        assert form_data["scope"] == "cdx/*.read cdx/fhir-resource.write"
+
+    def test_uses_custom_scope_from_secrets(self, full_secrets):
+        """ACCESS_OAUTH_SCOPE secret overrides the default scope."""
+        secrets = {**full_secrets, "ACCESS_OAUTH_SCOPE": "cdx/*.read"}
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.ok = True
+        mock_response.json.return_value = {"access_token": "tok", "expires_in": 300}
+
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.oauth.get_cache", return_value=mock_cache),
+            patch("cms_access_fhir_client.oauth.Http", return_value=mock_http),
+        ):
+            from cms_access_fhir_client.oauth import get_access_token
+            get_access_token(secrets)
+
+        form_data = mock_http.post.call_args[1]["data"]
+        assert form_data["scope"] == "cdx/*.read"
 
     def test_returns_cached_token_without_http(self, full_secrets):
         mock_cache = MagicMock()
@@ -144,8 +227,6 @@ class TestGetAccessToken:
                 get_access_token(full_secrets)
 
         assert mock_cache.mock_calls == [call.get("access_oauth_token_test-client-id")]
-        # ok/status_code/text are plain values on the mock, so attribute access is not recorded;
-        # the RuntimeError raise is already verified by the pytest.raises context manager above
 
     def test_raises_when_access_token_missing_from_response(self, full_secrets):
         """Response 200 OK but body lacks access_token field."""

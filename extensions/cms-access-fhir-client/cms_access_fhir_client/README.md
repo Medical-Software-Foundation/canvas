@@ -33,11 +33,12 @@ Inbound: the plugin exposes a webhook endpoint that receives all seven CMS FHIR 
 
 | Secret | Purpose |
 |---|---|
-| `ACCESS_BASE_URL` | CMS FHIR API base URL (switch between mock/sandbox/prod) |
+| `ACCESS_BASE_URL` | CMS FHIR API base URL, up to (but not including) `/access` — e.g. `https://impl-cdxapi.cmmi.cms.gov/cdx/services/fhir` |
 | `ACCESS_OAUTH_CLIENT_ID` | OAuth 2.0 client_id |
 | `ACCESS_OAUTH_CLIENT_SECRET` | OAuth 2.0 client_secret |
-| `ACCESS_OAUTH_TOKEN_URL` | OAuth 2.0 token endpoint |
-| `ACCESS_PARTICIPANT_ID` | Your participant ID (format `ACCESS####`) |
+| `ACCESS_OAUTH_TOKEN_URL` | OAuth 2.0 token endpoint — e.g. `https://impl.idp.idm.cms.gov/oauth2/ausqf73jnuHioLLg3297/v1/token` |
+| `ACCESS_OAUTH_SCOPE` | OAuth scopes to request (default: `cdx/*.read cdx/fhir-resource.write`; leave blank to use the default) |
+| `ACCESS_PARTICIPANT_ID` | Your entity ID — format is `ACCES` (5 letters) + 5 digits, e.g. `ACCES10098` |
 | `ACCESS_WEBHOOK_SECRET` | Shared secret for `X-Access-Webhook-Secret` header validation |
 | `ACCESS_SHOW_BANNER` | `true` to enable banner alert in the chart |
 | `ACCESS_SHOW_CHART_SUMMARY` | `true` to enable the custom chart summary section |

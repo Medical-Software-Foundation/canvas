@@ -107,6 +107,7 @@
         {"name": "ACCESS_OAUTH_CLIENT_ID", "sensitive": true},
         {"name": "ACCESS_OAUTH_CLIENT_SECRET", "sensitive": true},
         {"name": "ACCESS_OAUTH_TOKEN_URL", "sensitive": false},
+        {"name": "ACCESS_OAUTH_SCOPE", "sensitive": false},
         {"name": "ACCESS_PARTICIPANT_ID", "sensitive": false},
         {"name": "ACCESS_WEBHOOK_SECRET", "sensitive": true},
         {"name": "ACCESS_SHOW_BANNER", "sensitive": false},
