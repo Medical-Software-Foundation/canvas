@@ -233,6 +233,58 @@ def test_apply_uses_provider_overrides_for_units_and_modifiers(active_cdm_codes)
     assert data["modifiers"] == [{"code": "59", "system": "http://www.ama-assn.org/go/cpt"}]
 
 
+def test_apply_resolves_dbid_to_uuid_for_billing_line_item(active_cdm_codes) -> None:
+    """The footer ActionButton's event.context['note_id'] is an integer dbid.
+    AddBillingLineItem.note_id requires the Note's UUID. apply_codes must
+    resolve the dbid to UUID before emitting the effect — otherwise Canvas
+    rejects with 'X is not a valid UUID'."""
+    from canvas_sdk.v1.data import Note
+    from canvas_sdk.test_utils.factories import NoteFactory
+
+    note = NoteFactory.create()
+    entry = CuratedCptCode.objects.create(cpt_code="99213", description="Office")
+
+    handler = _make_handler(_make_request(
+        method="POST",
+        body={
+            "note_id": str(note.dbid),  # the numeric dbid, as the footer button sends
+            "selected": [{"id": str(entry.pk)}],
+        },
+    ))
+    results = handler.apply_codes()
+
+    billing = [r for r in results if hasattr(r, "type") and r.type == EffectType.ADD_BILLING_LINE_ITEM]
+    assert len(billing) == 1
+    payload = json.loads(billing[0].payload)
+    assert payload["note_id"] == str(note.id)
+
+
+def test_apply_passes_through_uuid_note_id_unchanged(active_cdm_codes) -> None:
+    """When note_id is already a UUID (some callers may pass one directly),
+    the resolver leaves it alone instead of forcing a DB lookup."""
+    entry = CuratedCptCode.objects.create(cpt_code="99213", description="Office")
+    handler = _make_handler(_make_request(
+        method="POST",
+        body={
+            "note_id": "550e8400-e29b-41d4-a716-446655440000",
+            "selected": [{"id": str(entry.pk)}],
+        },
+    ))
+    results = handler.apply_codes()
+    billing = [r for r in results if hasattr(r, "type") and r.type == EffectType.ADD_BILLING_LINE_ITEM]
+    assert json.loads(billing[0].payload)["note_id"] == "550e8400-e29b-41d4-a716-446655440000"
+
+
+def test_apply_returns_404_when_dbid_does_not_resolve() -> None:
+    """Unknown dbid → 404, not a misleading 'Missing note_id' or a silent skip."""
+    handler = _make_handler(_make_request(
+        method="POST",
+        body={"note_id": "999999999", "selected": [{"id": "1"}]},
+    ))
+    results = handler.apply_codes()
+    assert results[0].status_code == 404
+
+
 def test_apply_falls_back_to_curated_defaults_when_overrides_missing(active_cdm_codes) -> None:
     """If a row in `selected` omits units/modifiers (or sends garbage), apply
     falls back to the admin-curated defaults rather than rejecting."""

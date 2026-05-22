@@ -3,6 +3,7 @@ from canvas_sdk.effects.billing_line_item import AddBillingLineItem
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data import Note
 
 from curated_cpt_picker.models.curated_cpt_code import CuratedCptCode
 from curated_cpt_picker.lib.cdm_validation import filter_valid_cpt_codes
@@ -13,6 +14,26 @@ def _modifier_summary(modifiers: list[dict]) -> str:
     if not modifiers:
         return ""
     return ", ".join(m.get("code", "") for m in modifiers if m.get("code"))
+
+
+def _resolve_note_uuid(note_id_input: object) -> str | None:
+    """Convert whatever the picker URL carried into a Note UUID.
+
+    The footer ActionButton's event context provides note_id as an integer
+    dbid (e.g. '326'); AddBillingLineItem.note_id requires the UUID. If the
+    input is numeric, look up by dbid; otherwise assume it's already a UUID.
+    """
+    if note_id_input is None:
+        return None
+    raw = str(note_id_input).strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        try:
+            return str(Note.objects.get(dbid=int(raw)).id)
+        except Note.DoesNotExist:
+            return None
+    return raw
 
 
 class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
@@ -52,9 +73,12 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
           - Old shape: {"note_id": str, "selected_ids": [str]}
         """
         body = self.request.json()
-        note_id = body.get("note_id")
-        if not note_id:
+        note_id_raw = body.get("note_id")
+        if not note_id_raw:
             return [JSONResponse({"error": "Missing note_id"}, status_code=400)]
+        note_uuid = _resolve_note_uuid(note_id_raw)
+        if not note_uuid:
+            return [JSONResponse({"error": f"Note not found for id '{note_id_raw}'"}, status_code=404)]
 
         # Normalize to a list of overrides keyed by entry id.
         selected_raw = body.get("selected")
@@ -95,7 +119,7 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
 
             effects.append(
                 AddBillingLineItem(
-                    note_id=str(note_id),
+                    note_id=note_uuid,
                     cpt=entry.cpt_code,
                     units=units,
                     modifiers=modifiers,
