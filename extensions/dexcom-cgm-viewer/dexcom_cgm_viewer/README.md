@@ -226,3 +226,8 @@ uv run mypy dexcom_cgm_viewer
 ## License
 
 Released under the [MIT License](../LICENSE).
+
+## Info
+
+*This plugin was developed and contributed by [Vicert](https://vicert.com).*
+Contact: engineering@vicert.com
