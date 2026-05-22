@@ -1,0 +1,34 @@
+{
+    "sdk_version": "0.154.1",
+    "plugin_version": "0.0.4",
+    "name": "patient_portal_profile",
+    "description": "Patient portal application that lets patients view their own profile: photo, name, birthdate, registration email, registration phone, addresses, care team, and preferred pharmacy.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "patient_portal_profile.applications.profile_application:ProfileApplication",
+                "name": "My Profile",
+                "description": "View your personal information on file.",
+                "scope": "portal_menu_item",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "patient_portal_profile.handlers.profile_web_app:ProfileWebApp",
+                "description": "Serves the profile HTML/JS/CSS for the My Profile menu item."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
