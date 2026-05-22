@@ -1,6 +1,6 @@
 # Plugin Specification: Clinical Pathways
 
-Version: 0.4.3
+Version: 0.4.7
 Status: Implemented — in UAT
 
 This spec captures the **v0.4** implementation. The user-facing UI of the
@@ -41,7 +41,7 @@ Canvas render the questionnaires as it would for any other
 ```json
 {
   "sdk_version": "0.139.0",
-  "plugin_version": "0.4.3",
+  "plugin_version": "0.4.7",
   "name": "clinical_pathways",
   "custom_data": {
     "namespace": "canvas__clinical_pathways",
@@ -70,8 +70,11 @@ Surfaces:
 
 - **Pathway Builder** (`provider_menu_item` Application) — full-page SPA
   for authoring pathways. Three-pane layout: left rail (pathways list),
-  center (per-step rule editor), right rail (loaded questionnaires +
-  recommendations).
+  center (per-step rule editor with A/B/C… letter labels on step cards),
+  right rail (collapsible loaded-questionnaire panels + recommendations).
+  Routing dropdowns ("Then go to" / "Otherwise") prefix step targets
+  with the matching center-pane letter so the logic flow is visible at
+  a glance.
 - **Picker** (`NOTE_HEADER` `ActionButton` → `RIGHT_CHART_PANE`) —
   searchable list of published pathways. On select, originates the start
   step's questionnaire as a `QuestionnaireCommand`, creates a `PathwayRun`
@@ -143,7 +146,9 @@ class PathwayRun(CustomModel):
 | v0.1.x | Five tables (Pathway / Segment / Question / Option / BranchRule) | n/a |
 | v0.2.x | `definition.version = 1` (nested tree of questionnaires + terminal nodes) | `current_node_id` |
 | v0.3.x | `definition.version = 2` (flat `nodes[]`, recommendations top-level) | `current_node_id` |
-| v0.4.x | `definition.version = 3` (flat `steps[]`, per-step rules + Otherwise) | `current_step_id`, `inserted_questionnaires`, `committed_questionnaires`, `last_processed_event_token` |
+| v0.4.0–v0.4.3 | `definition.version = 3` (flat `steps[]`, per-step rules + Otherwise; rule-level `combinator: "all"\|"any"`) | `current_step_id`, `inserted_questionnaires`, `committed_questionnaires`, `last_processed_event_token` |
+| v0.4.4+ | Same `version = 3`, but rules carry per-condition `connector: "and"\|"or"` with AND-tighter-than-OR precedence; legacy `combinator` auto-migrated on load. | (unchanged) |
+| v0.4.5+ | Recommendations: `params.recommended_action` dropped (folded into `params.body`); builder uses `params.title` as the rail label (mirrors `rec.name`). | (unchanged) |
 
 Older definition shapes are *not* migrated — opening a v0.1/0.2/0.3
 pathway in the v0.4 builder yields a blank v3 definition that the user
@@ -178,7 +183,6 @@ crash in v0.1.3.
       "rules": [
         {
           "rule_id": "r_...",
-          "combinator": "all" | "any",
           "conditions": [
             {
               "question_id": "<canvas-uuid>",
@@ -189,7 +193,8 @@ crash in v0.1.3.
               "value_option_id": "<dbid as string>",
               "value_option_ids": ["<dbid as string>", ...],
               "value_text": "...",
-              "value_number": 0
+              "value_number": 0,
+              "connector": "and" | "or"
             }
           ],
           "then": {
@@ -212,8 +217,7 @@ crash in v0.1.3.
       "params": {
         "title": "...",
         "severity": "minor" | "moderate" | "severe" | "critical",
-        "body": "...",
-        "recommended_action": "..."
+        "body": "..."
       }
     }
   ]
@@ -228,8 +232,19 @@ crash in v0.1.3.
 - Each step has **exactly one rule** (auto-created with one empty
   condition when the step is added). The builder UI does not surface
   add/delete-rule affordances.
-- The rule combinator is `all` (AND) or `any` (OR) — applied to a flat
-  conditions list. Nested AND/OR groups are not supported.
+- Conditions in a rule are joined by **per-pair `connector` values**
+  (`"and"` | `"or"`, default `"and"`) carried on each non-first
+  condition. The evaluator splits the list on `or` boundaries and
+  matches if any AND-group is fully satisfied — i.e. AND binds tighter
+  than OR, so `A and B or C and D` evaluates as `(A and B) or (C and
+  D)`. Arbitrary parenthesization beyond this precedence is not
+  supported.
+- v0.4.0–v0.4.3 used a rule-level `combinator` field (`"all"`/`"any"`)
+  instead. The evaluator still honors it as a back-compat fallback when
+  no per-condition connectors are present; the builder migrates pathways
+  to the new shape on first load (`combinator: "any"` → every non-first
+  condition gets `connector: "or"`, `"all"` → `"and"`, then the field is
+  removed).
 - The rule's `then` (if any condition matches) and the step's
   `otherwise` (if no rule matches) each route to either another step or
   a recommendation.
@@ -249,6 +264,20 @@ Question identifiers in definition JSON are Canvas Question UUIDs.
 ResponseOption identifiers are the option's integer `dbid` stringified,
 **not** a UUID — Canvas's `ResponseOption` model has no `id` field, only
 `dbid` (a discovery from v0.2.6).
+
+**Recommendation shape** (v0.4.5+):
+
+- The builder no longer surfaces a separate "Name" input. `params.title`
+  drives both the rail label and the classification card heading;
+  `rec.name` is mirrored from `params.title` on every keystroke and on
+  load (legacy records with `name` set and `title` blank are backfilled
+  in the JS migration).
+- The `recommended_action` parameter is gone. The renamed "Recommendation"
+  textarea writes `params.body` only. Legacy records' `recommended_action`
+  text is folded into `params.body` with a `Recommended action: …`
+  prefix on first load, and the field is dropped from the params dict.
+- The `pathway_classification.html` and `pathway_classification_print.html`
+  templates no longer render a "Recommended action" callout.
 
 ---
 
@@ -332,9 +361,11 @@ matches the event's interview:
    the event's questionnaire IDs to `committed_questionnaires`.
 4. Walk forward from `current_step_id`:
    - If the step's question is captured (or its questionnaire is in
-     `committed_questionnaires`), evaluate the step's rules under their
-     combinator. First match wins. If no rule matches, fall through to
-     the step's `otherwise`.
+     `committed_questionnaires`), evaluate the step's rules — each
+     rule's conditions are joined by the per-pair `connector` values
+     with AND-tighter-than-OR precedence. First rule whose conditions
+     are satisfied wins. If no rule matches, fall through to the step's
+     `otherwise`.
    - If the routing target is a step, advance `current_step_id` and
      continue the walk.
    - If the routing target is a recommendation, resolve the recommendation
@@ -366,8 +397,8 @@ warnings inform the configurator but allow publish.
 | error | Each step references a `questionnaire_id` and `question_id`. |
 | warning | Referenced questionnaire still exists in Canvas. |
 | warning | Step has no rules and no `otherwise` — the arm dead-ends. |
-| error | Rule combinator is `all` or `any`. |
 | error | Rule has at least one condition. |
+| error | Each non-first condition's `connector`, if set, is `"and"` or `"or"`. |
 | error | Rule's `then` and step's `otherwise` resolve to a step or recommendation in this pathway. |
 | error | Every recommendation references a known `command_key`. |
 | error | Every recommendation's required parameters are non-empty. |
@@ -382,8 +413,9 @@ warnings inform the configurator but allow publish.
   each step card.
 - **Multiple rules per step.** A step has exactly one implicit rule;
   alternate routing is modelled by adding another step.
-- **Nested AND/OR/NONE condition groups.** Single combinator per rule
-  (`all` or `any`).
+- **Arbitrary parenthesization of condition groups.** v0.4.4 introduced
+  per-pair AND/OR connectors with AND-tighter-than-OR precedence; the
+  user cannot author `A and (B or C)`-style explicit groupings.
 - **Cross-pathway recommendation library.** Recommendations are
   per-pathway.
 - **`{{question_id}}` autocomplete** in the recommendation editor. Manual
