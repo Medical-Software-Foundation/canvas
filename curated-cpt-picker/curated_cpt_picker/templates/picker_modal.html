@@ -4,43 +4,58 @@
   <meta charset="utf-8">
   <title>Quick add codes</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: #1f2937; }
-    h1 { font-size: 18px; margin: 0 0 16px; }
-    p.empty { color: #6b7280; font-style: italic; }
-    .codes { list-style: none; padding: 0; margin: 0 0 24px; max-height: 60vh; overflow-y: auto; }
-    .codes li { display: flex; align-items: center; padding: 8px 4px; border-bottom: 1px solid #e5e7eb; }
-    .codes li:hover { background: #f9fafb; }
-    .codes input[type=checkbox] { margin-right: 12px; }
-    .codes .code { font-weight: 600; font-family: ui-monospace, "SF Mono", monospace; margin-right: 12px; min-width: 64px; }
-    .codes .desc { color: #374151; flex: 1; }
-    .codes .mods { color: #6b7280; font-size: 12px; margin-left: 8px; }
+    :root { --border: #e5e7eb; --muted: #6b7280; --text: #1f2937; --primary: #2563eb; --bg-hover: #f9fafb; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: var(--text); }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.lede { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
+    p.empty { color: var(--muted); font-style: italic; padding: 16px 0; }
+    .select-all { margin-bottom: 12px; font-size: 13px; color: var(--primary); cursor: pointer; background: none; border: 0; padding: 0; }
+    table.picker { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 16px; }
+    table.picker th, table.picker td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    table.picker th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    table.picker tr:hover { background: var(--bg-hover); }
+    table.picker td.code-cell { font-family: ui-monospace, "SF Mono", monospace; font-weight: 600; }
+    table.picker input[type=checkbox] { transform: scale(1.1); cursor: pointer; }
+    table.picker input.units-input { width: 60px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+    table.picker input.modifiers-input { width: 110px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; font-family: ui-monospace, "SF Mono", monospace; }
+    table.picker td.desc-cell { color: #374151; max-width: 280px; }
     .actions { display: flex; gap: 12px; justify-content: flex-end; }
     button { padding: 8px 16px; border: 0; border-radius: 4px; font-size: 14px; cursor: pointer; }
-    button.primary { background: #2563eb; color: #fff; }
+    button.primary { background: var(--primary); color: #fff; }
     button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
-    button.secondary { background: #e5e7eb; color: #1f2937; }
-    .select-all { margin-bottom: 12px; font-size: 13px; color: #2563eb; cursor: pointer; background: none; border: 0; padding: 0; }
+    button.secondary { background: #e5e7eb; color: var(--text); }
   </style>
 </head>
 <body data-note-id="{{ note_id }}">
   <h1>Add curated codes to this note</h1>
 
   {% if codes %}
+    <p class="lede">Check the codes you want to add. You can tweak units and modifiers on a per-code basis before adding — those overrides flow through to the billing footer.</p>
     <button type="button" class="select-all" id="select-all">Select all</button>
-    <ul class="codes">
-      {% for code in codes %}
-        <li>
-          <input type="checkbox" id="code-{{ code.id }}" value="{{ code.id }}">
-          <label for="code-{{ code.id }}" style="display: contents;">
-            <span class="code">{{ code.cpt_code }}</span>
-            <span class="desc">{{ code.description }}</span>
-            {% if code.modifier_summary %}<span class="mods">[{{ code.modifier_summary }}]</span>{% endif %}
-          </label>
-        </li>
-      {% endfor %}
-    </ul>
+    <table class="picker">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Code</th>
+          <th>Description</th>
+          <th>Units</th>
+          <th>Modifiers</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for code in codes %}
+          <tr data-id="{{ code.id }}">
+            <td><input type="checkbox" id="code-{{ code.id }}" class="row-checkbox" value="{{ code.id }}"></td>
+            <td class="code-cell"><label for="code-{{ code.id }}">{{ code.cpt_code }}</label></td>
+            <td class="desc-cell">{{ code.description }}</td>
+            <td><input type="number" class="units-input" min="1" value="{{ code.default_units }}" aria-label="Units"></td>
+            <td><input type="text" class="modifiers-input" value="{{ code.modifier_summary }}" placeholder="optional" aria-label="Modifiers"></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
     <div class="actions">
-      <button type="button" class="secondary" onclick="window.parent.postMessage({type:'closeModal'},'*')">Cancel</button>
+      <button type="button" class="secondary" id="cancel-btn">Cancel</button>
       <button type="button" class="primary" id="apply-btn">Add selected</button>
     </div>
   {% else %}
@@ -50,40 +65,84 @@
       are currently active in the ChargeDescriptionMaster.
     </p>
     <div class="actions">
-      <button type="button" class="secondary" onclick="window.parent.postMessage({type:'closeModal'},'*')">Close</button>
+      <button type="button" class="secondary" id="cancel-btn">Close</button>
     </div>
   {% endif %}
 
   <script>
     (function () {
+      // ---- Canvas modal close via MessageChannel handshake ----
+      // Canvas posts an INIT_CHANNEL event to this iframe with a MessagePort.
+      // We save the port and send CLOSE_MODAL through it when the user is done.
+      let messagePort = null;
+      window.addEventListener("message", (event) => {
+        if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
+          messagePort = event.ports[0];
+          messagePort.start();
+        }
+      });
+
+      function closeModal() {
+        if (messagePort) {
+          messagePort.postMessage({ type: "CLOSE_MODAL" });
+        }
+      }
+
+      // ---- Picker behavior ----
       const noteId = document.body.dataset.noteId;
       const selectAllBtn = document.getElementById("select-all");
       const applyBtn = document.getElementById("apply-btn");
-      const checkboxes = document.querySelectorAll('.codes input[type=checkbox]');
+      const cancelBtn = document.getElementById("cancel-btn");
+      const rows = document.querySelectorAll(".picker tbody tr");
+
+      cancelBtn && cancelBtn.addEventListener("click", closeModal);
 
       if (selectAllBtn) {
         selectAllBtn.addEventListener("click", () => {
-          const anyUnchecked = Array.from(checkboxes).some(cb => !cb.checked);
-          checkboxes.forEach(cb => { cb.checked = anyUnchecked; });
+          const boxes = document.querySelectorAll(".row-checkbox");
+          const anyUnchecked = Array.from(boxes).some(cb => !cb.checked);
+          boxes.forEach(cb => { cb.checked = anyUnchecked; });
           selectAllBtn.textContent = anyUnchecked ? "Deselect all" : "Select all";
         });
       }
 
+      function parseModifiers(raw) {
+        return (raw || "").split(",")
+          .map(s => s.trim())
+          .filter(Boolean)
+          .map(code => ({ code, system: "http://www.ama-assn.org/go/cpt" }));
+      }
+
       if (applyBtn) {
         applyBtn.addEventListener("click", async () => {
-          const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+          const selected = [];
+          rows.forEach(row => {
+            const cb = row.querySelector(".row-checkbox");
+            if (!cb || !cb.checked) return;
+            const units = parseInt(row.querySelector(".units-input").value, 10);
+            const modifiersRaw = row.querySelector(".modifiers-input").value;
+            selected.push({
+              id: row.dataset.id,
+              units: Number.isFinite(units) && units > 0 ? units : 1,
+              modifiers: parseModifiers(modifiersRaw),
+            });
+          });
           if (!selected.length) return;
+
           applyBtn.disabled = true;
           applyBtn.textContent = "Adding…";
           try {
             const res = await fetch("/plugin-io/api/curated_cpt_picker/apply", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ note_id: noteId, selected_ids: selected }),
+              body: JSON.stringify({ note_id: noteId, selected }),
               credentials: "same-origin",
             });
-            if (!res.ok) throw new Error(await res.text());
-            window.parent.postMessage({ type: "closeModal" }, "*");
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(text || `Server returned ${res.status}`);
+            }
+            closeModal();
           } catch (err) {
             applyBtn.disabled = false;
             applyBtn.textContent = "Add selected";

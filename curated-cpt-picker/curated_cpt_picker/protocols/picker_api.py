@@ -30,6 +30,7 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
                 "id": str(entry.pk),
                 "cpt_code": entry.cpt_code,
                 "description": entry.description,
+                "default_units": entry.default_units,
                 "modifier_summary": _modifier_summary(entry.modifiers),
             }
             for entry in curated
@@ -44,16 +45,35 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/apply")
     def apply_codes(self) -> list[Response | Effect]:
+        """Apply selected curated codes to the note as billing line items.
+
+        Accepts either of two payload shapes for backward compatibility:
+          - New shape: {"note_id": str, "selected": [{"id", "units", "modifiers"}]}
+          - Old shape: {"note_id": str, "selected_ids": [str]}
+        """
         body = self.request.json()
         note_id = body.get("note_id")
-        selected_ids = body.get("selected_ids") or []
-
         if not note_id:
             return [JSONResponse({"error": "Missing note_id"}, status_code=400)]
-        if not isinstance(selected_ids, list) or not selected_ids:
-            return [JSONResponse({"error": "Missing selected_ids"}, status_code=400)]
 
-        entries = list(CuratedCptCode.objects.filter(pk__in=selected_ids, enabled=True))
+        # Normalize to a list of overrides keyed by entry id.
+        selected_raw = body.get("selected")
+        if isinstance(selected_raw, list) and selected_raw:
+            overrides: dict[str, dict] = {}
+            for item in selected_raw:
+                if not isinstance(item, dict) or not item.get("id"):
+                    continue
+                overrides[str(item["id"])] = item
+        else:
+            ids = body.get("selected_ids") or []
+            if not isinstance(ids, list) or not ids:
+                return [JSONResponse({"error": "Missing selected"}, status_code=400)]
+            overrides = {str(i): {} for i in ids}
+
+        if not overrides:
+            return [JSONResponse({"error": "Missing selected"}, status_code=400)]
+
+        entries = list(CuratedCptCode.objects.filter(pk__in=list(overrides.keys()), enabled=True))
         valid_cpt_codes = filter_valid_cpt_codes([entry.cpt_code for entry in entries])
 
         effects: list[Response | Effect] = []
@@ -64,12 +84,21 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
             if entry.cpt_code not in valid_cpt_codes:
                 skipped.append(entry.cpt_code)
                 continue
+
+            override = overrides.get(str(entry.pk), {})
+            units = override.get("units")
+            if not isinstance(units, int) or units <= 0:
+                units = entry.default_units
+            modifiers = override.get("modifiers")
+            if not isinstance(modifiers, list):
+                modifiers = entry.modifiers or []
+
             effects.append(
                 AddBillingLineItem(
                     note_id=str(note_id),
                     cpt=entry.cpt_code,
-                    units=entry.default_units,
-                    modifiers=entry.modifiers or [],
+                    units=units,
+                    modifiers=modifiers,
                 ).apply()
             )
             added.append(entry.cpt_code)

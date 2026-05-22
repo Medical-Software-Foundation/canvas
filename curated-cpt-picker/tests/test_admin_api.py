@@ -252,3 +252,41 @@ def test_list_returns_all_entries_including_disabled() -> None:
     body = json.loads(results[0].content)
     cpts = {e["cpt_code"] for e in body["entries"]}
     assert cpts == {"99213", "99214"}
+
+
+# --- CDM lookup endpoint (powers the admin CPT dropdown) ---
+
+def test_cdm_codes_returns_only_currently_active(active_cdm) -> None:
+    handler = _make_handler(_make_request(headers=_staff_headers()))
+    results = handler.list_cdm_codes()
+    body = json.loads(results[0].content)
+    cpts = {row["cpt_code"] for row in body["cdm_codes"]}
+    assert "99213" in cpts
+    assert "99214" in cpts
+    assert "EXPIRED" not in cpts
+
+
+def test_cdm_codes_dedupes_multiple_active_rows_per_cpt(active_cdm) -> None:
+    """The same CPT can appear in CDM more than once with different effective
+    windows. The dropdown should show one entry per CPT, not per CDM row."""
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="99213", name="Office 15 min v2", short_name="Office 15 v2", charge_amount=0,
+        effective_date=TODAY - timedelta(days=10), end_date=None,
+    )
+    handler = _make_handler(_make_request(headers=_staff_headers()))
+    body = json.loads(handler.list_cdm_codes()[0].content)
+    cpt_99213_rows = [row for row in body["cdm_codes"] if row["cpt_code"] == "99213"]
+    assert len(cpt_99213_rows) == 1
+
+
+def test_cdm_codes_includes_label_from_short_name(active_cdm) -> None:
+    handler = _make_handler(_make_request(headers=_staff_headers()))
+    body = json.loads(handler.list_cdm_codes()[0].content)
+    by_code = {row["cpt_code"]: row["label"] for row in body["cdm_codes"]}
+    assert by_code["99213"] == "Office 15"
+    assert by_code["99214"] == "Office 25"
+
+
+def test_cdm_codes_denies_unauthenticated() -> None:
+    handler = _make_handler(_make_request(headers={}))
+    assert handler.list_cdm_codes()[0].status_code == 403

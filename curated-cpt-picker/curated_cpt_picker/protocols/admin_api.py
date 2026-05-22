@@ -1,13 +1,15 @@
+from datetime import date
 from http import HTTPStatus
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data import ChargeDescriptionMaster
 
 from curated_cpt_picker.models.curated_cpt_code import CuratedCptCode
 from curated_cpt_picker.lib.admin_auth import is_admin
-from curated_cpt_picker.lib.cdm_validation import validate_cpt_code
+from curated_cpt_picker.lib.cdm_validation import _is_currently_active, validate_cpt_code
 
 
 def _serialize(entry: CuratedCptCode) -> dict:
@@ -56,6 +58,25 @@ class AdminAPI(StaffSessionAuthMixin, SimpleAPI):
             return _forbidden()
         entries = [_serialize(e) for e in CuratedCptCode.objects.all().order_by("display_order", "cpt_code")]
         return [JSONResponse({"entries": entries})]
+
+    @api.get("/admin/cdm-codes")
+    def list_cdm_codes(self) -> list[Response | Effect]:
+        """Return CDM rows currently active today, for the admin CPT dropdown."""
+        if not self._check_admin():
+            return _forbidden()
+
+        today = date.today()
+        rows = list(ChargeDescriptionMaster.objects.all().order_by("cpt_code"))
+        seen: set[str] = set()
+        cdm_codes = []
+        for row in rows:
+            if row.cpt_code in seen or not _is_currently_active(row, today):
+                continue
+            seen.add(row.cpt_code)
+            # short_name is meant for display; fall back to name when short_name is empty
+            label = (row.short_name or row.name or "").strip()
+            cdm_codes.append({"cpt_code": row.cpt_code, "label": label})
+        return [JSONResponse({"cdm_codes": cdm_codes})]
 
     @api.post("/admin/codes")
     def create_code(self) -> list[Response | Effect]:

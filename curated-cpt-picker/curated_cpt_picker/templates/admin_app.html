@@ -25,15 +25,16 @@
     .empty { padding: 40px; text-align: center; color: var(--muted); font-style: italic; border: 1px dashed var(--border); border-radius: 6px; }
     .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 10; }
     .modal.open { display: flex; }
-    .modal-card { background: #fff; border-radius: 8px; padding: 24px; max-width: 480px; width: 90%; max-height: 90vh; overflow-y: auto; }
+    .modal-card { background: #fff; border-radius: 8px; padding: 24px; max-width: 520px; width: 90%; max-height: 90vh; overflow-y: auto; }
     .modal-card h2 { margin: 0 0 16px; font-size: 16px; }
     .field { margin-bottom: 14px; }
     .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-    .field input, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; box-sizing: border-box; font-family: inherit; }
+    .field input, .field select, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; box-sizing: border-box; font-family: inherit; background: #fff; }
     .field-row { display: flex; gap: 12px; }
     .field-row .field { flex: 1; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
     .error { color: var(--danger); font-size: 13px; margin-top: 8px; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -61,7 +62,7 @@
         </thead>
         <tbody id="entries-tbody">
           {% for e in entries %}
-            <tr data-id="{{ e.id }}" data-cpt="{{ e.cpt_code }}" data-description="{{ e.description }}" data-units="{{ e.default_units }}" data-order="{{ e.display_order }}" data-enabled="{{ e.enabled|yesno:'true,false' }}">
+            <tr data-id="{{ e.id }}" data-cpt="{{ e.cpt_code }}" data-description="{{ e.description }}" data-units="{{ e.default_units }}" data-order="{{ e.display_order }}" data-enabled="{{ e.enabled|yesno:'true,false' }}" data-modifiers="{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %},{% endif %}{% endfor %}">
               <td class="code-cell">{{ e.cpt_code }}</td>
               <td>{{ e.description }}</td>
               <td>{{ e.default_units }}</td>
@@ -92,7 +93,10 @@
         <div class="field-row">
           <div class="field">
             <label for="edit-cpt">CPT code</label>
-            <input type="text" id="edit-cpt" required>
+            <select id="edit-cpt" required>
+              <option value="">Loading from fee schedule…</option>
+            </select>
+            <div class="hint">Choose from currently active codes in your ChargeDescriptionMaster.</div>
           </div>
           <div class="field" style="flex: 0 0 100px;">
             <label for="edit-units">Units</label>
@@ -102,6 +106,7 @@
         <div class="field">
           <label for="edit-description">Description</label>
           <input type="text" id="edit-description" required>
+          <div class="hint">Pre-filled from the fee schedule. You can change it to a more provider-friendly label.</div>
         </div>
         <div class="field-row">
           <div class="field">
@@ -129,11 +134,71 @@
       const form = document.getElementById("edit-form");
       const errorEl = document.getElementById("edit-error");
       const titleEl = document.getElementById("modal-title");
+      const cptSelect = document.getElementById("edit-cpt");
+      const descInput = document.getElementById("edit-description");
 
-      function openModal(entry) {
+      // Map of cpt_code -> default description from CDM (for autofill on change)
+      const cdmLabelByCode = new Map();
+      let cdmLoaded = false;
+      let cdmLoadPromise = null;
+
+      async function loadCdmCodes() {
+        if (cdmLoaded) return;
+        if (!cdmLoadPromise) {
+          cdmLoadPromise = (async () => {
+            const res = await fetch(`${BASE}/admin/cdm-codes`, { credentials: "same-origin" });
+            if (!res.ok) {
+              cptSelect.innerHTML = `<option value="">Could not load fee schedule (${res.status})</option>`;
+              return;
+            }
+            const data = await res.json();
+            cptSelect.innerHTML = '<option value="">Select a code…</option>';
+            for (const row of data.cdm_codes) {
+              cdmLabelByCode.set(row.cpt_code, row.label);
+              const opt = document.createElement("option");
+              opt.value = row.cpt_code;
+              opt.textContent = row.label ? `${row.cpt_code} — ${row.label}` : row.cpt_code;
+              opt.dataset.label = row.label || "";
+              cptSelect.appendChild(opt);
+            }
+            cdmLoaded = true;
+          })();
+        }
+        return cdmLoadPromise;
+      }
+
+      cptSelect.addEventListener("change", () => {
+        const code = cptSelect.value;
+        if (!code) return;
+        const label = cdmLabelByCode.get(code) || "";
+        // Only autofill description if the field is empty or was previously
+        // an autofilled value — never clobber a description the admin typed.
+        if (!descInput.value || descInput.dataset.autofilled === "true") {
+          descInput.value = label;
+          descInput.dataset.autofilled = "true";
+        }
+      });
+      descInput.addEventListener("input", () => {
+        // Once the admin types into the description, mark it as manual so
+        // subsequent CPT changes don't overwrite it.
+        descInput.dataset.autofilled = "false";
+      });
+
+      async function openModal(entry) {
+        await loadCdmCodes();
         document.getElementById("edit-id").value = entry ? entry.id : "";
-        document.getElementById("edit-cpt").value = entry ? entry.cpt_code : "";
-        document.getElementById("edit-description").value = entry ? entry.description : "";
+        // For edits, make sure the existing CPT is in the dropdown even if
+        // it has since been removed from CDM (otherwise the user can't see
+        // the value they're editing).
+        if (entry && entry.cpt_code && ![...cptSelect.options].some(o => o.value === entry.cpt_code)) {
+          const opt = document.createElement("option");
+          opt.value = entry.cpt_code;
+          opt.textContent = `${entry.cpt_code} (no longer in fee schedule)`;
+          cptSelect.appendChild(opt);
+        }
+        cptSelect.value = entry ? entry.cpt_code : "";
+        descInput.value = entry ? entry.description : "";
+        descInput.dataset.autofilled = entry ? "false" : "true";
         document.getElementById("edit-units").value = entry ? entry.default_units : 1;
         document.getElementById("edit-modifiers").value = entry && entry.modifiers ? entry.modifiers.join(", ") : "";
         document.getElementById("edit-order").value = entry ? entry.display_order : 0;
@@ -142,7 +207,7 @@
         modal.classList.add("open");
       }
 
-      function closeModal() {
+      function closeFormModal() {
         modal.classList.remove("open");
       }
 
@@ -151,7 +216,7 @@
       }
 
       function rowToEntry(row) {
-        const modifiers = Array.from(row.querySelectorAll("td"))[3].textContent.split(",").map(s => s.trim()).filter(Boolean);
+        const modifiers = (row.dataset.modifiers || "").split(",").map(s => s.trim()).filter(Boolean);
         return {
           id: row.dataset.id,
           cpt_code: row.dataset.cpt,
@@ -164,15 +229,15 @@
       }
 
       document.getElementById("add-btn").addEventListener("click", () => openModal(null));
-      document.getElementById("modal-cancel").addEventListener("click", closeModal);
-      modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+      document.getElementById("modal-cancel").addEventListener("click", closeFormModal);
+      modal.addEventListener("click", (e) => { if (e.target === modal) closeFormModal(); });
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const id = document.getElementById("edit-id").value;
         const payload = {
-          cpt_code: document.getElementById("edit-cpt").value.trim(),
-          description: document.getElementById("edit-description").value.trim(),
+          cpt_code: cptSelect.value.trim(),
+          description: descInput.value.trim(),
           default_units: parseInt(document.getElementById("edit-units").value, 10) || 1,
           modifiers: parseModifiers(document.getElementById("edit-modifiers").value),
           display_order: parseInt(document.getElementById("edit-order").value, 10) || 0,

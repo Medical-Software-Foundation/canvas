@@ -197,3 +197,62 @@ def test_apply_rejects_empty_selection() -> None:
     results = handler.apply_codes()
     assert len(results) == 1
     assert results[0].status_code == 400
+
+
+# --- New `selected: [{id, units, modifiers}]` payload shape ---
+
+def test_apply_uses_provider_overrides_for_units_and_modifiers(active_cdm_codes) -> None:
+    """When the picker UI lets the provider tweak units/modifiers per row,
+    those overrides flow through to AddBillingLineItem — not the admin defaults."""
+    entry = CuratedCptCode.objects.create(
+        cpt_code="99213",
+        description="Office visit",
+        default_units=1,
+        modifiers=[{"code": "25", "system": "http://www.ama-assn.org/go/cpt"}],
+    )
+
+    handler = _make_handler(_make_request(
+        method="POST",
+        body={
+            "note_id": "note-abc",
+            "selected": [{
+                "id": str(entry.pk),
+                "units": 3,
+                "modifiers": [
+                    {"code": "59", "system": "http://www.ama-assn.org/go/cpt"},
+                ],
+            }],
+        },
+    ))
+    results = handler.apply_codes()
+
+    billing = [r for r in results if hasattr(r, "type") and r.type == EffectType.ADD_BILLING_LINE_ITEM]
+    assert len(billing) == 1
+    data = json.loads(billing[0].payload)["data"]
+    assert data["units"] == 3
+    assert data["modifiers"] == [{"code": "59", "system": "http://www.ama-assn.org/go/cpt"}]
+
+
+def test_apply_falls_back_to_curated_defaults_when_overrides_missing(active_cdm_codes) -> None:
+    """If a row in `selected` omits units/modifiers (or sends garbage), apply
+    falls back to the admin-curated defaults rather than rejecting."""
+    entry = CuratedCptCode.objects.create(
+        cpt_code="99213",
+        description="Office visit",
+        default_units=2,
+        modifiers=[{"code": "25", "system": "http://www.ama-assn.org/go/cpt"}],
+    )
+
+    handler = _make_handler(_make_request(
+        method="POST",
+        body={
+            "note_id": "note-abc",
+            "selected": [{"id": str(entry.pk), "units": 0, "modifiers": "not-a-list"}],
+        },
+    ))
+    results = handler.apply_codes()
+
+    billing = [r for r in results if hasattr(r, "type") and r.type == EffectType.ADD_BILLING_LINE_ITEM]
+    data = json.loads(billing[0].payload)["data"]
+    assert data["units"] == 2  # curated default
+    assert data["modifiers"] == [{"code": "25", "system": "http://www.ama-assn.org/go/cpt"}]
