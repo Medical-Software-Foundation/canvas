@@ -1,21 +1,45 @@
 patient-portal-profile
 ======================
 
-## Description
+## What it does
 
 Adds a **My Profile** menu item to the Canvas patient portal. When a logged-in
-patient opens it, the plugin renders a read-only page that displays the
-personal information Canvas holds for them:
+patient opens it, the plugin renders a read-only page showing the personal
+information Canvas holds for them — photo, full name, birthdate, registration
+email and phone, addresses on file, active care team members, and preferred
+pharmacy.
 
-- Photo
-- Full name (and preferred name)
-- Birthdate
-- Patient-portal registration email and phone number
-- All addresses on file
-- Active care team members
-- Preferred pharmacy
+![My Profile screen](./assets/screenshot-my-profile.png)
 
-v1 is read-only.
+## Problem it solves
+
+Patients often want to confirm the contact info, addresses, care team, and
+pharmacy the clinic has on file — but Canvas's patient portal doesn't include
+a "my information" view out of the box. Today they have to call the front desk
+or message their care team to ask, and staff have to look it up and reply
+manually. This plugin gives patients self-serve visibility into their own
+profile data, with no staff intervention.
+
+v1 is read-only; updates still go through staff.
+
+## Who it's for
+
+- **Practices** that want to reduce inbound "what do you have on file for me?"
+  questions from their patient population.
+- **Patients** using the Canvas patient portal who want to verify their own
+  contact info, addresses, care team, and preferred pharmacy.
+- **All specialties** — the data shown is universal patient profile
+  information, not specialty-specific.
+
+## How to install
+
+```
+canvas install patient-portal-profile
+```
+
+No secrets, environment variables, or post-install configuration are required.
+Once installed, every logged-in patient sees a **My Profile** entry in the
+portal menu.
 
 ## How it works
 
@@ -45,7 +69,8 @@ patient_portal_profile/
 ├── handlers/
 │   └── profile_web_app.py        # ProfileWebApp (SimpleAPI)
 ├── assets/
-│   └── icon.png                  # 48x48 menu-item icon
+│   ├── icon.png                  # 48x48 menu-item icon
+│   └── screenshot-my-profile.png # README screenshot
 └── static/
     ├── index.html                # Django template rendered server-side
     ├── styles.css
