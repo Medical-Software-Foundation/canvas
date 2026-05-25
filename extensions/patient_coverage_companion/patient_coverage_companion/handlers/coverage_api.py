@@ -117,11 +117,13 @@ def _serialize_coverage(coverage: Coverage) -> dict[str, Any]:
     if snapshot is not None:
         # The SDK declares SnapshotImage.snapshot FK with related_name="images",
         # so the reverse manager is `snapshot.images`, not `snapshotimage_set`.
+        # SDK SnapshotImage.image is a CharField (path); use the image_url
+        # property to get a presigned URL.
         for image in snapshot.images.all():
-            if image.tag == "FRONT_IMAGE" and image.image:
-                front_url = image.image.url
-            elif image.tag == "BACK_IMAGE" and image.image:
-                back_url = image.image.url
+            if image.tag == "FRONT_IMAGE":
+                front_url = image.image_url
+            elif image.tag == "BACK_IMAGE":
+                back_url = image.image_url
     return {
         "id": str(coverage.id),
         "issuer_id": str(coverage.issuer_id) if coverage.issuer_id else None,
@@ -424,7 +426,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
 
     @api.post("/coverage/<coverage_id>")
-    def update_coverage(self, coverage_id: str) -> list[Response | Effect]:
+    def update_coverage(self) -> list[Response | Effect]:
+        coverage_id = self.request.path_params.get("coverage_id") or ""
         body = self.request.json() or {}
         fields, err = _build_effect_fields(body)
         if err:
@@ -444,14 +447,16 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
 
     @api.post("/coverage/<coverage_id>/remove")
-    def remove_coverage(self, coverage_id: str) -> list[Response | Effect]:
+    def remove_coverage(self) -> list[Response | Effect]:
+        coverage_id = self.request.path_params.get("coverage_id") or ""
         return [
             CoverageEffect(coverage_id=coverage_id).remove(),
             JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
         ]
 
     @api.post("/coverage/<coverage_id>/expire")
-    def expire_coverage(self, coverage_id: str) -> list[Response | Effect]:
+    def expire_coverage(self) -> list[Response | Effect]:
+        coverage_id = self.request.path_params.get("coverage_id") or ""
         body = self.request.json() or {}
         try:
             end = _parse_date(body.get("coverage_end_date"))
@@ -473,7 +478,9 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         ]
 
     @api.post("/coverage/<coverage_id>/photo/<side>/remove")
-    def remove_photo(self, coverage_id: str, side: str) -> list[Response | Effect]:
+    def remove_photo(self) -> list[Response | Effect]:
+        coverage_id = self.request.path_params.get("coverage_id") or ""
+        side = self.request.path_params.get("side") or ""
         side_upper = side.upper()
         if side_upper not in {"FRONT", "BACK"}:
             return [
@@ -582,7 +589,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
 
     @api.post("/id-card/<card_id>")
-    def update_id_card(self, card_id: str) -> list[Response | Effect]:
+    def update_id_card(self) -> list[Response | Effect]:
+        card_id = self.request.path_params.get("card_id") or ""
         body = self.request.json() or {}
         try:
             card_id_int = int(card_id)
@@ -615,7 +623,8 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
         return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
 
     @api.post("/id-card/<card_id>/delete")
-    def delete_id_card(self, card_id: str) -> list[Response | Effect]:
+    def delete_id_card(self) -> list[Response | Effect]:
+        card_id = self.request.path_params.get("card_id") or ""
         try:
             card_id_int = int(card_id)
         except (TypeError, ValueError):

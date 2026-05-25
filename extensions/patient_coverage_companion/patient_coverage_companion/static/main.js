@@ -380,6 +380,7 @@
   function renderList() {
     if (!state.coverages.length) {
       return [
+        renderBackButton(),
         makeElement("div", { className: "empty" }, "No coverages on file."),
         makeElement(
           "div",
@@ -396,6 +397,25 @@
     }
     const list = makeElement("ul", { className: "coverage-list" });
     for (const c of state.coverages) {
+      const thumbs = [];
+      if (c.card_image_front_url) {
+        thumbs.push(
+          makeElement("img", {
+            src: c.card_image_front_url,
+            alt: "Front of card",
+            className: "coverage-thumb",
+          })
+        );
+      }
+      if (c.card_image_back_url) {
+        thumbs.push(
+          makeElement("img", {
+            src: c.card_image_back_url,
+            alt: "Back of card",
+            className: "coverage-thumb",
+          })
+        );
+      }
       const card = makeElement("li", { className: "coverage-card" }, [
         makeElement("div", { className: "coverage-card-head" }, [
           makeElement("div", { className: "coverage-card-title" }, c.issuer_name || "(unknown payer)"),
@@ -405,6 +425,9 @@
             "Rank " + c.coverage_rank + " · " + (c.plan_type || "") + " · " + (c.id_number || "")
           ),
         ]),
+        thumbs.length
+          ? makeElement("div", { className: "coverage-thumbs" }, thumbs)
+          : null,
         makeElement(
           "div",
           { className: "coverage-card-actions" },
@@ -418,6 +441,7 @@
       list.appendChild(card);
     }
     return [
+      renderBackButton(),
       list,
       makeElement(
         "div",
@@ -649,18 +673,21 @@
 
   function renderCardPhoto(side, existingUrl) {
     const previewSrc = state.cardPreviews[side] || existingUrl || null;
-    const preview = makeElement(
-      "div",
-      { className: "preview" },
-      previewSrc ? makeElement("img", { src: previewSrc, alt: side + " card" }) : "No photo"
-    );
     const input = makeElement("input", {
       id: "card-" + side + "-input",
       type: "file",
       accept: "image/*",
       capture: "environment",
       onchange: (e) => onCardFileSelected(side, e.target),
+      className: "visually-hidden-file-input",
     });
+    const preview = makeElement(
+      "div",
+      { className: "preview preview-clickable", onclick: () => input.click() },
+      previewSrc
+        ? makeElement("img", { src: previewSrc, alt: side + " card" })
+        : "Tap to add " + side + " photo"
+    );
     return makeElement(
       "div",
       { className: "card-photo", "data-side": side },
@@ -706,31 +733,19 @@
   // ---- selector view ----
 
   function renderSelector() {
-    const tile = (label, sub, onclick) =>
+    const tile = (label, onclick) =>
       makeElement(
         "button",
         { className: "selector-tile", onclick },
-        [
-          makeElement("div", { className: "selector-tile-title" }, label),
-          makeElement("div", { className: "selector-tile-sub" }, sub),
-        ]
+        makeElement("div", { className: "selector-tile-title" }, label)
       );
     return [
-      makeElement("h1", null, "Patient cards"),
       makeElement(
         "div",
         { className: "selector-grid" },
         [
-          tile(
-            "Insurance coverages",
-            "Add or edit payers, ranks, and card photos.",
-            () => onPickMode("coverage")
-          ),
-          tile(
-            "ID cards",
-            "Driver license, passport, and other ID images.",
-            () => onPickMode("id_card")
-          ),
+          tile("Insurance", () => onPickMode("coverage")),
+          tile("Identification", () => onPickMode("id_card")),
         ]
       ),
     ];
@@ -916,20 +931,21 @@
 
     const previewSrc =
       state.idCardImage.preview || state.idCardImage.existingUrl || null;
-    const previewBox = makeElement(
-      "div",
-      { className: "preview" },
-      previewSrc
-        ? makeElement("img", { src: previewSrc, alt: "ID card" })
-        : "No image"
-    );
     const fileInput = makeElement("input", {
       id: "id-card-image-input",
       type: "file",
       accept: "image/*",
       capture: "environment",
       onchange: (e) => onIdCardImageSelected(e.target),
+      className: "visually-hidden-file-input",
     });
+    const previewBox = makeElement(
+      "div",
+      { className: "preview preview-clickable", onclick: () => fileInput.click() },
+      previewSrc
+        ? makeElement("img", { src: previewSrc, alt: "ID card" })
+        : "Tap to add image"
+    );
     const imageError = state.fieldErrors.image;
     const imageBlock = makeElement(
       "div",
@@ -1003,6 +1019,18 @@
     state.fieldErrors = {};
     const isUpdate = state.editingIdCard && state.editingIdCard.id;
 
+    // Collect form field values BEFORE any render() — the inputs are
+    // uncontrolled, and the "Saving…" re-render below would wipe them.
+    const id = (name) => document.getElementById(name);
+    const titleEl = id("f-id-card-title");
+    const activeEl = id("f-id-card-active");
+    const formFields = {
+      title: titleEl ? titleEl.value : "",
+      active: activeEl ? activeEl.value === "true" : true,
+    };
+    // Mirror typed values into editingIdCard so any re-render reflects them.
+    state.editingIdCard = Object.assign({}, state.editingIdCard || {}, formFields);
+
     // Client-side: require an image on create. On update it's optional.
     if (!isUpdate && !state.idCardImage.file && !state.idCardImage.pendingKey) {
       state.fieldErrors.image = "Image is required.";
@@ -1029,13 +1057,7 @@
       state.idCardImage.pendingKey = keys.image || state.idCardImage.pendingKey;
     }
 
-    const id = (name) => document.getElementById(name);
-    const titleEl = id("f-id-card-title");
-    const activeEl = id("f-id-card-active");
-    const body = {
-      title: titleEl ? titleEl.value : "",
-      active: activeEl ? activeEl.value === "true" : true,
-    };
+    const body = { ...formFields };
     if (state.idCardImage.pendingKey)
       body.image_upload_key = state.idCardImage.pendingKey;
     if (!isUpdate) body.patient_id = state.patientId;

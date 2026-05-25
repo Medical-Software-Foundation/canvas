@@ -9,7 +9,7 @@ html, body {
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #1a1a1a;
-  background: #f6f7f9;
+  background: #ffffff;
   margin: 0;
   padding: 0;
   font-size: 15px;
@@ -19,11 +19,12 @@ body {
 #root {
   max-width: 720px;
   margin: 0 auto;
-  padding: 12px 12px 96px;
+  /* Bottom padding leaves room for the fixed form-actions bar (see below). */
+  padding: 12px 12px 80px;
 }
 
 @media (min-width: 600px) {
-  #root { padding: 16px 16px 96px; }
+  #root { padding: 16px 16px 80px; }
 }
 
 h1 {
@@ -213,16 +214,46 @@ button:disabled {
 }
 .card-photo .preview img { width: 100%; height: 100%; object-fit: cover; }
 
+/* Preview is the click target — hide the native <input type="file"> and
+ * let the dashed box launch the file picker / camera. */
+.visually-hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+}
+.preview-clickable {
+  cursor: pointer;
+}
+.preview-clickable:hover {
+  border-color: #2563eb;
+  background: #f0f5ff;
+  color: #2563eb;
+}
+
+/* Anchored to the iframe viewport bottom so Cancel / Save (and the list
+ * view's "Add" button) stay reachable no matter how long the form is. */
 .form-actions {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
-  background: #f6f7f9;
-  padding: 10px 0;
+  background: #ffffff;
+  padding: 10px 12px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 12px;
   border-top: 1px solid #e1e3e8;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+  z-index: 20;
+}
+@media (min-width: 600px) {
+  .form-actions { padding: 10px 16px; }
 }
 
 .empty {
@@ -243,15 +274,14 @@ button:disabled {
 }
 .selector-tile {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  text-align: left;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
   border-radius: 8px;
   border: 1px solid #e1e3e8;
-  background: #fff;
+  background: #ffffff;
   cursor: pointer;
-  min-height: 96px;
+  min-height: 140px;
 }
 .selector-tile:hover {
   border-color: #2563eb;
@@ -259,12 +289,9 @@ button:disabled {
 }
 .selector-tile-title {
   font-weight: 600;
-  font-size: 16px;
+  font-size: 18px;
   color: #1a1a1a;
-}
-.selector-tile-sub {
-  color: #555;
-  font-size: 13px;
+  text-align: center;
 }
 
 /* Back button row above each list / form */
@@ -290,6 +317,20 @@ button:disabled {
   height: auto;
   border-radius: 6px;
   margin-top: 8px;
+  border: 1px solid #e1e3e8;
+}
+
+/* Coverage list thumbnails (front + back side-by-side) */
+.coverage-thumbs {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.coverage-thumb {
+  width: 140px;
+  height: auto;
+  border-radius: 6px;
   border: 1px solid #e1e3e8;
 }
 
