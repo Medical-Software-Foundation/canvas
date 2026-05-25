@@ -265,7 +265,23 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         )
 
         patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
-        result = check_eligibility(self.secrets, patient_resource=patient_resource)
+        try:
+            result = check_eligibility(self.secrets, patient_resource=patient_resource)
+        except RuntimeError as exc:
+            log.error(f"[cms-access] $check-eligibility failed for patient {patient.id}: {exc}")
+            alignment, _ = ACCESSAlignment.objects.get_or_create(
+                patient=patient,
+                track="",
+                defaults={"status": ACCESSAlignment.STATUS_ERROR},
+            )
+            alignment.status = ACCESSAlignment.STATUS_ERROR
+            alignment.status_message = str(exc)
+            alignment.last_eligibility_check_at = _utcnow()
+            alignment.save()
+            return [JSONResponse(
+                {"error": f"CMS request failed: {exc}", "status": alignment.status},
+                status_code=HTTPStatus.BAD_GATEWAY,
+            )]
 
         status = _extract_eligibility_status(result)
         alignment, _ = ACCESSAlignment.objects.get_or_create(
@@ -330,12 +346,28 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         )
 
         patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
-        status_code, content_location, _ = align(
-            self.secrets,
-            patient_resource=patient_resource,
-            track=track,
-            clinical_justification=clinical_justification,
-        )
+        try:
+            status_code, content_location, _ = align(
+                self.secrets,
+                patient_resource=patient_resource,
+                track=track,
+                clinical_justification=clinical_justification,
+            )
+        except RuntimeError as exc:
+            log.error(f"[cms-access] $align failed for patient {patient.id}: {exc}")
+            alignment, _ = ACCESSAlignment.objects.get_or_create(
+                patient=patient,
+                track=track,
+                defaults={"status": ACCESSAlignment.STATUS_ERROR},
+            )
+            alignment.status = ACCESSAlignment.STATUS_ERROR
+            alignment.status_message = str(exc)
+            alignment.clinical_justification = clinical_justification
+            alignment.save()
+            return [JSONResponse(
+                {"error": f"CMS request failed: {exc}", "status": alignment.status},
+                status_code=HTTPStatus.BAD_GATEWAY,
+            )]
 
         alignment, _ = ACCESSAlignment.objects.get_or_create(
             patient=patient,
@@ -420,11 +452,21 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        status_code, content_location, _ = unalign(
-            self.secrets,
-            alignment_id=alignment_id,
-            reason_code=reason_code,
-        )
+        try:
+            status_code, content_location, _ = unalign(
+                self.secrets,
+                alignment_id=alignment_id,
+                reason_code=reason_code,
+            )
+        except RuntimeError as exc:
+            log.error(f"[cms-access] $unalign failed for patient {patient.id}: {exc}")
+            alignment.status = ACCESSAlignment.STATUS_ERROR
+            alignment.status_message = str(exc)
+            alignment.save()
+            return [JSONResponse(
+                {"error": f"CMS request failed: {exc}", "status": alignment.status},
+                status_code=HTTPStatus.BAD_GATEWAY,
+            )]
 
         alignment.unalignment_reason = reason_code
         if status_code == 202 and content_location:

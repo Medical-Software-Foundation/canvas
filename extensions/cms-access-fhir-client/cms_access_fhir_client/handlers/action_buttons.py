@@ -17,7 +17,7 @@ class EligibilityActionButton(ActionButton):
     PRIORITY = 10
 
     def handle(self) -> list[Effect]:
-        patient_id = self.event.context.get("patient", {}).get("id")
+        patient_id = self.event.target.id
         if not patient_id:
             return []
         url = (
@@ -42,7 +42,7 @@ class AlignActionButton(ActionButton):
     PRIORITY = 20
 
     def handle(self) -> list[Effect]:
-        patient_id = self.event.context.get("patient", {}).get("id")
+        patient_id = self.event.target.id
         if not patient_id:
             return []
         url = (
@@ -67,7 +67,7 @@ class UnalignActionButton(ActionButton):
     PRIORITY = 30
 
     def handle(self) -> list[Effect]:
-        patient_id = self.event.context.get("patient", {}).get("id")
+        patient_id = self.event.target.id
         if not patient_id:
             return []
         url = (

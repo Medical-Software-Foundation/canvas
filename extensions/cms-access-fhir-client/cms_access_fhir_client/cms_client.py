@@ -74,7 +74,10 @@ def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
         detail = _parse_operation_outcome(response.json())
         raise RuntimeError(f"$check-eligibility pre-validation failed: {detail}")
 
-    response.raise_for_status()
+    if not response.is_success:
+        raise RuntimeError(
+            f"$check-eligibility failed: HTTP {response.status_code} {response.text[:200]}"
+        )
     return response.json()
 
 
@@ -116,7 +119,10 @@ def align(
         detail = _parse_operation_outcome(response.json())
         raise RuntimeError(f"$align pre-validation failed: {detail}")
 
-    response.raise_for_status()
+    if not response.is_success:
+        raise RuntimeError(
+            f"$align failed: HTTP {response.status_code} {response.text[:200]}"
+        )
     content_location = response.headers.get("Content-Location")
     body = response.json() if response.text else {}
     return response.status_code, content_location, body
@@ -157,7 +163,10 @@ def unalign(
         detail = _parse_operation_outcome(response.json())
         raise RuntimeError(f"$unalign pre-validation failed: {detail}")
 
-    response.raise_for_status()
+    if not response.is_success:
+        raise RuntimeError(
+            f"$unalign failed: HTTP {response.status_code} {response.text[:200]}"
+        )
     content_location = response.headers.get("Content-Location")
     body = response.json() if response.text else {}
     return response.status_code, content_location, body
