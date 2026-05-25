@@ -42,35 +42,30 @@ class TestBuildHttp:
             with pytest.raises(ValueError):
                 _build_http(SECRETS)
 
-    def test_returns_http_with_auth_header(self):
+    def test_returns_headers_with_bearer_token(self):
         from cms_access_fhir_client.cms_client import _build_http
-
-        mock_http_instance = MagicMock()
-        mock_http_instance.headers = {}
 
         with (
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok-123"),
-            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http_instance),
+            patch("cms_access_fhir_client.cms_client.Http") as mock_http_cls,
         ):
-            http, base_url = _build_http(SECRETS)
+            http, headers = _build_http(SECRETS)
 
-        assert base_url == "https://api.access.cms.gov/fhir"
-        assert "Bearer tok-123" in http.headers.get("Authorization", "")
+        assert headers.get("Authorization") == "Bearer tok-123"
+        # base URL must be normalized to end with a slash so urljoin keeps the prefix
+        mock_http_cls.assert_called_once_with(base_url="https://api.access.cms.gov/fhir/")
 
     def test_sets_prefer_respond_async_header(self):
         """_build_http must inject Prefer: respond-async on every call."""
         from cms_access_fhir_client.cms_client import _build_http
 
-        mock_http_instance = MagicMock()
-        mock_http_instance.headers = {}
-
         with (
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
-            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http_instance),
+            patch("cms_access_fhir_client.cms_client.Http"),
         ):
-            http, _ = _build_http(SECRETS)
+            _, headers = _build_http(SECRETS)
 
-        assert http.headers.get("Prefer") == "respond-async"
+        assert headers.get("Prefer") == "respond-async"
 
 
 _PATIENT_RESOURCE = {
@@ -106,7 +101,7 @@ class TestCheckEligibility:
             check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
 
         path = mock_http.post.call_args[0][0]
-        assert path == "/access/Patient/$check-eligibility"
+        assert path == "access/Patient/$check-eligibility?entityId=ACCES10098"
 
     def test_sends_entity_id_as_query_param(self):
         """entityId must be sent as a query param, not only in the body."""
@@ -124,8 +119,8 @@ class TestCheckEligibility:
         ):
             check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
 
-        kwargs = mock_http.post.call_args[1]
-        assert kwargs.get("params", {}).get("entityId") == "ACCES10098"
+        path = mock_http.post.call_args[0][0]
+        assert "entityId=ACCES10098" in path
 
     def test_body_uses_participantID_field_name(self):
         """Body parameter must be 'participantID' (camelCase, capital-ID), not 'participant'."""
@@ -287,7 +282,7 @@ class TestAlign:
             align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="eCKM", clinical_justification="CKD")
 
         path = mock_http.post.call_args[0][0]
-        assert path == "/access/Patient/$align"
+        assert path == "access/Patient/$align?entityId=ACCES10098"
 
     def test_sends_entity_id_as_query_param(self):
         from cms_access_fhir_client.cms_client import align
@@ -305,8 +300,8 @@ class TestAlign:
         ):
             align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="eCKM", clinical_justification="CKD")
 
-        kwargs = mock_http.post.call_args[1]
-        assert kwargs.get("params", {}).get("entityId") == "ACCES10098"
+        path = mock_http.post.call_args[0][0]
+        assert "entityId=ACCES10098" in path
 
     def test_body_uses_participantID_field_name(self):
         from cms_access_fhir_client.cms_client import align
@@ -444,7 +439,7 @@ class TestUnalign:
             unalign(SECRETS, alignment_id="align-1", reason_code="care-completed")
 
         path = mock_http.post.call_args[0][0]
-        assert path == "/access/Patient/$unalign"
+        assert path == "access/Patient/$unalign?entityId=ACCES10098"
 
     def test_sends_entity_id_as_query_param(self):
         from cms_access_fhir_client.cms_client import unalign
@@ -462,8 +457,8 @@ class TestUnalign:
         ):
             unalign(SECRETS, alignment_id="align-1", reason_code="care-completed")
 
-        kwargs = mock_http.post.call_args[1]
-        assert kwargs.get("params", {}).get("entityId") == "ACCES10098"
+        path = mock_http.post.call_args[0][0]
+        assert "entityId=ACCES10098" in path
 
     def test_body_uses_participantID_field_name(self):
         from cms_access_fhir_client.cms_client import unalign
@@ -642,7 +637,8 @@ class TestPollSubmissionStatus:
             poll_submission_status(SECRETS, "https://api.cms.gov/status/abc")
 
         assert mock_http.get.call_args[0][0] == "https://api.cms.gov/status/abc"
-        assert "Bearer tok" in mock_http.headers.get("Authorization", "")
+        headers = mock_http.get.call_args[1].get("headers", {})
+        assert headers.get("Authorization") == "Bearer tok"
 
 
 class TestParseOperationOutcome:

@@ -10,7 +10,17 @@ Real example:
     https://impl-cdxapi.cmmi.cms.gov/cdx/services/fhir
 
 All async operation POSTs require ``Prefer: respond-async``.
+
+Implementation notes:
+- The SDK ``Http`` client does not accept a ``params=`` kwarg, so entityId is
+  embedded in the URL path.
+- Headers must be passed per-call (``Http`` doesn't read instance attributes
+  like ``http.headers = {...}``).
+- ``urljoin`` requires the base URL to end with ``/`` or it strips the last
+  path segment, so we normalize the base URL in ``_build_http``.
 """
+from urllib.parse import quote
+
 from canvas_sdk.utils import Http
 from cms_access_fhir_client.oauth import get_access_token
 
@@ -21,19 +31,23 @@ _MODEL_ID = "access"
 _PREFER_ASYNC = "respond-async"
 
 
-def _build_http(secrets: dict) -> tuple[Http, str]:
-    """Return (Http instance, base_url). Fails closed on missing BASE_URL."""
+def _build_http(secrets: dict) -> tuple[Http, dict]:
+    """Return (Http instance, headers dict). Fails closed on missing BASE_URL."""
     base_url = secrets.get("ACCESS_BASE_URL")
     if not base_url:
         raise ValueError("Missing required secret: ACCESS_BASE_URL")
+    # urljoin treats the last path segment as a "file" and replaces it when the
+    # base lacks a trailing slash — normalize so relative paths resolve correctly.
+    if not base_url.endswith("/"):
+        base_url = base_url + "/"
     token = get_access_token(secrets)
     http = Http(base_url=base_url)
-    http.headers = {
+    headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/fhir+json",
         "Prefer": _PREFER_ASYNC,
     }
-    return http, base_url
+    return http, headers
 
 
 def _parse_operation_outcome(body: dict) -> str:
@@ -42,6 +56,11 @@ def _parse_operation_outcome(body: dict) -> str:
     if issues:
         return issues[0].get("details", {}).get("text", "Unknown error")
     return "Unknown error"
+
+
+def _operation_url(operation: str, participant_id: str) -> str:
+    """Build the operation URL relative to the (slash-terminated) base URL."""
+    return f"{_MODEL_ID}/Patient/${operation}?entityId={quote(participant_id)}"
 
 
 def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
@@ -56,7 +75,7 @@ def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
     if not participant_id:
         raise ValueError("Missing required secret: ACCESS_PARTICIPANT_ID")
 
-    http, _ = _build_http(secrets)
+    http, headers = _build_http(secrets)
     payload = {
         "resourceType": "Parameters",
         "parameter": [
@@ -65,16 +84,16 @@ def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
         ],
     }
     response = http.post(
-        f"/{_MODEL_ID}/Patient/$check-eligibility",
+        _operation_url("check-eligibility", participant_id),
         json=payload,
-        params={"entityId": participant_id},
+        headers=headers,
     )
 
     if response.status_code == 400:
         detail = _parse_operation_outcome(response.json())
         raise RuntimeError(f"$check-eligibility pre-validation failed: {detail}")
 
-    if not response.is_success:
+    if not response.ok:
         raise RuntimeError(
             f"$check-eligibility failed: HTTP {response.status_code} {response.text[:200]}"
         )
@@ -99,7 +118,7 @@ def align(
     if not participant_id:
         raise ValueError("Missing required secret: ACCESS_PARTICIPANT_ID")
 
-    http, _ = _build_http(secrets)
+    http, headers = _build_http(secrets)
     payload = {
         "resourceType": "Parameters",
         "parameter": [
@@ -110,16 +129,16 @@ def align(
         ],
     }
     response = http.post(
-        f"/{_MODEL_ID}/Patient/$align",
+        _operation_url("align", participant_id),
         json=payload,
-        params={"entityId": participant_id},
+        headers=headers,
     )
 
     if response.status_code == 400:
         detail = _parse_operation_outcome(response.json())
         raise RuntimeError(f"$align pre-validation failed: {detail}")
 
-    if not response.is_success:
+    if not response.ok:
         raise RuntimeError(
             f"$align failed: HTTP {response.status_code} {response.text[:200]}"
         )
@@ -144,7 +163,7 @@ def unalign(
     if not participant_id:
         raise ValueError("Missing required secret: ACCESS_PARTICIPANT_ID")
 
-    http, _ = _build_http(secrets)
+    http, headers = _build_http(secrets)
     payload = {
         "resourceType": "Parameters",
         "parameter": [
@@ -154,16 +173,16 @@ def unalign(
         ],
     }
     response = http.post(
-        f"/{_MODEL_ID}/Patient/$unalign",
+        _operation_url("unalign", participant_id),
         json=payload,
-        params={"entityId": participant_id},
+        headers=headers,
     )
 
     if response.status_code == 400:
         detail = _parse_operation_outcome(response.json())
         raise RuntimeError(f"$unalign pre-validation failed: {detail}")
 
-    if not response.is_success:
+    if not response.ok:
         raise RuntimeError(
             f"$unalign failed: HTTP {response.status_code} {response.text[:200]}"
         )
@@ -177,8 +196,6 @@ def report_data(secrets: dict, patient_fhir_id: str, alignment_id: str) -> tuple
 
     TODO: Implement full payload once IG v0.9.6+ is published.
     """
-    # TODO: Build the correct FHIR Parameters resource per IG when payload spec is published.
-    # For now this is scaffolded only and will raise NotImplementedError to make it obvious.
     raise NotImplementedError(
         "$report-data payload is not yet specified in CMS ACCESS IG v0.9.1. "
         "Implement once IG v0.9.6+ is published."
@@ -199,8 +216,8 @@ def poll_submission_status(secrets: dict, status_url: str) -> tuple[int, dict]:
     """
     token = get_access_token(secrets)
     http = Http()
-    http.headers = {"Authorization": f"Bearer {token}"}
-    response = http.get(status_url)
+    headers = {"Authorization": f"Bearer {token}"}
+    response = http.get(status_url, headers=headers)
 
     # 202 is expected (async in-progress) — don't raise on it
     if response.status_code not in (200, 202):
