@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.153.0",
-    "plugin_version": "0.1.5",
+    "plugin_version": "0.1.6",
     "name": "cms_access_fhir_client",
     "description": "Canvas-side integration with the CMS ACCESS Model FHIR APIs. Provides eligibility checking, patient alignment and unalignment (tracks eCKM, CKM, MSK, BH), webhook reception for CMS subscription events, async submission polling, banner alerts, and a real-time chart summary section.",
     "components": {
