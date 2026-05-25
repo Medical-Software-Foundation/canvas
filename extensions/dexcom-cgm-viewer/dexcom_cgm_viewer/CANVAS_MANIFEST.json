@@ -37,7 +37,8 @@
         "DEXCOM_ENVIRONMENT",
         "DEXCOM_MAGIC_LINK_SECRET",
         "SENDGRID_API_KEY",
-        "SENDGRID_FROM_EMAIL"
+        "SENDGRID_FROM_EMAIL",
+        "namespace_read_write_access_key"
     ],
     "custom_data": {
         "namespace": "canvas__dexcom_cgm_viewer",
