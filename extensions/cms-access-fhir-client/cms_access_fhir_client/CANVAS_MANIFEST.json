@@ -101,6 +101,10 @@
         "effects": [],
         "views": []
     },
+    "custom_data": {
+        "namespace": "canvas_medical__cms_access_model",
+        "access": "read_write"
+    },
     "secrets": [],
     "variables": [
         {"name": "ACCESS_BASE_URL", "sensitive": false},
