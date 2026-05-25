@@ -1,15 +1,15 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.0.2",
     "name": "patient_coverage_companion",
-    "description": "Provider companion app (patient scope) for managing insurance coverages, including front/back card photo capture.",
+    "description": "Provider companion app (patient scope) for managing patient cards — insurance coverages and identification cards — with front/back photo capture.",
     "url_permissions": [],
     "components": {
         "applications": [
             {
                 "class": "patient_coverage_companion.applications.coverage_app:CoverageCompanionApp",
-                "name": "Coverages",
-                "description": "Manage insurance coverages for this patient.",
+                "name": "Cards",
+                "description": "Manage insurance coverages and ID cards for this patient.",
                 "scope": "provider_companion_patient_specific",
                 "icon": "assets/icon.png"
             }

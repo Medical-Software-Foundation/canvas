@@ -1,6 +1,13 @@
 # Patient Coverage Companion
 
-Patient-scope provider companion app for managing a patient's insurance coverages — list, add, edit, expire, remove, and reorder — including capturing front/back card photos from the rear camera on mobile (and from disk on desktop).
+Patient-scope provider companion app for managing the patient's cards on file:
+
+1. **Insurance coverages** — list, add, edit, expire, remove, reorder, with front/back insurance-card photo capture.
+2. **ID cards** — list, add, edit, delete identification cards (driver license, passport, etc.) with a single image per card.
+
+The launch screen is a mode selector with two tiles; pick a mode to enter its flow. The two modes are independent — no shared list view.
+
+All photo capture uses the rear camera natively on mobile (via `<input type="file" capture="environment">`) and a file picker on desktop.
 
 ## Surface
 
@@ -26,7 +33,9 @@ On mobile, the `<input type="file" accept="image/*" capture="environment">` fiel
 ## Dependencies
 
 - Canvas SDK ≥ 0.1.4
-- `canvas_sdk.effects.coverage` (CoverageCreate / Update / Expire / Remove / RemovePhoto / Reorder effects) — see [KOALA-5549](https://canvasmedical.atlassian.net/browse/KOALA-5549).
+- `canvas_sdk.effects.coverage` (Coverage create / update / expire / remove / remove_photo + CoverageReorder)
+- `canvas_sdk.effects.patient_identification_card` (PatientIdentificationCard create / update / delete)
+- Both shipped under [KOALA-5549](https://canvasmedical.atlassian.net/browse/KOALA-5549).
 
 ## Endpoints
 
@@ -38,10 +47,14 @@ All under `/plugin-io/api/patient_coverage_companion/app/`:
 | GET    | `/main.js`, `/styles.css`                   | Static assets                    |
 | GET    | `/data.json?patient_id=X`                   | Coverages + dropdown options     |
 | GET    | `/payers/search?q=Y`                        | Payer (Transactor) type-ahead    |
-| POST   | `/cards/upload` (`upload_files=True`)       | Card photo upload → S3 keys      |
+| POST   | `/cards/upload` (`upload_files=True`)       | File upload → S3 keys (any field name) |
 | POST   | `/coverage`                                 | Create coverage                  |
 | POST   | `/coverage/<id>`                            | Update coverage (partial)        |
 | POST   | `/coverage/<id>/remove`                     | Remove coverage                  |
 | POST   | `/coverage/<id>/expire`                     | Expire coverage with end date    |
 | POST   | `/coverage/<id>/photo/<side>/remove`        | Clear front or back card photo   |
 | POST   | `/coverages/reorder`                        | Reorder ranks in one call        |
+| GET    | `/id-cards.json?patient_id=X`               | ID cards for the patient         |
+| POST   | `/id-card`                                  | Create ID card                   |
+| POST   | `/id-card/<id>`                             | Update ID card (partial)         |
+| POST   | `/id-card/<id>/delete`                      | Delete ID card                   |
