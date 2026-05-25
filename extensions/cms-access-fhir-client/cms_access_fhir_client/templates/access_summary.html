@@ -73,8 +73,17 @@
   <div class="value">{{ alignment.alignment_id }}</div>
 </div>
 {% endif %}
+{% if alignment.status_message %}
+<div class="section">
+  <div class="label">Last Error</div>
+  <div class="value status-error">{{ alignment.status_message }}</div>
+</div>
+{% endif %}
 {% else %}
-<div class="no-data">No ACCESS alignment on record for this patient.</div>
+<div class="no-data">
+  No ACCESS eligibility check on record yet. Use the
+  <strong>Check ACCESS Eligibility</strong> button above to begin.
+</div>
 {% endif %}
 
 <script>

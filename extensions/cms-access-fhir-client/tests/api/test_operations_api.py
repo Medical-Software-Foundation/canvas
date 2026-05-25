@@ -146,8 +146,8 @@ class TestSubmitEligibility:
 
             effects = handler.submit_eligibility()
 
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.OK
+        assert len(effects) == 2  # broadcast + JSONResponse
+        assert effects[-1].status_code == HTTPStatus.OK
         assert mock_alignment.save.called
 
     def test_check_eligibility_called_with_embedded_patient_resource(self):
@@ -294,8 +294,8 @@ class TestSubmitAlign:
 
             effects = handler.submit_align()
 
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.ACCEPTED
+        assert len(effects) == 2  # broadcast + JSONResponse
+        assert effects[-1].status_code == HTTPStatus.ACCEPTED
         assert mock_alignment.submission_status_url == "https://api.cms.gov/status/xyz"
 
     def test_align_called_with_embedded_patient_resource(self):
@@ -437,8 +437,8 @@ class TestSubmitUnalign:
 
             effects = handler.submit_unalign()
 
-        assert len(effects) == 1
-        assert effects[0].status_code == HTTPStatus.ACCEPTED
+        assert len(effects) == 2  # broadcast + JSONResponse
+        assert effects[-1].status_code == HTTPStatus.ACCEPTED
         assert mock_alignment.submission_status_url == "https://api.cms.gov/status/unalign-xyz"
 
     def test_unalign_called_without_patient_fhir_id(self):

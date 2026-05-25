@@ -19,6 +19,7 @@ from logger import log
 
 from cms_access_fhir_client.cms_client import align, check_eligibility, unalign
 from cms_access_fhir_client.coverage_lookup import get_active_medicare_part_b_coverage
+from cms_access_fhir_client.handlers.realtime_broadcaster import broadcast_alignment_update
 from cms_access_fhir_client.models import ACCESSAlignment
 from cms_access_fhir_client.models.access_alignment import CustomPatient
 
@@ -278,10 +279,13 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
             alignment.status_message = str(exc)
             alignment.last_eligibility_check_at = _utcnow()
             alignment.save()
-            return [JSONResponse(
-                {"error": f"CMS request failed: {exc}", "status": alignment.status},
-                status_code=HTTPStatus.BAD_GATEWAY,
-            )]
+            return [
+                broadcast_alignment_update(str(patient.id)),
+                JSONResponse(
+                    {"error": f"CMS request failed: {exc}", "status": alignment.status},
+                    status_code=HTTPStatus.BAD_GATEWAY,
+                ),
+            ]
 
         status = _extract_eligibility_status(result)
         alignment, _ = ACCESSAlignment.objects.get_or_create(
@@ -303,7 +307,10 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
 
         alignment.save()
 
-        return [JSONResponse({"status": alignment.status}, status_code=HTTPStatus.OK)]
+        return [
+            broadcast_alignment_update(str(patient.id)),
+            JSONResponse({"status": alignment.status}, status_code=HTTPStatus.OK),
+        ]
 
     @api.get("/align")
     def align_modal(self) -> list[Response | Effect]:
@@ -364,10 +371,13 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
             alignment.status_message = str(exc)
             alignment.clinical_justification = clinical_justification
             alignment.save()
-            return [JSONResponse(
-                {"error": f"CMS request failed: {exc}", "status": alignment.status},
-                status_code=HTTPStatus.BAD_GATEWAY,
-            )]
+            return [
+                broadcast_alignment_update(str(patient.id)),
+                JSONResponse(
+                    {"error": f"CMS request failed: {exc}", "status": alignment.status},
+                    status_code=HTTPStatus.BAD_GATEWAY,
+                ),
+            ]
 
         alignment, _ = ACCESSAlignment.objects.get_or_create(
             patient=patient,
@@ -387,7 +397,10 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         alignment.save()
         log.info(f"[cms-access] Align submitted for patient {patient_id}, track {track}")
 
-        return [JSONResponse({"status": alignment.status}, status_code=HTTPStatus.ACCEPTED)]
+        return [
+            broadcast_alignment_update(str(patient.id)),
+            JSONResponse({"status": alignment.status}, status_code=HTTPStatus.ACCEPTED),
+        ]
 
     @api.get("/unalign")
     def unalign_modal(self) -> list[Response | Effect]:
@@ -463,10 +476,13 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
             alignment.status = ACCESSAlignment.STATUS_ERROR
             alignment.status_message = str(exc)
             alignment.save()
-            return [JSONResponse(
-                {"error": f"CMS request failed: {exc}", "status": alignment.status},
-                status_code=HTTPStatus.BAD_GATEWAY,
-            )]
+            return [
+                broadcast_alignment_update(str(patient.id)),
+                JSONResponse(
+                    {"error": f"CMS request failed: {exc}", "status": alignment.status},
+                    status_code=HTTPStatus.BAD_GATEWAY,
+                ),
+            ]
 
         alignment.unalignment_reason = reason_code
         if status_code == 202 and content_location:
@@ -481,7 +497,10 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         alignment.save()
         log.info(f"[cms-access] Unalign submitted for patient {patient_id}")
 
-        return [JSONResponse({"status": alignment.status}, status_code=HTTPStatus.ACCEPTED)]
+        return [
+            broadcast_alignment_update(str(patient.id)),
+            JSONResponse({"status": alignment.status}, status_code=HTTPStatus.ACCEPTED),
+        ]
 
 
 def _extract_eligibility_status(result: dict) -> str:
