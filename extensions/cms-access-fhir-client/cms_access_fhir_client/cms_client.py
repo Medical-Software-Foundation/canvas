@@ -44,8 +44,11 @@ def _parse_operation_outcome(body: dict) -> str:
     return "Unknown error"
 
 
-def check_eligibility(secrets: dict, patient_fhir_id: str) -> dict:
+def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
     """POST $check-eligibility and return the response body dict.
+
+    ``patient_resource`` must be a fully-constructed FHIR Patient dict with at
+    minimum an MBI identifier; the caller is responsible for building it.
 
     On 400, parses the OperationOutcome and raises RuntimeError with the detail text.
     """
@@ -58,7 +61,7 @@ def check_eligibility(secrets: dict, patient_fhir_id: str) -> dict:
         "resourceType": "Parameters",
         "parameter": [
             {"name": "participantID", "valueString": participant_id},
-            {"name": "patient", "valueReference": {"reference": f"Patient/{patient_fhir_id}"}},
+            {"name": "patient", "resource": patient_resource},
         ],
     }
     response = http.post(
@@ -77,11 +80,14 @@ def check_eligibility(secrets: dict, patient_fhir_id: str) -> dict:
 
 def align(
     secrets: dict,
-    patient_fhir_id: str,
+    patient_resource: dict,
     track: str,
     clinical_justification: str,
 ) -> tuple[int, str | None, dict]:
     """POST $align. Returns (status_code, content_location_url, body_dict).
+
+    ``patient_resource`` must be a fully-constructed FHIR Patient dict with at
+    minimum an MBI identifier; the caller is responsible for building it.
 
     202 means async — caller should store content_location_url and poll.
     On 400, raises RuntimeError with the OperationOutcome detail text.
@@ -95,7 +101,7 @@ def align(
         "resourceType": "Parameters",
         "parameter": [
             {"name": "participantID", "valueString": participant_id},
-            {"name": "patient", "valueReference": {"reference": f"Patient/{patient_fhir_id}"}},
+            {"name": "patient", "resource": patient_resource},
             {"name": "track", "valueCode": track},
             {"name": "clinicalJustification", "valueString": clinical_justification},
         ],
@@ -118,11 +124,13 @@ def align(
 
 def unalign(
     secrets: dict,
-    patient_fhir_id: str,
     alignment_id: str,
     reason_code: str,
 ) -> tuple[int, str | None, dict]:
     """POST $unalign. Returns (status_code, content_location_url, body_dict).
+
+    Note: $unalign does not require a patient parameter per the CMS ACCESS IG —
+    the alignment is identified by ``alignment_id`` alone.
 
     On 400, raises RuntimeError with the OperationOutcome detail text.
     """

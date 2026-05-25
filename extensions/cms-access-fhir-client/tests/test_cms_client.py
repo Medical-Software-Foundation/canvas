@@ -73,11 +73,21 @@ class TestBuildHttp:
         assert http.headers.get("Prefer") == "respond-async"
 
 
+_PATIENT_RESOURCE = {
+    "resourceType": "Patient",
+    "identifier": [
+        {"system": "http://hl7.org/fhir/sid/us-mbi", "value": "1EG4-TE5-MK72"}
+    ],
+    "name": [{"family": "Doe", "given": ["Jane"]}],
+    "birthDate": "1942-06-15",
+}
+
+
 class TestCheckEligibility:
     def test_raises_when_participant_id_missing(self):
         from cms_access_fhir_client.cms_client import check_eligibility
         with pytest.raises(ValueError, match="ACCESS_PARTICIPANT_ID"):
-            check_eligibility({}, patient_fhir_id="p-123")
+            check_eligibility({}, patient_resource=_PATIENT_RESOURCE)
 
     def test_posts_to_access_prefix_path(self):
         """Path must be /access/Patient/$check-eligibility (not /Patient/$check-eligibility)."""
@@ -93,7 +103,7 @@ class TestCheckEligibility:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            check_eligibility(SECRETS, patient_fhir_id="patient-fhir-123")
+            check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
 
         path = mock_http.post.call_args[0][0]
         assert path == "/access/Patient/$check-eligibility"
@@ -112,7 +122,7 @@ class TestCheckEligibility:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            check_eligibility(SECRETS, patient_fhir_id="patient-fhir-123")
+            check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
 
         kwargs = mock_http.post.call_args[1]
         assert kwargs.get("params", {}).get("entityId") == "ACCES10098"
@@ -131,12 +141,81 @@ class TestCheckEligibility:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            check_eligibility(SECRETS, patient_fhir_id="patient-fhir-123")
+            check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
 
         payload = mock_http.post.call_args[1]["json"]
         param_names = [p["name"] for p in payload["parameter"]]
         assert "participantID" in param_names
         assert "participant" not in param_names
+
+    def test_patient_parameter_uses_resource_key_not_value_reference(self):
+        """Patient param must use 'resource' (inline) not 'valueReference' (external reference)."""
+        from cms_access_fhir_client.cms_client import check_eligibility
+
+        mock_http = _mock_http_and_token()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"parameter": []}
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
+            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
+        ):
+            check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
+
+        payload = mock_http.post.call_args[1]["json"]
+        patient_param = next(p for p in payload["parameter"] if p["name"] == "patient")
+        assert "resource" in patient_param
+        assert "valueReference" not in patient_param
+
+    def test_patient_resource_contains_mbi_identifier(self):
+        """Patient resource in the body must include the us-mbi identifier."""
+        from cms_access_fhir_client.cms_client import check_eligibility
+
+        mock_http = _mock_http_and_token()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"parameter": []}
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
+            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
+        ):
+            check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
+
+        payload = mock_http.post.call_args[1]["json"]
+        patient_param = next(p for p in payload["parameter"] if p["name"] == "patient")
+        resource = patient_param["resource"]
+        assert resource["resourceType"] == "Patient"
+        identifiers = resource["identifier"]
+        assert any(
+            i["system"] == "http://hl7.org/fhir/sid/us-mbi" and i["value"] == "1EG4-TE5-MK72"
+            for i in identifiers
+        )
+
+    def test_patient_resource_contains_name_and_birth_date(self):
+        """Patient resource must include name and birthDate fields."""
+        from cms_access_fhir_client.cms_client import check_eligibility
+
+        mock_http = _mock_http_and_token()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"parameter": []}
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
+            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
+        ):
+            check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
+
+        payload = mock_http.post.call_args[1]["json"]
+        patient_param = next(p for p in payload["parameter"] if p["name"] == "patient")
+        resource = patient_param["resource"]
+        assert resource["name"][0]["family"] == "Doe"
+        assert resource["birthDate"] == "1942-06-15"
 
     def test_raises_runtime_error_on_400_with_operation_outcome(self):
         """400 + OperationOutcome must raise RuntimeError with the detail text."""
@@ -162,7 +241,7 @@ class TestCheckEligibility:
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
             with pytest.raises(RuntimeError, match="participantID not found in registry"):
-                check_eligibility(SECRETS, patient_fhir_id="p-123")
+                check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
 
     def test_raises_runtime_error_on_400_with_no_issues(self):
         """400 + OperationOutcome with empty issues list falls back to 'Unknown error'."""
@@ -182,14 +261,14 @@ class TestCheckEligibility:
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
             with pytest.raises(RuntimeError, match="Unknown error"):
-                check_eligibility(SECRETS, patient_fhir_id="p-123")
+                check_eligibility(SECRETS, patient_resource=_PATIENT_RESOURCE)
 
 
 class TestAlign:
     def test_raises_when_participant_id_missing(self):
         from cms_access_fhir_client.cms_client import align
         with pytest.raises(ValueError, match="ACCESS_PARTICIPANT_ID"):
-            align({}, patient_fhir_id="p-123", track="eCKM", clinical_justification="Justified")
+            align({}, patient_resource=_PATIENT_RESOURCE, track="eCKM", clinical_justification="Justified")
 
     def test_posts_to_access_prefix_path(self):
         from cms_access_fhir_client.cms_client import align
@@ -205,7 +284,7 @@ class TestAlign:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            align(SECRETS, patient_fhir_id="p-fhir-123", track="eCKM", clinical_justification="CKD")
+            align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="eCKM", clinical_justification="CKD")
 
         path = mock_http.post.call_args[0][0]
         assert path == "/access/Patient/$align"
@@ -224,7 +303,7 @@ class TestAlign:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            align(SECRETS, patient_fhir_id="p-fhir-123", track="eCKM", clinical_justification="CKD")
+            align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="eCKM", clinical_justification="CKD")
 
         kwargs = mock_http.post.call_args[1]
         assert kwargs.get("params", {}).get("entityId") == "ACCES10098"
@@ -243,12 +322,59 @@ class TestAlign:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            align(SECRETS, patient_fhir_id="p-123", track="MSK", clinical_justification="Arthritis")
+            align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="MSK", clinical_justification="Arthritis")
 
         payload = mock_http.post.call_args[1]["json"]
         param_names = [p["name"] for p in payload["parameter"]]
         assert "participantID" in param_names
         assert "participant" not in param_names
+
+    def test_patient_parameter_uses_resource_key_not_value_reference(self):
+        """align patient param must use 'resource' (inline) not 'valueReference'."""
+        from cms_access_fhir_client.cms_client import align
+
+        mock_http = _mock_http_and_token()
+        mock_response = MagicMock()
+        mock_response.status_code = 202
+        mock_response.headers.get.return_value = None
+        mock_response.text = ""
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
+            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
+        ):
+            align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="eCKM", clinical_justification="CKD")
+
+        payload = mock_http.post.call_args[1]["json"]
+        patient_param = next(p for p in payload["parameter"] if p["name"] == "patient")
+        assert "resource" in patient_param
+        assert "valueReference" not in patient_param
+
+    def test_patient_resource_contains_mbi_identifier(self):
+        """align patient resource must include the us-mbi identifier."""
+        from cms_access_fhir_client.cms_client import align
+
+        mock_http = _mock_http_and_token()
+        mock_response = MagicMock()
+        mock_response.status_code = 202
+        mock_response.headers.get.return_value = None
+        mock_response.text = ""
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
+            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
+        ):
+            align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="eCKM", clinical_justification="CKD")
+
+        payload = mock_http.post.call_args[1]["json"]
+        patient_param = next(p for p in payload["parameter"] if p["name"] == "patient")
+        resource = patient_param["resource"]
+        assert any(
+            i["system"] == "http://hl7.org/fhir/sid/us-mbi"
+            for i in resource["identifier"]
+        )
 
     def test_returns_202_with_content_location(self):
         from cms_access_fhir_client.cms_client import align
@@ -266,7 +392,7 @@ class TestAlign:
         ):
             status_code, content_location, body = align(
                 SECRETS,
-                patient_fhir_id="p-fhir-123",
+                patient_resource=_PATIENT_RESOURCE,
                 track="eCKM",
                 clinical_justification="CKD stage 3",
             )
@@ -292,14 +418,14 @@ class TestAlign:
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
             with pytest.raises(RuntimeError, match="Invalid track"):
-                align(SECRETS, patient_fhir_id="p-123", track="INVALID", clinical_justification="x")
+                align(SECRETS, patient_resource=_PATIENT_RESOURCE, track="INVALID", clinical_justification="x")
 
 
 class TestUnalign:
     def test_raises_when_participant_id_missing(self):
         from cms_access_fhir_client.cms_client import unalign
         with pytest.raises(ValueError, match="ACCESS_PARTICIPANT_ID"):
-            unalign({}, patient_fhir_id="p-123", alignment_id="align-1", reason_code="patient-request")
+            unalign({}, alignment_id="align-1", reason_code="patient-request")
 
     def test_posts_to_access_prefix_path(self):
         from cms_access_fhir_client.cms_client import unalign
@@ -315,7 +441,7 @@ class TestUnalign:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            unalign(SECRETS, patient_fhir_id="p-123", alignment_id="align-1", reason_code="care-completed")
+            unalign(SECRETS, alignment_id="align-1", reason_code="care-completed")
 
         path = mock_http.post.call_args[0][0]
         assert path == "/access/Patient/$unalign"
@@ -334,7 +460,7 @@ class TestUnalign:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            unalign(SECRETS, patient_fhir_id="p-123", alignment_id="align-1", reason_code="care-completed")
+            unalign(SECRETS, alignment_id="align-1", reason_code="care-completed")
 
         kwargs = mock_http.post.call_args[1]
         assert kwargs.get("params", {}).get("entityId") == "ACCES10098"
@@ -353,12 +479,33 @@ class TestUnalign:
             patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
-            unalign(SECRETS, patient_fhir_id="p-123", alignment_id="align-1", reason_code="care-completed")
+            unalign(SECRETS, alignment_id="align-1", reason_code="care-completed")
 
         payload = mock_http.post.call_args[1]["json"]
         param_names = [p["name"] for p in payload["parameter"]]
         assert "participantID" in param_names
         assert "participant" not in param_names
+
+    def test_body_does_not_contain_patient_parameter(self):
+        """$unalign does not send a patient parameter — alignment_id identifies the record."""
+        from cms_access_fhir_client.cms_client import unalign
+
+        mock_http = _mock_http_and_token()
+        mock_response = MagicMock()
+        mock_response.status_code = 202
+        mock_response.headers.get.return_value = None
+        mock_response.text = ""
+        mock_http.post.return_value = mock_response
+
+        with (
+            patch("cms_access_fhir_client.cms_client.get_access_token", return_value="tok"),
+            patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
+        ):
+            unalign(SECRETS, alignment_id="align-1", reason_code="care-completed")
+
+        payload = mock_http.post.call_args[1]["json"]
+        param_names = [p["name"] for p in payload["parameter"]]
+        assert "patient" not in param_names
 
     def test_returns_status_and_location(self):
         from cms_access_fhir_client.cms_client import unalign
@@ -376,7 +523,6 @@ class TestUnalign:
         ):
             status_code, content_location, body = unalign(
                 SECRETS,
-                patient_fhir_id="p-fhir-123",
                 alignment_id="align-abc",
                 reason_code="provider-decision",
             )
@@ -402,7 +548,7 @@ class TestUnalign:
             patch("cms_access_fhir_client.cms_client.Http", return_value=mock_http),
         ):
             with pytest.raises(RuntimeError, match="Alignment not found"):
-                unalign(SECRETS, patient_fhir_id="p-123", alignment_id="align-1", reason_code="other")
+                unalign(SECRETS, alignment_id="align-1", reason_code="other")
 
 
 class TestReportData:

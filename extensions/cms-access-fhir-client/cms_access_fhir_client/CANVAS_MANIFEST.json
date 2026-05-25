@@ -64,7 +64,7 @@
                 "description": "Internal API endpoints called by chart-button modals to invoke CMS operations",
                 "data_access": {
                     "event": "SIMPLE_API_REQUEST",
-                    "read": ["Patient"],
+                    "read": ["Patient", "Coverage"],
                     "write": ["ACCESSAlignment"]
                 }
             },
@@ -112,7 +112,9 @@
         {"name": "ACCESS_WEBHOOK_SECRET", "sensitive": true},
         {"name": "ACCESS_SHOW_BANNER", "sensitive": false},
         {"name": "ACCESS_SHOW_CHART_SUMMARY", "sensitive": false},
-        {"name": "ACCESS_SHOW_PROFILE_FIELD", "sensitive": false}
+        {"name": "ACCESS_SHOW_PROFILE_FIELD", "sensitive": false},
+        {"name": "ACCESS_MEDICARE_PART_B_PAYER_IDS", "sensitive": false},
+        {"name": "ACCESS_PAYER_NAME_PATTERN", "sensitive": false}
     ],
     "tags": {},
     "references": [],

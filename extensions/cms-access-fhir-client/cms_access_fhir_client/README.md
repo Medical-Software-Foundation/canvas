@@ -46,6 +46,30 @@ Inbound: the plugin exposes a webhook endpoint that receives all seven CMS FHIR 
 
 All operations fail closed if a required secret is missing.
 
+## MBI source
+
+The plugin does **not** accept an MBI from the user. Instead, it reads the Medicare Beneficiary Identifier from the patient's active Medicare Part B Coverage record in Canvas.
+
+**How the lookup works:**
+
+1. The plugin calls `get_active_medicare_part_b_coverage(patient, secrets)` before invoking any CMS operation.
+2. Two filter mechanisms are supported (evaluated in order):
+   - **Allowlist** (`ACCESS_MEDICARE_PART_B_PAYER_IDS`): comma-separated list of Transactor UUIDs. If set, the plugin matches `coverage.issuer.id` against this list — useful for precise control when you know the exact payer IDs on your Canvas instance.
+   - **Name pattern** (`ACCESS_PAYER_NAME_PATTERN`, default `Medicare Part B`): case-insensitive substring match against `coverage.issuer.name`. This is the default and requires no configuration. It matches payers like `IL Medicare Part B` or `AK Medicare Part B` while excluding Medicare Advantage payers (e.g. `ASPIRUS MEDICARE ADVANTAGE`), which do not contain the substring `Medicare Part B`.
+3. Only coverages with `state=active` are considered.
+4. If multiple active Part B coverages are found, the one with the lowest `coverage_rank` (primary) is used.
+5. The MBI is read from `coverage.id_number`.
+
+**Fail-closed behavior:** If no active Medicare Part B coverage is found for the patient, all three operations (eligibility, align, unalign) return HTTP 422 with the error:
+
+```
+Patient has no active Medicare Part B coverage on file — cannot perform ACCESS operation
+```
+
+The staff member must attach a Medicare Part B coverage to the patient via the Canvas insurance section before the ACCESS operations will succeed.
+
+**How the MBI is sent to CMS:** The patient is sent as an inline FHIR `Patient` resource (not a reference), with the MBI in `identifier[system=http://hl7.org/fhir/sid/us-mbi]`. Name and date of birth are also included.
+
 ## Webhook endpoint
 
 Point the CMS participant portal at:

@@ -18,6 +18,7 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from logger import log
 
 from cms_access_fhir_client.cms_client import align, check_eligibility, unalign
+from cms_access_fhir_client.coverage_lookup import get_active_medicare_part_b_coverage
 from cms_access_fhir_client.models import ACCESSAlignment
 from cms_access_fhir_client.models.access_alignment import CustomPatient
 
@@ -203,6 +204,27 @@ _UNALIGN_HTML = """<!DOCTYPE html>
 </body></html>"""
 
 
+def _build_patient_resource(patient, mbi: str) -> dict:
+    """Build a FHIR Patient resource embedding the MBI for transmission to CMS.
+
+    None-valued top-level fields are stripped to avoid FHIR validator rejections.
+    """
+    resource: dict = {
+        "resourceType": "Patient",
+        "identifier": [
+            {
+                "system": "http://hl7.org/fhir/sid/us-mbi",
+                "value": mbi,
+            }
+        ],
+        "name": [{"family": patient.last_name, "given": [patient.first_name]}],
+    }
+    birth_date = getattr(patient, "birth_date", None)
+    if birth_date is not None:
+        resource["birthDate"] = birth_date.isoformat()
+    return resource
+
+
 class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
     """Internal endpoints invoked by the chart-button modals.
 
@@ -228,7 +250,22 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         except CustomPatient.DoesNotExist:
             return [JSONResponse({"error": "Patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
 
-        result = check_eligibility(self.secrets, patient_fhir_id=str(patient.id))
+        coverage = get_active_medicare_part_b_coverage(patient, self.secrets)
+        if coverage is None:
+            return [
+                JSONResponse(
+                    {"error": "Patient has no active Medicare Part B coverage on file — cannot perform ACCESS operation"},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
+        log.info(
+            f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
+            f"(issuer={coverage.issuer.name}) for patient {patient.id}"
+        )
+
+        patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
+        result = check_eligibility(self.secrets, patient_resource=patient_resource)
 
         status = _extract_eligibility_status(result)
         alignment, _ = ACCESSAlignment.objects.get_or_create(
@@ -278,9 +315,24 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         except CustomPatient.DoesNotExist:
             return [JSONResponse({"error": "Patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
 
+        coverage = get_active_medicare_part_b_coverage(patient, self.secrets)
+        if coverage is None:
+            return [
+                JSONResponse(
+                    {"error": "Patient has no active Medicare Part B coverage on file — cannot perform ACCESS operation"},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
+        log.info(
+            f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
+            f"(issuer={coverage.issuer.name}) for patient {patient.id}"
+        )
+
+        patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
         status_code, content_location, _ = align(
             self.secrets,
-            patient_fhir_id=str(patient.id),
+            patient_resource=patient_resource,
             track=track,
             clinical_justification=clinical_justification,
         )
@@ -328,6 +380,20 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         except CustomPatient.DoesNotExist:
             return [JSONResponse({"error": "Patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
 
+        coverage = get_active_medicare_part_b_coverage(patient, self.secrets)
+        if coverage is None:
+            return [
+                JSONResponse(
+                    {"error": "Patient has no active Medicare Part B coverage on file — cannot perform ACCESS operation"},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
+        log.info(
+            f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
+            f"(issuer={coverage.issuer.name}) for patient {patient.id}"
+        )
+
         alignment = (
             ACCESSAlignment.objects.filter(
                 patient=patient,
@@ -356,7 +422,6 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
 
         status_code, content_location, _ = unalign(
             self.secrets,
-            patient_fhir_id=str(patient.id),
             alignment_id=alignment_id,
             reason_code=reason_code,
         )

@@ -79,6 +79,20 @@ GET /submission/{id}?force_error=true → 200 + OperationOutcome body  (any poll
 `POLLS_BEFORE_COMPLETE = 1` (default) means the second GET returns completed.
 Adjust in `app.py` if you want longer in-progress windows.
 
+## Test patient setup
+
+Before exercising the plugin, each test patient on `allison-training` must have an active Medicare Part B coverage record. Cecilia is attaching these manually via the Canvas UI (patient chart → Insurance tab → Add Coverage).
+
+**Required coverage configuration per patient:**
+- Payer: any payer whose name contains `Medicare Part B` (e.g. `IL Medicare Part B`) — or configure `ACCESS_MEDICARE_PART_B_PAYER_IDS` with the specific Transactor UUID(s) from your instance
+- Member/subscriber ID: the patient's MBI (e.g. `1EG4-TE5-MK72`)
+- Status: Active
+- Rank: 1 (Primary)
+
+The plugin reads the MBI from `coverage.id_number` on this record. If no active Part B coverage is found, all three modal actions (eligibility, align, unalign) will return a 422 error visible in the modal UI.
+
+**Note:** Medicare Advantage payers (e.g. `ASPIRUS MEDICARE ADVANTAGE`) are not matched by the default name pattern and will not count as Part B coverage.
+
 ## End-to-end flow to exercise
 
 1. Open any patient chart on `allison-training`.
