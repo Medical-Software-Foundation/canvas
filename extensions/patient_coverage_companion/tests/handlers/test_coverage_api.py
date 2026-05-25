@@ -25,6 +25,7 @@ def _make_api(
     body: dict | None = None,
     form_data: dict | None = None,
     upload_failures: list | None = None,
+    path_params: dict | None = None,
     headers: dict | None = None,
 ) -> CoverageAPI:
     """Build a CoverageAPI instance with a stubbed request — no auth flow,
@@ -33,6 +34,7 @@ def _make_api(
     api.request = SimpleNamespace(
         headers=headers or {"canvas-logged-in-user-id": STAFF_UUID},
         query_params=query_params or {},
+        path_params=path_params or {},
         json=lambda: body,
         # form_data() in production returns a MultiDict[str, FormPart] where
         # iteration yields keys and form[key] yields the part. A plain dict
@@ -243,16 +245,15 @@ class TestCreateCoverage:
 class TestUpdateCoverage:
     def test_update_with_image_only(self) -> None:
         api = _make_api(
-            body={
-                "card_image_back_upload_key": "plugin-uploads/x/y-back.jpg",
-            }
+            body={"card_image_back_upload_key": "plugin-uploads/x/y-back.jpg"},
+            path_params={"coverage_id": "cov-1"},
         )
         with patch.object(coverage_api, "CoverageEffect") as eff_cls:
             instance = eff_cls.return_value
             instance.update.return_value = MagicMock(
                 type=EffectType.UPDATE_COVERAGE, payload=""
             )
-            results = api.update_coverage("cov-1")
+            results = api.update_coverage()
         assert len(results) == 2
         eff_cls.assert_called_once()
         kwargs = eff_cls.call_args.kwargs
@@ -265,11 +266,11 @@ class TestUpdateCoverage:
 
 class TestRemoveCoverage:
     def test_remove_emits_remove_effect(self) -> None:
-        api = _make_api()
+        api = _make_api(path_params={"coverage_id": "cov-1"})
         with patch.object(coverage_api, "CoverageEffect") as eff_cls:
             instance = eff_cls.return_value
             instance.remove.return_value = MagicMock(type=EffectType.REMOVE_COVERAGE)
-            results = api.remove_coverage("cov-1")
+            results = api.remove_coverage()
         assert eff_cls.call_args.kwargs["coverage_id"] == "cov-1"
         instance.remove.assert_called_once()
         assert results[-1].status_code == HTTPStatus.ACCEPTED
@@ -277,39 +278,45 @@ class TestRemoveCoverage:
 
 class TestExpireCoverage:
     def test_missing_end_date_returns_400(self) -> None:
-        api = _make_api(body={})
-        (response,) = api.expire_coverage("cov-1")
+        api = _make_api(body={}, path_params={"coverage_id": "cov-1"})
+        (response,) = api.expire_coverage()
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_bad_date_returns_400(self) -> None:
-        api = _make_api(body={"coverage_end_date": "not-a-date"})
-        (response,) = api.expire_coverage("cov-1")
+        api = _make_api(
+            body={"coverage_end_date": "not-a-date"},
+            path_params={"coverage_id": "cov-1"},
+        )
+        (response,) = api.expire_coverage()
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_expire_emits_effect(self) -> None:
-        api = _make_api(body={"coverage_end_date": "2026-12-31"})
+        api = _make_api(
+            body={"coverage_end_date": "2026-12-31"},
+            path_params={"coverage_id": "cov-1"},
+        )
         with patch.object(coverage_api, "CoverageEffect") as eff_cls:
             instance = eff_cls.return_value
             instance.expire.return_value = MagicMock(type=EffectType.EXPIRE_COVERAGE)
-            results = api.expire_coverage("cov-1")
+            results = api.expire_coverage()
         instance.expire.assert_called_once_with(coverage_end_date=date(2026, 12, 31))
         assert results[-1].status_code == HTTPStatus.ACCEPTED
 
 
 class TestRemovePhoto:
     def test_invalid_side_returns_400(self) -> None:
-        api = _make_api()
-        (response,) = api.remove_photo("cov-1", "middle")
+        api = _make_api(path_params={"coverage_id": "cov-1", "side": "middle"})
+        (response,) = api.remove_photo()
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_front_side_emits_effect(self) -> None:
-        api = _make_api()
+        api = _make_api(path_params={"coverage_id": "cov-1", "side": "front"})
         with patch.object(coverage_api, "CoverageEffect") as eff_cls:
             instance = eff_cls.return_value
             instance.remove_photo.return_value = MagicMock(
                 type=EffectType.REMOVE_COVERAGE_PHOTO
             )
-            results = api.remove_photo("cov-1", "front")
+            results = api.remove_photo()
         instance.remove_photo.assert_called_once_with("FRONT")
         assert results[-1].status_code == HTTPStatus.ACCEPTED
 
@@ -425,20 +432,21 @@ class TestIdCardEndpoints:
         assert results[-1].status_code == HTTPStatus.ACCEPTED
 
     def test_update_id_card_bad_id_returns_400(self) -> None:
-        api = _make_api(body={"title": "x"})
-        (response,) = api.update_id_card("not-a-number")
+        api = _make_api(body={"title": "x"}, path_params={"card_id": "not-a-number"})
+        (response,) = api.update_id_card()
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_update_id_card_with_new_image(self) -> None:
         api = _make_api(
-            body={"image_upload_key": "plugin-uploads/x/renewed.jpg", "title": "Renewed"}
+            body={"image_upload_key": "plugin-uploads/x/renewed.jpg", "title": "Renewed"},
+            path_params={"card_id": "42"},
         )
         with patch.object(coverage_api, "PatientIdentificationCardEffect") as eff_cls:
             instance = eff_cls.return_value
             instance.update.return_value = MagicMock(
                 type=EffectType.UPDATE_PATIENT_IDENTIFICATION_CARD
             )
-            results = api.update_id_card("42")
+            results = api.update_id_card()
         kwargs = eff_cls.call_args.kwargs
         assert kwargs["card_id"] == 42
         assert kwargs["image_upload_key"] == "plugin-uploads/x/renewed.jpg"
@@ -446,19 +454,19 @@ class TestIdCardEndpoints:
         assert results[-1].status_code == HTTPStatus.ACCEPTED
 
     def test_delete_id_card_emits_effect(self) -> None:
-        api = _make_api()
+        api = _make_api(path_params={"card_id": "42"})
         with patch.object(coverage_api, "PatientIdentificationCardEffect") as eff_cls:
             instance = eff_cls.return_value
             instance.delete.return_value = MagicMock(
                 type=EffectType.DELETE_PATIENT_IDENTIFICATION_CARD
             )
-            results = api.delete_id_card("42")
+            results = api.delete_id_card()
         kwargs = eff_cls.call_args.kwargs
         assert kwargs["card_id"] == 42
         instance.delete.assert_called_once()
         assert results[-1].status_code == HTTPStatus.ACCEPTED
 
     def test_delete_id_card_bad_id_returns_400(self) -> None:
-        api = _make_api()
-        (response,) = api.delete_id_card("not-a-number")
+        api = _make_api(path_params={"card_id": "not-a-number"})
+        (response,) = api.delete_id_card()
         assert response.status_code == HTTPStatus.BAD_REQUEST
