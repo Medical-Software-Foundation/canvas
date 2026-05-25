@@ -9,10 +9,22 @@
 
   const state = {
     patientId: null,
+    // Top-level mode: which card type is the user managing.
+    // null/"selector" → landing screen with two tiles.
+    mode: "selector", // "selector" | "coverage" | "id_card"
+
+    // Coverage mode state
     coverages: [],
     options: { relationship: [], plan_type: [], rank: [] },
-    view: "list", // "list" | "edit"
+    view: "list", // "list" | "edit" (only meaningful when mode != "selector")
     editing: null, // coverage being edited, or null for "new"
+
+    // ID card mode state
+    idCards: [],
+    editingIdCard: null,
+    idCardImage: { file: null, preview: null, existingUrl: null, pendingKey: null },
+
+    // Shared
     banner: null,
     saving: false,
     uploading: false,
@@ -20,7 +32,7 @@
     cardFiles: { front: null, back: null }, // hold File refs so we don't lose them on re-render
     pendingKeys: { front: null, back: null },
     fieldErrors: {}, // { field_name: "message" } for inline display
-    payer: { id: "", name: "", query: "", results: [], open: false }, // search box state
+    payer: { id: "", name: "", query: "", results: [], open: false }, // coverage search box state
   };
 
   let payerSearchTimer = null;
@@ -691,6 +703,380 @@
     render();
   }
 
+  // ---- selector view ----
+
+  function renderSelector() {
+    const tile = (label, sub, onclick) =>
+      makeElement(
+        "button",
+        { className: "selector-tile", onclick },
+        [
+          makeElement("div", { className: "selector-tile-title" }, label),
+          makeElement("div", { className: "selector-tile-sub" }, sub),
+        ]
+      );
+    return [
+      makeElement("h1", null, "Patient cards"),
+      makeElement(
+        "div",
+        { className: "selector-grid" },
+        [
+          tile(
+            "Insurance coverages",
+            "Add or edit payers, ranks, and card photos.",
+            () => onPickMode("coverage")
+          ),
+          tile(
+            "ID cards",
+            "Driver license, passport, and other ID images.",
+            () => onPickMode("id_card")
+          ),
+        ]
+      ),
+    ];
+  }
+
+  async function onPickMode(mode) {
+    state.mode = mode;
+    state.view = "list";
+    state.banner = null;
+    state.fieldErrors = {};
+    state.editing = null;
+    state.editingIdCard = null;
+    state.cardFiles = { front: null, back: null };
+    state.cardPreviews = { front: null, back: null };
+    state.pendingKeys = { front: null, back: null };
+    state.idCardImage = { file: null, preview: null, existingUrl: null, pendingKey: null };
+    state.payer = { id: "", name: "", query: "", results: [], open: false };
+    render();
+    if (mode === "coverage") await fetchData();
+    else if (mode === "id_card") await fetchIdCards();
+    render();
+  }
+
+  function backToSelector() {
+    state.mode = "selector";
+    state.view = "list";
+    state.banner = null;
+    state.fieldErrors = {};
+    render();
+  }
+
+  function renderBackButton() {
+    return makeElement(
+      "div",
+      { className: "back-row" },
+      makeElement("button", { onclick: backToSelector }, "‹ Back")
+    );
+  }
+
+  // ---- ID card flow ----
+
+  async function fetchIdCards() {
+    const r = await http(
+      "GET",
+      "/id-cards.json?patient_id=" + encodeURIComponent(state.patientId)
+    );
+    if (!r.ok) {
+      state.banner = {
+        type: "error",
+        text: (r.body && r.body.error) || "Could not load ID cards.",
+      };
+      return;
+    }
+    state.idCards = (r.body && r.body.id_cards) || [];
+  }
+
+  function renderIdCardList() {
+    if (!state.idCards.length) {
+      return [
+        renderBackButton(),
+        makeElement("h1", null, "ID cards"),
+        makeElement("div", { className: "empty" }, "No ID cards on file."),
+        makeElement(
+          "div",
+          { className: "form-actions" },
+          makeElement(
+            "button",
+            { className: "primary", onclick: () => onEditIdCard(null) },
+            "Add ID card"
+          )
+        ),
+      ];
+    }
+    const list = makeElement("ul", { className: "coverage-list" });
+    for (const c of state.idCards) {
+      const card = makeElement("li", { className: "coverage-card" }, [
+        makeElement("div", { className: "coverage-card-head" }, [
+          makeElement(
+            "div",
+            { className: "coverage-card-title" },
+            c.title || "(untitled)"
+          ),
+          makeElement(
+            "div",
+            { className: "coverage-card-meta" },
+            c.active ? "Active" : "Inactive"
+          ),
+        ]),
+        c.image_url
+          ? makeElement(
+              "img",
+              { src: c.image_url, alt: c.title || "ID card", className: "id-card-thumb" }
+            )
+          : null,
+        makeElement(
+          "div",
+          { className: "coverage-card-actions" },
+          [
+            makeElement("button", { onclick: () => onEditIdCard(c) }, "Edit"),
+            makeElement(
+              "button",
+              { className: "danger", onclick: () => deleteIdCard(c) },
+              "Delete"
+            ),
+          ]
+        ),
+      ]);
+      list.appendChild(card);
+    }
+    return [
+      renderBackButton(),
+      makeElement("h1", null, "ID cards"),
+      list,
+      makeElement(
+        "div",
+        { className: "form-actions" },
+        makeElement(
+          "button",
+          { className: "primary", onclick: () => onEditIdCard(null) },
+          "Add ID card"
+        )
+      ),
+    ];
+  }
+
+  function onEditIdCard(card) {
+    state.editingIdCard = card; // null => new
+    state.view = "edit";
+    state.banner = null;
+    state.fieldErrors = {};
+    state.idCardImage = {
+      file: null,
+      preview: null,
+      existingUrl: (card && card.image_url) || null,
+      pendingKey: null,
+    };
+    render();
+  }
+
+  function cancelEditIdCard() {
+    state.view = "list";
+    state.editingIdCard = null;
+    state.idCardImage = { file: null, preview: null, existingUrl: null, pendingKey: null };
+    state.fieldErrors = {};
+    render();
+  }
+
+  function onIdCardImageSelected(fileInput) {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    state.idCardImage.file = file;
+    state.fieldErrors.image = null;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      state.idCardImage.preview = e.target.result;
+      // Surgical preview swap so the file input keeps its selection.
+      const preview = document.querySelector(".id-card-image .preview");
+      if (preview) {
+        preview.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = e.target.result;
+        img.alt = "ID card";
+        preview.appendChild(img);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function uploadIdCardImage() {
+    const file = state.idCardImage.file;
+    if (!file) return { ok: true, body: { keys: {} } };
+    const form = new FormData();
+    form.append("image", file);
+    state.uploading = true;
+    const r = await http("POST", "/cards/upload", { body: form });
+    state.uploading = false;
+    return r;
+  }
+
+  function renderIdCardForm() {
+    const editing = state.editingIdCard || {};
+    const isUpdate = !!editing.id;
+
+    const previewSrc =
+      state.idCardImage.preview || state.idCardImage.existingUrl || null;
+    const previewBox = makeElement(
+      "div",
+      { className: "preview" },
+      previewSrc
+        ? makeElement("img", { src: previewSrc, alt: "ID card" })
+        : "No image"
+    );
+    const fileInput = makeElement("input", {
+      id: "id-card-image-input",
+      type: "file",
+      accept: "image/*",
+      capture: "environment",
+      onchange: (e) => onIdCardImageSelected(e.target),
+    });
+    const imageError = state.fieldErrors.image;
+    const imageBlock = makeElement(
+      "div",
+      {
+        className: imageError
+          ? "field id-card-image field-has-error"
+          : "field id-card-image",
+      },
+      [
+        makeElement("label", null, "ID card image"),
+        previewBox,
+        fileInput,
+        imageError ? makeElement("div", { className: "field-error" }, imageError) : null,
+      ]
+    );
+
+    const fields = [
+      renderField({
+        id: "id-card-title",
+        fieldName: "title",
+        label: "Title (e.g., Driver license)",
+        value: editing.title || "",
+      }),
+      renderField({
+        id: "id-card-active",
+        fieldName: "active",
+        label: "Active",
+        type: "select",
+        options: [
+          { value: "true", label: "Yes" },
+          { value: "false", label: "No" },
+        ],
+        value: editing.active === false ? "false" : "true",
+      }),
+    ];
+
+    const actions = makeElement(
+      "div",
+      { className: "form-actions" },
+      [
+        makeElement("button", { onclick: cancelEditIdCard }, "Cancel"),
+        makeElement(
+          "button",
+          {
+            className: "primary",
+            onclick: saveIdCard,
+            disabled: state.saving || state.uploading || null,
+          },
+          state.saving
+            ? "Saving…"
+            : state.uploading
+              ? "Uploading…"
+              : isUpdate
+                ? "Save changes"
+                : "Add ID card"
+        ),
+      ]
+    );
+
+    return [
+      renderBackButton(),
+      makeElement("h1", null, isUpdate ? "Edit ID card" : "New ID card"),
+      imageBlock,
+      makeElement("div", { className: "form-grid" }, fields),
+      actions,
+    ];
+  }
+
+  async function saveIdCard() {
+    state.banner = null;
+    state.fieldErrors = {};
+    const isUpdate = state.editingIdCard && state.editingIdCard.id;
+
+    // Client-side: require an image on create. On update it's optional.
+    if (!isUpdate && !state.idCardImage.file && !state.idCardImage.pendingKey) {
+      state.fieldErrors.image = "Image is required.";
+      state.banner = { type: "error", text: "Please attach an ID card image." };
+      render();
+      return;
+    }
+
+    state.saving = true;
+    render();
+
+    if (state.idCardImage.file) {
+      const up = await uploadIdCardImage();
+      if (!up.ok) {
+        state.saving = false;
+        state.banner = {
+          type: "error",
+          text: (up.body && up.body.error) || "Could not upload image.",
+        };
+        render();
+        return;
+      }
+      const keys = (up.body && up.body.keys) || {};
+      state.idCardImage.pendingKey = keys.image || state.idCardImage.pendingKey;
+    }
+
+    const id = (name) => document.getElementById(name);
+    const titleEl = id("f-id-card-title");
+    const activeEl = id("f-id-card-active");
+    const body = {
+      title: titleEl ? titleEl.value : "",
+      active: activeEl ? activeEl.value === "true" : true,
+    };
+    if (state.idCardImage.pendingKey)
+      body.image_upload_key = state.idCardImage.pendingKey;
+    if (!isUpdate) body.patient_id = state.patientId;
+
+    const path = isUpdate
+      ? "/id-card/" + encodeURIComponent(state.editingIdCard.id)
+      : "/id-card";
+    const r = await http("POST", path, { body });
+    state.saving = false;
+    if (!r.ok) {
+      if (r.body && r.body.field_errors) state.fieldErrors = r.body.field_errors;
+      state.banner = {
+        type: "error",
+        text: (r.body && r.body.error) || "Save failed.",
+      };
+      render();
+      return;
+    }
+    state.banner = { type: "success", text: "Saved." };
+    state.idCardImage = { file: null, preview: null, existingUrl: null, pendingKey: null };
+    await fetchIdCards();
+    state.view = "list";
+    state.editingIdCard = null;
+    render();
+  }
+
+  async function deleteIdCard(card) {
+    if (!confirm("Delete this ID card?")) return;
+    const r = await http(
+      "POST",
+      "/id-card/" + encodeURIComponent(card.id) + "/delete"
+    );
+    state.banner = r.ok
+      ? { type: "success", text: "Deleted." }
+      : { type: "error", text: (r.body && r.body.error) || "Delete failed." };
+    await fetchIdCards();
+    render();
+  }
+
+  // ---- render dispatch ----
+
   function render(opts) {
     opts = opts || {};
     // Capture focus + cursor state so a typing-driven re-render (payer
@@ -707,7 +1093,17 @@
     root.innerHTML = "";
     const banner = renderBanner();
     if (banner) root.appendChild(banner);
-    const body = state.view === "list" ? renderList() : renderForm();
+
+    let body;
+    if (state.mode === "selector") {
+      body = renderSelector();
+    } else if (state.mode === "coverage") {
+      body = state.view === "list" ? renderList() : renderForm();
+    } else if (state.mode === "id_card") {
+      body = state.view === "list" ? renderIdCardList() : renderIdCardForm();
+    } else {
+      body = renderSelector();
+    }
     for (const node of [].concat(body)) root.appendChild(node);
 
     if (focusedId) {
@@ -733,5 +1129,6 @@
     render();
     return;
   }
-  fetchData().then(render);
+  // Start on the selector — don't fetch anything until the user picks a mode.
+  render();
 })();

@@ -230,3 +230,89 @@ button:disabled {
   color: #777;
   padding: 32px 0;
 }
+
+/* Mode selector */
+.selector-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (min-width: 600px) {
+  .selector-grid { grid-template-columns: 1fr 1fr; }
+}
+.selector-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e1e3e8;
+  background: #fff;
+  cursor: pointer;
+  min-height: 96px;
+}
+.selector-tile:hover {
+  border-color: #2563eb;
+  background: #f0f5ff;
+}
+.selector-tile-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: #1a1a1a;
+}
+.selector-tile-sub {
+  color: #555;
+  font-size: 13px;
+}
+
+/* Back button row above each list / form */
+.back-row {
+  margin-bottom: 8px;
+}
+.back-row button {
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #555;
+  border-color: transparent;
+  background: transparent;
+}
+.back-row button:hover {
+  background: #f0f1f4;
+  border-color: #c8c8d0;
+}
+
+/* ID card list thumbnails */
+.id-card-thumb {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  border-radius: 6px;
+  margin-top: 8px;
+  border: 1px solid #e1e3e8;
+}
+
+/* ID card image upload block (single image, full-width) */
+.id-card-image {
+  margin: 12px 0;
+}
+.id-card-image .preview {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 1.6 / 1;
+  background: #f0f1f4;
+  border: 1px dashed #c8c8d0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  font-size: 13px;
+  overflow: hidden;
+}
+.id-card-image .preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

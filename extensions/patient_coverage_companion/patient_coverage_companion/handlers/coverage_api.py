@@ -31,6 +31,9 @@ from pydantic import ValidationError as PydanticValidationError
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.coverage import Coverage as CoverageEffect, CoverageReorder
+from canvas_sdk.effects.patient_identification_card import (
+    PatientIdentificationCard as PatientIdentificationCardEffect,
+)
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
@@ -42,7 +45,7 @@ from canvas_sdk.v1.data.coverage import (
     CoverageType as CoverageTypeChoice,
     Transactor,
 )
-from canvas_sdk.v1.data.patient import Patient
+from canvas_sdk.v1.data.patient import Patient, PatientIdentificationCard
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -311,11 +314,11 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/cards/upload", upload_files=True)
     def upload_cards(self) -> list[Response | Effect]:
-        """Accept 'front' and/or 'back' file parts; return S3 keys to the browser
-        so the next save call can attach them to the Coverage."""
+        """Accept any named file parts; return the S3 keys to the browser so
+        the next save call can attach them via an effect. Used by both the
+        Coverage flow (``front`` / ``back``) and the ID card flow (``image``).
+        """
         form = self.request.form_data()
-        # MultiDict iterates over keys; pull each named part and look for a .key
-        # (UploadedFilePart). String form_fields don't have .key.
         keys: dict[str, str] = {}
         for name in form:
             part = form[name]
@@ -323,20 +326,30 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
             if key:
                 keys[name] = key
         failures = self.request.upload_failures()
-        front = keys.get("front")
-        back = keys.get("back")
-        if not front and not back:
+        if not keys:
             return [
                 JSONResponse(
                     {
-                        "error": "expected at least one of 'front' or 'back' file parts",
-                        "received": list(keys.keys()) or None,
+                        "error": "expected at least one file part",
                         "failures": failures or None,
                     },
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
             ]
-        return [JSONResponse({"front_key": front, "back_key": back})]
+        # Return both shapes:
+        #   - keys: {<part_name>: <s3_key>, ...} for callers that handle
+        #     arbitrary field names (ID card flow uses "image").
+        #   - front_key / back_key for backwards compatibility with the
+        #     Coverage card flow.
+        return [
+            JSONResponse(
+                {
+                    "keys": keys,
+                    "front_key": keys.get("front"),
+                    "back_key": keys.get("back"),
+                }
+            )
+        ]
 
     # ---- coverage CRUD ----
 
@@ -488,5 +501,131 @@ class CoverageAPI(StaffSessionAuthMixin, SimpleAPI):
             ]
         return [
             CoverageReorder(patient_id=patient_id, ordering=ordering).apply(),
+            JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
+        ]
+
+    # ---- ID cards ----
+
+    @api.get("/id-cards.json")
+    def id_cards_data(self) -> list[Response | Effect]:
+        patient_id = (self.request.query_params.get("patient_id") or "").strip()
+        if not patient_id:
+            return [
+                JSONResponse(
+                    {"error": "patient_id query param is required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        try:
+            patient = Patient.objects.get(id=patient_id)
+        except Patient.DoesNotExist:
+            return [JSONResponse({"error": "patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        cards = (
+            PatientIdentificationCard.objects.filter(patient=patient)
+            .order_by("-created")
+        )
+        return [
+            JSONResponse(
+                {
+                    "patient_id": str(patient.id),
+                    "id_cards": [
+                        {
+                            "id": c.dbid,
+                            "title": c.title or "",
+                            "active": c.active,
+                            "image_url": c.image_url,
+                        }
+                        for c in cards
+                    ],
+                }
+            )
+        ]
+
+    @api.post("/id-card")
+    def create_id_card(self) -> list[Response | Effect]:
+        body = self.request.json() or {}
+        patient_id = (body.get("patient_id") or "").strip()
+        image_upload_key = body.get("image_upload_key")
+        if not patient_id:
+            return [
+                JSONResponse(
+                    {"error": "patient_id is required"}, status_code=HTTPStatus.BAD_REQUEST
+                )
+            ]
+        if not image_upload_key:
+            return [
+                JSONResponse(
+                    {
+                        "error": "Image is required.",
+                        "field_errors": {"image": "Image is required."},
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        try:
+            effect = PatientIdentificationCardEffect(
+                patient_id=patient_id,
+                image_upload_key=image_upload_key,
+                title=body.get("title") or "",
+                active=body.get("active", True),
+            ).create()
+        except PydanticValidationError as exc:
+            return [
+                JSONResponse(
+                    {
+                        "error": "ID card could not be created.",
+                        "field_errors": _field_errors_from_pydantic(exc),
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
+
+    @api.post("/id-card/<card_id>")
+    def update_id_card(self, card_id: str) -> list[Response | Effect]:
+        body = self.request.json() or {}
+        try:
+            card_id_int = int(card_id)
+        except (TypeError, ValueError):
+            return [
+                JSONResponse(
+                    {"error": "card_id must be an integer"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        kwargs: dict[str, Any] = {"card_id": card_id_int}
+        if "image_upload_key" in body and body["image_upload_key"]:
+            kwargs["image_upload_key"] = body["image_upload_key"]
+        if "title" in body and body["title"] is not None:
+            kwargs["title"] = body["title"]
+        if "active" in body and body["active"] is not None:
+            kwargs["active"] = bool(body["active"])
+        try:
+            effect = PatientIdentificationCardEffect(**kwargs).update()
+        except PydanticValidationError as exc:
+            return [
+                JSONResponse(
+                    {
+                        "error": "ID card could not be updated.",
+                        "field_errors": _field_errors_from_pydantic(exc),
+                    },
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        return [effect, JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED)]
+
+    @api.post("/id-card/<card_id>/delete")
+    def delete_id_card(self, card_id: str) -> list[Response | Effect]:
+        try:
+            card_id_int = int(card_id)
+        except (TypeError, ValueError):
+            return [
+                JSONResponse(
+                    {"error": "card_id must be an integer"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        return [
+            PatientIdentificationCardEffect(card_id=card_id_int).delete(),
             JSONResponse({"status": "submitted"}, status_code=HTTPStatus.ACCEPTED),
         ]

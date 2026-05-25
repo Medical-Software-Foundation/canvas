@@ -5,12 +5,12 @@ authors = [
 dependencies = [
   "canvas[test-utils]"
 ]
-description = "Provider companion app (patient scope) for managing insurance coverages, including front/back card photo capture."
+description = "Provider companion app (patient scope) for managing patient cards — insurance coverages and identification cards — with front/back photo capture."
 license = "MIT"
 name = "patient_coverage_companion"
 readme = "patient_coverage_companion/README.md"
 requires-python = ">=3.11"
-version = "0.0.1"
+version = "0.0.2"
 
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]
