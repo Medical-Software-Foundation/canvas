@@ -25,7 +25,7 @@ class EligibilityActionButton(ActionButton):
             return []
         return [
             LaunchModalEffect(
-                content=ELIGIBILITY_HTML.format(patient_id=patient_id),
+                content=ELIGIBILITY_HTML.replace("__PATIENT_ID__", patient_id),
                 target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
                 title="Check ACCESS Eligibility",
             ).apply()
@@ -46,7 +46,7 @@ class AlignActionButton(ActionButton):
             return []
         return [
             LaunchModalEffect(
-                content=ALIGN_HTML.format(patient_id=patient_id),
+                content=ALIGN_HTML.replace("__PATIENT_ID__", patient_id),
                 target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
                 title="Enroll in ACCESS",
             ).apply()
@@ -67,7 +67,7 @@ class UnalignActionButton(ActionButton):
             return []
         return [
             LaunchModalEffect(
-                content=UNALIGN_HTML.format(patient_id=patient_id),
+                content=UNALIGN_HTML.replace("__PATIENT_ID__", patient_id),
                 target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
                 title="Unalign from ACCESS",
             ).apply()

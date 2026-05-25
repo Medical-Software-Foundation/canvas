@@ -20,189 +20,9 @@ from logger import log
 from cms_access_fhir_client.cms_client import align, check_eligibility, unalign
 from cms_access_fhir_client.coverage_lookup import get_active_medicare_part_b_coverage
 from cms_access_fhir_client.handlers.realtime_broadcaster import broadcast_alignment_update
+from cms_access_fhir_client.modal_html import ALIGN_HTML, ELIGIBILITY_HTML, UNALIGN_HTML
 from cms_access_fhir_client.models import ACCESSAlignment
 from cms_access_fhir_client.models.access_alignment import CustomPatient
-
-
-_ELIGIBILITY_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         padding: 24px; max-width: 480px; margin: auto; }}
-  h2 {{ margin-bottom: 16px; }}
-  .result {{ margin-top: 16px; padding: 12px; border-radius: 4px; }}
-  .ok {{ background: #dcfce7; color: #16a34a; }}
-  .err {{ background: #fee2e2; color: #dc2626; }}
-  button {{ padding: 8px 16px; background: #2563eb; color: white;
-            border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }}
-  button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
-</style>
-</head>
-<body>
-  <h2>Check ACCESS Eligibility</h2>
-  <p>Patient ID: <code>{patient_id}</code></p>
-  <button id="btn" onclick="checkEligibility()">Check Eligibility</button>
-  <div id="result"></div>
-  <script>
-    async function checkEligibility() {{
-      const btn = document.getElementById('btn');
-      const result = document.getElementById('result');
-      btn.disabled = true;
-      btn.textContent = 'Checking...';
-      try {{
-        const resp = await fetch('/plugin-io/api/cms_access_fhir_client/eligibility', {{
-          method: 'POST',
-          credentials: 'include',
-          headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify({{patient_id: '{patient_id}'}})
-        }});
-        const data = await resp.json();
-        result.className = 'result ' + (resp.ok ? 'ok' : 'err');
-        result.textContent = resp.ok
-          ? 'Status: ' + data.status
-          : 'Error: ' + (data.error || resp.status);
-      }} catch (e) {{
-        result.className = 'result err';
-        result.textContent = 'Request failed: ' + e.message;
-      }} finally {{
-        btn.disabled = false;
-        btn.textContent = 'Check Eligibility';
-      }}
-    }}
-  </script>
-</body></html>"""
-
-_ALIGN_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         padding: 24px; max-width: 480px; margin: auto; }}
-  h2 {{ margin-bottom: 16px; }}
-  label {{ display: block; margin-bottom: 4px; font-weight: 500; }}
-  select, textarea {{ width: 100%; margin-bottom: 12px; padding: 6px;
-                      border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; }}
-  textarea {{ height: 80px; resize: vertical; }}
-  .result {{ margin-top: 16px; padding: 12px; border-radius: 4px; }}
-  .ok {{ background: #dcfce7; color: #16a34a; }}
-  .err {{ background: #fee2e2; color: #dc2626; }}
-  button {{ padding: 8px 16px; background: #16a34a; color: white;
-            border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }}
-  button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
-</style>
-</head>
-<body>
-  <h2>Enroll in ACCESS</h2>
-  <form id="form" onsubmit="submitAlign(event)">
-    <label for="track">Track</label>
-    <select id="track" required>
-      <option value="">Select track...</option>
-      <option value="eCKM">eCKM — Enhanced Kidney Care Model</option>
-      <option value="CKM">CKM — Kidney Care Model</option>
-      <option value="MSK">MSK — Musculoskeletal</option>
-      <option value="BH">BH — Behavioral Health</option>
-    </select>
-    <label for="justification">Clinical Justification</label>
-    <textarea id="justification" required placeholder="Enter clinical justification..."></textarea>
-    <button type="submit" id="btn">Submit Enrollment</button>
-  </form>
-  <div id="result"></div>
-  <script>
-    async function submitAlign(e) {{
-      e.preventDefault();
-      const btn = document.getElementById('btn');
-      const result = document.getElementById('result');
-      btn.disabled = true;
-      btn.textContent = 'Submitting...';
-      try {{
-        const resp = await fetch('/plugin-io/api/cms_access_fhir_client/align', {{
-          method: 'POST',
-          credentials: 'include',
-          headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify({{
-            patient_id: '{patient_id}',
-            track: document.getElementById('track').value,
-            clinical_justification: document.getElementById('justification').value,
-          }})
-        }});
-        const data = await resp.json();
-        result.className = 'result ' + (resp.ok ? 'ok' : 'err');
-        result.textContent = resp.ok
-          ? 'Enrollment submitted. Status: ' + data.status
-          : 'Error: ' + (data.error || resp.status);
-      }} catch (e) {{
-        result.className = 'result err';
-        result.textContent = 'Request failed: ' + e.message;
-      }} finally {{
-        btn.disabled = false;
-        btn.textContent = 'Submit Enrollment';
-      }}
-    }}
-  </script>
-</body></html>"""
-
-_UNALIGN_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         padding: 24px; max-width: 480px; margin: auto; }}
-  h2 {{ margin-bottom: 16px; }}
-  label {{ display: block; margin-bottom: 4px; font-weight: 500; }}
-  select {{ width: 100%; margin-bottom: 12px; padding: 6px;
-            border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; }}
-  .result {{ margin-top: 16px; padding: 12px; border-radius: 4px; }}
-  .ok {{ background: #dcfce7; color: #16a34a; }}
-  .err {{ background: #fee2e2; color: #dc2626; }}
-  button {{ padding: 8px 16px; background: #dc2626; color: white;
-            border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }}
-  button:disabled {{ opacity: 0.5; cursor: not-allowed; }}
-</style>
-</head>
-<body>
-  <h2>Unalign from ACCESS</h2>
-  <form id="form" onsubmit="submitUnalign(event)">
-    <label for="reason">Reason for Unalignment</label>
-    <select id="reason" required>
-      <option value="">Select reason...</option>
-      <option value="patient-request">Patient Request</option>
-      <option value="provider-decision">Provider Decision</option>
-      <option value="care-completed">Care Completed</option>
-      <option value="other">Other</option>
-    </select>
-    <button type="submit" id="btn">Submit Unalignment</button>
-  </form>
-  <div id="result"></div>
-  <script>
-    async function submitUnalign(e) {{
-      e.preventDefault();
-      const btn = document.getElementById('btn');
-      const result = document.getElementById('result');
-      btn.disabled = true;
-      btn.textContent = 'Submitting...';
-      try {{
-        const resp = await fetch('/plugin-io/api/cms_access_fhir_client/unalign', {{
-          method: 'POST',
-          credentials: 'include',
-          headers: {{'Content-Type': 'application/json'}},
-          body: JSON.stringify({{
-            patient_id: '{patient_id}',
-            reason_code: document.getElementById('reason').value,
-          }})
-        }});
-        const data = await resp.json();
-        result.className = 'result ' + (resp.ok ? 'ok' : 'err');
-        result.textContent = resp.ok
-          ? 'Unalignment submitted.'
-          : 'Error: ' + (data.error || resp.status);
-      }} catch (e) {{
-        result.className = 'result err';
-        result.textContent = 'Request failed: ' + e.message;
-      }} finally {{
-        btn.disabled = false;
-        btn.textContent = 'Submit Unalignment';
-      }}
-    }}
-  </script>
-</body></html>"""
 
 
 def _build_patient_resource(patient, mbi: str) -> dict:
@@ -237,7 +57,7 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         patient_id = self.request.query_params.get("patient_id")
         if not patient_id:
             return [JSONResponse({"error": "Missing patient_id"}, status_code=HTTPStatus.BAD_REQUEST)]
-        return [HTMLResponse(_ELIGIBILITY_HTML.format(patient_id=patient_id))]
+        return [HTMLResponse(ELIGIBILITY_HTML.replace("__PATIENT_ID__", patient_id))]
 
     @api.post("/eligibility")
     def submit_eligibility(self) -> list[Response | Effect]:
@@ -317,7 +137,7 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         patient_id = self.request.query_params.get("patient_id")
         if not patient_id:
             return [JSONResponse({"error": "Missing patient_id"}, status_code=HTTPStatus.BAD_REQUEST)]
-        return [HTMLResponse(_ALIGN_HTML.format(patient_id=patient_id))]
+        return [HTMLResponse(ALIGN_HTML.replace("__PATIENT_ID__", patient_id))]
 
     @api.post("/align")
     def submit_align(self) -> list[Response | Effect]:
@@ -407,7 +227,7 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         patient_id = self.request.query_params.get("patient_id")
         if not patient_id:
             return [JSONResponse({"error": "Missing patient_id"}, status_code=HTTPStatus.BAD_REQUEST)]
-        return [HTMLResponse(_UNALIGN_HTML.format(patient_id=patient_id))]
+        return [HTMLResponse(UNALIGN_HTML.replace("__PATIENT_ID__", patient_id))]
 
     @api.post("/unalign")
     def submit_unalign(self) -> list[Response | Effect]:
