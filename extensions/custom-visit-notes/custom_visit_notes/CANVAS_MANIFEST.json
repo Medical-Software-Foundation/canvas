@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.152.0",
+    "plugin_version": "0.0.3",
+    "name": "custom_visit_notes",
+    "description": "Adds a configurable visit notes tab to notes for free-text documentation saved to custom data. Set the tab_name secret to customize the tab label.",
+    "components": {
+        "protocols": [
+            {
+                "class": "custom_visit_notes.handlers.visit_notes_api:VisitNotesAPI",
+                "description": "SimpleAPI serving UI and save/load endpoints for visit notes"
+            }
+        ],
+        "applications": [
+            {
+                "class": "custom_visit_notes.applications.visit_notes_app:VisitNotesApp",
+                "name": "Visit Notes",
+                "description": "Note tab for free-text visit notes",
+                "scope": "provider_companion_note_specific",
+                "icon": "assets/icon.png"
+            }
+        ]
+    },
+    "secrets": ["tab_name"],
+    "custom_data": {
+        "namespace": "custom_visit_notes__data",
+        "access": "read_write"
+    },
+    "data_access": {
+        "event": "",
+        "read": ["Note"],
+        "write": []
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
