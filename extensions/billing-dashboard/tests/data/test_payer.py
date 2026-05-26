@@ -25,8 +25,8 @@ class TestPayerAggregation:
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
         _set_payer_rows(mock_claim, [
-            {"coverages__payer_name": "Aetna",  "collected": Decimal("300"), "total_claims": 10, "rejected_claims": 2},
-            {"coverages__payer_name": "CIGNA",  "collected": Decimal("500"), "total_claims": 20, "rejected_claims": 0},
+            {"current_coverage__payer_name": "Aetna",  "collected": Decimal("300"), "total_claims": 10, "rejected_claims": 2},
+            {"current_coverage__payer_name": "CIGNA",  "collected": Decimal("500"), "total_claims": 20, "rejected_claims": 0},
         ])
         result = payer.build_payer(now=fixed_now)
         assert result["payers"]["source"] == "real"
@@ -42,7 +42,7 @@ class TestPayerAggregation:
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
         _set_payer_rows(mock_claim, [
-            {"coverages__payer_name": "Aetna", "collected": Decimal("100"), "total_claims": 1, "rejected_claims": 0},
+            {"current_coverage__payer_name": "Aetna", "collected": Decimal("100"), "total_claims": 1, "rejected_claims": 0},
         ])
         row = payer.build_payer(now=fixed_now)["payers"]["data"][0]
         assert row["cms_delta"] is None
@@ -53,7 +53,7 @@ class TestPayerAggregation:
     ) -> None:
         """Real claims with no postings yet — collected is 0, source still real."""
         _set_payer_rows(mock_claim, [
-            {"coverages__payer_name": "Aetna", "collected": None, "total_claims": 5, "rejected_claims": 1},
+            {"current_coverage__payer_name": "Aetna", "collected": None, "total_claims": 5, "rejected_claims": 1},
         ])
         row = payer.build_payer(now=fixed_now)["payers"]["data"][0]
         assert row["collected"] == 0.0
@@ -64,7 +64,7 @@ class TestPayerAggregation:
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
         _set_payer_rows(mock_claim, [
-            {"coverages__payer_name": "", "collected": Decimal("999"), "total_claims": 3, "rejected_claims": 0},
+            {"current_coverage__payer_name": "", "collected": Decimal("999"), "total_claims": 3, "rejected_claims": 0},
         ])
         result = payer.build_payer(now=fixed_now)
         assert result["payers"]["source"] == "mock"

@@ -54,9 +54,17 @@ def filed_claims_in_range(start: arrow.Arrow, end: arrow.Arrow) -> Any:
 
 
 def aggregate_filed_claims(start: arrow.Arrow, end: arrow.Arrow) -> dict[str, Any]:
-    """Count and collected sum for filed claims in window. Single DB query."""
+    """Count and collected sum for filed claims in window. Single DB query.
+
+    ``Count("id", distinct=True)`` is required because ``_COLLECTED_SUM`` joins
+    through ``postings__newlineitempayments`` (two to-many relations). Without
+    DISTINCT, ``count`` counts the (claim × postings × payments) joined-row
+    fan-out instead of distinct claims, which silently understates
+    ``avg_collected`` in ``next_month_projected`` and inflates ``visits`` in
+    ``daily_collections``.
+    """
     result: dict[str, Any] = filed_claims_in_range(start, end).aggregate(
-        count=Count("id"),
+        count=Count("id", distinct=True),
         total=_COLLECTED_SUM,
     )
     return result
@@ -150,7 +158,10 @@ def daily_collections(now: arrow.Arrow | None = None) -> dict[str, Any]:
     rows = list(
         filed_claims_in_range(start, end)
         .values("modified__date")
-        .annotate(collected=_COLLECTED_SUM, visits=Count("id"))
+        # ``distinct=True`` because ``_COLLECTED_SUM`` joins through
+        # ``postings__newlineitempayments``; without it, ``visits`` would
+        # report payment-row counts instead of distinct claim counts.
+        .annotate(collected=_COLLECTED_SUM, visits=Count("id", distinct=True))
         .order_by("modified__date")
     )
     if not rows:

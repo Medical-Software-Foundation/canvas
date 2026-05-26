@@ -1,8 +1,21 @@
 """Payer tab data builder — per-payer aggregation against Claim.
 
-Groups filed-or-later claims by `coverages__payer_name` and aggregates at the
-DB level: collected amount, total claim count, rejected claim count. Single
-query; no per-claim Python iteration.
+Groups filed-or-later claims by ``current_coverage__payer_name`` (the claim's
+*primary* coverage's payer) and aggregates at the DB level: collected amount,
+total claim count, rejected claim count. Single query; no per-claim Python
+iteration.
+
+Why ``current_coverage`` (singular FK) and not ``coverages`` (M2M reverse): a
+claim with both primary and secondary coverage (e.g., Medicare + supplemental)
+appears in the M2M join once per coverage. Grouping by ``coverages__payer_name``
+would attribute the claim's full collected amount to BOTH payers, inflating
+revenue and claim counts. The repo's sample-sql/financial/ar_by_insurance_payer
+uses the equivalent ``cc.id = c.current_coverage_id`` filter for the same
+reason.
+
+``Count("id", distinct=True)`` is required on top of that because the ``Sum``
+joins through ``postings__newlineitempayments`` (two more to-many relations),
+which would otherwise fan ``total_claims`` out by the per-claim payment count.
 """
 
 from __future__ import annotations
@@ -25,15 +38,19 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
             current_queue__queue_sort_ordering__gte=ClaimQueueState.FILED,
             modified__range=(start.datetime, end.datetime),
         )
-        .exclude(coverages__payer_name="")
-        .values("coverages__payer_name")
+        .exclude(current_coverage__payer_name="")
+        .values("current_coverage__payer_name")
         .annotate(
             collected=Sum(
                 "postings__newlineitempayments__amount",
                 filter=Q(postings__entered_in_error__isnull=True),
             ),
-            total_claims=Count("id"),
-            rejected_claims=Count("id", filter=Q(current_queue__queue_sort_ordering=ClaimQueueState.REJECTED)),
+            total_claims=Count("id", distinct=True),
+            rejected_claims=Count(
+                "id",
+                filter=Q(current_queue__queue_sort_ordering=ClaimQueueState.REJECTED),
+                distinct=True,
+            ),
         )
     )
 
@@ -42,7 +59,7 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
 
     data = []
     for r in rows:
-        name = r["coverages__payer_name"]
+        name = r["current_coverage__payer_name"]
         if not name:
             continue
         total = r["total_claims"] or 0
