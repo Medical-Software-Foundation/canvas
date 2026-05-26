@@ -1,0 +1,180 @@
+/* Pre-Visit Brief – mobile-first, material-card style */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1a2433;
+  background: #f4f6f9;
+  min-height: 100vh;
+}
+
+/* ── Pinned header ───────────────────────────────────────────────────────── */
+
+.pvb-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
+  border-bottom: 1px solid #e3e8ef;
+  padding: 12px 16px 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.pvb-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f6cbf;
+  letter-spacing: 0.01em;
+}
+
+.pvb-subtitle {
+  font-size: 12px;
+  color: #6b7a8d;
+  margin-top: 1px;
+}
+
+/* ── Card list ───────────────────────────────────────────────────────────── */
+
+.pvb-cards {
+  padding: 12px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Individual prep card ────────────────────────────────────────────────── */
+
+.pvb-card {
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+.pvb-card-header {
+  background: #0f6cbf;
+  color: #ffffff;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pvb-patient-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pvb-patient-name a {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.pvb-patient-name a:hover {
+  text-decoration: underline;
+}
+
+.pvb-appt-meta {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* ── Sections within a card ──────────────────────────────────────────────── */
+
+.pvb-section {
+  padding: 10px 14px;
+  border-top: 1px solid #e8ecf0;
+}
+
+.pvb-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7a8d;
+  margin-bottom: 4px;
+}
+
+.pvb-last-visit-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3c4b5e;
+  margin-bottom: 3px;
+}
+
+.pvb-snippet {
+  font-size: 13px;
+  color: #3c4b5e;
+  font-style: italic;
+}
+
+/* ── Condition list ──────────────────────────────────────────────────────── */
+
+.pvb-list {
+  list-style: none;
+  padding: 0;
+}
+
+.pvb-list li {
+  font-size: 13px;
+  color: #1a2433;
+  padding: 1px 0;
+}
+
+.pvb-list li::before {
+  content: "• ";
+  color: #0f6cbf;
+}
+
+/* ── Safety block (allergies / meds / vitals) ────────────────────────────── */
+
+.pvb-safety-block {
+  background: #f8fafc;
+}
+
+.pvb-safety-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  align-items: baseline;
+}
+
+.pvb-safety-row:last-child {
+  margin-bottom: 0;
+}
+
+.pvb-safety-label {
+  font-weight: 700;
+  color: #3c4b5e;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.pvb-safety-value {
+  color: #1a2433;
+  word-break: break-word;
+}
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+
+.pvb-loading,
+.pvb-empty,
+.pvb-error,
+.pvb-none {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7a8d;
+}
+
+.pvb-error {
+  color: #c0392b;
+}
