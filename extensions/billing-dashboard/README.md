@@ -130,23 +130,26 @@ billing_dashboard/
 │   ├── trends.py               # Trends tab builder (BillingLineItem + ChargeDescriptionMaster)
 │   └── windows.py              # calendar + trailing time-window helpers
 ├── handlers/
-│   └── billing_api.py          # SimpleAPI: GET /dashboard, GET /api/metrics
+│   └── billing_api.py          # SimpleAPI: serves the page, CSS, JS, and JSON metrics
 ├── static/
-│   └── css/styles.css          # dashboard CSS (inlined into page via render_to_string)
+│   ├── css/styles.css          # dashboard CSS (served via render_to_string)
+│   └── js/main.js              # tab switching, fetches, Chart.js rendering
 └── templates/
-    └── page.html               # full HTML + JS (fetches /api/metrics per tab)
+    └── page.html               # HTML page (references styles.css and main.js as static assets)
 ```
 
 ## Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/dashboard` | Serves the inline HTML/CSS/JS page |
+| GET | `/dashboard` | Serves the dashboard HTML page |
+| GET | `/styles.css` | Dashboard stylesheet |
+| GET | `/main.js` | Dashboard JavaScript (tab switching, fetches, charts) |
 | GET | `/api/metrics?tab=overview` | Overview JSON — summary cards + daily/monthly charts + insights |
 | GET | `/api/metrics?tab=payer` | Payer JSON — per-payer table + payer mix data |
 | GET | `/api/metrics?tab=trends` | Trends JSON — top CPT table + monthly average series |
 
-Both endpoints are guarded by `StaffSessionAuthMixin` — only authenticated Canvas staff can reach them.
+All endpoints are guarded by `StaffSessionAuthMixin` — only authenticated Canvas staff can reach them.
 
 ## Running tests
 

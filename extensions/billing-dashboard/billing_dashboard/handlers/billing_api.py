@@ -15,19 +15,24 @@ from billing_dashboard.data.trends import build_trends
 from logger import log
 
 
-def _build_inline_html() -> str:
-    css = render_to_string("static/css/styles.css") or ""
-    html = render_to_string("templates/page.html") or ""
-    return html.replace("%%CSS%%", css)
-
-
 class BillingDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
     PREFIX = ""
 
     @api.get("/dashboard")
     def dashboard(self) -> list[Response | Effect]:
         log.info("[BillingDashboardAPI] Serving dashboard page")
-        return [HTMLResponse(_build_inline_html(), status_code=HTTPStatus.OK)]
+        html = render_to_string("templates/page.html") or ""
+        return [HTMLResponse(html, status_code=HTTPStatus.OK)]
+
+    @api.get("/styles.css")
+    def styles_css(self) -> list[Response | Effect]:
+        css = render_to_string("static/css/styles.css") or ""
+        return [Response(css.encode(), status_code=HTTPStatus.OK, content_type="text/css")]
+
+    @api.get("/main.js")
+    def main_js(self) -> list[Response | Effect]:
+        js = render_to_string("static/js/main.js") or ""
+        return [Response(js.encode(), status_code=HTTPStatus.OK, content_type="text/javascript")]
 
     @api.get("/api/metrics")
     def metrics(self) -> list[Response | Effect]:

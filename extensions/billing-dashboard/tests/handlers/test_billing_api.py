@@ -6,14 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse
+from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 
 from billing_dashboard.data import mock
 from billing_dashboard.data.cms_rates import CMS_PRIMARY_BENCHMARK
-from billing_dashboard.handlers.billing_api import (
-    BillingDashboardAPI,
-    _build_inline_html,
-)
+from billing_dashboard.handlers.billing_api import BillingDashboardAPI
 
 
 # ---------------------------------------------------------------------------
@@ -176,53 +173,15 @@ class TestTrendsData:
 
 
 # ---------------------------------------------------------------------------
-# _build_inline_html
-# ---------------------------------------------------------------------------
-
-
-class TestBuildInlineHtml:
-
-    @patch("billing_dashboard.handlers.billing_api.render_to_string")
-    def test_injects_css_into_html(self, mock_render: MagicMock) -> None:
-        mock_render.side_effect = lambda path: {
-            "static/css/styles.css": "body { color: red; }",
-            "templates/page.html": "<style>%%CSS%%</style>",
-        }[path]
-
-        result = _build_inline_html()
-        assert result == "<style>body { color: red; }</style>"
-
-    @patch("billing_dashboard.handlers.billing_api.render_to_string")
-    def test_handles_none_css(self, mock_render: MagicMock) -> None:
-        mock_render.side_effect = lambda path: {
-            "static/css/styles.css": None,
-            "templates/page.html": "<style>%%CSS%%</style>",
-        }[path]
-
-        result = _build_inline_html()
-        assert result == "<style></style>"
-
-    @patch("billing_dashboard.handlers.billing_api.render_to_string")
-    def test_handles_none_html(self, mock_render: MagicMock) -> None:
-        mock_render.side_effect = lambda path: {
-            "static/css/styles.css": "body {}",
-            "templates/page.html": None,
-        }[path]
-
-        result = _build_inline_html()
-        assert result == ""
-
-
-# ---------------------------------------------------------------------------
-# BillingDashboardAPI.dashboard
+# BillingDashboardAPI.dashboard / styles_css / main_js
 # ---------------------------------------------------------------------------
 
 
 class TestDashboardEndpoint:
 
-    @patch("billing_dashboard.handlers.billing_api._build_inline_html")
-    def test_returns_html_response(self, mock_build: MagicMock) -> None:
-        mock_build.return_value = "<html>test</html>"
+    @patch("billing_dashboard.handlers.billing_api.render_to_string")
+    def test_returns_html_response(self, mock_render: MagicMock) -> None:
+        mock_render.return_value = "<html>test</html>"
         handler = BillingDashboardAPI(event=_make_event("/dashboard"))
 
         result = handler.dashboard()
@@ -232,6 +191,52 @@ class TestDashboardEndpoint:
         assert isinstance(resp, HTMLResponse)
         assert resp.status_code == HTTPStatus.OK
         assert resp.content == b"<html>test</html>"
+        mock_render.assert_called_once_with("templates/page.html")
+
+    @patch("billing_dashboard.handlers.billing_api.render_to_string")
+    def test_handles_none_html(self, mock_render: MagicMock) -> None:
+        mock_render.return_value = None
+        handler = BillingDashboardAPI(event=_make_event("/dashboard"))
+
+        result = handler.dashboard()
+
+        assert result[0].content == b""
+
+
+class TestStylesEndpoint:
+
+    @patch("billing_dashboard.handlers.billing_api.render_to_string")
+    def test_returns_css_response(self, mock_render: MagicMock) -> None:
+        mock_render.return_value = "body { color: red; }"
+        handler = BillingDashboardAPI(event=_make_event("/styles.css"))
+
+        result = handler.styles_css()
+
+        assert len(result) == 1
+        resp = result[0]
+        assert isinstance(resp, Response)
+        assert resp.status_code == HTTPStatus.OK
+        assert resp.content == b"body { color: red; }"
+        assert resp.headers["Content-Type"] == "text/css"
+        mock_render.assert_called_once_with("static/css/styles.css")
+
+
+class TestMainJsEndpoint:
+
+    @patch("billing_dashboard.handlers.billing_api.render_to_string")
+    def test_returns_js_response(self, mock_render: MagicMock) -> None:
+        mock_render.return_value = "console.log('hi');"
+        handler = BillingDashboardAPI(event=_make_event("/main.js"))
+
+        result = handler.main_js()
+
+        assert len(result) == 1
+        resp = result[0]
+        assert isinstance(resp, Response)
+        assert resp.status_code == HTTPStatus.OK
+        assert resp.content == b"console.log('hi');"
+        assert resp.headers["Content-Type"] == "text/javascript"
+        mock_render.assert_called_once_with("static/js/main.js")
 
 
 # ---------------------------------------------------------------------------
