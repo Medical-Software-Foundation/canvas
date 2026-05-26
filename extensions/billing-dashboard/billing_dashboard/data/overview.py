@@ -154,7 +154,10 @@ def claim_acceptance_rate(now: arrow.Arrow | None = None) -> SummaryEntry:
 
 
 def daily_collections(now: arrow.Arrow | None = None) -> dict[str, Any]:
-    start, end = this_month_range(now)
+    # Trailing 30 days matches the "(trailing month)" chart title in
+    # templates/page.html and static/js/main.js. A this_month_range here would
+    # produce a sawtooth window that resets on the 1st of each month.
+    start, end = trailing_30_days_range(now)
     rows = list(
         filed_claims_in_range(start, end)
         .values("modified__date")
