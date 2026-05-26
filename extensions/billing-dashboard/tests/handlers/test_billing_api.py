@@ -204,7 +204,19 @@ class TestDashboardEndpoint:
         assert isinstance(resp, HTMLResponse)
         assert resp.status_code == HTTPStatus.OK
         assert resp.content == b"<html>test</html>"
-        mock_render.assert_called_once_with("templates/page.html", {"v": ASSET_VERSION})
+        mock_render.assert_called_once_with("templates/page.html")
+
+    @patch("billing_dashboard.handlers.billing_api.render_to_string")
+    def test_version_sentinel_replaced(self, mock_render: MagicMock) -> None:
+        mock_render.return_value = '<link href="styles.css?v=__VERSION__"><script src="main.js?v=__VERSION__">'
+        handler = BillingDashboardAPI(event=_make_event("/dashboard"))
+
+        result = handler.dashboard()
+
+        body = result[0].content.decode()
+        assert "__VERSION__" not in body
+        assert f"styles.css?v={ASSET_VERSION}" in body
+        assert f"main.js?v={ASSET_VERSION}" in body
 
     @patch("billing_dashboard.handlers.billing_api.render_to_string")
     def test_missing_template_returns_500(self, mock_render: MagicMock) -> None:
