@@ -28,6 +28,23 @@ def _forbidden() -> list[Response | Effect]:
     return [JSONResponse({"error": "Forbidden"}, status_code=HTTPStatus.FORBIDDEN)]
 
 
+def _cdm_labels_for(cpt_codes: list[str]) -> dict[str, str]:
+    """Return {cpt_code: display label} for the given CPT codes in one query.
+
+    Each CPT may have multiple CDM rows — we prefer short_name and fall back
+    to name. If a curated CPT no longer has a CDM row (stale data), it
+    simply won't appear in the result; callers should default to "".
+    """
+    if not cpt_codes:
+        return {}
+    labels: dict[str, str] = {}
+    for row in ChargeDescriptionMaster.objects.filter(cpt_code__in=cpt_codes):
+        if row.cpt_code in labels:
+            continue
+        labels[row.cpt_code] = (row.short_name or row.name or "").strip()
+    return labels
+
+
 class AdminAPI(StaffSessionAuthMixin, SimpleAPI):
     """CRUD + UI for the curated CPT list.
 
@@ -49,6 +66,9 @@ class AdminAPI(StaffSessionAuthMixin, SimpleAPI):
             return [HTMLResponse("<p>Forbidden — your account does not have access to the curated CPT admin.</p>", status_code=HTTPStatus.FORBIDDEN)]
 
         entries = [_serialize(e) for e in CuratedCptCode.objects.all().order_by("display_order", "cpt_code")]
+        cdm_labels = _cdm_labels_for([e["cpt_code"] for e in entries])
+        for entry in entries:
+            entry["cdm_name"] = cdm_labels.get(entry["cpt_code"], "")
         html = render_to_string("templates/admin_app.html", {"entries": entries})
         return [HTMLResponse(html)]
 
@@ -57,6 +77,9 @@ class AdminAPI(StaffSessionAuthMixin, SimpleAPI):
         if not self._check_admin():
             return _forbidden()
         entries = [_serialize(e) for e in CuratedCptCode.objects.all().order_by("display_order", "cpt_code")]
+        cdm_labels = _cdm_labels_for([e["cpt_code"] for e in entries])
+        for entry in entries:
+            entry["cdm_name"] = cdm_labels.get(entry["cpt_code"], "")
         return [JSONResponse({"entries": entries})]
 
     @api.get("/admin/cdm-codes")

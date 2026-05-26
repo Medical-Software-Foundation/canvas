@@ -142,11 +142,11 @@
     tbody tr.disabled td { opacity: 0.55; }
 
     td.code-cell {
-      font-family: 'DM Mono', ui-monospace, monospace;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--navy);
       white-space: nowrap;
     }
+    td.name-cell { color: var(--text-body); }
     td.desc-cell { color: var(--text-body); }
     td.muted { color: var(--text-dim); font-size: 13px; }
 
@@ -255,7 +255,7 @@
 
   <div class="card">
     <div class="toolbar">
-      <input type="search" id="filter" placeholder="Filter by code or description…">
+      <input type="search" id="filter" placeholder="Filter by code, name, or description…">
       <button type="button" class="primary" id="add-btn">+ Add code</button>
     </div>
 
@@ -265,6 +265,7 @@
           <thead>
             <tr>
               <th>Code</th>
+              <th>Name</th>
               <th>Description</th>
               <th>Units</th>
               <th>Modifiers</th>
@@ -275,8 +276,9 @@
           </thead>
           <tbody id="entries-tbody">
             {% for e in entries %}
-              <tr data-id="{{ e.id }}" data-cpt="{{ e.cpt_code }}" data-description="{{ e.description }}" data-units="{{ e.default_units }}" data-order="{{ e.display_order }}" data-enabled="{{ e.enabled|yesno:'true,false' }}" data-modifiers="{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %},{% endif %}{% endfor %}"{% if not e.enabled %} class="disabled"{% endif %}>
+              <tr data-id="{{ e.id }}" data-cpt="{{ e.cpt_code }}" data-description="{{ e.description }}" data-name="{{ e.cdm_name }}" data-units="{{ e.default_units }}" data-order="{{ e.display_order }}" data-enabled="{{ e.enabled|yesno:'true,false' }}" data-modifiers="{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %},{% endif %}{% endfor %}"{% if not e.enabled %} class="disabled"{% endif %}>
                 <td class="code-cell">{{ e.cpt_code }}</td>
+                <td class="name-cell">{{ e.cdm_name }}</td>
                 <td class="desc-cell">{{ e.description }}</td>
                 <td class="muted">{{ e.default_units }}</td>
                 <td class="muted">{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
@@ -496,7 +498,7 @@
       filterInput.addEventListener("input", () => {
         const q = filterInput.value.toLowerCase();
         document.querySelectorAll("#entries-tbody tr").forEach((row) => {
-          const text = `${row.dataset.cpt} ${row.dataset.description}`.toLowerCase();
+          const text = `${row.dataset.cpt} ${row.dataset.name || ""} ${row.dataset.description}`.toLowerCase();
           row.style.display = text.includes(q) ? "" : "none";
         });
       });

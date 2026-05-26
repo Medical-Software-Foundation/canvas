@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.3.0",
+    "plugin_version": "0.3.1",
     "name": "curated_cpt_picker",
     "description": "Adds an 'Add CPT codes' button to the note footer that opens a modal of CPT favorites — and an app drawer entry where admins curate the list. Filters out any code that is not currently active in the ChargeDescriptionMaster.",
     "components": {

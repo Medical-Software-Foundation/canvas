@@ -254,6 +254,28 @@ def test_list_returns_all_entries_including_disabled() -> None:
     assert cpts == {"99213", "99214"}
 
 
+def test_list_includes_cdm_name_from_fee_schedule(active_cdm) -> None:
+    """The admin UI surfaces the CDM's official name next to the admin's
+    custom description so reviewers can tell what each curated code actually
+    represents. Bulk-fetched from CDM, not stored on CuratedCptCode."""
+    CuratedCptCode.objects.create(cpt_code="99213", description="My short label")
+    handler = _make_handler(_make_request(headers=_staff_headers()))
+    body = json.loads(handler.list_codes()[0].content)
+    entry = next(e for e in body["entries"] if e["cpt_code"] == "99213")
+    assert entry["cdm_name"] == "Office 15"
+    assert entry["description"] == "My short label"
+
+
+def test_list_cdm_name_empty_when_cdm_row_missing() -> None:
+    """If a curated entry's CPT no longer appears in CDM, cdm_name comes
+    back as an empty string rather than crashing or erroring."""
+    CuratedCptCode.objects.create(cpt_code="00000", description="Stale")
+    handler = _make_handler(_make_request(headers=_staff_headers()))
+    body = json.loads(handler.list_codes()[0].content)
+    entry = next(e for e in body["entries"] if e["cpt_code"] == "00000")
+    assert entry["cdm_name"] == ""
+
+
 # --- CDM lookup endpoint (powers the admin CPT dropdown) ---
 
 def test_cdm_codes_returns_only_currently_active(active_cdm) -> None:
