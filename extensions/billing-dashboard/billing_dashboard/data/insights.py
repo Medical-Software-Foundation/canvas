@@ -10,19 +10,25 @@ Severity values: "info", "warning", "critical".
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from billing_dashboard.data.overview import SummaryEntry
 
 
-def _value(summary: dict[str, Any], key: str) -> Any | None:
+def _value(summary: "dict[str, SummaryEntry]", key: str) -> float | int | None:
     entry = summary.get(key)
-    return entry["value"] if entry is not None else None
+    if entry is None:
+        return None
+    raw = entry["value"]
+    return raw if isinstance(raw, (int, float)) else None
 
 
 def _insight(severity: str, title: str, description: str, tag: str) -> dict[str, str]:
     return {"severity": severity, "title": title, "description": description, "tag": tag}
 
 
-def compute_insights(summary: dict[str, Any]) -> list[dict[str, str]]:
+def compute_insights(summary: "dict[str, SummaryEntry]") -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
 
     trend = _value(summary, "last_month_trend_pct")
@@ -62,7 +68,11 @@ def compute_insights(summary: dict[str, Any]) -> list[dict[str, str]]:
 
     this_month = _value(summary, "this_month_collected")
     projected = _value(summary, "next_month_projected")
-    if this_month and projected and projected > 2 * this_month:
+    if (
+        this_month
+        and projected
+        and projected > 2 * this_month
+    ):
         out.append(_insight(
             "info",
             "Projected next month is an estimate",

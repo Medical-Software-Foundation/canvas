@@ -10,7 +10,7 @@ from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 
 from billing_dashboard.data import mock
 from billing_dashboard.data.cms_rates import CMS_PRIMARY_BENCHMARK
-from billing_dashboard.handlers.billing_api import BillingDashboardAPI
+from billing_dashboard.handlers.billing_api import ASSET_VERSION, BillingDashboardAPI
 
 
 # ---------------------------------------------------------------------------
@@ -204,16 +204,16 @@ class TestDashboardEndpoint:
         assert isinstance(resp, HTMLResponse)
         assert resp.status_code == HTTPStatus.OK
         assert resp.content == b"<html>test</html>"
-        mock_render.assert_called_once_with("templates/page.html")
+        mock_render.assert_called_once_with("templates/page.html", {"v": ASSET_VERSION})
 
     @patch("billing_dashboard.handlers.billing_api.render_to_string")
-    def test_handles_none_html(self, mock_render: MagicMock) -> None:
+    def test_missing_template_returns_500(self, mock_render: MagicMock) -> None:
         mock_render.return_value = None
         handler = BillingDashboardAPI(event=_make_event("/dashboard"))
 
         result = handler.dashboard()
 
-        assert result[0].content == b""
+        assert result[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 class TestStylesEndpoint:
@@ -233,6 +233,13 @@ class TestStylesEndpoint:
         assert resp.headers["Content-Type"] == "text/css"
         mock_render.assert_called_once_with("static/css/styles.css")
 
+    @patch("billing_dashboard.handlers.billing_api.render_to_string")
+    def test_missing_css_returns_500(self, mock_render: MagicMock) -> None:
+        mock_render.return_value = None
+        handler = BillingDashboardAPI(event=_make_event("/styles.css"))
+        result = handler.styles_css()
+        assert result[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 class TestMainJsEndpoint:
 
@@ -250,6 +257,13 @@ class TestMainJsEndpoint:
         assert resp.content == b"console.log('hi');"
         assert resp.headers["Content-Type"] == "text/javascript"
         mock_render.assert_called_once_with("static/js/main.js")
+
+    @patch("billing_dashboard.handlers.billing_api.render_to_string")
+    def test_missing_js_returns_500(self, mock_render: MagicMock) -> None:
+        mock_render.return_value = None
+        handler = BillingDashboardAPI(event=_make_event("/main.js"))
+        result = handler.main_js()
+        assert result[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 # ---------------------------------------------------------------------------

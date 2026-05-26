@@ -79,7 +79,7 @@ If the practice's `ChargeDescriptionMaster` table has entries for their CPT code
 │  │ (trailing month)        │ │ (trailing 12 months)    │       │
 │  └─────────────────────────┘ └─────────────────────────┘       │
 │                                                                 │
-│  ACTIONABLE INSIGHTS (rule-based, computed from real data)     │
+│  ACTIONABLE INSIGHTS (rule-based, computed from summary metrics)│
 └─────────────────────────────────────────────────────────────────┘
 ```
 

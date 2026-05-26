@@ -13,18 +13,16 @@ import arrow
 from canvas_sdk.v1.data.claim import Claim
 from django.db.models import Count, Q, Sum
 
+from billing_dashboard.data.claim_queue import ClaimQueueState
 from billing_dashboard.data.mock import payer_analysis as mock_payer
 from billing_dashboard.data.windows import trailing_90_days_range
-
-_FILED_OR_LATER = 5
-_REJECTED = 6
 
 
 def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
     start, end = trailing_90_days_range(now)
     rows = list(
         Claim.objects.filter(
-            current_queue__queue_sort_ordering__gte=_FILED_OR_LATER,
+            current_queue__queue_sort_ordering__gte=ClaimQueueState.FILED,
             modified__range=(start.datetime, end.datetime),
         )
         .exclude(coverages__payer_name="")
@@ -35,7 +33,7 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
                 filter=Q(postings__entered_in_error__isnull=True),
             ),
             total_claims=Count("id"),
-            rejected_claims=Count("id", filter=Q(current_queue__queue_sort_ordering=_REJECTED)),
+            rejected_claims=Count("id", filter=Q(current_queue__queue_sort_ordering=ClaimQueueState.REJECTED)),
         )
     )
 

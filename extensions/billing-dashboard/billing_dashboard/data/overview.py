@@ -9,13 +9,14 @@ import Posting (blocked in the plugin sandbox).
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal, TypedDict
 
 import arrow
 from canvas_sdk.v1.data.appointment import Appointment
 from canvas_sdk.v1.data.claim import Claim
 from django.db.models import Count, Q, Sum
 
+from billing_dashboard.data.claim_queue import ClaimQueueState
 from billing_dashboard.data.insights import compute_insights
 from billing_dashboard.data.mock import financial_overview as mock_overview
 from billing_dashboard.data.windows import (
@@ -27,8 +28,16 @@ from billing_dashboard.data.windows import (
     trailing_90_days_range,
 )
 
-_FILED_OR_LATER = 5
-_REJECTED = 6
+
+class SummaryEntry(TypedDict):
+    """Envelope used for every summary metric returned by this module.
+
+    `source` lets the UI badge mock values; downstream consumers (insights
+    rules, JS metric cards) read `value` and decide based on `source`.
+    """
+    value: float | int
+    source: Literal["mock", "real"]
+
 
 _COLLECTED_SUM = Sum(
     "postings__newlineitempayments__amount",
@@ -39,7 +48,7 @@ _COLLECTED_SUM = Sum(
 def filed_claims_in_range(start: arrow.Arrow, end: arrow.Arrow) -> Any:
     """Base queryset of filed-or-later claims whose activity date falls in [start, end]."""
     return Claim.objects.filter(
-        current_queue__queue_sort_ordering__gte=_FILED_OR_LATER,
+        current_queue__queue_sort_ordering__gte=ClaimQueueState.FILED,
         modified__range=(start.datetime, end.datetime),
     )
 
@@ -53,11 +62,11 @@ def aggregate_filed_claims(start: arrow.Arrow, end: arrow.Arrow) -> dict[str, An
     return result
 
 
-def _mock_summary(key: str) -> dict[str, Any]:
+def _mock_summary(key: str) -> SummaryEntry:
     return {"value": mock_overview()["summary"][key], "source": "mock"}
 
 
-def last_month_collected(now: arrow.Arrow | None = None) -> dict[str, Any]:
+def last_month_collected(now: arrow.Arrow | None = None) -> SummaryEntry:
     start, end = last_month_range(now)
     agg = aggregate_filed_claims(start, end)
     if agg["count"] == 0:
@@ -65,7 +74,7 @@ def last_month_collected(now: arrow.Arrow | None = None) -> dict[str, Any]:
     return {"value": float(agg["total"] or Decimal("0")), "source": "real"}
 
 
-def this_month_collected(now: arrow.Arrow | None = None) -> dict[str, Any]:
+def this_month_collected(now: arrow.Arrow | None = None) -> SummaryEntry:
     start, end = this_month_range(now)
     agg = aggregate_filed_claims(start, end)
     if agg["count"] == 0:
@@ -79,7 +88,7 @@ def compute_trend_pct(current: Decimal, prior: Decimal) -> float:
     return float((current - prior) / prior * 100)
 
 
-def last_month_trend_pct(now: arrow.Arrow | None = None) -> dict[str, Any]:
+def last_month_trend_pct(now: arrow.Arrow | None = None) -> SummaryEntry:
     now_arrow = now if now is not None else arrow.utcnow()
     last_start, last_end = last_month_range(now_arrow)
     prior_start, prior_end = last_month_range(now_arrow.shift(months=-1))
@@ -94,7 +103,7 @@ def last_month_trend_pct(now: arrow.Arrow | None = None) -> dict[str, Any]:
     return {"value": pct, "source": "real"}
 
 
-def next_month_appointment_count(now: arrow.Arrow | None = None) -> dict[str, Any]:
+def next_month_appointment_count(now: arrow.Arrow | None = None) -> SummaryEntry:
     start, end = next_month_range(now)
     count = Appointment.objects.filter(start_time__range=(start.datetime, end.datetime)).count()
     return {"value": count, "source": "real"}
@@ -102,32 +111,33 @@ def next_month_appointment_count(now: arrow.Arrow | None = None) -> dict[str, An
 
 def next_month_projected(
     now: arrow.Arrow | None = None,
-    appt_count: int | None = None,
-) -> dict[str, Any]:
+    precomputed_appt_count: int | None = None,
+) -> SummaryEntry:
     """Project next-month revenue as (appt count) × (avg collected per filed claim, trailing 90d).
 
-    Callers that have already computed the appointment count can pass it in via
-    ``appt_count`` to avoid a duplicate ``Appointment.objects...count()`` roundtrip.
+    `precomputed_appt_count` lets callers that have already queried the
+    appointment count for this `now` pass it in and avoid a duplicate
+    ``Appointment.objects...count()`` roundtrip.
     """
-    if appt_count is None:
-        appt_count = next_month_appointment_count(now)["value"]
+    if precomputed_appt_count is None:
+        precomputed_appt_count = int(next_month_appointment_count(now)["value"])
     trailing_start, trailing_end = trailing_90_days_range(now)
     agg = aggregate_filed_claims(trailing_start, trailing_end)
     if agg["count"] == 0:
         return _mock_summary("next_month_projected")
     avg_collected = (agg["total"] or Decimal("0")) / Decimal(agg["count"])
-    projected = float(Decimal(appt_count) * avg_collected)
+    projected = float(Decimal(precomputed_appt_count) * avg_collected)
     return {"value": projected, "source": "real"}
 
 
-def claim_acceptance_rate(now: arrow.Arrow | None = None) -> dict[str, Any]:
+def claim_acceptance_rate(now: arrow.Arrow | None = None) -> SummaryEntry:
     start, end = trailing_30_days_range(now)
     counts = Claim.objects.filter(
-        current_queue__queue_sort_ordering__gte=_FILED_OR_LATER,
+        current_queue__queue_sort_ordering__gte=ClaimQueueState.FILED,
         modified__range=(start.datetime, end.datetime),
     ).aggregate(
         filed_total=Count("id"),
-        rejected=Count("id", filter=Q(current_queue__queue_sort_ordering=_REJECTED)),
+        rejected=Count("id", filter=Q(current_queue__queue_sort_ordering=ClaimQueueState.REJECTED)),
     )
     if counts["filed_total"] == 0:
         return _mock_summary("claim_acceptance_rate")
@@ -176,10 +186,10 @@ def monthly_collections(now: arrow.Arrow | None = None) -> dict[str, Any]:
 
 def build_overview(now: arrow.Arrow | None = None) -> dict[str, Any]:
     next_month_appt = next_month_appointment_count(now)
-    summary = {
+    summary: dict[str, SummaryEntry] = {
         "last_month_collected": last_month_collected(now),
         "this_month_collected": this_month_collected(now),
-        "next_month_projected": next_month_projected(now, appt_count=next_month_appt["value"]),
+        "next_month_projected": next_month_projected(now, precomputed_appt_count=int(next_month_appt["value"])),
         "claim_acceptance_rate": claim_acceptance_rate(now),
         "last_month_trend_pct": last_month_trend_pct(now),
         "next_month_appt_count": next_month_appt,

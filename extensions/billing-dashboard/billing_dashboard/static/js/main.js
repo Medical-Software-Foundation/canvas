@@ -157,8 +157,13 @@
                 document.getElementById('overview-status').textContent = '';
             })
             .catch(function(err) {
-                document.getElementById('overview-status').textContent = 'Error loading metrics: ' + err.message;
-                document.getElementById('overview-status').style.color = '#dc2626';
+                console.error('[billing_dashboard] overview fetch failed:', err);
+                ['val-last-month', 'val-this-month', 'val-next-month', 'val-acceptance'].forEach(function(id) {
+                    document.getElementById(id).textContent = '—';
+                });
+                var status = document.getElementById('overview-status');
+                status.textContent = 'Could not load metrics. Refresh the page to retry.';
+                status.style.color = '#dc2626';
             });
 
         /* ---- Tab 2: Payer Analysis ---- */
@@ -223,8 +228,12 @@
                     }
                 })
                 .catch(function(err) {
+                    console.error('[billing_dashboard] payer fetch failed:', err);
+                    payerLoaded = false;
                     document.getElementById('payer-table-body').innerHTML =
-                        '<tr><td colspan="4" style="text-align:center;padding:24px;color:#dc2626">Error: ' + err.message + '</td></tr>';
+                        '<tr><td colspan="4" style="text-align:center;padding:24px;color:#dc2626">' +
+                        'Could not load payer data. Switch tabs and back to retry.' +
+                        '</td></tr>';
                 });
         });
 
@@ -309,8 +318,12 @@
                     }
                 })
                 .catch(function(err) {
+                    console.error('[billing_dashboard] trends fetch failed:', err);
+                    trendsLoaded = false;
                     document.getElementById('cpt-table-body').innerHTML =
-                        '<tr><td colspan="6" style="text-align:center;padding:24px;color:#dc2626">Error: ' + err.message + '</td></tr>';
+                        '<tr><td colspan="6" style="text-align:center;padding:24px;color:#dc2626">' +
+                        'Could not load trends data. Switch tabs and back to retry.' +
+                        '</td></tr>';
                 });
         });
     })();
