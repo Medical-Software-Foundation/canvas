@@ -2,7 +2,7 @@
 
 ## What it does
 
-The DEA Prescriber Filter plugin controls who can sign prescriptions for which providers in Canvas. It prevents staff from signing prescriptions on behalf of providers they are not authorized for, and blocks prescriptions being sent to pharmacies in states the prescriber is not licensed in.
+The DEA Prescriber Filter plugin controls who can sign prescriptions for which providers in Canvas. It prevents staff from signing prescriptions on behalf of providers they are not authorized for. By default, it also blocks prescriptions being sent to pharmacies in states the prescriber is not licensed in — this state-block can be disabled via the `STATE_VALIDATION_ENFORCE` secret (see [Configuration options](#configuration-options)).
 
 An admin UI called **Prescriber Assist** lets administrators explicitly authorize delegation relationships — for example, granting a clinical assistant the right to sign on behalf of a specific prescriber.
 
@@ -66,6 +66,20 @@ ADMIN_STAFF_IDS=57f3668ea9f84f3980e772ea8451af38,a1b2c3d4e5f6...
 
 Configure this in the Canvas admin panel: **Plugins → dea_prescriber_filter → Secrets**.
 
+### `STATE_VALIDATION_ENFORCE` (optional plugin secret)
+
+Controls whether the plugin blocks prescriptions when the prescriber's license state doesn't match the pharmacy's state. Dropdown state annotations are independent of this setting and always show.
+
+**Accepted values:**
+- `true` / `1` / `yes` — block on state mismatch with a validation error on review
+- `false` / `0` / `no` — skip the blocking check; the dropdown still shows each prescriber's license state so reviewers can catch mismatches visually
+
+**Default behavior** — when the secret is unset, empty, or set to an unrecognized value, the plugin enforces state validation. This preserves 0.3.0 behavior for any installation upgrading to 0.4.0 without configuration changes.
+
+Parsing is case- and whitespace-insensitive (`" True "` is accepted).
+
+Configure this in the Canvas admin panel: **Plugins → dea_prescriber_filter → Secrets**.
+
 ## Screenshots
 
 ![Prescriber Assist admin UI](assets/admin-ui-screenshot.png)
@@ -80,8 +94,10 @@ The Prescriber Assist admin UI: administrators select a provider and a set of st
 - **Sign button hiding** — when the current user is not authorized for the selected prescriber, sign/send/print actions are removed from the command, preventing the commit
 - **Validation error** — when review is clicked without authorization, the user sees "Not authorized to prescribe for this provider."
 
-### State license validation
-- On review, checks that the selected prescriber profile's license state matches the pharmacy's state
+### State license validation (configurable)
+- Controlled by the `STATE_VALIDATION_ENFORCE` plugin secret (see [Configuration options](#configuration-options)). Default: enforce.
+- **When enforced** — on review, checks that the selected prescriber profile's license state matches the pharmacy's state; blocks signing on mismatch
+- **When not enforced** — no blocking check; dropdown annotations still show each provider's license state so reviewers can spot mismatches visually
 - The check scopes to the specific selected profile (e.g. "Dr Brown (AK)"), not all NPI-linked profiles — so picking the wrong profile for a cross-state prescription is caught
 - Pharmacy state is looked up live via the Canvas pharmacy service (NCPDP)
 
@@ -151,8 +167,9 @@ POST_VALIDATION fires
       │
       ├─ Reads the cached user key
       ├─ If present and user is unauthorized → shows "Not authorized" error
-      ├─ Checks the selected prescriber profile's license states
-      └─ If pharmacy state not in license states → shows state-mismatch error
+      └─ If STATE_VALIDATION_ENFORCE is true (the default):
+           ├─ Checks the selected prescriber profile's license states
+           └─ If pharmacy state not in license states → shows state-mismatch error
 ```
 
 The action filter is the primary safety gate: it always runs with the *current* user context (not a cached decision), so user-switching does not leak authorization.
