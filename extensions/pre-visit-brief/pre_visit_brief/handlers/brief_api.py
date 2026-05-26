@@ -28,6 +28,32 @@ _EXCLUDED_STATUSES = {
     AppointmentProgressStatus.NOSHOWED,
 }
 
+# Observation `name` values that aren't real vitals and should be hidden.
+# "Vital Signs Panel" is the parent record; "note" and "pulse_rhythm" are
+# free-text annotations that don't render meaningfully as "label: value".
+_SKIP_VITAL_NAMES = {"Vital Signs Panel", "note", "pulse_rhythm"}
+
+# Friendly labels for common vital-sign observation names.
+_VITAL_LABELS = {
+    "blood_pressure": "BP",
+    "blood_pressure_systolic": "BP (systolic)",
+    "blood_pressure_diastolic": "BP (diastolic)",
+    "pulse": "Pulse",
+    "respiration_rate": "Respirations",
+    "body_temperature": "Temp",
+    "oxygen_saturation": "O2 sat",
+    "weight": "Weight",
+    "height": "Height",
+    "waist_circumference": "Waist",
+    "bmi": "BMI",
+    "bmi_percentile": "BMI %ile",
+    "weight_for_length_percentile": "Wt-for-length %ile",
+    "head_circumference": "Head circ.",
+    "head_circumference_percentile": "Head circ. %ile",
+    "height_percentile": "Height %ile",
+    "weight_percentile": "Weight %ile",
+}
+
 
 class BriefAPI(StaffSessionAuthMixin, SimpleAPI):
     """Serves the pre-visit brief modal UI and data.
@@ -150,11 +176,15 @@ class BriefAPI(StaffSessionAuthMixin, SimpleAPI):
             entered_in_error__isnull=True,
         ).prefetch_related("codings")
 
-        observations_qs = Observation.objects.filter(
-            patient_id__in=raw_patient_ids,
-            category__contains="vital-signs",
-            entered_in_error__isnull=True,
-        ).order_by("-effective_datetime")
+        observations_qs = (
+            Observation.objects.filter(
+                patient_id__in=raw_patient_ids,
+                category__contains="vital-signs",
+                entered_in_error__isnull=True,
+            )
+            .exclude(name__in=_SKIP_VITAL_NAMES)
+            .order_by("-effective_datetime")
+        )
 
         # Bulk-fetch the most recent encounter note per patient.
         notes_qs = (
@@ -307,16 +337,25 @@ def _format_medications(medications: list[Medication]) -> list[str]:
 
 def _format_vitals(observations: list[Observation]) -> list[str]:
     """Return a list of vital-signs display strings."""
-    if not observations:
-        return ["None on record"]
     result = []
     for obs in observations:
-        name = obs.name or "Vital"
-        value = obs.value or ""
-        units = obs.units or ""
-        display = f"{name}: {value} {units}".strip().rstrip(":")
+        if obs.name in _SKIP_VITAL_NAMES:
+            continue
+        value = (obs.value or "").strip()
+        if not value or value == "0":
+            continue
+        label = _VITAL_LABELS.get(obs.name, _humanize(obs.name))
+        units = (obs.units or "").strip()
+        display = f"{label}: {value} {units}".strip()
         result.append(display)
+    if not result:
+        return ["None on record"]
     return result
+
+
+def _humanize(name: str) -> str:
+    """Convert a snake_case observation name to a Title Case label."""
+    return name.replace("_", " ").title() if name else "Vital"
 
 
 def _format_last_visit(note: Note | None) -> dict[str, str | None]:
