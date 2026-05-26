@@ -6,7 +6,7 @@ Automatically creates a Clinic calendar and a daily recurring "Available" event 
 
 ## Problem it solves
 
-Out of the box, Canvas does not give providers any open availability when they are activated. A scheduler has to manually open each provider's calendar, set business hours, and create a recurring availability block - repeated for every new hire. This plugin removes that manual step so newly activated providers are immediately schedulable using the practice's configured business hours.
+Out of the box, Canvas does not give providers any open availability when they are activated. A scheduler has to manually open each provider's calendar, set business hours, and create a recurring availability block - repeated for every new hire. This plugin alllows for default open hours every day of the week which is most beneficial if your scheduling is handled outside of Canvas
 
 ## Who it's for
 
@@ -91,7 +91,8 @@ The status banner shows counts of created, skipped, ended (force mode), and erro
 
 ## Screenshots
 
-Screenshots of the admin app UI and a provisioned calendar will be added prior to public release.
+<img width="2704" height="1302" alt="screenshot-primary05252026014692@2x" src="https://github.com/user-attachments/assets/2ba312bd-9a6a-47d8-be02-dcb2814283d3" />
+
 
 ## Edge cases
 
