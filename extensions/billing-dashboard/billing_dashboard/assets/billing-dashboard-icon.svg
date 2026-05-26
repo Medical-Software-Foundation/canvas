@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <rect width="48" height="48" rx="10" fill="#222222"/>
+  <!-- L-shaped axis -->
+  <path d="M12,11 L12,36 L37,36"
+        stroke="white" stroke-width="3" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Trend line: up, dip, sharp rise -->
+  <polyline points="15,28 21,22 25,27 34,14"
+            stroke="white" stroke-width="3" fill="none"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Arrowhead -->
+  <polyline points="29,14 34,14 34,19"
+            stroke="white" stroke-width="3" fill="none"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
