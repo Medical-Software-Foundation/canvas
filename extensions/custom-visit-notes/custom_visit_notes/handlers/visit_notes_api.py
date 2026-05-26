@@ -12,6 +12,16 @@ from canvas_sdk.v1.data.note import Note
 from custom_visit_notes.models.visit_note import VisitNote
 
 
+def _json_for_script(value: str) -> str:
+    """JSON-encode a value for safe embedding inside an inline <script> block.
+
+    json.dumps does not escape '<', so a payload containing '</script>' can
+    break out of the script element and inject arbitrary HTML.  Replacing '<'
+    with the unicode escape prevents the HTML parser from seeing a closing tag.
+    """
+    return json.dumps(value).replace("<", "\\u003c")
+
+
 class VisitNotesAPI(StaffSessionAuthMixin, SimpleAPI):
     """Serves the Visit Notes UI and handles save/load."""
 
@@ -50,8 +60,8 @@ class VisitNotesAPI(StaffSessionAuthMixin, SimpleAPI):
         html = render_to_string(
             "templates/visit_notes.html",
             {
-                "note_id_json": json.dumps(note_uuid),
-                "content": json.dumps(content),
+                "note_id_json": _json_for_script(note_uuid),
+                "content": _json_for_script(content),
                 "tab_name": self._tab_name(),
             },
         )

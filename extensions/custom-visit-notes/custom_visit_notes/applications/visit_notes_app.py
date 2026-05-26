@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from urllib.parse import quote_plus
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
@@ -24,7 +25,12 @@ class VisitNotesApp(NoteApplication):
     def on_open(self) -> Effect | list[Effect]:
         note_uuid = self.event.context.get("note", {}).get("id", "")
         tab_name = self.secrets.get("tab_name", "Visit Notes")
-        url = f"{PLUGIN_API_BASE}/notes/app?note_id={note_uuid}&tab_name={tab_name}&v={_CACHE_BUST}"
+        url = (
+            f"{PLUGIN_API_BASE}/notes/app"
+            f"?note_id={quote_plus(note_uuid)}"
+            f"&tab_name={quote_plus(tab_name)}"
+            f"&v={_CACHE_BUST}"
+        )
 
         return LaunchModalEffect(
             url=url,

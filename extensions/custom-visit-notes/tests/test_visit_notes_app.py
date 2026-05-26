@@ -34,11 +34,18 @@ class TestVisitNotesApp:
         effect = app.on_open()
         payload = effect.payload if isinstance(effect.payload, dict) else {}
         url = payload.get("url", str(effect.payload))
-        assert "tab_name=Session Notes" in url
+        assert "tab_name=Session+Notes" in url
 
     def test_on_open_defaults_tab_name(self):
         app = _make_app(note_uuid=NOTE_UUID)
         effect = app.on_open()
         payload = effect.payload if isinstance(effect.payload, dict) else {}
         url = payload.get("url", str(effect.payload))
-        assert "tab_name=Visit Notes" in url
+        assert "tab_name=Visit+Notes" in url
+
+    def test_on_open_url_encodes_special_chars(self):
+        app = _make_app(note_uuid=NOTE_UUID, secrets={"tab_name": "Therapy & Counseling"})
+        effect = app.on_open()
+        payload = effect.payload if isinstance(effect.payload, dict) else {}
+        url = payload.get("url", str(effect.payload))
+        assert "tab_name=Therapy+%26+Counseling" in url

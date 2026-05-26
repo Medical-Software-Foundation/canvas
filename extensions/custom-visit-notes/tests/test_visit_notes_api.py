@@ -140,6 +140,41 @@ class TestLoad:
         assert resp["updated_at"] is None
 
 
+class TestXSSPrevention:
+    """Regression tests for stored XSS via </script> injection."""
+
+    @patch("custom_visit_notes.handlers.visit_notes_api.render_to_string", return_value="<html></html>")
+    @patch("custom_visit_notes.handlers.visit_notes_api.VisitNote")
+    @patch("custom_visit_notes.handlers.visit_notes_api.Note")
+    def test_script_tag_in_content_is_escaped(self, mock_note, mock_visit_note, mock_render):
+        mock_note.objects.get.return_value = MagicMock(dbid=NOTE_DBID)
+        malicious = '</script><script>alert("xss")</script>'
+        existing = MagicMock(content=malicious)
+        mock_visit_note.objects.filter.return_value.first.return_value = existing
+
+        handler = _make_api(query_params={"note_id": NOTE_UUID})
+        handler.get_app()
+
+        context = mock_render.call_args[0][1]
+        # The rendered JSON must not contain a literal </script>
+        assert "</script>" not in context["content"]
+        assert "\\u003c" in context["content"]
+
+    @patch("custom_visit_notes.handlers.visit_notes_api.render_to_string", return_value="<html></html>")
+    @patch("custom_visit_notes.handlers.visit_notes_api.VisitNote")
+    @patch("custom_visit_notes.handlers.visit_notes_api.Note")
+    def test_script_tag_in_note_id_is_escaped(self, mock_note, mock_visit_note, mock_render):
+        mock_note.objects.get.return_value = MagicMock(dbid=NOTE_DBID)
+        mock_visit_note.objects.filter.return_value.first.return_value = None
+
+        handler = _make_api(query_params={"note_id": '<script>alert("xss")</script>'})
+        handler.get_app()
+
+        context = mock_render.call_args[0][1]
+        assert "<script>" not in context["note_id_json"]
+        assert "\\u003c" in context["note_id_json"]
+
+
 class TestTabName:
     def test_defaults_to_visit_notes(self):
         handler = _make_api(query_params={})
