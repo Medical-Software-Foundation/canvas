@@ -19,7 +19,6 @@ from canvas_sdk.v1.data.condition import Condition
 from canvas_sdk.v1.data.medication import Medication
 from canvas_sdk.v1.data.note import Note, NoteTypeCategories
 from canvas_sdk.v1.data.observation import Observation
-from logger import log
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -33,6 +32,27 @@ _EXCLUDED_STATUSES = {
 # "Vital Signs Panel" is the parent record; "note" and "pulse_rhythm" are
 # free-text annotations that don't render meaningfully as "label: value".
 _SKIP_VITAL_NAMES = {"Vital Signs Panel", "note", "pulse_rhythm"}
+
+# Canonical clinical display order for vitals.
+_VITAL_ORDER = [
+    "blood_pressure",
+    "blood_pressure_systolic",
+    "blood_pressure_diastolic",
+    "pulse",
+    "respiration_rate",
+    "body_temperature",
+    "oxygen_saturation",
+    "weight",
+    "height",
+    "bmi",
+    "waist_circumference",
+    "head_circumference",
+    "bmi_percentile",
+    "weight_percentile",
+    "height_percentile",
+    "weight_for_length_percentile",
+    "head_circumference_percentile",
+]
 
 # Friendly labels for common vital-sign observation names.
 _VITAL_LABELS = {
@@ -187,15 +207,6 @@ class BriefAPI(StaffSessionAuthMixin, SimpleAPI):
             .order_by("-effective_datetime")
         )
 
-        # Diagnostic: dump observation names/values per patient so we can see
-        # why a vital (e.g. weight) might not be appearing. Remove once stable.
-        for obs in observations_qs:
-            log.info(
-                f"[pre_visit_brief] obs patient={obs.patient_id} "
-                f"name={obs.name!r} value={obs.value!r} units={obs.units!r} "
-                f"category={obs.category!r}"
-            )
-
         # Bulk-fetch the most recent encounter note per patient.
         notes_qs = (
             Note.objects.filter(
@@ -290,9 +301,9 @@ def _build_card(
     medications = medications_by_patient.get(patient_key, [])
     medication_list = _format_medications(medications)
 
-    # Vitals – up to 5 most recent observations
+    # Vitals – most recent value per vital name (no fixed cap)
     observations = observations_by_patient.get(patient_key, [])
-    vital_list = _format_vitals(observations[:5])
+    vital_list = _format_vitals(observations)
 
     # Last visit
     prior_note = latest_note_by_patient.get(patient_key)
@@ -346,21 +357,52 @@ def _format_medications(medications: list[Medication]) -> list[str]:
 
 
 def _format_vitals(observations: list[Observation]) -> list[str]:
-    """Return a list of vital-signs display strings."""
-    result = []
+    """Return a list of vital-signs display strings.
+
+    Keeps only the most recent value per vital `name` (observations are
+    already ordered by `-effective_datetime` upstream), converts weight
+    from oz to lbs, and renders in canonical clinical order.
+    """
+    latest: dict[str, Observation] = {}
     for obs in observations:
         if obs.name in _SKIP_VITAL_NAMES:
             continue
+        if obs.name not in latest:
+            latest[obs.name] = obs
+
+    result = []
+    for name in sorted(latest.keys(), key=_vital_sort_key):
+        obs = latest[name]
         value = (obs.value or "").strip()
         if not value or value == "0":
             continue
-        label = _VITAL_LABELS.get(obs.name, _humanize(obs.name))
         units = (obs.units or "").strip()
+        if name == "weight" and units == "oz":
+            value, units = _oz_to_lbs(value)
+        label = _VITAL_LABELS.get(name, _humanize(name))
         display = f"{label}: {value} {units}".strip()
         result.append(display)
     if not result:
         return ["None on record"]
     return result
+
+
+def _vital_sort_key(name: str) -> int:
+    """Canonical sort order for vital signs; unknown names sort last."""
+    try:
+        return _VITAL_ORDER.index(name)
+    except ValueError:
+        return len(_VITAL_ORDER)
+
+
+def _oz_to_lbs(value: str) -> tuple[str, str]:
+    """Convert a weight in ounces to lbs, returning (value, units)."""
+    try:
+        lbs = float(value) / 16.0
+    except ValueError:
+        return value, "oz"
+    formatted = f"{lbs:.1f}".rstrip("0").rstrip(".") or "0"
+    return formatted, "lbs"
 
 
 def _humanize(name: str) -> str:
