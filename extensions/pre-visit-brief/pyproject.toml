@@ -4,6 +4,7 @@
 [project]
 name = "pre-visit-brief"
 version = "0.0.0"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "django>=4.2.0",
