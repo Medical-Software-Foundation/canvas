@@ -2,7 +2,7 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "report_builder",
-    "description": "UI-configurable report builder over Canvas data with saved reports and CSV export.",
+    "description": "UI-configurable report builder for clinical and operations staff — filter patients, appointments, conditions, notes, and lab orders by field values and one-hop aggregates; save reports per instance; export CSV.",
     "components": {
         "handlers": [
             {
@@ -31,7 +31,7 @@
     },
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }
