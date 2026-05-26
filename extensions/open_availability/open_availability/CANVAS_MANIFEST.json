@@ -1,0 +1,48 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.3",
+    "name": "open_availability",
+    "description": "Automatically creates open availability calendars for eligible providers when activated",
+    "components": {
+        "protocols": [
+            {
+                "class": "open_availability.protocols.open_availability:OpenAvailabilityOnActivation",
+                "description": "Creates calendar and recurring availability event when staff is activated"
+            },
+            {
+                "class": "open_availability.protocols.open_availability:OpenAvailabilityOnDeactivation",
+                "description": "Ends recurring availability event when staff is deactivated"
+            },
+            {
+                "class": "open_availability.applications.provision_api:ProvisionAvailabilityAPI",
+                "description": "API endpoint for manually triggering open availability provisioning"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": [
+            {
+                "class": "open_availability.applications.provision_availability:ProvisionAvailabilityApp",
+                "name": "Provision Availability",
+                "description": "Admin tool to provision open availability calendars for all active staff",
+                "scope": "global",
+                "icon": "assets/provision_icon.png"
+            }
+        ]
+    },
+    "secrets": [
+        "ADMIN_USERS",
+        "AVAILABILITY_END_TIME",
+        "AVAILABILITY_START_TIME",
+        "AVAILABILITY_TIMEZONE",
+        "SCHEDULABLE_ROLES",
+        "simpleapi-api-key"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
