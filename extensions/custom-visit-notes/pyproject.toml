@@ -1,0 +1,25 @@
+[project]
+name = "custom-visit-notes"
+version = "0.0.1"
+description = "Adds a configurable visit notes tab to notes for free-text documentation saved to custom data."
+requires-python = ">=3.11"
+dependencies = [
+    "canvas[test-utils]",
+    "pytest-canvas",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.uv.sources]
+canvas = { editable = true, path = "../../repos/canvas-plugins" }
+pytest-canvas = { editable = true, path = "../../repos/canvas-plugins/pytest-canvas" }
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.1.0",
+]
