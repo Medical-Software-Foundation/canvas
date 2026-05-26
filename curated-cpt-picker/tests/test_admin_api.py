@@ -290,3 +290,43 @@ def test_cdm_codes_includes_label_from_short_name(active_cdm) -> None:
 def test_cdm_codes_denies_unauthenticated() -> None:
     handler = _make_handler(_make_request(headers={}))
     assert handler.list_cdm_codes()[0].status_code == 403
+
+
+def test_cdm_codes_excludes_codes_with_too_long_description(active_cdm) -> None:
+    """Codes whose CDM name/short_name exceed Canvas's 255-char
+    BillingLineItem.description limit cannot be added to a note. Don't show
+    them in the dropdown — admins who pick them would get a confusing error
+    at save time AND providers who tried to use them later would silently
+    fail in the picker."""
+    long_text = "x" * 300
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="99349", name=long_text, short_name=long_text, charge_amount=0,
+        effective_date=TODAY - timedelta(days=10), end_date=None,
+    )
+    handler = _make_handler(_make_request(headers=_staff_headers()))
+    body = json.loads(handler.list_cdm_codes()[0].content)
+    cpts = {row["cpt_code"] for row in body["cdm_codes"]}
+    assert "99349" not in cpts
+    # control: codes with short descriptions still appear
+    assert "99213" in cpts
+
+
+def test_create_rejects_cpt_with_too_long_cdm_description() -> None:
+    """Admin save returns 422 with a clear, actionable message when the
+    selected CPT's CDM row has a description that won't fit Canvas's
+    BillingLineItem.description column."""
+    long_text = "x" * 300
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="99349", name=long_text, short_name=long_text, charge_amount=0,
+        effective_date=TODAY - timedelta(days=10), end_date=None,
+    )
+    handler = _make_handler(_make_request(
+        method="POST",
+        body={"cpt_code": "99349", "description": "Home visit"},
+        headers=_staff_headers(),
+    ))
+    results = handler.create_code()
+    assert results[0].status_code == 422
+    error = json.loads(results[0].content)
+    assert "too long" in error["error"]
+    assert CuratedCptCode.objects.count() == 0

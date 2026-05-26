@@ -122,3 +122,70 @@ def test_filter_valid_cpt_codes_returns_only_active() -> None:
 
 def test_filter_valid_cpt_codes_handles_empty_input() -> None:
     assert filter_valid_cpt_codes([], today=TODAY) == set()
+
+
+# --- Description-length guard (Canvas BillingLineItem.description is varchar(255)) ---
+
+LONG_TEXT = "x" * 300  # exceeds the 255-char BillingLineItem.description limit
+
+
+def test_validate_rejects_cpt_with_too_long_cdm_name() -> None:
+    """Canvas's effect interpreter copies CDM name into a 255-char column
+    without truncating. We must reject these at admin save so providers
+    don't hit a silent AddBillingLineItem failure later."""
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="99349",
+        name=LONG_TEXT,
+        short_name="Home visit short",
+        charge_amount=0,
+        effective_date=TODAY - timedelta(days=30),
+        end_date=None,
+    )
+    result = validate_cpt_code("99349", today=TODAY)
+    assert result.is_valid is False
+    assert result.reason is not None
+    assert "too long" in result.reason
+    assert "Settings" in result.reason  # actionable guidance for the admin
+
+
+def test_validate_rejects_cpt_with_too_long_short_name() -> None:
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="99349",
+        name="OK name",
+        short_name=LONG_TEXT,
+        charge_amount=0,
+        effective_date=TODAY - timedelta(days=30),
+        end_date=None,
+    )
+    result = validate_cpt_code("99349", today=TODAY)
+    assert result.is_valid is False
+    assert "too long" in result.reason  # type: ignore[operator]
+
+
+def test_validate_accepts_when_at_least_one_active_row_fits() -> None:
+    """If a CPT has two active CDM rows and only one has a short-enough
+    description, that's still usable — validation passes."""
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="99349", name=LONG_TEXT, short_name=LONG_TEXT, charge_amount=0,
+        effective_date=TODAY - timedelta(days=100), end_date=None,
+    )
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="99349", name="Short", short_name="Short", charge_amount=0,
+        effective_date=TODAY - timedelta(days=10), end_date=None,
+    )
+    assert validate_cpt_code("99349", today=TODAY).is_valid is True
+
+
+def test_filter_silently_skips_codes_with_too_long_description() -> None:
+    """Picker should not raise on long-description curated entries — it
+    silently drops them so the modal opens normally with the safe codes."""
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="LONG", name=LONG_TEXT, short_name=LONG_TEXT, charge_amount=0,
+        effective_date=TODAY - timedelta(days=10), end_date=None,
+    )
+    ChargeDescriptionMaster.objects.create(
+        cpt_code="OK", name="Fits", short_name="Fits", charge_amount=0,
+        effective_date=TODAY - timedelta(days=10), end_date=None,
+    )
+    result = filter_valid_cpt_codes(["LONG", "OK"], today=TODAY)
+    assert result == {"OK"}

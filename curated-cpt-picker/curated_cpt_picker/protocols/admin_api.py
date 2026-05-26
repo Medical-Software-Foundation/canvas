@@ -9,7 +9,7 @@ from canvas_sdk.v1.data import ChargeDescriptionMaster
 
 from curated_cpt_picker.models.curated_cpt_code import CuratedCptCode
 from curated_cpt_picker.lib.admin_auth import is_admin
-from curated_cpt_picker.lib.cdm_validation import _is_currently_active, validate_cpt_code
+from curated_cpt_picker.lib.cdm_validation import _is_usable, validate_cpt_code
 
 
 def _serialize(entry: CuratedCptCode) -> dict:
@@ -70,7 +70,11 @@ class AdminAPI(StaffSessionAuthMixin, SimpleAPI):
         seen: set[str] = set()
         cdm_codes = []
         for row in rows:
-            if row.cpt_code in seen or not _is_currently_active(row, today):
+            # Filter on _is_usable (not just _is_currently_active) so the
+            # dropdown hides codes whose description would exceed Canvas's
+            # 255-char BillingLineItem.description limit — those would pass
+            # admin validation but fail later when AddBillingLineItem fires.
+            if row.cpt_code in seen or not _is_usable(row, today):
                 continue
             seen.add(row.cpt_code)
             # short_name is meant for display; fall back to name when short_name is empty
