@@ -19,6 +19,7 @@ from canvas_sdk.v1.data.condition import Condition
 from canvas_sdk.v1.data.medication import Medication
 from canvas_sdk.v1.data.note import Note, NoteTypeCategories
 from canvas_sdk.v1.data.observation import Observation
+from logger import log
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -185,6 +186,15 @@ class BriefAPI(StaffSessionAuthMixin, SimpleAPI):
             .exclude(name__in=_SKIP_VITAL_NAMES)
             .order_by("-effective_datetime")
         )
+
+        # Diagnostic: dump observation names/values per patient so we can see
+        # why a vital (e.g. weight) might not be appearing. Remove once stable.
+        for obs in observations_qs:
+            log.info(
+                f"[pre_visit_brief] obs patient={obs.patient_id} "
+                f"name={obs.name!r} value={obs.value!r} units={obs.units!r} "
+                f"category={obs.category!r}"
+            )
 
         # Bulk-fetch the most recent encounter note per patient.
         notes_qs = (
