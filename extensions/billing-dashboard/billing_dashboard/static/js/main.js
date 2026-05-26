@@ -20,6 +20,9 @@
         function renderBadge(source) {
             return source === 'mock' ? ' <span class="demo-badge">Demo data</span>' : '';
         }
+        function setCardBadge(id, source) {
+            document.getElementById(id).innerHTML = renderBadge(source);
+        }
         function escapeHtml(s) {
             if (s === null || s === undefined) return '';
             return String(s)
@@ -51,6 +54,10 @@
                 document.getElementById('val-this-month').textContent = fmtCurrency(s.this_month_collected.value);
                 document.getElementById('val-next-month').textContent = fmtCurrency(s.next_month_projected.value);
                 document.getElementById('val-acceptance').textContent = s.claim_acceptance_rate.value.toFixed(1) + '%';
+                setCardBadge('badge-last-month', s.last_month_collected.source);
+                setCardBadge('badge-this-month', s.this_month_collected.source);
+                setCardBadge('badge-next-month', s.next_month_projected.source);
+                setCardBadge('badge-acceptance', s.claim_acceptance_rate.source);
                 setTrend(document.getElementById('trend-last-month'), s.last_month_trend_pct.value);
                 var nextTrend = document.getElementById('trend-next-month');
                 nextTrend.className = 'metric-trend neutral';
@@ -163,7 +170,7 @@
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     document.getElementById('payer-table-title').innerHTML =
-                        'Payer Performance (trailing 12 months)' + renderBadge(data.payers && data.payers.source);
+                        'Payer Performance (trailing 90 days)' + renderBadge(data.payers && data.payers.source);
                     var tbody = document.getElementById('payer-table-body');
                     var payers = (data.payers && data.payers.data) ? data.payers.data : [];
                     if (payers.length === 0) {
@@ -230,7 +237,7 @@
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     document.getElementById('cpt-table-title').innerHTML =
-                        'Top CPT Codes by Volume (trailing 12 months)' + renderBadge(data.cpt_codes && data.cpt_codes.source);
+                        'Top CPT Codes by Volume (trailing 90 days)' + renderBadge(data.cpt_codes && data.cpt_codes.source);
                     /* CPT table */
                     var tbody = document.getElementById('cpt-table-body');
                     var cpts = (data.cpt_codes && data.cpt_codes.data) ? data.cpt_codes.data : [];

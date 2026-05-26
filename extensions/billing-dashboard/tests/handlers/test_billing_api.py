@@ -62,14 +62,14 @@ class TestFinancialOverviewData:
         entry = data["daily"][0]
         assert "date" in entry
         assert "visits" in entry
-        assert "revenue" in entry
+        assert "collected" in entry
 
     def test_returns_monthly_data(self) -> None:
         data = mock.financial_overview()
         assert len(data["monthly"]) == 12
         entry = data["monthly"][0]
         assert "month" in entry
-        assert "revenue" in entry
+        assert "collected" in entry
 
     def test_returns_insights(self) -> None:
         data = mock.financial_overview()
@@ -112,23 +112,20 @@ class TestPayerAnalysisData:
     def test_payer_entry_keys(self) -> None:
         payer = mock.payer_analysis()["payers"][0]
         assert "name" in payer
-        assert "total_reimbursement" in payer
+        assert "collected" in payer
         assert "acceptance_rate" in payer
-        assert "avg_99214" in payer
         assert "cms_delta" in payer
 
     def test_payer_values_are_numeric(self) -> None:
         for payer in mock.payer_analysis()["payers"]:
-            assert isinstance(payer["total_reimbursement"], (int, float))
+            assert isinstance(payer["collected"], (int, float))
             assert isinstance(payer["acceptance_rate"], (int, float))
-            assert isinstance(payer["avg_99214"], (int, float))
             assert isinstance(payer["cms_delta"], (int, float))
 
     def test_medicare_delta_is_zero(self) -> None:
         payers = mock.payer_analysis()["payers"]
         medicare = next(p for p in payers if p["name"] == "Medicare")
         assert medicare["cms_delta"] == 0.00
-        assert medicare["avg_99214"] == CMS_PRIMARY_BENCHMARK
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +144,7 @@ class TestTrendsData:
         cpt = mock.trends()["cpt_codes"][0]
         assert "code" in cpt
         assert "description" in cpt
-        assert "your_avg" in cpt
+        assert "your_avg_charge" in cpt
         assert "cms_rate" in cpt
         assert "trend" in cpt
 
@@ -160,7 +157,7 @@ class TestTrendsData:
         assert len(data["monthly_avg"]) == 12
         entry = data["monthly_avg"][0]
         assert "month" in entry
-        assert "avg" in entry
+        assert "avg_charge" in entry
 
     def test_cms_benchmark_matches_constant(self) -> None:
         data = mock.trends()
@@ -170,6 +167,22 @@ class TestTrendsData:
         cpts = mock.trends()["cpt_codes"]
         c99214 = next(c for c in cpts if c["code"] == "99214")
         assert c99214["cms_rate"] == CMS_PRIMARY_BENCHMARK
+
+    def test_mock_field_names_match_real_shape(self) -> None:
+        """Regression: mock dict keys must match what main.js reads.
+
+        Real path emits ``collected``/``your_avg_charge``/``avg_charge``;
+        mock had ``revenue``/``your_avg``/``avg`` before, so the empty-DB
+        fallback rendered ``undefined``/``$NaN``/TypeError.
+        """
+        m = mock.trends()
+        assert all("your_avg_charge" in r and "cms_rate" in r for r in m["cpt_codes"])
+        assert all("avg_charge" in r for r in m["monthly_avg"])
+        fin = mock.financial_overview()
+        assert all("collected" in r for r in fin["daily"])
+        assert all("collected" in r for r in fin["monthly"])
+        for p in mock.payer_analysis()["payers"]:
+            assert "collected" in p
 
 
 # ---------------------------------------------------------------------------
@@ -300,8 +313,9 @@ class TestMetricsEndpoint:
     def test_unknown_tab(self) -> None:
         handler = self._handler_for_tab("invalid")
         result = handler.metrics()
+        assert result[0].status_code == HTTPStatus.BAD_REQUEST
         data = json.loads(result[0].content)
-        assert data == {"message": "Unknown tab"}
+        assert data == {"error": "Unknown tab"}
 
     def test_returns_json_response(self) -> None:
         with patch("billing_dashboard.handlers.billing_api.build_overview") as mock_build:

@@ -39,11 +39,10 @@ class BillingDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         tab = self.request.query_params.get("tab", "overview")
         log.info("[BillingDashboardAPI] Fetching metrics for tab: %s", tab)
         if tab == "overview":
-            data = build_overview()
-        elif tab == "payer":
-            data = build_payer()
-        elif tab == "trends":
-            data = build_trends()
-        else:
-            data = {"message": "Unknown tab"}
-        return [JSONResponse(data, status_code=HTTPStatus.OK)]
+            return [JSONResponse(build_overview(), status_code=HTTPStatus.OK)]
+        if tab == "payer":
+            return [JSONResponse(build_payer(), status_code=HTTPStatus.OK)]
+        if tab == "trends":
+            return [JSONResponse(build_trends(), status_code=HTTPStatus.OK)]
+        log.warning("[BillingDashboardAPI] Unknown tab: %s", tab)
+        return [JSONResponse({"error": "Unknown tab"}, status_code=HTTPStatus.BAD_REQUEST)]
