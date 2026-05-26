@@ -683,3 +683,144 @@ def test_build_card_no_data_shows_none_on_record() -> None:
     assert card["medications"] == ["None on record"]
     assert card["vitals"] == ["None on record"]
     assert card["last_visit"]["snippet"] == "No prior visit on record"
+
+
+# ── Fallback / edge-case helpers ──────────────────────────────────────────
+
+
+def test_format_medications_no_coding_uses_quantity_only() -> None:
+    """A medication with no codings falls back to the clinical quantity description."""
+    med = MagicMock()
+    med.codings.all.return_value = []
+    med.clinical_quantity_description = "500 mg twice daily"
+
+    result = _format_medications([med])
+    assert result == ["500 mg twice daily"]
+
+
+def test_format_medications_no_coding_no_quantity_falls_back_to_unknown() -> None:
+    """A medication with no codings and no quantity renders 'Unknown medication'."""
+    med = MagicMock()
+    med.codings.all.return_value = []
+    med.clinical_quantity_description = ""
+
+    result = _format_medications([med])
+    assert result == ["Unknown medication"]
+
+
+def test_format_vitals_skips_skip_list_entries() -> None:
+    """Observations whose name is in _SKIP_VITAL_NAMES must not appear in output."""
+    panel = MagicMock(name="Vital Signs Panel")
+    panel.name = "Vital Signs Panel"
+    panel.value = "anything"
+    panel.units = ""
+    note = MagicMock()
+    note.name = "note"
+    note.value = "some free text"
+    note.units = ""
+    pulse = MagicMock()
+    pulse.name = "pulse"
+    pulse.value = "72"
+    pulse.units = "bpm"
+
+    result = _format_vitals([panel, note, pulse])
+    assert result == ["Pulse: 72 bpm"]
+
+
+def test_format_vitals_keeps_only_first_occurrence_per_name() -> None:
+    """When the same vital name appears twice, the first (most recent) wins."""
+    newer = MagicMock()
+    newer.name = "pulse"
+    newer.value = "72"
+    newer.units = "bpm"
+    older = MagicMock()
+    older.name = "pulse"
+    older.value = "80"
+    older.units = "bpm"
+
+    result = _format_vitals([newer, older])
+    assert result == ["Pulse: 72 bpm"]
+
+
+def test_format_vitals_skips_empty_value() -> None:
+    """Observations with an empty value string must be filtered out."""
+    obs = MagicMock()
+    obs.name = "pulse"
+    obs.value = ""
+    obs.units = "bpm"
+
+    assert _format_vitals([obs]) == ["None on record"]
+
+
+def test_format_vitals_skips_zero_value() -> None:
+    """Observations with value '0' (typical for unrecorded percentiles) are filtered."""
+    obs = MagicMock()
+    obs.name = "bmi_percentile"
+    obs.value = "0"
+    obs.units = "%"
+
+    assert _format_vitals([obs]) == ["None on record"]
+
+
+def test_format_vitals_converts_weight_oz_to_lbs() -> None:
+    """Weight stored in ounces must be converted to pounds in the display."""
+    weight = MagicMock()
+    weight.name = "weight"
+    weight.value = "800"
+    weight.units = "oz"
+
+    result = _format_vitals([weight])
+    assert result == ["Weight: 50 lbs"]
+
+
+def test_format_vitals_weight_non_numeric_falls_back_to_oz() -> None:
+    """A non-numeric weight value falls back to the original oz value, not an error."""
+    weight = MagicMock()
+    weight.name = "weight"
+    weight.value = "not-a-number"
+    weight.units = "oz"
+
+    result = _format_vitals([weight])
+    assert result == ["Weight: not-a-number oz"]
+
+
+def test_format_vitals_unknown_name_is_humanized() -> None:
+    """A vital name not in _VITAL_LABELS must be Title-Cased from snake_case."""
+    obs = MagicMock()
+    obs.name = "some_new_vital"
+    obs.value = "42"
+    obs.units = "u"
+
+    result = _format_vitals([obs])
+    assert result == ["Some New Vital: 42 u"]
+
+
+def test_format_last_visit_hpi_empty_narrative_falls_back_to_rfv() -> None:
+    """If the HPI command has an empty narrative, fall through to RFV."""
+    note = MagicMock()
+    note.datetime_of_service = datetime.datetime(2026, 4, 1, 9, 0)
+    hpi_cmd = MagicMock()
+    hpi_cmd.schema_key = "hpi"
+    hpi_cmd.data = {"narrative": ""}
+    rfv_cmd = MagicMock()
+    rfv_cmd.schema_key = "reasonForVisit"
+    rfv_cmd.data = {"comment": "Follow-up"}
+    note.commands.all.return_value = [hpi_cmd, rfv_cmd]
+
+    result = _format_last_visit(note)
+    snippet = result["snippet"]
+    assert isinstance(snippet, str)
+    assert "Follow-up" in snippet
+
+
+def test_format_last_visit_rfv_empty_comment_shows_no_summary() -> None:
+    """If the only RFV command has an empty comment, snippet is 'No summary available'."""
+    note = MagicMock()
+    note.datetime_of_service = datetime.datetime(2026, 4, 1, 9, 0)
+    rfv_cmd = MagicMock()
+    rfv_cmd.schema_key = "reasonForVisit"
+    rfv_cmd.data = {"comment": ""}
+    note.commands.all.return_value = [rfv_cmd]
+
+    result = _format_last_visit(note)
+    assert result["snippet"] == "No summary available"
