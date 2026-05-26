@@ -4,13 +4,13 @@ from canvas_sdk.handlers.action_button import ActionButton
 
 
 class CuratedCptFooterButton(ActionButton):
-    """Adds a 'Quick add codes' button to the note footer.
+    """Adds an 'Add CPT codes' button to the note footer.
 
-    Clicking the button opens a modal whose contents are served by this
-    plugin's `GET /picker` endpoint (see picker_api.py).
+    Clicking the button opens the CPT favorites picker modal, whose contents
+    are served by this plugin's `GET /picker` endpoint (see picker_api.py).
     """
 
-    BUTTON_TITLE = "Quick add codes"
+    BUTTON_TITLE = "Add CPT codes"
     BUTTON_KEY = "CURATED_CPT_PICKER_OPEN"
     BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_FOOTER
 

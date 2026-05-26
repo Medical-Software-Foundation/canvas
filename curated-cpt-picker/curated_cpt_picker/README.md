@@ -6,15 +6,17 @@ polished admin app for maintaining that list.
 
 ## What it does
 
-**For providers** — adds a **"Quick add codes"** button to every note footer.
-Clicking it opens a modal showing the curated codes that are currently active
-in your CDM. Providers can check the codes they need, hit "Add selected", and
-the codes appear as billing line items on the note.
+**For providers** — adds an **"Add CPT codes"** button to every note footer.
+Clicking it opens a modal showing the curated CPT favorites that are currently
+active in your CDM. Providers can check the codes they need, tweak units or
+modifiers per row, hit "Add selected", and the codes appear as billing line
+items on the note.
 
-**For admins** — installs an **app drawer entry** (Curated CPT Picker Admin)
-where practice admins can add, edit, reorder, enable/disable, and remove
-curated entries. Each save is validated against `ChargeDescriptionMaster`, so
-admins can't add codes that aren't billable or have expired.
+**For admins** — installs an **app drawer entry** (CPT Favorites) where
+practice admins can add, edit, reorder, enable/disable, and remove favorite
+codes. The CPT field is a dropdown of the currently active codes in your
+ChargeDescriptionMaster — descriptions pre-fill from CDM and stay editable so
+admins can supply a more provider-friendly label.
 
 ## How CDM validation works
 

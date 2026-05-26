@@ -2,36 +2,171 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Quick add codes</title>
+  <title>Add CPT codes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --border: #e5e7eb; --muted: #6b7280; --text: #1f2937; --primary: #2563eb; --bg-hover: #f9fafb; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: var(--text); }
-    h1 { font-size: 18px; margin: 0 0 4px; }
-    p.lede { color: var(--muted); margin: 0 0 16px; font-size: 13px; }
-    p.empty { color: var(--muted); font-style: italic; padding: 16px 0; }
-    .select-all { margin-bottom: 12px; font-size: 13px; color: var(--primary); cursor: pointer; background: none; border: 0; padding: 0; }
-    table.picker { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 16px; }
-    table.picker th, table.picker td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    table.picker th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-    table.picker tr:hover { background: var(--bg-hover); }
-    table.picker td.code-cell { font-family: ui-monospace, "SF Mono", monospace; font-weight: 600; }
-    table.picker input[type=checkbox] { transform: scale(1.1); cursor: pointer; }
-    table.picker input.units-input { width: 60px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
-    table.picker input.modifiers-input { width: 110px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; font-family: ui-monospace, "SF Mono", monospace; }
-    table.picker td.desc-cell { color: #374151; max-width: 280px; }
-    .actions { display: flex; gap: 12px; justify-content: flex-end; }
-    button { padding: 8px 16px; border: 0; border-radius: 4px; font-size: 14px; cursor: pointer; }
-    button.primary { background: var(--primary); color: #fff; }
-    button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
-    button.secondary { background: #e5e7eb; color: var(--text); }
+    :root {
+      --navy: #0d203c;
+      --teal-deep: #5ab5c4;
+      --teal-light: #96D3DD;
+      --bg: #EFF5F7;
+      --surface: #ffffff;
+      --surface-alt: #F4F8FA;
+      --border: #dce8ec;
+      --border-strong: #b8cfd8;
+      --text-head: #0d203c;
+      --text-body: #2c4155;
+      --text-dim: #5e7a8a;
+      --text-muted: #8ea8b5;
+      --focus-ring: 0 0 0 3px rgba(150,211,221,0.2);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { background: var(--surface); }
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 24px 28px;
+      color: var(--text-body);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-head);
+      margin: 0 0 4px;
+      letter-spacing: -0.01em;
+    }
+    p.lede { color: var(--text-dim); margin: 0 0 16px; font-size: 13px; }
+    p.empty { color: var(--text-dim); font-size: 14px; padding: 8px 0 16px; }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    button.link {
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--teal-deep);
+      background: none;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button.link:hover { color: var(--navy); }
+
+    table.picker {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin-bottom: 18px;
+      border-top: 1.5px solid var(--border);
+      border-bottom: 1.5px solid var(--border);
+    }
+    table.picker thead th {
+      text-align: left;
+      padding: 10px 8px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--surface-alt);
+      border-bottom: 1.5px solid var(--border);
+    }
+    table.picker tbody td {
+      padding: 12px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    table.picker tbody tr:last-child td { border-bottom: none; }
+    table.picker tbody tr:hover { background: var(--surface-alt); }
+    table.picker td.code-cell {
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-weight: 500;
+      color: var(--navy);
+      white-space: nowrap;
+    }
+    table.picker td.desc-cell { color: var(--text-body); max-width: 320px; }
+
+    table.picker input[type=checkbox] {
+      transform: scale(1.1);
+      cursor: pointer;
+      accent-color: var(--teal-deep);
+    }
+    table.picker input.units-input,
+    table.picker input.modifiers-input {
+      padding: 6px 8px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text-body);
+      background: var(--surface);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    table.picker input.units-input { width: 64px; }
+    table.picker input.modifiers-input {
+      width: 120px;
+      font-family: 'DM Mono', ui-monospace, monospace;
+    }
+    table.picker input:focus {
+      outline: none;
+      border-color: var(--teal-deep);
+      box-shadow: var(--focus-ring);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    button {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 9px 16px;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 9px;
+      background: var(--surface);
+      color: var(--text-body);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    button:hover { background: var(--surface-alt); border-color: var(--teal-deep); color: var(--navy); }
+    button:focus-visible { outline: none; border-color: var(--teal-deep); box-shadow: var(--focus-ring); }
+    button.primary {
+      background: var(--navy);
+      color: #fff;
+      border-color: var(--navy);
+    }
+    button.primary:hover {
+      background: #14304a;
+      border-color: #14304a;
+      color: #fff;
+    }
+    button.primary:disabled {
+      background: var(--text-muted);
+      border-color: var(--text-muted);
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body data-note-id="{{ note_id }}">
-  <h1>Add curated codes to this note</h1>
+  <h1>Add CPT codes to this note</h1>
 
   {% if codes %}
-    <p class="lede">Check the codes you want to add. You can tweak units and modifiers on a per-code basis before adding — those overrides flow through to the billing footer.</p>
-    <button type="button" class="select-all" id="select-all">Select all</button>
+    <p class="lede">Check the codes you want to add. You can tweak units and modifiers per row before adding — those overrides flow through to the billing footer.</p>
+    <div class="toolbar">
+      <button type="button" class="link" id="select-all">Select all</button>
+    </div>
     <table class="picker">
       <thead>
         <tr>
@@ -55,30 +190,39 @@
       </tbody>
     </table>
     <div class="actions">
-      <button type="button" class="secondary" id="cancel-btn">Cancel</button>
+      <button type="button" id="cancel-btn">Cancel</button>
       <button type="button" class="primary" id="apply-btn">Add selected</button>
     </div>
   {% else %}
     <p class="empty">
-      No curated codes are currently available.
-      Your admin may need to update the curated list, or none of the configured codes
-      are currently active in the ChargeDescriptionMaster.
+      No CPT favorites are currently available. Your admin may need to update the
+      CPT Favorites list, or none of the configured codes are currently active in
+      the ChargeDescriptionMaster.
     </p>
     <div class="actions">
-      <button type="button" class="secondary" id="cancel-btn">Close</button>
+      <button type="button" id="cancel-btn">Close</button>
     </div>
   {% endif %}
 
   <script>
     (function () {
-      // ---- Canvas modal close via MessageChannel handshake ----
-      // Canvas posts an INIT_CHANNEL event to this iframe with a MessagePort.
-      // We save the port and send CLOSE_MODAL through it when the user is done.
+      // Canvas modal handshake: INIT_CHANNEL gives us a MessagePort we use to
+      // send CLOSE_MODAL (when user clicks Cancel/Close after Apply) and
+      // RESIZE (to shrink the iframe modal to fit our content — otherwise the
+      // default modal is much taller than our table).
       let messagePort = null;
+
+      function resizeToContent() {
+        if (!messagePort) return;
+        const height = Math.min(720, Math.max(220, document.body.scrollHeight + 24));
+        messagePort.postMessage({ type: "RESIZE", height: height });
+      }
+
       window.addEventListener("message", (event) => {
         if (event.data && event.data.type === "INIT_CHANNEL" && event.ports && event.ports[0]) {
           messagePort = event.ports[0];
           messagePort.start();
+          resizeToContent();
         }
       });
 
@@ -88,7 +232,6 @@
         }
       }
 
-      // ---- Picker behavior ----
       const noteId = document.body.dataset.noteId;
       const selectAllBtn = document.getElementById("select-all");
       const applyBtn = document.getElementById("apply-btn");

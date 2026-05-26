@@ -2,87 +2,301 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Curated CPT Picker Admin</title>
+  <title>CPT Favorites</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --border: #e5e7eb; --muted: #6b7280; --text: #1f2937; --primary: #2563eb; --danger: #dc2626; --success: #059669; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: var(--text); background: #fff; }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    p.lede { color: var(--muted); margin: 0 0 24px; }
-    .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
-    .toolbar input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; }
-    button { padding: 8px 14px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font-size: 13px; cursor: pointer; }
-    button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
-    button.danger { color: var(--danger); border-color: #fca5a5; }
+    :root {
+      --navy: #0d203c;
+      --teal-deep: #5ab5c4;
+      --teal-light: #96D3DD;
+      --bg: #EFF5F7;
+      --surface: #ffffff;
+      --surface-alt: #F4F8FA;
+      --border: #dce8ec;
+      --border-strong: #b8cfd8;
+      --text-head: #0d203c;
+      --text-body: #2c4155;
+      --text-dim: #5e7a8a;
+      --text-muted: #8ea8b5;
+      --danger: #b83232;
+      --danger-bg: #fdf0f0;
+      --shadow-card: 0 1px 4px rgba(13,32,60,0.07);
+      --shadow-hover: 0 4px 16px rgba(13,32,60,0.10);
+      --focus-ring: 0 0 0 3px rgba(150,211,221,0.2);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 32px;
+      background: var(--bg);
+      color: var(--text-body);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text-head);
+      margin: 0 0 4px;
+      letter-spacing: -0.01em;
+    }
+    p.lede { color: var(--text-dim); margin: 0 0 24px; font-size: 13px; }
+
+    .card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1.5px solid var(--border);
+      background: var(--surface-alt);
+    }
+    .toolbar input[type=search] {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text-body);
+      background: var(--surface);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .toolbar input[type=search]::placeholder { color: var(--text-muted); }
+    .toolbar input[type=search]:focus {
+      outline: none;
+      border-color: var(--teal-deep);
+      box-shadow: var(--focus-ring);
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border: 1.5px solid var(--border-strong);
+      border-radius: 9px;
+      background: var(--surface);
+      color: var(--text-body);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    button:hover { background: var(--surface-alt); border-color: var(--teal-deep); color: var(--navy); }
+    button:focus-visible { outline: none; border-color: var(--teal-deep); box-shadow: var(--focus-ring); }
+    button.primary {
+      background: var(--navy);
+      color: #fff;
+      border-color: var(--navy);
+    }
+    button.primary:hover {
+      background: #14304a;
+      border-color: #14304a;
+      color: #fff;
+    }
+    button.ghost {
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      padding: 6px 10px;
+    }
+    button.ghost:hover { color: var(--navy); background: var(--surface-alt); }
+    button.ghost.danger { color: var(--danger); }
+    button.ghost.danger:hover { color: var(--danger); background: var(--danger-bg); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
-    .code-cell { font-family: ui-monospace, "SF Mono", monospace; font-weight: 600; }
-    .row-actions { display: flex; gap: 6px; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-    .badge.on { background: #d1fae5; color: #065f46; }
-    .badge.off { background: #f3f4f6; color: var(--muted); }
-    .empty { padding: 40px; text-align: center; color: var(--muted); font-style: italic; border: 1px dashed var(--border); border-radius: 6px; }
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 10; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    thead th {
+      text-align: left;
+      padding: 12px 20px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--surface-alt);
+      border-bottom: 1.5px solid var(--border);
+    }
+    tbody td {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--surface-alt); }
+    tbody tr.disabled td { opacity: 0.55; }
+
+    td.code-cell {
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-weight: 500;
+      color: var(--navy);
+      white-space: nowrap;
+    }
+    td.desc-cell { color: var(--text-body); }
+    td.muted { color: var(--text-dim); font-size: 13px; }
+
+    .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    .badge.on { background: #e8f4f7; color: var(--navy); border: 1px solid var(--teal-light); }
+    .badge.off { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+
+    .empty {
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    /* Add/Edit modal */
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(13,32,60,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      backdrop-filter: blur(2px);
+    }
     .modal.open { display: flex; }
-    .modal-card { background: #fff; border-radius: 8px; padding: 24px; max-width: 520px; width: 90%; max-height: 90vh; overflow-y: auto; }
-    .modal-card h2 { margin: 0 0 16px; font-size: 16px; }
-    .field { margin-bottom: 14px; }
-    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-    .field input, .field select, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; box-sizing: border-box; font-family: inherit; background: #fff; }
+    .modal-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 28px;
+      max-width: 540px;
+      width: 92%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-hover);
+    }
+    .modal-card h2 {
+      margin: 0 0 18px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-head);
+    }
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text-body);
+      background: var(--surface);
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field input:focus,
+    .field select:focus {
+      outline: none;
+      border-color: var(--teal-deep);
+      box-shadow: var(--focus-ring);
+    }
     .field-row { display: flex; gap: 12px; }
     .field-row .field { flex: 1; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-    .error { color: var(--danger); font-size: 13px; margin-top: 8px; }
-    .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .error {
+      color: var(--danger);
+      background: var(--danger-bg);
+      border: 1px solid #f3c5c5;
+      border-radius: 9px;
+      padding: 10px 12px;
+      font-size: 13px;
+      margin-top: 12px;
+    }
+    .error:empty { display: none; }
   </style>
 </head>
 <body>
-  <h1>Curated CPT Picker</h1>
-  <p class="lede">Codes shown here appear in the "Quick add codes" picker on every note footer. Each save is validated against the ChargeDescriptionMaster.</p>
+  <h1>CPT Favorites</h1>
+  <p class="lede">These codes appear in the "Add CPT codes" picker on every note footer. Each save is validated against the ChargeDescriptionMaster.</p>
 
-  <div class="toolbar">
-    <input type="search" id="filter" placeholder="Filter by code or description...">
-    <button type="button" class="primary" id="add-btn">+ Add code</button>
-  </div>
+  <div class="card">
+    <div class="toolbar">
+      <input type="search" id="filter" placeholder="Filter by code or description…">
+      <button type="button" class="primary" id="add-btn">+ Add code</button>
+    </div>
 
-  <div id="table-container">
-    {% if entries %}
-      <table>
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Description</th>
-            <th>Units</th>
-            <th>Modifiers</th>
-            <th>Order</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="entries-tbody">
-          {% for e in entries %}
-            <tr data-id="{{ e.id }}" data-cpt="{{ e.cpt_code }}" data-description="{{ e.description }}" data-units="{{ e.default_units }}" data-order="{{ e.display_order }}" data-enabled="{{ e.enabled|yesno:'true,false' }}" data-modifiers="{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %},{% endif %}{% endfor %}">
-              <td class="code-cell">{{ e.cpt_code }}</td>
-              <td>{{ e.description }}</td>
-              <td>{{ e.default_units }}</td>
-              <td>{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-              <td>{{ e.display_order }}</td>
-              <td>
-                {% if e.enabled %}<span class="badge on">Enabled</span>{% else %}<span class="badge off">Disabled</span>{% endif %}
-              </td>
-              <td class="row-actions">
-                <button type="button" data-action="edit">Edit</button>
-                <button type="button" data-action="toggle">{% if e.enabled %}Disable{% else %}Enable{% endif %}</button>
-                <button type="button" class="danger" data-action="delete">Delete</button>
-              </td>
+    <div id="table-container">
+      {% if entries %}
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Description</th>
+              <th>Units</th>
+              <th>Modifiers</th>
+              <th>Order</th>
+              <th>Status</th>
+              <th></th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <div class="empty">No curated codes yet. Click "+ Add code" to add your first one.</div>
-    {% endif %}
+          </thead>
+          <tbody id="entries-tbody">
+            {% for e in entries %}
+              <tr data-id="{{ e.id }}" data-cpt="{{ e.cpt_code }}" data-description="{{ e.description }}" data-units="{{ e.default_units }}" data-order="{{ e.display_order }}" data-enabled="{{ e.enabled|yesno:'true,false' }}" data-modifiers="{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %},{% endif %}{% endfor %}"{% if not e.enabled %} class="disabled"{% endif %}>
+                <td class="code-cell">{{ e.cpt_code }}</td>
+                <td class="desc-cell">{{ e.description }}</td>
+                <td class="muted">{{ e.default_units }}</td>
+                <td class="muted">{% for m in e.modifiers %}{{ m.code }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                <td class="muted">{{ e.display_order }}</td>
+                <td>
+                  {% if e.enabled %}<span class="badge on">Enabled</span>{% else %}<span class="badge off">Disabled</span>{% endif %}
+                </td>
+                <td class="row-actions">
+                  <button type="button" class="ghost" data-action="edit">Edit</button>
+                  <button type="button" class="ghost" data-action="toggle">{% if e.enabled %}Disable{% else %}Enable{% endif %}</button>
+                  <button type="button" class="ghost danger" data-action="delete">Delete</button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty">No CPT favorites yet. Click "+ Add code" to add your first one.</div>
+      {% endif %}
+    </div>
   </div>
 
   <div class="modal" id="edit-modal">
@@ -98,7 +312,7 @@
             </select>
             <div class="hint">Choose from currently active codes in your ChargeDescriptionMaster.</div>
           </div>
-          <div class="field" style="flex: 0 0 100px;">
+          <div class="field" style="flex: 0 0 110px;">
             <label for="edit-units">Units</label>
             <input type="number" id="edit-units" value="1" min="1">
           </div>
@@ -113,7 +327,7 @@
             <label for="edit-modifiers">Modifiers (comma-separated, e.g. "25, 59")</label>
             <input type="text" id="edit-modifiers" placeholder="optional">
           </div>
-          <div class="field" style="flex: 0 0 100px;">
+          <div class="field" style="flex: 0 0 110px;">
             <label for="edit-order">Order</label>
             <input type="number" id="edit-order" value="0">
           </div>
@@ -137,7 +351,6 @@
       const cptSelect = document.getElementById("edit-cpt");
       const descInput = document.getElementById("edit-description");
 
-      // Map of cpt_code -> default description from CDM (for autofill on change)
       const cdmLabelByCode = new Map();
       let cdmLoaded = false;
       let cdmLoadPromise = null;
@@ -171,25 +384,18 @@
         const code = cptSelect.value;
         if (!code) return;
         const label = cdmLabelByCode.get(code) || "";
-        // Only autofill description if the field is empty or was previously
-        // an autofilled value — never clobber a description the admin typed.
         if (!descInput.value || descInput.dataset.autofilled === "true") {
           descInput.value = label;
           descInput.dataset.autofilled = "true";
         }
       });
       descInput.addEventListener("input", () => {
-        // Once the admin types into the description, mark it as manual so
-        // subsequent CPT changes don't overwrite it.
         descInput.dataset.autofilled = "false";
       });
 
       async function openModal(entry) {
         await loadCdmCodes();
         document.getElementById("edit-id").value = entry ? entry.id : "";
-        // For edits, make sure the existing CPT is in the dropdown even if
-        // it has since been removed from CDM (otherwise the user can't see
-        // the value they're editing).
         if (entry && entry.cpt_code && ![...cptSelect.options].some(o => o.value === entry.cpt_code)) {
           const opt = document.createElement("option");
           opt.value = entry.cpt_code;

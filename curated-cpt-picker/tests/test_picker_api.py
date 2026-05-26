@@ -32,7 +32,7 @@ def stub_template_renderer(monkeypatch):
     def fake_render(template_path: str, context: dict) -> str:
         codes = context.get("codes") or []
         if not codes:
-            return "<html><body><p>No curated codes are currently available.</p></body></html>"
+            return "<html><body><p>No CPT favorites are currently available.</p></body></html>"
         parts = ["<html><body><ul>"]
         for c in codes:
             parts.append(
@@ -118,7 +118,7 @@ def test_picker_renders_empty_state_when_no_codes_valid() -> None:
     handler = _make_handler(_make_request(query={"note_id": "note-abc"}))
     body = handler.render_picker()[0].content.decode("utf-8")
 
-    assert "No curated codes are currently available" in body
+    assert "No CPT favorites are currently available" in body
     assert "Add selected" not in body  # primary action button absent
 
 

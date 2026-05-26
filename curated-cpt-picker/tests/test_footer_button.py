@@ -22,7 +22,7 @@ def test_button_metadata_targets_note_footer() -> None:
     """The button must register in the NOTE_FOOTER, not some other location —
     otherwise providers won't find it in the right workflow."""
     assert CuratedCptFooterButton.BUTTON_LOCATION == ActionButton.ButtonLocation.NOTE_FOOTER
-    assert CuratedCptFooterButton.BUTTON_TITLE == "Quick add codes"
+    assert CuratedCptFooterButton.BUTTON_TITLE == "Add CPT codes"
     assert CuratedCptFooterButton.BUTTON_KEY == "CURATED_CPT_PICKER_OPEN"
 
 
