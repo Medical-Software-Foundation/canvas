@@ -67,7 +67,7 @@
       "<article class='pvb-card'>" +
         "<header class='pvb-card-header'>" +
           "<h2 class='pvb-patient-name'>" +
-            "<a href='" + esc(chartUrl) + "'>" + esc(appt.patient_name) + "</a>" +
+            "<a href='" + esc(chartUrl) + "' target='_top'>" + esc(appt.patient_name) + "</a>" +
           "</h2>" +
           "<span class='pvb-appt-meta'>" +
             esc(formatTime(appt.start_time)) +
