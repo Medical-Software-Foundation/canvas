@@ -59,9 +59,15 @@
                 setCardBadge('badge-next-month', s.next_month_projected.source);
                 setCardBadge('badge-acceptance', s.claim_acceptance_rate.source);
                 setTrend(document.getElementById('trend-last-month'), s.last_month_trend_pct.value);
+                var thisMonthTrend = document.getElementById('trend-this-month');
+                thisMonthTrend.className = 'metric-trend neutral';
+                thisMonthTrend.textContent = 'Month-to-date';
                 var nextTrend = document.getElementById('trend-next-month');
                 nextTrend.className = 'metric-trend neutral';
                 nextTrend.textContent = s.next_month_appt_count.value + ' appointments scheduled';
+                var acceptanceTrend = document.getElementById('trend-acceptance');
+                acceptanceTrend.className = 'metric-trend neutral';
+                acceptanceTrend.textContent = 'Trailing 30 days';
 
                 /* Chart title badges */
                 document.getElementById('daily-chart-title').innerHTML =
