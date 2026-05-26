@@ -59,7 +59,7 @@
    * Build HTML for a single prep card.
    */
   function buildCard(appt) {
-    var chartUrl = "/patient/" + encodeURIComponent(appt.patient_id);
+    var chartUrl = "/companion/patient/" + encodeURIComponent(appt.patient_id);
     var lastVisitDate = (appt.last_visit && appt.last_visit.date) ? esc(appt.last_visit.date) : "No prior visit";
     var snippet = (appt.last_visit && appt.last_visit.snippet) ? esc(appt.last_visit.snippet) : "No summary available";
 
@@ -67,7 +67,7 @@
       "<article class='pvb-card'>" +
         "<header class='pvb-card-header'>" +
           "<h2 class='pvb-patient-name'>" +
-            "<a href='" + esc(chartUrl) + "' target='_top'>" + esc(appt.patient_name) + "</a>" +
+            "<a href='" + esc(chartUrl) + "'>" + esc(appt.patient_name) + "</a>" +
           "</h2>" +
           "<span class='pvb-appt-meta'>" +
             esc(formatTime(appt.start_time)) +
