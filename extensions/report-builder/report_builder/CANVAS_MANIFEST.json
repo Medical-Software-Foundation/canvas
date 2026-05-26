@@ -1,0 +1,37 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "report_builder",
+    "description": "UI-configurable report builder over Canvas data with saved reports and CSV export.",
+    "components": {
+        "handlers": [
+            {
+                "class": "report_builder.handlers.api:ReportBuilderAPI",
+                "description": "HTTP endpoints for the report builder SPA and JSON API."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": [
+            {
+                "class": "report_builder.handlers.application:ReportBuilderApp",
+                "name": "Report Builder",
+                "description": "Build and run patient worklists and care-gap reports.",
+                "icon": "assets/icon.png",
+                "scope": "global"
+            }
+        ]
+    },
+    "variables": [],
+    "custom_data": {
+        "namespace": "canvas_medical__report_builder",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
