@@ -3,10 +3,22 @@ from canvas_sdk.effects.billing_line_item import AddBillingLineItem
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
-from canvas_sdk.v1.data import Note
+from canvas_sdk.v1.data import ChargeDescriptionMaster, Note
 
 from curated_cpt_picker.models.curated_cpt_code import CuratedCptCode
 from curated_cpt_picker.lib.cdm_validation import filter_valid_cpt_codes
+
+
+def _cdm_labels_for(cpt_codes: list[str]) -> dict[str, str]:
+    """Return {cpt_code: display label} for the given CPT codes in one query."""
+    if not cpt_codes:
+        return {}
+    labels: dict[str, str] = {}
+    for row in ChargeDescriptionMaster.objects.filter(cpt_code__in=cpt_codes):
+        if row.cpt_code in labels:
+            continue
+        labels[row.cpt_code] = (row.short_name or row.name or "").strip()
+    return labels
 
 
 def _modifier_summary(modifiers: list[dict]) -> str:
@@ -45,11 +57,13 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
 
         curated = list(CuratedCptCode.objects.filter(enabled=True).order_by("display_order", "cpt_code"))
         valid_cpt_codes = filter_valid_cpt_codes([entry.cpt_code for entry in curated])
+        cdm_labels = _cdm_labels_for(list(valid_cpt_codes))
 
         visible = [
             {
                 "id": str(entry.pk),
                 "cpt_code": entry.cpt_code,
+                "cdm_name": cdm_labels.get(entry.cpt_code, ""),
                 "description": entry.description,
                 "default_units": entry.default_units,
                 "modifier_summary": _modifier_summary(entry.modifiers),

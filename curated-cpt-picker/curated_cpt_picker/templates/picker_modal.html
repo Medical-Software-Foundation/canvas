@@ -89,12 +89,12 @@
     table.picker tbody tr:last-child td { border-bottom: none; }
     table.picker tbody tr:hover { background: var(--surface-alt); }
     table.picker td.code-cell {
-      font-family: 'DM Mono', ui-monospace, monospace;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--navy);
       white-space: nowrap;
     }
-    table.picker td.desc-cell { color: var(--text-body); max-width: 320px; }
+    table.picker td.name-cell { color: var(--text-body); max-width: 280px; }
+    table.picker td.desc-cell { color: var(--text-body); max-width: 240px; }
 
     table.picker input[type=checkbox] {
       transform: scale(1.1);
@@ -172,6 +172,7 @@
         <tr>
           <th></th>
           <th>Code</th>
+          <th>Name</th>
           <th>Description</th>
           <th>Units</th>
           <th>Modifiers</th>
@@ -182,6 +183,7 @@
           <tr data-id="{{ code.id }}">
             <td><input type="checkbox" id="code-{{ code.id }}" class="row-checkbox" value="{{ code.id }}"></td>
             <td class="code-cell"><label for="code-{{ code.id }}">{{ code.cpt_code }}</label></td>
+            <td class="name-cell">{{ code.cdm_name }}</td>
             <td class="desc-cell">{{ code.description }}</td>
             <td><input type="number" class="units-input" min="1" value="{{ code.default_units }}" aria-label="Units"></td>
             <td><input type="text" class="modifiers-input" value="{{ code.modifier_summary }}" placeholder="optional" aria-label="Modifiers"></td>
