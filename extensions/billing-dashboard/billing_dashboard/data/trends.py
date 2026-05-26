@@ -46,10 +46,13 @@ def cpt_codes(now: arrow.Arrow | None = None) -> dict[str, Any]:
         return {"source": "mock", "data": mock_trends()["cpt_codes"]}
 
     cpt_list = [r["cpt"] for r in rows]
+    # Ascending effective_date so the *newest* CDM row per CPT is iterated last
+    # and wins ``dict()``'s last-write-wins collapse. Reversing this to ``-effective_date``
+    # would silently surface the oldest description for any CPT with revisions.
     cdm_descriptions = dict(
         ChargeDescriptionMaster.objects
         .filter(cpt_code__in=cpt_list)
-        .order_by("cpt_code", "-effective_date")
+        .order_by("cpt_code", "effective_date")
         .values_list("cpt_code", "short_name")
     )
 

@@ -46,6 +46,30 @@ class TestCptCodeAggregation:
 
     @patch("billing_dashboard.data.trends.ChargeDescriptionMaster")
     @patch("billing_dashboard.data.trends.BillingLineItem")
+    def test_newest_cdm_revision_wins_over_older(
+        self, mock_bli: MagicMock, mock_cdm: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """When a CPT has multiple CDM revisions, the newest short_name wins.
+
+        Regression: the lookup orders by ascending effective_date so dict()'s
+        last-write-wins collapse picks the newest row. Reversing to
+        ``-effective_date`` would surface the oldest description instead.
+        """
+        mock_bli.objects.filter.return_value.values.return_value.annotate.return_value.order_by.return_value.__getitem__.return_value = [
+            {"cpt": "99214", "your_avg_charge": Decimal("131.20"), "volume": 45, "sample_description": None},
+        ]
+        # Production sorts ascending so the rightmost tuple is the newest.
+        mock_cdm.objects.filter.return_value.order_by.return_value.values_list.return_value = [
+            ("99214", "Established visit"),                              # oldest
+            ("99214", "Office visit, est. patient"),                     # middle
+            ("99214", "Office visit, established patient (moderate)"),   # newest
+        ]
+        row = trends.cpt_codes(now=fixed_now)["data"][0]
+        assert row["description"] == "Office visit, established patient (moderate)"
+        mock_cdm.objects.filter.return_value.order_by.assert_called_once_with("cpt_code", "effective_date")
+
+    @patch("billing_dashboard.data.trends.ChargeDescriptionMaster")
+    @patch("billing_dashboard.data.trends.BillingLineItem")
     def test_description_fallback_chain(
         self, mock_bli: MagicMock, mock_cdm: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
