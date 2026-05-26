@@ -39,7 +39,7 @@ class BriefAPI(StaffSessionAuthMixin, SimpleAPI):
         GET /data      – JSON prep-card data for today's upcoming appointments
     """
 
-    PREFIX = "/pre_visit_brief"
+    PREFIX = "/app"
 
     # ── Static asset routes ───────────────────────────────────────────────
 

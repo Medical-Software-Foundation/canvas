@@ -137,7 +137,7 @@
   function loadData() {
     var win = todayWindow();
     var url =
-      "/plugin-io/api/pre_visit_brief/data" +
+      "/plugin-io/api/pre_visit_brief/app/data" +
       "?start=" + encodeURIComponent(win.start) +
       "&end=" + encodeURIComponent(win.end);
 

@@ -19,7 +19,7 @@ class PreVisitBriefApp(Application):
     def on_open(self) -> Effect:
         """Launch the pre-visit brief modal."""
         return LaunchModalEffect(
-            url=f"/plugin-io/api/pre_visit_brief/?v={_CACHE_BUST}",
+            url=f"/plugin-io/api/pre_visit_brief/app/?v={_CACHE_BUST}",
             target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
             title="Pre-Visit Brief",
         ).apply()
