@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.155.0",
-    "plugin_version": "0.1.6",
+    "plugin_version": "0.1.7",
     "name": "pre_visit_brief",
     "description": "Global companion app that shows a stack of prep cards (up to 3) for the logged-in provider's upcoming appointments today. Each card displays the patient's prior-visit summary, active problem list, allergies, current medications, and most recent vitals.",
     "components": {

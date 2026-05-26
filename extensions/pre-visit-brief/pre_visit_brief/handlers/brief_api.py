@@ -207,16 +207,22 @@ class BriefAPI(StaffSessionAuthMixin, SimpleAPI):
             .order_by("-effective_datetime")
         )
 
-        # Bulk-fetch the most recent encounter note per patient.
-        notes_qs = (
-            Note.objects.filter(
-                patient_id__in=raw_patient_ids,
-                note_type_version__category=NoteTypeCategories.ENCOUNTER,
+        # One targeted query per patient instead of dragging the full encounter
+        # history (and all its commands) across the wire just to render the
+        # latest note per card. N is bounded to ≤3 by the appointment slice.
+        latest_note_by_patient: dict[str, Note] = {}
+        for patient_dbid in raw_patient_ids:
+            note = (
+                Note.objects.filter(
+                    patient_id=patient_dbid,
+                    note_type_version__category=NoteTypeCategories.ENCOUNTER,
+                )
+                .prefetch_related("commands")
+                .order_by("-datetime_of_service")
+                .first()
             )
-            .select_related("note_type_version")
-            .prefetch_related("commands")
-            .order_by("-datetime_of_service")
-        )
+            if note is not None:
+                latest_note_by_patient[str(patient_dbid)] = note
 
         # Group each queryset by the integer patient_id (as string for dict key).
         conditions_by_patient: dict[str, list[Condition]] = {}
@@ -238,13 +244,6 @@ class BriefAPI(StaffSessionAuthMixin, SimpleAPI):
         for obs in observations_qs:
             key = str(obs.patient_id)
             observations_by_patient.setdefault(key, []).append(obs)
-
-        # Keep only the most recent note per patient.
-        latest_note_by_patient: dict[str, Note] = {}
-        for note in notes_qs:
-            key = str(note.patient_id)
-            if key not in latest_note_by_patient:
-                latest_note_by_patient[key] = note
 
         cards = [
             _build_card(
