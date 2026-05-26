@@ -20,6 +20,15 @@
         function renderBadge(source) {
             return source === 'mock' ? ' <span class="demo-badge">Demo data</span>' : '';
         }
+        function escapeHtml(s) {
+            if (s === null || s === undefined) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
         function setTrend(el, pct) {
             if (pct > 0) {
                 el.className = 'metric-trend up';
@@ -170,7 +179,7 @@
                             deltaHtml = '<span class="delta-badge ' + cls + '">' + sign + '$' + Math.abs(p.cms_delta).toFixed(2) + '</span>';
                         }
                         html += '<tr>' +
-                            '<td>' + p.name + '</td>' +
+                            '<td>' + escapeHtml(p.name) + '</td>' +
                             '<td class="td-number">' + fmtCurrency(p.collected) + '</td>' +
                             '<td class="td-number">' + p.acceptance_rate.toFixed(1) + '%</td>' +
                             '<td>' + deltaHtml + '</td>' +
@@ -238,8 +247,8 @@
                             var trendCls = c.trend > 0 ? 'up' : (c.trend < 0 ? 'down' : 'flat');
                             var trendIcon = c.trend > 0 ? '\u2191' : (c.trend < 0 ? '\u2193' : '\u2192');
                             html += '<tr>' +
-                                '<td class="td-number">' + c.code + '</td>' +
-                                '<td>' + c.description + '</td>' +
+                                '<td class="td-number">' + escapeHtml(c.code) + '</td>' +
+                                '<td>' + escapeHtml(c.description) + '</td>' +
                                 '<td class="td-number">$' + c.your_avg_charge.toFixed(2) + '</td>' +
                                 '<td class="td-number">' + (hasRate ? '$' + cmsRate.toFixed(2) : '—') + '</td>' +
                                 '<td>' + (hasRate ? '<span class="delta-badge ' + cls + '">' + sign + '$' + Math.abs(deltaVal).toFixed(2) + '</span>' : '—') + '</td>' +

@@ -100,9 +100,17 @@ def next_month_appointment_count(now: arrow.Arrow | None = None) -> dict[str, An
     return {"value": count, "source": "real"}
 
 
-def next_month_projected(now: arrow.Arrow | None = None) -> dict[str, Any]:
-    """Project next-month revenue as (appt count) × (avg collected per filed claim, trailing 90d)."""
-    appt_count = next_month_appointment_count(now)["value"]
+def next_month_projected(
+    now: arrow.Arrow | None = None,
+    appt_count: int | None = None,
+) -> dict[str, Any]:
+    """Project next-month revenue as (appt count) × (avg collected per filed claim, trailing 90d).
+
+    Callers that have already computed the appointment count can pass it in via
+    ``appt_count`` to avoid a duplicate ``Appointment.objects...count()`` roundtrip.
+    """
+    if appt_count is None:
+        appt_count = next_month_appointment_count(now)["value"]
     trailing_start, trailing_end = trailing_90_days_range(now)
     agg = aggregate_filed_claims(trailing_start, trailing_end)
     if agg["count"] == 0:
@@ -167,13 +175,14 @@ def monthly_collections(now: arrow.Arrow | None = None) -> dict[str, Any]:
 
 
 def build_overview(now: arrow.Arrow | None = None) -> dict[str, Any]:
+    next_month_appt = next_month_appointment_count(now)
     summary = {
         "last_month_collected": last_month_collected(now),
         "this_month_collected": this_month_collected(now),
-        "next_month_projected": next_month_projected(now),
+        "next_month_projected": next_month_projected(now, appt_count=next_month_appt["value"]),
         "claim_acceptance_rate": claim_acceptance_rate(now),
         "last_month_trend_pct": last_month_trend_pct(now),
-        "next_month_appt_count": next_month_appointment_count(now),
+        "next_month_appt_count": next_month_appt,
     }
     insights = compute_insights(summary)
     return {

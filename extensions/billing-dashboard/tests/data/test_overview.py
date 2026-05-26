@@ -193,6 +193,17 @@ class TestNextMonthProjected:
         result = overview.next_month_projected(now=fixed_now)
         assert result["source"] == "mock"
 
+    @patch("billing_dashboard.data.overview.next_month_appointment_count")
+    @patch("billing_dashboard.data.overview.aggregate_filed_claims")
+    def test_uses_provided_appt_count_without_querying(
+        self, mock_agg: MagicMock, mock_appts: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        mock_agg.return_value = {"count": 4, "total": Decimal("1000")}
+        # 20 appts × (1000/4 avg) = 5000; appt count must not trigger a query
+        result = overview.next_month_projected(now=fixed_now, appt_count=20)
+        assert result == {"value": pytest.approx(5000.0), "source": "real"}
+        mock_appts.assert_not_called()
+
 
 class TestDailyCollections:
     @patch("billing_dashboard.data.overview.filed_claims_in_range")
@@ -294,3 +305,5 @@ class TestBuildOverview:
         assert result["monthly"]["source"] == "real"
         assert result["insights"]["source"] == "real"
         assert isinstance(result["insights"]["data"], list)
+        mock_appts.assert_called_once()
+        mock_projected.assert_called_once_with(fixed_now, appt_count=10)
