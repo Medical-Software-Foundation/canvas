@@ -116,13 +116,21 @@ def _compute_synced_amounts(service_lines: list[dict]) -> dict[str, int]:
     Returns ``{"primary": N, "secondary": N, "tertiary": N}`` in cents.
     """
     return {
-        "primary": sum(sl.get("primary_paid_amount_cents") or 0 for sl in service_lines),
-        "secondary": sum(sl.get("secondary_paid_amount_cents") or 0 for sl in service_lines),
-        "tertiary": sum(sl.get("tertiary_paid_amount_cents") or 0 for sl in service_lines),
+        "primary": sum(
+            sl.get("primary_paid_amount_cents") or 0 for sl in service_lines
+        ),
+        "secondary": sum(
+            sl.get("secondary_paid_amount_cents") or 0 for sl in service_lines
+        ),
+        "tertiary": sum(
+            sl.get("tertiary_paid_amount_cents") or 0 for sl in service_lines
+        ),
     }
 
 
-def _has_delta(current: dict[str, int], previously_synced: dict[str, int], tier: str) -> bool:
+def _has_delta(
+    current: dict[str, int], previously_synced: dict[str, int], tier: str
+) -> bool:
     """Check if a payer tier has new amounts to post."""
     return current.get(tier, 0) > previously_synced.get(tier, 0)
 
@@ -165,18 +173,22 @@ def _build_insurance_transactions(
                 )
             )
 
-        # Contractual adjustment: difference between charged and allowed is
-        # the write-off the provider agreed to per their payer contract.
-        if charged and allowed and charged > allowed:
-            contractual = charged - allowed
-            txns.append(
-                LineItemTransaction(
-                    claim_line_item_id=line_item_id,
-                    adjustment=contractual,
-                    adjustment_code="CO-45",
-                    write_off=True,
+        # Contractual adjustment: difference between the Canvas line item's
+        # charge and the payer's allowed amount is the write-off the provider
+        # agreed to per their payer contract. We use line_item.charge rather
+        # than the ERA's charge_amount because the two often disagree.
+        if allowed:
+            line_item = next(li for li in line_items if str(li.id) == line_item_id)
+            if line_item and line_item.charge and line_item.charge > allowed:
+                contractual = line_item.charge - allowed
+                txns.append(
+                    LineItemTransaction(
+                        claim_line_item_id=line_item_id,
+                        adjustment=contractual,
+                        adjustment_code="CO-45",
+                        write_off=True,
+                    )
                 )
-            )
 
         # Adjustments from ERA (payer-reported) and manual adjustments.
         # Both live on the service line but in different locations:
@@ -392,8 +404,11 @@ def _init_sync_state(claim: Claim) -> _SyncState:
         synced_era_ids=get_claim_metadata_set(claim, META_SYNCED_ERA_IDS),
         synced_pmt_ids=synced_pmt_ids,
         known_payment_ids=synced_pmt_ids | reported_pmt_ids,
-        prev_synced_amounts=get_claim_metadata(claim, META_SYNCED_AMOUNTS) or {
-            "primary": 0, "secondary": 0, "tertiary": 0,
+        prev_synced_amounts=get_claim_metadata(claim, META_SYNCED_AMOUNTS)
+        or {
+            "primary": 0,
+            "secondary": 0,
+            "tertiary": 0,
         },
     )
 
@@ -425,7 +440,9 @@ def _post_era_payments(
     current_amounts = _compute_synced_amounts(service_lines)
 
     cumulative_total = (
-        current_amounts["primary"] + current_amounts["secondary"] + current_amounts["tertiary"]
+        current_amounts["primary"]
+        + current_amounts["secondary"]
+        + current_amounts["tertiary"]
     )
     for era in new_eras:
         eid = str(era["era_id"])
@@ -433,7 +450,10 @@ def _post_era_payments(
         state.attempted_era_ids.append(eid)
 
     # Primary insurance (ERA index 0)
-    if _has_delta(current_amounts, state.prev_synced_amounts, "primary") and state.primary_id:
+    if (
+        _has_delta(current_amounts, state.prev_synced_amounts, "primary")
+        and state.primary_id
+    ):
         primary_era = _era_at(all_eras, 0)
         insurance_txns = _build_insurance_transactions(
             service_lines,
@@ -535,7 +555,9 @@ def _process_encounter(
             and era_id not in state.synced_era_ids
         ]
         if new_eras:
-            _post_era_payments(state, candid_claim, service_lines, new_eras, transfer_to)
+            _post_era_payments(
+                state, candid_claim, service_lines, new_eras, transfer_to
+            )
 
         _post_patient_payments_for_candid_claim(state, client, candid_claim_id)
 
@@ -543,9 +565,13 @@ def _process_encounter(
 def _finalize_effects(state: _SyncState, claim: Claim) -> None:
     """Append metadata, banner, queue-move, and dedup-list effects after all encounters processed."""
     now = datetime.now(UTC).isoformat()
-    state.effects.append(state.claim_effect.upsert_metadata(key=META_LAST_SYNC, value=now))
     state.effects.append(
-        state.claim_effect.upsert_metadata(key=META_CLAIM_STATUS, value=state.claim_status)
+        state.claim_effect.upsert_metadata(key=META_LAST_SYNC, value=now)
+    )
+    state.effects.append(
+        state.claim_effect.upsert_metadata(
+            key=META_CLAIM_STATUS, value=state.claim_status
+        )
     )
 
     submitted_at = get_claim_metadata(claim, META_SUBMITTED_AT)
@@ -579,7 +605,9 @@ def _finalize_effects(state: _SyncState, claim: Claim) -> None:
             )
         )
     if state.attempted_payment_ids:
-        updated_pmt_ids = sorted(state.synced_pmt_ids | set(state.attempted_payment_ids))
+        updated_pmt_ids = sorted(
+            state.synced_pmt_ids | set(state.attempted_payment_ids)
+        )
         state.effects.insert(
             0,
             state.claim_effect.upsert_metadata(
@@ -628,8 +656,7 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
     encounters_meta = get_claim_metadata(claim, META_ENCOUNTERS)
     if not encounters_meta:
         log.info(
-            f"Candid sync: no candid_encounters metadata for claim "
-            f"{claim.id}, skipping"
+            f"Candid sync: no candid_encounters metadata for claim {claim.id}, skipping"
         )
         return []
 

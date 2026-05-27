@@ -222,6 +222,29 @@ def test_insurance_payment_from_service_line() -> None:
     assert txns[1].write_off is True
 
 
+def test_contractual_uses_line_item_charge_not_era_charge() -> None:
+    """ERA charge_amount often disagrees with the Canvas line item's charge;
+    the contractual write-off is computed against the Canvas charge."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    # ERA reports a different charge ($120) than the Canvas line item ($100).
+    service_lines = [
+        _candid_service_line(
+            charge_amount_cents=12000,
+            primary_paid_amount_cents=7000,
+            allowed_amount_cents=9500,
+        )
+    ]
+    txns = _build_insurance_transactions(service_lines, [li], CANVAS_CLAIM_ID)
+    assert len(txns) == 2
+    # The "charged" reported on the txn still echoes the ERA value.
+    assert txns[0].charged == Decimal("120.00")
+    # But the contractual write-off uses the Canvas line item's charge:
+    # $100 charged - $95 allowed = $5 (not $120 - $95 = $25).
+    assert txns[1].adjustment == Decimal("5.00")
+    assert txns[1].adjustment_code == "CO-45"
+    assert txns[1].write_off is True
+
+
 def test_insurance_manual_adjustments() -> None:
     """Manual adjustments (service_line_manual_adjustments) are picked up."""
     li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
