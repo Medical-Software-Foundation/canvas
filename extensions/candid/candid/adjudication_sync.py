@@ -129,10 +129,18 @@ def _compute_synced_amounts(service_lines: list[dict]) -> dict[str, int]:
 
 
 def _has_delta(
-    current: dict[str, int], previously_synced: dict[str, int], tier: str
+    current: dict[str, int], previously_synced: dict[str, int | None], tier: str
 ) -> bool:
-    """Check if a payer tier has new amounts to post."""
-    return current.get(tier, 0) > previously_synced.get(tier, 0)
+    """Check if a payer tier has new amounts to post.
+
+    Returns True when:
+    - The tier was never synced before (previous is None) — even if current is 0
+    - The current amount exceeds the previously synced amount
+    """
+    prev = previously_synced.get(tier)
+    if prev is None:
+        return True
+    return current.get(tier, 0) > prev
 
 
 # ---------------------------------------------------------------------------
@@ -406,9 +414,9 @@ def _init_sync_state(claim: Claim) -> _SyncState:
         known_payment_ids=synced_pmt_ids | reported_pmt_ids,
         prev_synced_amounts=get_claim_metadata(claim, META_SYNCED_AMOUNTS)
         or {
-            "primary": 0,
-            "secondary": 0,
-            "tertiary": 0,
+            "primary": None,
+            "secondary": None,
+            "tertiary": None,
         },
     )
 
