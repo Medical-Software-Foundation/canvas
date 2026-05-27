@@ -24,6 +24,17 @@ def _value(summary: "dict[str, SummaryEntry]", key: str) -> float | int | None:
     return raw if isinstance(raw, (int, float)) else None
 
 
+def _source(summary: "dict[str, SummaryEntry]", key: str) -> str | None:
+    """Read the ``source`` flag ("mock" or "real") for a summary entry.
+
+    Used by insight rules that need to know whether the value they are
+    reading came from a real DB query or the mock fallback — so the rule
+    copy can match what the user is actually seeing on the matching card.
+    """
+    entry = summary.get(key)
+    return entry["source"] if entry is not None else None
+
+
 def _insight(severity: str, title: str, description: str, tag: str) -> dict[str, str]:
     return {"severity": severity, "title": title, "description": description, "tag": tag}
 
@@ -59,12 +70,25 @@ def compute_insights(summary: "dict[str, SummaryEntry]") -> list[dict[str, str]]
 
     appt_count = _value(summary, "next_month_appt_count")
     if appt_count == 0:
-        out.append(_insight(
-            "info",
-            "No appointments scheduled next month",
-            "Projected revenue cannot be estimated until appointments are booked.",
-            "Volume",
-        ))
+        if _source(summary, "next_month_projected") == "mock":
+            # The Next Month Projected card next to this insight is showing
+            # mock data (no claim history). Saying "projection cannot be
+            # estimated" while a confident "$X (Demo data)" sits above is
+            # contradictory; use copy that matches what the card is actually
+            # displaying.
+            out.append(_insight(
+                "info",
+                "Demonstration data shown",
+                "No claim history or appointments yet — projected revenue is a placeholder until real activity is logged.",
+                "Volume",
+            ))
+        else:
+            out.append(_insight(
+                "info",
+                "No appointments scheduled next month",
+                "Projected revenue cannot be estimated until appointments are booked.",
+                "Volume",
+            ))
 
     this_month = _value(summary, "this_month_collected")
     projected = _value(summary, "next_month_projected")
