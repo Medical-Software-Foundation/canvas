@@ -340,14 +340,11 @@ def test_validate_session_returns_none_when_missing() -> None:
     assert handler.validate_session("abc") is None
 
 
-def test_validate_session_returns_none_when_staff_mismatches() -> None:
+def test_validate_session_returns_session_regardless_of_staff() -> None:
+    """Multiple staff may legitimately use the same session (clinical
+    handoff during a treatment). The session_id UUID is the capability;
+    we don't gate by which staff originally started it."""
     session = _make_session(staff_id="other-staff")
-    handler = _make_handler(session=session, path_params={"session_id": "abc"})
-    assert handler.validate_session("abc") is None
-
-
-def test_validate_session_returns_session_on_match() -> None:
-    session = _make_session(staff_id="staff-1")
     handler = _make_handler(session=session, path_params={"session_id": "abc"})
     assert handler.validate_session("abc") is session
 

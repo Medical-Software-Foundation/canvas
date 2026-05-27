@@ -31,6 +31,34 @@ This plugin provides an integration for the VitalStream device by Caretaker Medi
 
 - **LiveObservationsChannel**: WebSocket channel that streams readings and the `session_closed` event to the UI. Authorizes the connection by looking up the session row in the DB.
 
+## Authorization model
+
+The plugin intentionally allows **any logged-in Canvas staff member** to open
+the VitalStream UI for any note and to use any session whose `session_id`
+they know. This supports clinical handoffs during a treatment — a covering
+clinician picks up where the recording clinician left off, on the same note,
+without losing data.
+
+What this means concretely:
+
+- `VitalstreamUIAPI` is gated by `StaffSessionAuthMixin`, so callers must
+  have a valid Canvas staff session.
+- `validate_session()` only checks that the `session_id` exists. The
+  `session.staff_id` field is recorded as audit info (who *started* the
+  session) but is not used as an access gate. `LiveObservationsChannel`
+  applies the same rule for the WebSocket.
+- The session_id UUID is the capability. It's unguessable, surfaced only
+  through the rendered QR code and the WebSocket channel name, and rotates
+  per note.
+- The plugin does **not** add its own staff↔patient access check on
+  `/vitalstream-ui/notes/<note_dbid>/`. It trusts Canvas's platform-level
+  access controls (staff session validity, and whichever per-note visibility
+  rules the SDK queryset for `Note.objects.get(dbid=...)` already applies).
+
+If your deployment needs per-staff or per-clinic restrictions on which
+notes can receive VitalStream recordings, enforce that at the Canvas
+platform level — the plugin will not add a second wall.
+
 ## Custom data
 
 The plugin owns the `canvas__vitalstream` namespace with two models:

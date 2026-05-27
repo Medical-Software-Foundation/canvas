@@ -641,14 +641,13 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
     """API to serve the VitalStream integration UI."""
 
     def validate_session(self, session_id: str) -> VitalstreamSession | None:
-        """Return the VitalstreamSession if it belongs to the logged-in staff."""
-        logged_in_staff_id = self.request.headers["canvas-logged-in-user-id"]
-        session = (
+        """Return the session if it exists. Any logged-in staff is allowed —
+        clinical handoffs are intentional, so the session_id UUID itself is
+        the capability. session.staff_id remains as audit info (who started
+        the session) but is not used as an access gate."""
+        return (
             VitalstreamSession.objects.filter(session_id=session_id).first()
         )
-        if session is None or session.staff_id != logged_in_staff_id:
-            return None
-        return session
 
     @api.get("/vitalstream-ui/notes/<note_dbid>/")
     def index(self) -> list[Response | Effect]:
