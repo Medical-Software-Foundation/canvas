@@ -42,6 +42,65 @@ def _get_payer_id(coverage, secrets: dict) -> str | None:
     return None
 
 
+def _build_patient_resource(patient, mbi: str) -> dict:
+    """Build a US Core Patient FHIR resource for inclusion in CMS ACCESS API requests.
+
+    Per Operations Manual v0.9.8 §Patient Identification, the resource must contain:
+    - identifier with cmsMBI system + MC type code
+    - name (family + given)
+    - gender (male/female/other/unknown)
+    - birthDate (REQUIRED — CMS rejects requests without it)
+
+    Raises ValueError if patient.birth_date is None, because CMS will reject the
+    payload. Callers must ensure the patient has a birth date on file before
+    invoking any ACCESS operation.
+    """
+    if patient.birth_date is None:
+        raise ValueError(
+            f"Patient {patient.id} has no birth_date — CMS ACCESS requires birthDate "
+            "in the Patient resource. Ensure birth date is recorded before submitting."
+        )
+
+    # Resolve gender: use sex_at_birth if present, fall back to gender attribute,
+    # then default to "unknown" per the FHIR Patient.gender value set.
+    gender = "unknown"
+    if hasattr(patient, "sex_at_birth") and patient.sex_at_birth:
+        raw = patient.sex_at_birth.lower()
+        if raw in ("male", "female", "other", "unknown"):
+            gender = raw
+    elif hasattr(patient, "gender") and patient.gender:
+        raw = patient.gender.lower()
+        if raw in ("male", "female", "other", "unknown"):
+            gender = raw
+
+    return {
+        "resourceType": "Patient",
+        "id": str(patient.id),
+        "identifier": [
+            {
+                "type": {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+                            "code": "MC",
+                        }
+                    ]
+                },
+                "system": "http://terminology.hl7.org/NamingSystem/cmsMBI",
+                "value": mbi,
+            }
+        ],
+        "name": [
+            {
+                "family": patient.last_name or "",
+                "given": [patient.first_name or ""],
+            }
+        ],
+        "gender": gender,
+        "birthDate": patient.birth_date.isoformat(),
+    }
+
+
 class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
     """Internal endpoints invoked by the chart-button modals.
 
@@ -88,6 +147,17 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        try:
+            patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
+        except ValueError as exc:
+            log.error(f"[cms-access] Cannot build Patient resource for {patient.id}: {exc}")
+            return [
+                JSONResponse(
+                    {"error": str(exc)},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
         log.info(
             f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
             f"(issuer={coverage.issuer.name}) for patient {patient.id}"
@@ -96,7 +166,7 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         try:
             result = check_eligibility(
                 self.secrets,
-                mbi=coverage.id_number,
+                patient_resource=patient_resource,
                 payer_id=payer_id,
                 track=track,
             )
@@ -119,13 +189,14 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 ),
             ]
 
-        status = _extract_eligibility_status(result)
+        status, raw_code = _extract_eligibility_status(result)
         alignment, _ = ACCESSAlignment.objects.get_or_create(
             patient=patient,
             track=track,
             defaults={"status": status},
         )
         alignment.status = status
+        alignment.status_message = raw_code
         alignment.last_eligibility_check_at = _utcnow()
 
         if result.get("status_code") == 202:
@@ -188,6 +259,17 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        try:
+            patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
+        except ValueError as exc:
+            log.error(f"[cms-access] Cannot build Patient resource for {patient.id}: {exc}")
+            return [
+                JSONResponse(
+                    {"error": str(exc)},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
         log.info(
             f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
             f"(issuer={coverage.issuer.name}) for patient {patient.id}"
@@ -196,7 +278,7 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         try:
             status_code, content_location, _ = align(
                 self.secrets,
-                mbi=coverage.id_number,
+                patient_resource=patient_resource,
                 payer_id=payer_id,
                 track=track,
                 clinical_justification=clinical_justification,
@@ -284,6 +366,17 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        try:
+            patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
+        except ValueError as exc:
+            log.error(f"[cms-access] Cannot build Patient resource for {patient.id}: {exc}")
+            return [
+                JSONResponse(
+                    {"error": str(exc)},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
         log.info(
             f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
             f"(issuer={coverage.issuer.name}) for patient {patient.id}"
@@ -318,10 +411,9 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         try:
             status_code, content_location, _ = unalign(
                 self.secrets,
-                mbi=coverage.id_number,
+                patient_resource=patient_resource,
                 payer_id=payer_id,
                 track=alignment.track,
-                alignment_id=alignment_id,
                 reason_code=reason_code,
             )
         except RuntimeError as exc:
@@ -356,17 +448,47 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         ]
 
 
-def _extract_eligibility_status(result: dict) -> str:
-    """Parse a CMS check-eligibility Parameters response into an ACCESSAlignment status string."""
+def _extract_eligibility_status(result: dict) -> tuple[str, str]:
+    """Parse a completed $submission-status Parameters response (eligibility op).
+
+    The OM v0.9.8 uses `result` (valueCodeableConcept) in the polling response,
+    not `status` (valueCode) as in the earlier flat-payload implementation.
+
+    Returns (alignment_status_constant, raw_cms_code) so the caller can persist
+    the raw code in status_message for display in the chart summary.
+
+    Mapping rules:
+    - starts with "eligible"                → STATUS_ELIGIBLE
+    - "not-eligible-already-aligned"        → STATUS_ALREADY_ALIGNED
+    - starts with "not-eligible-"           → STATUS_INELIGIBLE
+    - anything else                         → STATUS_ERROR
+    """
     for param in result.get("parameter", []):
+        if param.get("name") == "result":
+            codings = (
+                param.get("valueCodeableConcept", {})
+                .get("coding", [])
+            )
+            if codings:
+                raw_code = codings[0].get("code", "")
+                return _map_eligibility_code(raw_code), raw_code
+        # Also handle legacy/direct invocation responses that may use valueCode
         if param.get("name") == "status":
-            code = param.get("valueCode", "")
-            if code == "eligible":
-                return ACCESSAlignment.STATUS_ELIGIBLE
-            if code == "ineligible":
-                return ACCESSAlignment.STATUS_INELIGIBLE
-            if code == "already-aligned":
-                return ACCESSAlignment.STATUS_ALREADY_ALIGNED
+            raw_code = param.get("valueCode", "")
+            return _map_eligibility_code(raw_code), raw_code
+    return ACCESSAlignment.STATUS_ERROR, ""
+
+
+def _map_eligibility_code(code: str) -> str:
+    """Map a CMS ACCESSEligibilityResultCS code to an ACCESSAlignment status constant."""
+    if not code:
+        return ACCESSAlignment.STATUS_ERROR
+    if code == "not-eligible-already-aligned":
+        return ACCESSAlignment.STATUS_ALREADY_ALIGNED
+    if code.startswith("eligible"):
+        return ACCESSAlignment.STATUS_ELIGIBLE
+    if code.startswith("not-eligible-"):
+        return ACCESSAlignment.STATUS_INELIGIBLE
     return ACCESSAlignment.STATUS_ERROR
 
 

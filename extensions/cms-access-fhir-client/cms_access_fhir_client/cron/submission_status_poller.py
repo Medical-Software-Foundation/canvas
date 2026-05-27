@@ -137,14 +137,20 @@ def _apply_poll_result(alignment: ACCESSAlignment, status_code: int, body: dict)
 
 
 def _apply_completed_result(alignment: ACCESSAlignment, result: dict) -> None:
-    """Extract final state from a completed submission-status Parameters response."""
+    """Extract final state from a completed submission-status Parameters response.
+
+    Per OM v0.9.8, the polling response uses:
+        {"name": "result", "valueCodeableConcept": {"coding": [{"code": "eligible", ...}]}}
+
+    The raw CMS code is persisted in alignment.status_message for chart-summary display.
+    """
     op = alignment.submission_op
 
     if op == ACCESSAlignment.SUB_OP_ELIGIBILITY:
-        for param in result.get("parameter", []):
-            if param.get("name") == "status":
-                code = param.get("valueCode", "")
-                alignment.status = code if code else ACCESSAlignment.STATUS_ERROR
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        status, raw_code = _extract_eligibility_status(result)
+        alignment.status = status
+        alignment.status_message = raw_code
         from datetime import datetime, timezone
         alignment.last_eligibility_check_at = datetime.now(timezone.utc)
 

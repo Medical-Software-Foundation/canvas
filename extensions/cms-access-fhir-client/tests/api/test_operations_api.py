@@ -1,15 +1,18 @@
 """Tests for AccessOperationsApi — GET modals and POST submissions.
 
-Key changes tested here:
-- Flat payload: check_eligibility / align / unalign now receive mbi, payer_id, track directly
-- Eligibility modal and submit now require track in the request body
+Key changes tested here (OM v0.9.8 payload rebuild):
+- check_eligibility / align / unalign now receive patient_resource, payer_id, track
+- _build_patient_resource builds a US Core Patient resource from Canvas patient data
+- Eligibility modal and submit require track in the request body
 - payer_id lookup order: coverage.issuer.payer_id → ACCESS_DEFAULT_PAYER_ID secret → 422 fail-closed
-- unalign pulls track from the stored ACCESSAlignment record, not the request
+- unalign pulls track from the stored ACCESSAlignment record
+- _extract_eligibility_status returns (status_constant, raw_code) and reads `result` param
 """
 import json
 import pytest
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
+from datetime import date
 
 
 def _make_handler(secrets=None, request_body=None, query_params=None):
@@ -23,12 +26,19 @@ def _make_handler(secrets=None, request_body=None, query_params=None):
     return handler, mock_request
 
 
-def _make_mock_patient(patient_id="p-123", first_name="Jane", last_name="Doe", birth_date=None):
+def _make_mock_patient(
+    patient_id="p-123",
+    first_name="Jane",
+    last_name="Doe",
+    birth_date=date(1950, 1, 1),
+    sex_at_birth="female",
+):
     patient = MagicMock()
     patient.id = patient_id
     patient.first_name = first_name
     patient.last_name = last_name
     patient.birth_date = birth_date
+    patient.sex_at_birth = sex_at_birth
     return patient
 
 
@@ -42,6 +52,73 @@ def _make_mock_coverage(mbi="1EG4-TE5-MK72", issuer_name="IL Medicare Part B", d
     return coverage
 
 
+# ---------------------------------------------------------------------------
+# _build_patient_resource
+# ---------------------------------------------------------------------------
+
+class TestBuildPatientResource:
+    def test_raises_when_birth_date_is_none(self):
+        """Missing birthDate must raise, not silently strip the field."""
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient(birth_date=None)
+        with pytest.raises(ValueError, match="birth_date"):
+            _build_patient_resource(patient, mbi="1EG4-TE5-MK72")
+
+    def test_includes_birth_date_as_iso_string(self):
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient(birth_date=date(1950, 3, 15))
+        result = _build_patient_resource(patient, mbi="1EG4-TE5-MK72")
+        assert result["birthDate"] == "1950-03-15"
+
+    def test_includes_mbi_identifier_with_mc_type(self):
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient()
+        result = _build_patient_resource(patient, mbi="TEST-MBI-99")
+        identifiers = result["identifier"]
+        assert len(identifiers) == 1
+        ident = identifiers[0]
+        assert ident["system"] == "http://terminology.hl7.org/NamingSystem/cmsMBI"
+        assert ident["value"] == "TEST-MBI-99"
+        assert ident["type"]["coding"][0]["code"] == "MC"
+
+    def test_includes_name(self):
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient(first_name="Alice", last_name="Smith")
+        result = _build_patient_resource(patient, mbi="X")
+        assert result["name"][0]["family"] == "Smith"
+        assert result["name"][0]["given"] == ["Alice"]
+
+    def test_uses_sex_at_birth_for_gender(self):
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient(sex_at_birth="male")
+        result = _build_patient_resource(patient, mbi="X")
+        assert result["gender"] == "male"
+
+    def test_falls_back_to_unknown_when_no_gender(self):
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient(sex_at_birth=None)
+        # Remove gender attribute entirely
+        del patient.gender
+        result = _build_patient_resource(patient, mbi="X")
+        assert result["gender"] == "unknown"
+
+    def test_resource_type_is_patient(self):
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient()
+        result = _build_patient_resource(patient, mbi="X")
+        assert result["resourceType"] == "Patient"
+
+    def test_id_is_patient_uuid(self):
+        from cms_access_fhir_client.api.operations_api import _build_patient_resource
+        patient = _make_mock_patient(patient_id="abc-uuid-123")
+        result = _build_patient_resource(patient, mbi="X")
+        assert result["id"] == "abc-uuid-123"
+
+
+# ---------------------------------------------------------------------------
+# Modal GETs
+# ---------------------------------------------------------------------------
+
 class TestEligibilityModalGet:
     def test_returns_html_when_patient_id_present(self):
         from canvas_sdk.effects.simple_api import HTMLResponse
@@ -52,7 +129,6 @@ class TestEligibilityModalGet:
         assert isinstance(effects[0], HTMLResponse)
 
     def test_eligibility_html_contains_track_selector(self):
-        """The eligibility modal HTML must include a track <select> (required by CMS)."""
         from canvas_sdk.effects.simple_api import HTMLResponse
         handler, _ = _make_handler(query_params={"patient_id": "p-123"})
         effects = handler.eligibility_modal()
@@ -105,9 +181,11 @@ class TestUnalignModalGet:
         assert effects[0].status_code == HTTPStatus.BAD_REQUEST
 
 
-class TestGetPayerId:
-    """Tests for the _get_payer_id helper: coverage → secret → None."""
+# ---------------------------------------------------------------------------
+# _get_payer_id
+# ---------------------------------------------------------------------------
 
+class TestGetPayerId:
     def test_returns_coverage_payer_id_when_populated(self):
         from cms_access_fhir_client.api.operations_api import _get_payer_id
         coverage = _make_mock_coverage(payer_id="payer-from-transactor")
@@ -117,12 +195,11 @@ class TestGetPayerId:
     def test_falls_back_to_secret_when_transactor_empty(self):
         from cms_access_fhir_client.api.operations_api import _get_payer_id
         coverage = _make_mock_coverage(payer_id=None)
-        coverage.issuer.payer_id = ""  # explicitly empty
+        coverage.issuer.payer_id = ""
         result = _get_payer_id(coverage, secrets={"ACCESS_DEFAULT_PAYER_ID": "secret-payer"})
         assert result == "secret-payer"
 
     def test_transactor_wins_over_secret(self):
-        """Coverage.issuer.payer_id takes precedence over the secret."""
         from cms_access_fhir_client.api.operations_api import _get_payer_id
         coverage = _make_mock_coverage(payer_id="transactor-payer")
         result = _get_payer_id(coverage, secrets={"ACCESS_DEFAULT_PAYER_ID": "secret-payer"})
@@ -136,6 +213,10 @@ class TestGetPayerId:
         assert result is None
 
 
+# ---------------------------------------------------------------------------
+# submit_eligibility
+# ---------------------------------------------------------------------------
+
 class TestSubmitEligibility:
     def test_returns_400_when_no_patient_id(self):
         handler, _ = _make_handler(request_body={})
@@ -145,7 +226,6 @@ class TestSubmitEligibility:
         assert effects[0].status_code == HTTPStatus.BAD_REQUEST
 
     def test_returns_400_when_no_track(self):
-        """Eligibility now requires track — CMS needs it as a flat parameter."""
         handler, _ = _make_handler(request_body={"patient_id": "p-123"})
         effects = handler.submit_eligibility()
 
@@ -170,7 +250,6 @@ class TestSubmitEligibility:
         assert effects[0].status_code == HTTPStatus.NOT_FOUND
 
     def test_returns_422_when_no_part_b_coverage(self):
-        """Fail closed: 422 when patient has no active Medicare Part B coverage."""
         handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
         mock_patient = _make_mock_patient()
 
@@ -187,7 +266,6 @@ class TestSubmitEligibility:
         assert "Medicare Part B" in body["error"]
 
     def test_returns_422_when_payer_id_cannot_be_determined(self):
-        """Fail closed: 422 when neither Transactor.payer_id nor ACCESS_DEFAULT_PAYER_ID is set."""
         handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"}, secrets={})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(payer_id=None)
@@ -205,6 +283,24 @@ class TestSubmitEligibility:
         body = json.loads(effects[0].content)
         assert "payerID" in body["error"]
 
+    def test_returns_422_when_patient_birth_date_is_none(self):
+        """Patient with no birth_date must return 422 — CMS requires birthDate."""
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
+        mock_patient = _make_mock_patient(birth_date=None)
+        mock_coverage = _make_mock_coverage(payer_id="00831")
+
+        with (
+            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
+            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
+        ):
+            mock_patient_objects.get.return_value = mock_patient
+            effects = handler.submit_eligibility()
+
+        assert len(effects) == 1
+        assert effects[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+        body = json.loads(effects[0].content)
+        assert "birth_date" in body["error"].lower() or "birthDate" in body["error"]
+
     def test_uses_coverage_payer_id_preferentially(self):
         """When Transactor.payer_id is populated it must be passed to check_eligibility."""
         handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
@@ -212,81 +308,7 @@ class TestSubmitEligibility:
         mock_coverage = _make_mock_coverage(mbi="MBI-123", payer_id="transactor-payer-id")
         mock_alignment = MagicMock()
         mock_alignment.status = "eligible"
-
-        with (
-            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
-            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
-            patch("cms_access_fhir_client.api.operations_api.check_eligibility") as mock_check,
-            patch("cms_access_fhir_client.api.operations_api.ACCESSAlignment.objects") as mock_alignment_objects,
-        ):
-            mock_patient_objects.get.return_value = mock_patient
-            mock_check.return_value = {"parameter": [{"name": "status", "valueCode": "eligible"}]}
-            mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
-
-            handler.submit_eligibility()
-
-        _, call_kwargs = mock_check.call_args
-        assert call_kwargs["payer_id"] == "transactor-payer-id"
-
-    def test_falls_back_to_secret_payer_id(self):
-        """When Transactor.payer_id is absent, use ACCESS_DEFAULT_PAYER_ID secret."""
-        handler, _ = _make_handler(
-            request_body={"patient_id": "p-123", "track": "eCKM"},
-            secrets={"ACCESS_DEFAULT_PAYER_ID": "secret-fallback-payer"},
-        )
-        mock_patient = _make_mock_patient()
-        mock_coverage = _make_mock_coverage(payer_id=None)
-        mock_coverage.issuer.payer_id = ""
-        mock_alignment = MagicMock()
-        mock_alignment.status = "eligible"
-
-        with (
-            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
-            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
-            patch("cms_access_fhir_client.api.operations_api.check_eligibility") as mock_check,
-            patch("cms_access_fhir_client.api.operations_api.ACCESSAlignment.objects") as mock_alignment_objects,
-        ):
-            mock_patient_objects.get.return_value = mock_patient
-            mock_check.return_value = {"parameter": [{"name": "status", "valueCode": "eligible"}]}
-            mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
-
-            handler.submit_eligibility()
-
-        _, call_kwargs = mock_check.call_args
-        assert call_kwargs["payer_id"] == "secret-fallback-payer"
-
-    def test_check_eligibility_called_with_flat_mbi_payer_id_track(self):
-        """check_eligibility must be called with flat mbi/payer_id/track — no patient_resource."""
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "MSK"})
-        mock_patient = _make_mock_patient()
-        mock_coverage = _make_mock_coverage(mbi="MBI-FLAT", payer_id="payer-flat")
-        mock_alignment = MagicMock()
-        mock_alignment.status = "eligible"
-
-        with (
-            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
-            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
-            patch("cms_access_fhir_client.api.operations_api.check_eligibility") as mock_check,
-            patch("cms_access_fhir_client.api.operations_api.ACCESSAlignment.objects") as mock_alignment_objects,
-        ):
-            mock_patient_objects.get.return_value = mock_patient
-            mock_check.return_value = {"parameter": [{"name": "status", "valueCode": "eligible"}]}
-            mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
-
-            handler.submit_eligibility()
-
-        _, call_kwargs = mock_check.call_args
-        assert call_kwargs["mbi"] == "MBI-FLAT"
-        assert call_kwargs["payer_id"] == "payer-flat"
-        assert call_kwargs["track"] == "MSK"
-        assert "patient_resource" not in call_kwargs
-
-    def test_creates_alignment_on_success(self):
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
-        mock_patient = _make_mock_patient()
-        mock_coverage = _make_mock_coverage(payer_id="payer-001")
-        mock_alignment = MagicMock()
-        mock_alignment.status = "eligible"
+        mock_alignment.status_message = ""
 
         with (
             patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
@@ -296,7 +318,66 @@ class TestSubmitEligibility:
         ):
             mock_patient_objects.get.return_value = mock_patient
             mock_check.return_value = {
-                "parameter": [{"name": "status", "valueCode": "eligible"}]
+                "parameter": [
+                    {"name": "result", "valueCodeableConcept": {"coding": [{"code": "eligible"}]}}
+                ]
+            }
+            mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
+
+            handler.submit_eligibility()
+
+        _, call_kwargs = mock_check.call_args
+        assert call_kwargs["payer_id"] == "transactor-payer-id"
+
+    def test_check_eligibility_called_with_patient_resource_not_mbi(self):
+        """check_eligibility must be called with patient_resource — no flat mbi kwarg."""
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "MSK"})
+        mock_patient = _make_mock_patient()
+        mock_coverage = _make_mock_coverage(mbi="MBI-FLAT", payer_id="payer-flat")
+        mock_alignment = MagicMock()
+        mock_alignment.status = "eligible"
+        mock_alignment.status_message = ""
+
+        with (
+            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
+            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
+            patch("cms_access_fhir_client.api.operations_api.check_eligibility") as mock_check,
+            patch("cms_access_fhir_client.api.operations_api.ACCESSAlignment.objects") as mock_alignment_objects,
+        ):
+            mock_patient_objects.get.return_value = mock_patient
+            mock_check.return_value = {
+                "parameter": [
+                    {"name": "result", "valueCodeableConcept": {"coding": [{"code": "eligible"}]}}
+                ]
+            }
+            mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
+
+            handler.submit_eligibility()
+
+        _, call_kwargs = mock_check.call_args
+        assert "patient_resource" in call_kwargs
+        assert call_kwargs["patient_resource"]["resourceType"] == "Patient"
+        assert "mbi" not in call_kwargs
+
+    def test_creates_alignment_on_success(self):
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
+        mock_patient = _make_mock_patient()
+        mock_coverage = _make_mock_coverage(payer_id="payer-001")
+        mock_alignment = MagicMock()
+        mock_alignment.status = "eligible"
+        mock_alignment.status_message = ""
+
+        with (
+            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
+            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
+            patch("cms_access_fhir_client.api.operations_api.check_eligibility") as mock_check,
+            patch("cms_access_fhir_client.api.operations_api.ACCESSAlignment.objects") as mock_alignment_objects,
+        ):
+            mock_patient_objects.get.return_value = mock_patient
+            mock_check.return_value = {
+                "parameter": [
+                    {"name": "result", "valueCodeableConcept": {"coding": [{"code": "eligible"}]}}
+                ]
             }
             mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
 
@@ -306,7 +387,8 @@ class TestSubmitEligibility:
         assert effects[-1].status_code == HTTPStatus.OK
         assert mock_alignment.save.called
 
-    def test_sets_submission_state_on_202(self):
+    def test_persists_raw_cms_code_in_status_message(self):
+        """The raw CMS result code must be saved in status_message."""
         handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(payer_id="payer-001")
@@ -320,19 +402,20 @@ class TestSubmitEligibility:
         ):
             mock_patient_objects.get.return_value = mock_patient
             mock_check.return_value = {
-                "status_code": 202,
-                "content_location": "https://api.cms.gov/status/abc",
-                "parameter": [],
+                "parameter": [
+                    {
+                        "name": "result",
+                        "valueCodeableConcept": {"coding": [{"code": "not-eligible-diagnoses"}]},
+                    }
+                ]
             }
             mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
 
             handler.submit_eligibility()
 
-        assert mock_alignment.submission_status_url == "https://api.cms.gov/status/abc"
-        assert mock_alignment.save.called
+        assert mock_alignment.status_message == "not-eligible-diagnoses"
 
     def test_returns_502_on_runtime_error(self):
-        """RuntimeError from CMS must result in 502 and saved error alignment."""
         handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(payer_id="payer-001")
@@ -354,6 +437,10 @@ class TestSubmitEligibility:
         body = json.loads(effects[-1].content)
         assert "CMS down" in body["error"]
 
+
+# ---------------------------------------------------------------------------
+# submit_align
+# ---------------------------------------------------------------------------
 
 class TestSubmitAlign:
     def test_returns_400_when_no_patient_id(self):
@@ -437,8 +524,27 @@ class TestSubmitAlign:
         body = json.loads(effects[0].content)
         assert "payerID" in body["error"]
 
-    def test_align_called_with_flat_mbi_payer_id_track(self):
-        """align() must receive mbi, payer_id, track directly — no patient_resource."""
+    def test_returns_422_when_patient_birth_date_is_none(self):
+        handler, _ = _make_handler(request_body={
+            "patient_id": "p-123",
+            "track": "eCKM",
+            "clinical_justification": "Stage 3 CKD",
+        })
+        mock_patient = _make_mock_patient(birth_date=None)
+        mock_coverage = _make_mock_coverage(payer_id="00831")
+
+        with (
+            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
+            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
+        ):
+            mock_patient_objects.get.return_value = mock_patient
+            effects = handler.submit_align()
+
+        assert len(effects) == 1
+        assert effects[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+    def test_align_called_with_patient_resource_not_mbi(self):
+        """align() must receive patient_resource — no flat mbi kwarg."""
         handler, _ = _make_handler(request_body={
             "patient_id": "p-123",
             "track": "eCKM",
@@ -462,10 +568,11 @@ class TestSubmitAlign:
             handler.submit_align()
 
         _, call_kwargs = mock_align.call_args
-        assert call_kwargs["mbi"] == "MBI-ALIGN"
+        assert "patient_resource" in call_kwargs
+        assert call_kwargs["patient_resource"]["resourceType"] == "Patient"
         assert call_kwargs["payer_id"] == "payer-align"
         assert call_kwargs["track"] == "eCKM"
-        assert "patient_resource" not in call_kwargs
+        assert "mbi" not in call_kwargs
 
     def test_creates_alignment_on_success(self):
         handler, _ = _make_handler(request_body={
@@ -495,6 +602,10 @@ class TestSubmitAlign:
         assert mock_alignment.submission_status_url == "https://api.cms.gov/status/xyz"
 
 
+# ---------------------------------------------------------------------------
+# submit_unalign
+# ---------------------------------------------------------------------------
+
 class TestSubmitUnalign:
     def test_returns_400_when_no_patient_id(self):
         handler, _ = _make_handler(request_body={})
@@ -511,7 +622,7 @@ class TestSubmitUnalign:
         assert effects[0].status_code == HTTPStatus.BAD_REQUEST
 
     def test_returns_404_when_patient_not_found(self):
-        handler, _ = _make_handler(request_body={"patient_id": "missing", "reason_code": "patient-request"})
+        handler, _ = _make_handler(request_body={"patient_id": "missing", "reason_code": "loss-of-contact"})
 
         from cms_access_fhir_client.models.access_alignment import CustomPatient
 
@@ -526,7 +637,7 @@ class TestSubmitUnalign:
         assert effects[0].status_code == HTTPStatus.NOT_FOUND
 
     def test_returns_422_when_no_part_b_coverage(self):
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "patient-request"})
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"})
         mock_patient = _make_mock_patient()
 
         with (
@@ -543,7 +654,7 @@ class TestSubmitUnalign:
 
     def test_returns_422_when_payer_id_cannot_be_determined(self):
         handler, _ = _make_handler(
-            request_body={"patient_id": "p-123", "reason_code": "patient-request"},
+            request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"},
             secrets={},
         )
         mock_patient = _make_mock_patient()
@@ -562,8 +673,23 @@ class TestSubmitUnalign:
         body = json.loads(effects[0].content)
         assert "payerID" in body["error"]
 
+    def test_returns_422_when_patient_birth_date_is_none(self):
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"})
+        mock_patient = _make_mock_patient(birth_date=None)
+        mock_coverage = _make_mock_coverage(payer_id="00831")
+
+        with (
+            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
+            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
+        ):
+            mock_patient_objects.get.return_value = mock_patient
+            effects = handler.submit_unalign()
+
+        assert len(effects) == 1
+        assert effects[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
     def test_returns_404_when_no_active_alignment(self):
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "patient-request"})
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(payer_id="payer-001")
 
@@ -581,7 +707,7 @@ class TestSubmitUnalign:
         assert effects[0].status_code == HTTPStatus.NOT_FOUND
 
     def test_returns_422_when_alignment_missing_id(self):
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "patient-request"})
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(payer_id="payer-001")
         mock_alignment = MagicMock()
@@ -600,10 +726,10 @@ class TestSubmitUnalign:
         assert len(effects) == 1
         assert effects[0].status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_unalign_called_with_flat_params_including_track_from_alignment(self):
-        """unalign() must receive mbi, payer_id, track, alignment_id, reason_code.
-        track comes from the stored alignment record, not the HTTP request body."""
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "patient-request"})
+    def test_unalign_called_with_patient_resource_and_track_from_alignment(self):
+        """unalign() must receive patient_resource, payer_id, track (from alignment), reason_code.
+        No flat mbi, no alignmentId."""
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(mbi="MBI-UNALIGN", payer_id="payer-unalign")
         mock_alignment = MagicMock()
@@ -624,16 +750,17 @@ class TestSubmitUnalign:
             handler.submit_unalign()
 
         _, call_kwargs = mock_unalign.call_args
-        assert call_kwargs["mbi"] == "MBI-UNALIGN"
+        assert "patient_resource" in call_kwargs
+        assert call_kwargs["patient_resource"]["resourceType"] == "Patient"
         assert call_kwargs["payer_id"] == "payer-unalign"
-        assert call_kwargs["track"] == "BH"  # pulled from alignment record
-        assert call_kwargs["alignment_id"] == "align-abc"
-        assert call_kwargs["reason_code"] == "patient-request"
-        assert "patient_resource" not in call_kwargs
-        assert "patient_fhir_id" not in call_kwargs
+        assert call_kwargs["track"] == "BH"  # from alignment record
+        assert call_kwargs["reason_code"] == "loss-of-contact"
+        assert "mbi" not in call_kwargs
+        assert "alignmentId" not in call_kwargs
+        assert "alignment_id" not in call_kwargs
 
     def test_submits_unalign_on_success(self):
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "patient-request"})
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(payer_id="payer-001")
         mock_alignment = MagicMock()
@@ -658,7 +785,7 @@ class TestSubmitUnalign:
         assert mock_alignment.submission_status_url == "https://api.cms.gov/status/unalign-xyz"
 
     def test_marks_unaligned_immediately_on_non_202(self):
-        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "patient-request"})
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "reason_code": "loss-of-contact"})
         mock_patient = _make_mock_patient()
         mock_coverage = _make_mock_coverage(payer_id="payer-001")
         mock_alignment = MagicMock()
@@ -681,27 +808,109 @@ class TestSubmitUnalign:
         assert mock_alignment.status == ACCESSAlignment.STATUS_UNALIGNED
 
 
+# ---------------------------------------------------------------------------
+# _extract_eligibility_status
+# ---------------------------------------------------------------------------
+
 class TestExtractEligibilityStatus:
-    def test_eligible_code_maps_to_eligible_status(self):
+    """OM v0.9.8: polling response uses `result` (valueCodeableConcept), not `status` (valueCode).
+
+    Function now returns (status_constant, raw_cms_code) tuple.
+    """
+
+    def _make_result(self, code: str) -> dict:
+        return {
+            "parameter": [
+                {
+                    "name": "result",
+                    "valueCodeableConcept": {
+                        "coding": [{"code": code}]
+                    },
+                }
+            ]
+        }
+
+    def test_eligible_maps_to_eligible_status(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("eligible"))
+        assert status == ACCESSAlignment.STATUS_ELIGIBLE
+        assert raw == "eligible"
+
+    def test_eligible_pending_diagnosis_maps_to_eligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("eligible-pending-diagnosis"))
+        assert status == ACCESSAlignment.STATUS_ELIGIBLE
+        assert raw == "eligible-pending-diagnosis"
+
+    def test_eligible_switch_participants_maps_to_eligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("eligible-switch-participants"))
+        assert status == ACCESSAlignment.STATUS_ELIGIBLE
+        assert raw == "eligible-switch-participants"
+
+    def test_not_eligible_already_aligned_maps_to_already_aligned(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("not-eligible-already-aligned"))
+        assert status == ACCESSAlignment.STATUS_ALREADY_ALIGNED
+        assert raw == "not-eligible-already-aligned"
+
+    def test_not_eligible_not_medicare_maps_to_ineligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("not-eligible-not-medicare"))
+        assert status == ACCESSAlignment.STATUS_INELIGIBLE
+        assert raw == "not-eligible-not-medicare"
+
+    def test_not_eligible_services_maps_to_ineligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("not-eligible-services"))
+        assert status == ACCESSAlignment.STATUS_INELIGIBLE
+
+    def test_not_eligible_diagnoses_maps_to_ineligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("not-eligible-diagnoses"))
+        assert status == ACCESSAlignment.STATUS_INELIGIBLE
+
+    def test_not_eligible_control_group_maps_to_ineligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("not-eligible-control-group"))
+        assert status == ACCESSAlignment.STATUS_INELIGIBLE
+
+    def test_not_eligible_clinical_exclusion_maps_to_ineligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("not-eligible-clinical-exclusion"))
+        assert status == ACCESSAlignment.STATUS_INELIGIBLE
+
+    def test_not_eligible_mismatch_maps_to_ineligible(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status(self._make_result("not-eligible-mismatch"))
+        assert status == ACCESSAlignment.STATUS_INELIGIBLE
+
+    def test_empty_result_returns_error(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status({})
+        assert status == ACCESSAlignment.STATUS_ERROR
+
+    def test_empty_parameter_list_returns_error(self):
+        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        status, raw = _extract_eligibility_status({"parameter": []})
+        assert status == ACCESSAlignment.STATUS_ERROR
+
+    def test_legacy_valueCode_status_param_also_works(self):
+        """Back-compat: if response uses `status` + `valueCode` it still maps correctly."""
         from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
         from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
         result = {"parameter": [{"name": "status", "valueCode": "eligible"}]}
-        assert _extract_eligibility_status(result) == ACCESSAlignment.STATUS_ELIGIBLE
-
-    def test_ineligible_code_maps_correctly(self):
-        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
-        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
-        result = {"parameter": [{"name": "status", "valueCode": "ineligible"}]}
-        assert _extract_eligibility_status(result) == ACCESSAlignment.STATUS_INELIGIBLE
-
-    def test_already_aligned_code_maps_correctly(self):
-        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
-        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
-        result = {"parameter": [{"name": "status", "valueCode": "already-aligned"}]}
-        assert _extract_eligibility_status(result) == ACCESSAlignment.STATUS_ALREADY_ALIGNED
-
-    def test_unknown_code_returns_error(self):
-        from cms_access_fhir_client.api.operations_api import _extract_eligibility_status
-        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
-        assert _extract_eligibility_status({}) == ACCESSAlignment.STATUS_ERROR
-        assert _extract_eligibility_status({"parameter": []}) == ACCESSAlignment.STATUS_ERROR
+        status, raw = _extract_eligibility_status(result)
+        assert status == ACCESSAlignment.STATUS_ELIGIBLE
