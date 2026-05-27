@@ -17,7 +17,7 @@ Practice managers and billing leads need a weekly pulse on financial health: "Di
 | Clinic owner / administrator | At-a-glance revenue trend without pulling reports |
 | Revenue cycle consultant | Benchmark a practice against CMS rates and their own history |
 
-**Specialty:** not specialty-specific. Any ambulatory practice using Canvas for billing will see meaningful data. Specialties with heavy quality-measure (F-code) reporting will notice those rows have blank descriptions (see caveats above).
+**Specialty:** not specialty-specific. Any ambulatory practice using Canvas for billing will see meaningful data. Specialties with heavy quality-measure (F-code) reporting may see blank descriptions for CPTs that aren't entries in the practice's `ChargeDescriptionMaster`.
 
 ## How to install
 
@@ -46,17 +46,17 @@ If the practice's `ChargeDescriptionMaster` table has entries for their CPT code
 
 ### Financial Overview
 
-![Financial Overview tab — summary cards, daily/monthly charts, insights panel](assets/overview-tab.png)
+![Financial Overview tab — summary cards, daily/monthly charts, insights panel](billing_dashboard/assets/overview-tab.png)
 
 ### Payer Analysis
 
-![Payer Analysis tab — performance table and payer mix chart](assets/payer-tab.png)
+![Payer Analysis tab — performance table and payer mix chart](billing_dashboard/assets/payer-tab.png)
 
 ### Reimbursement Trends
 
-![Reimbursement Trends — top CPT codes table](assets/trends-tab1.png)
+![Reimbursement Trends — top CPT codes table](billing_dashboard/assets/trends-tab1.png)
 
-![Reimbursement Trends — average-charge-vs-CMS line chart](assets/trends-tab2.png)
+![Reimbursement Trends — average-charge-vs-CMS line chart](billing_dashboard/assets/trends-tab2.png)
 
 ## Frontend layout (reference)
 
