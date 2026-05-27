@@ -55,53 +55,97 @@ def _cents_to_dollars(cents: int | None) -> Decimal | None:
 
 
 def _match_line_item(
-    candid_line: dict, line_items: list, canvas_claim_id: str
+    candid_line: dict,
+    line_items: list,
+    canvas_claim_id: str,
+    index: int | None = None,
 ) -> str | None:
-    """Match a Candid service_line to a Canvas ClaimLineItem by external_id, then on proc_code, date, charge."""
-    # First pass: match on external_id
+    """Match a Candid service_line to a Canvas ClaimLineItem.
+
+    Tries in order:
+    1. ``external_id`` (set by the plugin at submission time)
+    2. Exact ``procedure_code`` match
+    3. Fallback: ``charge_amount`` + ``date_of_service`` (handles payer code remaps)
+    4. Fallback: positional index (same order as submitted)
+    """
+    # Pass 1: match on external_id (most reliable — set by the plugin)
     if external_id := candid_line.get("external_id"):
         match = next((li for li in line_items if str(li.id) == external_id), None)
         if match:
             return str(match.id)
 
-    # Second pass: match on procedure code alone
     candid_proc = candid_line.get("procedure_code", "")
-    if not candid_proc:
-        return None
+    candid_charge_cents = candid_line.get("charge_amount_cents")
+    candid_dos = candid_line.get("date_of_service_range", {})
+    candid_from_date = candid_dos.get("start_date") or candid_dos.get(
+        "date_of_service"
+    )
+    candid_charge_dollars = _cents_to_dollars(candid_charge_cents)
 
-    matches = [li for li in line_items if li.proc_code == candid_proc]
+    # Pass 2: match on procedure code
+    if candid_proc:
+        matches = [li for li in line_items if li.proc_code == candid_proc]
 
-    # If ambiguous, narrow by date and charge
-    if len(matches) > 1:
-        candid_charge_cents = candid_line.get("charge_amount_cents")
-        candid_dos = candid_line.get("date_of_service_range", {})
-        candid_from_date = candid_dos.get("start_date") or candid_dos.get(
-            "date_of_service"
-        )
-        candid_charge_dollars = _cents_to_dollars(candid_charge_cents)
+        # If ambiguous, narrow by date and charge
+        if len(matches) > 1:
+            narrowed = [
+                li
+                for li in matches
+                if (
+                    not candid_from_date
+                    or str(li.from_date) == str(candid_from_date)
+                )
+                and (
+                    candid_charge_dollars is None
+                    or li.charge == candid_charge_dollars
+                )
+            ]
+            if narrowed:
+                matches = narrowed
 
-        narrowed = [
+        if len(matches) == 1:
+            return str(matches[0].id)
+
+        if len(matches) > 1:
+            log.warning(
+                f"Candid sync: ambiguous match for procedure {candid_proc} "
+                f"on claim {canvas_claim_id} — {len(matches)} candidates, skipping"
+            )
+            return None
+
+    # Pass 3: fallback on charge + date (handles payer code remaps like
+    # 99487→G0023 where Candid changes the proc code after submission)
+    if candid_charge_dollars is not None:
+        matches = [
             li
-            for li in matches
-            if (not candid_from_date or str(li.from_date) == str(candid_from_date))
-            and (candid_charge_dollars is None or li.charge == candid_charge_dollars)
+            for li in line_items
+            if li.charge == candid_charge_dollars
+            and (
+                not candid_from_date
+                or str(li.from_date) == str(candid_from_date)
+            )
         ]
-        if narrowed:
-            matches = narrowed
+        if len(matches) == 1:
+            log.info(
+                f"Candid sync: matched {candid_proc} to {matches[0].proc_code} "
+                f"via charge+date fallback on claim {canvas_claim_id}"
+            )
+            return str(matches[0].id)
 
-    if len(matches) == 1:
-        return str(matches[0].id)
+    # Pass 4: positional index fallback (same order as submitted)
+    if index is not None and 0 <= index < len(line_items):
+        li = line_items[index]
+        log.info(
+            f"Candid sync: matched {candid_proc} to {li.proc_code} "
+            f"via index fallback (position {index}) on claim {canvas_claim_id}"
+        )
+        return str(li.id)
 
-    if len(matches) > 1:
-        log.warning(
-            f"Candid sync: ambiguous match for procedure {candid_proc} "
-            f"on claim {canvas_claim_id} — {len(matches)} candidates, skipping"
-        )
-    else:
-        log.warning(
-            f"Candid sync: no match for procedure {candid_proc} "
-            f"on claim {canvas_claim_id}"
-        )
+    log.warning(
+        f"Candid sync: no match for procedure {candid_proc} "
+        f"(charge={candid_charge_cents}c, date={candid_from_date}) "
+        f"on claim {canvas_claim_id}"
+    )
     return None
 
 
@@ -162,8 +206,8 @@ def _build_insurance_transactions(
     """
     txns: list[LineItemTransaction] = []
 
-    for sl in service_lines:
-        line_item_id = _match_line_item(sl, line_items, canvas_claim_id)
+    for idx, sl in enumerate(service_lines):
+        line_item_id = _match_line_item(sl, line_items, canvas_claim_id, index=idx)
         if not line_item_id:
             continue
 
@@ -224,25 +268,24 @@ def _build_insurance_transactions(
                     )
                 )
 
-        # Patient responsibility (deductible, coinsurance, copay) as
-        # transfer adjustments on the insurance posting. These transfer
-        # to whoever is next responsible (patient, secondary, etc.).
-        if transfer_to:
-            for cents_field, pr_code in (
-                ("deductible_cents", PR_DEDUCTIBLE),
-                ("coinsurance_cents", PR_COINSURANCE),
-                ("copay_cents", PR_COPAY),
-            ):
-                amount = _cents_to_dollars(sl.get(cents_field))
-                if amount:
-                    txns.append(
-                        LineItemTransaction(
-                            claim_line_item_id=line_item_id,
-                            adjustment=amount,
-                            adjustment_code=pr_code,
-                            transfer_remaining_balance_to=transfer_to,
-                        )
+        # Patient responsibility (deductible, coinsurance, copay) always
+        # transfers to the patient — these are the patient's share regardless
+        # of what next_responsible_party says about the remaining balance.
+        for cents_field, pr_code in (
+            ("deductible_cents", PR_DEDUCTIBLE),
+            ("coinsurance_cents", PR_COINSURANCE),
+            ("copay_cents", PR_COPAY),
+        ):
+            amount = _cents_to_dollars(sl.get(cents_field))
+            if amount:
+                txns.append(
+                    LineItemTransaction(
+                        claim_line_item_id=line_item_id,
+                        adjustment=amount,
+                        adjustment_code=pr_code,
+                        transfer_remaining_balance_to="patient",
                     )
+                )
 
     return txns
 
@@ -252,8 +295,8 @@ def _build_secondary_transactions(
 ) -> list[LineItemTransaction]:
     """Build payment transactions for secondary/tertiary payer."""
     txns: list[LineItemTransaction] = []
-    for sl in service_lines:
-        line_item_id = _match_line_item(sl, line_items, canvas_claim_id)
+    for idx, sl in enumerate(service_lines):
+        line_item_id = _match_line_item(sl, line_items, canvas_claim_id, index=idx)
         if not line_item_id:
             continue
         payment = _cents_to_dollars(sl.get(paid_field))
@@ -422,13 +465,21 @@ def _init_sync_state(claim: Claim) -> _SyncState:
 
 
 def _resolve_transfer_target(state: _SyncState, next_responsible: str) -> str | None:
-    """Determine where the remaining balance transfers after this insurance posting."""
+    """Determine where the remaining balance transfers after this insurance posting.
+
+    For adjustments (CO-45 etc.) the transfer goes to whoever is next
+    responsible. For patient responsibility amounts (deductible, coinsurance,
+    copay) the transfer always goes to patient — see
+    ``_build_insurance_transactions`` which handles PR codes separately.
+    """
     if next_responsible == "patient":
         return "patient"
     if next_responsible == "secondary" and state.secondary_id:
         return state.secondary_id
     if next_responsible == "tertiary" and state.tertiary_id:
         return state.tertiary_id
+    if next_responsible == "primary" and state.primary_id:
+        return state.primary_id
     return None
 
 
