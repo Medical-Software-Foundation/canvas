@@ -17,6 +17,9 @@ ELIGIBILITY_HTML = """<!DOCTYPE html>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
          padding: 24px; max-width: 480px; margin: auto; }
   h2 { margin-bottom: 16px; }
+  label { display: block; margin-bottom: 4px; font-weight: 500; }
+  select { width: 100%; margin-bottom: 12px; padding: 6px;
+           border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px; }
   .result { margin-top: 16px; padding: 12px; border-radius: 4px; }
   .ok { background: #dcfce7; color: #16a34a; }
   .err { background: #fee2e2; color: #dc2626; }
@@ -28,10 +31,21 @@ ELIGIBILITY_HTML = """<!DOCTYPE html>
 <body>
   <h2>Check ACCESS Eligibility</h2>
   <p>Patient ID: <code>__PATIENT_ID__</code></p>
-  <button id="btn" onclick="checkEligibility()">Check Eligibility</button>
+  <form id="form" onsubmit="checkEligibility(event)">
+    <label for="track">Track</label>
+    <select id="track" required>
+      <option value="">Select track...</option>
+      <option value="eCKM">eCKM &mdash; Enhanced Kidney Care Model</option>
+      <option value="CKM">CKM &mdash; Kidney Care Model</option>
+      <option value="MSK">MSK &mdash; Musculoskeletal</option>
+      <option value="BH">BH &mdash; Behavioral Health</option>
+    </select>
+    <button type="submit" id="btn">Check Eligibility</button>
+  </form>
   <div id="result"></div>
   <script>
-    async function checkEligibility() {
+    async function checkEligibility(e) {
+      e.preventDefault();
       const btn = document.getElementById('btn');
       const result = document.getElementById('result');
       btn.disabled = true;
@@ -41,7 +55,10 @@ ELIGIBILITY_HTML = """<!DOCTYPE html>
           method: 'POST',
           credentials: 'include',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({patient_id: '__PATIENT_ID__'})
+          body: JSON.stringify({
+            patient_id: '__PATIENT_ID__',
+            track: document.getElementById('track').value,
+          })
         });
         const data = await resp.json();
         result.className = 'result ' + (resp.ok ? 'ok' : 'err');

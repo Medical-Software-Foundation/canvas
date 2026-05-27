@@ -63,11 +63,12 @@ def _operation_url(operation: str, participant_id: str) -> str:
     return f"{_MODEL_ID}/Patient/${operation}?entityId={quote(participant_id)}"
 
 
-def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
+def check_eligibility(secrets: dict, mbi: str, payer_id: str, track: str) -> dict:
     """POST $check-eligibility and return the response body dict.
 
-    ``patient_resource`` must be a fully-constructed FHIR Patient dict with at
-    minimum an MBI identifier; the caller is responsible for building it.
+    CMS requires four flat top-level parameters: participantID, payerID, track, mbi.
+    The nested Patient resource is NOT sent — CMS resolves the patient by MBI on
+    their side.
 
     On 400, parses the OperationOutcome and raises RuntimeError with the detail text.
     """
@@ -80,7 +81,9 @@ def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
         "resourceType": "Parameters",
         "parameter": [
             {"name": "participantID", "valueString": participant_id},
-            {"name": "patient", "resource": patient_resource},
+            {"name": "payerID", "valueString": payer_id},
+            {"name": "track", "valueCode": track},
+            {"name": "mbi", "valueString": mbi},
         ],
     }
     response = http.post(
@@ -102,14 +105,15 @@ def check_eligibility(secrets: dict, patient_resource: dict) -> dict:
 
 def align(
     secrets: dict,
-    patient_resource: dict,
+    mbi: str,
+    payer_id: str,
     track: str,
     clinical_justification: str,
 ) -> tuple[int, str | None, dict]:
     """POST $align. Returns (status_code, content_location_url, body_dict).
 
-    ``patient_resource`` must be a fully-constructed FHIR Patient dict with at
-    minimum an MBI identifier; the caller is responsible for building it.
+    CMS requires four flat top-level parameters (participantID, payerID, track, mbi)
+    plus clinicalJustification. The nested Patient resource is NOT sent.
 
     202 means async — caller should store content_location_url and poll.
     On 400, raises RuntimeError with the OperationOutcome detail text.
@@ -123,8 +127,9 @@ def align(
         "resourceType": "Parameters",
         "parameter": [
             {"name": "participantID", "valueString": participant_id},
-            {"name": "patient", "resource": patient_resource},
+            {"name": "payerID", "valueString": payer_id},
             {"name": "track", "valueCode": track},
+            {"name": "mbi", "valueString": mbi},
             {"name": "clinicalJustification", "valueString": clinical_justification},
         ],
     }
@@ -149,13 +154,16 @@ def align(
 
 def unalign(
     secrets: dict,
+    mbi: str,
+    payer_id: str,
+    track: str,
     alignment_id: str,
     reason_code: str,
 ) -> tuple[int, str | None, dict]:
     """POST $unalign. Returns (status_code, content_location_url, body_dict).
 
-    Note: $unalign does not require a patient parameter per the CMS ACCESS IG —
-    the alignment is identified by ``alignment_id`` alone.
+    CMS requires the full flat parameter set (participantID, payerID, track, mbi)
+    plus alignmentId and reasonCode.
 
     On 400, raises RuntimeError with the OperationOutcome detail text.
     """
@@ -168,6 +176,9 @@ def unalign(
         "resourceType": "Parameters",
         "parameter": [
             {"name": "participantID", "valueString": participant_id},
+            {"name": "payerID", "valueString": payer_id},
+            {"name": "track", "valueCode": track},
+            {"name": "mbi", "valueString": mbi},
             {"name": "alignmentId", "valueString": alignment_id},
             {"name": "reasonCode", "valueCode": reason_code},
         ],

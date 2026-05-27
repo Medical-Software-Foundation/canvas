@@ -25,25 +25,21 @@ from cms_access_fhir_client.models import ACCESSAlignment
 from cms_access_fhir_client.models.access_alignment import CustomPatient
 
 
-def _build_patient_resource(patient, mbi: str) -> dict:
-    """Build a FHIR Patient resource embedding the MBI for transmission to CMS.
+def _get_payer_id(coverage, secrets: dict) -> str | None:
+    """Resolve the CMS payerID for a Coverage record.
 
-    None-valued top-level fields are stripped to avoid FHIR validator rejections.
+    Lookup order:
+    1. coverage.issuer.payer_id — the Transactor identifier, preferred when populated.
+    2. ACCESS_DEFAULT_PAYER_ID secret — escape hatch when Transactor.payer_id is empty.
+    3. Returns None if both are absent, signalling fail-closed to the caller.
     """
-    resource: dict = {
-        "resourceType": "Patient",
-        "identifier": [
-            {
-                "system": "http://hl7.org/fhir/sid/us-mbi",
-                "value": mbi,
-            }
-        ],
-        "name": [{"family": patient.last_name, "given": [patient.first_name]}],
-    }
-    birth_date = getattr(patient, "birth_date", None)
-    if birth_date is not None:
-        resource["birthDate"] = birth_date.isoformat()
-    return resource
+    payer_id = getattr(coverage.issuer, "payer_id", None)
+    if payer_id:
+        return payer_id
+    default = secrets.get("ACCESS_DEFAULT_PAYER_ID", "")
+    if default:
+        return default
+    return None
 
 
 class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
@@ -63,8 +59,11 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
     def submit_eligibility(self) -> list[Response | Effect]:
         body = self.request.json()
         patient_id = body.get("patient_id")
+        track = body.get("track")
         if not patient_id:
             return [JSONResponse({"error": "Missing patient_id"}, status_code=HTTPStatus.BAD_REQUEST)]
+        if not track:
+            return [JSONResponse({"error": "Missing track"}, status_code=HTTPStatus.BAD_REQUEST)]
 
         try:
             patient = CustomPatient.objects.get(id=patient_id)
@@ -80,19 +79,32 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        payer_id = _get_payer_id(coverage, self.secrets)
+        if not payer_id:
+            return [
+                JSONResponse(
+                    {"error": "Cannot determine payerID — populate Transactor.payer_id on the Medicare Part B payer or set ACCESS_DEFAULT_PAYER_ID secret"},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
         log.info(
             f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
             f"(issuer={coverage.issuer.name}) for patient {patient.id}"
         )
 
-        patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
         try:
-            result = check_eligibility(self.secrets, patient_resource=patient_resource)
+            result = check_eligibility(
+                self.secrets,
+                mbi=coverage.id_number,
+                payer_id=payer_id,
+                track=track,
+            )
         except RuntimeError as exc:
             log.error(f"[cms-access] $check-eligibility failed for patient {patient.id}: {exc}")
             alignment, _ = ACCESSAlignment.objects.get_or_create(
                 patient=patient,
-                track="",
+                track=track,
                 defaults={"status": ACCESSAlignment.STATUS_ERROR},
             )
             alignment.status = ACCESSAlignment.STATUS_ERROR
@@ -110,7 +122,7 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         status = _extract_eligibility_status(result)
         alignment, _ = ACCESSAlignment.objects.get_or_create(
             patient=patient,
-            track="",
+            track=track,
             defaults={"status": status},
         )
         alignment.status = status
@@ -167,16 +179,25 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        payer_id = _get_payer_id(coverage, self.secrets)
+        if not payer_id:
+            return [
+                JSONResponse(
+                    {"error": "Cannot determine payerID — populate Transactor.payer_id on the Medicare Part B payer or set ACCESS_DEFAULT_PAYER_ID secret"},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
         log.info(
             f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
             f"(issuer={coverage.issuer.name}) for patient {patient.id}"
         )
 
-        patient_resource = _build_patient_resource(patient, mbi=coverage.id_number)
         try:
             status_code, content_location, _ = align(
                 self.secrets,
-                patient_resource=patient_resource,
+                mbi=coverage.id_number,
+                payer_id=payer_id,
                 track=track,
                 clinical_justification=clinical_justification,
             )
@@ -254,6 +275,15 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
+        payer_id = _get_payer_id(coverage, self.secrets)
+        if not payer_id:
+            return [
+                JSONResponse(
+                    {"error": "Cannot determine payerID — populate Transactor.payer_id on the Medicare Part B payer or set ACCESS_DEFAULT_PAYER_ID secret"},
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+            ]
+
         log.info(
             f"[cms-access] Using Medicare Part B coverage {coverage.dbid} "
             f"(issuer={coverage.issuer.name}) for patient {patient.id}"
@@ -288,6 +318,9 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
         try:
             status_code, content_location, _ = unalign(
                 self.secrets,
+                mbi=coverage.id_number,
+                payer_id=payer_id,
+                track=alignment.track,
                 alignment_id=alignment_id,
                 reason_code=reason_code,
             )

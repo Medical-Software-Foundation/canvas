@@ -118,7 +118,8 @@
         {"name": "ACCESS_SHOW_CHART_SUMMARY", "sensitive": false},
         {"name": "ACCESS_SHOW_PROFILE_FIELD", "sensitive": false},
         {"name": "ACCESS_MEDICARE_PART_B_PAYER_IDS", "sensitive": false},
-        {"name": "ACCESS_PAYER_NAME_PATTERN", "sensitive": false}
+        {"name": "ACCESS_PAYER_NAME_PATTERN", "sensitive": false},
+        {"name": "ACCESS_DEFAULT_PAYER_ID", "sensitive": false}
     ],
     "tags": {},
     "references": [],
