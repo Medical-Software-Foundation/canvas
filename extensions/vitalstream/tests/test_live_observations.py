@@ -11,7 +11,7 @@ def _make_channel(
     *,
     logged_in_user: dict | None,
     channel_name: str,
-    cache_session: dict | None = None,
+    session_exists: bool = True,
     note_exists: bool = True,
 ) -> LiveObservationsChannel:
     ch = LiveObservationsChannel.__new__(LiveObservationsChannel)
@@ -19,9 +19,9 @@ def _make_channel(
         logged_in_user=logged_in_user,
         channel=channel_name,
     )
-    cache_mock = MagicMock()
-    cache_mock.get.return_value = cache_session
-    sys.modules["canvas_sdk.caching.plugins"].get_cache.return_value = cache_mock
+
+    session_mgr = sys.modules["vitalstream.models"].VitalstreamSession.objects
+    session_mgr.filter.return_value.exists.return_value = session_exists
 
     note_mgr = sys.modules["canvas_sdk.v1.data.note"].Note.objects
     note_mgr.filter.return_value.exists.return_value = note_exists
@@ -61,40 +61,22 @@ def test_authenticate_per_note_spravato_channel_rejects_unknown_note() -> None:
     assert ch.authenticate() is False
 
 
-def test_authenticate_legacy_global_spravato_channel_falls_through_to_session() -> None:
-    # Regression: the previous `spravato_notify` open channel let any staff in
-    # the org subscribe. It must no longer be treated as open; with no session
-    # cached for that name, auth must fail.
-    ch = _make_channel(
-        logged_in_user={"id": "s1", "type": "Staff"},
-        channel_name="spravato_notify",
-        cache_session=None,
-    )
-    assert ch.authenticate() is False
-
-
 def test_authenticate_rejects_session_channel_when_session_missing() -> None:
     ch = _make_channel(
         logged_in_user={"id": "s1", "type": "Staff"},
         channel_name="a_b_c",
-        cache_session=None,
+        session_exists=False,
     )
     assert ch.authenticate() is False
 
 
-def test_authenticate_allows_session_channel_when_staff_matches() -> None:
+def test_authenticate_allows_session_channel_when_session_exists() -> None:
     ch = _make_channel(
         logged_in_user={"id": "s1", "type": "Staff"},
         channel_name="a_b_c",
-        cache_session={"note_id": 1, "staff_id": "s1"},
+        session_exists=True,
     )
     assert ch.authenticate() is True
-
-
-def test_authenticate_allows_session_channel_regardless_of_staff_match() -> None:
-    ch = _make_channel(
-        logged_in_user={"id": "other-staff", "type": "Staff"},
-        channel_name="a_b_c",
-        cache_session={"note_id": 1, "staff_id": "s1"},
-    )
-    assert ch.authenticate() is True
+    session_mgr = sys.modules["vitalstream.models"].VitalstreamSession.objects
+    # session_id reconstructed from channel name (underscores → hyphens).
+    session_mgr.filter.assert_called_with(session_id="a-b-c")

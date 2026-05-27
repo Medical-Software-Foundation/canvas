@@ -4,7 +4,8 @@ let intervalSelections = {};
 let mockInterval = null;
 let sessionStartTime = null; // timestamp of first reading
 let activeSocket = null;
-let sessionEndedByUser = false;
+let sessionClosed = false;
+let seenTimestamps = new Set();  // dedupe across backfill + WS
 
 // Map interval labels to Spravato charting app's row_id values (0, 1, 2).
 var INTERVAL_ROW_IDS = {
@@ -20,6 +21,7 @@ var allReadings = [];
 window.addEventListener("load", () => {{
   var session_id = window._caretaker.session_id;
   var subdomain = window._caretaker.subdomain;
+  var initialStatus = window._caretaker.session_status || "open";
 
   new QRCode(
     document.getElementById("qr-code"),
@@ -30,15 +32,18 @@ window.addEventListener("load", () => {{
     }
   );
 
-  // Set up save intervals button
+  // Set up save intervals button (Spravato workflow only — does not end session).
   document.getElementById('save-intervals-btn').addEventListener('click', () => {
     saveIntervalsToChart(window._caretaker.session_id, subdomain);
   });
 
-  // Set up save summary button
-  document.getElementById('save-summary-btn').addEventListener('click', () => {
-    saveSummaryToChart(window._caretaker.session_id, subdomain);
-  });
+  // Set up end-session-and-save-summary button.
+  var endBtn = document.getElementById('end-session-btn');
+  if (endBtn) {
+    endBtn.addEventListener('click', () => {
+      endSessionAndSave(window._caretaker.session_id, subdomain);
+    });
+  }
 
   // Set up mock vitals button if enabled
   var mockBtn = document.getElementById('mock-vitals-btn');
@@ -46,12 +51,6 @@ window.addEventListener("load", () => {{
     mockBtn.addEventListener('click', () => {
       toggleMockVitals(window._caretaker.session_id, subdomain);
     });
-  }
-
-  // Set up end session button — provider clicks when device feed is done.
-  var endBtn = document.getElementById('end-session-btn');
-  if (endBtn) {
-    endBtn.addEventListener('click', endSession);
   }
 
   // Live filter for the readings feed.
@@ -66,42 +65,189 @@ window.addEventListener("load", () => {{
     incrementSelect.addEventListener('change', recomputeAverages);
   }
 
-  // TODO: convert hyphens in UUID to underscores
-  session_id = session_id.replaceAll("-", "_");
-  connectToWebsocket(session_id, subdomain);
+  // Persist form inputs to the server cache so they survive pane reopens.
+  // Treatment select also fires toggleMode() inline via its onchange attr;
+  // we just need to additionally save on change.
+  ['treatment-type', 'increment-size', 'wrist-placement',
+   'treatment-start', 'treatment-end'].forEach((id) => {
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        schedulePreferenceSave(window._caretaker.session_id, subdomain);
+      });
+    }
+  });
+
+  // Backfill any previously persisted readings, then open the WebSocket.
+  // Reopening the chart pane resumes from history rather than starting blank.
+  backfillReadings(session_id, subdomain)
+    .catch((err) => console.error('VitalStream backfill failed', err))
+    .finally(() => {
+      if (initialStatus === 'closed') {
+        markSessionClosed();
+      }
+      // TODO: convert hyphens in UUID to underscores
+      connectToWebsocket(session_id.replaceAll('-', '_'), subdomain);
+      // Auto-resume the mock-vitals timer if it was running before the user
+      // closed the chart pane. localStorage survives the modal teardown so
+      // testers don't have to re-click "Mock Vitals" on every reopen.
+      if (!sessionClosed && isMockActiveInStorage(session_id)) {
+        startMockVitals(session_id, subdomain);
+      }
+    });
 }});
+
+function mockStorageKey(session_id) {
+  return 'vs_mock_active_' + session_id;
+}
+
+function isMockActiveInStorage(session_id) {
+  try {
+    return localStorage.getItem(mockStorageKey(session_id)) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+function setMockActiveInStorage(session_id, active) {
+  try {
+    if (active) {
+      localStorage.setItem(mockStorageKey(session_id), '1');
+    } else {
+      localStorage.removeItem(mockStorageKey(session_id));
+    }
+  } catch (e) {
+    // Ignore — localStorage may be unavailable in some embeds.
+  }
+}
+
+async function backfillReadings(session_id, subdomain) {
+  var resp = await fetch(
+    `https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/readings/`,
+    { method: 'GET', credentials: 'include' }
+  );
+  if (!resp.ok) return;
+  var body = await resp.json();
+  // Apply persisted preferences BEFORE handling readings so that the
+  // increment-size affects the very first recomputeAverages() call.
+  if (body.preferences) applyPreferences(body.preferences);
+  var readings = body.readings || [];
+  // Hide the QR instructions if we already have data — the device is paired.
+  if (readings.length > 0) ensureInstructionsAreClosed();
+  for (var r of readings) {
+    handleNewDiscreteMeasurement(r.timestamp, {
+      hr: r.hr,
+      sys: r.sys,
+      dia: r.dia,
+      resp: r.resp,
+      spo2: r.spo2,
+    });
+  }
+  if (body.status === 'closed') {
+    markSessionClosed();
+  }
+}
+
+function applyPreferences(prefs) {
+  if (!prefs || typeof prefs !== 'object') return;
+  var treatment = document.getElementById('treatment-type');
+  if (treatment && prefs.treatment_type) {
+    treatment.value = prefs.treatment_type;
+    toggleMode();
+  }
+  var increment = document.getElementById('increment-size');
+  if (increment && prefs.increment_minutes) {
+    increment.value = String(prefs.increment_minutes);
+  }
+  var wrist = document.getElementById('wrist-placement');
+  if (wrist && prefs.bp_placement) {
+    wrist.value = prefs.bp_placement;
+  }
+  var tStart = document.getElementById('treatment-start');
+  if (tStart && prefs.treatment_start) {
+    tStart.value = prefs.treatment_start;
+  }
+  var tEnd = document.getElementById('treatment-end');
+  if (tEnd && prefs.treatment_end) {
+    tEnd.value = prefs.treatment_end;
+  }
+}
+
+function currentPreferences() {
+  return {
+    treatment_type: (document.getElementById('treatment-type') || {}).value || '',
+    increment_minutes: parseInt(
+      (document.getElementById('increment-size') || {}).value || '10', 10
+    ),
+    bp_placement: (document.getElementById('wrist-placement') || {}).value || 'left_wrist',
+    treatment_start: (document.getElementById('treatment-start') || {}).value || '',
+    treatment_end: (document.getElementById('treatment-end') || {}).value || '',
+  };
+}
+
+var prefsSaveTimer = null;
+
+function schedulePreferenceSave(session_id, subdomain) {
+  if (sessionClosed) return;  // closed sessions own their saved-state forever
+  // Debounce so dragging the time-picker doesn't fire dozens of PUTs.
+  if (prefsSaveTimer) clearTimeout(prefsSaveTimer);
+  prefsSaveTimer = setTimeout(() => savePreferences(session_id, subdomain), 400);
+}
+
+function savePreferences(session_id, subdomain) {
+  fetch(
+    `https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/preferences/`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(currentPreferences()),
+    }
+  ).catch((err) => console.error('VitalStream preference save failed', err));
+}
 
 function connectToWebsocket(session_id, subdomain) {
   const socket = new WebSocket("wss://" + subdomain + ".canvasmedical.com/plugin-io/ws/vitalstream/" + session_id + "/");
   activeSocket = socket;
 
   socket.addEventListener("open", (event) => {
-    setSessionStatus("Waiting for data...");
-    setSaveSummaryVisible(false);
+    if (sessionClosed) {
+      setSessionStatus("Session ended");
+      return;
+    }
+    if (allReadings.length === 0) {
+      setSessionStatus("Waiting for data...");
+    } else {
+      setSessionStatus("Connected", true);
+    }
   });
 
   socket.addEventListener("message", (event) => {
-    ensureInstructionsAreClosed();
-    setSessionStatus("Receiving data...", true);
-    setEndSessionVisible(true);
+    var payload = JSON.parse(event.data).message || {};
 
-    data = JSON.parse(event.data).message
+    if (payload.event_type === 'session_closed') {
+      markSessionClosed();
+      return;
+    }
 
-    if (Object.hasOwn(data, "measurements")) {
-      for (var timestamp of Object.keys(data.measurements).sort()) {
-        handleNewDiscreteMeasurement(timestamp, data.measurements[timestamp]);
+    if (sessionClosed) return;  // ignore late readings after close
+
+    if (Object.hasOwn(payload, "measurements")) {
+      ensureInstructionsAreClosed();
+      setSessionStatus("Receiving data...", true);
+      setEndSessionVisible(true);
+      for (var timestamp of Object.keys(payload.measurements).sort()) {
+        handleNewDiscreteMeasurement(timestamp, payload.measurements[timestamp]);
       }
     }
   });
 
   socket.addEventListener("close", (event) => {
-    if (sessionEndedByUser) {
+    if (sessionClosed) {
       setSessionStatus("Session ended");
-      setSaveSummaryVisible(true);
       return;
     }
     setSessionStatus("Disconnected. Attempting to reconnect.");
-    setSaveSummaryVisible(true);
     setTimeout(() => connectToWebsocket(session_id, subdomain), 3000);
   });
 
@@ -110,36 +256,50 @@ function connectToWebsocket(session_id, subdomain) {
   });
 }
 
-function endSession() {
-  if (!confirm('End this VitalStream session? You will no longer receive readings, and the summary can then be saved to the chart.')) {
-    return;
-  }
+function markSessionClosed() {
+  if (sessionClosed) return;
+  sessionClosed = true;
+  setSessionStatus("Session ended");
+  setEndSessionVisible(false);
 
-  sessionEndedByUser = true;
-
+  // Stop mock generator if it's running, and clear its auto-resume flag so
+  // the next pane reopen doesn't re-arm it against a closed session.
+  setMockActiveInStorage(window._caretaker.session_id, false);
   if (mockInterval) {
     clearInterval(mockInterval);
     mockInterval = null;
-    var mockBtn = document.getElementById('mock-vitals-btn');
-    if (mockBtn) {
-      mockBtn.textContent = 'Mock Vitals';
-      mockBtn.classList.remove('mock-active');
-    }
+  }
+  var mockBtn = document.getElementById('mock-vitals-btn');
+  if (mockBtn) {
+    mockBtn.textContent = 'Mock Vitals';
+    mockBtn.classList.remove('mock-active');
+    mockBtn.disabled = true;
   }
 
-  if (activeSocket && activeSocket.readyState <= WebSocket.OPEN) {
-    activeSocket.close();
-  } else {
-    setSessionStatus("Session ended");
-    setSaveSummaryVisible(true);
-  }
+  // Disable spravato save-intervals once the session is officially over.
+  var saveIntervalsBtn = document.getElementById('save-intervals-btn');
+  if (saveIntervalsBtn) saveIntervalsBtn.disabled = true;
+  document.querySelectorAll('.capture-btn').forEach((b) => b.disabled = true);
 
-  setEndSessionVisible(false);
+  // Freeze the input form so its visible values can't drift away from the
+  // ones that were submitted with the end-session POST and rendered into
+  // the saved CustomCommand. Without this, a user changing the inputs
+  // post-save would see UI values that contradict what's in the chart.
+  ['treatment-type', 'increment-size', 'wrist-placement',
+   'treatment-start', 'treatment-end'].forEach((id) => {
+    var el = document.getElementById(id);
+    if (el) el.disabled = true;
+  });
 }
 
 function setEndSessionVisible(visible) {
   var btn = document.getElementById('end-session-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+  if (!btn) return;
+  if (sessionClosed) {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = visible ? '' : 'none';
 }
 
 function createTableCell(content) {
@@ -157,11 +317,17 @@ function toHHMM(date) {
 
 function handleNewDiscreteMeasurement(timestamp, data) {
   var dt = new Date(timestamp);
+  var isoTimestamp = dt.toISOString();
+
+  // Dedupe across backfill (HTTP) and the live WebSocket stream — a reading
+  // that arrived just before we fetched /readings/ could otherwise show twice.
+  if (seenTimestamps.has(isoTimestamp)) return;
+  seenTimestamps.add(isoTimestamp);
+
   if (!sessionStartTime) sessionStartTime = dt.getTime();
   var elapsedMin = (dt.getTime() - sessionStartTime) / 60000;
   var displayTime = dt.toLocaleTimeString("en-US");
   var hhmmTime = toHHMM(dt);
-  var isoTimestamp = dt.toISOString();
 
   allReadings.push({
     elapsedMin: elapsedMin,
@@ -178,6 +344,9 @@ function handleNewDiscreteMeasurement(timestamp, data) {
   appendLiveRow(displayTime, hhmmTime, isoTimestamp, data);
   updateLiveCount();
   recomputeAverages();
+  // First reading at any point in the session means there's something to
+  // end-and-save. Keep hidden once we've closed the session.
+  setEndSessionVisible(!sessionClosed);
 }
 
 function formatBPDisplay(sys, dia) {
@@ -335,11 +504,16 @@ function recomputeAverages() {
   });
 }
 
-// Convert a wall-clock HH:MM (from the treatment-start/end inputs) into elapsed
-// minutes since sessionStartTime. Anchors to sessionStartTime's calendar day
-// and rolls forward one day if the HH:MM would otherwise sit unreasonably far
-// in the past — that's the case when the treatment window crosses midnight
-// (e.g. start=22:30, end=00:15 next day).
+// The averages table is a live preview only. Phase classification and the
+// trailing discharge bucket are computed server-side at end-session time so
+// the persisted Observations and the displayed preview stay independently
+// correct even if the client-side state drifts.
+
+// Resolve a wall-clock HH:MM (from the treatment-start/end inputs) into
+// minutes elapsed since sessionStartTime. The server can't do this itself
+// because the reading timestamps are UTC and the HH:MM the user typed is
+// in their browser's local timezone. Rolls forward one day if the candidate
+// is more than 12 hours before session_start (cross-midnight session).
 function hhmmToElapsedMin(hhmm) {
   if (!hhmm || !sessionStartTime) return null;
   var parts = hhmm.split(':');
@@ -347,72 +521,14 @@ function hhmmToElapsedMin(hhmm) {
   var hours = parseInt(parts[0], 10);
   var mins = parseInt(parts[1], 10);
   if (isNaN(hours) || isNaN(mins)) return null;
-
   var session = new Date(sessionStartTime);
   var candidate = new Date(
     session.getFullYear(), session.getMonth(), session.getDate(), hours, mins, 0, 0
   );
-  // If the candidate is more than 12 hours before session start, it's the
-  // next-day occurrence (midnight crossover).
   if (candidate.getTime() < session.getTime() - 12 * 60 * 60 * 1000) {
     candidate.setDate(candidate.getDate() + 1);
   }
   return (candidate.getTime() - session.getTime()) / 60000;
-}
-
-// Classify a bucket by its elapsed-minute offset from sessionStartTime against
-// the treatment window. elapsedMin is monotonic across midnight; the previous
-// HH:MM lexicographic comparison was not.
-function classifyPhase(bucketElapsedMin, startElapsedMin, endElapsedMin) {
-  if (startElapsedMin === null && endElapsedMin === null) return '';
-  if (typeof bucketElapsedMin !== 'number' || isNaN(bucketElapsedMin)) return '';
-  if (startElapsedMin !== null && bucketElapsedMin < startElapsedMin) return 'pre';
-  if (endElapsedMin !== null && bucketElapsedMin > endElapsedMin) return 'post';
-  return 'during';
-}
-
-// Average over the trailing 30 seconds of `allReadings`. Returns null if no
-// readings are within that window.
-function computeDischargeAverage() {
-  if (allReadings.length === 0) return null;
-
-  var maxElapsedMin = 0;
-  for (var i = 0; i < allReadings.length; i++) {
-    if (allReadings[i].elapsedMin > maxElapsedMin) maxElapsedMin = allReadings[i].elapsedMin;
-  }
-  var cutoff = maxElapsedMin - 0.5;
-
-  var totals = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
-  var counts = { hr: 0, sys: 0, dia: 0, rr: 0, spo2: 0 };
-  var n = 0;
-  var lastReading = null;
-
-  for (var j = 0; j < allReadings.length; j++) {
-    var r = allReadings[j];
-    if (r.elapsedMin < cutoff) continue;
-    n++;
-    lastReading = r;
-    if (r.hr !== undefined) { totals.hr += Number(r.hr); counts.hr++; }
-    if (r.sys !== undefined) { totals.sys += Number(r.sys); counts.sys++; }
-    if (r.dia !== undefined) { totals.dia += Number(r.dia); counts.dia++; }
-    if (r.rr !== undefined) { totals.rr += Number(r.rr); counts.rr++; }
-    if (r.spo2 !== undefined) { totals.spo2 += Number(r.spo2); counts.spo2++; }
-  }
-
-  if (n === 0) return null;
-
-  return {
-    label: 'Discharge',
-    count: String(n),
-    timestamp: lastReading ? (lastReading.timestamp || '') : '',
-    time: lastReading ? lastReading.time : '',
-    elapsedMin: lastReading ? lastReading.elapsedMin : null,
-    hr: counts.hr ? String(Math.round(totals.hr / counts.hr)) : '',
-    bp_sys: counts.sys ? String(Math.round(totals.sys / counts.sys)) : '',
-    bp_dia: counts.dia ? String(Math.round(totals.dia / counts.dia)) : '',
-    rr: counts.rr ? String(Math.round(totals.rr / counts.rr)) : '',
-    spo2: counts.spo2 ? String(Math.round(totals.spo2 / counts.spo2)) : '',
-  };
 }
 
 function assignToInterval(intervalName) {
@@ -491,94 +607,111 @@ function toggleMode() {
 function getIncrementSizeMinutes() {
   var el = document.getElementById('increment-size');
   var val = el ? parseInt(el.value, 10) : 10;
-  return [5, 10, 15, 30].includes(val) ? val : 10;
+  return [5, 10, 15, 20, 30].includes(val) ? val : 10;
 }
 
-async function saveSummaryToChart(session_id, subdomain) {
+async function endSessionAndSave(session_id, subdomain) {
+  if (sessionClosed) return;
   if (allReadings.length === 0) {
     alert('No readings to summarize.');
     return;
   }
-
-  var summaryBuckets = computeIncrementBuckets();
-  if (summaryBuckets.length === 0) {
-    alert('No readings near the selected increment marks.');
+  if (!confirm('End this VitalStream session and save the summary to the chart? Further readings from the device will be rejected.')) {
     return;
   }
 
+  // Show a saving state, but DO NOT mark the session closed until the server
+  // confirms. Closing optimistically meant the inputs could be edited after
+  // save while the server preserved a stale snapshot — the visible UI then
+  // didn't match the saved command.
+  var btn = document.getElementById('end-session-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+  }
+  setSessionStatus('Saving...');
+
   var treatmentStart = (document.getElementById('treatment-start').value || '').trim();
   var treatmentEnd = (document.getElementById('treatment-end').value || '').trim();
-  // Resolve the HH:MM inputs to elapsed-minute offsets so cross-midnight
-  // windows (e.g. start=22:30, end=00:15 next day) classify correctly.
-  var startElapsedMin = treatmentStart ? hhmmToElapsedMin(treatmentStart) : null;
-  var endElapsedMin = treatmentEnd ? hhmmToElapsedMin(treatmentEnd) : null;
-
-  summaryBuckets.forEach(function (b) {
-    b.phase = classifyPhase(b.elapsedMin, startElapsedMin, endElapsedMin);
-  });
-
-  // Append a discharge row averaging the last 30 seconds of readings — only
-  // when treatment end is set and there are readings recorded after it.
-  if (treatmentEnd && endElapsedMin !== null) {
-    var discharge = computeDischargeAverage();
-    if (discharge && typeof discharge.elapsedMin === 'number' && discharge.elapsedMin > endElapsedMin) {
-      discharge.phase = 'discharge';
-      summaryBuckets.push(discharge);
-    }
-  }
-
-  var btn = document.getElementById('save-summary-btn');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
+  // Elapsed-minute offsets done client-side so the user's local-time HH:MM
+  // inputs resolve correctly against the reading_time stored in UTC.
+  var startElapsedMin = hhmmToElapsedMin(treatmentStart);
+  var endElapsedMin = hhmmToElapsedMin(treatmentEnd);
 
   try {
     var resp = await fetch(
-      `https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/save-summary/`,
+      `https://${subdomain}.canvasmedical.com/plugin-io/api/vitalstream/vitalstream-ui/sessions/${session_id}/end-session/`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          buckets: summaryBuckets,
+          summary_increment_minutes: getIncrementSizeMinutes(),
           bp_placement: document.getElementById('wrist-placement').value,
           treatment_start: treatmentStart,
           treatment_end: treatmentEnd,
+          treatment_start_elapsed_min: startElapsedMin,
+          treatment_end_elapsed_min: endElapsedMin,
+          // getTimezoneOffset() is positive west of UTC, e.g. 240 in EDT.
+          tz_offset_minutes: new Date().getTimezoneOffset(),
         }),
       }
     );
 
     if (resp.ok) {
-      btn.textContent = 'Saved to Chart!';
+      // Server has flipped status=closed and written the command. Only now
+      // do we freeze the UI — guarantees the saved command matches what the
+      // user can still see on screen.
+      markSessionClosed();
+      setSessionStatus('Session ended — saved to chart');
     } else {
-      btn.textContent = 'Error - Try Again';
-      btn.disabled = false;
+      setSessionStatus('Error saving summary — try again');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'End Session & Save Summary';
+      }
     }
   } catch (e) {
-    btn.textContent = 'Error - Try Again';
-    btn.disabled = false;
+    setSessionStatus('Error saving summary — try again');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'End Session & Save Summary';
+    }
   }
 }
 
 function toggleMockVitals(session_id, subdomain) {
-  var btn = document.getElementById('mock-vitals-btn');
+  if (sessionClosed) return;
   if (mockInterval) {
-    clearInterval(mockInterval);
-    mockInterval = null;
-    btn.textContent = 'Mock Vitals';
-    btn.classList.remove('mock-active');
-    setSaveSummaryVisible(true);
+    stopMockVitals(session_id);
   } else {
-    btn.textContent = 'Stop Mock';
-    btn.classList.add('mock-active');
-    setSaveSummaryVisible(false);
-    postMockVital(session_id, subdomain);
-    mockInterval = setInterval(() => postMockVital(session_id, subdomain), 3000);
+    startMockVitals(session_id, subdomain);
   }
 }
 
-function setSaveSummaryVisible(visible) {
-  var btn = document.getElementById('save-summary-btn');
-  if (btn) btn.style.display = visible ? '' : 'none';
+function startMockVitals(session_id, subdomain) {
+  if (mockInterval) return;
+  var btn = document.getElementById('mock-vitals-btn');
+  if (btn) {
+    btn.textContent = 'Stop Mock';
+    btn.classList.add('mock-active');
+  }
+  setMockActiveInStorage(session_id, true);
+  postMockVital(session_id, subdomain);
+  mockInterval = setInterval(() => postMockVital(session_id, subdomain), 3000);
+}
+
+function stopMockVitals(session_id) {
+  if (mockInterval) {
+    clearInterval(mockInterval);
+    mockInterval = null;
+  }
+  var btn = document.getElementById('mock-vitals-btn');
+  if (btn) {
+    btn.textContent = 'Mock Vitals';
+    btn.classList.remove('mock-active');
+  }
+  setMockActiveInStorage(session_id, false);
 }
 
 function postMockVital(session_id, subdomain) {

@@ -54,11 +54,24 @@ _ensure(
     "canvas_sdk.templates",
     "canvas_sdk.v1",
     "canvas_sdk.v1.data",
+    "canvas_sdk.v1.data.base",
     "canvas_sdk.v1.data.command",
     "canvas_sdk.v1.data.note",
     "canvas_sdk.v1.data.staff",
+    "django",
+    "django.db",
+    "django.db.models",
     "logger",
 )
+
+# Pre-register `vitalstream.models` as a stub so plugin imports of
+# `from vitalstream.models import ...` resolve without Django installed.
+# We don't pre-stub `vitalstream` itself — it's a real package on disk and
+# must be importable so constants/templates/static paths resolve normally.
+import importlib
+import vitalstream  # noqa: F401 — ensure the real package loads first
+_models_stub = ModuleType("vitalstream.models")
+sys.modules["vitalstream.models"] = _models_stub
 
 
 # --- canvas_sdk.caching.plugins ---------------------------------------------
@@ -226,6 +239,21 @@ sys.modules["canvas_sdk.v1.data.command"].Command = MagicMock()
 sys.modules["logger"].log = MagicMock()
 
 
+# --- vitalstream.models -----------------------------------------------------
+# Stub the plugin's own Django models so route/handler tests can run without
+# Django installed. Each test resets these via the _reset_canvas_mocks
+# autouse fixture below.
+class _SessionStatus:
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+_models_stub.SessionStatus = _SessionStatus
+_models_stub.VitalstreamSession = MagicMock()
+_models_stub.VitalstreamReading = MagicMock()
+_ = importlib  # silence unused-import lint
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -241,6 +269,7 @@ def _reset_canvas_mocks() -> None:
         "canvas_sdk.v1.data.staff",
         "canvas_sdk.v1.data.command",
         "logger",
+        "vitalstream.models",
     ]:
         mod = sys.modules[name]
         for attr in dir(mod):
@@ -248,7 +277,7 @@ def _reset_canvas_mocks() -> None:
                 continue
             obj = getattr(mod, attr)
             if isinstance(obj, MagicMock):
-                obj.reset_mock()
+                obj.reset_mock(return_value=True, side_effect=True)
 
 
 @pytest.fixture()

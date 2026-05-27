@@ -1,14 +1,14 @@
+import datetime
+import re
 from http import HTTPStatus
 
 import arrow
-import re
 
-from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import Broadcast, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import Credentials, SimpleAPI, api
 
-from vitalstream.util import session_key
+from vitalstream.models import SessionStatus, VitalstreamReading, VitalstreamSession
 
 
 class CaretakerPortalAPI(SimpleAPI):
@@ -20,7 +20,7 @@ class CaretakerPortalAPI(SimpleAPI):
     serial number embedded in the JSON body, with no way to send custom
     headers or API keys. Authentication is therefore payload-based — the
     serial number is matched against AUTHORIZED_SERIAL_NUMBERS (a secret)
-    and the request's `patid` field must match an active cached session.
+    and the request's `patid` field must match an OPEN VitalstreamSession.
     """
 
     def authenticate(self, credentials: Credentials) -> bool:
@@ -70,66 +70,99 @@ class CaretakerPortalAPI(SimpleAPI):
             ]
 
         # Always accept, but we will only do anything if we can match the
-        # request body to an active session.
-        effects = [
+        # request body to an OPEN session.
+        effects: list[Response | Effect] = [
             JSONResponse(
                 {"message": "Reading accepted"}, status_code=HTTPStatus.ACCEPTED
             )
         ]
 
         # The session id is entered as the patient id on the device via QR
-        # code
+        # code.
         raw_patid = body.get('patid')
         if not isinstance(raw_patid, str) or not raw_patid.strip():
             return effects
         session_id = raw_patid.lower()
 
-        # Ensure the request body is referencing an active session
-        cache = get_cache()
-        session = cache.get(session_key(session_id))
-        if session is not None:
-            # TODO: channel names do not currently support hyphens, so they're
-            # being substituted with underscores. We need to broadcast to the
-            # version that has underscores.
-            session_id = session_id.replace("-", "_")
+        session = (
+            VitalstreamSession.objects.filter(session_id=session_id).first()
+        )
+        # Reject readings for unknown OR closed sessions — when the user ends
+        # the session, the DB row flips to "closed" and further posts stop
+        # persisting immediately.
+        if session is None or session.status != SessionStatus.OPEN:
+            return effects
 
-            # Parse the request payload and pull out measurements to record,
-            # grouping by timestamp. Bad rows (missing/malformed `ts`) are
-            # skipped rather than aborting the whole payload.
-            measurements: dict = {}
-            v1_readings = body.get('v1') or {}
-            if isinstance(v1_readings, dict):
-                for readings in v1_readings.values():
-                    if not isinstance(readings, dict):
-                        continue
-                    ts = self._safe_iso8601(readings.get('ts'))
-                    if ts is None:
-                        continue
-                    measurement = {}
-                    if 'hr' in readings:
-                        measurement['hr'] = readings['hr']
-                    if 'sys' in readings:
-                        measurement['sys'] = readings['sys']
-                    if 'dia' in readings:
-                        measurement['dia'] = readings['dia']
-                    if 'resp' in readings:
-                        measurement['resp'] = readings['resp']
-                    measurements[ts] = measurement
+        # TODO: channel names do not currently support hyphens, so they're
+        # being substituted with underscores. We need to broadcast to the
+        # version that has underscores.
+        channel = session_id.replace("-", "_")
 
-            spo2_readings = body.get('spo2') or {}
-            if isinstance(spo2_readings, dict):
-                for reading in spo2_readings.values():
-                    if not isinstance(reading, dict) or 'v' not in reading:
-                        continue
-                    ts = self._safe_iso8601(reading.get('ts'))
-                    if ts is None:
-                        continue
-                    if ts not in measurements:
-                        measurements[ts] = {}
-                    measurements[ts]['spo2'] = reading['v']
+        # Parse the request payload and pull out measurements to record,
+        # grouping by timestamp. Bad rows (missing/malformed `ts`) are
+        # skipped rather than aborting the whole payload.
+        measurements: dict[str, dict] = {}
+        v1_readings = body.get('v1') or {}
+        if isinstance(v1_readings, dict):
+            for readings in v1_readings.values():
+                if not isinstance(readings, dict):
+                    continue
+                ts = self._safe_iso8601(readings.get('ts'))
+                if ts is None:
+                    continue
+                measurement: dict = {}
+                if 'hr' in readings:
+                    measurement['hr'] = readings['hr']
+                if 'sys' in readings:
+                    measurement['sys'] = readings['sys']
+                if 'dia' in readings:
+                    measurement['dia'] = readings['dia']
+                if 'resp' in readings:
+                    measurement['resp'] = readings['resp']
+                measurements[ts] = measurement
 
-            effects.append(Broadcast(message={'measurements': measurements}, channel=session_id).apply())
+        spo2_readings = body.get('spo2') or {}
+        if isinstance(spo2_readings, dict):
+            for reading in spo2_readings.values():
+                if not isinstance(reading, dict) or 'v' not in reading:
+                    continue
+                ts = self._safe_iso8601(reading.get('ts'))
+                if ts is None:
+                    continue
+                if ts not in measurements:
+                    measurements[ts] = {}
+                measurements[ts]['spo2'] = reading['v']
+
+        if measurements:
+            self._persist_readings(session, measurements)
+            effects.append(
+                Broadcast(message={'measurements': measurements}, channel=channel).apply()
+            )
         return effects
+
+    def _persist_readings(
+        self, session: VitalstreamSession, measurements: dict[str, dict]
+    ) -> None:
+        """Bulk-persist parsed measurements as VitalstreamReading rows."""
+        rows = []
+        for ts, m in measurements.items():
+            try:
+                reading_time = datetime.datetime.fromisoformat(ts)
+            except (TypeError, ValueError):
+                continue
+            rows.append(
+                VitalstreamReading(
+                    session=session,
+                    reading_time=reading_time,
+                    hr=_as_int(m.get('hr')),
+                    sys=_as_int(m.get('sys')),
+                    dia=_as_int(m.get('dia')),
+                    resp=_as_int(m.get('resp')),
+                    spo2=_as_int(m.get('spo2')),
+                )
+            )
+        if rows:
+            VitalstreamReading.objects.bulk_create(rows)
 
     def _safe_iso8601(self, timestamp) -> str | None:
         if not isinstance(timestamp, str):
@@ -143,3 +176,13 @@ class CaretakerPortalAPI(SimpleAPI):
         # Expects timestamp to be a string like '2026-Jan-07 08:50:14 UTC'
         # Returns '2026-01-07T08:50:14+00:00'
         return arrow.get(timestamp, 'YYYY-MMM-DD HH:mm:ss ZZZ').isoformat()
+
+
+def _as_int(value) -> int | None:
+    """Coerce a measurement value to int; return None if absent or invalid."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None

@@ -4,6 +4,7 @@ import json
 import random
 import uuid
 from http import HTTPStatus
+from uuid import uuid4
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.commands.commands.custom_command import CustomCommand
@@ -13,6 +14,8 @@ from canvas_sdk.effects.simple_api import Broadcast, HTMLResponse, JSONResponse,
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import Note
+
+from logger import log
 
 from vitalstream.constants import (
     LOINC_BP_DIA,
@@ -29,9 +32,43 @@ from vitalstream.constants import (
     LOINC_SPO2_MEAN,
     TREATMENT_INTERVALS,
 )
-from vitalstream.util import session_key
+from vitalstream.models import (
+    SessionStatus,
+    VitalstreamReading,
+    VitalstreamSession,
+)
 
-from logger import log
+
+_VALID_INCREMENTS = {5, 10, 15, 20, 30}
+_DEFAULT_INCREMENT = 10
+_WINDOW_HALF_MINUTES = 0.5  # 30s before and after each Nth-minute mark
+_PREF_TTL_SECONDS = 60 * 60 * 48  # 48 hours — VitalStream sessions are short-lived
+
+# Whitelisted preference keys. Anything else the client sends is dropped so
+# the cache can't be used as a generic dumping ground.
+_PREF_KEYS = (
+    "treatment_type",
+    "increment_minutes",
+    "bp_placement",
+    "treatment_start",
+    "treatment_end",
+)
+
+
+def _prefs_cache_key(session_id: str) -> str:
+    return f"vs_prefs:{session_id}"
+
+
+def _load_prefs(session_id: str) -> dict:
+    value = get_cache().get(_prefs_cache_key(session_id))
+    return value if isinstance(value, dict) else {}
+
+
+def _save_prefs(session_id: str, prefs: dict) -> dict:
+    """Filter to whitelisted keys, persist, and return the stored shape."""
+    clean = {k: prefs[k] for k in _PREF_KEYS if k in prefs}
+    get_cache().set(_prefs_cache_key(session_id), clean, timeout_seconds=_PREF_TTL_SECONDS)
+    return clean
 
 
 def _build_interval_html_table(rows: list[dict[str, str]], bp_placement: str = "left_wrist") -> str:
@@ -102,15 +139,8 @@ def _parse_bool_secret(value: str | None) -> bool:
 
 
 def _parse_vitals_datetime(timestamp: str) -> datetime.datetime:
-    """Parse an ISO8601 timestamp from the client into a TZ-aware UTC datetime.
-
-    The wire format from the JS client is `Date.toISOString()` (always UTC,
-    "Z"-suffixed). Falls back to the current UTC time for malformed input so
-    saved observations remain on the actual reading day.
-    """
+    """Parse an ISO8601 timestamp from the client into a TZ-aware UTC datetime."""
     if timestamp:
-        # `datetime.fromisoformat` only learned to accept the "Z" suffix in
-        # Python 3.11. Normalize so older runtimes still parse cleanly.
         normalized = timestamp.strip()
         if normalized.endswith("Z"):
             normalized = normalized[:-1] + "+00:00"
@@ -458,25 +488,185 @@ def _create_summary_observations(
     return effects
 
 
+def _coerce_elapsed_min(value) -> float | None:
+    """Coerce a wire value to a float elapsed-minute, returning None on junk."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _classify_phase(
+    elapsed_min: float | None,
+    start_elapsed: float | None,
+    end_elapsed: float | None,
+) -> str:
+    if start_elapsed is None and end_elapsed is None:
+        return ""
+    if elapsed_min is None:
+        return ""
+    if start_elapsed is not None and elapsed_min < start_elapsed:
+        return "pre"
+    if end_elapsed is not None and elapsed_min > end_elapsed:
+        return "post"
+    return "during"
+
+
+def _mean_int(values: list[int]) -> str:
+    """Round to the nearest int and return as a string; empty if no values."""
+    return str(round(sum(values) / len(values))) if values else ""
+
+
+def _format_local_time(dt: datetime.datetime, tz_offset_minutes: int) -> str:
+    """Render dt as the user's local wall-clock HH:MM.
+
+    `dt` is a UTC datetime from the DB; `tz_offset_minutes` is what JS's
+    `Date.prototype.getTimezoneOffset()` returns — positive for west of UTC
+    (e.g. 240 in EDT). Local = UTC - offset.
+    """
+    local = dt - datetime.timedelta(minutes=tz_offset_minutes)
+    return local.strftime("%H:%M")
+
+
+def _compute_buckets(
+    readings: list[VitalstreamReading],
+    session_start: datetime.datetime,
+    increment_minutes: int,
+    tz_offset_minutes: int = 0,
+) -> list[dict]:
+    """Compute Nth-minute-mark buckets from persisted readings.
+
+    Each bucket averages readings within a 1-minute window (±30s) around the
+    mark. Marks with no readings in their window are skipped — same algorithm
+    that ran client-side previously.
+    """
+    if not readings:
+        return []
+
+    elapsed = [
+        (r, (r.reading_time - session_start).total_seconds() / 60.0)
+        for r in readings
+    ]
+    max_elapsed = max(em for _, em in elapsed)
+
+    buckets: list[dict] = []
+    t = 0.0
+    while t <= max_elapsed + _WINDOW_HALF_MINUTES:
+        lo = t - _WINDOW_HALF_MINUTES
+        hi = t + _WINDOW_HALF_MINUTES
+        window = [r for r, em in elapsed if lo <= em <= hi]
+        if window:
+            buckets.append(_bucket_from_readings(
+                window,
+                label=f"{int(t)} min",
+                anchor_dt=session_start + datetime.timedelta(minutes=t),
+                elapsed_min=t,
+                tz_offset_minutes=tz_offset_minutes,
+            ))
+        t += increment_minutes
+    return buckets
+
+
+def _bucket_from_readings(
+    readings: list[VitalstreamReading],
+    *,
+    label: str,
+    anchor_dt: datetime.datetime,
+    elapsed_min: float,
+    tz_offset_minutes: int = 0,
+) -> dict:
+    hr = [r.hr for r in readings if r.hr is not None]
+    sys_vals = [r.sys for r in readings if r.sys is not None]
+    dia_vals = [r.dia for r in readings if r.dia is not None]
+    rr = [r.resp for r in readings if r.resp is not None]
+    spo2 = [r.spo2 for r in readings if r.spo2 is not None]
+    return {
+        "label": label,
+        "count": str(len(readings)),
+        "timestamp": anchor_dt.isoformat(),
+        "time": _format_local_time(anchor_dt, tz_offset_minutes),
+        "elapsed_min": elapsed_min,
+        "hr": _mean_int(hr),
+        "bp_sys": _mean_int(sys_vals),
+        "bp_dia": _mean_int(dia_vals),
+        "rr": _mean_int(rr),
+        "spo2": _mean_int(spo2),
+    }
+
+
+def _compute_discharge_bucket(
+    readings: list[VitalstreamReading],
+    session_start: datetime.datetime,
+    tz_offset_minutes: int = 0,
+) -> dict | None:
+    """Average over the trailing 30 seconds of readings."""
+    if not readings:
+        return None
+    elapsed = [
+        (r, (r.reading_time - session_start).total_seconds() / 60.0)
+        for r in readings
+    ]
+    max_elapsed = max(em for _, em in elapsed)
+    cutoff = max_elapsed - _WINDOW_HALF_MINUTES
+    window = [r for r, em in elapsed if em >= cutoff]
+    if not window:
+        return None
+    last = window[-1]
+    last_elapsed = (last.reading_time - session_start).total_seconds() / 60.0
+    bucket = _bucket_from_readings(
+        window,
+        label="Discharge",
+        anchor_dt=last.reading_time,
+        elapsed_min=last_elapsed,
+        tz_offset_minutes=tz_offset_minutes,
+    )
+    return bucket
+
+
+def _serialize_reading(reading: VitalstreamReading) -> dict:
+    """Wire format for backfill on UI open — matches what the JS expects."""
+    return {
+        "timestamp": reading.reading_time.isoformat(),
+        "hr": reading.hr,
+        "sys": reading.sys,
+        "dia": reading.dia,
+        "resp": reading.resp,
+        "spo2": reading.spo2,
+    }
+
+
 class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
     """API to serve the VitalStream integration UI."""
 
-    def validate_session(self, session_id: str) -> dict | None:
-        """Validate that the session exists and belongs to the logged-in staff."""
+    def validate_session(self, session_id: str) -> VitalstreamSession | None:
+        """Return the VitalstreamSession if it belongs to the logged-in staff."""
         logged_in_staff_id = self.request.headers["canvas-logged-in-user-id"]
-        session = get_cache().get(session_key(session_id))
-
-        if session is None or session.get("staff_id") != logged_in_staff_id:
+        session = (
+            VitalstreamSession.objects.filter(session_id=session_id).first()
+        )
+        if session is None or session.staff_id != logged_in_staff_id:
             return None
         return session
 
-    @api.get("/vitalstream-ui/sessions/<session_id>/")
+    @api.get("/vitalstream-ui/notes/<note_dbid>/")
     def index(self) -> list[Response | Effect]:
-        """Render the custom UI for the chart application."""
-        session_id = self.request.path_params["session_id"]
-        session = self.validate_session(session_id)
+        """Render the custom UI for a note, creating the session if needed.
 
-        if session is None:
+        The action button routes here with the note's dbid. We resolve the
+        VitalstreamSession for this note (reusing the open one, or the most
+        recent closed one for read-only revisit, otherwise creating a fresh
+        open row) and render the UI with the resolved session_id baked in.
+        This keeps the DB write inside a SimpleAPI handler — the persistence
+        path other MSF plugins use.
+        """
+        note_dbid = self.request.path_params["note_dbid"]
+        logged_in_staff_id = self.request.headers["canvas-logged-in-user-id"]
+
+        try:
+            note = Note.objects.select_related("note_type_version").get(dbid=note_dbid)
+        except Note.DoesNotExist:
             return [
                 HTMLResponse(
                     render_to_string("templates/session-not-found.html"),
@@ -484,7 +674,8 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        note = Note.objects.select_related("note_type_version").get(dbid=session["note_id"])
+        session = self._get_or_create_session(note_dbid, logged_in_staff_id)
+
         note_type = note.note_type_version
         check = (
             ((note_type.name if note_type else "") + " " + (note.title or "")).lower()
@@ -492,11 +683,12 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
         is_spravato = "spravato" in check
 
         context = {
-            "session_id": session_id,
+            "session_id": session.session_id,
             "subdomain": self.environment["CUSTOMER_IDENTIFIER"],
             "enable_mock_vitals": _parse_bool_secret(self.secrets.get("ENABLE_MOCK_VITALS")),
             "treatment_intervals": TREATMENT_INTERVALS,
             "is_spravato": is_spravato,
+            "session_status": session.status,
         }
         return [
             HTMLResponse(
@@ -505,9 +697,98 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         ]
 
+    def _get_or_create_session(
+        self, note_dbid: int | str, staff_id: str
+    ) -> VitalstreamSession:
+        """Return the session row for this note, creating one if absent."""
+        existing = (
+            VitalstreamSession.objects.filter(
+                note__dbid=note_dbid, status=SessionStatus.OPEN
+            )
+            .order_by("-started_at")
+            .first()
+        )
+        if existing is not None:
+            return existing
+
+        # Fall back to the most recent closed session so revisiting the chart
+        # pane after end-of-session lands on a read-only history view rather
+        # than silently spinning up a new session.
+        most_recent = (
+            VitalstreamSession.objects.filter(note__dbid=note_dbid)
+            .order_by("-started_at")
+            .first()
+        )
+        if most_recent is not None:
+            return most_recent
+
+        session = VitalstreamSession(
+            note_id=note_dbid,
+            session_id=str(uuid4()),
+            staff_id=staff_id,
+            status=SessionStatus.OPEN,
+        )
+        session.save()
+        return session
+
+    @api.get("/vitalstream-ui/sessions/<session_id>/readings/")
+    def list_readings(self) -> list[Response | Effect]:
+        """Single-roundtrip UI hydration: status, persisted readings, and the
+        last-saved form preferences for this session."""
+        session_id = self.request.path_params["session_id"]
+        session = self.validate_session(session_id)
+
+        if session is None:
+            return [
+                JSONResponse(
+                    {"error": "Session not found"},
+                    status_code=HTTPStatus.NOT_FOUND,
+                )
+            ]
+
+        readings = list(
+            VitalstreamReading.objects.filter(session=session).order_by("reading_time")
+        )
+        return [
+            JSONResponse(
+                {
+                    "status": session.status,
+                    "readings": [_serialize_reading(r) for r in readings],
+                    "preferences": _load_prefs(session_id),
+                }
+            )
+        ]
+
+    @api.put("/vitalstream-ui/sessions/<session_id>/preferences/")
+    def save_preferences(self) -> list[Response | Effect]:
+        """Persist the form inputs (treatment type, increment, wrist, treatment
+        times) in the SDK cache so they survive a chart-pane close/reopen.
+
+        Cache TTL is 48h — VitalStream sessions run for hours, not days, so
+        the cache is the appropriate store rather than a CustomModel."""
+        session_id = self.request.path_params["session_id"]
+        session = self.validate_session(session_id)
+        if session is None:
+            return [
+                JSONResponse(
+                    {"error": "Session not found"},
+                    status_code=HTTPStatus.NOT_FOUND,
+                )
+            ]
+
+        try:
+            body = self.request.json() or {}
+        except (ValueError, TypeError):
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+
+        stored = _save_prefs(session_id, body)
+        return [JSONResponse({"preferences": stored})]
+
     @api.post("/vitalstream-ui/sessions/<session_id>/mock-vitals/")
     def mock_vitals(self) -> list[Response | Effect]:
-        """Generate a mock vital sign reading and broadcast via WebSocket."""
+        """Generate a mock vital sign reading, persist it, and broadcast via WebSocket."""
         session_id = self.request.path_params["session_id"]
         session = self.validate_session(session_id)
 
@@ -527,17 +808,35 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        if session.status != SessionStatus.OPEN:
+            return [
+                JSONResponse(
+                    {"error": "Session is closed"},
+                    status_code=HTTPStatus.CONFLICT,
+                )
+            ]
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        reading = VitalstreamReading(
+            session=session,
+            reading_time=now,
+            hr=random.randint(60, 100),
+            sys=random.randint(110, 140),
+            dia=random.randint(65, 90),
+            resp=random.randint(12, 20),
+            spo2=random.randint(95, 100),
+        )
+        reading.save()
+
         measurements = {
-            now: {
-                "hr": random.randint(60, 100),
-                "sys": random.randint(110, 140),
-                "dia": random.randint(65, 90),
-                "resp": random.randint(12, 20),
-                "spo2": random.randint(95, 100),
+            now.isoformat(): {
+                "hr": reading.hr,
+                "sys": reading.sys,
+                "dia": reading.dia,
+                "resp": reading.resp,
+                "spo2": reading.spo2,
             }
         }
-
         channel = session_id.replace("-", "_")
 
         return [
@@ -549,7 +848,10 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/vitalstream-ui/sessions/<session_id>/save-intervals/")
     def save_intervals(self) -> list[Response | Effect]:
-        """Save interval vitals as a CustomCommand and create Observations."""
+        """Save interval vitals as a CustomCommand and create Observations.
+
+        Spravato workflow only — does not end the session.
+        """
         session_id = self.request.path_params["session_id"]
         session = self.validate_session(session_id)
 
@@ -572,7 +874,7 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        note = Note.objects.select_related("patient").get(dbid=session["note_id"])
+        note = Note.objects.select_related("patient").get(dbid=session.note_id)
         patient_id = note.patient.id
 
         bp_placement = data.get("bp_placement", "left_wrist")
@@ -601,7 +903,6 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
             note_effect.upsert_metadata("spravato:vitals_data", vitals_json)
         )
 
-        # Store individual BP metadata for REMS extractor
         # Labels match Spravato charting app: Pre-administration, 40-min post, Pre-discharge
         for row in rows:
             bp_sys = row.get("bp_sys", "")
@@ -623,9 +924,7 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                     )
 
         # Notify the Spravato charting app via WebSocket so it can
-        # live-reload the vitals section without a page refresh. The channel is
-        # scoped per-note (UUID acts as the capability token) so saves on one
-        # patient's note don't leak to staff viewing other patients.
+        # live-reload the vitals section without a page refresh.
         note_channel = f"spravato_notify_{str(note.id).replace('-', '_')}"
         log.info(f"[VitalStream] Broadcasting vitals_saved on {note_channel}")
         effects.append(
@@ -644,9 +943,21 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
 
         return effects
 
-    @api.post("/vitalstream-ui/sessions/<session_id>/save-summary/")
-    def save_summary(self) -> list[Response | Effect]:
-        """Save summary vitals (10-min bucket averages) as a CustomCommand and Observations."""
+    @api.post("/vitalstream-ui/sessions/<session_id>/end-session/")
+    def end_session(self) -> list[Response | Effect]:
+        """Atomically close the session, then summarize and write Observations.
+
+        The "End Session & Save Summary" button hits this endpoint. Steps:
+
+        1. Flip session.status to "closed" so any in-flight device posts are
+           rejected from this point forward (status check happens in the
+           device endpoint before persisting).
+        2. Read all persisted VitalstreamReading rows for the session.
+        3. Compute per-increment means using a 1-min window around each Nth
+           minute mark (algorithm previously implemented client-side).
+        4. Write mean Observations + vitalstreamSummary CustomCommand.
+        5. Broadcast session_closed so any other open UIs disable input.
+        """
         session_id = self.request.path_params["session_id"]
         session = self.validate_session(session_id)
 
@@ -658,42 +969,138 @@ class VitalstreamUIAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        data = self.request.json()
-        buckets = data.get("buckets", [])
-
-        if not buckets:
+        # Idempotency: a closed session has already had its summary written.
+        # Re-running would duplicate the CustomCommand + Observations and use
+        # a now-different snapshot of readings (any that raced in before the
+        # close commit). Just acknowledge.
+        if session.status == SessionStatus.CLOSED:
+            log.info(
+                f"[VitalStream] end_session called on already-closed "
+                f"session {session_id}; returning without re-saving."
+            )
+            channel = session_id.replace("-", "_")
             return [
-                JSONResponse(
-                    {"error": "No summary data provided"},
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
+                Broadcast(
+                    channel=channel,
+                    message={"event_type": "session_closed"},
+                ).apply(),
+                JSONResponse({"status": "closed", "already_closed": True}),
             ]
 
-        note = Note.objects.select_related("patient").get(dbid=session["note_id"])
-        patient_id = note.patient.id
+        data = self.request.json() or {}
+        increment_minutes = data.get("summary_increment_minutes", _DEFAULT_INCREMENT)
+        try:
+            increment_minutes = int(increment_minutes)
+        except (TypeError, ValueError):
+            increment_minutes = _DEFAULT_INCREMENT
+        if increment_minutes not in _VALID_INCREMENTS:
+            increment_minutes = _DEFAULT_INCREMENT
 
         bp_placement = data.get("bp_placement", "left_wrist")
-        treatment_start = data.get("treatment_start", "") or ""
-        treatment_end = data.get("treatment_end", "") or ""
+        treatment_start = (data.get("treatment_start") or "").strip()
+        treatment_end = (data.get("treatment_end") or "").strip()
+        # Elapsed-minute offsets computed client-side from sessionStartTime and
+        # the local HH:MM inputs. The server can't resolve HH:MM against UTC
+        # readings without the user's tz, so it trusts what the browser sent.
+        start_elapsed = _coerce_elapsed_min(data.get("treatment_start_elapsed_min"))
+        end_elapsed = _coerce_elapsed_min(data.get("treatment_end_elapsed_min"))
+        # Browser's Date.prototype.getTimezoneOffset(): positive west of UTC.
+        try:
+            tz_offset_minutes = int(data.get("tz_offset_minutes") or 0)
+        except (TypeError, ValueError):
+            tz_offset_minutes = 0
+
+        # Step 1: close the session atomically. This stops the device endpoint
+        # from persisting any further readings.
+        session.status = SessionStatus.CLOSED
+        session.ended_at = datetime.datetime.now(datetime.timezone.utc)
+        session.summary_increment_minutes = increment_minutes
+        session.save()
+
+        # Step 2: read all persisted readings. Done AFTER the close so any
+        # in-flight device POSTs are race-rejected at most once.
+        readings = list(
+            VitalstreamReading.objects.filter(session=session).order_by("reading_time")
+        )
+        log.info(
+            f"[VitalStream] end_session {session_id}: "
+            f"closed at {session.ended_at}, {len(readings)} readings persisted, "
+            f"increment={increment_minutes}min"
+        )
+
+        note = Note.objects.select_related("patient").get(dbid=session.note_id)
+        patient_id = note.patient.id
+
+        effects: list[Response | Effect] = []
+
+        if not readings:
+            # No data to summarize, but we still close the session and notify.
+            channel = session_id.replace("-", "_")
+            effects.append(
+                Broadcast(
+                    channel=channel,
+                    message={"event_type": "session_closed"},
+                ).apply()
+            )
+            effects.append(
+                JSONResponse({"status": "closed", "buckets": []})
+            )
+            return effects
+
+        # Step 3: compute mean buckets.
+        session_start = readings[0].reading_time
+        buckets = _compute_buckets(
+            readings, session_start, increment_minutes, tz_offset_minutes
+        )
+
+        # Phase classification + optional discharge bucket. start_elapsed and
+        # end_elapsed already arrived as elapsed-minute floats from the client,
+        # so no further timezone math here.
+        for bucket in buckets:
+            bucket["phase"] = _classify_phase(
+                bucket.get("elapsed_min"), start_elapsed, end_elapsed
+            )
+
+        if treatment_end and end_elapsed is not None:
+            discharge = _compute_discharge_bucket(readings, session_start, tz_offset_minutes)
+            if discharge is not None and discharge["elapsed_min"] > end_elapsed:
+                discharge["phase"] = "discharge"
+                buckets.append(discharge)
+
+        # Strip the float elapsed_min before serializing — the wire format and
+        # the persisted HTML table only care about the human-facing fields.
+        for bucket in buckets:
+            bucket.pop("elapsed_min", None)
+
+        # Step 4: persist as CustomCommand + Observations.
         html_content = _build_summary_html_table(
             buckets, bp_placement, treatment_start, treatment_end
         )
-
         custom_command = CustomCommand(
             schema_key="vitalstreamSummary",
             content=html_content,
         )
         custom_command.command_uuid = str(uuid.uuid4())
         custom_command.note_uuid = str(note.id)
-
-        log.info(f"[VitalStream] Saving summary for note {note.id}: {len(buckets)} buckets")
-        effects: list[Response | Effect] = [custom_command.originate()]
+        effects.append(custom_command.originate())
         effects.extend(
             _create_summary_observations(buckets, str(patient_id), note.dbid)
         )
 
-        effects.append(JSONResponse({"status": "ok"}))
+        # Step 5: broadcast that the session is closed.
+        channel = session_id.replace("-", "_")
+        effects.append(
+            Broadcast(
+                channel=channel,
+                message={"event_type": "session_closed"},
+            ).apply()
+        )
 
+        log.info(
+            f"[VitalStream] Ended session {session_id}: "
+            f"{len(readings)} readings, {len(buckets)} buckets"
+        )
+        effects.append(JSONResponse({"status": "closed", "buckets": buckets}))
         return effects
 
     @api.get("/main.js")

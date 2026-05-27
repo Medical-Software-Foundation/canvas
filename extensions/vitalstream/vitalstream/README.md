@@ -5,9 +5,11 @@ This plugin provides an integration for the VitalStream device by Caretaker Medi
 
 ## Features
 
-- **Real-time Vital Signs Display**: Receives continuous vital sign measurements from VitalStream devices via WebSocket, displaying them in a live feed within the patient chart.
+- **One session per note**: When the staff member first clicks "Record with VitalStream" on a note, a session is created and tied to that note. Re-clicking the button (or reopening the chart pane) resumes the same session and shows the same QR code — the device stays paired and the user can close and revisit the pane at will without losing data.
 
-- **Windowed Averaging at Increments**: When the user clicks "Save Summary to Chart", the plugin computes averages in a 1-minute window (30 seconds before and after) around each increment mark. The user chooses a 5 or 10 minute increment for the summary regardless of treatment type.
+- **Real-time persistence**: Each reading the device pushes is persisted to a `VitalstreamReading` custom data row as it arrives. The browser tab no longer has to stay open for data to be recorded. Reopening the pane backfills the live feed from history before subscribing to the WebSocket for new readings.
+
+- **Single end-session-and-save button**: When the user is finished recording they click "End Session & Save Summary". The server atomically flips the session row to `closed` (further device posts are rejected from that instant), reads all persisted readings, computes a mean over a 1-minute window (±30s) around each Nth-minute mark, and writes Observations + a CustomCommand summary to the chart. Other open UIs are notified via a `session_closed` broadcast.
 
 - **Observation Recording**: Averaged measurements are saved to the patient's chart as Observations with appropriate LOINC codes for:
   - Mean heart rate (103205-1)
@@ -15,19 +17,28 @@ This plugin provides an integration for the VitalStream device by Caretaker Medi
   - Mean oxygen saturation (103209-3)
   - Blood pressure panel with mean systolic and diastolic components (96607-7)
 
-- **Command Summary**: When saving to chart, a command is automatically inserted into the note with a summary of all recorded vital sign measurements.
+- **Selectable summary increment**: 5, 10, 15, 20, or 30 minutes.
 
-- **Secure Session Management**: Each VitalStream session is tied to a specific note and staff member, with QR code-based device pairing.
+- **Secure Session Management**: Each VitalStream session is tied to a specific note and staff member, with QR code-based device pairing. The device authenticates by serial number; per-session authorization is enforced by the unguessable session UUID embedded in the QR code.
 
 ## Components
 
-- **VitalstreamUILauncher**: Action button in the note header that launches the VitalStream UI in the right chart pane.
+- **VitalstreamUILauncher**: Action button in the note header that opens the VitalStream UI in the right chart pane. It just emits a `LaunchModalEffect`; the UI handler resolves (or creates) the `VitalstreamSession` for the note when the page renders.
 
-- **CaretakerPortalAPI**: Receives incoming vital sign data from VitalStream devices, validates device authorization via serial number, and broadcasts measurements to active sessions.
+- **CaretakerPortalAPI**: Receives incoming vital sign data from VitalStream devices. Validates the device serial number, looks up the `VitalstreamSession` by `patid`, rejects readings if the session is closed, otherwise bulk-creates `VitalstreamReading` rows and broadcasts to active UIs.
 
-- **VitalstreamUIAPI**: Serves the VitalStream UI and handles saving averaged measurements as Observations.
+- **VitalstreamUIAPI**: Serves the VitalStream UI at `/vitalstream-ui/notes/<note_dbid>/` (where the get-or-create on the session row happens), plus the session-scoped `/sessions/<session_id>/readings/` backfill endpoint, the Spravato `/sessions/<session_id>/save-intervals/` endpoint, and the `/sessions/<session_id>/end-session/` endpoint that closes the session and writes the summary Observations + CustomCommand.
 
-- **LiveObservationsChannel**: WebSocket channel for real-time communication between the device API and the UI.
+- **LiveObservationsChannel**: WebSocket channel that streams readings and the `session_closed` event to the UI. Authorizes the connection by looking up the session row in the DB.
+
+## Custom data
+
+The plugin owns the `canvas__vitalstream` namespace with two models:
+
+| Model | Purpose |
+|---|---|
+| `VitalstreamSession` | One row per note. Tracks `session_id`, `staff_id`, `status` (`open`/`closed`), `started_at`, `ended_at`, `summary_increment_minutes`. |
+| `VitalstreamReading` | One row per individual device reading. Holds `reading_time`, `hr`, `sys`, `dia`, `resp`, `spo2`. Indexed by `(session, reading_time)`. |
 
 ## Configuration
 
@@ -35,7 +46,7 @@ The plugin uses the following secrets:
 
 - `AUTHORIZED_SERIAL_NUMBERS` (required): A newline-separated list of authorized VitalStream device serial numbers. You can get the device's serial number from the "About" section of the Settings screen in the VitalStream app.
 
-- `ENABLE_MOCK_VITALS` (optional, default disabled): When enabled, exposes a "Mock Vitals" button in the chart pane and the `/mock-vitals/` endpoint, which generate random vitals for development/testing. Accepted truthy values (case-insensitive): `1`, `true`, `yes`, `on`, `enabled`. Any other value (including `false`, `0`, `disabled`, or unset) leaves the feature off. Do not enable in production.
+- `ENABLE_MOCK_VITALS` (optional, default disabled): When enabled, exposes a "Mock Vitals" button in the chart pane and the `/mock-vitals/` endpoint, which generate random vitals for development/testing. Mock readings are persisted to `VitalstreamReading` just like real ones, so the full end-session flow can be exercised without a device. Accepted truthy values (case-insensitive): `1`, `true`, `yes`, `on`, `enabled`. Any other value (including `false`, `0`, `disabled`, or unset) leaves the feature off. Do not enable in production.
 
 In the VitalStream app on the tablet:
 
@@ -46,17 +57,16 @@ In the VitalStream app on the tablet:
 
 ## Usage
 
-- In Canvas, create a note
-- Click the "Record with VitalStream" button
-- Right pane opens, revealing QR code used to pair the device
-- Start a session on the caretaker tablet, click the camera icon to scan the code
-  - Data starts flowing in and is displayed in real-time
-  - Data is not persisted until the user clicks "Save to Chart"
-- Choose a summary increment (5 or 10 minutes)
-- When finished recording, click "Save Summary to Chart"
-  - For each increment mark (0, N, 2N, ... minutes from session start), readings in the 1-minute window around that mark (±30 seconds) are averaged
-  - Averaged readings are saved as Observations
-  - A command is inserted into the note summarizing the measurements
+- In Canvas, open a note and click "Record with VitalStream".
+- The right chart pane opens with a QR code.
+- On the Caretaker tablet, start a session and tap the camera icon to scan the QR.
+- Readings start streaming and are persisted in real time. The user can close the chart pane and return; the same QR/session is shown and the prior readings are still on the timeline.
+- Choose a summary increment (5, 10, 15, 20, or 30 min).
+- When finished, click "End Session & Save Summary":
+  - The session is closed atomically — further device readings are rejected.
+  - For each increment mark (0, N, 2N, ... minutes from session start), readings in the 1-minute window around that mark (±30 seconds) are averaged.
+  - Averaged readings are saved as Observations.
+  - A command is inserted into the note summarizing the measurements.
 
 ## Spravato workflow
 
@@ -64,13 +74,7 @@ The UI offers a Spravato "Treatment Intervals" workflow (pre-administration, 40-
 
 This is intentionally name-based so customers can opt note types into the Spravato workflow without a code change. To enable it, name the note type (or set the note title) to include `spravato` — e.g. "Spravato Session", "Spravato Treatment". Note types that should _not_ surface the Spravato workflow must avoid that substring in their display name.
 
-When intervals are assigned and saved via "Save Intervals to Chart", the plugin writes `spravato:vitals_data` and `spravato:bp_pre_admin` / `spravato:bp_40min_post` / `spravato:bp_pre_completion` metadata on the note, which the Spravato charting app and REMS extractor consume.
-
-## Opportunities for enhancement
-
-The UI implements optimistic creation of the averaged Observations. An
-enhancement to this would be to perform a lookup of the newly created
-observations to confirm persistence.
+"Save Intervals to Chart" writes the interval Observations and `spravato:vitals_data` / `spravato:bp_pre_admin` / `spravato:bp_40min_post` / `spravato:bp_pre_completion` note metadata that the Spravato charting app and REMS extractor consume. This is independent of "End Session & Save Summary" — Spravato users typically click both.
 
 ## Testing
 
@@ -84,8 +88,7 @@ To run tests for a specific module:
 
 ```bash
 uv run pytest tests/test_vitalstream_ui_api.py -v
-uv run pytest tests/test_caretaker_portal_api.py -v
-uv run pytest tests/test_vitalstream_ui_launcher.py -v
+uv run pytest tests/test_vitalstream_api.py -v
+uv run pytest tests/test_vitalstream_ui.py -v
 uv run pytest tests/test_live_observations.py -v
-uv run pytest tests/test_util.py -v
 ```

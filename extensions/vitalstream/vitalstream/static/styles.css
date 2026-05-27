@@ -318,8 +318,8 @@ details[open] summary {
   color: #333;
 }
 
-/* Save summary button */
-#save-summary-btn,
+/* End-session-and-save and save-intervals — primary save-style buttons. */
+#end-session-btn,
 #save-intervals-btn {
   background: rgb(46, 187, 227);
   color: #fff;
@@ -332,32 +332,15 @@ details[open] summary {
   white-space: nowrap;
 }
 
-#save-summary-btn:hover,
+#end-session-btn:hover,
 #save-intervals-btn:hover {
   background: rgb(30, 160, 200);
 }
 
-#save-summary-btn:disabled,
+#end-session-btn:disabled,
 #save-intervals-btn:disabled {
   background: #ccc;
   cursor: not-allowed;
-}
-
-/* End session button — in header, revealed once readings start arriving */
-#end-session-btn {
-  background: #c0392b;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-#end-session-btn:hover {
-  background: #a93226;
 }
 
 /* Mock vitals button — in header */
