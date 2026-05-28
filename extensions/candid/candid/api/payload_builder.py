@@ -198,9 +198,15 @@ def _clamp_service_line_pointers(
 
 
 def _make_overflow_service_line(num_diagnoses: int) -> dict:
-    """Build a 99499 placeholder service line for a supplemental split."""
+    """Build a 99499 placeholder service line for a supplemental split.
+
+    The ``description`` field is required by clearinghouses when the CPT code
+    is non-specific (like 99499). Without it the claim is rejected with
+    "SUB-ELEMENT SV101-07 IS MISSING".
+    """
     return {
         "procedure_code": OVERFLOW_CPT_CODE,
+        "description": "Supplemental claim for additional diagnosis codes exceeding CMS-1500 limit",
         "units": "UN",
         "quantity": "1",
         "charge_amount_cents": OVERFLOW_CHARGE_CENTS,
