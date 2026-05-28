@@ -33,7 +33,10 @@ from typing import Any
 import pytest
 import requests
 
-HOST = os.environ.get("HOST", "general-primary-care-trial")
+HOST = os.environ.get("HOST")
+if not HOST:
+    raise ValueError("HOST environment variable is required")
+
 CHAT_URL = f"https://{HOST}.canvasmedical.com/plugin-io/api/assistant/chat"
 STAFF_ID = os.environ.get("STAFF_ID")
 
