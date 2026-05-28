@@ -22,6 +22,7 @@ from logger import log
 
 from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
+from candid.api.payload_builder import OVERFLOW_CHARGE_CENTS, OVERFLOW_CPT_CODE
 from candid.effect_helpers import (
     DEFAULT_CLAIM_STATUS,
     ERA_DESC_PREFIX,
@@ -68,6 +69,16 @@ def _match_line_item(
     3. Fallback: ``charge_amount`` + ``date_of_service`` (handles payer code remaps)
     4. Fallback: positional index (same order as submitted)
     """
+    # Supplemental-split overflow placeholders (99499 at $0.01) don't correspond
+    # to any Canvas line item — they exist only to carry diagnosis codes past
+    # the CMS-1500 limit. Skip so their ERA adjustments aren't misrouted to
+    # line_items[0] via the positional-index fallback.
+    if (
+        candid_line.get("procedure_code") == OVERFLOW_CPT_CODE
+        and candid_line.get("charge_amount_cents") == OVERFLOW_CHARGE_CENTS
+    ):
+        return None
+
     # Pass 1: match on external_id (most reliable — set by the plugin)
     if external_id := candid_line.get("external_id"):
         match = next((li for li in line_items if str(li.id) == external_id), None)
@@ -205,6 +216,7 @@ def _build_insurance_transactions(
     remaining balance moves to the appropriate payer after insurance pays.
     """
     txns: list[LineItemTransaction] = []
+    line_items_by_id = {str(li.id): li for li in line_items}
 
     for idx, sl in enumerate(service_lines):
         line_item_id = _match_line_item(sl, line_items, canvas_claim_id, index=idx)
@@ -230,8 +242,8 @@ def _build_insurance_transactions(
         # agreed to per their payer contract. We use line_item.charge rather
         # than the ERA's charge_amount because the two often disagree.
         if allowed:
-            line_item = next(li for li in line_items if str(li.id) == line_item_id)
-            if line_item and line_item.charge and line_item.charge > allowed:
+            line_item = line_items_by_id[line_item_id]
+            if line_item.charge and line_item.charge > allowed:
                 contractual = line_item.charge - allowed
                 txns.append(
                     LineItemTransaction(
@@ -425,7 +437,7 @@ class _SyncState:
     synced_era_ids: set[str]
     synced_pmt_ids: set[str]
     known_payment_ids: set[str]
-    prev_synced_amounts: dict[str, int]
+    prev_synced_amounts: dict[str, int | None]
 
     effects: list[Effect] = field(default_factory=list)
     attempted_era_ids: list[str] = field(default_factory=list)

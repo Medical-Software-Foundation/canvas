@@ -152,7 +152,9 @@ def build_split_payloads(
             )
         else:
             # Supplemental: single 99499 line pointing to all diagnoses in this split
-            split_payload["service_lines"] = [_make_overflow_service_line(len(chunk))]
+            split_payload["service_lines"] = [
+                _make_overflow_service_line(len(chunk), split_payload["external_id"])
+            ]
 
         payloads.append((split_payload, []))
 
@@ -197,16 +199,17 @@ def _clamp_service_line_pointers(
     return clamped
 
 
-def _make_overflow_service_line(num_diagnoses: int) -> dict:
+def _make_overflow_service_line(num_diagnoses: int, split_external_id: str = "") -> dict:
     """Build a 99499 placeholder service line for a supplemental split.
 
     The ``description`` field is required by clearinghouses when the CPT code
     is non-specific (like 99499). Without it the claim is rejected with
     "SUB-ELEMENT SV101-07 IS MISSING".
     """
-    return {
+    line: dict[str, Any] = {
         "procedure_code": OVERFLOW_CPT_CODE,
         "description": "Supplemental claim for additional diagnosis codes exceeding CMS-1500 limit",
+        "modifiers": [],
         "units": "UN",
         "quantity": "1",
         "charge_amount_cents": OVERFLOW_CHARGE_CENTS,
@@ -214,6 +217,9 @@ def _make_overflow_service_line(num_diagnoses: int) -> dict:
             range(min(num_diagnoses, MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE))
         ),
     }
+    if split_external_id:
+        line["external_id"] = f"{split_external_id}-sl0"
+    return line
 
 
 def _add_core_fields(

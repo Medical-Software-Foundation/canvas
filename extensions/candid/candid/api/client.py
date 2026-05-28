@@ -128,6 +128,20 @@ class CandidClient:
             return True, response.json().get("encounter_id", encounter_id)
         return False, self._format_error(response)
 
+    def update_service_line(
+        self, service_line_id: str, payload: dict
+    ) -> tuple[bool, str]:
+        """Update a service line via PATCH /api/service-lines/v2/{service_line_id}."""
+        response = requests.patch(
+            f"{self.base_url}/api/service-lines/v2/{service_line_id}",
+            json=payload,
+            headers=self._auth_headers(json_body=True),
+            timeout=30,
+        )
+        if response.ok:
+            return True, service_line_id
+        return False, self._format_error(response)
+
     # ------------------------------------------------------------------
     # Patient payment reporting (Canvas → Candid)
     # ------------------------------------------------------------------

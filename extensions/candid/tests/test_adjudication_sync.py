@@ -201,6 +201,14 @@ def test_match_line_item_ambiguous() -> None:
     assert _match_line_item(candid_line, [li1, li2], CANVAS_CLAIM_ID) is None
 
 
+def test_match_line_item_skips_supplemental_overflow() -> None:
+    """A supplemental-split 99499 placeholder ($0.01) is not a real charge and
+    must not be index-matched to a Canvas line item."""
+    li = _fake_line_item("99213", Decimal("100.00"), "2026-01-15", "li-1")
+    overflow = _candid_service_line(procedure_code="99499", charge_amount_cents=1)
+    assert _match_line_item(overflow, [li], CANVAS_CLAIM_ID, index=0) is None
+
+
 # ---------------------------------------------------------------------------
 # _build_insurance_transactions
 # ---------------------------------------------------------------------------
