@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Patient Portal Forms — Admin disabled</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+               max-width: 640px; margin: 4rem auto; padding: 0 1rem; color: #333; }
+        h1 { font-size: 1.2rem; }
+        code { background: #f4f4f4; padding: 0.15rem 0.35rem; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>Patient Portal Forms — Migration admin is disabled</h1>
+    <p>
+        This page is the one-time legacy metadata migration tool. It is gated
+        by the <code>ENABLE_MIGRATION_ADMIN</code> secret to keep it out of
+        day-to-day workflows.
+    </p>
+    <p>
+        To enable it, set <code>ENABLE_MIGRATION_ADMIN</code> on the plugin
+        configuration to any non-empty value. Once the migration is complete,
+        unset the secret to disable this page again.
+    </p>
+</body>
+</html>

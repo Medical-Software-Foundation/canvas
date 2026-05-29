@@ -1,0 +1,24 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]",
+  "pytest-cov>=7.0.0",
+]
+description = "Enables providers to assign Canvas questionnaires to patients and lets patients complete them through the patient portal, with submissions recorded automatically in a clinical note."
+license = "MIT"
+name = "patient-portal-forms"
+readme = "patient_portal_forms/README.md"
+requires-python = ">=3.11"
+version = "0.2.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.coverage.run]
+source = ["patient_portal_forms"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]

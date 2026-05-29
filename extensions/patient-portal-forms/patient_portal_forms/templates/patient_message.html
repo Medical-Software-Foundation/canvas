@@ -1,0 +1,13 @@
+<p>Please fill out the following forms in advance of your upcoming appointment:</p>
+<ul>
+{% for questionnaire in assigned_questionnaires.questionnaires %}
+    <li>{{ questionnaire.questionnaire_name }} (<i>due {{ questionnaire.due_date }}</i>)</li>
+{% endfor %}
+</ul>
+<br>
+
+<p>To access the forms:</p>
+<ul>
+    <li>On the left hand menu, click <i>Forms</i>.</li>
+    <li>For each form, click <i>Start Form</i> and then <i>Submit Form</i> when finished answering all questions.</li>
+</ul>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Patient Portal Forms — Admin</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+               max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+        h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+        h2 { font-size: 1.1rem; margin-top: 2rem; }
+        p { line-height: 1.5; }
+        button { background: #0a6; color: #fff; border: 0; padding: 0.6rem 1rem;
+                 border-radius: 4px; cursor: pointer; font-size: 1rem; }
+        button.danger { background: #a33; }
+        button:disabled { background: #888; cursor: not-allowed; }
+        pre { background: #f4f4f4; padding: 1rem; border-radius: 4px;
+              overflow: auto; white-space: pre-wrap; max-height: 400px; }
+        .status { margin-top: 1rem; }
+        .errors { color: #a00; }
+        .step { padding: 1rem 1.25rem; border: 1px solid #ddd; border-radius: 6px;
+                margin-bottom: 1.25rem; background: #fcfcfc; }
+    </style>
+</head>
+<body>
+    <h1>Patient Portal Forms — Metadata Migration</h1>
+    <p>
+        This plugin previously stored assigned questionnaires in
+        <code>PatientMetadata</code> under the key <code>portal_forms</code>.
+        Two steps move that data into the new
+        <code>QuestionnaireAssignment</code> table (namespace
+        <code>canvas__patient_portal_forms</code>) and then clean up the
+        legacy rows. Both steps are idempotent.
+    </p>
+
+    <section class="step">
+        <h2>Step 1 — Copy legacy data into the new table</h2>
+        <p>
+            Walks every <code>portal_forms</code> metadata row and creates
+            equivalent <code>QuestionnaireAssignment</code> rows. Safe to run
+            more than once — patients already migrated will be skipped.
+        </p>
+        <button id="migrate-btn">Migrate now</button>
+        <div class="status" id="migrate-status"></div>
+    </section>
+
+    <section class="step">
+        <h2>Step 2 — Clear the legacy metadata values</h2>
+        <p>
+            Overwrites the value of every <code>portal_forms</code>
+            <code>PatientMetadata</code> row with an empty string. The row
+            itself remains — the SDK only supports
+            <code>upsert</code> on PatientMetadata, not <code>delete</code> —
+            but its data is neutralized so nothing reads it again.
+            <strong>Only run this after Step 1 has succeeded and you have
+            spot-checked the new assignments.</strong>
+        </p>
+        <button id="cleanup-btn" class="danger" disabled>Clear legacy metadata</button>
+        <div class="status" id="cleanup-status"></div>
+    </section>
+
+    <script>
+        const migrateBtn = document.getElementById("migrate-btn");
+        const migrateStatus = document.getElementById("migrate-status");
+        const cleanupBtn = document.getElementById("cleanup-btn");
+        const cleanupStatus = document.getElementById("cleanup-status");
+
+        migrateBtn.addEventListener("click", async () => {
+            migrateBtn.disabled = true;
+            migrateBtn.textContent = "Migrating…";
+            migrateStatus.innerHTML = "";
+            try {
+                const resp = await fetch(
+                    "/plugin-io/api/patient_portal_forms/admin/migrate-metadata",
+                    { method: "POST" }
+                );
+                const data = await resp.json();
+                const errorBlock = data.errors && data.errors.length
+                    ? `<p class="errors">${data.errors.length} warning(s):</p><pre class="errors">${data.errors.join("\n")}</pre>`
+                    : "";
+                migrateStatus.innerHTML = `
+                    <p>
+                        Processed <b>${data.patients_processed}</b> patient(s),
+                        created <b>${data.rows_created}</b> row(s),
+                        skipped <b>${data.rows_skipped}</b>.
+                    </p>${errorBlock}
+                `;
+                // Step 2 unlocks only after Step 1 has been attempted at least once.
+                cleanupBtn.disabled = false;
+            } catch (err) {
+                migrateStatus.innerHTML = `<p class="errors">Migration failed: ${err}</p>`;
+            } finally {
+                migrateBtn.disabled = false;
+                migrateBtn.textContent = "Migrate now";
+            }
+        });
+
+        cleanupBtn.addEventListener("click", async () => {
+            if (!confirm("Clear the value of all `portal_forms` PatientMetadata rows? The rows will remain but be emptied.")) {
+                return;
+            }
+            cleanupBtn.disabled = true;
+            cleanupBtn.textContent = "Clearing…";
+            cleanupStatus.innerHTML = "";
+            try {
+                const resp = await fetch(
+                    "/plugin-io/api/patient_portal_forms/admin/clear-legacy-metadata",
+                    { method: "POST" }
+                );
+                const data = await resp.json();
+                cleanupStatus.innerHTML = `
+                    <p>Cleared <b>${data.rows_cleared}</b> legacy metadata row(s).</p>
+                `;
+            } catch (err) {
+                cleanupStatus.innerHTML = `<p class="errors">Cleanup failed: ${err}</p>`;
+            } finally {
+                cleanupBtn.disabled = false;
+                cleanupBtn.textContent = "Clear legacy metadata";
+            }
+        });
+    </script>
+</body>
+</html>

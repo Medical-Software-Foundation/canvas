@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Forms</title>
+    <style type="text/css">
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .page-title {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #000;
+        }
+
+        .page-subtitle {
+            font-size: 16px;
+            color: #6e6e73;
+            margin-bottom: 48px;
+            line-height: 1.5;
+        }
+
+        .section-title {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #000;
+        }
+
+        .forms-tabs {
+            display: flex;
+            gap: 28px;
+            border-bottom: 1px solid #d2d2d7;
+            margin-bottom: 24px;
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 10px 0 12px;
+            margin-bottom: -1px;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            color: #6e6e73;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .tab-button:hover {
+            color: #1d1d1f;
+        }
+
+        .tab-button.active {
+            color: #000;
+            border-bottom-color: #000;
+        }
+
+        .tab-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 7px;
+            background-color: #e8e8ed;
+            color: #1d1d1f;
+            border-radius: 11px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .tab-button.active .tab-count {
+            background-color: #000;
+            color: #fff;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .empty-state-tab {
+            display: none;
+        }
+
+        .tab-panel:not(:has(.form-card)) .empty-state-tab {
+            display: block;
+        }
+
+        .forms-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 60px;
+            max-width: 800px;
+        }
+
+        .form-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .form-content {
+            flex: 1;
+        }
+
+        .form-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .form-name {
+            font-size: 20px;
+            font-weight: 600;
+            color: #000;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .badge {
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+
+        .badge.due-soon {
+            background-color: #fff;
+            color: #ff3b30;
+            border: 1px solid #ff3b30;
+        }
+
+        .badge.overdue {
+            background-color: #ff3b30;
+            color: white;
+        }
+
+        .badge.completed {
+            background-color: #e8f5ee;
+            color: #1b7a3e;
+            border: 1px solid #b7e2c5;
+            padding: 8px 16px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .form-card.completed-card {
+            background-color: #fafafa;
+        }
+
+        .form-card.completed-card .form-name {
+            color: #3c3c43;
+        }
+
+        .review-button {
+            background-color: #fff;
+            color: #000;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            line-height: 1.4;
+            white-space: nowrap;
+        }
+
+        .review-button:hover {
+            background-color: #f5f5f7;
+        }
+
+        .form-description {
+            font-size: 14px;
+            color: #6e6e73;
+            margin-bottom: 12px;
+        }
+
+        .form-meta {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 14px;
+            color: #6e6e73;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .meta-item svg {
+            width: 20px;
+            height: 20px;
+            color: #6e6e73;
+        }
+
+        .form-action {
+            flex-shrink: 0;
+            align-self: center;
+        }
+
+        .start-button {
+            background-color: #000;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .start-button:hover {
+            background-color: #2d2d2f;
+        }
+
+        /* Empty State */
+        .empty-state {
+            background: white;
+            border-radius: 16px;
+            padding: 64px 32px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .empty-state-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 24px;
+            color: #d2d2d7;
+        }
+
+        .empty-state-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 12px;
+        }
+
+        .empty-state-description {
+            font-size: 16px;
+            color: #6e6e73;
+            line-height: 1.5;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 20px 16px;
+            }
+
+            .container {
+                padding: 0;
+            }
+
+            .page-title {
+                font-size: 32px;
+                margin-bottom: 12px;
+            }
+
+            .page-subtitle {
+                font-size: 15px;
+                margin-bottom: 32px;
+                line-height: 1.4;
+            }
+
+            .section-title {
+                font-size: 20px;
+                margin-bottom: 16px;
+            }
+
+            .forms-list {
+                gap: 16px;
+            }
+
+            .form-card {
+                flex-direction: column;
+                padding: 20px;
+                gap: 16px;
+                border-radius: 12px;
+            }
+
+            .form-card.pending-card {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                grid-template-areas:
+                    "content status"
+                    "action  action";
+                column-gap: 12px;
+                row-gap: 16px;
+                align-items: start;
+            }
+
+            .form-card.pending-card > .form-content {
+                grid-area: content;
+                min-width: 0;
+            }
+
+            .form-card.pending-card > .form-status {
+                grid-area: status;
+                align-self: start;
+                margin-top: 2px;
+            }
+
+            .form-card.pending-card > .form-action {
+                grid-area: action;
+                width: 100%;
+            }
+
+            .form-header {
+                gap: 8px;
+            }
+
+            .form-name {
+                font-size: 18px;
+            }
+
+            .badge {
+                font-size: 12px;
+                padding: 4px 10px;
+            }
+
+            .badge svg {
+                width: 14px;
+                height: 14px;
+            }
+
+            .form-description {
+                font-size: 14px;
+            }
+
+            .form-meta {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+                font-size: 13px;
+            }
+
+            .meta-item svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .form-action {
+                width: 100%;
+                align-self: stretch;
+            }
+
+            .start-button {
+                width: 100%;
+                padding: 14px 24px;
+                font-size: 16px;
+                border-radius: 12px;
+            }
+
+            /* Keep completed cards as a row on mobile so the Completed
+               badge stays visibly on the right side of the card. */
+            .form-card.completed-card {
+                flex-direction: row;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .form-card.completed-card .form-name {
+                width: auto;
+            }
+
+            .form-card.completed-card .form-action {
+                width: auto;
+                align-self: center;
+                flex-shrink: 0;
+            }
+
+            .empty-state {
+                padding: 48px 24px;
+                border-radius: 12px;
+            }
+
+            .empty-state-icon {
+                width: 56px;
+                height: 56px;
+                margin-bottom: 20px;
+            }
+
+            .empty-state-title {
+                font-size: 20px;
+                margin-bottom: 10px;
+            }
+
+            .empty-state-description {
+                font-size: 15px;
+            }
+        }
+
+        @media (max-width: 390px) {
+            body {
+                padding: 16px 12px;
+            }
+
+            .page-title {
+                font-size: 28px;
+            }
+
+            .page-subtitle {
+                font-size: 14px;
+            }
+
+            .form-card {
+                padding: 16px;
+            }
+
+            .form-name {
+                font-size: 17px;
+            }
+
+            .empty-state {
+                padding: 40px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="page-title">My Forms</h1>
+        <p class="page-subtitle">Complete your assigned forms to help your care team provide the best care.</p>
+
+        <!-- Forms Section -->
+        <section>
+            {% if pending_items or completed_groups %}
+            <div class="forms-tabs" role="tablist">
+                <button type="button" class="tab-button active" role="tab" data-tab="pending" aria-selected="true">
+                    Pending <span class="tab-count" data-count-for="pending">0</span>
+                </button>
+                <button type="button" class="tab-button" role="tab" data-tab="completed" aria-selected="false">
+                    Completed <span class="tab-count" data-count-for="completed">0</span>
+                </button>
+            </div>
+
+            <div class="tab-panel active" data-tab-panel="pending">
+                <div class="forms-list">
+                        {% for item in pending_items %}
+                            <div class="form-card pending-card">
+                            <div class="form-content">
+                                <div class="form-header">
+                                    <h3 class="form-name">{{ item.questionnaire_name }}</h3>
+                                </div>
+                                <div class="form-meta">
+                                    <div class="meta-item">
+                                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+                                            <rect x="3" y="4" width="14" height="14" rx="2"/>
+                                            <path d="M3 8h14M7 2v4M13 2v4" stroke-linecap="round"/>
+                                        </svg>
+                                        <span>Due: <span class="format-date">{{ item.due_date }}</span></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-status">
+                                <span class="badge overdue" data-due-date="{{ item.due_date }}" style="display: none;">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+                                        <path d="M8 4v4l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                    </svg>
+                                    Overdue
+                                </span>
+                                <span class="badge due-soon" data-due-date="{{ item.due_date }}" style="display: none;">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+                                        <path d="M8 4v4l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                    </svg>
+                                    Due Soon
+                                </span>
+                            </div>
+
+                            <div class="form-action">
+                                <button class="start-button"
+                                        data-questionnaire-name="{{ item.questionnaire_name }}"
+                                        data-due-date="{{ item.due_date }}">
+                                    Start Form
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <div class="empty-state empty-state-tab" data-empty-for="pending">
+                            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 12l2 2 4-4"/>
+                                <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.66 0 3.22.45 4.56 1.24"/>
+                            </svg>
+                            <div class="empty-state-title">All caught up</div>
+                            <div class="empty-state-description">You have no pending forms right now. Nice work!</div>
+                        </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" data-tab-panel="completed">
+                <div class="forms-list">
+                        {% for group in completed_groups %}
+                            <div class="form-card completed-card">
+                            <div class="form-content">
+                                <h3 class="form-name">{{ group.questionnaire_name }}</h3>
+                                <div class="form-meta">
+                                    <div class="meta-item">
+                                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+                                            <rect x="3" y="4" width="14" height="14" rx="2"/>
+                                            <path d="M3 8h14M7 2v4M13 2v4" stroke-linecap="round"/>
+                                        </svg>
+                                        <span>
+                                            {% if group.submission_count > 1 %}Last completed{% else %}Completed{% endif %}:
+                                            <span class="format-date">{{ group.latest_completed_date }}</span>
+                                        </span>
+                                    </div>
+                                    {% if group.submission_count > 1 %}
+                                    <div class="meta-item submission-count-meta">
+                                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                            <path d="M4 6h12M4 10h12M4 14h8" stroke-linecap="round"/>
+                                        </svg>
+                                        <span>{{ group.submission_count }} submissions</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <div class="form-action">
+                                <a class="review-button"
+                                   href="/plugin-io/api/patient_portal_forms/patient-view/patient/{{ patient_id }}/questionnaire/{{ group.questionnaire_name|urlencode }}">
+                                    Review
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <div class="empty-state empty-state-tab" data-empty-for="completed">
+                            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                            </svg>
+                            <div class="empty-state-title">No completed forms yet</div>
+                            <div class="empty-state-description">Forms you submit will appear here so you can review them anytime.</div>
+                        </div>
+                </div>
+            </div>
+            {% else %}
+                <div class="empty-state">
+                    <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <div class="empty-state-title">No Forms Assigned</div>
+                    <div class="empty-state-description">You don't have any forms to complete at this time. Check back later or contact your care team if you have questions.</div>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <script>
+        // Format dates on page load
+        function formatDate(dateString) {
+            if (!dateString) return '';
+
+            // Check if it's a simple date format (YYYY-MM-DD) without time
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+                // Parse as local date to avoid timezone issues
+                const [year, month, day] = dateString.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                const options = { year: 'numeric', month: 'short', day: 'numeric' };
+                return date.toLocaleDateString('en-US', options);
+            }
+
+            // For datetime strings, use regular parsing
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString; // Return original if invalid
+
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        // Format all dates with class 'format-date'
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.format-date').forEach(element => {
+                const formattedDate = formatDate(element.textContent.trim());
+                if (formattedDate) {
+                    element.textContent = formattedDate;
+                }
+            });
+
+            // Check for overdue questionnaires
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Reset time to midnight for accurate date comparison
+
+            document.querySelectorAll('.badge.overdue').forEach(overdueBadge => {
+                const dueDateString = overdueBadge.dataset.dueDate;
+                if (dueDateString && /^\d{4}-\d{2}-\d{2}$/.test(dueDateString)) {
+                    const [year, month, day] = dueDateString.split('-').map(Number);
+                    const dueDate = new Date(year, month - 1, day);
+                    dueDate.setHours(0, 0, 0, 0);
+
+                    // Show overdue indicator only if due date is in the past
+                    if (dueDate < today) {
+                        overdueBadge.style.display = 'inline-flex';
+                    }
+                }
+            });
+
+            // Check for "Due Soon" badges - show if due within 5 days
+            const fiveDaysFromNow = new Date(today);
+            fiveDaysFromNow.setDate(today.getDate() + 5);
+
+            document.querySelectorAll('.badge.due-soon').forEach(dueSoonBadge => {
+                const dueDateString = dueSoonBadge.dataset.dueDate;
+                if (dueDateString && /^\d{4}-\d{2}-\d{2}$/.test(dueDateString)) {
+                    const [year, month, day] = dueDateString.split('-').map(Number);
+                    const dueDate = new Date(year, month - 1, day);
+                    dueDate.setHours(0, 0, 0, 0);
+
+                    // Show "Due Soon" badge if due date is within 5 days (and not overdue)
+                    if (dueDate >= today && dueDate <= fiveDaysFromNow) {
+                        dueSoonBadge.style.display = 'inline-flex';
+                    }
+                }
+            });
+
+            // Populate tab counts and toggle per-tab empty states from the rendered cards.
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                const key = panel.dataset.tabPanel;
+                const count = panel.querySelectorAll('.form-card').length;
+                const countEl = document.querySelector(`[data-count-for="${key}"]`);
+                if (countEl) countEl.textContent = count;
+                const emptyState = panel.querySelector('.empty-state-tab');
+                if (emptyState) emptyState.style.display = count === 0 ? 'block' : 'none';
+            });
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    document.querySelectorAll('.tab-button').forEach(b => {
+                        const isActive = b === btn;
+                        b.classList.toggle('active', isActive);
+                        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                    });
+                    document.querySelectorAll('.tab-panel').forEach(p => {
+                        p.classList.toggle('active', p.dataset.tabPanel === tab);
+                    });
+                });
+            });
+
+            installFormsMenuInterceptor('{{ patient_id }}');
+        });
+
+        // Intercept clicks on the portal's "Forms" menu item so it always
+        // returns the patient to this list, even if they are mid-form in
+        // another plugin page. Installed once per parent session.
+        function installFormsMenuInterceptor(patientId) {
+            try {
+                if (!window.parent || window.parent === window) return;
+                if (window.parent.__ppfFormsInterceptorInstalled) return;
+                const listPath = `/plugin-io/api/patient_portal_forms/patient-view/patient/${patientId}`;
+                const handler = (e) => {
+                    let el = e.target;
+                    while (el && el.nodeType === 1) {
+                        const role = el.getAttribute && el.getAttribute('role');
+                        const isClickable = el.tagName === 'A' || el.tagName === 'BUTTON' ||
+                            role === 'menuitem' || role === 'button' || role === 'link';
+                        if (isClickable) {
+                            const text = (el.innerText || el.textContent || '').trim();
+                            if (text === 'Forms') {
+                                if (window.location.pathname !== listPath) {
+                                    window.location.href = listPath;
+                                }
+                                return;
+                            }
+                        }
+                        el = el.parentNode;
+                    }
+                };
+                window.parent.document.addEventListener('click', handler, true);
+                window.parent.__ppfFormsInterceptorInstalled = true;
+            } catch (err) {}
+        }
+
+        // Handle Start Form button clicks
+        document.addEventListener('click', async (e) => {
+            if (e.target.closest('.start-button')) {
+                const button = e.target.closest('.start-button');
+                const questionnaireName = button.dataset.questionnaireName;
+                const dueDate = button.dataset.dueDate;
+
+                // Navigate to questionnaire endpoint
+                window.location.href = `/plugin-io/api/patient_portal_forms/patient-view/patient/{{ patient_id }}/questionnaire/${encodeURIComponent(questionnaireName)}`;
+            }
+        });
+
+        // Close the patient portal side menu when the patient clicks anywhere
+        // in the plugin's content area. The portal shell doesn't receive the
+        // iframe's click, so we notify via postMessage and also dispatch a
+        // synthetic click on the parent body to trigger the portal's own
+        // outside-click handlers. Dispatching synchronously was interfering
+        // with iOS Safari touch-scroll, so defer to the next tick.
+        document.addEventListener('click', () => {
+            try {
+                window.parent.postMessage({ type: 'plugin-content-click' }, '*');
+            } catch (err) {}
+            setTimeout(() => {
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.document.body.dispatchEvent(
+                            new MouseEvent('click', { bubbles: true, cancelable: true })
+                        );
+                    }
+                } catch (err) {}
+            }, 0);
+        });
+    </script>
+</body>
+</html>
