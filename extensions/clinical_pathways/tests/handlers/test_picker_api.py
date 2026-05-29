@@ -132,21 +132,6 @@ class TestStartPathway:
             responses = handler.start_pathway()
         assert responses[0].status_code == HTTPStatus.NOT_FOUND
 
-    def test_rejects_old_definition_version(self) -> None:
-        handler = _make_handler()
-        handler.request.json.return_value = {
-            "note_uuid": "note-1",
-            "pathway_dbid": 5,
-        }
-        pw = self._pathway_with_definition({"version": 2}, dbid=5)
-        qs = MagicMock()
-        qs.first.return_value = pw
-        with patch.object(Pathway, "objects") as mock_objects:
-            mock_objects.filter.return_value = qs
-            responses = handler.start_pathway()
-        assert responses[0].status_code == HTTPStatus.BAD_REQUEST
-        assert "older format" in responses[0].data["error"]
-
     def test_rejects_when_no_starting_step(self) -> None:
         handler = _make_handler()
         handler.request.json.return_value = {

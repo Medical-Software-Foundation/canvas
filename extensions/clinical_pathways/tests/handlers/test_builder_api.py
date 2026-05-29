@@ -120,11 +120,6 @@ class TestValidatePathway:
         assert issues[0]["severity"] == "error"
         assert "no definition" in issues[0]["message"]
 
-    def test_old_version_errors(self) -> None:
-        issues = _validate_pathway({"version": 2})
-        assert issues[0]["severity"] == "error"
-        assert "older format" in issues[0]["message"]
-
     def test_no_steps_errors(self) -> None:
         issues = _validate_pathway(
             {"version": 3, "start_step_id": None, "steps": [], "recommendations": []}
@@ -996,11 +991,3 @@ class TestTerminalCommandCatalogRoute:
         assert "terminal_commands" in responses[0].data
         keys = [tc["key"] for tc in responses[0].data["terminal_commands"]]
         assert "pathway_classification" in keys
-
-
-@pytest.mark.parametrize(
-    "version", [1, 2],
-)
-def test_validate_pathway_rejects_old_versions(version: int) -> None:
-    issues = _validate_pathway({"version": version})
-    assert any("older format" in i["message"] for i in issues)

@@ -144,7 +144,7 @@
   }
 
   function upgradeDefinitionIfNeeded(pw) {
-    if (!pw.definition || pw.definition.version !== 3) {
+    if (!pw.definition) {
       pw.definition = {
         version: 3,
         start_step_id: null,
@@ -177,23 +177,6 @@
       }
       // Keep rail label in sync with title.
       if (rec.params.title) rec.name = rec.params.title;
-    });
-    // v0.4.4: per-rule combinator → per-condition connector. Translate
-    // 'any' → 'or' on every non-first condition, 'all' (or absent) → 'and',
-    // then drop the rule-level field. New rules write the new shape only.
-    (pw.definition.steps || []).forEach((step) => {
-      (step.rules || []).forEach((rule) => {
-        const conds = rule.conditions || [];
-        const legacy = rule.combinator === 'any' ? 'or' : 'and';
-        conds.forEach((cond, idx) => {
-          if (idx === 0) {
-            delete cond.connector;
-          } else if (!cond.connector) {
-            cond.connector = legacy;
-          }
-        });
-        delete rule.combinator;
-      });
     });
     return pw;
   }

@@ -179,20 +179,10 @@ def _evaluate_rule(rule: dict[str, Any], captured: dict[str, dict[str, Any]]) ->
     default "and"). AND binds tighter than OR, so `A and B or C and D` groups
     as `(A and B) or (C and D)`. Implemented by splitting the condition list
     on `or` boundaries and matching if any AND-group is fully satisfied.
-
-    Legacy v0.4.0–v0.4.3 rules carry a rule-level `combinator` ("all"|"any")
-    instead; honor that when no per-condition connectors are present so
-    pre-migration pathways keep their semantics until they're re-saved.
     """
     conditions = rule.get("conditions") or []
     if not conditions:
         return False
-
-    has_connectors = any("connector" in (c or {}) for c in conditions[1:])
-    if not has_connectors and "combinator" in rule:
-        if rule.get("combinator") == "any":
-            return any(_evaluate_condition(c, captured) for c in conditions)
-        return all(_evaluate_condition(c, captured) for c in conditions)
 
     groups: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
@@ -371,13 +361,6 @@ class PathwayEvaluator(BaseHandler):
             if not pathway:
                 continue
             definition = pathway.definition or {}
-            if definition.get("version") != 3:
-                log.info(
-                    "clinical_pathways: skipping run %s — pathway %s uses pre-v3 definition",
-                    run.dbid,
-                    pathway.dbid,
-                )
-                continue
 
             prior_token = run.last_processed_event_token or ""
             if prior_token == event_token:

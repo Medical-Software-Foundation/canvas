@@ -107,17 +107,6 @@ def _validate_pathway(definition: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(definition, dict):
         issues.append({"severity": "error", "message": "Pathway has no definition yet."})
         return issues
-    if definition.get("version") != 3:
-        issues.append(
-            {
-                "severity": "error",
-                "message": (
-                    "This pathway uses an older format and can't be published. "
-                    "Delete and recreate it."
-                ),
-            }
-        )
-        return issues
 
     steps = definition.get("steps") or []
     recommendations = definition.get("recommendations") or []

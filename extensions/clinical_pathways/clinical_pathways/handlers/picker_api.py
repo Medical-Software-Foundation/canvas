@@ -110,18 +110,6 @@ class PickerAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
         definition = pw.definition or {}
-        if definition.get("version") != 3:
-            return [
-                JSONResponse(
-                    {
-                        "error": (
-                            "Pathway uses an older format. Open it in the builder "
-                            "and re-author it before running."
-                        )
-                    },
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
         start_step_id = definition.get("start_step_id")
         steps = definition.get("steps") or []
         start_step = next(

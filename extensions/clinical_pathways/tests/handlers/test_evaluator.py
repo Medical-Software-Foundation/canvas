@@ -240,40 +240,6 @@ class TestEvaluateRule:
     def test_empty_conditions_is_false(self) -> None:
         assert _evaluate_rule({"conditions": []}, {}) is False
 
-    def test_legacy_combinator_all(self) -> None:
-        captured = {"q1": {"text": "y"}, "q2": {"text": "y"}}
-        rule = {
-            "combinator": "all",
-            "conditions": [_cond("q1", "y"), _cond("q2", "y")],
-        }
-        assert _evaluate_rule(rule, captured) is True
-
-    def test_legacy_combinator_all_negative(self) -> None:
-        captured = {"q1": {"text": "y"}, "q2": {"text": "n"}}
-        rule = {
-            "combinator": "all",
-            "conditions": [_cond("q1", "y"), _cond("q2", "y")],
-        }
-        assert _evaluate_rule(rule, captured) is False
-
-    def test_legacy_combinator_any(self) -> None:
-        captured = {"q1": {"text": "n"}, "q2": {"text": "y"}}
-        rule = {
-            "combinator": "any",
-            "conditions": [_cond("q1", "y"), _cond("q2", "y")],
-        }
-        assert _evaluate_rule(rule, captured) is True
-
-    def test_per_condition_or_takes_precedence_over_legacy_combinator(self) -> None:
-        # When per-condition connectors exist, `combinator` is ignored.
-        captured = {"q1": {"text": "y"}, "q2": {"text": "n"}}
-        rule = {
-            "combinator": "all",
-            "conditions": [_cond("q1", "y"), _cond("q2", "y", connector="or")],
-        }
-        # Groups: [q1=y] OR [q2=y]; first group is satisfied, so True.
-        assert _evaluate_rule(rule, captured) is True
-
     def test_and_or_grouping(self) -> None:
         # A AND B OR C AND D → (A AND B) OR (C AND D)
         captured = {
