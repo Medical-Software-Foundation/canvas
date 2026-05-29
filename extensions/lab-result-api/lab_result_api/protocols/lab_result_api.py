@@ -130,7 +130,7 @@ class LabResultAPI(APIKeyAuthMixin, SimpleAPIRoute):
 
     def _serialize_reason_conditions(self, order: Any) -> list[dict[str, Any]]:
         reason_conditions = []
-        reasons = order.reasons.prefetch_related(
+        reasons = order.reasons.filter(entered_in_error__isnull=True).prefetch_related(
             "reason_conditions__condition__codings"
         )
         for reason in reasons:

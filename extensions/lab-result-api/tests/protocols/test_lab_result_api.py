@@ -290,15 +290,17 @@ class TestReasonConditions:
                 ),
             ]
         )
-        mock_lab_order.reasons.prefetch_related.return_value = [reason]
+        mock_lab_order.reasons.filter.return_value.prefetch_related.return_value = [reason]
 
         handler = LabResultAPI(event=mock_event)
         responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
         data = json.loads(responses[0].content)
 
-        assert mock_lab_order.reasons.prefetch_related.mock_calls == [
-            call("reason_conditions__condition__codings"),
-        ]
+        # Retracted order reasons are excluded before prefetching their conditions.
+        mock_lab_order.reasons.filter.assert_called_once_with(entered_in_error__isnull=True)
+        mock_lab_order.reasons.filter.return_value.prefetch_related.assert_called_once_with(
+            "reason_conditions__condition__codings"
+        )
         assert data["lab_order"]["reason_conditions"] == [
             {
                 "id": "condition-uuid-1",
@@ -327,7 +329,7 @@ class TestReasonConditions:
                 ("bad-condition", [("B00", "Herpes", "ICD-10")], "user-uuid"),
             ]
         )
-        mock_lab_order.reasons.prefetch_related.return_value = [reason]
+        mock_lab_order.reasons.filter.return_value.prefetch_related.return_value = [reason]
 
         handler = LabResultAPI(event=mock_event)
         responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
@@ -349,7 +351,7 @@ class TestReasonConditions:
         rc.condition = None
         reason = MagicMock()
         reason.reason_conditions.all.return_value = [rc]
-        mock_lab_order.reasons.prefetch_related.return_value = [reason]
+        mock_lab_order.reasons.filter.return_value.prefetch_related.return_value = [reason]
 
         handler = LabResultAPI(event=mock_event)
         responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)

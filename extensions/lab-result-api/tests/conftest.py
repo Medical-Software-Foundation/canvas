@@ -131,7 +131,7 @@ def mock_lab_order(mock_ordering_provider: MagicMock) -> MagicMock:
     lab_order.comment = "Routine check"
     lab_order.date_ordered = datetime(2025, 1, 14, 9, 0, 0)
     lab_order.ordering_provider = mock_ordering_provider
-    lab_order.reasons.prefetch_related.return_value = []
+    lab_order.reasons.filter.return_value.prefetch_related.return_value = []
     return lab_order
 
 
