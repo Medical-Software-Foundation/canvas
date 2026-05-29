@@ -44,7 +44,7 @@ class LabResultAPI(APIKeyAuthMixin, SimpleAPIRoute):
                 LabReport.objects
                 .with_result_tests_and_values()
                 .prefetch_related("tests__values__codings", "values__codings")
-                .get(id=lab_report_id)
+                .get(id=lab_report_id, entered_in_error__isnull=True)
             )
         except LabReport.DoesNotExist:
             return [
@@ -66,8 +66,12 @@ class LabResultAPI(APIKeyAuthMixin, SimpleAPIRoute):
         lab_order: dict[str, Any] = {}
         lab_partner_name = None
 
-        # Access lab orders through the reverse relationship
-        lab_orders = lab_report.laborder_set.select_related("ordering_provider").all()
+        # Access lab orders through the reverse relationship, skipping any
+        # order retracted as entered-in-error so a retracted order is never
+        # surfaced as the canonical order block.
+        lab_orders = lab_report.laborder_set.select_related("ordering_provider").filter(
+            entered_in_error__isnull=True
+        )
         if lab_orders:
             first_order = lab_orders[0]
             if first_order.ordering_provider:

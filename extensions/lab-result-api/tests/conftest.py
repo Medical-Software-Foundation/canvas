@@ -155,7 +155,7 @@ def mock_lab_report(
 
     lab_report.result_tests = [mock_lab_test]
     lab_report.values.all.return_value = [mock_lab_value_with_coding]
-    lab_report.laborder_set.select_related.return_value.all.return_value = [mock_lab_order]
+    lab_report.laborder_set.select_related.return_value.filter.return_value = [mock_lab_order]
     return lab_report
 
 

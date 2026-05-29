@@ -65,7 +65,7 @@ class TestLookup:
             call(),
             call().prefetch_related("tests__values__codings", "values__codings"),
             call().prefetch_related("tests__values__codings", "values__codings").get(
-                id="missing-id"
+                id="missing-id", entered_in_error__isnull=True
             ),
         ]
         assert len(responses) == 1
@@ -93,7 +93,7 @@ class TestLookup:
             call(),
             call().prefetch_related("tests__values__codings", "values__codings"),
             call().prefetch_related("tests__values__codings", "values__codings").get(
-                id="lab-report-uuid-789"
+                id="lab-report-uuid-789", entered_in_error__isnull=True
             ),
         ]
         assert len(responses) == 1
@@ -176,7 +176,7 @@ class TestLabOrderBlock:
         self, mock_event: MagicMock, mock_request: MagicMock, mock_lab_report: MagicMock
     ) -> None:
         mock_request.path_params.get.return_value = "lab-report-uuid-789"
-        mock_lab_report.laborder_set.select_related.return_value.all.return_value = []
+        mock_lab_report.laborder_set.select_related.return_value.filter.return_value = []
 
         handler = LabResultAPI(event=mock_event)
         responses, _ = _invoke_get(handler, mock_request, lab_report=mock_lab_report)
@@ -220,6 +220,12 @@ class TestLabOrderBlock:
         assert data["lab_order"]["comment"] == "Routine check"
         assert data["lab_order"]["date_ordered"] == "2025-01-14T09:00:00"
         assert data["lab_facility"] == {"name": "Quest Diagnostics"}
+        # Retracted orders must be excluded so an entered-in-error order is never
+        # surfaced as the canonical order block.
+        mock_lab_report.laborder_set.select_related.assert_called_once_with("ordering_provider")
+        mock_lab_report.laborder_set.select_related.return_value.filter.assert_called_once_with(
+            entered_in_error__isnull=True
+        )
 
     def test_lab_order_with_no_date_ordered(
         self,
