@@ -1,13 +1,27 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.0.6",
     "name": "population_vitals_dashboard",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "A global staff dashboard for exploring aggregate vital-sign statistics across the patient population. Supports cohort filtering by age, sex, and date window; shows mean, median, distribution histogram, and monthly trend for weight, BMI, height, and blood pressure.",
     "components": {
+        "applications": [
+            {
+                "class": "population_vitals_dashboard.applications.dashboard_app:PopulationDashboardApp",
+                "name": "Population Vitals",
+                "description": "Explore aggregate vitals statistics across the patient population by age, sex, and date range.",
+                "scope": "global",
+                "icon": "assets/population-vitals-dashboard-icon.png"
+            }
+        ],
         "handlers": [
             {
-                "class": "population_vitals_dashboard.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "population_vitals_dashboard.handlers.dashboard_api:DashboardAPI",
+                "description": "Staff-only API serving the dashboard HTML shell, static assets, and aggregate stats endpoint.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Observation", "ObservationComponent", "Patient"],
+                    "write": []
+                }
             }
         ],
         "commands": [],
@@ -15,10 +29,12 @@
         "effects": [],
         "views": []
     },
-    "variables": [],
+    "variables": [
+        {"name": "MIN_COHORT_SIZE", "sensitive": false}
+    ],
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }
