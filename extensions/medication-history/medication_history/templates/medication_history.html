@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      color: #1a1a1a;
+      background: #fff;
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .subtitle { color: #666; font-size: 13px; margin: 0 0 12px; }
+    .empty { color: #666; font-style: italic; padding: 24px 0; }
+    .filter-bar {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      display: flex;
+      gap: 6px;
+      padding: 8px 0 12px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid #eee;
+    }
+    .filter-btn {
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 12px;
+      border: 1px solid #ccc;
+      border-radius: 14px;
+      background: #fff;
+      color: #444;
+    }
+    .filter-btn:hover { background: #f5f5f5; }
+    .filter-btn.is-active { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+    .filter-empty { color: #666; font-style: italic; padding: 24px 0; }
+    .med {
+      border: 1px solid #e3e3e3;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+    .med-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .med-name { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+    .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+    .badge.active { background: #e3f5e8; color: #1f7a3d; }
+    .badge.inactive { background: #eee; color: #666; }
+    dl.meta {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 2px 12px;
+      margin: 10px 0 0;
+      font-size: 12px;
+    }
+    dl.meta dt { color: #888; }
+    dl.meta dd { margin: 0; }
+  </style>
+</head>
+<body>
+  <h1>Medication History</h1>
+  <p class="subtitle">{{ patient_name }} &middot; {{ medications|length }} record{{ medications|length|pluralize }}</p>
+
+  {% if medications %}
+    <div class="filter-bar">
+      <button type="button" class="filter-btn is-active" data-filter="all">All ({{ medications|length }})</button>
+      <button type="button" class="filter-btn" data-filter="active">Active ({{ active_count }})</button>
+      <button type="button" class="filter-btn" data-filter="inactive">Inactive ({{ inactive_count }})</button>
+    </div>
+
+    <div id="med-list">
+      {% for med in medications %}
+        <div class="med" data-status="{{ med.status|lower }}">
+          <div class="med-head">
+            <p class="med-name">{{ med.name }}</p>
+            {% if med.status %}<span class="badge {% if med.status == 'Active' %}active{% else %}inactive{% endif %}">{{ med.status }}</span>{% endif %}
+          </div>
+          <dl class="meta">
+            {% if med.start_date %}<dt>Started</dt><dd>{{ med.start_date }}</dd>{% endif %}
+            {% if med.end_date %}<dt>Ended</dt><dd>{{ med.end_date }}</dd>{% endif %}
+            {% if med.quantity %}<dt>Quantity</dt><dd>{{ med.quantity }}</dd>{% endif %}
+            {% if med.national_drug_code %}<dt>NDC</dt><dd>{{ med.national_drug_code }}</dd>{% endif %}
+          </dl>
+        </div>
+      {% endfor %}
+    </div>
+    <p id="filter-empty" class="filter-empty" style="display: none;">No medications match this filter.</p>
+  {% else %}
+    <p class="empty">No medication history is available for this patient.</p>
+  {% endif %}
+
+  <script>
+    (function () {
+      var buttons = document.querySelectorAll('.filter-btn');
+      var cards = document.querySelectorAll('#med-list .med');
+      var emptyMsg = document.getElementById('filter-empty');
+
+      function applyFilter(filter) {
+        var shown = 0;
+        cards.forEach(function (card) {
+          var match = filter === 'all' || card.getAttribute('data-status') === filter;
+          card.style.display = match ? '' : 'none';
+          if (match) { shown += 1; }
+        });
+        buttons.forEach(function (btn) {
+          btn.classList.toggle('is-active', btn.getAttribute('data-filter') === filter);
+        });
+        if (emptyMsg) { emptyMsg.style.display = shown === 0 ? '' : 'none'; }
+      }
+
+      buttons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          applyFilter(btn.getAttribute('data-filter'));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
