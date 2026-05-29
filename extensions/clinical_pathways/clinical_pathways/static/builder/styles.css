@@ -118,6 +118,8 @@ button.small { padding: 4px 8px; font-size: 12px; }
 
 /* Right rail */
 .right-rail { width: 300px; background: #fff; border-left: 1px solid #e2e8f0; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px; }
+/* Breathing room beneath the last rail section (recommendations). */
+#recommendations-section { margin-bottom: 50px; }
 .rail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .rail-header h2 { margin: 0; }
 
