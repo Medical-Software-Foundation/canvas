@@ -25,6 +25,7 @@ SYNC_QUEUES = (
     ClaimQueues.FILED_AWAITING_RESPONSE,
     ClaimQueues.ADJUDICATED_OPEN_BALANCE,
     ClaimQueues.PATIENT_BALANCE,
+    ClaimQueues.REJECTED_NEEDS_REVIEW,
 )
 
 TARGET_HOUR = 2  # 2 AM local time
