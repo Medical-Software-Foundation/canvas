@@ -5,6 +5,16 @@ lab-result-api
 
 SimpleAPI endpoint that provides read-only access to Canvas lab reports. Returns the report metadata, the patient, and the result tests with their nested lab values. When the report is linked to an originating lab order, the order block is also included (with ordering provider, lab partner, and reason conditions); reports ingested without a Canvas-side order (e.g., external HL7 or FHIR results) will not have this block populated. Values from legacy reports that were ingested without an associated `LabTest` are surfaced separately under `unassigned_values`.
 
+## Problem it solves
+
+External systems that need lab results out of Canvas otherwise have to assemble them from several FHIR resources — `DiagnosticReport`, `Observation`, `ServiceRequest`, `Patient`, and `Condition` — and then reconstruct the report → order → test → value hierarchy themselves, reconcile result tests against ordered tests, and handle legacy values that were ingested without a linked test. That is several round-trips and a non-trivial amount of stitching logic for every integrator, and the legacy-value edge case is easy to miss and silently drop data.
+
+This endpoint collapses that work into a single authenticated `GET`: one call by `lab_report_id` returns the full graph — patient demographics, originating order with ordering provider and reason conditions, lab facility, and every result test with its nested values — already shaped and with `entered_in_error` conditions filtered out. Legacy values with no associated test are surfaced explicitly under `unassigned_values` so nothing is lost.
+
+## Who it's for
+
+Integration engineers and developers building systems that consume Canvas lab data — analytics and reporting pipelines, data warehouses, downstream clinical or patient-facing applications, and third-party lab integrations. It is a server-to-server API (authenticated with a shared key), not a clinical end-user interface. The plugin is specialty-agnostic: it works for any practice ingesting lab results into Canvas, regardless of the lab partner or test types involved.
+
 ## API Endpoint
 
 ### `GET /plugin-io/api/lab_result_api/lab-result/<lab_report_id>`
@@ -107,6 +117,14 @@ SimpleAPI endpoint that provides read-only access to Canvas lab reports. Returns
 curl -X GET "https://<your-instance>.canvasmedical.com/plugin-io/api/lab_result_api/lab-result/788881ce-e451-44c3-b42d-6dbaebc999bb" \
   -H "Authorization: <your-simpleapi-api-key>"
 ```
+
+## Screenshots
+
+**Example response**
+
+![JSON response from the lab-result endpoint](docs/screenshots/01-lab-result-response.png)
+
+A live `GET` to the endpoint returns the full lab report graph in a single response — patient, originating order with ordering provider and reason conditions, lab facility, and each result test with its nested values (here, a Hepatic Function Panel and a Vitamin D test). Captured against a local development instance with synthetic data.
 
 ## Installation
 

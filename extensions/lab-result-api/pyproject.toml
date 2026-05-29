@@ -2,7 +2,8 @@
 # The Canvas plugin has its own packaging process that doesn't use this file.
 [project]
 name = "lab-result-api"
-version = "0.0.0"
+version = "0.1.0"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "django>=4.2.0",
