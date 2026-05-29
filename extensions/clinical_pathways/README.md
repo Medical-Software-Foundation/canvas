@@ -11,7 +11,7 @@ A Canvas plugin for building structured, branching clinical questionnaires ("pat
 
 Clinical decision algorithms — triage trees, severity classifications, screening protocols — are typically maintained as paper documents, PDFs, or ad-hoc copy/paste into notes. There is no first-class way for a non-engineer to encode "if cough + fever ≥ 3 days, then ask about chest indrawing; if yes, classify as severe pneumonia" and have the EHR walk a provider through it during a real encounter.
 
-Clinical Pathways turns those algorithms into authorable artifacts that run inside a note. A clinical lead builds the pathway once; thereafter every provider who picks it during a note gets the next questionnaire auto-inserted as they commit each step, and the final classification + answer trail land in the note as committed commands. The provider never leaves the note, and the algorithm stays versioned and visible in one place instead of scattered across PDFs and tribal knowledge.
+Clinical Pathways turns those algorithms into authorable artifacts that run inside a note. A clinical lead builds the pathway once; thereafter every provider who picks it during a note gets the next questionnaire auto-inserted as they commit each step, and the final classification + answer trail land in the note as committed commands. The provider never leaves the note, and the algorithm stays versioned and visible in one place instead of scattered across PDFs.
 
 ## Who it's for
 
