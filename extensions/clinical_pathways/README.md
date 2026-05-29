@@ -5,7 +5,7 @@ A Canvas plugin for building structured, branching clinical questionnaires ("pat
 ## What it does
 
 - **Pathway Builder** — A page application reachable from the provider menu where any authenticated staff user can author pathways: ordered steps that each reference an existing Canvas questionnaire + question, branching rules between steps, and a terminal recommendation that originates as a custom command.
-- **Pathway Runner** — A "Clinical Pathways" button in the note header opens a picker modal where the provider selects a published pathway. The runtime evaluator listens for `INTERVIEW_UPDATED` events and walks the pathway forward as each questionnaire is committed, auto-inserting the next questionnaire and, on completion, originating the Q&A trail and the recommendation as custom commands in the open note.
+- **Pathway Runner** — A "Clinical Pathways" button in the note header opens a picker where the provider selects a published pathway. The runtime evaluator listens for `INTERVIEW_UPDATED` events and walks the pathway forward as each questionnaire is committed, auto-inserting the next questionnaire and, on completion, originating the Q&A trail and the recommendation as custom commands in the open note.
 
 ## Problem it solves
 
