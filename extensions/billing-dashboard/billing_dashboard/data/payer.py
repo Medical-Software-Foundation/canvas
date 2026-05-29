@@ -38,6 +38,7 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
             current_queue__queue_sort_ordering__gte=ClaimQueueState.FILED,
             modified__range=(start.datetime, end.datetime),
         )
+        .exclude(current_queue__queue_sort_ordering=ClaimQueueState.TRASH)
         .exclude(current_coverage__payer_name="")
         .values("current_coverage__payer_name")
         .annotate(

@@ -15,8 +15,13 @@ def fixed_now() -> arrow.Arrow:
 
 
 def _set_payer_rows(mock_claim: MagicMock, rows: list[dict]) -> None:
-    """Helper to wire up the Claim.objects.filter().exclude().values().annotate() chain."""
-    mock_claim.objects.filter.return_value.exclude.return_value.values.return_value.annotate.return_value = rows
+    """Helper to wire up the Claim.objects.filter().exclude().exclude().values().annotate() chain.
+
+    Two ``.exclude()`` calls: first to drop trashed claims (queue=10), second
+    to drop blank payer-name rows. The values+annotate aggregation runs on
+    the result of the second exclude.
+    """
+    mock_claim.objects.filter.return_value.exclude.return_value.exclude.return_value.values.return_value.annotate.return_value = rows
 
 
 class TestPayerAggregation:

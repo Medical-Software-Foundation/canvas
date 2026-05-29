@@ -33,6 +33,7 @@ def cpt_codes(now: arrow.Arrow | None = None) -> dict[str, Any]:
         BillingLineItem.objects.filter(
             created__range=(start.datetime, end.datetime),
             status=BillingLineItemStatus.ACTIVE,
+            entered_in_error__isnull=True,
         )
         .values("cpt")
         .annotate(
@@ -82,6 +83,7 @@ def monthly_avg(now: arrow.Arrow | None = None) -> dict[str, Any]:
         BillingLineItem.objects.filter(
             created__range=(start.datetime, end.datetime),
             status=BillingLineItemStatus.ACTIVE,
+            entered_in_error__isnull=True,
         )
         .values("created__year", "created__month")
         .annotate(avg_charge=Avg("charge"))

@@ -27,11 +27,26 @@ class TestFiledClaimsQuerySet:
             modified__range=(start.datetime, end.datetime),
         )
 
+    @patch("billing_dashboard.data.overview.Claim")
+    def test_excludes_trashed_claims(
+        self, mock_claim: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """Regression: TRASH ordinal (10) is >= FILED (5), so a bare
+        ``__gte=FILED`` filter would silently include deleted claims in
+        revenue and acceptance-rate aggregates."""
+        start, end = arrow.get(2026, 3, 1), arrow.get(2026, 4, 1)
+        overview.filed_claims_in_range(start, end)
+        mock_claim.objects.filter.return_value.exclude.assert_called_once_with(
+            current_queue__queue_sort_ordering=10,
+        )
+
 
 class TestAggregateFiledClaims:
     @patch("billing_dashboard.data.overview.Claim")
     def test_returns_count_and_total(self, mock_claim: MagicMock, fixed_now: arrow.Arrow) -> None:
-        mock_claim.objects.filter.return_value.aggregate.return_value = {
+        # filed_claims_in_range now does Claim.objects.filter().exclude();
+        # the aggregate is on the exclude() result.
+        mock_claim.objects.filter.return_value.exclude.return_value.aggregate.return_value = {
             "count": 42,
             "total": Decimal("1234.56"),
         }
@@ -94,8 +109,11 @@ class TestComputeTrendPct:
     def test_negative_growth(self) -> None:
         assert overview.compute_trend_pct(Decimal("90"), Decimal("100")) == pytest.approx(-10.0)
 
-    def test_zero_prior_returns_zero(self) -> None:
-        assert overview.compute_trend_pct(Decimal("500"), Decimal("0")) == 0.0
+    def test_zero_prior_returns_none(self) -> None:
+        """No baseline means no percentage. Returning 0.0 here would silently
+        render as '0.0% from prior month / No change' even when the current
+        month had real activity emerging from nothing."""
+        assert overview.compute_trend_pct(Decimal("500"), Decimal("0")) is None
 
 
 class TestLastMonthTrendPct:
@@ -123,6 +141,20 @@ class TestLastMonthTrendPct:
         result = overview.last_month_trend_pct(now=fixed_now)
         assert result["source"] == "mock"
 
+    @patch("billing_dashboard.data.overview.aggregate_filed_claims")
+    def test_real_activity_with_zero_prior_marks_no_baseline(
+        self, mock_agg: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """Last month had real collections but the prior month did not.
+        Result must be sourced as 'no_baseline' so the JS renders 'No
+        prior-month baseline' rather than the misleading 'No change'."""
+        mock_agg.side_effect = [
+            {"count": 5, "total": Decimal("500")},  # last month
+            {"count": 0, "total": None},             # prior month
+        ]
+        result = overview.last_month_trend_pct(now=fixed_now)
+        assert result == {"value": 0.0, "source": "no_baseline"}
+
     @patch("billing_dashboard.data.overview.arrow")
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
     def test_defaults_to_utcnow_when_now_omitted(
@@ -140,7 +172,7 @@ class TestClaimAcceptanceRate:
     def test_ratio_of_non_rejected_to_filed(
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
-        mock_claim.objects.filter.return_value.aggregate.return_value = {
+        mock_claim.objects.filter.return_value.exclude.return_value.aggregate.return_value = {
             "filed_total": 100,
             "rejected": 8,
         }
@@ -152,7 +184,7 @@ class TestClaimAcceptanceRate:
     def test_zero_filed_returns_mock(
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
-        mock_claim.objects.filter.return_value.aggregate.return_value = {
+        mock_claim.objects.filter.return_value.exclude.return_value.aggregate.return_value = {
             "filed_total": 0,
             "rejected": 0,
         }

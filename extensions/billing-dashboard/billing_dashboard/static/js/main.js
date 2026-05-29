@@ -32,7 +32,12 @@
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
-        function setTrend(el, pct) {
+        function setTrend(el, pct, source) {
+            if (source === 'no_baseline') {
+                el.className = 'metric-trend neutral';
+                el.textContent = '\u2014 No prior-month baseline';
+                return;
+            }
             if (pct > 0) {
                 el.className = 'metric-trend up';
                 el.textContent = '\u2191 ' + pct.toFixed(1) + '% from prior month';
@@ -58,7 +63,7 @@
                 setCardBadge('badge-this-month', s.this_month_collected.source);
                 setCardBadge('badge-next-month', s.next_month_projected.source);
                 setCardBadge('badge-acceptance', s.claim_acceptance_rate.source);
-                setTrend(document.getElementById('trend-last-month'), s.last_month_trend_pct.value);
+                setTrend(document.getElementById('trend-last-month'), s.last_month_trend_pct.value, s.last_month_trend_pct.source);
                 var thisMonthTrend = document.getElementById('trend-this-month');
                 thisMonthTrend.className = 'metric-trend neutral';
                 thisMonthTrend.textContent = 'Month-to-date';

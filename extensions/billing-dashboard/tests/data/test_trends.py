@@ -103,6 +103,17 @@ class TestCptCodeAggregation:
         assert result["source"] == "mock"
         assert len(result["data"]) == 6
 
+    @patch("billing_dashboard.data.trends.BillingLineItem")
+    def test_filters_entered_in_error_bli(
+        self, mock_bli: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """Regression: BLI queries must filter out entered_in_error rows or
+        retracted line items will inflate CPT averages."""
+        mock_bli.objects.filter.return_value.values.return_value.annotate.return_value.order_by.return_value.__getitem__.return_value = []
+        trends.cpt_codes(now=fixed_now)
+        kwargs = mock_bli.objects.filter.call_args.kwargs
+        assert kwargs.get("entered_in_error__isnull") is True
+
 
 class TestMonthlyAvg:
     @patch("billing_dashboard.data.trends.BillingLineItem")

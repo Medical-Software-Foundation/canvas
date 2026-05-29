@@ -15,3 +15,4 @@ from __future__ import annotations
 class ClaimQueueState:
     FILED = 5
     REJECTED = 6
+    TRASH = 10

@@ -32,11 +32,18 @@ from billing_dashboard.data.windows import (
 class SummaryEntry(TypedDict):
     """Envelope used for every summary metric returned by this module.
 
-    `source` lets the UI badge mock values; downstream consumers (insights
-    rules, JS metric cards) read `value` and decide based on `source`.
+    ``source`` lets the UI badge mock values; downstream consumers (insights
+    rules, JS metric cards) read ``value`` and decide based on ``source``.
+
+    - ``"real"``: value was computed from a real DB query
+    - ``"mock"``: value came from the mock fallback (badge as Demo data)
+    - ``"no_baseline"``: only used by ``last_month_trend_pct``; the prior
+      month had zero collected, so a percentage change can't be computed.
+      ``value`` is 0.0 in this state but the JS must NOT render it as
+      "No change" — the trend slot shows "No prior-month baseline" instead.
     """
     value: float | int
-    source: Literal["mock", "real"]
+    source: Literal["mock", "real", "no_baseline"]
 
 
 _COLLECTED_SUM = Sum(
@@ -46,11 +53,15 @@ _COLLECTED_SUM = Sum(
 
 
 def filed_claims_in_range(start: arrow.Arrow, end: arrow.Arrow) -> Any:
-    """Base queryset of filed-or-later claims whose activity date falls in [start, end]."""
+    """Base queryset of filed-or-later claims whose activity date falls in [start, end].
+
+    Trashed claims (``ClaimQueueState.TRASH``) are excluded — they were deleted
+    and would silently inflate revenue and acceptance-rate aggregates if left in.
+    """
     return Claim.objects.filter(
         current_queue__queue_sort_ordering__gte=ClaimQueueState.FILED,
         modified__range=(start.datetime, end.datetime),
-    )
+    ).exclude(current_queue__queue_sort_ordering=ClaimQueueState.TRASH)
 
 
 def aggregate_filed_claims(start: arrow.Arrow, end: arrow.Arrow) -> dict[str, Any]:
@@ -90,9 +101,17 @@ def this_month_collected(now: arrow.Arrow | None = None) -> SummaryEntry:
     return {"value": float(agg["total"] or Decimal("0")), "source": "real"}
 
 
-def compute_trend_pct(current: Decimal, prior: Decimal) -> float:
+def compute_trend_pct(current: Decimal, prior: Decimal) -> float | None:
+    """Percentage change from ``prior`` to ``current``.
+
+    Returns ``None`` when ``prior`` is zero — there is no baseline to compute
+    a percentage against. Callers must NOT substitute 0.0 here, because that
+    would render as "0.0% from prior month / No change" in the UI, falsely
+    implying the metric was flat when in fact a real value emerged from no
+    history.
+    """
     if prior == 0:
-        return 0.0
+        return None
     return float((current - prior) / prior * 100)
 
 
@@ -108,6 +127,11 @@ def last_month_trend_pct(now: arrow.Arrow | None = None) -> SummaryEntry:
         last_agg["total"] or Decimal("0"),
         prior_agg["total"] or Decimal("0"),
     )
+    if pct is None:
+        # Prior month had zero collections; can't compute a percentage.
+        # JS renders this state as "No prior-month baseline" rather than
+        # the misleading "0.0% / No change".
+        return {"value": 0.0, "source": "no_baseline"}
     return {"value": pct, "source": "real"}
 
 
@@ -143,6 +167,8 @@ def claim_acceptance_rate(now: arrow.Arrow | None = None) -> SummaryEntry:
     counts = Claim.objects.filter(
         current_queue__queue_sort_ordering__gte=ClaimQueueState.FILED,
         modified__range=(start.datetime, end.datetime),
+    ).exclude(
+        current_queue__queue_sort_ordering=ClaimQueueState.TRASH,
     ).aggregate(
         filed_total=Count("id"),
         rejected=Count("id", filter=Q(current_queue__queue_sort_ordering=ClaimQueueState.REJECTED)),
