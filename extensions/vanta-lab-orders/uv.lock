@@ -1826,7 +1826,7 @@ wheels = [
 
 [[package]]
 name = "vanta-lab-orders"
-version = "0.0.19"
+version = "0.0.21"
 source = { virtual = "." }
 dependencies = [
     { name = "canvas", extra = ["test-utils"] },

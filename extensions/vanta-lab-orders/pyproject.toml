@@ -4,7 +4,7 @@
 
 [project]
 name = "vanta-lab-orders"
-version = "0.0.19"
+version = "0.0.21"
 description = "Canvas Medical plugin that forwards signed Vanta Diagnostics lab orders to LKCareEvolve (ELLKAY) via the ELLKAY Orders & Results JSON v2.2 contract."
 readme = "README.md"
 license = { text = "MIT" }

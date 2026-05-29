@@ -28,6 +28,13 @@ inbound plugin endpoint is required.
 - Outbound only: on `LAB_ORDER_COMMAND__POST_COMMIT`, build & POST the
   ELLKAY Orders JSON payload for the configured Vanta lab partner.
   Other partners are a silent no-op.
+- **AOE (Ask-on-Order-Entry)**: AOE answers captured on the lab order
+  command are read from `Command.data` (keys
+  `aoes|{test_ontology_code}|{question_code}`) and emitted in the
+  `ObservationRequest.AOE[]` array of the matching test. Pass-through only:
+  `Description` is left blank, answers are emitted verbatim, and missing
+  required AOEs are not validated or blocked (ELLKAY/Vanta enforce
+  downstream).
 - Plugin secrets: LKCareEvolve URL + auth key, Vanta lab-partner name,
   location-to-account-number JSON map, sending facility name.
 - Structured logging (no PHI) on every send: Canvas order id, patient
@@ -43,7 +50,6 @@ inbound plugin endpoint is required.
 - Inbound `SimpleAPI` for results (ELLKAY posts straight to Canvas
   FHIR `DiagnosticReport`).
 - Order requisition / specimen-label printing (Canvas APIs not ready).
-- AOE (Ask-on-Order-Entry) collection.
 - ABN workflow.
 - LOINC coding / reference ranges.
 - Retry queue. Non-2xx propagates to Canvas logs (no swallow).
@@ -96,44 +102,53 @@ this plugin's.
       "LastName": "...", "FirstName": "...",
       "MiddleName": "", "Suffix": "", "Prefix": ""
     },
-    "ReferringProvider": { /* 8-key empty Provider object when unused */ },
+    "ReferringProvider": { /* 8-key empty Provider object when unused */ }
+  },
 
-    "Patient": {
-      /* full ELLKAY Patient block — see source */
-    },
+  "Patient": {
+    /* full ELLKAY Patient block — see source */
+  },
 
-    "Guarantor": { /* full Guarantor block; for self-pay, mirrors patient */ },
+  "Guarantor": { /* full Guarantor block; for self-pay, mirrors patient */ },
 
-    "Insurances": [
-      /* one Insurance entry per active Coverage row, with full PolicyHolder address */
-    ],
+  "Insurances": [
+    /* one Insurance entry per active Coverage row, with full PolicyHolder address */
+  ],
 
-    "ObservationRequest": [
-      {
-        /* one entry per LabTest on the order */
-        "SequenceNumber": "1",
-        "PlacerOrderNumber": "<str(lab_order.id)>",
-        "OrderControl": "NW",
-        "OrderStatus": "SC",
-        "TestCodeId": "<lab_test.ontology_test_code>",
-        "TestCodeType": "L",
-        "TestCodeDescription": "<lab_test.ontology_test_name>",
-        "Priority": "R",
-        "RequestedDateTime": "<yyyyMMddHHmmss>",
-        "ObservationDateTime": "<yyyyMMddHHmmss>",
-        "Diagnoses": [ { "Code": "<dotted ICD-10>", "CodingMethod": "ICD10", ... } ],
-        "Notes": [{"SequenceNumber": "1", "Note": "<lab_order.comment>"}],
-        "Custom": [
-          {"Name": "CanvasPatientId", "Value": "<patient.id>"},
-          {"Name": "CanvasOrderId",   "Value": "<lab_order.id>"},
-          {"Name": "CanvasNoteId",    "Value": "<note.id>"}
-        ],
-        "AOE": []
-      }
-    ]
-  }
+  "ObservationRequest": [
+    {
+      /* one entry per LabTest on the order */
+      "SequenceNumber": "1",
+      "PlacerOrderNumber": "<str(lab_order.id)>",
+      "OrderControl": "NW",
+      "OrderStatus": "SC",
+      "TestCodeId": "<lab_test.ontology_test_code>",
+      "TestCodeType": "L",
+      "TestCodeDescription": "<lab_test.ontology_test_name>",
+      "Priority": "R",
+      "RequestedDateTime": "<yyyyMMddHHmmss>",
+      "ObservationDateTime": "<yyyyMMddHHmmss>",
+      "Diagnoses": [ { "Code": "<dotted ICD-10>", "CodingMethod": "ICD10", ... } ],
+      "Notes": [{"SequenceNumber": "1", "Note": "<lab_order.comment>"}],
+      "Custom": [
+        {"Name": "CanvasPatientId", "Value": "<patient.id>"},
+        {"Name": "CanvasOrderId",   "Value": "<lab_order.id>"},
+        {"Name": "CanvasNoteId",    "Value": "<note.id>"}
+      ],
+      "AOE": [
+        {"SequenceNumber": "1", "Code": "<question_code>", "Description": "", "Answer": "<answer>"}
+      ]
+    }
+  ]
 }
 ```
+
+> **Envelope note:** `Patient`, `Guarantor`, `Insurances`, and
+> `ObservationRequest` sit at the **top level** of the payload (siblings of
+> `MessageHeader`), as accepted by the live LKCareEvolve SendRawMessage
+> endpoint. This differs from the nesting shown in the ELLKAY spec PDF
+> (everything under `MessageHeader`); the top-level shape reflects what the
+> endpoint actually expects.
 
 ### Key rules
 
@@ -145,6 +160,11 @@ this plugin's.
   2. `ObservationRequest.Custom[]` carries `CanvasPatientId`,
      `CanvasOrderId`, `CanvasNoteId` so ELLKAY can echo them back on
      result write-back and unsolicited results match cleanly.
+- **AOE answers** — sourced from the lab order `Command.data` JSONField, where
+  Canvas stores them under `aoes|{test_ontology_code}|{question_code}` keys.
+  Parsed by `vanta_lab_orders/aoe.py` and attached per test by matching the
+  test ontology code to `TestCodeId`. ELLKAY AOE object: `SequenceNumber` (R),
+  `Code` (question code), `Description` (left blank), `Answer` (verbatim).
 - **Account number** comes from a JSON secret mapping `note.location.id`
   → LKCareEvolve account number string. Missing mapping → raise (fail
   loud per Canvas standards).
@@ -162,9 +182,16 @@ this plugin's.
   at emit time; codes already carrying a dot pass through.
 - **Phone / SSN format** — non-digit characters stripped at every emit
   site (per ELLKAY appendix `9999999999` / `999999999`).
-- **`LKCAREEVOLVE_BASE_URL`** — required to start with `https://`;
-  `http://` is rejected at settings-read time so the bearer token
-  cannot leak in cleartext.
+- **`LKCAREEVOLVE_BASE_URL`** — the full LKCareEvolve ingestion URL (e.g. the
+  ELLKAY SendRawMessage endpoint); the payload is POSTed to it as-is (no path
+  appended). Required to start with `https://`; `http://` is rejected at
+  settings-read time so the Basic-auth credential cannot leak in cleartext.
+- **Auth** — `Authorization: Basic <LKCAREEVOLVE_API_KEY>` (ELLKAY issues the
+  API key as a base64-encoded Basic credential, not a bearer token).
+- **Local-dev secrets** — `settings.py` reads each secret from the
+  Canvas-supplied `secrets` dict first, then falls back to a gitignored
+  `secrets_local.py` (copy from `secrets_local.example.py`). Production is
+  unchanged; the fallback only fills values Canvas didn't supply.
 - **Cancel envelope** (delete / entered-in-error, deferred to v2):
   same envelope shape, but `OrderControl = "CA"` and `Custom` entries
   are sufficient to identify the original order. Demographics block
@@ -199,6 +226,7 @@ vanta-lab-orders/
     ├── __init__.py
     ├── settings.py              secret accessors + LabPartner lookup helper
     ├── payload.py               pure ELLKAY Orders v2.2 builder
+    ├── aoe.py                   pure parser: Command.data AOE keys → per-test answers
     ├── lkcareevolve_client.py   thin wrapper around canvas_sdk.utils.Http
     └── protocols/
         ├── __init__.py
@@ -213,7 +241,7 @@ vanta-lab-orders/
 - **`lkcareevolve_client.py`** —
   `post_order(payload, base_url, api_key) -> Response`. Uses the
   Canvas SDK's allowed `Http` wrapper (`canvas_sdk.utils.Http`), sets
-  bearer auth, calls `raise_for_status()`. No retry, no swallowing.
+  Basic auth, calls `raise_for_status()`. No retry, no swallowing.
 - **`protocols/send_order.py`** — `SendVantaOrder(BaseHandler)`.
   `RESPONDS_TO = LAB_ORDER_COMMAND__POST_COMMIT`. Filters by lab
   partner, resolves the just-committed `LabOrder` from the event,
@@ -228,8 +256,8 @@ vanta-lab-orders/
 
 | Secret | Purpose |
 |---|---|
-| `LKCAREEVOLVE_BASE_URL` | LKCareEvolve ingestion base URL. Must start with `https://`. |
-| `LKCAREEVOLVE_API_KEY` | Bearer token issued by ELLKAY. |
+| `LKCAREEVOLVE_BASE_URL` | Full LKCareEvolve ingestion URL (e.g. SendRawMessage endpoint). Posted to as-is. Must start with `https://`. |
+| `LKCAREEVOLVE_API_KEY` | Base64-encoded Basic auth credential issued by ELLKAY. |
 | `VANTA_LAB_PARTNER_NAME` | Exact `LabPartner.name` for the Vanta Diagnostics entry in this Canvas instance. |
 | `LOCATION_TO_ACCOUNT_MAP_JSON` | JSON object: `{ "<practice_location_uuid>": "<lkcareevolve_account_number>" }` |
 | `SENDING_FACILITY_NAME` | Friendly facility name embedded in `MessageHeader.SendingFacilityName`. |
@@ -246,7 +274,7 @@ sandbox instance.
   Guarantor / Insurance shapes and field order.
 - **`test_send_order_protocol.py`** — partner filter, LabOrder
   resolution, no-signed-order fallback, error propagation.
-- **`test_lkcareevolve_client.py`** — URL composition, bearer auth,
+- **`test_lkcareevolve_client.py`** — URL used as-is, Basic auth,
   `raise_for_status` invocation, error propagation.
 - **`test_settings.py`** — secret accessors, missing/empty validation,
   HTTPS-only guard on the base URL.
@@ -262,7 +290,8 @@ These do not block the plugin loading or POSTing a payload; they are
 payload-shape clarifications best confirmed during production
 onboarding with ELLKAY.
 
-1. **Auth scheme** — confirm bearer vs an alternative API-key header.
+1. ~~**Auth scheme**~~ — resolved: `Authorization: Basic <api_key>` against the
+   SendRawMessage endpoint (confirmed during UAT).
 2. **`BillType` code** — confirm acceptable values from the ELLKAY
    appendix (currently `T` when insurance is present, `P` otherwise).
 3. **Gender / Race / Ethnicity normalization** — confirm the code-set

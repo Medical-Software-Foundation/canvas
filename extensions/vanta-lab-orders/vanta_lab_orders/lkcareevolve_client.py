@@ -5,10 +5,14 @@ sandbox). Returns a requests.Response-compatible object.
 
 Design rules:
 - No retry logic — non-2xx propagates immediately.
-- Bearer auth via LKCAREEVOLVE_API_KEY secret.
+- Basic auth via LKCAREEVOLVE_API_KEY secret (ELLKAY issues the API key as a
+  base64-encoded Basic credential, not a bearer token).
 - raise_for_status() always called — never swallow HTTP errors.
 - Timeout is whatever canvas_sdk.utils.Http defaults to; the wrapper
   doesn't accept a per-call timeout kwarg.
+- The full LKCareEvolve ingestion endpoint is supplied via the
+  LKCAREEVOLVE_BASE_URL secret (e.g. the SendRawMessage URL); the payload is
+  POSTed to that URL as-is.
 """
 
 from __future__ import annotations
@@ -16,8 +20,6 @@ from __future__ import annotations
 from typing import Any
 
 from canvas_sdk.utils import Http
-
-_ORDER_PATH = "/orders"
 
 
 def post_order(
@@ -29,8 +31,9 @@ def post_order(
 
     Args:
         payload: The dict built by payload.build_order_payload().
-        base_url: LKCareEvolve base URL (no trailing slash), e.g. 'https://api.lkcareevolve.ellkay.com'.
-        api_key: Bearer token issued by ELLKAY.
+        base_url: Full LKCareEvolve ingestion URL (no trailing slash), e.g. the
+            ELLKAY SendRawMessage endpoint.
+        api_key: Base64-encoded Basic auth credential issued by ELLKAY.
 
     Returns:
         The HTTP response on success (2xx). Has .status_code, .ok, .text, .json().
@@ -39,11 +42,10 @@ def post_order(
         requests.HTTPError: On non-2xx response (via raise_for_status).
         requests.RequestException: On network-level failure (timeout, DNS, etc.).
     """
-    url = f"{base_url}{_ORDER_PATH}"
+    url = base_url
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Basic {api_key}",
         "Content-Type": "application/json",
-        "Accept": "application/json",
     }
     http = Http()
     response = http.post(url, json=payload, headers=headers)

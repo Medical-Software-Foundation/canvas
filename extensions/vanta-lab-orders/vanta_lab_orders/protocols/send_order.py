@@ -15,9 +15,11 @@ from __future__ import annotations
 from canvas_sdk.effects import Effect
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
+from canvas_sdk.v1.data import Command
 from canvas_sdk.v1.data.lab import LabOrder
 from logger import log
 
+from vanta_lab_orders.aoe import parse_aoe_answers
 from vanta_lab_orders.lkcareevolve_client import post_order
 from vanta_lab_orders.payload import build_order_payload
 from vanta_lab_orders.settings import (
@@ -50,7 +52,12 @@ class SendVantaOrder(BaseHandler):
         expected_partner = vanta_lab_partner_name(self.secrets)
 
         if partner_name_in_event != expected_partner:
-            # Not a Vanta order — silent no-op.
+            # Not a Vanta order — no-op.
+            log.info(
+                "[vanta_lab_orders] Skipping lab order because partner does not match: "
+                f"expected_partner={expected_partner} "
+                f"event_partner={partner_name_in_event}"
+            )
             return []
 
         # Resolve the LabOrder. The Canvas data module has no FK between
@@ -96,13 +103,28 @@ class SendVantaOrder(BaseHandler):
         location_id = str(note.location.id) if (note and note.location) else "unknown"
         test_count = lab_order.tests.count()
 
+        # AOE answers live on the lab order Command (the commit event's target),
+        # keyed 'aoes|{test_ontology_code}|{question_code}'. If the Command can't
+        # be loaded, send the order without AOEs rather than block it.
+        command_id = self.event.target.id
+        aoe_answers: dict[str, list[tuple[str, str]]] = {}
+        try:
+            command = Command.objects.get(id=command_id)
+            aoe_answers = parse_aoe_answers(command.data)
+        except Command.DoesNotExist:
+            log.warning(
+                f"[vanta_lab_orders] Command {command_id} not found; "
+                f"sending order without AOE"
+            )
+
         log.info(
             "[vanta_lab_orders] Sending lab order to LKCareEvolve: "
             f"order_id={lab_order.id} patient_id={patient_id} "
-            f"location_id={location_id} test_count={test_count}"
+            f"location_id={location_id} test_count={test_count} "
+            f"aoe_test_count={len(aoe_answers)}"
         )
 
-        order_payload = build_order_payload(lab_order, self.secrets)
+        order_payload = build_order_payload(lab_order, self.secrets, aoe_answers)
 
         base_url = lkcareevolve_base_url(self.secrets)
         api_key = lkcareevolve_api_key(self.secrets)

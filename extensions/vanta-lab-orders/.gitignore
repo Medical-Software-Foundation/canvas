@@ -20,3 +20,6 @@ htmlcov/
 
 # Claude Code session files (kept out of OSS distribution)
 .claude/
+
+# Local-dev secret values — never commit real credentials
+vanta_lab_orders/secrets_local.py

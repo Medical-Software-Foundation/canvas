@@ -67,12 +67,13 @@ class MockLKCareEvolveHandler(BaseHTTPRequestHandler):
         print(f"Content-Type:  {content_type}", flush=True)
         print(f"Body bytes:    {length}", flush=True)
 
-        # Auth check
-        expected = f"Bearer {self.api_key}"
-        if auth != expected:
-            print(f"\n[REJECTED] Authorization header mismatch.", flush=True)
-            print(f"  expected: {expected}", flush=True)
-            print(f"  got:      {auth!r}", flush=True)
+        # Auth check — the integrated plugin sends `Basic <key>`; older builds
+        # used `Bearer <key>`. Accept either scheme as long as the token matches.
+        token = auth.partition(" ")[2] if " " in auth else ""
+        if token != self.api_key:
+            print(f"\n[REJECTED] Authorization token mismatch.", flush=True)
+            print(f"  expected token: {self.api_key}", flush=True)
+            print(f"  got header:     {auth!r}", flush=True)
             self._send_json(401, {"error": "invalid api key"})
             return
 
@@ -89,20 +90,27 @@ class MockLKCareEvolveHandler(BaseHTTPRequestHandler):
             print("\nPayload:", flush=True)
             print(json.dumps(parsed, indent=2, sort_keys=False), flush=True)
 
-            placer = (
-                parsed.get("MessageHeader", {}).get("PlacerOrderNumber")
+            header = parsed.get("MessageHeader", {}) if isinstance(parsed, dict) else {}
+            placer = header.get("PlacerOrderNumber")
+            # Integrated contract puts ObservationRequest at the top level;
+            # older builds nested it under MessageHeader. Check both.
+            obs = (
+                (parsed.get("ObservationRequest") or header.get("ObservationRequest") or [])
                 if isinstance(parsed, dict)
-                else None
+                else []
             )
-            obs = parsed.get("MessageHeader", {}).get("ObservationRequest", []) if isinstance(parsed, dict) else []
+            aoe_total = sum(
+                len(o.get("AOE", [])) for o in obs if isinstance(o, dict)
+            )
             print(
-                f"\nSummary: PlacerOrderNumber={placer}, ObservationRequest count={len(obs)}",
+                f"\nSummary: PlacerOrderNumber={placer}, "
+                f"ObservationRequest count={len(obs)}, AOE answers={aoe_total}",
                 flush=True,
             )
 
-        # Routing — only /orders is "real"; anything else still 200s so you
-        # can probe the surface, but it gets a different acknowledgement.
-        if self.path.rstrip("/") == "/orders":
+        # Routing — the integrated plugin POSTs to the base URL root; older
+        # builds used /orders. Treat both as a real order submission.
+        if self.path.rstrip("/") in ("", "/orders"):
             response_body = {
                 "Status": "Accepted",
                 "FillerOrderNumber": f"MOCK-{uuid.uuid4().hex[:12].upper()}",
@@ -114,7 +122,7 @@ class MockLKCareEvolveHandler(BaseHTTPRequestHandler):
 
         self._send_json(
             200,
-            {"Status": "Accepted", "Note": f"path {self.path} not /orders but accepted"},
+            {"Status": "Accepted", "Note": f"path {self.path} not a known orders path but accepted"},
         )
 
 
@@ -136,7 +144,8 @@ def main() -> None:
     print(bar, flush=True)
     print(f"Listening on  : http://{args.host}:{args.port}", flush=True)
     print(f"Local URL     : http://localhost:{args.port}", flush=True)
-    print(f"Orders path   : POST /orders", flush=True)
+    print(f"Orders path   : POST / (root) or /orders", flush=True)
+    print(f"Auth accepted : Basic <key> or Bearer <key>", flush=True)
     print(f"Health check  : GET  /health", flush=True)
     print("", flush=True)
     print(f"Local URL for curl    : http://localhost:{args.port}", flush=True)

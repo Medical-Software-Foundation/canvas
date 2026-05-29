@@ -16,21 +16,21 @@ import pytest
 from vanta_lab_orders.lkcareevolve_client import post_order
 
 
-def test_post_order_posts_to_orders_path(mocker: Any) -> None:
-    """URL is composed as base_url + '/orders'."""
+def test_post_order_posts_to_base_url_as_is(mocker: Any) -> None:
+    """URL is the supplied base_url, posted as-is (no path appended)."""
     mock_http_cls = mocker.patch("vanta_lab_orders.lkcareevolve_client.Http")
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_http_cls.return_value.post.return_value = mock_response
 
-    post_order({"x": 1}, "https://lkce.example.com", "tkn")
+    post_order({"x": 1}, "https://lkce.example.com/LKTransfer/SendRawMessage", "tkn")
 
     call_args = mock_http_cls.return_value.post.call_args
-    assert call_args.args[0] == "https://lkce.example.com/orders"
+    assert call_args.args[0] == "https://lkce.example.com/LKTransfer/SendRawMessage"
 
 
-def test_post_order_sets_bearer_auth_header(mocker: Any) -> None:
-    """Authorization header is `Bearer <api_key>`."""
+def test_post_order_sets_basic_auth_header(mocker: Any) -> None:
+    """Authorization header is `Basic <api_key>`; no Accept header is sent."""
     mock_http_cls = mocker.patch("vanta_lab_orders.lkcareevolve_client.Http")
     mock_response = MagicMock()
     mock_http_cls.return_value.post.return_value = mock_response
@@ -38,9 +38,9 @@ def test_post_order_sets_bearer_auth_header(mocker: Any) -> None:
     post_order({}, "https://lkce.example.com", "secret-token")
 
     headers = mock_http_cls.return_value.post.call_args.kwargs["headers"]
-    assert headers["Authorization"] == "Bearer secret-token"
+    assert headers["Authorization"] == "Basic secret-token"
     assert headers["Content-Type"] == "application/json"
-    assert headers["Accept"] == "application/json"
+    assert "Accept" not in headers
 
 
 def test_post_order_passes_payload_as_json_body(mocker: Any) -> None:

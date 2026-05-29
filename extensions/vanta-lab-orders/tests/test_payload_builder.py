@@ -108,12 +108,12 @@ def test_happy_path_single_test(secrets: dict) -> None:
 
     # Patient block
     patient = lab_order.patient
-    assert header["Patient"]["LastName"] == patient.last_name
-    assert header["Patient"]["FirstName"] == patient.first_name
-    assert header["Patient"]["ChartNumber"] == str(patient.id)
+    assert result["Patient"]["LastName"] == patient.last_name
+    assert result["Patient"]["FirstName"] == patient.first_name
+    assert result["Patient"]["ChartNumber"] == str(patient.id)
 
     # ObservationRequest
-    obs = header["ObservationRequest"]
+    obs = result["ObservationRequest"]
     assert len(obs) == 1
     assert obs[0]["OrderControl"] == "NW"
     assert obs[0]["PlacerOrderNumber"] == str(lab_order.id)
@@ -134,7 +134,7 @@ def test_multi_test_order(secrets: dict) -> None:
     """Multi-test order produces one ObservationRequest per test."""
     lab_order = _make_lab_order(num_tests=3)
     result = build_order_payload(lab_order, secrets)
-    obs = result["MessageHeader"]["ObservationRequest"]
+    obs = result["ObservationRequest"]
     assert len(obs) == 3
     for i, entry in enumerate(obs, start=1):
         assert entry["SequenceNumber"] == str(i)
@@ -155,7 +155,7 @@ def test_multiple_icd10_reasons(secrets: dict) -> None:
         LabOrderReasonConditionFactory.create(reason=reason, condition=condition)
 
     result = build_order_payload(lab_order, secrets)
-    diagnoses = result["MessageHeader"]["ObservationRequest"][0]["Diagnoses"]
+    diagnoses = result["ObservationRequest"][0]["Diagnoses"]
     codes = [d["Code"] for d in diagnoses]
     assert "Z00.00" in codes
     assert "E11.9" in codes
@@ -193,7 +193,7 @@ def test_non_icd10_codings_excluded(secrets: dict) -> None:
     LabOrderReasonConditionFactory.create(reason=reason, condition=condition)
 
     result = build_order_payload(lab_order, secrets)
-    diagnoses = result["MessageHeader"]["ObservationRequest"][0]["Diagnoses"]
+    diagnoses = result["ObservationRequest"][0]["Diagnoses"]
     assert len(diagnoses) == 1
     assert diagnoses[0]["Code"] == "J32.9"
 
@@ -215,7 +215,7 @@ def test_missing_optional_fields_no_middle_name_no_email(secrets: dict) -> None:
     LabTestFactory.create(order=lab_order)
 
     result = build_order_payload(lab_order, secrets)
-    p_block = result["MessageHeader"]["Patient"]
+    p_block = result["Patient"]
     assert p_block["MiddleName"] == ""
     assert p_block["HomePhoneNumber"] == ""
     assert p_block["Email"] == ""
@@ -273,7 +273,7 @@ def test_insurance_populated_from_active_coverage(secrets: dict) -> None:
     )
 
     result = build_order_payload(lab_order, secrets)
-    insurances = result["MessageHeader"]["Insurances"]
+    insurances = result["Insurances"]
     assert len(insurances) >= 1
     policy_numbers = [ins["PolicyNumber"] for ins in insurances]
     assert "POL-123456" in policy_numbers
@@ -287,7 +287,7 @@ def test_no_insurance_produces_empty_list(secrets: dict) -> None:
     lab_order.patient.coverages.all().delete()
 
     result = build_order_payload(lab_order, secrets)
-    assert result["MessageHeader"]["Insurances"] == []
+    assert result["Insurances"] == []
 
 
 @pytest.mark.django_db
@@ -295,7 +295,7 @@ def test_comment_appears_in_notes_block(secrets: dict) -> None:
     """A non-empty comment on the lab order appears in Notes on each ObservationRequest."""
     lab_order = _make_lab_order(num_tests=1, with_comment=True)
     result = build_order_payload(lab_order, secrets)
-    notes = result["MessageHeader"]["ObservationRequest"][0]["Notes"]
+    notes = result["ObservationRequest"][0]["Notes"]
     assert len(notes) == 1
     assert notes[0]["Note"] == lab_order.comment
 
@@ -305,7 +305,7 @@ def test_empty_comment_produces_empty_notes_block(secrets: dict) -> None:
     """An empty comment → empty Notes list on ObservationRequest."""
     lab_order = _make_lab_order(num_tests=1, with_comment=False)
     result = build_order_payload(lab_order, secrets)
-    notes = result["MessageHeader"]["ObservationRequest"][0]["Notes"]
+    notes = result["ObservationRequest"][0]["Notes"]
     assert notes == []
 
 
@@ -362,9 +362,7 @@ def test_diagnosis_coding_method_is_ICD10_no_dash(secrets: dict) -> None:
     reason = LabOrderReasonFactory.create(order=lab_order)
     LabOrderReasonConditionFactory.create(reason=reason, condition=condition)
 
-    diagnoses = build_order_payload(lab_order, secrets)["MessageHeader"][
-        "ObservationRequest"
-    ][0]["Diagnoses"]
+    diagnoses = build_order_payload(lab_order, secrets)["ObservationRequest"][0]["Diagnoses"]
     assert diagnoses[0]["CodingMethod"] == "ICD10"
 
 
@@ -374,7 +372,7 @@ def test_ethnicity_cdc_2186_5_maps_to_N(secrets: dict) -> None:
     lab_order = _make_lab_order(num_tests=1)
     lab_order.patient.cultural_ethnicity_codes = ["2186-5"]
     lab_order.patient.save()
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["Ethnicity"] == "N"
 
 
@@ -384,7 +382,7 @@ def test_ethnicity_cdc_2135_2_maps_to_H(secrets: dict) -> None:
     lab_order = _make_lab_order(num_tests=1)
     lab_order.patient.cultural_ethnicity_codes = ["2135-2"]
     lab_order.patient.save()
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["Ethnicity"] == "H"
 
 
@@ -394,7 +392,7 @@ def test_ethnicity_unknown_cdc_code_maps_to_U(secrets: dict) -> None:
     lab_order = _make_lab_order(num_tests=1)
     lab_order.patient.cultural_ethnicity_codes = ["9999-9"]
     lab_order.patient.save()
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["Ethnicity"] == "U"
 
 
@@ -404,7 +402,7 @@ def test_ethnicity_empty_codes_emits_empty_string(secrets: dict) -> None:
     lab_order = _make_lab_order(num_tests=1)
     lab_order.patient.cultural_ethnicity_codes = []
     lab_order.patient.save()
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["Ethnicity"] == ""
 
 
@@ -412,7 +410,7 @@ def test_ethnicity_empty_codes_emits_empty_string(secrets: dict) -> None:
 def test_guarantor_relationship_to_patient_is_SEL(secrets: dict) -> None:
     """Self-pay guarantor block uses ELLKAY Relationship code 'SEL', not 'Self'."""
     lab_order = _make_lab_order(num_tests=1)
-    g = build_order_payload(lab_order, secrets)["MessageHeader"]["Guarantor"]
+    g = build_order_payload(lab_order, secrets)["Guarantor"]
     assert g["RelationshipToPatient"] == "SEL"
 
 
@@ -430,7 +428,7 @@ def test_insurance_policy_holder_relationship_x12_to_ellkay_code(secrets: dict) 
         patient_relationship_to_subscriber="18",
     )
 
-    ins = build_order_payload(lab_order, secrets)["MessageHeader"]["Insurances"]
+    ins = build_order_payload(lab_order, secrets)["Insurances"]
     assert ins[0]["PolicyHolderRelationshipToPatient"] == "SEL"
 
 
@@ -445,7 +443,7 @@ def test_insurance_unknown_relationship_x12_maps_to_UNK(secrets: dict) -> None:
         state="active",
         patient_relationship_to_subscriber="ZZ",
     )
-    ins = build_order_payload(lab_order, secrets)["MessageHeader"]["Insurances"]
+    ins = build_order_payload(lab_order, secrets)["Insurances"]
     assert ins[0]["PolicyHolderRelationshipToPatient"] == "UNK"
 
 
@@ -454,7 +452,7 @@ def test_guarantor_field_set_and_order_match_spec(secrets: dict) -> None:
     """Guarantor block must contain exactly the keys defined by ELLKAY spec p.28,
     in spec order. No extra keys (Email, WorkPhoneNumber) and none missing."""
     lab_order = _make_lab_order(num_tests=1)
-    g = build_order_payload(lab_order, secrets)["MessageHeader"]["Guarantor"]
+    g = build_order_payload(lab_order, secrets)["Guarantor"]
     assert list(g.keys()) == [
         "RelationshipToPatient",
         "LastName",
@@ -493,7 +491,7 @@ def test_guarantor_self_pay_mirrors_patient_address(secrets: dict) -> None:
         use="home",
     )
 
-    g = build_order_payload(lab_order, secrets)["MessageHeader"]["Guarantor"]
+    g = build_order_payload(lab_order, secrets)["Guarantor"]
     assert g["Address1"] == "123 Main St"
     assert g["City"] == "Boston"
     assert g["State"] == "MA"
@@ -513,7 +511,7 @@ def test_insurance_field_set_and_order_match_spec(secrets: dict) -> None:
         state="active",
     )
 
-    ins = build_order_payload(lab_order, secrets)["MessageHeader"]["Insurances"][0]
+    ins = build_order_payload(lab_order, secrets)["Insurances"][0]
     assert list(ins.keys()) == [
         "SequenceNumber",
         "PlanId",
@@ -573,7 +571,7 @@ def test_insurance_policy_holder_self_pay_address_from_patient(secrets: dict) ->
         patient_relationship_to_subscriber="18",
     )
 
-    ins = build_order_payload(lab_order, secrets)["MessageHeader"]["Insurances"][0]
+    ins = build_order_payload(lab_order, secrets)["Insurances"][0]
     assert ins["PolicyHolderAddress1"] == "500 Oak Ave"
     assert ins["PolicyHolderCity"] == "Greenville"
     assert ins["PolicyHolderState"] == "SC"
@@ -585,7 +583,7 @@ def test_insurance_policy_holder_self_pay_address_from_patient(secrets: dict) ->
 def test_patient_field_order_places_ethnicity_after_driverlicense(secrets: dict) -> None:
     """ELLKAY spec p.27 places Ethnicity between DriverLicenseNumber and PatientDeathDateTime."""
     lab_order = _make_lab_order(num_tests=1)
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     keys = list(p.keys())
     assert keys.index("DriverLicenseNumber") < keys.index("Ethnicity")
     assert keys.index("Ethnicity") < keys.index("PatientDeathDateTime")
@@ -619,9 +617,7 @@ def test_icd10_code_is_normalized_to_dotted_form(secrets: dict) -> None:
     reason = LabOrderReasonFactory.create(order=lab_order)
     LabOrderReasonConditionFactory.create(reason=reason, condition=condition)
 
-    diagnoses = build_order_payload(lab_order, secrets)["MessageHeader"][
-        "ObservationRequest"
-    ][0]["Diagnoses"]
+    diagnoses = build_order_payload(lab_order, secrets)["ObservationRequest"][0]["Diagnoses"]
     assert diagnoses[0]["Code"] == "Z11.59"
 
 
@@ -633,9 +629,7 @@ def test_icd10_code_already_dotted_passes_through(secrets: dict) -> None:
     reason = LabOrderReasonFactory.create(order=lab_order)
     LabOrderReasonConditionFactory.create(reason=reason, condition=condition)
 
-    diagnoses = build_order_payload(lab_order, secrets)["MessageHeader"][
-        "ObservationRequest"
-    ][0]["Diagnoses"]
+    diagnoses = build_order_payload(lab_order, secrets)["ObservationRequest"][0]["Diagnoses"]
     assert diagnoses[0]["Code"] == "J06.9"
 
 
@@ -646,7 +640,7 @@ def test_ssn_dashes_are_stripped(secrets: dict) -> None:
     lab_order.patient.social_security_number = "123-45-6789"
     lab_order.patient.save()
 
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["SocialSecurityNumber"] == "123456789"
 
 
@@ -658,7 +652,7 @@ def test_gender_lowercase_word_maps_to_letter(secrets: dict) -> None:
     lab_order.patient.sex_at_birth = "male"
     lab_order.patient.save()
 
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["Gender"] == "M"
 
 
@@ -667,7 +661,7 @@ def test_observation_request_order_status_defaults_to_SC(secrets: dict) -> None:
     """ELLKAY spec p.29: OrderStatus is required. v1 defaults to 'SC' (Scheduled).
     TODO at top of payload module references ELLKAY confirmation (open item #6)."""
     lab_order = _make_lab_order(num_tests=1)
-    obs = build_order_payload(lab_order, secrets)["MessageHeader"]["ObservationRequest"][0]
+    obs = build_order_payload(lab_order, secrets)["ObservationRequest"][0]
     assert obs["OrderStatus"] == "SC"
 
 
@@ -676,7 +670,7 @@ def test_observation_request_observation_datetime_mirrors_requested(secrets: dic
     """ELLKAY spec p.29: ObservationDateTime is required. For new orders we
     mirror RequestedDateTime (no separate collection time yet)."""
     lab_order = _make_lab_order(num_tests=1)
-    obs = build_order_payload(lab_order, secrets)["MessageHeader"]["ObservationRequest"][0]
+    obs = build_order_payload(lab_order, secrets)["ObservationRequest"][0]
     assert obs["ObservationDateTime"] != ""
     assert obs["ObservationDateTime"] == obs["RequestedDateTime"]
 
@@ -698,13 +692,13 @@ def test_dates_use_ellkay_yyyymmdd_format(secrets: dict) -> None:
     )
 
     result = build_order_payload(lab_order, secrets)
-    p = result["MessageHeader"]["Patient"]
+    p = result["Patient"]
     assert p["DateOfBirth"] == "19750821", p["DateOfBirth"]
 
-    g = result["MessageHeader"]["Guarantor"]
+    g = result["Guarantor"]
     assert g["DateOfBirth"] == "19750821", g["DateOfBirth"]
 
-    insurance = result["MessageHeader"]["Insurances"][0]
+    insurance = result["Insurances"][0]
     assert insurance["PlanEffectiveDate"] == "20200115", insurance["PlanEffectiveDate"]
 
 
@@ -725,7 +719,7 @@ def test_datetimes_use_ellkay_yyyymmddhhmmss_format(secrets: dict) -> None:
         assert re.fullmatch(r"\d{14}", header["OrderDateTime"]), header["OrderDateTime"]
 
     # ObservationRequest RequestedDateTime: 14 digits when present
-    requested = header["ObservationRequest"][0]["RequestedDateTime"]
+    requested = result["ObservationRequest"][0]["RequestedDateTime"]
     if requested:
         assert re.fullmatch(r"\d{14}", requested), requested
 
@@ -816,7 +810,7 @@ def test_telecom_picks_up_work_phone_and_email(secrets: dict) -> None:
         opted_out=False,
     )
 
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["WorkPhoneNumber"] == "6175550199"
     assert p["Email"] == "john@example.com"
 
@@ -839,7 +833,7 @@ def test_telecom_phone_without_use_falls_back_to_home(secrets: dict) -> None:
         opted_out=False,
     )
 
-    p = build_order_payload(lab_order, secrets)["MessageHeader"]["Patient"]
+    p = build_order_payload(lab_order, secrets)["Patient"]
     assert p["HomePhoneNumber"] == "5555550199"
 
 
@@ -850,3 +844,73 @@ def test_payload_is_json_serialisable(secrets: dict) -> None:
     result = build_order_payload(lab_order, secrets)
     # Should not raise
     json.dumps(result)
+
+
+# ---------------------------------------------------------------------------
+# AOE
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_aoe_empty_when_no_answers(secrets: dict) -> None:
+    """No AOE answers passed → AOE stays an empty list (unchanged behavior)."""
+    lab_order = _make_lab_order(num_tests=1)
+    obs = build_order_payload(lab_order, secrets)["ObservationRequest"][0]
+    assert obs["AOE"] == []
+
+
+@pytest.mark.django_db
+def test_aoe_entries_emitted_for_matching_test(secrets: dict) -> None:
+    """AOE answers for a test code appear on that test's ObservationRequest."""
+    location = _make_location(LOCATION_UUID_1)
+    note = NoteFactory.create(location=location)
+    lab_order = LabOrderFactory.create(note=note, patient=note.patient)
+    LabTestFactory.create(order=lab_order, ontology_test_code="Derm-ID")
+
+    aoe_answers = {"Derm-ID": [("DERMSOU", "DRMSWB"), ("SKMCAP", "No")]}
+    obs = build_order_payload(lab_order, secrets, aoe_answers)["ObservationRequest"][0]
+
+    assert obs["AOE"] == [
+        {"SequenceNumber": "1", "Code": "DERMSOU", "Description": "", "Answer": "DRMSWB"},
+        {"SequenceNumber": "2", "Code": "SKMCAP", "Description": "", "Answer": "No"},
+    ]
+
+
+@pytest.mark.django_db
+def test_aoe_routed_to_correct_test_in_multi_test_order(secrets: dict) -> None:
+    """Each test's AOE answers attach to its own ObservationRequest by test code."""
+    location = _make_location(LOCATION_UUID_1)
+    note = NoteFactory.create(location=location)
+    lab_order = LabOrderFactory.create(note=note, patient=note.patient)
+    LabTestFactory.create(order=lab_order, ontology_test_code="Derm-ID")
+    LabTestFactory.create(order=lab_order, ontology_test_code="Gastro-ID")
+
+    aoe_answers = {
+        "Derm-ID": [("DERMSOU", "DRMSWB")],
+        "Gastro-ID": [("GASSOU", "RECTSTL")],
+    }
+    obs = build_order_payload(lab_order, secrets, aoe_answers)["ObservationRequest"]
+
+    by_code = {o["TestCodeId"]: o["AOE"] for o in obs}
+    assert by_code["Derm-ID"] == [
+        {"SequenceNumber": "1", "Code": "DERMSOU", "Description": "", "Answer": "DRMSWB"}
+    ]
+    assert by_code["Gastro-ID"] == [
+        {"SequenceNumber": "1", "Code": "GASSOU", "Description": "", "Answer": "RECTSTL"}
+    ]
+
+
+@pytest.mark.django_db
+def test_aoe_test_with_no_answers_stays_empty_when_others_have_them(secrets: dict) -> None:
+    """A test absent from aoe_answers keeps AOE == [] even when siblings have answers."""
+    location = _make_location(LOCATION_UUID_1)
+    note = NoteFactory.create(location=location)
+    lab_order = LabOrderFactory.create(note=note, patient=note.patient)
+    LabTestFactory.create(order=lab_order, ontology_test_code="Derm-ID")
+    LabTestFactory.create(order=lab_order, ontology_test_code="Gastro-ID")
+
+    aoe_answers = {"Derm-ID": [("DERMSOU", "DRMSWB")]}
+    obs = build_order_payload(lab_order, secrets, aoe_answers)["ObservationRequest"]
+    by_code = {o["TestCodeId"]: o["AOE"] for o in obs}
+    assert by_code["Gastro-ID"] == []
+    assert len(by_code["Derm-ID"]) == 1

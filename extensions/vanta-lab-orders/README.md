@@ -81,10 +81,10 @@ or empty values raise `ValueError` and the handler fails loud.
 
 | Secret | Required | Purpose |
 |---|---|---|
-| `LKCAREEVOLVE_BASE_URL` | ✓ | LKCareEvolve ingestion base URL. Must use `https://` — `http://` is rejected to prevent the bearer token from traversing the network in cleartext. |
-| `LKCAREEVOLVE_API_KEY` | ✓ | Bearer token issued by ELLKAY for your account. |
+| `LKCAREEVOLVE_BASE_URL` | ✓ | Full LKCareEvolve ingestion URL (posted to as-is). Must use `https://` — `http://` is rejected to prevent the auth credential from traversing the network in cleartext. |
+| `LKCAREEVOLVE_API_KEY` | ✓ | Base64-encoded Basic auth credential issued by ELLKAY for your account. |
 | `VANTA_LAB_PARTNER_NAME` | ✓ | Exact `LabPartner.name` string the plugin filters on. Orders whose `lab_partner.text` doesn't equal this are skipped silently. |
-| `LOCATION_TO_ACCOUNT_MAP_JSON` | ✓ | JSON object mapping `PracticeLocation.id` (UUID) → LKCareEvolve account number string. Example: `{"d1eacdb5-9ead-47ce-855a-c8c6ef3932a6": "ACCT-001"}`. A signed order whose location isn't in the map raises `KeyError`. |
+| `LOCATION_TO_ACCOUNT_MAP_JSON` | ✓ | JSON object mapping `PracticeLocation.id` (UUID) → LKCareEvolve account number string. Example: `{"<practice_location_uuid>": "ACCT-001"}`. A signed order whose location isn't in the map raises `KeyError`. |
 | `SENDING_FACILITY_NAME` | ✓ | Friendly facility name embedded in `MessageHeader.SendingFacilityName`. |
 
 ## Development

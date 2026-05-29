@@ -7,6 +7,7 @@ import json
 import pytest
 
 from tests.conftest import LOCATION_UUID_1, LOCATION_UUID_2
+from vanta_lab_orders import settings as settings_module
 from vanta_lab_orders.settings import (
     account_number_for_location,
     lkcareevolve_api_key,
@@ -17,13 +18,25 @@ from vanta_lab_orders.settings import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _disable_secrets_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure the local-dev fallback never leaks into these tests.
+
+    A developer may have a real secrets_local.py in their tree; without this,
+    the 'missing'/'empty' assertions would pick up those values and fail.
+    """
+    monkeypatch.setattr(settings_module, "_secrets_local", None)
+
+
 def test_lkcareevolve_base_url_strips_trailing_slash(secrets: dict) -> None:
     secrets["LKCAREEVOLVE_BASE_URL"] = "https://api.example.com/"
     assert lkcareevolve_base_url(secrets) == "https://api.example.com"
 
 
 def test_lkcareevolve_base_url_missing_raises() -> None:
-    with pytest.raises(KeyError):
+    # With the secrets_local fallback, a missing key is treated the same as an
+    # empty value: no source supplies it, so it raises ValueError ("is empty").
+    with pytest.raises(ValueError, match="LKCAREEVOLVE_BASE_URL is empty"):
         lkcareevolve_base_url({})
 
 

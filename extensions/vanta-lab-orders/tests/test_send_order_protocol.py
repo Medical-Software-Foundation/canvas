@@ -234,3 +234,77 @@ def test_missing_location_account_raises(mocker: Any) -> None:
     handler = SendVantaOrder(event=event, secrets=secrets)
     with pytest.raises(KeyError, match="No LKCareEvolve account number configured"):
         handler.compute()
+
+
+# ---------------------------------------------------------------------------
+# AOE
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_aoe_answers_parsed_from_command_and_sent(mocker: Any) -> None:
+    """When the Command carries AOE answers, they reach the posted payload."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_post = mocker.patch(
+        "vanta_lab_orders.protocols.send_order.post_order",
+        return_value=mock_response,
+    )
+
+    location = _make_location()
+    note = NoteFactory.create(location=location)
+    lab_order = LabOrderFactory.create(
+        note=note,
+        patient=note.patient,
+        ordering_provider=StaffFactory.create(),
+        committer=CanvasUserFactory.create(),
+    )
+    LabTestFactory.create(order=lab_order, ontology_test_code="Derm-ID")
+
+    fake_command = MagicMock()
+    fake_command.data = {"aoes|Derm-ID|DERMSOU": "DRMSWB"}
+    mocker.patch(
+        "vanta_lab_orders.protocols.send_order.Command.objects.get",
+        return_value=fake_command,
+    )
+
+    event = _make_event(lab_order)
+    secrets = _make_secrets()
+
+    handler = SendVantaOrder(event=event, secrets=secrets)
+    handler.compute()
+
+    payload_arg = mock_post.call_args.args[0]
+    obs = payload_arg["ObservationRequest"][0]
+    assert obs["AOE"] == [
+        {"SequenceNumber": "1", "Code": "DERMSOU", "Description": "", "Answer": "DRMSWB"}
+    ]
+
+
+@pytest.mark.django_db
+def test_missing_command_still_sends_without_aoe(mocker: Any) -> None:
+    """If the Command can't be loaded, the order is still sent with empty AOE."""
+    from canvas_sdk.v1.data import Command
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_post = mocker.patch(
+        "vanta_lab_orders.protocols.send_order.post_order",
+        return_value=mock_response,
+    )
+    mocker.patch(
+        "vanta_lab_orders.protocols.send_order.Command.objects.get",
+        side_effect=Command.DoesNotExist,
+    )
+
+    lab_order = _make_lab_order()
+    event = _make_event(lab_order)
+    secrets = _make_secrets()
+
+    handler = SendVantaOrder(event=event, secrets=secrets)
+    effects = handler.compute()
+
+    assert effects == []
+    mock_post.assert_called_once()
+    payload_arg = mock_post.call_args.args[0]
+    assert payload_arg["ObservationRequest"][0]["AOE"] == []

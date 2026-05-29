@@ -34,10 +34,10 @@ loud (`ValueError`).
 
 | Secret | Purpose |
 |---|---|
-| `LKCAREEVOLVE_BASE_URL` | LKCareEvolve ingestion base URL. Must use `https://` — http URLs are rejected to prevent the bearer token from leaking in cleartext. |
-| `LKCAREEVOLVE_API_KEY` | Bearer token issued by ELLKAY for this account. |
+| `LKCAREEVOLVE_BASE_URL` | Full LKCareEvolve ingestion URL (posted to as-is). Must use `https://` — http URLs are rejected to prevent the auth credential from leaking in cleartext. |
+| `LKCAREEVOLVE_API_KEY` | Base64-encoded Basic auth credential issued by ELLKAY for this account. |
 | `VANTA_LAB_PARTNER_NAME` | Exact `LabPartner.name` string the plugin filters on. Orders whose `lab_partner.text` doesn't match are skipped. |
-| `LOCATION_TO_ACCOUNT_MAP_JSON` | JSON object mapping `PracticeLocation.id` (UUID) to LKCareEvolve account number string. Example: `{"d1eacdb5-9ead-47ce-855a-c8c6ef3932a6": "ACCT-001"}`. A signed order whose location isn't in this map raises `KeyError`. |
+| `LOCATION_TO_ACCOUNT_MAP_JSON` | JSON object mapping `PracticeLocation.id` (UUID) to LKCareEvolve account number string. Example: `{"<practice_location_uuid>": "ACCT-001"}`. A signed order whose location isn't in this map raises `KeyError`. |
 | `SENDING_FACILITY_NAME` | Friendly facility name embedded in `MessageHeader.SendingFacilityName`. |
 
 ## Components
@@ -71,3 +71,16 @@ A zero-dependency mock LKCareEvolve server lives under `dev/mock_lkcareevolve/`
 in the repo (not packaged into the plugin tarball). See its README for
 the localhost + tunnel workflow used during UAT against a Canvas
 sandbox instance.
+
+### Secrets for local dev
+
+Passing five `--secret` flags on every `canvas install` gets old fast.
+Instead:
+
+1. Copy [secrets_local.example.py](secrets_local.example.py) to `secrets_local.py`.
+2. Fill in real dev values.
+3. Run `canvas install vanta_lab_orders` with no `--secret` flags.
+
+`secrets_local.py` is gitignored. [settings.py](settings.py) checks
+`self.secrets` first and only falls back to `secrets_local.py` when a
+value isn't supplied by Canvas, so production behavior is unchanged.

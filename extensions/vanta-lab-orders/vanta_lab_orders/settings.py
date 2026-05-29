@@ -1,12 +1,36 @@
 """Secret accessors and configuration helpers for vanta_lab_orders.
 
-All accessors raise loudly on missing or malformed values — no defaults.
+Lookup order for every secret:
+    1. The `secrets` dict Canvas passes into handlers (production).
+    2. The local fallback module `secrets_local.py` (local dev only —
+       gitignored). Copy `secrets_local.example.py` to `secrets_local.py`
+       and fill in values to avoid passing --secret flags on every
+       `canvas install`.
+
+All accessors still raise loudly when neither source provides a value.
 """
 
 from __future__ import annotations
 
 import json
 from typing import Any
+
+# Optional local-dev fallback module (gitignored; absent in deployed plugins).
+# Imported statically: the Canvas plugin sandbox disallows `importlib`. The
+# sandbox raises ImportError both when the module is missing and when it is
+# not allowed, so this try/except is safe in every environment.
+try:
+    from . import secrets_local as _secrets_local  # type: ignore[attr-defined]
+except ImportError:
+    _secrets_local = None
+
+
+def _read_secret(secrets: dict[str, Any], key: str) -> str:
+    """Return the secret from Canvas first, then the local dev fallback."""
+    value = secrets.get(key)
+    if not value and _secrets_local is not None:
+        value = getattr(_secrets_local, key, "")
+    return value or ""
 
 
 def lkcareevolve_base_url(secrets: dict[str, Any]) -> str:
@@ -15,7 +39,7 @@ def lkcareevolve_base_url(secrets: dict[str, Any]) -> str:
     Refuses to return a non-https URL so a misconfigured secret can't cause
     the bearer token to traverse the network in cleartext.
     """
-    value: str = secrets["LKCAREEVOLVE_BASE_URL"]
+    value = _read_secret(secrets, "LKCAREEVOLVE_BASE_URL")
     if not value:
         raise ValueError("Secret LKCAREEVOLVE_BASE_URL is empty")
     if not value.startswith("https://"):
@@ -28,7 +52,7 @@ def lkcareevolve_base_url(secrets: dict[str, Any]) -> str:
 
 def lkcareevolve_api_key(secrets: dict[str, Any]) -> str:
     """Return the bearer token issued by ELLKAY."""
-    value: str = secrets["LKCAREEVOLVE_API_KEY"]
+    value = _read_secret(secrets, "LKCAREEVOLVE_API_KEY")
     if not value:
         raise ValueError("Secret LKCAREEVOLVE_API_KEY is empty")
     return value
@@ -36,7 +60,7 @@ def lkcareevolve_api_key(secrets: dict[str, Any]) -> str:
 
 def vanta_lab_partner_name(secrets: dict[str, Any]) -> str:
     """Return the exact LabPartner.name string for the Vanta/Vanta partner."""
-    value: str = secrets["VANTA_LAB_PARTNER_NAME"]
+    value = _read_secret(secrets, "VANTA_LAB_PARTNER_NAME")
     if not value:
         raise ValueError("Secret VANTA_LAB_PARTNER_NAME is empty")
     return value
@@ -48,7 +72,7 @@ def location_to_account_map(secrets: dict[str, Any]) -> dict[str, str]:
     Expects a JSON string like: {"<location_uuid>": "<account_number>"}
     Raises ValueError on parse failure or empty map.
     """
-    raw: str = secrets["LOCATION_TO_ACCOUNT_MAP_JSON"]
+    raw = _read_secret(secrets, "LOCATION_TO_ACCOUNT_MAP_JSON")
     if not raw:
         raise ValueError("Secret LOCATION_TO_ACCOUNT_MAP_JSON is empty")
     try:
@@ -64,7 +88,7 @@ def location_to_account_map(secrets: dict[str, Any]) -> dict[str, str]:
 
 def sending_facility_name(secrets: dict[str, Any]) -> str:
     """Return the friendly facility name for MessageHeader.SendingFacilityName."""
-    value: str = secrets["SENDING_FACILITY_NAME"]
+    value = _read_secret(secrets, "SENDING_FACILITY_NAME")
     if not value:
         raise ValueError("Secret SENDING_FACILITY_NAME is empty")
     return value

@@ -516,8 +516,14 @@ def _build_diagnoses(lab_order: LabOrder) -> list[dict[str, str]]:
 def _build_observation_request(
     lab_order: LabOrder,
     diagnoses: list[dict[str, str]],
+    aoe_answers: dict[str, list[tuple[str, str]]],
 ) -> list[dict[str, Any]]:
-    """Build one ObservationRequest entry per LabTest on the order."""
+    """Build one ObservationRequest entry per LabTest on the order.
+
+    AOE answers (keyed by test ontology code) are attached to the matching
+    ObservationRequest. Description is left blank per the AOE design decision;
+    only SequenceNumber, Code, and Answer carry data.
+    """
     placer = str(lab_order.id)
     note = lab_order.note
     note_id = _str(note.id) if note is not None else ""
@@ -574,7 +580,18 @@ def _build_observation_request(
                     {"Name": "CanvasOrderId", "Value": placer},
                     {"Name": "CanvasNoteId", "Value": note_id},
                 ],
-                "AOE": [],
+                "AOE": [
+                    {
+                        "SequenceNumber": str(i),
+                        "Code": qcode,
+                        "Description": "",
+                        "Answer": answer,
+                    }
+                    for i, (qcode, answer) in enumerate(
+                        aoe_answers.get(_str(test.ontology_test_code), []),
+                        start=1,
+                    )
+                ],
             }
         )
     return observations
@@ -583,6 +600,7 @@ def _build_observation_request(
 def build_order_payload(
     lab_order: LabOrder,
     secrets: dict[str, Any],
+    aoe_answers: dict[str, list[tuple[str, str]]] | None = None,
 ) -> dict[str, Any]:
     """Build the complete ELLKAY Orders JSON v2.2 envelope for a new order.
 
@@ -590,6 +608,8 @@ def build_order_payload(
         lab_order: Fully loaded LabOrder instance (note, patient, tests,
                    reasons, ordering_provider pre-fetched is optimal but not required).
         secrets: The plugin secrets dict (see vanta_lab_orders.settings).
+        aoe_answers: Optional {test_ontology_code: [(question_code, answer)]}
+            from vanta_lab_orders.aoe.parse_aoe_answers. Defaults to None.
 
     Returns:
         A dict ready to be JSON-serialised and POSTed to LKCareEvolve.
@@ -622,7 +642,9 @@ def build_order_payload(
     facility_name = sending_facility_name(secrets)
     placer = str(lab_order.id)
     diagnoses = _build_diagnoses(lab_order)
-    observation_request = _build_observation_request(lab_order, diagnoses)
+    observation_request = _build_observation_request(
+        lab_order, diagnoses, aoe_answers or {}
+    )
 
     return {
         "MessageHeader": {
@@ -641,9 +663,9 @@ def build_order_payload(
             "LocationName": location_name,
             "OrderingProvider": _build_ordering_provider(lab_order),
             "ReferringProvider": _empty_provider_block(),
-            "Patient": _build_patient(lab_order),
-            "Guarantor": _build_guarantor(lab_order),
-            "Insurances": _build_insurances(lab_order),
-            "ObservationRequest": observation_request,
-        }
+        },
+        "Patient": _build_patient(lab_order),
+        "Guarantor": _build_guarantor(lab_order),
+        "Insurances": _build_insurances(lab_order),
+        "ObservationRequest": observation_request,
     }

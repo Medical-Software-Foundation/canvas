@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.19",
+    "plugin_version": "0.0.21",
     "name": "vanta_lab_orders",
     "description": "Send signed Vanta Diagnostics lab orders from Canvas to LKCareEvolve (ELLKAY) via Orders JSON v2.2. Pattern reusable for other ELLKAY-fronted labs.",
     "components": {
