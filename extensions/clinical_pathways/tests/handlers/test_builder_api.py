@@ -13,10 +13,6 @@ from clinical_pathways.handlers import builder_api as builder_mod
 from clinical_pathways.handlers.builder_api import (
     BuilderAPI,
     _empty_definition,
-    _new_recommendation_id,
-    _new_rule_id,
-    _new_step_id,
-    _now_iso,
     _parse_int,
     _serialize_pathway_full,
     _serialize_pathway_summary,
@@ -47,19 +43,6 @@ class TestModuleHelpers:
     def test_parse_int_garbage(self) -> None:
         assert _parse_int("xyz") is None
         assert _parse_int(object()) is None
-
-    def test_now_iso_returns_string_with_t_separator(self) -> None:
-        value = _now_iso()
-        assert "T" in value and value.endswith("+00:00")
-
-    def test_new_step_id_prefix(self) -> None:
-        assert _new_step_id().startswith("s_")
-
-    def test_new_rule_id_prefix(self) -> None:
-        assert _new_rule_id().startswith("r_")
-
-    def test_new_recommendation_id_prefix(self) -> None:
-        assert _new_recommendation_id().startswith("rec_")
 
     def test_empty_definition_shape(self) -> None:
         d = _empty_definition()

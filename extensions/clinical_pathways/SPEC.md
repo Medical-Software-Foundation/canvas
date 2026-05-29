@@ -3,12 +3,9 @@
 Version: 0.4.7
 Status: Implemented — in UAT
 
-This spec captures the **v0.4** implementation. The user-facing UI of the
-builder is informed by the external design brief at
-`/Users/sr/src/pathway-builder-ui-design.md`; this document captures only
-the implementation choices for *this* plugin (data model, handler topology,
-runtime semantics, file layout). When the two disagree, the design brief is
-authoritative for UI direction and this spec is authoritative for code shape.
+This spec captures the **v0.4** implementation: the implementation choices
+for this plugin (data model, handler topology, runtime semantics, file
+layout).
 
 The companion plugin `imci_questionnaires` (a separate plugin at
 `extensions/imci_questionnaires/`, on branch `add-imci-questionnaires`)

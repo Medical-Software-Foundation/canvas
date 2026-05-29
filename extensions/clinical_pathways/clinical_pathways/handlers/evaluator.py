@@ -278,7 +278,6 @@ def _recommendation_command(
         "severity": resolved.get("severity", ""),
         "severity_label": _severity_label(spec, resolved.get("severity", "")),
         "body": resolved.get("body", ""),
-        "recommended_action": resolved.get("recommended_action", ""),
     }
     html = render_to_string("templates/pathway_classification.html", template_context)
     print_html = render_to_string(

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import uuid as _uuid_lib
 from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
@@ -24,22 +22,6 @@ def _parse_int(value: Any) -> int | None:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
         return None
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _new_step_id() -> str:
-    return "s_" + _uuid_lib.uuid4().hex[:10]
-
-
-def _new_rule_id() -> str:
-    return "r_" + _uuid_lib.uuid4().hex[:10]
-
-
-def _new_recommendation_id() -> str:
-    return "rec_" + _uuid_lib.uuid4().hex[:10]
 
 
 def _serialize_pathway_summary(pw: Pathway) -> dict[str, Any]:
@@ -88,7 +70,7 @@ def _empty_definition() -> dict[str, Any]:
         "recommendations": [
           { "recommendation_id": "rec_...", "name": "...",
             "command_key": "pathway_classification",
-            "params": {title, severity, body, recommended_action} }
+            "params": {title, severity, body} }
         ]
       }
     """

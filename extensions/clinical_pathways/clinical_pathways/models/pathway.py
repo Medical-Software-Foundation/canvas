@@ -9,15 +9,17 @@ from django.db.models import (
 
 
 class Pathway(CustomModel):
-    """A branching clinical pathway stored as a single JSON document.
+    """A clinical pathway stored as a single JSON document.
 
-    The `definition` field carries the pathway tree (root QuestionnaireNode,
-    branches with nested AND/OR/NONE conditions, terminal CustomCommand
-    leaves). See `pathway-builder-ui-design.md` for the shape.
+    The `definition` field carries the v3 schema: a flat `steps[]` list where
+    each step references a (questionnaire, question) pair and carries its own
+    `rules[]` (each with per-condition `and`/`or` connectors) plus an
+    `otherwise` target, alongside a `recommendations[]` list of terminal
+    custom commands. See SPEC.md for the full JSON shape.
 
-    Legacy v0.1 columns (description, recommendation, is_active) remain in
-    the table because the SDK does not permit column drops; they are not
-    written by v0.2 code.
+    The `recommendation` column is a vestigial v0.1 field that remains in the
+    table because the SDK does not permit column drops; it is never read or
+    written by current code.
     """
 
     title = TextField()
