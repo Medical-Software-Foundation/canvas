@@ -427,7 +427,7 @@
     if (includeNoneOption) {
       const noneOpt = document.createElement('option');
       noneOpt.value = '';
-      noneOpt.textContent = '— end of pathway —';
+      noneOpt.textContent = 'Do nothing';
       sel.appendChild(noneOpt);
     } else {
       const placeholder = document.createElement('option');
@@ -983,9 +983,14 @@
       const evt = field.type === 'select' ? 'change' : 'input';
       input.addEventListener(evt, (ev) => {
         rec.params[field.key] = ev.target.value;
-        // Title doubles as the rail label, so keep rec.name in sync.
-        if (field.key === 'title') rec.name = ev.target.value;
         savePathway();
+        // Title doubles as the rail label and the option text in every step's
+        // Then/Otherwise target dropdown, so keep rec.name in sync and refresh
+        // both surfaces immediately rather than leaving the stale default.
+        if (field.key === 'title') {
+          rec.name = ev.target.value;
+          renderSteps();
+        }
         renderRecommendationsList();
       });
       lbl.appendChild(input);
