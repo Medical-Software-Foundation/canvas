@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pathway Builder</title>
+  <link rel="stylesheet" href="{{ api_base }}/styles.css?v={{ cache_bust }}" />
+</head>
+<body data-api-base="{{ api_base }}">
+  <header class="topbar">
+    <h1>Pathway Builder</h1>
+    <div class="topbar-right">
+      <span id="save-status" class="save-status" role="status" aria-live="polite"></span>
+      <button id="new-pathway-btn" class="primary">+ New pathway</button>
+    </div>
+  </header>
+
+  <main id="app">
+    <aside id="pathway-list" class="pane">
+      <h2>Pathways</h2>
+      <ul id="pathway-list-items" class="list"></ul>
+    </aside>
+
+    <section id="pathway-detail" class="pane wide">
+      <div id="empty-state" class="empty">
+        Pick a pathway from the list, or create a new one to begin.
+      </div>
+
+      <div id="pathway-editor" class="hidden">
+        <header class="editor-header">
+          <div class="header-fields">
+            <label class="block">
+              Pathway name
+              <input type="text" id="pathway-title" />
+            </label>
+            <label class="block">
+              Description (optional)
+              <textarea id="pathway-description" rows="2"></textarea>
+            </label>
+          </div>
+          <div class="header-actions">
+            <span id="status-pill" class="status-pill"></span>
+            <button type="button" id="publish-btn" class="primary">Publish</button>
+            <button type="button" id="unpublish-btn" class="secondary hidden">Unpublish</button>
+            <button type="button" id="delete-pathway-btn" class="danger">Delete</button>
+          </div>
+        </header>
+
+        <section id="steps-host" class="steps-host"></section>
+
+        <section id="validation-issues" class="validation hidden">
+          <h3>Validation</h3>
+          <ul id="validation-list"></ul>
+        </section>
+      </div>
+    </section>
+
+    <aside id="right-rail" class="pane right-rail">
+      <section id="questionnaires-section">
+        <div class="rail-header">
+          <h2>Questionnaires</h2>
+        </div>
+        <p class="hint">Load questionnaires, then add their questions as steps in the center.</p>
+        <div class="add-questionnaire-row">
+          <select id="add-questionnaire-select"></select>
+          <button type="button" id="add-questionnaire-btn" class="secondary small">Load</button>
+        </div>
+        <div id="loaded-questionnaires" class="loaded-questionnaires"></div>
+      </section>
+
+      <section id="recommendations-section">
+        <div class="rail-header">
+          <h2>Recommendations</h2>
+          <button type="button" id="add-recommendation-btn" class="ghost small">+ Add</button>
+        </div>
+        <p class="hint">Define once, point to from any rule.</p>
+        <ul id="recommendations-list" class="rail-list"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <div id="recommendation-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Edit recommendation">
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel">
+      <header class="modal-header">
+        <h3>Edit recommendation</h3>
+        <button type="button" id="close-recommendation-modal" class="ghost small">×</button>
+      </header>
+      <div id="recommendation-form" class="modal-body"></div>
+      <footer class="modal-footer">
+        <button type="button" id="delete-recommendation-btn" class="danger small">Delete recommendation</button>
+        <button type="button" id="save-recommendation-btn" class="primary">Done</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="{{ api_base }}/main.js?v={{ cache_bust }}"></script>
+</body>
+</html>

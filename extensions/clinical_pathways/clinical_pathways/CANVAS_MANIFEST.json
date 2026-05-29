@@ -1,0 +1,58 @@
+{
+    "sdk_version": "0.139.0",
+    "plugin_version": "0.4.10",
+    "name": "clinical_pathways",
+    "description": "Author and run branching clinical pathways over existing Canvas questionnaires. Pathways auto-insert questionnaires into the note as the provider commits each step, and terminate in a custom-command classification.",
+    "custom_data": {
+        "namespace": "canvas__clinical_pathways",
+        "access": "read_write"
+    },
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "clinical_pathways.applications.builder_app:PathwayBuilderApp",
+                "name": "Pathway Builder",
+                "description": "Author and publish branching clinical pathways.",
+                "scope": "provider_menu_item",
+                "icon": "assets/icon.png",
+                "menu_position": "top"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "clinical_pathways.handlers.builder_api:BuilderAPI",
+                "description": "Builder SPA + JSON-document CRUD + questionnaire catalog."
+            },
+            {
+                "class": "clinical_pathways.handlers.picker_api:PickerAPI",
+                "description": "In-note picker modal + start-pathway endpoint."
+            },
+            {
+                "class": "clinical_pathways.handlers.runner_button:PathwayRunnerButton",
+                "description": "Note-header button that launches the picker."
+            },
+            {
+                "class": "clinical_pathways.handlers.evaluator:PathwayEvaluator",
+                "description": "Advances active pathway runs each time an interview is committed."
+            }
+        ],
+        "commands": [
+            {
+                "name": "PathwayClassification",
+                "label": "Pathway Classification",
+                "schema_key": "pathwayClassification",
+                "section": "plan"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

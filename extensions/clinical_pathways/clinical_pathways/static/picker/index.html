@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Pick a clinical pathway</title>
+  <link rel="stylesheet" href="{{ api_base }}/styles.css?v={{ cache_bust }}" />
+</head>
+<body data-api-base="{{ api_base }}">
+  <header class="topbar">
+    <h1>Pick a clinical pathway</h1>
+  </header>
+
+  <main id="app">
+    <input id="search-input" type="text" placeholder="Search published pathways by title…" autofocus />
+    <ul id="results" class="list"></ul>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="{{ api_base }}/main.js?v={{ cache_bust }}"></script>
+</body>
+</html>

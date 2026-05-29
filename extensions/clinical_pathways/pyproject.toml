@@ -1,0 +1,29 @@
+[project]
+description = "Build structured branching questionnaires and run them against a patient note, originating a Q&A trail and recommendation as custom commands."
+license = "MIT"
+name = "clinical_pathways"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["clinical_pathways"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.1.0",
+]
