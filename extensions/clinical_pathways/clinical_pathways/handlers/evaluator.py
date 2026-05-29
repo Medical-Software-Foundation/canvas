@@ -349,12 +349,15 @@ class PathwayEvaluator(BaseHandler):
         new_captured = _collect_responses_for_interview(interview)
         interview_questionnaire_ids = {str(q.id) for q in interview.questionnaires.all()}
 
-        # Coordinate concurrent workers handling the same event: build a
-        # token unique to this interview-update (interview_id + modified
-        # timestamp), then atomically claim it via UPDATE-where on each run.
-        # Only the worker whose UPDATE changes a row proceeds; the others
-        # skip. Re-edits of the same interview produce a new token via the
-        # updated modified timestamp and re-trigger processing.
+        # A single PathwayRun is shared by every interview on the note, so
+        # distinct INTERVIEW_UPDATED events (one per questionnaire) can be
+        # processed concurrently by separate gRPC processes that all load and
+        # mutate the same run row. Serialize those writers: build a token
+        # unique to this interview-update (interview_id + modified timestamp),
+        # then atomically claim the run via an UPDATE guarded on its current
+        # token. Only the writer whose UPDATE changes a row proceeds; a loser
+        # would otherwise clobber the winner's advance with a stale
+        # read-modify-write (current_step_id, inserted_questionnaires, ...).
         event_token = str(interview_id)
         try:
             if interview.modified:
