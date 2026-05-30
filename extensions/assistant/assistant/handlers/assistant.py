@@ -2,6 +2,8 @@ import json
 from http import HTTPStatus
 from typing import Any
 
+import requests
+
 from assistant.chat_tools import (
     CHAT_TOOL_REGISTRY,
     dispatch_chat_tool,
@@ -231,11 +233,14 @@ class Assistant(StaffSessionAuthMixin, SimpleAPI):
     def _resolve_staff_id(self, body: dict) -> str | None:
         """Resolve the requesting staff member's id.
 
-        Prefers an explicit `staff_id` from the request body (useful for
-        out-of-session testing via curl), and falls back to the
-        `canvas-logged-in-user-id` header set by Canvas for in-session calls.
+        In production (`AUTH_ENABLED`) the identity comes solely from the
+        authenticated session via the `canvas-logged-in-user-id` header. A
+        client-supplied `staff_id` must NOT override it — otherwise any
+        authenticated caller could impersonate another staff member for
+        mutation authorship and "my panel" reads. The body `staff_id` is
+        honored only when auth is disabled, for out-of-session curl testing.
         """
-        if explicit := body.get("staff_id"):
+        if not AUTH_ENABLED and (explicit := body.get("staff_id")):
             return str(explicit)
         return self.request.headers.get("canvas-logged-in-user-id")
 
@@ -286,7 +291,14 @@ class Assistant(StaffSessionAuthMixin, SimpleAPI):
     # ---- Anthropic HTTP + tool-use loop ----------------------------------
 
     def _call_anthropic(self, messages: list[dict]) -> dict:
-        """One POST to /v1/messages. Returns the parsed JSON or raises on non-200."""
+        """One POST to /v1/messages. Returns the parsed JSON.
+
+        This is the single boundary for Anthropic call failures: network /
+        timeout errors, non-200 responses, and malformed JSON bodies are all
+        converted to `RuntimeError` so the caller can catch one type. Any
+        other exception (a programming bug) propagates untouched so it
+        reaches Sentry.
+        """
         http = _AnthropicHttp(base_url=ANTHROPIC_API_URL)
         headers = {
             "Content-Type": "application/json",
@@ -309,10 +321,16 @@ class Assistant(StaffSessionAuthMixin, SimpleAPI):
             "tool_choice": {"type": "auto"},
             "messages": messages,
         }
-        resp = http.post("/v1/messages", headers=headers, data=json.dumps(body))
+        try:
+            resp = http.post("/v1/messages", headers=headers, data=json.dumps(body))
+        except requests.RequestException as exc:
+            raise RuntimeError(f"anthropic request failed: {exc}") from exc
         if resp.status_code != HTTPStatus.OK:
             raise RuntimeError(f"anthropic {resp.status_code}: {resp.text[:500]}")
-        return json.loads(resp.text)
+        try:
+            return json.loads(resp.text)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"anthropic returned malformed JSON: {exc}") from exc
 
     @staticmethod
     def _summarize_result(result: dict) -> dict:
@@ -691,7 +709,9 @@ class Assistant(StaffSessionAuthMixin, SimpleAPI):
                 result = self._run_chat_loop(
                     seed_messages, staff_id=staff_id, polling=polling
                 )
-        except Exception as exc:  # noqa: BLE001
+        except RuntimeError as exc:
+            # Only the Anthropic call raises RuntimeError (see _call_anthropic).
+            # Any other exception is a bug and propagates to Sentry.
             return [
                 JSONResponse(
                     {"error": "chat loop failed", "detail": f"{exc.__class__.__name__}: {exc}"},

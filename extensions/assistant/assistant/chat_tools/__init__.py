@@ -122,9 +122,15 @@ def dispatch_chat_tool(instance: Any, name: str, arguments: dict | None) -> dict
     """Look up a read-only tool, validate args, and run the handler.
 
     Returns the handler's JSON-serializable dict on success, an `{"error": ...}`
-    dict on validation/runtime failure, or `None` if no read-only tool matches
-    `name` (so the caller can surface "unknown tool"). Mutating tools are
-    skipped — their execution goes through `dispatch_mutation`.
+    dict on invalid arguments, or `None` if no read-only tool matches `name`
+    (so the caller can surface "unknown tool"). Mutating tools are skipped —
+    their execution goes through `dispatch_mutation`.
+
+    Only `ValidationError` (bad arguments) is caught here. A tool's own
+    expected lookup failures (e.g. `Patient.DoesNotExist`) are handled in the
+    tool body and returned as `{"error": ...}`; anything else is an unexpected
+    bug and propagates so it reaches Sentry rather than being silently fed
+    back to Claude.
     """
     for tool in CHAT_TOOL_REGISTRY:
         if tool["name"] == name and not tool["mutates"]:
@@ -132,10 +138,7 @@ def dispatch_chat_tool(instance: Any, name: str, arguments: dict | None) -> dict
                 args = tool["args_model"].model_validate(arguments or {})
             except ValidationError as exc:
                 return {"error": f"invalid arguments: {exc}"}
-            try:
-                return tool["handler"](instance, args)
-            except Exception as exc:  # noqa: BLE001 — tool errors must not crash the loop
-                return {"error": f"{exc.__class__.__name__}: {exc}"}
+            return tool["handler"](instance, args)
     return None
 
 
@@ -144,9 +147,11 @@ def dispatch_mutation(
 ) -> tuple[dict, list[Effect]]:
     """Validate args and execute a registered mutation.
 
-    Returns `(result_dict, effects)`. On unknown tool name, validation error,
-    or handler exception, returns `({"error": ...}, [])` so the chat loop can
-    surface the error to Claude without crashing.
+    Returns `(result_dict, effects)`. On unknown tool name or invalid
+    arguments, returns `({"error": ...}, [])`. As with `dispatch_chat_tool`,
+    only `ValidationError` is caught here; a mutation's own expected failures
+    (e.g. `Patient.DoesNotExist`) are handled in the tool body, and any
+    unexpected exception propagates so it reaches Sentry.
     """
     for tool in CHAT_TOOL_REGISTRY:
         if tool["name"] == name and tool["mutates"]:
@@ -154,8 +159,5 @@ def dispatch_mutation(
                 args = tool["args_model"].model_validate(arguments or {})
             except ValidationError as exc:
                 return {"error": f"invalid arguments: {exc}"}, []
-            try:
-                return tool["handler"](instance, args, staff_id)
-            except Exception as exc:  # noqa: BLE001 — mutation errors must not crash the loop
-                return {"error": f"{exc.__class__.__name__}: {exc}"}, []
+            return tool["handler"](instance, args, staff_id)
     return {"error": f"unknown mutation: {name}"}, []

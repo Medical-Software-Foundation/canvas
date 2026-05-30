@@ -32,10 +32,13 @@ class FindMedicationsArgs(BaseModel):
 
 def find_medications(instance: Any, args: FindMedicationsArgs) -> dict:
     """Handler for the `find_medications` chat tool."""
-    # MedicationStatement has no `.committed()` queryset method; exclude
-    # clinician-retracted statements via the audit field directly.
+    # MedicationStatement uses Django's default manager (no `.committed()`
+    # and no automatic `deleted=False`), so exclude both soft-deleted and
+    # clinician-retracted statements explicitly.
     qs = apply_filter_args(
-        MedicationStatement.objects.filter(entered_in_error__isnull=True),
+        MedicationStatement.objects.filter(
+            deleted=False, entered_in_error__isnull=True
+        ),
         args,
         FindMedicationsArgs.LOOKUPS,
     )

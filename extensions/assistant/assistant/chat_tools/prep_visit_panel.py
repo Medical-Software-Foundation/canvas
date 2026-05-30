@@ -126,7 +126,10 @@ def prep_visit_panel(instance: Any, args: PrepVisitPanelArgs) -> dict:
         meds: list[dict] = []
         med_qs = (
             MedicationStatement.objects.filter(
-                patient__id=pid, end_date__isnull=True, entered_in_error__isnull=True
+                patient__id=pid,
+                end_date__isnull=True,
+                deleted=False,
+                entered_in_error__isnull=True,
             )
             .select_related("medication")
             .prefetch_related("medication__codings")
