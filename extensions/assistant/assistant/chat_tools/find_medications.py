@@ -32,8 +32,10 @@ class FindMedicationsArgs(BaseModel):
 
 def find_medications(instance: Any, args: FindMedicationsArgs) -> dict:
     """Handler for the `find_medications` chat tool."""
+    # MedicationStatement has no `.committed()` queryset method; exclude
+    # clinician-retracted statements via the audit field directly.
     qs = apply_filter_args(
-        MedicationStatement.objects.all(),
+        MedicationStatement.objects.filter(entered_in_error__isnull=True),
         args,
         FindMedicationsArgs.LOOKUPS,
     )

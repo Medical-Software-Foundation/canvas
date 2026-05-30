@@ -46,7 +46,9 @@ class FindLabReportsArgs(BaseModel):
 def find_lab_reports(instance: Any, args: FindLabReportsArgs) -> dict:
     """Handler for the `find_lab_reports` chat tool."""
     qs = apply_filter_args(
-        LabValue.objects.filter(report__junked=False),
+        LabValue.objects.filter(
+            report__junked=False, report__entered_in_error__isnull=True
+        ),
         args,
         FindLabReportsArgs.LOOKUPS,
     )

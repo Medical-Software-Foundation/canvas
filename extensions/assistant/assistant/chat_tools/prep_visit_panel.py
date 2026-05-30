@@ -107,8 +107,8 @@ def prep_visit_panel(instance: Any, args: PrepVisitPanelArgs) -> dict:
 
         conditions: list[dict] = []
         for cond in (
-            Condition.objects.filter(
-                patient__id=pid, deleted=False, resolution_date__isnull=True
+            Condition.objects.committed().filter(
+                patient__id=pid, resolution_date__isnull=True
             )
             .prefetch_related("codings")
             .order_by("-onset_date")[:per_patient_limit]
@@ -125,7 +125,9 @@ def prep_visit_panel(instance: Any, args: PrepVisitPanelArgs) -> dict:
 
         meds: list[dict] = []
         med_qs = (
-            MedicationStatement.objects.filter(patient__id=pid, end_date__isnull=True)
+            MedicationStatement.objects.filter(
+                patient__id=pid, end_date__isnull=True, entered_in_error__isnull=True
+            )
             .select_related("medication")
             .prefetch_related("medication__codings")
             .order_by("-start_date")[:per_patient_limit]
@@ -148,6 +150,7 @@ def prep_visit_panel(instance: Any, args: PrepVisitPanelArgs) -> dict:
             LabValue.objects.filter(
                 report__patient__id=pid,
                 report__junked=False,
+                report__entered_in_error__isnull=True,
                 report__original_date__date__gte=lab_floor,
             )
             .exclude(abnormal_flag="")

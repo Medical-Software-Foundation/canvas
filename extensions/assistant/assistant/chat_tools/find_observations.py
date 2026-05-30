@@ -38,7 +38,7 @@ class FindObservationsArgs(BaseModel):
 def find_observations(instance: Any, args: FindObservationsArgs) -> dict:
     """Handler for the `find_observations` chat tool."""
     qs = apply_filter_args(
-        Observation.objects.all(),
+        Observation.objects.committed(),
         args,
         FindObservationsArgs.LOOKUPS,
     )

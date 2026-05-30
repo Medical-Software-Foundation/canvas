@@ -33,7 +33,7 @@ class FindConditionsArgs(BaseModel):
 def find_conditions(instance: Any, args: FindConditionsArgs) -> dict:
     """Handler for the `find_conditions` chat tool."""
     qs = apply_filter_args(
-        Condition.objects.filter(deleted=False),
+        Condition.objects.committed(),
         args,
         FindConditionsArgs.LOOKUPS,
     )

@@ -33,7 +33,7 @@ class FindAllergiesArgs(BaseModel):
 def find_allergies(instance: Any, args: FindAllergiesArgs) -> dict:
     """Handler for the `find_allergies` chat tool."""
     qs = apply_filter_args(
-        AllergyIntolerance.objects.filter(deleted=False),
+        AllergyIntolerance.objects.committed(),
         args,
         FindAllergiesArgs.LOOKUPS,
     )
