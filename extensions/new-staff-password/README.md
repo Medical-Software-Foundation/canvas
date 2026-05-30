@@ -61,6 +61,10 @@ This plugin has no UI. Its output is the standard Canvas password-activation ema
 staff member - the same "Update Password / Canvas Account" email Canvas sends from the
 `$send-reset-password-email` operation.
 
+<img width="556" height="320" alt="reset-password" src="https://github.com/user-attachments/assets/eb6ee3b7-c94c-40ba-9419-ccc3af53c701" />
+
+
+
 ## Running tests
 
 ```bash
