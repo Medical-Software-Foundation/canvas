@@ -16,12 +16,15 @@ own "Other" bucket. If every medication is coded, the list renders untouched.
 
 ## Problem it solves
 
-Free-text medications break interaction checking, e-prescribing, and reporting.
-Canvas does signal them, but the signal is minimal - a provider has to hover an
-individual entry to see it is free text, which is easy to miss in a long list.
+Free-text medications cannot be sent electronically - a provider often only
+finds out when an e-prescribe attempt errors out mid-workflow. They also break
+interaction checking and reporting. These uncoded entries frequently arrive
+through data migrations from another EMR. Canvas does signal them today: the
+text renders in lighter grey and a hover tooltip notes that the medication
+cannot be electronically prescribed. That signal is easy to miss in a long list.
 This plugin pulls every unstructured medication under its own heading so the gap
-is obvious at a glance, prompting the provider to re-enter the medication with a
-real drug code.
+is obvious at a glance, prompting the provider to stop the entry and re-prescribe
+it with a properly coded medication.
 
 ## Who it's for
 
