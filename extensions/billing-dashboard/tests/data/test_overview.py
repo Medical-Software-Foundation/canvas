@@ -197,9 +197,23 @@ class TestNextMonthAppointmentCount:
     def test_counts_appointments_in_next_month(
         self, mock_appointment: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
-        mock_appointment.objects.filter.return_value.count.return_value = 312
+        mock_appointment.objects.filter.return_value.exclude.return_value.count.return_value = 312
         result = overview.next_month_appointment_count(now=fixed_now)
         assert result == {"value": 312, "source": "real"}
+
+    @patch("billing_dashboard.data.overview.Appointment")
+    def test_excludes_cancelled_and_noshowed(
+        self, mock_appointment: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """Regression: cancelled and no-showed appointments stay in the table
+        with their original start_time and would otherwise be counted as
+        future billable visits, inflating Next Month Projected."""
+        from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
+        mock_appointment.objects.filter.return_value.exclude.return_value.count.return_value = 0
+        overview.next_month_appointment_count(now=fixed_now)
+        excluded_statuses = mock_appointment.objects.filter.return_value.exclude.call_args.kwargs["status__in"]
+        assert AppointmentProgressStatus.CANCELLED in excluded_statuses
+        assert AppointmentProgressStatus.NOSHOWED in excluded_statuses
 
 
 class TestNextMonthProjected:

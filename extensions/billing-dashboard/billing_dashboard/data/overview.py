@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any, Literal, TypedDict
 
 import arrow
-from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 from canvas_sdk.v1.data.claim import Claim
 from django.db.models import Count, Q, Sum
 
@@ -149,8 +149,20 @@ def last_month_trend_pct(now: arrow.Arrow | None = None) -> SummaryEntry:
 
 
 def next_month_appointment_count(now: arrow.Arrow | None = None) -> SummaryEntry:
+    """Count of *billable* appointments in next month.
+
+    Excludes cancelled and no-showed appointments — both remain in the
+    Appointment table with their original ``start_time``, so a bare
+    ``.filter(start_time__range=...)`` would treat them as future revenue and
+    inflate the Next Month Projected card. Same pattern Canvas's own
+    `provider-calendaring` and `scheduling-with-rooms` plugins use.
+    """
     start, end = next_month_range(now)
-    count = Appointment.objects.filter(start_time__range=(start.datetime, end.datetime)).count()
+    count = (
+        Appointment.objects.filter(start_time__range=(start.datetime, end.datetime))
+        .exclude(status__in=(AppointmentProgressStatus.CANCELLED, AppointmentProgressStatus.NOSHOWED))
+        .count()
+    )
     return {"value": count, "source": "real"}
 
 
