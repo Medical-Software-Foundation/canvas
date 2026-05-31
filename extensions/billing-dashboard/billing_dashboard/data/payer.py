@@ -44,7 +44,15 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
         .annotate(
             collected=Sum(
                 "postings__newlineitempayments__amount",
-                filter=Q(postings__entered_in_error__isnull=True),
+                # Filter retractions at BOTH levels — a single payment row can
+                # be retracted (bounced check, misposted ERA line) while its
+                # parent posting stays valid. Matches the canonical financial
+                # SQL pattern (claims_export, cash_reconciliation,
+                # payment_report, revenue_by_*).
+                filter=Q(
+                    postings__entered_in_error__isnull=True,
+                    postings__newlineitempayments__entered_in_error__isnull=True,
+                ),
             ),
             total_claims=Count("id", distinct=True),
             rejected_claims=Count(
