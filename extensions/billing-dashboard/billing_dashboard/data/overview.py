@@ -48,20 +48,7 @@ class SummaryEntry(TypedDict):
 
 _COLLECTED_SUM = Sum(
     "postings__newlineitempayments__amount",
-    # Filter retractions at BOTH levels: the parent posting can be valid while
-    # an individual payment row is retracted (bounced check, misposted ERA
-    # line). Mirrors the canonical financial SQL pattern (e.g.
-    # sample-sql/financial/cash_reconciliation.md) which filters both
-    # ``bp.entered_in_error_id IS NULL AND nlp.entered_in_error_id IS NULL``.
-    # SDK exposure confirmed via canvas_sdk.v1.data.claim_line_item which
-    # uses the identical ``newlineitempayments__entered_in_error__isnull=True``
-    # path; the underlying ``entered_in_error`` ForeignKey is declared on the
-    # TimestampedModel base inherited by both BasePosting and
-    # AbstractLineItemTransaction.
-    filter=Q(
-        postings__entered_in_error__isnull=True,
-        postings__newlineitempayments__entered_in_error__isnull=True,
-    ),
+    filter=Q(postings__entered_in_error__isnull=True),
 )
 
 
