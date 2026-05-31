@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.4",
+    "plugin_version": "0.0.5",
     "name": "unstructured_med_flag",
     "description": "Separates unstructured (free-text, no FDB/RxNorm code) medications under an 'Unstructured Medications' heading below the coded medications in the patient chart medication list so they are obvious to the provider.",
     "components": {

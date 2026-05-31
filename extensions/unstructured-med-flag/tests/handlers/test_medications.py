@@ -74,6 +74,12 @@ def test_compute_returns_empty_for_empty_chart():
     assert handler.compute() == []
 
 
+def test_compute_handles_none_context():
+    # event.context can be None (patient with no medications); must not raise.
+    handler = make_handler(None)
+    assert handler.compute() == []
+
+
 def _groups_by_name(effects):
     """Parse the single PatientChartGroup effect into {group_name: [med ids]}."""
     assert len(effects) == 1

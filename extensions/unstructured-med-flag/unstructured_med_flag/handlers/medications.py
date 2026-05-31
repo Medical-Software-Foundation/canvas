@@ -47,7 +47,9 @@ class Medications(BaseHandler):
     RESPONDS_TO = EventType.Name(EventType.PATIENT_CHART__MEDICATIONS)
 
     def compute(self) -> list[Effect]:
-        coded, unstructured = partition_medications(self.event.context)
+        # event.context can be None for this event (e.g. a patient with no
+        # medications), so guard before iterating.
+        coded, unstructured = partition_medications(self.event.context or [])
 
         # Nothing to flag: leave the medication list rendering untouched.
         if not unstructured:
