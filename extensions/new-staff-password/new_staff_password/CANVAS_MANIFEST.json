@@ -1,0 +1,27 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.2",
+    "name": "new_staff_password",
+    "description": "Sends a Canvas password-reset email when a staff member is activated (created active or reactivated) via the FHIR Practitioner $send-reset-password-email operation.",
+    "components": {
+        "handlers": [
+            {
+                "class": "new_staff_password.handlers.event_handlers:NewStaffPasswordResetHandler",
+                "description": "On STAFF_ACTIVATED, sends the Canvas password-reset email to the activated staff member."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "CANVAS_FHIR_CLIENT_ID", "sensitive": true},
+        {"name": "CANVAS_FHIR_CLIENT_SECRET", "sensitive": true}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
