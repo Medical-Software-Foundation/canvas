@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Assistant</title>
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/marked/16.3.0/lib/marked.umd.min.js"
+  integrity="sha512-V6rGY7jjOEUc7q5Ews8mMlretz1Vn2wLdMW/qgABLWunzsLfluM0FwHuGjGQ1lc8jO5vGpGIGFE+rTzB+63HdA=="
+  crossorigin="anonymous"
+  referrerpolicy="no-referrer"></script>
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"
+  integrity="sha512-78KH17QLT5e55GJqP76vutp1D2iAoy06WcYBXB6iBCsmO6wWzx0Qdg8EDpm8mKXv68BcvHOyeeP4wxAL0twJGQ=="
+  crossorigin="anonymous"
+  referrerpolicy="no-referrer"></script>
+<!-- Chart.js: used to render ```chart``` fenced JSON blocks Claude emits in
+     answers. Category-scale only for now; if you need true time spacing,
+     also load chartjs-adapter-date-fns and switch `scales.x.type` to "time". -->
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"
+  integrity="sha512-Y51n9mtKTVBh3Jbx5pZSJNDDMyY+yGe77DGtBPzRlgsf/YLCh13kSZ3JmfHGzYFCmOndraf0sQgfM654b7dJ3w=="
+  crossorigin="anonymous"
+  referrerpolicy="no-referrer"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1f2937;
+    --muted: #6b7280;
+    --user-bg: #2563eb;
+    --user-fg: #ffffff;
+    --assistant-bg: #f3f4f6;
+    --assistant-fg: #111827;
+    --error: #b91c1c;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    /* Leave room for Canvas's bottom-right chat widget so it doesn't overlap our input. */
+    padding-bottom: 64px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .toolbar {
+    flex: 0 0 auto;
+    padding: 6px 10px 6px 12px;
+    border-bottom: 1px solid var(--border);
+    background: #f9fafb;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .toolbar .patient-info { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+  .toolbar .patient-info .label { font-weight: 500; flex: 0 0 auto; }
+  .toolbar .patient-info .name {
+    color: var(--fg); font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .toolbar .clear-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .toolbar .clear-btn:hover { color: var(--fg); background: var(--bg); }
+  .toolbar .clear-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .toolbar .autospeak-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .toolbar .autospeak-btn:hover { color: var(--fg); background: var(--bg); }
+  .toolbar .autospeak-btn.on { color: var(--user-bg); border-color: var(--user-bg); background: var(--bg); }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 14px auto 0;
+    justify-content: center;
+    max-width: 360px;
+  }
+  .chip {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 5px 12px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--fg);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .chip:hover { background: var(--assistant-bg); }
+  .copy-btn {
+    display: inline-block;
+    margin-top: 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .copy-btn:hover { color: var(--fg); }
+  .copy-btn.copied { color: #059669; border-color: #a7f3d0; }
+  .speak-btn {
+    display: inline-block;
+    margin-top: 6px;
+    margin-left: 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font: inherit;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .speak-btn:hover { color: var(--fg); }
+  .speak-btn.speaking { color: var(--user-bg); border-color: var(--user-bg); }
+  .messages {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .empty {
+    color: var(--muted);
+    text-align: center;
+    margin-top: 32px;
+    padding: 0 20px;
+    line-height: 1.4;
+  }
+  .row {
+    display: flex;
+  }
+  .row.user { justify-content: flex-end; }
+  .row.assistant { justify-content: flex-start; }
+  .bubble {
+    max-width: 90%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    word-wrap: break-word;
+    line-height: 1.45;
+  }
+  .bubble.plain, .bubble .md-fallback {
+    white-space: pre-wrap;
+  }
+  .bubble .md-fallback-warning {
+    display: block;
+    font-size: 11px;
+    color: var(--error);
+    margin-bottom: 6px;
+    font-style: italic;
+  }
+  /* Markdown typography inside assistant bubbles */
+  .bubble .md > *:first-child { margin-top: 0; }
+  .bubble .md > *:last-child { margin-bottom: 0; }
+  .bubble .md p { margin: 6px 0; }
+  .bubble .md h1, .bubble .md h2, .bubble .md h3, .bubble .md h4 {
+    margin: 10px 0 4px; line-height: 1.25;
+  }
+  .bubble .md h1 { font-size: 16px; }
+  .bubble .md h2 { font-size: 15px; }
+  .bubble .md h3, .bubble .md h4 { font-size: 14px; font-weight: 600; }
+  .bubble .md ul, .bubble .md ol { margin: 6px 0; padding-left: 22px; }
+  .bubble .md li { margin: 2px 0; }
+  .bubble .md a { color: var(--user-bg); text-decoration: underline; }
+  .bubble .md code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .bubble .md pre {
+    background: rgba(0, 0, 0, 0.06);
+    padding: 8px 10px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 6px 0;
+  }
+  .bubble .md pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 12px;
+  }
+  .bubble .md blockquote {
+    border-left: 3px solid var(--border);
+    margin: 6px 0;
+    padding-left: 10px;
+    color: var(--muted);
+  }
+  .bubble .md table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .bubble .md th, .bubble .md td {
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    text-align: left;
+  }
+  .bubble .md th {
+    background: rgba(0, 0, 0, 0.04);
+    font-weight: 600;
+  }
+  .bubble .md hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 10px 0;
+  }
+  .bubble .chart-container {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px 10px;
+    margin: 8px 0;
+    height: 260px;
+    position: relative;
+  }
+  .bubble .chart-container .chart-title {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+    text-align: center;
+    color: var(--fg);
+  }
+  .bubble .chart-container .chart-canvas-wrap {
+    position: absolute;
+    inset: 28px 10px 10px;
+  }
+  .bubble pre.chart-error {
+    border-left: 3px solid var(--error);
+  }
+  .bubble .suggested-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0 0;
+  }
+  .bubble .suggested-chips .chip {
+    font-size: 11px;
+    padding: 4px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .bubble .suggested-chips .chip:hover { background: var(--assistant-bg); }
+  /* Deep links into a patient chart. Styled to read as a clickable name,
+     not a URL. The trailing arrow signals "opens the chart" without
+     reading like a destination. */
+  .bubble .md a.patient-link {
+    color: var(--user-bg);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--user-bg);
+    font-weight: 500;
+  }
+  .bubble .md a.patient-link:hover {
+    text-decoration: none;
+    border-bottom-style: solid;
+  }
+  .bubble .md a.patient-link::after {
+    content: " \2197";
+    font-size: 0.85em;
+    opacity: 0.7;
+  }
+  .user .bubble {
+    background: var(--user-bg);
+    color: var(--user-fg);
+    border-bottom-right-radius: 2px;
+  }
+  .assistant .bubble {
+    background: var(--assistant-bg);
+    color: var(--assistant-fg);
+    border-bottom-left-radius: 2px;
+  }
+  .bubble.error {
+    background: #fef2f2;
+    color: var(--error);
+    border: 1px solid #fecaca;
+  }
+  .bubble.pending {
+    background: var(--assistant-bg);
+    color: var(--muted);
+    font-style: italic;
+  }
+  .bubble.mutation {
+    background: #fffbeb;
+    color: var(--fg);
+    border: 1px solid #fde68a;
+  }
+  .mutation .mut-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #92400e;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .mutation .mut-title {
+    font-weight: 600;
+    margin: 2px 0 6px;
+  }
+  .mutation .mut-fields {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 10px;
+    padding-left: 14px;
+  }
+  .mutation .mut-fields li { margin: 2px 0; }
+  .mutation .mut-fields code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--fg);
+  }
+  .mutation .mut-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .mutation .mut-actions button {
+    flex: 0 0 auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .mutation .mut-actions .approve {
+    background: #059669;
+    color: white;
+    border-color: #047857;
+  }
+  .mutation .mut-actions .approve:hover { background: #047857; }
+  .mutation .mut-actions .deny {
+    background: var(--bg);
+    color: var(--error);
+  }
+  .mutation .mut-actions .deny:hover { background: #fef2f2; }
+  .mutation .mut-decided {
+    font-size: 12px;
+    margin-top: 4px;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .trace {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .trace summary {
+    cursor: pointer;
+    user-select: none;
+  }
+  .trace ul {
+    margin: 4px 0 0;
+    padding-left: 16px;
+  }
+  .trace li {
+    margin: 2px 0;
+  }
+  .trace code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+  }
+  .input-row {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .input-row textarea {
+    flex: 1 1 auto;
+    resize: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font: inherit;
+    line-height: 1.4;
+    max-height: 140px;
+    min-height: 36px;
+  }
+  .input-row textarea:focus {
+    outline: none;
+    border-color: var(--user-bg);
+  }
+  .input-row button {
+    flex: 0 0 auto;
+    border: none;
+    background: var(--user-bg);
+    color: var(--user-fg);
+    border-radius: 8px;
+    padding: 0 14px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .input-row button:disabled {
+    background: var(--muted);
+    cursor: not-allowed;
+  }
+  .input-row .mic-btn {
+    background: var(--bg);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 0 10px;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .input-row .mic-btn:hover { color: var(--fg); background: var(--bg); }
+  .input-row .mic-btn.listening {
+    background: #fef2f2;
+    color: var(--error);
+    border-color: var(--error);
+    animation: mic-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(185, 28, 28, 0); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="toolbar">
+    <div class="patient-info">
+      {% if patient_name %}
+        <span class="label">Chatting about:</span>
+        <span class="name">{{ patient_name }}</span>
+      {% elif patient_id %}
+        <span class="label">Chatting about patient:</span>
+        <span class="name">{{ patient_id }}</span>
+      {% else %}
+        <span class="label">Practice-wide</span>
+      {% endif %}
+    </div>
+    <button type="button" id="autospeak-btn" class="autospeak-btn" title="Auto-speak each new reply" aria-pressed="false">Auto speak</button>
+    <button type="button" id="clear-btn" class="clear-btn" title="Clear conversation">Clear</button>
+  </div>
+  <div id="messages" class="messages">
+    <div class="empty" id="empty-state">
+      {% if patient_name %}
+        <p>Ask anything about <strong>{{ patient_name }}</strong> or the practice.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-prompt="what active conditions does this patient have?">Active conditions</button>
+          <button type="button" class="chip" data-prompt="what medications is this patient on?">Medications</button>
+          <button type="button" class="chip" data-prompt="summarize recent appointments for this patient">Recent appointments</button>
+          <button type="button" class="chip" data-prompt="does this patient have any allergies?">Allergies</button>
+        </div>
+      {% else %}
+        <p>Ask anything about the patients in this practice.</p>
+        <div class="chips">
+          <button type="button" class="chip" data-prompt="prep me for tomorrow's visits">Prep tomorrow</button>
+          <button type="button" class="chip" data-prompt="how many active patients do I have?">Patient count</button>
+          <button type="button" class="chip" data-prompt="what appointments do I have today?">My schedule today</button>
+          <button type="button" class="chip" data-prompt="who are the patients named Reagan?">Find patient</button>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  <form class="input-row" id="input-form">
+    <textarea id="input" placeholder="Ask a question…" rows="1" autocomplete="off"></textarea>
+    <button type="button" id="mic-btn" class="mic-btn" title="Dictate" aria-label="Dictate" aria-pressed="false">🎤</button>
+    <button type="submit" id="send">Send</button>
+  </form>
+</div>
+
+<script>
+  const CHAT_URL = "{{ chat_url }}";
+  const PATIENT_ID = "{{ patient_id|escapejs }}";
+  const messagesEl = document.getElementById("messages");
+  const emptyState = document.getElementById("empty-state");
+  const form = document.getElementById("input-form");
+  const input = document.getElementById("input");
+  const sendBtn = document.getElementById("send");
+  const clearBtn = document.getElementById("clear-btn");
+  const autoSpeakBtn = document.getElementById("autospeak-btn");
+  const micBtn = document.getElementById("mic-btn");
+  if (!window.speechSynthesis) autoSpeakBtn.style.display = "none";
+
+  // Speech input. Browser SpeechRecognition routes audio through the
+  // browser vendor's cloud (Chrome → Google, Safari → Apple), so this
+  // ships with the trial caveat that dictated audio is NOT under the
+  // Anthropic BAA. Hidden entirely if the API is unavailable.
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) micBtn.style.display = "none";
+  let recognizing = false;
+  let recognition = null;
+
+  function toggleMic() {
+    if (!SR) return;
+    if (recognizing && recognition) {
+      recognition.stop();
+      return;
+    }
+    recognition = new SR();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    // Track per-session state so onend can decide whether to auto-send.
+    // Reset only on a fresh recognition object so a prior error doesn't
+    // leak into the next click.
+    let gotFinalResult = false;
+    let recognitionFailed = false;
+    recognition.onstart = () => {
+      recognizing = true;
+      micBtn.classList.add("listening");
+      micBtn.setAttribute("aria-pressed", "true");
+    };
+    recognition.onend = () => {
+      recognizing = false;
+      micBtn.classList.remove("listening");
+      micBtn.setAttribute("aria-pressed", "false");
+      // Auto-send if we got a transcript and didn't error.
+      if (gotFinalResult && !recognitionFailed && input.value.trim()) {
+        form.requestSubmit();
+      }
+    };
+    recognition.onerror = (event) => {
+      recognitionFailed = true;
+      recognizing = false;
+      micBtn.classList.remove("listening");
+      micBtn.setAttribute("aria-pressed", "false");
+      const e = event.error;
+      // no-speech / aborted are normal user actions; don't surface them
+      if (e === "no-speech" || e === "aborted") return;
+      let msg;
+      if (e === "not-allowed" || e === "service-not-allowed") {
+        msg = "Microphone blocked. The Canvas iframe may need allow=\"microphone\". Check the browser permission prompt or ask a Canvas admin.";
+      } else {
+        msg = `Speech recognition failed (${e}).`;
+      }
+      view.push({role: "error", text: msg});
+      render();
+    };
+    recognition.onresult = (event) => {
+      let transcript = "";
+      let finalSeen = false;
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalSeen = true;
+      }
+      if (finalSeen) gotFinalResult = true;
+      input.value = transcript;
+      autosize();
+    };
+    try {
+      recognition.start();
+    } catch {
+      // Calling start() while already running throws; safe to ignore.
+    }
+  }
+  micBtn.addEventListener("click", toggleMic);
+
+  // The opaque server-side transcript. Replayed verbatim on every request.
+  let history = [];
+  // Visible UI rows. Each: {role: "user"|"assistant"|"error", text, trace?, pending?}
+  let view = [];
+
+  function autosize() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 140) + "px";
+  }
+  input.addEventListener("input", autosize);
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  // Strip markdown for text-to-speech so the synth doesn't say "asterisk
+  // asterisk bold asterisk asterisk" or read out table pipes. Not a full
+  // markdown parser — handles the constructs Claude actually emits.
+  function stripMarkdown(s) {
+    if (!s) return "";
+    return s
+      .replace(/```chart[\s\S]*?```/g, "(chart shown)")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/(\*\*|__)(.+?)\1/g, "$2")
+      .replace(/(\*|_)(.+?)\1/g, "$2")
+      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^>\s*/gm, "")
+      .replace(/^[-*+]\s+/gm, "")
+      .replace(/^\d+\.\s+/gm, "")
+      .replace(/\|/g, " ")
+      .replace(/-{3,}/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  // Track which row index is currently being spoken so the button can show
+  // its toggled state. -1 means nothing playing.
+  let speakingRowIndex = -1;
+  // When true, every fresh assistant reply auto-speaks on arrival.
+  let autoSpeakEnabled = false;
+
+  function speakRow(idx) {
+    if (!window.speechSynthesis) return;
+    const row = view[idx];
+    if (!row || typeof row.text !== "string") return;
+    // Toggle: re-clicking a playing row stops it.
+    if (speakingRowIndex === idx) {
+      speechSynthesis.cancel();
+      return;
+    }
+    speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(stripMarkdown(row.text));
+    utt.rate = 1.0;
+    utt.onstart = () => { speakingRowIndex = idx; render(); };
+    utt.onend = () => { speakingRowIndex = -1; render(); };
+    utt.onerror = () => { speakingRowIndex = -1; render(); };
+    speechSynthesis.speak(utt);
+  }
+
+  // GFM + line breaks. marked() returns a string of HTML; DOMPurify scrubs it.
+  if (window.marked) {
+    marked.setOptions({ gfm: true, breaks: true });
+  }
+  function renderMarkdown(s) {
+    if (!window.marked || !window.DOMPurify) {
+      const missing = [
+        !window.marked ? "marked" : null,
+        !window.DOMPurify ? "DOMPurify" : null,
+      ].filter(Boolean).join(", ");
+      console.warn(`[assistant] markdown libraries failed to load: ${missing}`);
+      return (
+        `<span class="md-fallback-warning">[markdown libraries failed to load: ${escapeHtml(missing)} — check browser console]</span>` +
+        `<div class="md-fallback">${escapeHtml(s)}</div>`
+      );
+    }
+    return `<div class="md">${DOMPurify.sanitize(marked.parse(s))}</div>`;
+  }
+
+  // ---- Chart rendering --------------------------------------------------
+  // Claude emits ```chart {JSON} ``` fences in its answer. After markdown is
+  // parsed and sanitized, walk the DOM for `code.language-chart` blocks and
+  // swap each one for a Chart.js canvas. Malformed JSON / missing library /
+  // init errors all fall back to leaving the raw fenced block visible with a
+  // red border, so the bubble degrades gracefully instead of breaking.
+  const CHART_SERIES_COLORS = ["#2563eb", "#dc2626", "#059669", "#d97706"];
+  const CHART_MAX_SERIES = 4;
+  const CHART_MAX_POINTS = 100;
+
+  function buildChartConfig(spec) {
+    const rawSeries = Array.isArray(spec.series) ? spec.series.slice(0, CHART_MAX_SERIES) : [];
+    // Union x-values across series for a shared category axis. Stringify so
+    // mixed numeric/date x-values still align by equality.
+    const xSet = new Set();
+    for (const s of rawSeries) {
+      const pts = Array.isArray(s.points) ? s.points.slice(0, CHART_MAX_POINTS) : [];
+      for (const p of pts) {
+        if (p && p.x != null) xSet.add(String(p.x));
+      }
+    }
+    const labels = Array.from(xSet).sort();
+    const datasets = rawSeries.map((s, i) => {
+      const map = new Map();
+      const pts = Array.isArray(s.points) ? s.points.slice(0, CHART_MAX_POINTS) : [];
+      for (const p of pts) {
+        if (p && p.x != null && typeof p.y === "number" && isFinite(p.y)) {
+          map.set(String(p.x), p.y);
+        }
+      }
+      const color = CHART_SERIES_COLORS[i % CHART_SERIES_COLORS.length];
+      return {
+        label: s.name || `Series ${i + 1}`,
+        data: labels.map(l => (map.has(l) ? map.get(l) : null)),
+        borderColor: color,
+        backgroundColor: color,
+        spanGaps: true,
+        tension: 0.15,
+        pointRadius: 3,
+      };
+    }).filter(d => d.data.some(v => v != null));
+    return {
+      type: "line",
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: {
+          x: {
+            title: { display: !!spec.x_label, text: spec.x_label || "" },
+            ticks: { autoSkip: true, maxRotation: 30 },
+          },
+          y: {
+            title: { display: !!spec.y_label, text: spec.y_label || "" },
+            beginAtZero: false,
+          },
+        },
+        plugins: { legend: { display: datasets.length > 1 } },
+      },
+    };
+  }
+
+  function enhanceCharts(containerEl) {
+    if (!window.Chart) return;
+    containerEl.querySelectorAll("pre > code.language-chart").forEach((codeEl) => {
+      const pre = codeEl.parentElement;
+      let spec;
+      try {
+        spec = JSON.parse(codeEl.textContent);
+      } catch (err) {
+        pre.classList.add("chart-error");
+        pre.title = "Could not parse chart JSON: " + err.message;
+        return;
+      }
+      let config;
+      try {
+        config = buildChartConfig(spec);
+      } catch (err) {
+        pre.classList.add("chart-error");
+        pre.title = "Could not build chart: " + err.message;
+        return;
+      }
+      if (!config.data.datasets.length) {
+        pre.classList.add("chart-error");
+        pre.title = "Chart had no plottable data.";
+        return;
+      }
+      const wrap = document.createElement("div");
+      wrap.className = "chart-container";
+      if (spec.title) {
+        const t = document.createElement("div");
+        t.className = "chart-title";
+        t.textContent = spec.title;
+        wrap.appendChild(t);
+      }
+      const canvasWrap = document.createElement("div");
+      canvasWrap.className = "chart-canvas-wrap";
+      const canvas = document.createElement("canvas");
+      canvasWrap.appendChild(canvas);
+      wrap.appendChild(canvasWrap);
+      pre.replaceWith(wrap);
+      try {
+        new Chart(canvas, config);
+      } catch (err) {
+        // Init failed after DOM swap; put the raw block back so the user can
+        // at least see what Claude tried to emit.
+        wrap.replaceWith(pre);
+        pre.classList.add("chart-error");
+        pre.title = "Chart.js init failed: " + err.message;
+      }
+    });
+  }
+
+  // ---- Patient-chart deep links -----------------------------------------
+  // Claude is asked to format patient references as `[Name](/patient/<id>)`
+  // markdown links. After sanitization, find those anchors and (a) tag them
+  // for styling, (b) set target="_top" so clicks navigate the parent
+  // window out of the chat iframe — without target, the click would
+  // navigate just the iframe and break the URL. Patient links are the only
+  // resource we deep-link to right now; other anchors (web_search results,
+  // ad-hoc markdown links) are left untouched.
+  const PATIENT_HREF_RE = /^\/patient\/[A-Za-z0-9-]+\/?$/;
+
+  function enhancePatientLinks(containerEl) {
+    containerEl.querySelectorAll(".md a[href]").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      if (!PATIENT_HREF_RE.test(href)) return;
+      a.classList.add("patient-link");
+      a.setAttribute("target", "_top");
+      a.setAttribute("rel", "noopener noreferrer");
+    });
+  }
+
+  // ---- Suggested next-action chips --------------------------------------
+  // Claude emits ```suggestions [ ... ] ``` fences after answers when an
+  // obvious follow-up workflow exists. The block is stripped from the
+  // markdown render and replaced with a row of clickable chips that
+  // re-fire as new questions. Only the latest assistant bubble shows the
+  // chips; earlier bubbles silently strip any stray block so the history
+  // doesn't accumulate stale suggestions.
+  const SUGGESTIONS_MAX_CHIPS = 3;
+  const SUGGESTIONS_MAX_LEN = 80;
+
+  function enhanceSuggestions(containerEl, addChips) {
+    const codeEl = containerEl.querySelector("pre > code.language-suggestions");
+    if (!codeEl) return;
+    const pre = codeEl.parentElement;
+    let chips = [];
+    try {
+      const parsed = JSON.parse(codeEl.textContent);
+      if (Array.isArray(parsed)) chips = parsed;
+      else if (parsed && Array.isArray(parsed.chips)) chips = parsed.chips;
+    } catch {
+      // Malformed JSON — just drop the block, don't surface it raw.
+      pre.remove();
+      return;
+    }
+    pre.remove();
+    if (!addChips) return;
+    chips = chips
+      .filter(s => typeof s === "string" && s.trim())
+      .slice(0, SUGGESTIONS_MAX_CHIPS)
+      .map(s => s.trim().slice(0, SUGGESTIONS_MAX_LEN));
+    if (chips.length === 0) return;
+    const wrap = document.createElement("div");
+    wrap.className = "suggested-chips";
+    for (const c of chips) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip suggested";
+      b.dataset.prompt = c;
+      b.textContent = c;
+      wrap.appendChild(b);
+    }
+    const md = containerEl.querySelector(".md");
+    if (md && md.parentNode) {
+      md.parentNode.insertBefore(wrap, md.nextSibling);
+    } else {
+      const bubble = containerEl.querySelector(".bubble");
+      if (bubble) bubble.appendChild(wrap);
+    }
+  }
+
+  function renderTrace(trace) {
+    if (!Array.isArray(trace) || trace.length === 0) return "";
+    const items = trace.map(t => {
+      const input = t.input ? JSON.stringify(t.input) : "{}";
+      const summary = t.summary ? " → " + JSON.stringify(t.summary) : "";
+      return `<li><code>${escapeHtml(t.tool)}(${escapeHtml(input)})</code>${escapeHtml(summary)}</li>`;
+    }).join("");
+    return `
+      <details class="trace">
+        <summary>Tools used (${trace.length})</summary>
+        <ul>${items}</ul>
+      </details>`;
+  }
+
+  function renderMutationCard(row, idx) {
+    const m = row.mutation;
+    const fields = Object.entries(m.input || {})
+      .filter(([, v]) => v != null && v !== "")
+      .map(([k, v]) => `<li><strong>${escapeHtml(k)}</strong>: <code>${escapeHtml(String(v))}</code></li>`)
+      .join("");
+    const fieldsHtml = fields ? `<ul class="mut-fields">${fields}</ul>` : "";
+    if (row.decided) {
+      return `
+        <div class="mut-header">${escapeHtml(m.tool)}</div>
+        ${fieldsHtml}
+        <div class="mut-decided">${escapeHtml(row.decided)}</div>`;
+    }
+    return `
+      <div class="mut-header">Claude wants to: ${escapeHtml(m.tool)}</div>
+      ${fieldsHtml}
+      <div class="mut-actions">
+        <button type="button" class="approve" data-row-index="${idx}">Approve</button>
+        <button type="button" class="deny" data-row-index="${idx}">Deny</button>
+      </div>`;
+  }
+
+  function render() {
+    clearBtn.disabled = view.length === 0;
+    if (view.length === 0) {
+      emptyState.style.display = "";
+      messagesEl.querySelectorAll(".row").forEach(el => el.remove());
+      return;
+    }
+    emptyState.style.display = "none";
+    messagesEl.querySelectorAll(".row").forEach(el => el.remove());
+    // Latest non-pending assistant row gets next-action chips; earlier
+    // assistant rows have their suggestions block silently stripped.
+    let latestAssistantIdx = -1;
+    for (let i = view.length - 1; i >= 0; i--) {
+      if (view[i].role === "assistant" && !view[i].pending) {
+        latestAssistantIdx = i;
+        break;
+      }
+    }
+    view.forEach((row, idx) => {
+      const div = document.createElement("div");
+      div.className = "row " + (row.role === "user" ? "user" : "assistant");
+      const bubbleClasses = ["bubble"];
+      const isMutation = row.role === "mutation";
+      // Markdown rendering only for fresh assistant text. User input, errors,
+      // mutation cards, and the pending placeholder don't go through marked.
+      const renderAsMarkdown = row.role === "assistant" && !row.pending;
+      if (row.role === "error") bubbleClasses.push("error", "plain");
+      else if (row.pending) bubbleClasses.push("pending", "plain");
+      else if (isMutation) bubbleClasses.push("mutation");
+      else if (!renderAsMarkdown) bubbleClasses.push("plain");
+      let body;
+      if (isMutation) body = renderMutationCard(row, idx);
+      else if (renderAsMarkdown) body = renderMarkdown(row.text);
+      else body = escapeHtml(row.text);
+      const copy = renderAsMarkdown
+        ? (
+            `<button type="button" class="copy-btn" data-row-index="${idx}">Copy</button>` +
+            (window.speechSynthesis
+              ? `<button type="button" class="speak-btn${speakingRowIndex === idx ? ' speaking' : ''}" data-row-index="${idx}">${speakingRowIndex === idx ? 'Stop' : 'Speak'}</button>`
+              : "")
+          )
+        : "";
+      div.innerHTML = `<div class="${bubbleClasses.join(" ")}">${body}${renderTrace(row.trace)}${copy}</div>`;
+      messagesEl.appendChild(div);
+      if (renderAsMarkdown) {
+        enhanceCharts(div);
+        enhancePatientLinks(div);
+        enhanceSuggestions(div, idx === latestAssistantIdx);
+      }
+    });
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // Apply a /chat response: update history, render assistant text and/or
+  // mutation cards. Caller is responsible for popping the pending bubble.
+  function applyResponse(data) {
+    history = Array.isArray(data.messages) ? data.messages : history;
+    const pending = Array.isArray(data.pending_mutations) ? data.pending_mutations : [];
+    if (pending.length > 0) {
+      for (const m of pending) {
+        view.push({role: "mutation", mutation: m, trace: data.trace});
+      }
+    } else {
+      view.push({
+        role: "assistant",
+        text: data.answer || "(no answer returned)",
+        trace: data.trace,
+      });
+      if (autoSpeakEnabled) {
+        // Speak after the render flush so speakingRowIndex picks up the
+        // correct idx; runPolledChat() calls render() right after us.
+        const idx = view.length - 1;
+        setTimeout(() => speakRow(idx), 0);
+      }
+    }
+  }
+
+  const MAX_POLL_ITERATIONS = 12;
+
+  function setBusy(busy) {
+    sendBtn.disabled = busy;
+    input.disabled = busy;
+    if (!busy) input.focus();
+  }
+
+  async function postChat(payload) {
+    const merged = Object.assign({}, payload);
+    if (PATIENT_ID) merged.patient_id = PATIENT_ID;
+    const resp = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(merged),
+      credentials: "same-origin",
+    });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${body.slice(0, 400)}`);
+    }
+    return await resp.json();
+  }
+
+  // Drive a polled /chat conversation: keep POSTing with continue=true while
+  // the server says state=running, updating the pending bubble in between.
+  // Each polled response only carries that iteration's trace, so accumulate
+  // them here and attach the full list to the final response.
+  async function runPolledChat(initialPayload) {
+    setBusy(true);
+    const accumulatedTrace = [];
+    let data;
+    try {
+      data = await postChat(Object.assign({poll: true}, initialPayload));
+      let polls = 0;
+      while (data && data.state === "running" && polls < MAX_POLL_ITERATIONS) {
+        if (Array.isArray(data.trace)) accumulatedTrace.push(...data.trace);
+        history = Array.isArray(data.messages) ? data.messages : history;
+        const pending = view[view.length - 1];
+        if (pending && pending.pending) {
+          pending.trace = accumulatedTrace.slice();
+          const last = accumulatedTrace[accumulatedTrace.length - 1];
+          pending.text = last ? `Running ${last.tool}…` : "Thinking…";
+        }
+        render();
+        polls += 1;
+        data = await postChat({continue: true, messages: history, poll: true});
+      }
+      view.pop();   // drop the pending bubble
+      if (data && data.state === "running") {
+        view.push({
+          role: "error",
+          text: `Reached client poll cap (${MAX_POLL_ITERATIONS}). Try a simpler question.`,
+        });
+      } else {
+        if (Array.isArray(data.trace)) accumulatedTrace.push(...data.trace);
+        data.trace = accumulatedTrace;
+        applyResponse(data);
+      }
+    } catch (err) {
+      view.pop();
+      view.push({role: "error", text: err.message});
+    } finally {
+      setBusy(false);
+      render();
+    }
+  }
+
+  async function send(question) {
+    view.push({role: "user", text: question});
+    view.push({role: "assistant", text: "Thinking…", pending: true});
+    render();
+    await runPolledChat({question, messages: history});
+  }
+
+  // Resume the loop after the user approves or denies pending mutations.
+  async function continueAfterDecisions(decisions) {
+    view.push({role: "assistant", text: "Thinking…", pending: true});
+    render();
+    await runPolledChat({mutation_results: decisions, messages: history});
+  }
+
+  // Decide on a single pending mutation row, then submit all pending
+  // decisions together if every pending card has been resolved.
+  function decideMutation(idx, decision, reason) {
+    const row = view[idx];
+    if (!row || row.role !== "mutation" || row.decided) return;
+    row.decided = decision === "approve" ? "Approved" : "Denied" + (reason ? `: ${reason}` : "");
+    row.decision = {tool_use_id: row.mutation.tool_use_id, decision};
+    if (reason) row.decision.reason = reason;
+    // If any other mutation in view is still undecided, wait for it.
+    const undecided = view.some(r => r.role === "mutation" && !r.decided);
+    render();
+    if (!undecided) {
+      const decisions = view
+        .filter(r => r.role === "mutation" && r.decision)
+        .map(r => r.decision);
+      // Don't re-send the same decision set twice.
+      view.forEach(r => { if (r.role === "mutation") delete r.decision; });
+      continueAfterDecisions(decisions);
+    }
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = "";
+    autosize();
+    send(q);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  // Suggestion-chip click → send the data-prompt verbatim.
+  document.querySelectorAll(".chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const prompt = btn.dataset.prompt || btn.textContent.trim();
+      if (prompt) send(prompt);
+    });
+  });
+
+  // Clear button → reset both server-side transcript and visible view.
+  autoSpeakBtn.addEventListener("click", () => {
+    autoSpeakEnabled = !autoSpeakEnabled;
+    autoSpeakBtn.classList.toggle("on", autoSpeakEnabled);
+    autoSpeakBtn.setAttribute("aria-pressed", String(autoSpeakEnabled));
+    // Stop any in-flight speech when turning off, mid-utterance.
+    if (!autoSpeakEnabled && window.speechSynthesis) speechSynthesis.cancel();
+  });
+
+  clearBtn.addEventListener("click", () => {
+    history = [];
+    view = [];
+    render();
+    input.focus();
+  });
+
+  // Copy-answer buttons + mutation approve/deny (event-delegated so
+  // dynamically-rendered bubbles work).
+  messagesEl.addEventListener("click", async (e) => {
+    const chip = e.target.closest(".suggested-chips .chip");
+    if (chip) {
+      const promptText = chip.dataset.prompt || chip.textContent.trim();
+      if (promptText) send(promptText);
+      return;
+    }
+    const approve = e.target.closest(".mut-actions .approve");
+    if (approve) {
+      decideMutation(parseInt(approve.dataset.rowIndex, 10), "approve");
+      return;
+    }
+    const deny = e.target.closest(".mut-actions .deny");
+    if (deny) {
+      const reason = (prompt("Why are you denying this action? (optional)") || "").trim();
+      decideMutation(parseInt(deny.dataset.rowIndex, 10), "deny", reason);
+      return;
+    }
+    const speak = e.target.closest(".speak-btn");
+    if (speak) {
+      speakRow(parseInt(speak.dataset.rowIndex, 10));
+      return;
+    }
+    const btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.rowIndex, 10);
+    const row = view[idx];
+    if (!row || typeof row.text !== "string") return;
+    // Strip the ```suggestions``` fenced block — it's UI-only, not useful in clipboard.
+    const copyText = row.text.replace(/```suggestions\s*[\s\S]*?```\s*/g, "").trim();
+    try {
+      await navigator.clipboard.writeText(copyText);
+      const original = btn.textContent;
+      btn.classList.add("copied");
+      btn.textContent = "Copied";
+      setTimeout(() => {
+        btn.classList.remove("copied");
+        btn.textContent = original;
+      }, 1500);
+    } catch {
+      btn.textContent = "Copy failed";
+    }
+  });
+
+  render();  // initial: disables clear button
+  input.focus();
+</script>
+</body>
+</html>
