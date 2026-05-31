@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.4",
+    "name": "unstructured_med_flag",
+    "description": "Separates unstructured (free-text, no FDB/RxNorm code) medications under an 'Unstructured Medications' heading below the coded medications in the patient chart medication list so they are obvious to the provider.",
+    "components": {
+        "handlers": [
+            {
+                "class": "unstructured_med_flag.handlers.medications:Medications",
+                "description": "Groups coded medications first (no heading) and unstructured medications below under an 'Unstructured Medications' heading in the patient chart medication list."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
