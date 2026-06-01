@@ -31,6 +31,8 @@ from canvas_sdk.v1.data.note import Note
 from canvas_sdk.v1.data.questionnaire import Questionnaire
 from canvas_sdk.value_set.value_set import CodeConstants
 
+from django.core.exceptions import ObjectDoesNotExist
+
 from soap_note.models.soap_note_data import SoapNoteData
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
@@ -81,7 +83,14 @@ class SoapNoteAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        note = Note.objects.get(id=note_uuid)
+        try:
+            note = Note.objects.get(id=note_uuid)
+        except ObjectDoesNotExist:
+            return [HTMLResponse(
+                "<html><body>Error: Note not found</body></html>",
+                status_code=HTTPStatus.NOT_FOUND,
+            )]
+
         patient_id = str(note.patient.id)
         existing = SoapNoteData.objects.filter(note_id=note.dbid).first()
 
@@ -261,7 +270,11 @@ class SoapNoteAPI(StaffSessionAuthMixin, SimpleAPI):
             effects.append(_originate(PlanCommand(note_uuid=note_uuid, narrative=plan_text)))
 
         # Persist to custom data
-        note = Note.objects.get(id=note_uuid)
+        try:
+            note = Note.objects.get(id=note_uuid)
+        except ObjectDoesNotExist:
+            return [JSONResponse({"error": "Note not found"}, status_code=HTTPStatus.NOT_FOUND)]
+
         SoapNoteData.objects.update_or_create(
             note_id=note.dbid,
             defaults={
@@ -283,14 +296,15 @@ class SoapNoteAPI(StaffSessionAuthMixin, SimpleAPI):
 
         try:
             resp = ontologies_http.get_json(f"/icd/condition?{urlencode({'search': query})}")
-            data = resp.json()
-            results = [
-                {"icd10_code": r.get("icd10_code", ""), "icd10_text": r.get("icd10_text", "")}
-                for r in data.get("results", [])[:15]
-            ]
-            return [JSONResponse({"results": results})]
-        except Exception:
+        except RuntimeError:
             return [JSONResponse({"results": []})]
+
+        data = resp.json()
+        results = [
+            {"icd10_code": r.get("icd10_code", ""), "icd10_text": r.get("icd10_text", "")}
+            for r in data.get("results", [])[:15]
+        ]
+        return [JSONResponse({"results": results})]
 
     @api.get("/patient-conditions")
     def patient_conditions(self) -> list[Union[Response, Effect]]:

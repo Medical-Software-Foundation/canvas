@@ -450,7 +450,7 @@ def test_search_conditions_api_error():
     handler = _make_api(query_params={"q": "diabetes"})
 
     with patch(f"{MODULE}.ontologies_http") as mock_http:
-        mock_http.get_json.side_effect = Exception("API down")
+        mock_http.get_json.side_effect = RuntimeError("API down")
 
         result = handler.search_conditions()
 
