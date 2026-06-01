@@ -270,7 +270,7 @@ def test_get_no_tz_param():
         "scheduling_with_rooms.api.events._serialize_event",
         return_value={"id": "ev-1"},
     ):
-        mock_staff.objects.filter.return_value.distinct.return_value = []
+        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
         mock_loc.objects.filter.return_value = []
         mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = [MagicMock()]
         result = h.get()
@@ -289,7 +289,7 @@ def test_get_invalid_tz_falls_back():
         "scheduling_with_rooms.api.events._serialize_event",
         return_value={"id": "ev-1"},
     ):
-        mock_staff.objects.filter.return_value.distinct.return_value = []
+        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
         mock_loc.objects.filter.return_value = []
         mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
         result = h.get()
@@ -308,7 +308,7 @@ def test_get_with_valid_tz():
         "scheduling_with_rooms.api.events._serialize_event",
         return_value={"id": "ev-1"},
     ):
-        mock_staff.objects.filter.return_value.distinct.return_value = []
+        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
         mock_loc.objects.filter.return_value = []
         mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
         result = h.get()

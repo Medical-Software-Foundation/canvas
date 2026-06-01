@@ -62,6 +62,7 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
         providers = (
             Staff.objects
             .filter(active=True, roles__internal_code__in=role_codes)
+            .select_related("primary_practice_location")
             .distinct()
         )
         room_ids = set(
@@ -101,6 +102,16 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
                     "name": provider.credentialed_name,
                     "full_name": provider.full_name,
                     "is_room": provider.id in room_ids,
+                    # For rooms, this drives the location-aware Rooms dropdown:
+                    # the UI only offers a room when its staff profile's
+                    # primary_practice_location matches the chosen location.
+                    # Use the location's UUID `id` (not the integer FK dbid) so
+                    # it matches the location ids the dropdown is built from.
+                    "primary_practice_location": (
+                        str(provider.primary_practice_location.id)
+                        if provider.primary_practice_location
+                        else None
+                    ),
                 }
                 for provider in providers
             ]),

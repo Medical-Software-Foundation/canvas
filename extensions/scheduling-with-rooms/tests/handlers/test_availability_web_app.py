@@ -78,7 +78,7 @@ def test_index_returns_html_response():
         # Two filter chains with .distinct()
         providers_qs = MagicMock()
         providers_qs.__iter__ = lambda self: iter([provider])
-        mock_staff.objects.filter.return_value.distinct.return_value = providers_qs
+        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = providers_qs
         mock_staff.objects.filter.return_value.values_list.return_value = ["prov-1"]
         mock_loc.objects.filter.return_value = [location]
         # Two NoteType.objects calls: filter() and all().
@@ -88,6 +88,116 @@ def test_index_returns_html_response():
 
         result = h.index()
         assert len(result) == 1
+
+
+def test_index_serializes_room_primary_practice_location():
+    """Each room entry carries its primary_practice_location id so the UI can
+    scope the Rooms dropdown to the chosen location."""
+    import json
+
+    h = _handler(request_headers={"canvas-logged-in-user-id": "user-1"})
+
+    room = MagicMock()
+    room.id = "room-1"
+    room.credentialed_name = "Room A"
+    room.full_name = "Room A"
+    room.primary_practice_location.id = "loc-1"
+
+    location = MagicMock()
+    location.id = "loc-1"
+    location.full_name = "Loc"
+
+    captured = {}
+
+    def fake_render(template, context=None):
+        captured["context"] = context
+        return "<html>"
+
+    with patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Staff"
+    ) as mock_staff, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.PracticeLocation"
+    ) as mock_loc, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.NoteType"
+    ) as mock_nt, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Event"
+    ) as mock_event_cls, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.render_to_string",
+        side_effect=fake_render,
+    ), patch(
+        "scheduling_with_rooms.handlers.availability_web_app._serialize_event",
+        return_value={"id": "ev-1"},
+    ):
+        providers_qs = MagicMock()
+        providers_qs.__iter__ = lambda self: iter([room])
+        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = providers_qs
+        mock_staff.objects.filter.return_value.values_list.return_value = ["room-1"]
+        mock_loc.objects.filter.return_value = [location]
+        mock_nt.objects.filter.return_value = []
+        mock_nt.objects.all.return_value = []
+        mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+
+        h.index()
+
+    providers = json.loads(captured["context"]["providers"])
+    assert providers == [
+        {
+            "id": "room-1",
+            "name": "Room A",
+            "full_name": "Room A",
+            "is_room": True,
+            "primary_practice_location": "loc-1",
+        }
+    ]
+
+
+def test_index_serializes_null_primary_practice_location():
+    """A staff profile with no primary_practice_location serializes to None."""
+    import json
+
+    h = _handler(request_headers={"canvas-logged-in-user-id": "user-1"})
+
+    provider = MagicMock()
+    provider.id = "prov-1"
+    provider.credentialed_name = "Bob, MD"
+    provider.full_name = "Bob Smith"
+    provider.primary_practice_location = None
+
+    captured = {}
+
+    def fake_render(template, context=None):
+        captured["context"] = context
+        return "<html>"
+
+    with patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Staff"
+    ) as mock_staff, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.PracticeLocation"
+    ) as mock_loc, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.NoteType"
+    ) as mock_nt, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.Event"
+    ) as mock_event_cls, patch(
+        "scheduling_with_rooms.handlers.availability_web_app.render_to_string",
+        side_effect=fake_render,
+    ), patch(
+        "scheduling_with_rooms.handlers.availability_web_app._serialize_event",
+        return_value={"id": "ev-1"},
+    ):
+        providers_qs = MagicMock()
+        providers_qs.__iter__ = lambda self: iter([provider])
+        mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = providers_qs
+        mock_staff.objects.filter.return_value.values_list.return_value = []
+        mock_loc.objects.filter.return_value = []
+        mock_nt.objects.filter.return_value = []
+        mock_nt.objects.all.return_value = []
+        mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+
+        h.index()
+
+    providers = json.loads(captured["context"]["providers"])
+    assert providers[0]["primary_practice_location"] is None
+    assert providers[0]["is_room"] is False
 
 
 def test_get_main_js_returns_response():

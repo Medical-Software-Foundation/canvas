@@ -147,6 +147,13 @@
         const l = state.locations.find(l => String(l.id) === String(id));
         return l ? l.name : '';
     }
+    // A room is offered only when its staff profile's primary_practice_location
+    // matches the chosen location. With no specific location chosen ("All
+    // locations"), every room is offered.
+    function roomMatchesLocation(room) {
+        if (!state.locationId) return true;
+        return String(room.primary_practice_location) === String(state.locationId);
+    }
     function noteTypeName(id) {
         const key = String(id);
         // window.noteTypeNames is the full id→name map (includes inactive /
@@ -366,7 +373,10 @@
         // dropdown so the user can filter independently.
         const allStaff = state.providers;
         const onlyProviders = allStaff.filter(p => !p.is_room);
-        const onlyRooms = allStaff.filter(p => p.is_room);
+        // Rooms are scoped to the chosen location: only offer a room when its
+        // staff profile's primary_practice_location matches state.locationId.
+        // With no specific location chosen ("All locations"), show every room.
+        const onlyRooms = allStaff.filter(p => p.is_room && roomMatchesLocation(p));
 
         const popoverFor = (group, label) => {
             if (state.openFilter !== label) return null;
@@ -1053,7 +1063,12 @@
             }, p.full_name || p.name);
         });
         const providerChips = makeChips(state.providers.filter(p => !p.is_room));
-        const roomChips = makeChips(state.providers.filter(p => p.is_room));
+        // Offer rooms whose primary_practice_location matches the chosen
+        // location, plus any room already selected on this event so an existing
+        // (possibly off-location) assignment stays visible and deselectable.
+        const roomChips = makeChips(state.providers.filter(p =>
+            p.is_room && (roomMatchesLocation(p) || f.providers.includes(String(p.id)))
+        ));
 
         const noteTypeChips = state.noteTypes.map(nt => {
             const id = String(nt.id);
