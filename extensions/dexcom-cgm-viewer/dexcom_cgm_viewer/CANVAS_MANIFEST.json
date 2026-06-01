@@ -30,14 +30,14 @@
         "effects": [],
         "views": []
     },
-    "secrets": [
-        "DEXCOM_CLIENT_ID",
-        "DEXCOM_CLIENT_SECRET",
-        "DEXCOM_REDIRECT_URI",
-        "DEXCOM_ENVIRONMENT",
-        "DEXCOM_MAGIC_LINK_SECRET",
-        "SENDGRID_API_KEY",
-        "SENDGRID_FROM_EMAIL"
+    "variables": [
+        {"name": "DEXCOM_CLIENT_ID", "sensitive": false},
+        {"name": "DEXCOM_CLIENT_SECRET", "sensitive": true},
+        {"name": "DEXCOM_REDIRECT_URI", "sensitive": false},
+        {"name": "DEXCOM_ENVIRONMENT", "sensitive": false},
+        {"name": "DEXCOM_MAGIC_LINK_SECRET", "sensitive": true},
+        {"name": "SENDGRID_API_KEY", "sensitive": true},
+        {"name": "SENDGRID_FROM_EMAIL", "sensitive": false}
     ],
     "custom_data": {
         "namespace": "canvas__dexcom_cgm_viewer",
