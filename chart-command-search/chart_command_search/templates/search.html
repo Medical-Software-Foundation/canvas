@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chart Search</title>
+  <style>
+    {% include "static/css/search.css" %}
+  </style>
+</head>
+<body>
+  <div class="search-panel" data-mode="keyword">
+    <div class="page-title">
+      <h1>Chart Search</h1>
+      <span class="title-accent"></span>
+      <p>Search across all patient chart entries by category, status or provider.</p>
+    </div>
+    {% if ai_enabled %}
+    <div class="tab-bar">
+      <button class="tab active" data-tab="keyword">Search</button>
+      <button class="tab" data-tab="ai">AI Search</button>
+    </div>
+    {% endif %}
+    <header>
+      <div class="keyword-row tab-keyword-only">
+        <div class="input-with-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+          </svg>
+          <input type="text" id="q" placeholder="Search keywords" autocomplete="off" />
+        </div>
+      </div>
+      <div class="header-bar tab-keyword-only" id="filter-toggle" title="Toggle filters">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+        </svg>
+      </div>
+      <div class="filters collapsed tab-keyword-only" id="collapsible-filters">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label class="filter-label">Category</label>
+            <div class="multiselect" id="category-ms" data-placeholder="All categories"></div>
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">Status</label>
+            <div class="multiselect" id="status-ms" data-placeholder="All statuses"></div>
+          </div>
+        </div>
+        <div class="filter-row filter-row-dates">
+          <div class="filter-group">
+            <label class="filter-label">From</label>
+            <input type="date" id="date-from" title="From date" />
+          </div>
+          <div class="filter-group">
+            <label class="filter-label">To</label>
+            <input type="date" id="date-to" title="To date" />
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Provider</label>
+          <div class="multiselect" id="provider-ms" data-placeholder="All providers"></div>
+        </div>
+        <div class="filter-clear-row">
+          <button type="button" class="filter-clear-btn" id="clear-all-filters">Clear all</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="results-area">
+      <div class="status-bar" id="status-bar"></div>
+      <div class="spinner" id="spinner">Searching...</div>
+      <div id="results-container" class="tab-keyword-only">
+        <div class="empty-state">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+          </svg>
+          <p>Browse or search across the full patient chart.</p>
+        </div>
+      </div>
+      {% if ai_enabled %}
+      <div id="ai-chat-container" class="tab-ai-only">
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-empty" id="chat-empty">
+            <div class="chat-empty-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/>
+              </svg>
+            </div>
+            <h3>AI Chart Search</h3>
+            <p>Ask a question about this patient's chart to get AI-powered insights.</p>
+            <div id="prompt-chips-container"></div>
+          </div>
+        </div>
+        <div id="suggested-questions" class="suggested-questions" style="display:none;"></div>
+      </div>
+      {% endif %}
+    </div>
+    {% if ai_enabled %}
+    <div class="chat-input-bar tab-ai-only">
+      <textarea id="ai-query" placeholder="Ask about this patient's chart..." rows="1"></textarea>
+      <button type="button" class="chat-send-btn" id="ai-send-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
+        </svg>
+      </button>
+    </div>
+    <div class="chat-disclaimer tab-ai-only">
+      AI-generated content may contain errors. Always verify clinical information.
+      <button class="chat-clear-btn" id="chat-clear-btn" style="display:none;" onclick="clearChatSession()">Clear chat</button>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if ai_enabled %}
+  <div class="feedback-modal-overlay" id="feedback-modal" style="display:none">
+    <div class="feedback-modal">
+      <h3>Share your feedback</h3>
+      <p class="feedback-modal-label" id="feedback-modal-label">What could be improved?</p>
+      <textarea id="feedback-comment" rows="3" maxlength="2000"
+        placeholder="Optional: tell us more..."></textarea>
+      <div class="feedback-modal-actions">
+        <button type="button" class="feedback-modal-skip" onclick="submitFeedback(false)">Skip</button>
+        <button type="button" class="feedback-modal-submit" onclick="submitFeedback(true)">Submit</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <script>
+    const PATIENT_ID = "{{ patient_id }}";
+    const APP_ID = "{{ app_id }}";
+    const AI_ENABLED = {{ ai_enabled|lower }};
+
+    const STATUS_OPTIONS = {
+      commands:        [{v:"committed",l:"Committed"},{v:"uncommitted",l:"Uncommitted"},{v:"entered_in_error",l:"Entered in error"},{v:"accepted",l:"Accepted"},{v:"pending",l:"Pending"},{v:"transmitted",l:"Transmitted"},{v:"delivered",l:"Delivered"},{v:"cancelled",l:"Cancelled"},{v:"open",l:"Open"},{v:"ordered",l:"Ordered"},{v:"results_in",l:"Results In"},{v:"reviewed",l:"Reviewed"},{v:"error",l:"Error"}],
+      appointments:    [{v:"unconfirmed",l:"Unconfirmed"},{v:"attempted",l:"Attempted"},{v:"confirmed",l:"Confirmed"},{v:"arrived",l:"Checked in"},{v:"roomed",l:"Roomed"},{v:"exited",l:"Exited"},{v:"noshowed",l:"No-showed"},{v:"cancelled",l:"Cancelled"}],
+      letters:         [{v:"faxed",l:"Faxed"},{v:"fax_pending",l:"Fax pending"},{v:"fax_failed",l:"Fax failed"},{v:"printed",l:"Printed"}],
+      messages:        [{v:"read",l:"Read"},{v:"unread",l:"Unread"}],
+      notes:           [{v:"locked",l:"Locked"},{v:"unlocked",l:"Unlocked"},{v:"deleted",l:"Deleted"},{% for nt in note_types %}{v:"note_type_{{ nt.id|escapejs }}",l:"{{ nt.name|escapejs }}"},{% endfor %}],
+      labs:            [{v:"reviewed",l:"Reviewed"},{v:"results_in",l:"Results In"},{v:"error",l:"Error"},{v:"ordered",l:"Ordered"},{v:"open",l:"Open"}],
+    };
+
+    const CATEGORY_OPTIONS = [
+      {v:"commands",l:"Commands"},{v:"appointments",l:"Appointments"},
+      {v:"letters",l:"Letters"},{v:"messages",l:"Messages"},{v:"notes",l:"Notes"},
+      {v:"labs",l:"Labs"}
+    ];
+
+    const PROVIDER_OPTIONS = [
+      {% for p in providers %}{v:"{{ p.id|escapejs }}",l:"{{ p.name|escapejs }}"},{% endfor %}
+    ];
+
+    const CATEGORY_LABELS = {
+      command: "CMD", appointment: "APPT",
+      letter: "LETTER", message: "MSG", note: "NOTE", lab: "LAB"
+    };
+
+    var PRACTICE_PROMPTS = [{% for p in practice_prompts %}"{{ p|escapejs }}",{% endfor %}];
+
+    {% include "static/js/search-core.js" %}
+    {% if ai_enabled %}{% include "static/js/search-feedback.js" %}{% endif %}
+    {% include "static/js/search-keyword.js" %}
+    {% if ai_enabled %}
+    {% include "static/js/search-ai.js" %}
+    {% include "static/js/search-prompts.js" %}
+    {% endif %}
+
+    restoreSearchState();
+    runSearch();
+    {% if ai_enabled %}
+    if (!restoreChatSession()) {
+      renderPromptChips();
+    }
+    {% endif %}
+  </script>
+</body>
+</html>
