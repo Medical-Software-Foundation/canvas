@@ -191,6 +191,7 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
         providers = list(
             Staff.objects
             .filter(active=True, roles__internal_code__in=role_codes)
+            .select_related("primary_practice_location")
             .distinct()
         )
         locations = list(PracticeLocation.objects.filter(active=True))
