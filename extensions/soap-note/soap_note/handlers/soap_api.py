@@ -314,7 +314,7 @@ class SoapNoteAPI(StaffSessionAuthMixin, SimpleAPI):
             return [JSONResponse({"conditions": []})]
 
         conditions = []
-        for cond in Condition.objects.for_patient(patient_id).committed().prefetch_related("codings"):
+        for cond in Condition.objects.for_patient(patient_id).committed().filter(clinical_status="active").prefetch_related("codings"):
             codings = [
                 c for c in cond.codings.all()
                 if c.system == CodeConstants.URL_ICD10
