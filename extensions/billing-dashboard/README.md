@@ -4,6 +4,8 @@
 
 Billing Dashboard is a full-page financial overview for practice managers and billing staff. Open it from the Canvas provider menu and see three tabs of real-time data about the practice's billing: how much money came in last month, which payers are the strongest performers, and which CPT codes are billed most often. The dashboard pulls directly from Canvas's claim and billing records — no exports, no copy/paste from other systems.
 
+Every value on the dashboard is computed from real Canvas data — no demo numbers, no embedded examples, no placeholder rows. A fresh instance with no filed claims renders honest zeros on the metric cards, "— No claims to rate" / "— No prior-month baseline" on metrics that need a baseline to be meaningful, and "No data in this window." over the chart areas. The only hardcoded reference data is the CMS Physician Fee Schedule benchmark rates in `data/cms_rates.py` (real published government rates used as the comparison line on the Reimbursement Trends chart).
+
 ## Problem it solves
 
 Practice managers and billing leads need a weekly pulse on financial health: "Did we collect more or less than last month? Which payer is slowest to pay? Are we billing the right mix of codes?" Today that answer lives in three places at once — the claim queues in Canvas's revenue views, an Excel file that tracks payer performance, and a report someone runs manually at month-end. The information exists but never lands in one place at the same time. Billing Dashboard is that one place: each metric reads from the same Canvas data the team already trusts, so the dashboard matches the claim detail views byte-for-byte.
@@ -91,7 +93,7 @@ If the practice's `ChargeDescriptionMaster` table has entries for their CPT code
 │  ─────────────────────────────────────           │ by Revenue   │
 │  Payer  │ Collected │ Acceptance │ vs CMS       │              │
 │  ───────┼───────────┼────────────┼─────────     │ [Doughnut]   │
-│  ...rows grouped by `coverages__payer_name`...  │              │
+│  ...rows grouped by `current_coverage__payer_name`│              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
