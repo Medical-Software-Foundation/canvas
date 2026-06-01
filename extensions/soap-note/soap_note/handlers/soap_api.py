@@ -105,7 +105,7 @@ class SoapNoteAPI(StaffSessionAuthMixin, SimpleAPI):
                 "note_id": note_uuid,
                 "note_id_json": json.dumps(note_uuid),
                 "patient_id_json": json.dumps(patient_id),
-                "sections_json": json.dumps(sections),
+                "sections_json_escaped": json.dumps(sections).replace("</", "<\\/"),
                 "cache_bust": _CACHE_BUST,
             },
         )

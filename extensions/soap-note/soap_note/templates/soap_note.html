@@ -466,11 +466,13 @@
         </div>
     </div>
 
+    <script id="sections-data" type="application/json">{{ sections_json_escaped|safe }}</script>
+
     <script>
         const NOTE_ID = {{ note_id_json|safe }};
         const PATIENT_ID = {{ patient_id_json|safe }};
         const BASE = "/plugin-io/api/soap_note/soap";
-        const initial = {{ sections_json|safe }};
+        const initial = JSON.parse(document.getElementById("sections-data").textContent);
 
         const statusEl = document.getElementById("status");
         let saving = false;
@@ -750,7 +752,8 @@
 
         function fmt(code) { return (!code || code.length <= 3) ? code : code.substring(0,3) + "." + code.substring(3); }
         function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-        function escA(s) { return (s||"").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+        function escJs(s) { return (s||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/"/g,'\\"'); }
+        function escA(s) { return esc(escJs(s)); }
 
         let messagePort = null;
         window.addEventListener("message", (event) => {
