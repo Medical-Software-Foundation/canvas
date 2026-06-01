@@ -61,7 +61,13 @@ Five required plugin secrets:
 | `DEXCOM_REDIRECT_URI` | Pre-registered with Dexcom; e.g. `https://<canvas-host>/plugin-io/api/dexcom_cgm_viewer/callback` |
 | `DEXCOM_ENVIRONMENT` | `sandbox` or `production` |
 | `DEXCOM_MAGIC_LINK_SECRET` | High-entropy string (≥ 32 bytes) used to HMAC-SHA256 sign magic-link tokens |
-| `namespace_read_write_access_key` | High-entropy string (≥ 32 bytes); Canvas requires this for any plugin declaring `read_write` access to a custom-data namespace |
+
+> **Do not set a `namespace_read_write_access_key`.** This plugin owns its
+> `canvas__dexcom_cgm_viewer` custom-data namespace, so Canvas generates and
+> manages that key automatically at install time. Setting it yourself
+> overwrites the value Canvas generated, which breaks the plugin's access to
+> its own tables — the chart panel then loads blank. (You only ever supply a
+> namespace access key when a plugin reads a namespace it does *not* own.)
 
 Two optional secrets enable email delivery via SendGrid. When unset, the
 link is still generated and offered as a copyable value plus a Canvas
@@ -81,7 +87,6 @@ canvas config set dexcom_cgm_viewer \
   "DEXCOM_REDIRECT_URI=https://<your-canvas-host>/plugin-io/api/dexcom_cgm_viewer/callback" \
   "DEXCOM_ENVIRONMENT=sandbox" \
   "DEXCOM_MAGIC_LINK_SECRET=$(python -c 'import secrets;print(secrets.token_urlsafe(48))')" \
-  "namespace_read_write_access_key=$(python -c 'import secrets;print(secrets.token_urlsafe(48))')" \
   --host <your-canvas-host>
 ```
 
