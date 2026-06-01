@@ -1,0 +1,49 @@
+{
+    "sdk_version": "0.152.0",
+    "plugin_version": "0.1.1",
+    "name": "soap_note",
+    "description": "Adds a SOAP Note tab to notes for structured Subjective, Objective, Assessment, Plan documentation.",
+    "components": {
+        "protocols": [
+            {
+                "class": "soap_note.handlers.soap_api:SoapNoteAPI",
+                "description": "SimpleAPI serving UI and save/load endpoints for SOAP notes"
+            }
+        ],
+        "applications": [
+            {
+                "class": "soap_note.applications.soap_note_app:SoapNoteApp",
+                "name": "SOAP Charting",
+                "description": "Note tab for structured SOAP charting",
+                "scope": "provider_companion_note_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "questionnaires/brief_ros.yml"
+            },
+            {
+                "template": "questionnaires/brief_exam.yml"
+            }
+        ]
+    },
+    "secrets": [],
+    "custom_data": {
+        "namespace": "soap_note__v1",
+        "access": "read_write"
+    },
+    "tags": {
+        "category": ["charting", "clinical-documentation", "reference"],
+        "specialty": ["primary-care", "general"],
+        "workflow": ["note-charting", "soap-note", "command-origination"]
+    },
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
