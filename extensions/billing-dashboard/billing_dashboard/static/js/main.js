@@ -17,12 +17,6 @@
         function fmtCurrency(val) {
             return '$' + Number(val).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
         }
-        function renderBadge(source) {
-            return source === 'mock' ? ' <span class="demo-badge">Demo data</span>' : '';
-        }
-        function setCardBadge(id, source) {
-            document.getElementById(id).innerHTML = renderBadge(source);
-        }
         function escapeHtml(s) {
             if (s === null || s === undefined) return '';
             return String(s)
@@ -32,21 +26,29 @@
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
-        function setTrend(el, pct, source) {
+        function setTrend(el, pct, source, noBaselineMsg) {
             if (source === 'no_baseline') {
                 el.className = 'metric-trend neutral';
-                el.textContent = '\u2014 No prior-month baseline';
+                el.textContent = '— ' + (noBaselineMsg || 'No prior-month baseline');
                 return;
             }
             if (pct > 0) {
                 el.className = 'metric-trend up';
-                el.textContent = '\u2191 ' + pct.toFixed(1) + '% from prior month';
+                el.textContent = '↑ ' + pct.toFixed(1) + '% from prior month';
             } else if (pct < 0) {
                 el.className = 'metric-trend down';
-                el.textContent = '\u2193 ' + Math.abs(pct).toFixed(1) + '% from prior month';
+                el.textContent = '↓ ' + Math.abs(pct).toFixed(1) + '% from prior month';
             } else {
                 el.className = 'metric-trend neutral';
-                el.textContent = '\u2192 No change';
+                el.textContent = '→ No change';
+            }
+        }
+        function renderEmptyChart(canvasId, message) {
+            var c = document.getElementById(canvasId);
+            if (c && c.parentElement) {
+                c.parentElement.innerHTML =
+                    '<p style="color:#6b7280;font-size:13px;text-align:center;padding:40px 16px;">' +
+                    message + '</p>';
             }
         }
 
@@ -58,11 +60,11 @@
                 document.getElementById('val-last-month').textContent = fmtCurrency(s.last_month_collected.value);
                 document.getElementById('val-this-month').textContent = fmtCurrency(s.this_month_collected.value);
                 document.getElementById('val-next-month').textContent = fmtCurrency(s.next_month_projected.value);
-                document.getElementById('val-acceptance').textContent = s.claim_acceptance_rate.value.toFixed(1) + '%';
-                setCardBadge('badge-last-month', s.last_month_collected.source);
-                setCardBadge('badge-this-month', s.this_month_collected.source);
-                setCardBadge('badge-next-month', s.next_month_projected.source);
-                setCardBadge('badge-acceptance', s.claim_acceptance_rate.source);
+                if (s.claim_acceptance_rate.source === 'no_baseline') {
+                    document.getElementById('val-acceptance').textContent = '—';
+                } else {
+                    document.getElementById('val-acceptance').textContent = s.claim_acceptance_rate.value.toFixed(1) + '%';
+                }
                 setTrend(document.getElementById('trend-last-month'), s.last_month_trend_pct.value, s.last_month_trend_pct.source);
                 var thisMonthTrend = document.getElementById('trend-this-month');
                 thisMonthTrend.className = 'metric-trend neutral';
@@ -71,18 +73,21 @@
                 nextTrend.className = 'metric-trend neutral';
                 nextTrend.textContent = s.next_month_appt_count.value + ' appointments scheduled';
                 var acceptanceTrend = document.getElementById('trend-acceptance');
-                acceptanceTrend.className = 'metric-trend neutral';
-                acceptanceTrend.textContent = 'Trailing 30 days';
+                if (s.claim_acceptance_rate.source === 'no_baseline') {
+                    setTrend(acceptanceTrend, null, 'no_baseline', 'No claims to rate');
+                } else {
+                    acceptanceTrend.className = 'metric-trend neutral';
+                    acceptanceTrend.textContent = 'Trailing 30 days';
+                }
 
-                /* Chart title badges */
-                document.getElementById('daily-chart-title').innerHTML =
-                    'Daily Volume &amp; Revenue (trailing month)' + renderBadge(data.daily && data.daily.source);
-                document.getElementById('monthly-chart-title').innerHTML =
-                    'Monthly Revenue Trend (trailing 12 months)' + renderBadge(data.monthly && data.monthly.source);
+                document.getElementById('daily-chart-title').textContent = 'Daily Volume & Revenue (trailing month)';
+                document.getElementById('monthly-chart-title').textContent = 'Monthly Revenue Trend (trailing 12 months)';
 
                 /* Daily chart */
-                if (typeof Chart !== 'undefined' && data.daily && data.daily.data) {
-                    var dailyRows = data.daily.data;
+                var dailyRows = (data.daily && data.daily.data) ? data.daily.data : [];
+                if (dailyRows.length === 0) {
+                    renderEmptyChart('daily-chart', 'No data in this window.');
+                } else if (typeof Chart !== 'undefined') {
                     var dLabels = dailyRows.map(function(d) { return d.date; });
                     new Chart(document.getElementById('daily-chart').getContext('2d'), {
                         type: 'bar',
@@ -124,8 +129,10 @@
                 }
 
                 /* Monthly chart */
-                if (typeof Chart !== 'undefined' && data.monthly && data.monthly.data) {
-                    var monthlyRows = data.monthly.data;
+                var monthlyRows = (data.monthly && data.monthly.data) ? data.monthly.data : [];
+                if (monthlyRows.length === 0) {
+                    renderEmptyChart('monthly-chart', 'No data in this window.');
+                } else if (typeof Chart !== 'undefined') {
                     new Chart(document.getElementById('monthly-chart').getContext('2d'), {
                         type: 'bar',
                         data: {
@@ -151,13 +158,13 @@
                 if (insightsData.length) {
                     var ihtml = '';
                     insightsData.forEach(function(ins) {
-                        var icon = ins.severity === 'critical' ? '\u26a0\ufe0f' : (ins.severity === 'warning' ? '\u26a0' : '\u2139\ufe0f');
+                        var icon = ins.severity === 'critical' ? '⚠️' : (ins.severity === 'warning' ? '⚠' : 'ℹ️');
                         ihtml += '<div class="insight-card ' + ins.severity + '">' +
                             '<span class="insight-icon">' + icon + '</span>' +
                             '<div class="insight-content">' +
-                            '<div class="insight-title">' + ins.title + '</div>' +
-                            '<div class="insight-desc">' + ins.description + '</div>' +
-                            '<span class="insight-tag">' + ins.tag + '</span>' +
+                            '<div class="insight-title">' + escapeHtml(ins.title) + '</div>' +
+                            '<div class="insight-desc">' + escapeHtml(ins.description) + '</div>' +
+                            '<span class="insight-tag">' + escapeHtml(ins.tag) + '</span>' +
                             '</div></div>';
                     });
                     insightsList.innerHTML = ihtml;
@@ -185,17 +192,17 @@
             fetch('/plugin-io/api/billing_dashboard/api/metrics?tab=payer')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    document.getElementById('payer-table-title').innerHTML =
-                        'Payer Performance (trailing 90 days)' + renderBadge(data.payers && data.payers.source);
+                    document.getElementById('payer-table-title').textContent = 'Payer Performance (trailing 90 days)';
                     var tbody = document.getElementById('payer-table-body');
                     var payers = (data.payers && data.payers.data) ? data.payers.data : [];
                     if (payers.length === 0) {
                         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:#9ca3af">No payer data available.</td></tr>';
+                        renderEmptyChart('payer-chart', 'No collected revenue in the trailing 90 days &mdash; payer mix is unavailable until claims post.');
                         return;
                     }
                     var html = '';
                     payers.forEach(function(p) {
-                        var deltaHtml = '\u2014';
+                        var deltaHtml = '—';
                         if (p.cms_delta !== null && p.cms_delta !== undefined) {
                             var cls = p.cms_delta >= 0 ? 'positive' : 'negative';
                             var sign = p.cms_delta >= 0 ? '+' : '';
@@ -213,16 +220,12 @@
                     /* Doughnut chart */
                     var values = payers.map(function(p) { return p.collected; });
                     var totalRevenue = values.reduce(function(a, b) { return a + b; }, 0);
-                    var chartCanvas = document.getElementById('payer-chart');
                     if (totalRevenue === 0) {
-                        chartCanvas.parentElement.innerHTML =
-                            '<p style="color:#6b7280;font-size:13px;text-align:center;padding:40px 16px;">' +
-                            'No collected revenue in the trailing 90 days &mdash; payer mix is unavailable until claims post.' +
-                            '</p>';
+                        renderEmptyChart('payer-chart', 'No collected revenue in the trailing 90 days &mdash; payer mix is unavailable until claims post.');
                     } else if (typeof Chart !== 'undefined') {
                         var labels = payers.map(function(p) { return p.name; });
                         var colors = ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2','#9ca3af'];
-                        new Chart(chartCanvas.getContext('2d'), {
+                        new Chart(document.getElementById('payer-chart').getContext('2d'), {
                             type: 'doughnut',
                             data: {
                                 labels: labels,
@@ -256,8 +259,7 @@
             fetch('/plugin-io/api/billing_dashboard/api/metrics?tab=trends')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    document.getElementById('cpt-table-title').innerHTML =
-                        'Top CPT Codes by Volume (trailing 90 days)' + renderBadge(data.cpt_codes && data.cpt_codes.source);
+                    document.getElementById('cpt-table-title').textContent = 'Top CPT Codes by Volume (trailing 90 days)';
                     /* CPT table */
                     var tbody = document.getElementById('cpt-table-body');
                     var cpts = (data.cpt_codes && data.cpt_codes.data) ? data.cpt_codes.data : [];
@@ -272,7 +274,7 @@
                             var cls = deltaVal >= 0 ? 'positive' : 'negative';
                             var sign = deltaVal >= 0 ? '+' : '';
                             var trendCls = c.trend > 0 ? 'up' : (c.trend < 0 ? 'down' : 'flat');
-                            var trendIcon = c.trend > 0 ? '\u2191' : (c.trend < 0 ? '\u2193' : '\u2192');
+                            var trendIcon = c.trend > 0 ? '↑' : (c.trend < 0 ? '↓' : '→');
                             html += '<tr>' +
                                 '<td class="td-number">' + escapeHtml(c.code) + '</td>' +
                                 '<td>' + escapeHtml(c.description) + '</td>' +
@@ -286,8 +288,10 @@
                     }
 
                     /* Trends line chart */
-                    if (typeof Chart !== 'undefined' && data.monthly_avg && data.monthly_avg.data) {
-                        var monthlyAvgRows = data.monthly_avg.data;
+                    var monthlyAvgRows = (data.monthly_avg && data.monthly_avg.data) ? data.monthly_avg.data : [];
+                    if (monthlyAvgRows.length === 0) {
+                        renderEmptyChart('trends-chart', 'No data in this window.');
+                    } else if (typeof Chart !== 'undefined') {
                         var months = monthlyAvgRows.map(function(m) { return m.month; });
                         var avgs = monthlyAvgRows.map(function(m) { return m.avg_charge; });
                         var benchmark = data.cms_benchmark || 128.94;

@@ -5,14 +5,9 @@ import pytest
 from billing_dashboard.data import insights
 
 
-def _summary(**overrides) -> dict:
-    """Build a summary dict for insight tests.
-
-    Pass ``key=value`` to override a value (source stays "real"). Pass
-    ``_sources={"key": "mock"}`` to override one or more entries' source flag,
-    leaving values unchanged.
-    """
-    source_overrides: dict = overrides.pop("_sources", {})
+def _summary(**overrides: float) -> dict:
+    """Build a summary dict for insight tests. Pass ``key=value`` to override
+    a value; source stays ``"real"`` for all entries."""
     base = {
         "last_month_collected":  {"value": 10_000.00, "source": "real"},
         "this_month_collected":  {"value":  5_000.00, "source": "real"},
@@ -23,10 +18,7 @@ def _summary(**overrides) -> dict:
     }
     for key, value in overrides.items():
         if key in base:
-            base[key] = {"value": value, "source": source_overrides.get(key, "real")}
-    for key, source in source_overrides.items():
-        if key in base and key not in overrides:
-            base[key] = {"value": base[key]["value"], "source": source}
+            base[key] = {"value": value, "source": "real"}
     return base
 
 
@@ -74,27 +66,13 @@ class TestAcceptanceRule:
 
 
 class TestNoUpcomingAppointmentsRule:
-    def test_fires_when_count_zero_and_projection_real(self) -> None:
+    def test_fires_when_count_zero(self) -> None:
         out = insights.compute_insights(_summary(next_month_appt_count=0))
-        titles = [i["title"] for i in out]
-        assert "No appointments scheduled next month" in titles
-        assert "Demonstration data shown" not in titles
+        assert any(i["title"] == "No appointments scheduled next month" for i in out)
 
     def test_does_not_fire_when_count_positive(self) -> None:
         out = insights.compute_insights(_summary(next_month_appt_count=1))
         assert not any(i["title"] == "No appointments scheduled next month" for i in out)
-
-    def test_demo_copy_when_projection_is_mock(self) -> None:
-        """When the Next Month Projected card shows mock data, the insight
-        next to it must say 'Demonstration data shown' rather than claim
-        the projection cannot be estimated."""
-        out = insights.compute_insights(_summary(
-            next_month_appt_count=0,
-            _sources={"next_month_projected": "mock"},
-        ))
-        titles = [i["title"] for i in out]
-        assert "Demonstration data shown" in titles
-        assert "No appointments scheduled next month" not in titles
 
 
 class TestProjectionConfidenceRule:

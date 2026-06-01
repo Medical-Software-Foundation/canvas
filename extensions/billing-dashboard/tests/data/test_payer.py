@@ -68,17 +68,19 @@ class TestPayerAggregation:
     def test_blank_payer_name_skipped(
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """A row with empty payer_name is dropped; result is an empty real list."""
         _set_payer_rows(mock_claim, [
             {"current_coverage__payer_name": "", "collected": Decimal("999"), "total_claims": 3, "rejected_claims": 0},
         ])
         result = payer.build_payer(now=fixed_now)
-        assert result["payers"]["source"] == "mock"
+        assert result == {"payers": {"source": "real", "data": []}}
 
     @patch("billing_dashboard.data.payer.Claim")
-    def test_empty_queryset_returns_mock(
+    def test_empty_queryset_returns_real_empty_list(
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """No payer activity → empty real list. JS renders 'No payer data
+        available.' and the doughnut chart's empty-state message."""
         _set_payer_rows(mock_claim, [])
         result = payer.build_payer(now=fixed_now)
-        assert result["payers"]["source"] == "mock"
-        assert len(result["payers"]["data"]) == 6
+        assert result == {"payers": {"source": "real", "data": []}}

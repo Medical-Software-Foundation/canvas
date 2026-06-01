@@ -95,13 +95,15 @@ class TestCptCodeAggregation:
         assert row["cms_rate"] is None
 
     @patch("billing_dashboard.data.trends.BillingLineItem")
-    def test_empty_returns_mock(
+    def test_empty_returns_real_empty_list(
         self, mock_bli: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """No CPT activity → empty real list. JS renders 'No CPT data
+        available.' in the table body."""
         mock_bli.objects.filter.return_value.values.return_value.annotate.return_value.order_by.return_value.__getitem__.return_value = []
         result = trends.cpt_codes(now=fixed_now)
-        assert result["source"] == "mock"
-        assert len(result["data"]) == 6
+        assert result == {"source": "real", "data": []}
+
 
 class TestMonthlyAvg:
     @patch("billing_dashboard.data.trends.BillingLineItem")
@@ -118,13 +120,12 @@ class TestMonthlyAvg:
         assert result["data"][0]["avg_charge"] == pytest.approx(118.50)
 
     @patch("billing_dashboard.data.trends.BillingLineItem")
-    def test_empty_returns_mock(
+    def test_empty_returns_real_empty_list(
         self, mock_bli: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
         mock_bli.objects.filter.return_value.values.return_value.annotate.return_value.order_by.return_value = []
         result = trends.monthly_avg(now=fixed_now)
-        assert result["source"] == "mock"
-        assert len(result["data"]) == 12
+        assert result == {"source": "real", "data": []}
 
 
 class TestBuildTrends:

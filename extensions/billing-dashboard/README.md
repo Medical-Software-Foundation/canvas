@@ -122,11 +122,11 @@ billing_dashboard/
 │   ├── billing-dashboard-icon.svg
 │   └── billing-dashboard-icon.png
 ├── data/
+│   ├── claim_queue.py          # ClaimQueue ordinal codes (FILED=5, REJECTED=6, TRASH=10)
 │   ├── cms_rates.py            # hardcoded CMS benchmark lookup
 │   ├── insights.py             # rule engine for the insights panel
-│   ├── mock.py                 # mock payloads (fallback when real data is empty)
 │   ├── overview.py             # Overview tab builder (Claim + Appointment)
-│   ├── payer.py                # Payer tab builder (Claim grouped by payer_name)
+│   ├── payer.py                # Payer tab builder (Claim grouped by current_coverage)
 │   ├── trends.py               # Trends tab builder (BillingLineItem + ChargeDescriptionMaster)
 │   └── windows.py              # calendar + trailing time-window helpers
 ├── handlers/

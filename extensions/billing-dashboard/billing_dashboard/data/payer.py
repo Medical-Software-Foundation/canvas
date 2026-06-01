@@ -27,7 +27,6 @@ from canvas_sdk.v1.data.claim import Claim
 from django.db.models import Count, Q, Sum
 
 from billing_dashboard.data.claim_queue import ClaimQueueState
-from billing_dashboard.data.mock import payer_analysis as mock_payer
 from billing_dashboard.data.windows import trailing_90_days_range
 
 
@@ -55,9 +54,6 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
         )
     )
 
-    if not rows:
-        return {"payers": {"source": "mock", "data": mock_payer()["payers"]}}
-
     data = []
     for r in rows:
         name = r["current_coverage__payer_name"]
@@ -73,7 +69,5 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
             "acceptance_rate": round(acceptance_rate, 2),
             "cms_delta": None,
         })
-    if not data:
-        return {"payers": {"source": "mock", "data": mock_payer()["payers"]}}
     data.sort(key=lambda row: row["collected"], reverse=True)
     return {"payers": {"source": "real", "data": data}}

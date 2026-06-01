@@ -18,7 +18,6 @@ from django.db.models import Count, Q, Sum
 
 from billing_dashboard.data.claim_queue import ClaimQueueState
 from billing_dashboard.data.insights import compute_insights
-from billing_dashboard.data.mock import financial_overview as mock_overview
 from billing_dashboard.data.windows import (
     last_month_range,
     next_month_range,
@@ -32,18 +31,14 @@ from billing_dashboard.data.windows import (
 class SummaryEntry(TypedDict):
     """Envelope used for every summary metric returned by this module.
 
-    ``source`` lets the UI badge mock values; downstream consumers (insights
-    rules, JS metric cards) read ``value`` and decide based on ``source``.
-
     - ``"real"``: value was computed from a real DB query
-    - ``"mock"``: value came from the mock fallback (badge as Demo data)
-    - ``"no_baseline"``: only used by ``last_month_trend_pct``; the prior
-      month had zero collected, so a percentage change can't be computed.
-      ``value`` is 0.0 in this state but the JS must NOT render it as
-      "No change" — the trend slot shows "No prior-month baseline" instead.
+    - ``"no_baseline"``: the metric can't be expressed as a number — either
+      the prior month had zero collected (no percentage to compute) or there
+      were zero filed claims (no rate to compute). ``value`` is ``None`` in
+      this state; the JS renders an explanatory dash rather than a number.
     """
-    value: float | int
-    source: Literal["mock", "real", "no_baseline"]
+    value: float | int | None
+    source: Literal["real", "no_baseline"]
 
 
 _COLLECTED_SUM = Sum(
@@ -81,23 +76,15 @@ def aggregate_filed_claims(start: arrow.Arrow, end: arrow.Arrow) -> dict[str, An
     return result
 
 
-def _mock_summary(key: str) -> SummaryEntry:
-    return {"value": mock_overview()["summary"][key], "source": "mock"}
-
-
 def last_month_collected(now: arrow.Arrow | None = None) -> SummaryEntry:
     start, end = last_month_range(now)
     agg = aggregate_filed_claims(start, end)
-    if agg["count"] == 0:
-        return _mock_summary("last_month_collected")
     return {"value": float(agg["total"] or Decimal("0")), "source": "real"}
 
 
 def this_month_collected(now: arrow.Arrow | None = None) -> SummaryEntry:
     start, end = this_month_range(now)
     agg = aggregate_filed_claims(start, end)
-    if agg["count"] == 0:
-        return _mock_summary("this_month_to_date")
     return {"value": float(agg["total"] or Decimal("0")), "source": "real"}
 
 
@@ -121,17 +108,15 @@ def last_month_trend_pct(now: arrow.Arrow | None = None) -> SummaryEntry:
     prior_start, prior_end = last_month_range(now_arrow.shift(months=-1))
     last_agg = aggregate_filed_claims(last_start, last_end)
     prior_agg = aggregate_filed_claims(prior_start, prior_end)
-    if last_agg["count"] == 0 and prior_agg["count"] == 0:
-        return _mock_summary("last_month_trend_pct")
     pct = compute_trend_pct(
         last_agg["total"] or Decimal("0"),
         prior_agg["total"] or Decimal("0"),
     )
     if pct is None:
-        # Prior month had zero collections; can't compute a percentage.
-        # JS renders this state as "No prior-month baseline" rather than
-        # the misleading "0.0% / No change".
-        return {"value": 0.0, "source": "no_baseline"}
+        # Prior month had zero collections; can't compute a percentage. JS
+        # renders this state as "No prior-month baseline" rather than the
+        # misleading "0.0% / No change".
+        return {"value": None, "source": "no_baseline"}
     return {"value": pct, "source": "real"}
 
 
@@ -159,16 +144,15 @@ def next_month_projected(
 ) -> SummaryEntry:
     """Project next-month revenue as (appt count) × (avg collected per filed claim, trailing 90d).
 
-    `precomputed_appt_count` lets callers that have already queried the
-    appointment count for this `now` pass it in and avoid a duplicate
-    ``Appointment.objects...count()`` roundtrip.
+    Returns a real $0 when there is no claim history yet (no average to
+    multiply against) — same intent as the other "no data" cards.
     """
     if precomputed_appt_count is None:
         precomputed_appt_count = int(next_month_appointment_count(now)["value"])
     trailing_start, trailing_end = trailing_90_days_range(now)
     agg = aggregate_filed_claims(trailing_start, trailing_end)
     if agg["count"] == 0:
-        return _mock_summary("next_month_projected")
+        return {"value": 0.0, "source": "real"}
     avg_collected = (agg["total"] or Decimal("0")) / Decimal(agg["count"])
     projected = float(Decimal(precomputed_appt_count) * avg_collected)
     return {"value": projected, "source": "real"}
@@ -186,7 +170,11 @@ def claim_acceptance_rate(now: arrow.Arrow | None = None) -> SummaryEntry:
         rejected=Count("id", filter=Q(current_queue__queue_sort_ordering=ClaimQueueState.REJECTED)),
     )
     if counts["filed_total"] == 0:
-        return _mock_summary("claim_acceptance_rate")
+        # No claims to compute an acceptance rate against. Rendering 0% would
+        # falsely suggest "all your claims got rejected"; 100% would suggest
+        # "all accepted". Use no_baseline so the JS renders "— No claims to
+        # rate" instead.
+        return {"value": None, "source": "no_baseline"}
     rate = (counts["filed_total"] - counts["rejected"]) / counts["filed_total"] * 100
     return {"value": rate, "source": "real"}
 
@@ -205,8 +193,6 @@ def daily_collections(now: arrow.Arrow | None = None) -> dict[str, Any]:
         .annotate(collected=_COLLECTED_SUM, visits=Count("id", distinct=True))
         .order_by("modified__date")
     )
-    if not rows:
-        return {"source": "mock", "data": mock_overview()["daily"]}
     return {"source": "real", "data": [
         {
             "date": arrow.get(r["modified__date"]).format("MMM D"),
@@ -225,8 +211,6 @@ def monthly_collections(now: arrow.Arrow | None = None) -> dict[str, Any]:
         .annotate(collected=_COLLECTED_SUM)
         .order_by("modified__year", "modified__month")
     )
-    if not rows:
-        return {"source": "mock", "data": mock_overview()["monthly"]}
     return {"source": "real", "data": [
         {
             "month": arrow.get(r["modified__year"], r["modified__month"], 1).format("MMM"),

@@ -20,7 +20,6 @@ from billing_dashboard.data.cms_rates import (
     get_cms_rate,
     get_cpt_description,
 )
-from billing_dashboard.data.mock import trends as mock_trends
 from billing_dashboard.data.windows import (
     trailing_12_months_range,
     trailing_90_days_range,
@@ -43,7 +42,7 @@ def cpt_codes(now: arrow.Arrow | None = None) -> dict[str, Any]:
         .order_by("-volume")[:10]
     )
     if not rows:
-        return {"source": "mock", "data": mock_trends()["cpt_codes"]}
+        return {"source": "real", "data": []}
 
     cpt_list = [r["cpt"] for r in rows]
     # Ascending effective_date so the *newest* CDM row per CPT is iterated last
@@ -88,7 +87,7 @@ def monthly_avg(now: arrow.Arrow | None = None) -> dict[str, Any]:
         .order_by("created__year", "created__month")
     )
     if not rows:
-        return {"source": "mock", "data": mock_trends()["monthly_avg"]}
+        return {"source": "real", "data": []}
     return {
         "source": "real",
         "data": [

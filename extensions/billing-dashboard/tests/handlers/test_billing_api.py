@@ -1,4 +1,4 @@
-"""Tests for BillingDashboardAPI handler and mock data helpers."""
+"""Tests for BillingDashboardAPI handler."""
 
 import json
 from http import HTTPStatus
@@ -8,7 +8,6 @@ import pytest
 
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 
-from billing_dashboard.data import mock
 from billing_dashboard.data.cms_rates import CMS_PRIMARY_BENCHMARK
 from billing_dashboard.handlers.billing_api import ASSET_VERSION, BillingDashboardAPI
 
@@ -37,152 +36,6 @@ def _make_event(path: str = "/dashboard", query_string: str = "") -> MagicMock:
 
 def test_cms_99214_rate_value() -> None:
     assert CMS_PRIMARY_BENCHMARK == 128.94
-
-
-# ---------------------------------------------------------------------------
-# _financial_overview_data
-# ---------------------------------------------------------------------------
-
-
-class TestFinancialOverviewData:
-
-    def test_returns_summary_keys(self) -> None:
-        data = mock.financial_overview()
-        summary = data["summary"]
-        assert "last_month_collected" in summary
-        assert "this_month_to_date" in summary
-        assert "next_month_projected" in summary
-        assert "claim_acceptance_rate" in summary
-        assert "last_month_trend_pct" in summary
-        assert "next_month_appt_count" in summary
-
-    def test_returns_daily_data(self) -> None:
-        data = mock.financial_overview()
-        assert len(data["daily"]) > 0
-        entry = data["daily"][0]
-        assert "date" in entry
-        assert "visits" in entry
-        assert "collected" in entry
-
-    def test_returns_monthly_data(self) -> None:
-        data = mock.financial_overview()
-        assert len(data["monthly"]) == 12
-        entry = data["monthly"][0]
-        assert "month" in entry
-        assert "collected" in entry
-
-    def test_returns_insights(self) -> None:
-        data = mock.financial_overview()
-        assert len(data["insights"]) > 0
-        insight = data["insights"][0]
-        assert "severity" in insight
-        assert "title" in insight
-        assert "description" in insight
-        assert "tag" in insight
-
-    def test_insight_severities_are_valid(self) -> None:
-        data = mock.financial_overview()
-        valid = {"critical", "warning", "info"}
-        for insight in data["insights"]:
-            assert insight["severity"] in valid
-
-    def test_summary_values_are_numeric(self) -> None:
-        data = mock.financial_overview()
-        s = data["summary"]
-        assert isinstance(s["last_month_collected"], (int, float))
-        assert isinstance(s["this_month_to_date"], (int, float))
-        assert isinstance(s["next_month_projected"], (int, float))
-        assert isinstance(s["claim_acceptance_rate"], (int, float))
-        assert isinstance(s["last_month_trend_pct"], (int, float))
-        assert isinstance(s["next_month_appt_count"], int)
-
-
-# ---------------------------------------------------------------------------
-# _payer_analysis_data
-# ---------------------------------------------------------------------------
-
-
-class TestPayerAnalysisData:
-
-    def test_returns_payers_list(self) -> None:
-        data = mock.payer_analysis()
-        assert "payers" in data
-        assert len(data["payers"]) == 6
-
-    def test_payer_entry_keys(self) -> None:
-        payer = mock.payer_analysis()["payers"][0]
-        assert "name" in payer
-        assert "collected" in payer
-        assert "acceptance_rate" in payer
-        assert "cms_delta" in payer
-
-    def test_payer_values_are_numeric(self) -> None:
-        for payer in mock.payer_analysis()["payers"]:
-            assert isinstance(payer["collected"], (int, float))
-            assert isinstance(payer["acceptance_rate"], (int, float))
-            assert isinstance(payer["cms_delta"], (int, float))
-
-    def test_medicare_delta_is_zero(self) -> None:
-        payers = mock.payer_analysis()["payers"]
-        medicare = next(p for p in payers if p["name"] == "Medicare")
-        assert medicare["cms_delta"] == 0.00
-
-
-# ---------------------------------------------------------------------------
-# _trends_data
-# ---------------------------------------------------------------------------
-
-
-class TestTrendsData:
-
-    def test_returns_cpt_codes(self) -> None:
-        data = mock.trends()
-        assert "cpt_codes" in data
-        assert len(data["cpt_codes"]) == 6
-
-    def test_cpt_entry_keys(self) -> None:
-        cpt = mock.trends()["cpt_codes"][0]
-        assert "code" in cpt
-        assert "description" in cpt
-        assert "your_avg_charge" in cpt
-        assert "cms_rate" in cpt
-        assert "trend" in cpt
-
-    def test_trend_values_are_valid(self) -> None:
-        for cpt in mock.trends()["cpt_codes"]:
-            assert cpt["trend"] in (-1, 0, 1)
-
-    def test_returns_monthly_avg(self) -> None:
-        data = mock.trends()
-        assert len(data["monthly_avg"]) == 12
-        entry = data["monthly_avg"][0]
-        assert "month" in entry
-        assert "avg_charge" in entry
-
-    def test_cms_benchmark_matches_constant(self) -> None:
-        data = mock.trends()
-        assert data["cms_benchmark"] == CMS_PRIMARY_BENCHMARK
-
-    def test_99214_cms_rate_matches_constant(self) -> None:
-        cpts = mock.trends()["cpt_codes"]
-        c99214 = next(c for c in cpts if c["code"] == "99214")
-        assert c99214["cms_rate"] == CMS_PRIMARY_BENCHMARK
-
-    def test_mock_field_names_match_real_shape(self) -> None:
-        """Regression: mock dict keys must match what main.js reads.
-
-        Real path emits ``collected``/``your_avg_charge``/``avg_charge``;
-        mock had ``revenue``/``your_avg``/``avg`` before, so the empty-DB
-        fallback rendered ``undefined``/``$NaN``/TypeError.
-        """
-        m = mock.trends()
-        assert all("your_avg_charge" in r and "cms_rate" in r for r in m["cpt_codes"])
-        assert all("avg_charge" in r for r in m["monthly_avg"])
-        fin = mock.financial_overview()
-        assert all("collected" in r for r in fin["daily"])
-        assert all("collected" in r for r in fin["monthly"])
-        for p in mock.payer_analysis()["payers"]:
-            assert "collected" in p
 
 
 # ---------------------------------------------------------------------------

@@ -519,16 +519,3 @@ tbody td {
     font-weight: 400;
 }
 
-.demo-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    margin-left: 8px;
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-    background: #fef3c7;
-    color: #92400e;
-    border-radius: 10px;
-    vertical-align: middle;
-    text-transform: uppercase;
-}

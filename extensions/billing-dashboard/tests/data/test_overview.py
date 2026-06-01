@@ -44,8 +44,6 @@ class TestFiledClaimsQuerySet:
 class TestAggregateFiledClaims:
     @patch("billing_dashboard.data.overview.Claim")
     def test_returns_count_and_total(self, mock_claim: MagicMock, fixed_now: arrow.Arrow) -> None:
-        # filed_claims_in_range now does Claim.objects.filter().exclude();
-        # the aggregate is on the exclude() result.
         mock_claim.objects.filter.return_value.exclude.return_value.aggregate.return_value = {
             "count": 42,
             "total": Decimal("1234.56"),
@@ -65,13 +63,13 @@ class TestLastMonthCollected:
         assert result == {"value": 3500.0, "source": "real"}
 
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
-    def test_zero_count_uses_mock_fallback(
+    def test_zero_count_returns_real_zero(
         self, mock_agg: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """No filed claims → honest $0 with source=real, not a mock fallback."""
         mock_agg.return_value = {"count": 0, "total": None}
         result = overview.last_month_collected(now=fixed_now)
-        assert result["source"] == "mock"
-        assert result["value"] == 42580.00
+        assert result == {"value": 0.0, "source": "real"}
 
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
     def test_claims_with_no_payments_still_real(
@@ -80,8 +78,7 @@ class TestLastMonthCollected:
         """Filed claims exist but total_paid is 0 — real source, zero value."""
         mock_agg.return_value = {"count": 10, "total": None}
         result = overview.last_month_collected(now=fixed_now)
-        assert result["source"] == "real"
-        assert result["value"] == 0.0
+        assert result == {"value": 0.0, "source": "real"}
 
 
 class TestThisMonthCollected:
@@ -94,12 +91,12 @@ class TestThisMonthCollected:
         assert result == {"value": 500.0, "source": "real"}
 
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
-    def test_zero_count_uses_mock(
+    def test_zero_count_returns_real_zero(
         self, mock_agg: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
         mock_agg.return_value = {"count": 0, "total": None}
         result = overview.this_month_collected(now=fixed_now)
-        assert result["source"] == "mock"
+        assert result == {"value": 0.0, "source": "real"}
 
 
 class TestComputeTrendPct:
@@ -131,15 +128,17 @@ class TestLastMonthTrendPct:
         assert result["value"] == pytest.approx(100.0)
 
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
-    def test_both_zero_falls_back_to_mock(
+    def test_both_zero_returns_no_baseline(
         self, mock_agg: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """Both months at zero collected → no percentage to compute.
+        JS renders this as '— No prior-month baseline'."""
         mock_agg.side_effect = [
             {"count": 0, "total": None},
             {"count": 0, "total": None},
         ]
         result = overview.last_month_trend_pct(now=fixed_now)
-        assert result["source"] == "mock"
+        assert result == {"value": None, "source": "no_baseline"}
 
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
     def test_real_activity_with_zero_prior_marks_no_baseline(
@@ -153,7 +152,7 @@ class TestLastMonthTrendPct:
             {"count": 0, "total": None},             # prior month
         ]
         result = overview.last_month_trend_pct(now=fixed_now)
-        assert result == {"value": 0.0, "source": "no_baseline"}
+        assert result == {"value": None, "source": "no_baseline"}
 
     @patch("billing_dashboard.data.overview.arrow")
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
@@ -181,15 +180,18 @@ class TestClaimAcceptanceRate:
         assert result["value"] == pytest.approx(92.0)
 
     @patch("billing_dashboard.data.overview.Claim")
-    def test_zero_filed_returns_mock(
+    def test_zero_filed_returns_no_baseline(
         self, mock_claim: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """No filed claims → no rate to compute. 0% would falsely suggest 'all
+        rejected'; 100% would falsely suggest 'all accepted'. Use no_baseline
+        so the JS renders '— No claims to rate' instead."""
         mock_claim.objects.filter.return_value.exclude.return_value.aggregate.return_value = {
             "filed_total": 0,
             "rejected": 0,
         }
         result = overview.claim_acceptance_rate(now=fixed_now)
-        assert result["source"] == "mock"
+        assert result == {"value": None, "source": "no_baseline"}
 
 
 class TestNextMonthAppointmentCount:
@@ -231,13 +233,14 @@ class TestNextMonthProjected:
 
     @patch("billing_dashboard.data.overview.next_month_appointment_count")
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
-    def test_no_filed_claims_falls_back_to_mock(
+    def test_no_filed_claims_returns_real_zero(
         self, mock_agg: MagicMock, mock_appts: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """No claim history → no avg to multiply by. Return $0 (real)."""
         mock_appts.return_value = {"value": 10, "source": "real"}
         mock_agg.return_value = {"count": 0, "total": None}
         result = overview.next_month_projected(now=fixed_now)
-        assert result["source"] == "mock"
+        assert result == {"value": 0.0, "source": "real"}
 
     @patch("billing_dashboard.data.overview.next_month_appointment_count")
     @patch("billing_dashboard.data.overview.aggregate_filed_claims")
@@ -272,13 +275,14 @@ class TestDailyCollections:
         assert rows[1]["visits"] == 2
 
     @patch("billing_dashboard.data.overview.filed_claims_in_range")
-    def test_empty_returns_mock(
+    def test_empty_returns_real_empty_list(
         self, mock_filed: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
+        """No claim activity → empty real data. JS renders 'No data in this
+        window.' over the chart canvas."""
         mock_filed.return_value.values.return_value.annotate.return_value.order_by.return_value = []
         result = overview.daily_collections(now=fixed_now)
-        assert result["source"] == "mock"
-        assert len(result["data"]) == 19
+        assert result == {"source": "real", "data": []}
 
 
 class TestMonthlyCollections:
@@ -297,13 +301,12 @@ class TestMonthlyCollections:
         assert by_month["Apr"] == 500.0
 
     @patch("billing_dashboard.data.overview.filed_claims_in_range")
-    def test_empty_returns_mock(
+    def test_empty_returns_real_empty_list(
         self, mock_filed: MagicMock, fixed_now: arrow.Arrow
     ) -> None:
         mock_filed.return_value.values.return_value.annotate.return_value.order_by.return_value = []
         result = overview.monthly_collections(now=fixed_now)
-        assert result["source"] == "mock"
-        assert len(result["data"]) == 12
+        assert result == {"source": "real", "data": []}
 
 
 class TestBuildOverview:
