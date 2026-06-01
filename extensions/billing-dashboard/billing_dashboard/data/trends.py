@@ -68,7 +68,6 @@ def cpt_codes(now: arrow.Arrow | None = None) -> dict[str, Any]:
                 ),
                 "your_avg_charge": float(r["your_avg_charge"]) if r["your_avg_charge"] else 0.0,
                 "cms_rate": get_cms_rate(r["cpt"]),
-                "trend": 0,
             }
             for r in rows
         ],

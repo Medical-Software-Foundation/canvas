@@ -1,8 +1,9 @@
 """CMS Physician Fee Schedule benchmark rates and CPT descriptions.
 
-Values taken from the CMS Physician Fee Schedule. Matches the values used in
-the original Trends tab mock. Extend this table as new CPT codes are surfaced
-by the Trends aggregation.
+Values taken from the CMS Physician Fee Schedule. Used as the comparison
+benchmark on the Reimbursement Trends tab and as a description fallback when
+``ChargeDescriptionMaster`` lookups return nothing. Extend these tables as
+new CPT codes are surfaced by the Trends aggregation.
 """
 
 from __future__ import annotations

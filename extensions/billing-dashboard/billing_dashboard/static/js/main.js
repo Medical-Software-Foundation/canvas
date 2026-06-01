@@ -264,7 +264,7 @@
                     var tbody = document.getElementById('cpt-table-body');
                     var cpts = (data.cpt_codes && data.cpt_codes.data) ? data.cpt_codes.data : [];
                     if (cpts.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">No CPT data available.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:#9ca3af">No CPT data available.</td></tr>';
                     } else {
                         var html = '';
                         cpts.forEach(function(c) {
@@ -273,15 +273,12 @@
                             var deltaVal = hasRate ? (c.your_avg_charge - cmsRate) : 0;
                             var cls = deltaVal >= 0 ? 'positive' : 'negative';
                             var sign = deltaVal >= 0 ? '+' : '';
-                            var trendCls = c.trend > 0 ? 'up' : (c.trend < 0 ? 'down' : 'flat');
-                            var trendIcon = c.trend > 0 ? '↑' : (c.trend < 0 ? '↓' : '→');
                             html += '<tr>' +
                                 '<td class="td-number">' + escapeHtml(c.code) + '</td>' +
                                 '<td>' + escapeHtml(c.description) + '</td>' +
                                 '<td class="td-number">$' + c.your_avg_charge.toFixed(2) + '</td>' +
                                 '<td class="td-number">' + (hasRate ? '$' + cmsRate.toFixed(2) : '—') + '</td>' +
                                 '<td>' + (hasRate ? '<span class="delta-badge ' + cls + '">' + sign + '$' + Math.abs(deltaVal).toFixed(2) + '</span>' : '—') + '</td>' +
-                                '<td><span class="trend-arrow ' + trendCls + '">' + trendIcon + '</span></td>' +
                                 '</tr>';
                         });
                         tbody.innerHTML = html;
@@ -336,7 +333,7 @@
                     console.error('[billing_dashboard] trends fetch failed:', err);
                     trendsLoaded = false;
                     document.getElementById('cpt-table-body').innerHTML =
-                        '<tr><td colspan="6" style="text-align:center;padding:24px;color:#dc2626">' +
+                        '<tr><td colspan="5" style="text-align:center;padding:24px;color:#dc2626">' +
                         'Could not load trends data. Switch tabs and back to retry.' +
                         '</td></tr>';
                 });

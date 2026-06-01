@@ -410,24 +410,6 @@ tbody td {
     color: var(--color-text-muted);
 }
 
-/* Trend arrows */
-.trend-arrow {
-    font-size: 14px;
-    font-weight: 700;
-}
-
-.trend-arrow.up {
-    color: var(--color-success);
-}
-
-.trend-arrow.down {
-    color: var(--color-danger);
-}
-
-.trend-arrow.flat {
-    color: var(--color-text-muted);
-}
-
 /* ---- Payer analysis layout ---- */
 .payer-layout {
     display: grid;
