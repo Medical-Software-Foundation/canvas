@@ -52,15 +52,20 @@ After installing, set the required plugin secrets (see
 
 ## Configuration options
 
-Five required plugin secrets:
+The plugin declares its configuration as manifest `variables`. Values flagged
+**sensitive** are hidden in the Admin UI and `canvas config list`; non-sensitive
+values are shown in plaintext for verification. (Requires Canvas ≥ 1.305.0 and
+`canvas` CLI ≥ 0.158.0 for the `variables` schema.)
 
-| Secret | Notes |
-| --- | --- |
-| `DEXCOM_CLIENT_ID` | From Dexcom developer registration |
-| `DEXCOM_CLIENT_SECRET` | From Dexcom developer registration |
-| `DEXCOM_REDIRECT_URI` | Pre-registered with Dexcom; e.g. `https://<canvas-host>/plugin-io/api/dexcom_cgm_viewer/callback` |
-| `DEXCOM_ENVIRONMENT` | `sandbox` or `production` |
-| `DEXCOM_MAGIC_LINK_SECRET` | High-entropy string (≥ 32 bytes) used to HMAC-SHA256 sign magic-link tokens |
+Five required variables:
+
+| Variable | Sensitive | Notes |
+| --- | --- | --- |
+| `DEXCOM_CLIENT_ID` | no | From Dexcom developer registration |
+| `DEXCOM_CLIENT_SECRET` | yes | From Dexcom developer registration |
+| `DEXCOM_REDIRECT_URI` | no | Pre-registered with Dexcom; e.g. `https://<canvas-host>/plugin-io/api/dexcom_cgm_viewer/callback` |
+| `DEXCOM_ENVIRONMENT` | no | `sandbox` or `production` |
+| `DEXCOM_MAGIC_LINK_SECRET` | yes | High-entropy string (≥ 32 bytes) used to HMAC-SHA256 sign magic-link tokens |
 
 > **Do not set a `namespace_read_write_access_key`.** This plugin owns its
 > `canvas__dexcom_cgm_viewer` custom-data namespace, so Canvas generates and
@@ -73,21 +78,23 @@ Two optional secrets enable email delivery via SendGrid. When unset, the
 link is still generated and offered as a copyable value plus a Canvas
 portal message:
 
-| Secret | Notes |
-| --- | --- |
-| `SENDGRID_API_KEY` | SendGrid API key with Mail Send permission |
-| `SENDGRID_FROM_EMAIL` | A SendGrid-verified sender address |
+| Variable | Sensitive | Notes |
+| --- | --- | --- |
+| `SENDGRID_API_KEY` | yes | SendGrid API key with Mail Send permission |
+| `SENDGRID_FROM_EMAIL` | no | A SendGrid-verified sender address |
 
-Set them with:
+Set them at install time — pass sensitive values with `--secret` and
+non-sensitive ones with `--variable`:
 
 ```bash
-canvas config set dexcom_cgm_viewer \
-  "DEXCOM_CLIENT_ID=..." \
-  "DEXCOM_CLIENT_SECRET=..." \
-  "DEXCOM_REDIRECT_URI=https://<your-canvas-host>/plugin-io/api/dexcom_cgm_viewer/callback" \
-  "DEXCOM_ENVIRONMENT=sandbox" \
-  "DEXCOM_MAGIC_LINK_SECRET=$(python -c 'import secrets;print(secrets.token_urlsafe(48))')" \
-  --host <your-canvas-host>
+canvas install dexcom_cgm_viewer --host <your-canvas-host> \
+  --variable "DEXCOM_CLIENT_ID=..." \
+  --secret   "DEXCOM_CLIENT_SECRET=..." \
+  --variable "DEXCOM_REDIRECT_URI=https://<your-canvas-host>/plugin-io/api/dexcom_cgm_viewer/callback" \
+  --variable "DEXCOM_ENVIRONMENT=sandbox" \
+  --secret   "DEXCOM_MAGIC_LINK_SECRET=$(python -c 'import secrets;print(secrets.token_urlsafe(48))')" \
+  --secret   "SENDGRID_API_KEY=..." \
+  --variable "SENDGRID_FROM_EMAIL=..."
 ```
 
 > **Note on token storage:** OAuth tokens are stored unencrypted in the
