@@ -95,7 +95,8 @@ class TestBuildMedication:
         result = _build_medication(make_medication())
 
         assert result["name"] == "ADVAIR 100-50 DISKUS"
-        assert result["status"] == "Active"
+        assert result["is_active"] is True
+        assert result["status_label"] == "Active"
         assert result["start_date"] == "Sep 04, 2019"
         assert result["end_date"] == ""
         assert result["quantity"] == "1 inhaler"
@@ -109,8 +110,24 @@ class TestBuildMedication:
             )
         )
 
-        assert result["status"] == "Inactive"
+        assert result["is_active"] is False
+        assert result["status_label"] == "Inactive"
         assert result["end_date"] == "Sep 04, 2020"
+
+    def test_stopped_status_buckets_as_inactive_keeping_label(self):
+        """A non-active/inactive status (e.g. "stopped") must still bucket as
+        inactive so it isn't orphaned from both filters, while the badge keeps
+        the real status text."""
+        result = _build_medication(make_medication(status="stopped"))
+
+        assert result["is_active"] is False
+        assert result["status_label"] == "Stopped"
+
+    def test_empty_status_buckets_as_inactive_with_no_label(self):
+        result = _build_medication(make_medication(status=""))
+
+        assert result["is_active"] is False
+        assert result["status_label"] == ""
 
     def test_missing_fields_never_render_none(self):
         result = _build_medication(
@@ -123,11 +140,11 @@ class TestBuildMedication:
             )
         )
 
-        assert result["status"] == ""
+        assert result["status_label"] == ""
         assert result["start_date"] == ""
         assert result["quantity"] == ""
         assert result["national_drug_code"] == ""
-        assert "None" not in result.values()
+        assert "None" not in [v for v in result.values() if isinstance(v, str)]
 
 
 class TestHandle:
@@ -138,6 +155,10 @@ class TestHandle:
             make_medication(
                 status="inactive",
                 codings=[make_coding(FDB_SYSTEM, "ASPIRIN EC 500 MG")],
+            ),
+            make_medication(
+                status="stopped",
+                codings=[make_coding(FDB_SYSTEM, "PREDNISONE 10 MG")],
             ),
         ]
 
@@ -163,10 +184,11 @@ class TestHandle:
                     template_name, context = mock_render.call_args[0]
                     assert template_name == "templates/medication_history.html"
                     assert context["patient_name"] == "Jane Doe"
-                    assert len(context["medications"]) == 2
+                    assert len(context["medications"]) == 3
                     assert context["medications"][1]["name"] == "ASPIRIN EC 500 MG"
+                    # "stopped" must count under inactive, not vanish.
                     assert context["active_count"] == 1
-                    assert context["inactive_count"] == 1
+                    assert context["inactive_count"] == 2
 
         assert len(effects) == 1
         assert effects[0].type == EffectType.LAUNCH_MODAL

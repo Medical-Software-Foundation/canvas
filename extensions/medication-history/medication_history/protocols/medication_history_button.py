@@ -50,11 +50,20 @@ def _medication_name(med: Medication) -> str:
     return "Unknown medication"
 
 
-def _build_medication(med: Medication) -> dict[str, str]:
-    """Flatten a Medication into display-ready strings (never None)."""
+def _build_medication(med: Medication) -> dict[str, object]:
+    """Flatten a Medication into display-ready values (never None).
+
+    `is_active` drives both the count tallies and the Active/Inactive filter:
+    only the canonical "active" status counts as active, and every other value
+    (e.g. "inactive", "stopped", or an empty/unknown status) buckets as
+    inactive — so no record is ever orphaned from both filters. `status_label`
+    preserves the real status text for the badge.
+    """
+    is_active = (med.status or "").strip().lower() == "active"
     return {
         "name": _medication_name(med),
-        "status": med.status.title() if med.status else "",
+        "is_active": is_active,
+        "status_label": med.status.title() if med.status else "",
         "start_date": _format_date(med.start_date),
         "end_date": _format_date(med.end_date),
         "quantity": med.clinical_quantity_description or "",
@@ -101,16 +110,15 @@ class MedicationHistoryButton(ActionButton):
         )
 
         medications = [_build_medication(med) for med in meds]
+        active_count = sum(1 for m in medications if m["is_active"])
 
         html = render_to_string(
             "templates/medication_history.html",
             {
                 "patient_name": f"{patient.first_name} {patient.last_name}".strip(),
                 "medications": medications,
-                "active_count": sum(1 for m in medications if m["status"] == "Active"),
-                "inactive_count": sum(
-                    1 for m in medications if m["status"] == "Inactive"
-                ),
+                "active_count": active_count,
+                "inactive_count": len(medications) - active_count,
             },
         )
 

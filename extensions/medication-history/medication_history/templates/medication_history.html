@@ -71,10 +71,10 @@
 
     <div id="med-list">
       {% for med in medications %}
-        <div class="med" data-status="{{ med.status|lower }}">
+        <div class="med" data-status="{% if med.is_active %}active{% else %}inactive{% endif %}">
           <div class="med-head">
             <p class="med-name">{{ med.name }}</p>
-            {% if med.status %}<span class="badge {% if med.status == 'Active' %}active{% else %}inactive{% endif %}">{{ med.status }}</span>{% endif %}
+            {% if med.status_label %}<span class="badge {% if med.is_active %}active{% else %}inactive{% endif %}">{{ med.status_label }}</span>{% endif %}
           </div>
           <dl class="meta">
             {% if med.start_date %}<dt>Started</dt><dd>{{ med.start_date }}</dd>{% endif %}
