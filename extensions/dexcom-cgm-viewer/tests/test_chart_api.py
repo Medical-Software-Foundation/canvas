@@ -13,7 +13,7 @@ import pytest
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 from canvas_sdk.handlers.simple_api.security import SessionCredentials
-from dexcom_cgm_viewer.lib import storage
+from dexcom_cgm_viewer.services import storage
 from dexcom_cgm_viewer.protocols.chart_api import (
     DexcomChartAPI,
     _build_connect_url,
@@ -206,7 +206,7 @@ def test_sync_returns_200_on_success() -> None:
 
 def test_sync_returns_502_on_dexcom_outage() -> None:
     """A Dexcom-side failure (DexcomAPIError) is the expected 502 path."""
-    from dexcom_cgm_viewer.lib.dexcom_client import DexcomAPIError
+    from dexcom_cgm_viewer.services.dexcom_client import DexcomAPIError
     api = _make_api("POST", "/sync", query_params={"patient_id": PATIENT, "range": "7d"})
     storage.upsert_tokens(
         PATIENT, access_token_ciphertext="x", refresh_token_ciphertext="y",
@@ -224,7 +224,7 @@ def test_sync_returns_502_on_dexcom_outage() -> None:
 
 def test_sync_returns_502_on_refresh_failure() -> None:
     """RefreshFailed (single-use refresh-token race) is also a 502."""
-    from dexcom_cgm_viewer.lib.oauth import RefreshFailed
+    from dexcom_cgm_viewer.services.oauth import RefreshFailed
     api = _make_api("POST", "/sync", query_params={"patient_id": PATIENT, "range": "7d"})
     storage.upsert_tokens(
         PATIENT, access_token_ciphertext="x", refresh_token_ciphertext="y",
@@ -437,7 +437,7 @@ def test_send_link_emails_when_sendgrid_configured() -> None:
 
 
 def test_send_link_reports_failed_when_sendgrid_rejects() -> None:
-    from dexcom_cgm_viewer.lib.email import EmailDeliveryError
+    from dexcom_cgm_viewer.services.email import EmailDeliveryError
     secrets = _full_secrets() | {
         "SENDGRID_API_KEY": "SG.test", "SENDGRID_FROM_EMAIL": "noreply@example.com",
     }

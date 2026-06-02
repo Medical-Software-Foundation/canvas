@@ -5,8 +5,8 @@ from __future__ import annotations
 import jwt
 import pytest
 
-from dexcom_cgm_viewer.lib import magic_link
-from dexcom_cgm_viewer.lib.settings import MAGIC_LINK_TTL_SECONDS
+from dexcom_cgm_viewer.services import magic_link
+from dexcom_cgm_viewer.services.settings import MAGIC_LINK_TTL_SECONDS
 
 
 SECRET = "x" * 64

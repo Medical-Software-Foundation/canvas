@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from dexcom_cgm_viewer.lib.email import (
+from dexcom_cgm_viewer.services.email import (
     EmailDeliveryError,
     patient_email_address,
     send_magic_link_email,
@@ -88,7 +88,7 @@ def test_send_magic_link_email_defaults_to_sdk_http_when_unset() -> None:
     ``canvas_sdk.utils.http.Http`` scoped to SendGrid (REVIEW.md §8)."""
     fake_http = MagicMock()
     fake_http.post.return_value = _mock_response(202)
-    with patch("dexcom_cgm_viewer.lib.email.Http", return_value=fake_http) as MockHttp:
+    with patch("dexcom_cgm_viewer.services.email.Http", return_value=fake_http) as MockHttp:
         send_magic_link_email(
             api_key="k", from_email="from@x", to_email="to@y",
             patient_first_name="Pat", link="https://canvas/connect",

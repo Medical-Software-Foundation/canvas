@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from dexcom_cgm_viewer.lib.time_utils import (
+from dexcom_cgm_viewer.services.time_utils import (
     age_seconds,
     parse_iso8601,
     relative_time,

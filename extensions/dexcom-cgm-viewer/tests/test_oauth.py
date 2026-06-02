@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dexcom_cgm_viewer.lib import oauth, storage
-from dexcom_cgm_viewer.lib.crypto import TokenCipher
-from dexcom_cgm_viewer.lib.dexcom_client import DexcomAuthError, TokenSet
+from dexcom_cgm_viewer.services import oauth, storage
+from dexcom_cgm_viewer.services.crypto import TokenCipher
+from dexcom_cgm_viewer.services.dexcom_client import DexcomAuthError, TokenSet
 from dexcom_cgm_viewer.models import DexcomOAuthToken
 
 

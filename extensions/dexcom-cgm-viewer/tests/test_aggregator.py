@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from dexcom_cgm_viewer.lib.aggregator import (
+from dexcom_cgm_viewer.services.aggregator import (
     Reading,
     aggregate_day,
     aggregate_range,

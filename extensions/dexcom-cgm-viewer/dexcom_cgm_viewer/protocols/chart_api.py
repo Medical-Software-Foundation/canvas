@@ -30,26 +30,26 @@ from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data import Patient
 from logger import log
 
-from dexcom_cgm_viewer.lib.chart_data import build_payload, payload_to_dict
-from dexcom_cgm_viewer.lib.crypto import TokenCipher
-from dexcom_cgm_viewer.lib.dexcom_client import (
+from dexcom_cgm_viewer.services.chart_data import build_payload, payload_to_dict
+from dexcom_cgm_viewer.services.crypto import TokenCipher
+from dexcom_cgm_viewer.services.dexcom_client import (
     DexcomAPIError,
     DexcomAuthError,
     DexcomClient,
 )
-from dexcom_cgm_viewer.lib.email import (
+from dexcom_cgm_viewer.services.email import (
     EmailDeliveryError,
     patient_email_address,
     send_magic_link_email,
 )
-from dexcom_cgm_viewer.lib.magic_link import mint as mint_magic_link
-from dexcom_cgm_viewer.lib.oauth import RefreshFailed, TokensNotFound
-from dexcom_cgm_viewer.lib.settings import REQUIRED_SECRETS, parse_range_days
-from dexcom_cgm_viewer.lib.storage import (
+from dexcom_cgm_viewer.services.magic_link import mint as mint_magic_link
+from dexcom_cgm_viewer.services.oauth import RefreshFailed, TokensNotFound
+from dexcom_cgm_viewer.services.settings import REQUIRED_SECRETS, parse_range_days
+from dexcom_cgm_viewer.services.storage import (
     delete_all_for_patient,
     upsert_sync_state,
 )
-from dexcom_cgm_viewer.lib.sync import sync_patient
+from dexcom_cgm_viewer.services.sync import sync_patient
 
 
 def _now() -> dt.datetime:

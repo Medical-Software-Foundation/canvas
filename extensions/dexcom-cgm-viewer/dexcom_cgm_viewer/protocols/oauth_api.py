@@ -25,20 +25,20 @@ from canvas_sdk.handlers.simple_api.security import Credentials
 from canvas_sdk.templates import render_to_string
 from logger import log
 
-from dexcom_cgm_viewer.lib.crypto import TokenCipher
-from dexcom_cgm_viewer.lib.dexcom_client import (
+from dexcom_cgm_viewer.services.crypto import TokenCipher
+from dexcom_cgm_viewer.services.dexcom_client import (
     DexcomAPIError,
     DexcomAuthError,
     DexcomClient,
 )
-from dexcom_cgm_viewer.lib.magic_link import (
+from dexcom_cgm_viewer.services.magic_link import (
     sign_state as sign_oauth_state,
     verify as verify_magic_link,
     verify_state,
 )
-from dexcom_cgm_viewer.lib.oauth import persist_tokens
-from dexcom_cgm_viewer.lib.settings import REQUIRED_SECRETS
-from dexcom_cgm_viewer.lib.storage import get_sync_state, upsert_sync_state
+from dexcom_cgm_viewer.services.oauth import persist_tokens
+from dexcom_cgm_viewer.services.settings import REQUIRED_SECRETS
+from dexcom_cgm_viewer.services.storage import get_sync_state, upsert_sync_state
 
 
 def _now() -> dt.datetime:
