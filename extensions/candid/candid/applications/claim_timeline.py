@@ -16,20 +16,16 @@ class CandidClaimTimeline(Application):
     def on_open(self) -> Effect:
         """Load timeline if already on a claim page, otherwise show placeholder."""
         claim = self.event.context.get("claim")
-        claim_id = claim["id"] if claim else None
-        return LaunchModalEffect(
-            content=_html(claim_id=claim_id),
-            target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE,
-            title="Candid Activity",
-        ).apply()
+        return self._render(claim["id"] if claim else None)
 
     def on_context_change(self) -> Effect | list[Effect] | None:
         """Update the timeline when the user navigates to a claim."""
         claim = self.event.context.get("claim")
         if not claim:
             return None
+        return self._render(claim["id"])
 
-        claim_id = claim["id"]
+    def _render(self, claim_id: str | None) -> Effect:
         return LaunchModalEffect(
             content=_html(claim_id=claim_id),
             target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE,

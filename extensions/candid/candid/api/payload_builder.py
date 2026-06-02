@@ -163,10 +163,8 @@ def build_split_payloads(
 
 def _split_diagnoses(diagnoses: list[dict]) -> list[list[dict]]:
     """Paginate a flat diagnosis list into chunks of MAX_DIAGNOSES_PER_ENCOUNTER."""
-    chunks = []
-    for i in range(0, len(diagnoses), MAX_DIAGNOSES_PER_ENCOUNTER):
-        chunks.append(diagnoses[i : i + MAX_DIAGNOSES_PER_ENCOUNTER])
-    return chunks
+    n = MAX_DIAGNOSES_PER_ENCOUNTER
+    return [diagnoses[i : i + n] for i in range(0, len(diagnoses), n)]
 
 
 def _format_diagnosis_chunk(chunk: list[dict]) -> list[dict]:
@@ -263,9 +261,9 @@ def _add_diagnoses(claim: Claim, payload: dict, errors: list[str]) -> None:
         return
 
     # First code is ABK (primary ICD-10), rest are ABF
-    formatted = [{"code": diagnosis_codes[0], "code_type": "ABK"}]
-    formatted.extend({"code": code, "code_type": "ABF"} for code in diagnosis_codes[1:])
-    payload["diagnoses"] = formatted
+    payload["diagnoses"] = _format_diagnosis_chunk(
+        [{"code": code} for code in diagnosis_codes]
+    )
 
 
 def _add_service_lines(claim: Claim, payload: dict) -> None:
