@@ -14,18 +14,20 @@ from canvas_sdk.v1.data.base import CustomModel
 class SonosSpeaker(CustomModel):
     """Maps a Sonos speaker/group to a Canvas practice location.
 
-    A location can host exactly one speaker mapping. The mapped speaker is what
-    play/pause/volume controls and schedules act on for that location.
+    A location can host many speakers, and a given Sonos player maps to exactly
+    one location (uniqueness is on ``player_id``, not ``location_id``). The
+    speakers mapped to a location are what play/pause/volume controls and
+    schedules act on for that location.
     """
 
     location_id: Any = TextField()  # Canvas PracticeLocation UUID
     location_name: Any = TextField(default="")
-    player_id: Any = TextField()  # Sonos player ID
+    player_id: Any = TextField()  # Sonos player ID (a player maps to one location)
     group_id: Any = TextField(default="")  # Sonos group ID (preferred for control)
     player_name: Any = TextField()  # human-readable name from Sonos
     household_id: Any = TextField()
     active: Any = BooleanField(default=True)
-    # Remembered "default station" for this location — set to the last favorite
+    # Remembered "default station" for this speaker — set to the last favorite
     # played here and pre-selected in the Play control. Staff can still pick another.
     default_favorite_id: Any = TextField(default="")
     default_favorite_name: Any = TextField(default="")
@@ -33,10 +35,11 @@ class SonosSpeaker(CustomModel):
 
     class Meta:
         constraints = [
-            UniqueConstraint(fields=["location_id"], name="uq_sonos_speaker_location"),
+            UniqueConstraint(fields=["player_id"], name="uq_sonos_speaker_player"),
         ]
         indexes = [
             Index(fields=["location_id"]),
+            Index(fields=["player_id"]),
         ]
 
     def __str__(self) -> str:

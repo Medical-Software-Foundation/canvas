@@ -9,8 +9,8 @@ single staff-facing app.
 
 - **In-app Connect Sonos** — a one-click OAuth handshake stores the refresh token
   on an org-wide credential record. No copy-pasting tokens.
-- **Speaker mapping** — link each Sonos player/group to a Canvas practice
-  location. One speaker per location.
+- **Speaker mapping** — link Sonos players/groups to Canvas practice locations.
+  A location can have many speakers; a given player maps to one location.
 - **Presets** — name a Sonos favorite + volume as a reusable "station." Mark one
   as the global default, or bind a preset to a specific location.
 - **Manual control** — play, pause, and set volume per location. The last station
@@ -89,10 +89,10 @@ update the offset when DST changes if you need exact local time year-round.
 
 ## Screenshots or screen recordings
 
-> _TODO: add at least one screenshot of the Sonos Audio app (e.g. the speaker
-> mapping / playback view) to `assets/` and embed it here, for example:_
->
-> `![Sonos Audio — playback controls](../assets/screenshot-playback.png)`
+The **Speakers** tab — map one or more Sonos speakers to each practice location,
+then play / pause / adjust volume per speaker or for the whole location:
+
+![Sonos Audio — Speakers tab with mapped speakers per location](assets/screenshot-speakers.png)
 
 ## Components
 

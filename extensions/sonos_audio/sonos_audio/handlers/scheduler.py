@@ -80,45 +80,43 @@ class PlaybackScheduler(CronTask):
         if not firing:
             return []
 
-        # One query for the speakers we need, keyed by location.
+        # One query for the speakers we need, grouped by location. A location may
+        # have several speakers, so the schedule fans out to every one of them.
         location_ids = {sched.location_id for sched, _ in firing}
-        speakers = {
-            s.location_id: s
-            for s in SonosSpeaker.objects.filter(location_id__in=location_ids, active=True)
-        }
+        speakers_by_location: dict[str, list[Any]] = {}
+        for s in SonosSpeaker.objects.filter(location_id__in=location_ids, active=True):
+            speakers_by_location.setdefault(s.location_id, []).append(s)
 
         client = self._client()
         demo = client is None
 
         for sched, action in firing:
             triggered_by = "schedule_start" if action == "play" else "schedule_stop"
-
-            speaker = speakers.get(sched.location_id)
-            if not speaker:
-                continue
-            group_id = speaker.group_id or speaker.player_id
             volume = max(0, min(100, int(sched.volume or 25)))
 
-            error_message = ""
-            if not demo and client is not None:
-                try:
-                    if action == "play":
-                        client.load_favorite(group_id, sched.favorite_id, play_on_completion=True)
-                        client.set_volume(group_id, volume)
-                    else:
-                        client.pause(group_id)
-                except Exception as e:  # noqa: BLE001 - log and record, never crash the cron tick
-                    error_message = str(e)
-                    log.warning("[sonos_audio] schedule %s error: %s", action, e)
+            for speaker in speakers_by_location.get(sched.location_id, []):
+                group_id = speaker.group_id or speaker.player_id
 
-            SonosPlaybackLog.objects.create(
-                location_id=sched.location_id,
-                location_name=sched.location_name,
-                player_id=speaker.player_id,
-                action="error" if error_message else action,
-                volume=volume if action == "play" else 0,
-                triggered_by=triggered_by,
-                error_message=error_message,
-            )
+                error_message = ""
+                if not demo and client is not None:
+                    try:
+                        if action == "play":
+                            client.load_favorite(group_id, sched.favorite_id, play_on_completion=True)
+                            client.set_volume(group_id, volume)
+                        else:
+                            client.pause(group_id)
+                    except Exception as e:  # noqa: BLE001 - log and record, never crash the cron tick
+                        error_message = str(e)
+                        log.warning("[sonos_audio] schedule %s error: %s", action, e)
+
+                SonosPlaybackLog.objects.create(
+                    location_id=sched.location_id,
+                    location_name=sched.location_name,
+                    player_id=speaker.player_id,
+                    action="error" if error_message else action,
+                    volume=volume if action == "play" else 0,
+                    triggered_by=triggered_by,
+                    error_message=error_message,
+                )
 
         return []

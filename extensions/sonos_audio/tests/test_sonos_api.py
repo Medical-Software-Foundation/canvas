@@ -392,7 +392,7 @@ def test_create_speaker_creates_new():
 
 
 def test_update_speaker_not_found():
-    api = make_api(body=json.dumps({"player_name": "x"}), path_params={"location_id": "loc1"})
+    api = make_api(body=json.dumps({"player_name": "x"}), path_params={"player_id": "p1"})
     with patch(f"{MODELS}.SonosSpeaker") as Sp:
         Sp.objects.filter.return_value = FakeQS(exists=False)
         out = api.update_sonos_speaker()
@@ -400,25 +400,25 @@ def test_update_speaker_not_found():
 
 
 def test_update_speaker_success():
-    api = make_api(body=json.dumps({"player_name": "x", "default_volume": 10}),
-                   path_params={"location_id": "loc1"})
+    api = make_api(body=json.dumps({"player_name": "x", "default_volume": 10, "location_id": "loc2"}),
+                   path_params={"player_id": "p1"})
     qs = FakeQS(items=[fake_speaker()], exists=True)
     with patch(f"{MODELS}.SonosSpeaker") as Sp:
         Sp.objects.filter.return_value = qs
         out = api.update_sonos_speaker()
     assert body_of(out[0])["success"] is True
-    assert qs.updated == {"player_name": "x", "default_volume": 10}
+    assert qs.updated == {"player_name": "x", "default_volume": 10, "location_id": "loc2"}
 
 
 def test_update_speaker_invalid_json():
-    api = make_api(body="x", path_params={"location_id": "loc1"})
+    api = make_api(body="x", path_params={"player_id": "p1"})
     with patch(f"{MODELS}.SonosSpeaker"):
         out = api.update_sonos_speaker()
     assert out[0].status_code == 400
 
 
 def test_delete_speaker_not_found_and_success():
-    api = make_api(path_params={"location_id": "loc1"})
+    api = make_api(path_params={"player_id": "p1"})
     with patch(f"{MODELS}.SonosSpeaker") as Sp:
         Sp.objects.filter.return_value.first.return_value = None
         assert api.delete_sonos_speaker()[0].status_code == 404
@@ -427,6 +427,20 @@ def test_delete_speaker_not_found_and_success():
         out = api.delete_sonos_speaker()
     assert sp.active is False
     assert body_of(out[0])["success"] is True
+
+
+def test_create_speaker_allows_multiple_per_location():
+    # A new player at an already-used location creates a second mapping (no upsert).
+    payload = {"location_id": "loc1", "player_id": "pNEW", "player_name": "Hallway", "household_id": "hh"}
+    api = make_api(body=json.dumps(payload))
+    with patch(f"{MODELS}.SonosSpeaker") as Sp:
+        Sp.objects.filter.return_value.first.return_value = None  # no existing player_id=pNEW
+        Sp.objects.create.return_value = Mock(pk=9)
+        out = api.create_sonos_speaker()
+    assert out[0].status_code == 201
+    # upsert keyed on player_id, not location_id
+    _, kwargs = Sp.objects.filter.call_args
+    assert kwargs == {"player_id": "pNEW"}
 
 
 # ---------------------------------------------------------------------------
@@ -504,10 +518,10 @@ def test_seed_presets_counts_created():
 
 
 # ---------------------------------------------------------------------------
-# playback control
+# playback control (fan-out by location, or single by player_id)
 # ---------------------------------------------------------------------------
 
-def test_play_invalid_json_and_missing_location():
+def test_play_invalid_json_and_missing_target():
     with patch(f"{MODELS}.AudioPreset"), patch(f"{MODELS}.SonosPlaybackLog"), \
          patch(f"{MODELS}.SonosSpeaker"), patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
@@ -520,7 +534,7 @@ def test_play_no_speaker():
     with patch(f"{MODELS}.AudioPreset"), patch(f"{MODELS}.SonosPlaybackLog"), \
          patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = None
+        Sp.objects.filter.return_value = FakeQS(items=[])
         out = api.sonos_play()
     assert out[0].status_code == 404
 
@@ -531,7 +545,7 @@ def test_play_no_favorite_resolvable():
     with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset") as Ap, \
          patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = speaker
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
         Ap.objects.filter.return_value.exclude.return_value = []
         out = api.sonos_play()
     assert out[0].status_code == 404
@@ -545,35 +559,51 @@ def test_play_demo_resolves_location_preset_and_logs():
     with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset") as Ap, \
          patch(f"{MODELS}.SonosPlaybackLog") as Log, patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = speaker
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
         Ap.objects.filter.return_value.exclude.return_value = [preset]
         out = api.sonos_play()
     data = body_of(out[0])
-    assert data["favorite_id"] == "favL"
-    assert data["volume"] == 33
+    assert data["played_count"] == 1
+    assert data["results"][0]["favorite_id"] == "favL"
+    assert data["results"][0]["volume"] == 33
     Log.objects.create.assert_called_once()
     speaker.save.assert_called_once()  # remembered as default
 
 
-def test_play_explicit_favorite_non_demo_calls_client():
+def test_play_fans_out_to_all_speakers_in_location():
+    api = make_api(body=json.dumps({"location_id": "loc1", "favorite_id": "fX", "volume": 40}))
+    s1 = fake_speaker(player_id="p1", player_name="A")
+    s2 = fake_speaker(player_id="p2", player_name="B")
+    with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset"), \
+         patch(f"{MODELS}.SonosPlaybackLog") as Log, patch(f"{MODELS}.SonosOAuthCredential") as Cr:
+        Cr.objects.first.return_value = None
+        Sp.objects.filter.return_value = FakeQS(items=[s1, s2])
+        out = api.sonos_play()
+    data = body_of(out[0])
+    assert data["played_count"] == 2
+    assert {r["player_id"] for r in data["results"]} == {"p1", "p2"}
+    assert Log.objects.create.call_count == 2
+
+
+def test_play_single_speaker_by_player_id_non_demo_clamps_volume():
     api = make_api(secrets=CONNECTED_SECRETS,
-                   body=json.dumps({"location_id": "loc1", "favorite_id": "fX", "volume": 200}))
-    speaker = fake_speaker()
+                   body=json.dumps({"player_id": "p1", "favorite_id": "fX", "volume": 200}))
+    speaker = fake_speaker(player_id="p1")
     client = Mock()
     with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset"), \
          patch(f"{MODELS}.SonosPlaybackLog") as Log, patch(f"{MODELS}.SonosOAuthCredential") as Cr, \
          patch(f"{APP}.SonosClient", return_value=client):
         Cr.objects.first.return_value = Mock(refresh_token="rt")
-        Sp.objects.filter.return_value.first.return_value = speaker
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
         out = api.sonos_play()
     data = body_of(out[0])
-    assert data["volume"] == 100  # clamped
+    assert data["results"][0]["volume"] == 100  # clamped
     client.load_favorite.assert_called_once()
     client.set_volume.assert_called_once()
     Log.objects.create.assert_called_once()
 
 
-def test_play_non_demo_client_error():
+def test_play_non_demo_all_error_returns_502():
     api = make_api(secrets=CONNECTED_SECRETS,
                    body=json.dumps({"location_id": "loc1", "favorite_id": "fX"}))
     speaker = fake_speaker()
@@ -583,7 +613,7 @@ def test_play_non_demo_client_error():
          patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosOAuthCredential") as Cr, \
          patch(f"{APP}.SonosClient", return_value=client):
         Cr.objects.first.return_value = Mock(refresh_token="rt")
-        Sp.objects.filter.return_value.first.return_value = speaker
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
         out = api.sonos_play()
     assert out[0].status_code == 502
 
@@ -595,12 +625,12 @@ def test_play_uses_preset_key_and_bad_volume_falls_back():
     with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset") as Ap, \
          patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = speaker
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
         Ap.objects.filter.return_value.first.return_value = preset
         out = api.sonos_play()
     data = body_of(out[0])
-    assert data["favorite_id"] == "favP"
-    assert data["volume"] == 42  # bad volume -> speaker default
+    assert data["results"][0]["favorite_id"] == "favP"
+    assert data["results"][0]["volume"] == 42  # bad volume -> speaker default
 
 
 def test_pause_paths():
@@ -613,17 +643,19 @@ def test_pause_paths():
     with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = None
+        Sp.objects.filter.return_value = FakeQS(items=[])
         assert api.sonos_pause()[0].status_code == 404
-    # demo success
+    # demo success — two speakers in the location, both paused
     api = make_api(body=json.dumps({"location_id": "loc1"}))
     with patch(f"{MODELS}.SonosPlaybackLog") as Log, patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = fake_speaker()
+        Sp.objects.filter.return_value = FakeQS(items=[fake_speaker(player_id="p1"), fake_speaker(player_id="p2")])
         out = api.sonos_pause()
-    assert body_of(out[0])["paused"] is True
-    Log.objects.create.assert_called_once()
+    data = body_of(out[0])
+    assert data["paused"] is True
+    assert data["paused_count"] == 2
+    assert Log.objects.create.call_count == 2
 
 
 def test_pause_non_demo_error():
@@ -633,7 +665,7 @@ def test_pause_non_demo_error():
     with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr, patch(f"{APP}.SonosClient", return_value=client):
         Cr.objects.first.return_value = Mock(refresh_token="rt")
-        Sp.objects.filter.return_value.first.return_value = fake_speaker()
+        Sp.objects.filter.return_value = FakeQS(items=[fake_speaker()])
         out = api.sonos_pause()
     assert out[0].status_code == 502
 
@@ -648,14 +680,13 @@ def test_volume_paths():
     with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = None
+        Sp.objects.filter.return_value = FakeQS(items=[])
         assert api.sonos_volume()[0].status_code == 404
-    # bad volume value
+    # bad volume value (validated before speaker lookup)
     api = make_api(body=json.dumps({"location_id": "loc1", "volume": "abc"}))
-    with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker") as Sp, \
+    with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker"), \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = fake_speaker()
         assert api.sonos_volume()[0].status_code == 400
     # demo success + persists default
     api = make_api(body=json.dumps({"location_id": "loc1", "volume": 60}))
@@ -663,7 +694,7 @@ def test_volume_paths():
     with patch(f"{MODELS}.SonosPlaybackLog") as Log, patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr:
         Cr.objects.first.return_value = None
-        Sp.objects.filter.return_value.first.return_value = speaker
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
         out = api.sonos_volume()
     assert body_of(out[0])["volume"] == 60
     assert speaker.default_volume == 60
@@ -677,7 +708,7 @@ def test_volume_non_demo_error():
     with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr, patch(f"{APP}.SonosClient", return_value=client):
         Cr.objects.first.return_value = Mock(refresh_token="rt")
-        Sp.objects.filter.return_value.first.return_value = fake_speaker()
+        Sp.objects.filter.return_value = FakeQS(items=[fake_speaker()])
         out = api.sonos_volume()
     assert out[0].status_code == 502
 

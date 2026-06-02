@@ -52,7 +52,14 @@
   .btn.sm{padding:5px 10px;font-size:12px}
   .btn:disabled{opacity:.5;cursor:not-allowed}
 
-  .speaker{border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;background:var(--surface);box-shadow:var(--shadow)}
+  .loc-group{padding:14px;margin-bottom:14px}
+  .loc-group .loc{font-weight:600;font-size:15px}
+  .loc-group .dev{color:var(--muted);font-size:12px}
+  .loc-head{padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .loc-controls{flex:1;justify-content:flex-end;margin-top:0;margin-left:16px}
+  .loc-speakers{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .loc-speakers .speaker{margin-bottom:0;background:var(--bg, transparent)}
+  .speaker{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--surface);box-shadow:var(--shadow)}
   .speaker .loc{font-weight:600;font-size:15px}
   .speaker .dev{color:var(--muted);font-size:12px}
   .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
@@ -310,44 +317,89 @@ function favoriteOptions(selectedId){
 }
 function renderSpeakers(){
   const host = document.getElementById('speaker-list');
-  if(!state.speakers.length){ host.innerHTML = `<div class="card empty">No speakers mapped yet. Click “Map a speaker” to link a Sonos device to a practice location.</div>`; return; }
-  host.innerHTML = state.speakers.map(s=>`
-    <div class="speaker" data-loc="${esc(s.location_id)}">
-      <div class="row spread">
-        <div><div class="loc">${esc(s.location_name||locName(s.location_id))}</div><div class="dev">${esc(s.player_name)}</div></div>
-        <button class="btn danger sm" onclick="unmapSpeaker('${esc(s.location_id)}')">Unmap</button>
-      </div>
-      <div class="controls">
-        <select class="sp-fav grow">${favoriteOptions(s.default_favorite_id)}</select>
-        <button class="btn sm" onclick="playSpeaker('${esc(s.location_id)}')">▶ Play</button>
-        <button class="btn ghost sm" onclick="pauseSpeaker('${esc(s.location_id)}')">❚❚ Pause</button>
-        <div class="vol">
-          <span>Vol</span>
-          <input type="range" min="0" max="100" value="${s.default_volume||25}" oninput="this.nextElementSibling.textContent=this.value+'%'" onchange="setVolume('${esc(s.location_id)}', this.value)">
-          <span class="pct">${s.default_volume||25}%</span>
+  if(!state.speakers.length){ host.innerHTML = `<div class="card empty">No speakers mapped yet. Click “Map a speaker” to link one or more Sonos devices to a practice location.</div>`; return; }
+  // Group speakers by location — a location can have several.
+  const byLoc = new Map();
+  state.speakers.forEach(s=>{ const k=s.location_id; if(!byLoc.has(k)) byLoc.set(k, []); byLoc.get(k).push(s); });
+  const groups = [];
+  byLoc.forEach((list, locId)=>{
+    const name = list[0].location_name || locName(locId);
+    const locVol = list[0].default_volume || 25;
+    const speakers = list.map(s=>`
+      <div class="speaker" data-player="${esc(s.player_id)}">
+        <div class="row spread">
+          <div class="dev">${esc(s.player_name)}</div>
+          <button class="btn danger sm" onclick="unmapSpeaker('${esc(s.player_id)}')">Unmap</button>
         </div>
-      </div>
-    </div>`).join('');
+        <div class="controls">
+          <select class="sp-fav grow">${favoriteOptions(s.default_favorite_id)}</select>
+          <button class="btn sm" onclick="playSpeaker('${esc(s.player_id)}')">▶ Play</button>
+          <button class="btn ghost sm" onclick="pauseSpeaker('${esc(s.player_id)}')">❚❚ Pause</button>
+          <div class="vol">
+            <span>Vol</span>
+            <input type="range" min="0" max="100" value="${s.default_volume||25}" oninput="this.nextElementSibling.textContent=this.value+'%'" onchange="setVolume('${esc(s.player_id)}', this.value)">
+            <span class="pct">${s.default_volume||25}%</span>
+          </div>
+        </div>
+      </div>`).join('');
+    groups.push(`
+      <div class="loc-group card" data-loc="${esc(locId)}">
+        <div class="row spread loc-head">
+          <div><div class="loc">${esc(name)}</div><div class="dev">${list.length} speaker${list.length===1?'':'s'}</div></div>
+          <div class="controls loc-controls">
+            <select class="loc-fav grow">${favoriteOptions('')}</select>
+            <button class="btn sm" onclick="playLocation('${esc(locId)}')">▶ Play all</button>
+            <button class="btn ghost sm" onclick="pauseLocation('${esc(locId)}')">❚❚ Pause all</button>
+            <div class="vol">
+              <span>Vol</span>
+              <input type="range" min="0" max="100" value="${locVol}" oninput="this.nextElementSibling.textContent=this.value+'%'" onchange="setLocationVolume('${esc(locId)}', this.value)">
+              <span class="pct">${locVol}%</span>
+            </div>
+          </div>
+        </div>
+        <div class="loc-speakers">${speakers}</div>
+      </div>`);
+  });
+  host.innerHTML = groups.join('');
 }
-function speakerCard(locId){ return document.querySelector(`.speaker[data-loc="${CSS.escape(locId)}"]`); }
-async function playSpeaker(locId){
-  const card = speakerCard(locId); const fav = card.querySelector('.sp-fav').value;
+function playToast(r){ return r.demo_mode ? `Demo: would play on ${r.played_count} speaker(s)` : `Playing on ${r.played_count} speaker(s)`; }
+// ---- per-speaker controls (target by player_id) ----
+async function playSpeaker(playerId){
+  const card = document.querySelector(`.speaker[data-player="${CSS.escape(playerId)}"]`);
+  const fav = card.querySelector('.sp-fav').value;
   const vol = card.querySelector('input[type=range]').value;
+  try{ const r = await apiFetch('/sonos/play', {method:'POST', body:JSON.stringify({player_id:playerId, favorite_id:fav||undefined, volume:Number(vol)})});
+    toast(playToast(r)); loadSpeakers(); }
+  catch(e){ toast(e.message); }
+}
+async function pauseSpeaker(playerId){
+  try{ const r = await apiFetch('/sonos/pause', {method:'POST', body:JSON.stringify({player_id:playerId})}); toast(r.demo_mode?'Demo: would pause':'Paused'); }
+  catch(e){ toast(e.message); }
+}
+async function setVolume(playerId, vol){
+  try{ await apiFetch('/sonos/volume', {method:'POST', body:JSON.stringify({player_id:playerId, volume:Number(vol)})}); }
+  catch(e){ toast(e.message); }
+}
+// ---- per-location controls (fan out to every speaker in the location) ----
+async function playLocation(locId){
+  const group = document.querySelector(`.loc-group[data-loc="${CSS.escape(locId)}"]`);
+  const fav = group.querySelector('.loc-fav').value;
+  const vol = group.querySelector('.loc-controls input[type=range]').value;
   try{ const r = await apiFetch('/sonos/play', {method:'POST', body:JSON.stringify({location_id:locId, favorite_id:fav||undefined, volume:Number(vol)})});
-    toast(r.demo_mode ? `Demo: would play ${r.favorite_name||'station'}` : `Playing ${r.favorite_name||''}`); loadSpeakers(); }
+    toast(playToast(r)); loadSpeakers(); }
   catch(e){ toast(e.message); }
 }
-async function pauseSpeaker(locId){
-  try{ const r = await apiFetch('/sonos/pause', {method:'POST', body:JSON.stringify({location_id:locId})}); toast(r.demo_mode?'Demo: would pause':'Paused'); }
+async function pauseLocation(locId){
+  try{ const r = await apiFetch('/sonos/pause', {method:'POST', body:JSON.stringify({location_id:locId})}); toast(r.demo_mode?`Demo: would pause ${r.paused_count} speaker(s)`:`Paused ${r.paused_count} speaker(s)`); }
   catch(e){ toast(e.message); }
 }
-async function setVolume(locId, vol){
+async function setLocationVolume(locId, vol){
   try{ await apiFetch('/sonos/volume', {method:'POST', body:JSON.stringify({location_id:locId, volume:Number(vol)})}); }
   catch(e){ toast(e.message); }
 }
-async function unmapSpeaker(locId){
+async function unmapSpeaker(playerId){
   if(!confirm('Remove this speaker mapping?')) return;
-  await apiFetch(`/sonos/speakers/${encodeURIComponent(locId)}`, {method:'DELETE'});
+  await apiFetch(`/sonos/speakers/${encodeURIComponent(playerId)}`, {method:'DELETE'});
   await loadSpeakers(); await loadStatus(); toast('Speaker unmapped.');
 }
 
@@ -355,8 +407,7 @@ async function unmapSpeaker(locId){
 let discoveredPlayers = [];
 async function openMapModal(){
   const locSel = document.getElementById('map-location');
-  const mapped = new Set(state.speakers.map(s=>s.location_id));
-  locSel.innerHTML = state.locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}${mapped.has(l.id)?' (remap)':''}</option>`).join('') || '<option value="">No locations found</option>';
+  locSel.innerHTML = state.locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('') || '<option value="">No locations found</option>';
   const playerSel = document.getElementById('map-player');
   playerSel.innerHTML = '<option>Loading speakers…</option>';
   openModal('map-modal');
@@ -366,9 +417,13 @@ async function openMapModal(){
     const groups = d.groups || []; const players = d.players || [];
     discoveredPlayers = groups.length ? groups.map(g=>({group_id:g.id, player_id:(g.playerIds&&g.playerIds[0])||g.id, name:g.name})) :
                                         players.map(p=>({group_id:'', player_id:p.id, name:p.name}));
-    playerSel.innerHTML = discoveredPlayers.length ? discoveredPlayers.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('')
-                                                   : '<option value="">No speakers found</option>';
-    document.getElementById('map-player-hint').textContent = state.status.demo_mode ? 'Showing demo speakers (Sonos not connected).' : '';
+    // A player maps to one location — annotate any already mapped so re-selecting moves it.
+    const mappedPlayers = new Map(state.speakers.map(s=>[s.player_id, s.location_name||locName(s.location_id)]));
+    playerSel.innerHTML = discoveredPlayers.length ? discoveredPlayers.map((p,i)=>{
+        const where = mappedPlayers.get(p.player_id);
+        return `<option value="${i}">${esc(p.name)}${where?` (mapped to ${esc(where)})`:''}</option>`;
+      }).join('') : '<option value="">No speakers found</option>';
+    document.getElementById('map-player-hint').textContent = state.status.demo_mode ? 'Showing demo speakers (Sonos not connected). You can map several speakers to one location.' : 'You can map several speakers to one location.';
   }catch(e){ playerSel.innerHTML = `<option value="">${esc(e.message)}</option>`; }
 }
 async function saveMapping(){

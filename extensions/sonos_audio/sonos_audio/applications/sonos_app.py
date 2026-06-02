@@ -87,6 +87,25 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
             return max(defaults, key=lambda p: p.priority)
         return None
 
+    def _target_speakers(self, body: dict) -> tuple[list[Any], str]:
+        """Speakers a playback action targets, and the location they belong to.
+
+        A request may name a single speaker (``player_id``) or a whole location
+        (``location_id``), in which case the action fans out to every active
+        speaker mapped there. Returns ``(speakers, location_id)``; ``location_id``
+        is "" when only a player_id was given and no speaker matched.
+        """
+        from sonos_audio.models.custom_data import SonosSpeaker
+
+        player_id = body.get("player_id", "")
+        if player_id:
+            speakers = list(SonosSpeaker.objects.filter(player_id=player_id, active=True))
+            return speakers, (speakers[0].location_id if speakers else "")
+        location_id = body.get("location_id", "")
+        if location_id:
+            return list(SonosSpeaker.objects.filter(location_id=location_id, active=True)), location_id
+        return [], ""
+
     # ------------------------------------------------------------------
     # Practice locations (mapping targets)
     # ------------------------------------------------------------------
@@ -366,11 +385,12 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
             if not body.get(field):
                 return [JSONResponse({"error": f"{field} is required"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        # Upsert: one speaker mapping per location.
-        existing = SonosSpeaker.objects.filter(location_id=body["location_id"]).first()
+        # Upsert by player: a physical Sonos player maps to exactly one location,
+        # but a location may host many players. Re-mapping a player moves it.
+        existing = SonosSpeaker.objects.filter(player_id=body["player_id"]).first()
         if existing:
+            existing.location_id = body["location_id"]
             existing.location_name = body.get("location_name", existing.location_name)
-            existing.player_id = body["player_id"]
             existing.group_id = body.get("group_id", "")
             existing.player_name = body["player_name"]
             existing.household_id = body["household_id"]
@@ -388,22 +408,22 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
         )
         return [JSONResponse({"success": True, "id": speaker.pk}, status_code=HTTPStatus.CREATED)]
 
-    @api.put("/sonos/speakers/<location_id>")
+    @api.put("/sonos/speakers/<player_id>")
     def update_sonos_speaker(self) -> list[Response | Effect]:
         from sonos_audio.models.custom_data import SonosSpeaker
 
-        location_id = self.request.path_params["location_id"]
+        player_id = self.request.path_params["player_id"]
         try:
             body = json.loads(self.request.body)
         except (json.JSONDecodeError, TypeError):
             return [JSONResponse({"error": "Invalid JSON"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        qs = SonosSpeaker.objects.filter(location_id=location_id, active=True)
+        qs = SonosSpeaker.objects.filter(player_id=player_id, active=True)
         if not qs.exists():
             return [JSONResponse({"error": "Speaker mapping not found"}, status_code=HTTPStatus.NOT_FOUND)]
 
         update_fields = {}
-        for field in ("player_id", "group_id", "player_name", "household_id",
+        for field in ("location_id", "location_name", "group_id", "player_name", "household_id",
                       "default_favorite_id", "default_favorite_name", "default_volume"):
             if field in body:
                 update_fields[field] = body[field]
@@ -411,12 +431,12 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
             qs.update(**update_fields)
         return [JSONResponse({"success": True}, status_code=HTTPStatus.OK)]
 
-    @api.delete("/sonos/speakers/<location_id>")
+    @api.delete("/sonos/speakers/<player_id>")
     def delete_sonos_speaker(self) -> list[Response | Effect]:
         from sonos_audio.models.custom_data import SonosSpeaker
 
-        location_id = self.request.path_params["location_id"]
-        speaker = SonosSpeaker.objects.filter(location_id=location_id).first()
+        player_id = self.request.path_params["player_id"]
+        speaker = SonosSpeaker.objects.filter(player_id=player_id).first()
         if not speaker:
             return [JSONResponse({"error": "Speaker mapping not found"}, status_code=HTTPStatus.NOT_FOUND)]
         speaker.active = False
@@ -539,7 +559,9 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
 
     @api.post("/sonos/play")
     def sonos_play(self) -> list[Response | Effect]:
-        from sonos_audio.models.custom_data import AudioPreset, SonosPlaybackLog, SonosSpeaker
+        """Play a station on one speaker (``player_id``) or a whole location
+        (``location_id``, fanning out to every speaker mapped there)."""
+        from sonos_audio.models.custom_data import AudioPreset, SonosPlaybackLog
 
         demo = self._sonos_demo_mode()
         try:
@@ -547,94 +569,102 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
         except (json.JSONDecodeError, TypeError):
             return [JSONResponse({"error": "Invalid JSON"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        location_id = body.get("location_id", "")
-        if not location_id:
-            return [JSONResponse({"error": "location_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
+        if not body.get("location_id") and not body.get("player_id"):
+            return [JSONResponse({"error": "location_id or player_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        speaker = SonosSpeaker.objects.filter(location_id=location_id, active=True).first()
-        if not speaker:
-            return [JSONResponse({"error": f"No speaker mapped to location {location_id}"}, status_code=HTTPStatus.NOT_FOUND)]
+        speakers, location_id = self._target_speakers(body)
+        if not speakers:
+            return [JSONResponse({"error": "No speaker mapped for that location/player"}, status_code=HTTPStatus.NOT_FOUND)]
 
         preset_key = body.get("preset_key", "")
         triggered_by = body.get("triggered_by", "manual")
 
-        # Resolve which favorite to play, in priority order:
+        # Resolve a location-level station that applies to every target speaker:
         #   1. explicit favorite_id in the request (staff picked a station)
         #   2. a preset (explicit preset_key, else the location's matched preset)
-        #   3. this location's remembered default station
-        favorite_id = body.get("favorite_id", "")
-        favorite_name = body.get("favorite_name", "")
-        volume = body.get("volume")
+        # If neither resolves, each speaker falls back to its own remembered default.
+        req_favorite_id = body.get("favorite_id", "")
+        req_favorite_name = body.get("favorite_name", "")
+        req_volume = body.get("volume")
         preset = None
-
-        if not favorite_id:
+        if not req_favorite_id:
             if preset_key:
                 preset = AudioPreset.objects.filter(key=preset_key, active=True).first()
-            else:
+            elif location_id:
                 preset = self._resolve_location_preset(location_id)
             if preset and preset.sonos_favorite_id:
-                favorite_id = preset.sonos_favorite_id
-                favorite_name = preset.sonos_favorite_name or preset.name
-                if volume is None:
-                    volume = preset.volume
-            elif speaker.default_favorite_id:
-                favorite_id = speaker.default_favorite_id
-                favorite_name = speaker.default_favorite_name
+                req_favorite_id = preset.sonos_favorite_id
+                req_favorite_name = preset.sonos_favorite_name or preset.name
+                if req_volume is None:
+                    req_volume = preset.volume
 
-        if not favorite_id:
+        sonos = None if demo else self._sonos_client()
+        results: list[dict] = []
+        for speaker in speakers:
+            favorite_id = req_favorite_id or speaker.default_favorite_id
+            favorite_name = req_favorite_name or (speaker.default_favorite_name if not req_favorite_id else "")
+            if not favorite_id:
+                results.append({"player_id": speaker.player_id, "speaker": speaker.player_name,
+                                "played": False, "reason": "no station"})
+                continue
+
+            try:
+                volume = int(req_volume) if req_volume is not None else (speaker.default_volume or 25)
+            except (TypeError, ValueError):
+                volume = speaker.default_volume or 25
+            volume = max(0, min(100, volume))
+            group_id = speaker.group_id or speaker.player_id
+
+            error_message = ""
+            if not demo and sonos is not None:
+                try:
+                    sonos.load_favorite(group_id, favorite_id, play_on_completion=True)
+                    sonos.set_volume(group_id, volume)
+                except Exception as e:
+                    error_message = str(e)
+                    log.warning("[sonos_audio] play error: %s", e)
+
+            # Remember this station as the speaker's default for next time.
+            if not error_message and (speaker.default_favorite_id != favorite_id or speaker.default_volume != volume):
+                speaker.default_favorite_id = favorite_id
+                speaker.default_favorite_name = favorite_name or ""
+                speaker.default_volume = volume
+                speaker.save()
+
+            SonosPlaybackLog.objects.create(
+                location_id=speaker.location_id,
+                location_name=speaker.location_name,
+                player_id=speaker.player_id,
+                preset_key=preset.key if preset else "",
+                action="error" if error_message else "play",
+                volume=volume,
+                triggered_by=triggered_by,
+                error_message=error_message,
+            )
+            results.append({"player_id": speaker.player_id, "speaker": speaker.player_name,
+                            "played": not error_message, "favorite_id": favorite_id,
+                            "favorite_name": favorite_name, "volume": volume,
+                            "error": error_message or None})
+
+        played = [r for r in results if r.get("played")]
+        if not played and all(r.get("reason") == "no station" for r in results):
             return [JSONResponse(
-                {"error": "Pick a station to play, or set a default for this location."},
+                {"error": "Pick a station to play, or set a default for these speakers."},
                 status_code=HTTPStatus.NOT_FOUND,
             )]
-
-        try:
-            volume = int(volume) if volume is not None else (speaker.default_volume or 25)
-        except (TypeError, ValueError):
-            volume = speaker.default_volume or 25
-        volume = max(0, min(100, volume))
-
-        group_id = speaker.group_id or speaker.player_id
-
-        if not demo:
-            try:
-                sonos = self._sonos_client()
-                assert sonos is not None
-                sonos.load_favorite(group_id, favorite_id, play_on_completion=True)
-                sonos.set_volume(group_id, volume)
-            except Exception as e:
-                log.warning("[sonos_audio] play error: %s", e)
-                return [JSONResponse({"error": str(e)}, status_code=HTTPStatus.BAD_GATEWAY)]
-
-        # Remember this station as the location's default for next time.
-        if speaker.default_favorite_id != favorite_id or speaker.default_volume != volume:
-            speaker.default_favorite_id = favorite_id
-            speaker.default_favorite_name = favorite_name or ""
-            speaker.default_volume = volume
-            speaker.save()
-
-        SonosPlaybackLog.objects.create(
-            location_id=location_id,
-            location_name=speaker.location_name,
-            player_id=speaker.player_id,
-            preset_key=preset.key if preset else "",
-            action="play",
-            volume=volume,
-            triggered_by=triggered_by,
-        )
+        if not demo and not played:
+            return [JSONResponse({"error": "Playback failed on all speakers", "results": results},
+                                 status_code=HTTPStatus.BAD_GATEWAY)]
         return [JSONResponse({
-            "success": True,
-            "playing": True,
-            "demo_mode": demo,
-            "preset": preset.key if preset else "",
-            "favorite_id": favorite_id,
-            "favorite_name": favorite_name,
-            "volume": volume,
-            "speaker": speaker.player_name,
+            "success": True, "playing": True, "demo_mode": demo, "location_id": location_id,
+            "preset": preset.key if preset else "", "played_count": len(played), "results": results,
         }, status_code=HTTPStatus.OK)]
 
     @api.post("/sonos/pause")
     def sonos_pause(self) -> list[Response | Effect]:
-        from sonos_audio.models.custom_data import SonosPlaybackLog, SonosSpeaker
+        """Pause one speaker (``player_id``) or every speaker in a location
+        (``location_id``)."""
+        from sonos_audio.models.custom_data import SonosPlaybackLog
 
         demo = self._sonos_demo_mode()
         try:
@@ -642,37 +672,47 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
         except (json.JSONDecodeError, TypeError):
             return [JSONResponse({"error": "Invalid JSON"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        location_id = body.get("location_id", "")
-        if not location_id:
-            return [JSONResponse({"error": "location_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
+        if not body.get("location_id") and not body.get("player_id"):
+            return [JSONResponse({"error": "location_id or player_id is required"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        speaker = SonosSpeaker.objects.filter(location_id=location_id, active=True).first()
-        if not speaker:
-            return [JSONResponse({"error": f"No speaker mapped to location {location_id}"}, status_code=HTTPStatus.NOT_FOUND)]
+        speakers, _ = self._target_speakers(body)
+        if not speakers:
+            return [JSONResponse({"error": "No speaker mapped for that location/player"}, status_code=HTTPStatus.NOT_FOUND)]
 
         triggered_by = body.get("triggered_by", "manual")
+        sonos = None if demo else self._sonos_client()
+        results: list[dict] = []
+        for speaker in speakers:
+            error_message = ""
+            if not demo and sonos is not None:
+                try:
+                    sonos.pause(speaker.group_id or speaker.player_id)
+                except Exception as e:
+                    error_message = str(e)
+                    log.warning("[sonos_audio] pause error: %s", e)
+            SonosPlaybackLog.objects.create(
+                location_id=speaker.location_id,
+                location_name=speaker.location_name,
+                player_id=speaker.player_id,
+                action="error" if error_message else "pause",
+                triggered_by=triggered_by,
+                error_message=error_message,
+            )
+            results.append({"player_id": speaker.player_id, "speaker": speaker.player_name,
+                            "paused": not error_message, "error": error_message or None})
 
-        if not demo:
-            try:
-                sonos = self._sonos_client()
-                assert sonos is not None
-                sonos.pause(speaker.group_id or speaker.player_id)
-            except Exception as e:
-                log.warning("[sonos_audio] pause error: %s", e)
-                return [JSONResponse({"error": str(e)}, status_code=HTTPStatus.BAD_GATEWAY)]
-
-        SonosPlaybackLog.objects.create(
-            location_id=location_id,
-            location_name=speaker.location_name,
-            player_id=speaker.player_id,
-            action="pause",
-            triggered_by=triggered_by,
-        )
-        return [JSONResponse({"success": True, "paused": True, "demo_mode": demo}, status_code=HTTPStatus.OK)]
+        paused = [r for r in results if r.get("paused")]
+        if not demo and not paused:
+            return [JSONResponse({"error": "Pause failed on all speakers", "results": results},
+                                 status_code=HTTPStatus.BAD_GATEWAY)]
+        return [JSONResponse({"success": True, "paused": True, "demo_mode": demo,
+                              "paused_count": len(paused), "results": results}, status_code=HTTPStatus.OK)]
 
     @api.post("/sonos/volume")
     def sonos_volume(self) -> list[Response | Effect]:
-        from sonos_audio.models.custom_data import SonosPlaybackLog, SonosSpeaker
+        """Set volume on one speaker (``player_id``) or every speaker in a
+        location (``location_id``)."""
+        from sonos_audio.models.custom_data import SonosPlaybackLog
 
         demo = self._sonos_demo_mode()
         try:
@@ -680,43 +720,51 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
         except (json.JSONDecodeError, TypeError):
             return [JSONResponse({"error": "Invalid JSON"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        location_id = body.get("location_id", "")
         volume = body.get("volume")
-        if not location_id or volume is None:
-            return [JSONResponse({"error": "location_id and volume are required"}, status_code=HTTPStatus.BAD_REQUEST)]
-
-        speaker = SonosSpeaker.objects.filter(location_id=location_id, active=True).first()
-        if not speaker:
-            return [JSONResponse({"error": f"No speaker mapped to location {location_id}"}, status_code=HTTPStatus.NOT_FOUND)]
+        if (not body.get("location_id") and not body.get("player_id")) or volume is None:
+            return [JSONResponse({"error": "location_id or player_id, and volume, are required"}, status_code=HTTPStatus.BAD_REQUEST)]
 
         try:
             volume = max(0, min(100, int(volume)))
         except (TypeError, ValueError):
             return [JSONResponse({"error": "volume must be an integer 0-100"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        if not demo:
-            try:
-                sonos = self._sonos_client()
-                assert sonos is not None
-                sonos.set_volume(speaker.group_id or speaker.player_id, volume)
-            except Exception as e:
-                log.warning("[sonos_audio] volume error: %s", e)
-                return [JSONResponse({"error": str(e)}, status_code=HTTPStatus.BAD_GATEWAY)]
+        speakers, _ = self._target_speakers(body)
+        if not speakers:
+            return [JSONResponse({"error": "No speaker mapped for that location/player"}, status_code=HTTPStatus.NOT_FOUND)]
 
-        # Persist as the location's default volume so it sticks.
-        if speaker.default_volume != volume:
-            speaker.default_volume = volume
-            speaker.save()
+        sonos = None if demo else self._sonos_client()
+        results: list[dict] = []
+        for speaker in speakers:
+            error_message = ""
+            if not demo and sonos is not None:
+                try:
+                    sonos.set_volume(speaker.group_id or speaker.player_id, volume)
+                except Exception as e:
+                    error_message = str(e)
+                    log.warning("[sonos_audio] volume error: %s", e)
+            # Persist as the speaker's default volume so it sticks.
+            if not error_message and speaker.default_volume != volume:
+                speaker.default_volume = volume
+                speaker.save()
+            SonosPlaybackLog.objects.create(
+                location_id=speaker.location_id,
+                location_name=speaker.location_name,
+                player_id=speaker.player_id,
+                action="error" if error_message else "volume_change",
+                volume=volume,
+                triggered_by="manual",
+                error_message=error_message,
+            )
+            results.append({"player_id": speaker.player_id, "speaker": speaker.player_name,
+                            "ok": not error_message, "error": error_message or None})
 
-        SonosPlaybackLog.objects.create(
-            location_id=location_id,
-            location_name=speaker.location_name,
-            player_id=speaker.player_id,
-            action="volume_change",
-            volume=volume,
-            triggered_by="manual",
-        )
-        return [JSONResponse({"success": True, "volume": volume, "demo_mode": demo}, status_code=HTTPStatus.OK)]
+        ok = [r for r in results if r.get("ok")]
+        if not demo and not ok:
+            return [JSONResponse({"error": "Volume change failed on all speakers", "results": results},
+                                 status_code=HTTPStatus.BAD_GATEWAY)]
+        return [JSONResponse({"success": True, "volume": volume, "demo_mode": demo,
+                              "count": len(ok), "results": results}, status_code=HTTPStatus.OK)]
 
     # ------------------------------------------------------------------
     # Sonos - playback schedules
