@@ -15,12 +15,20 @@ UI_MODULE = "provider_availability.api.ui_api"
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
-def _make_ui_handler(staff_id: str = "staff-1") -> UIApi:
-    """Create a UIApi handler with a mocked request."""
+_STAFF_HEX = "5e4fb0011234567890abcdef01234567"  # undashed (Staff.id form)
+_STAFF_DASHED = "5e4fb001-1234-5678-90ab-cdef01234567"  # same UUID, dashed
+_OTHER_HEX = "aa11bb22cc33dd44ee55ff6677889900"
+
+
+def _make_ui_handler(staff_id: str | None = _STAFF_HEX, secrets: dict | None = None) -> UIApi:
+    """Create a UIApi handler with a header-based request mock."""
     mock_event = MagicMock()
     handler = UIApi(mock_event)
     handler.request = MagicMock()
-    handler.request.staff_id = staff_id
+    handler.request.headers = (
+        {"canvas-logged-in-user-id": staff_id} if staff_id is not None else {}
+    )
+    handler.secrets = secrets or {}
     return handler
 
 
@@ -29,65 +37,54 @@ def _make_ui_handler(staff_id: str = "staff-1") -> UIApi:
 
 class TestGetAdminUI:
     @patch(f"{UI_MODULE}.render_admin_page", return_value="<html>Admin Page</html>")
-    @patch(f"{UI_MODULE}.get_allowed_staff", return_value=[])
-    def test_no_access_restriction_allowed_empty(self, mock_allowed, mock_render):
-        """When allowed_staff list is empty, everyone is allowed (bootstrap mode)."""
-        handler = _make_ui_handler(staff_id="anyone")
+    def test_empty_secret_allows_any_staff(self, mock_render):
+        """Unset/empty allowed-staff-keys → any logged-in staff is allowed."""
+        handler = _make_ui_handler(staff_id=_STAFF_HEX, secrets={})
         result = handler.get_admin_ui()
-
-        resp = result[0]
-        assert resp.status_code == HTTPStatus.OK
-        content = resp.content.decode() if isinstance(resp.content, bytes) else resp.content
-        assert "Admin Page" in content
-        assert mock_allowed.mock_calls == [call()]
+        assert result[0].status_code == HTTPStatus.OK
+        assert "Admin Page" in result[0].content.decode()
         assert mock_render.mock_calls == [call()]
-
-    @patch(f"{UI_MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
-    def test_access_denied_unauthorized_staff(self, mock_allowed):
-        """Staff not on the allowed list gets 403 Forbidden."""
-        handler = _make_ui_handler(staff_id="staff-999")
-        result = handler.get_admin_ui()
-
-        resp = result[0]
-        assert resp.status_code == HTTPStatus.FORBIDDEN
-        content = resp.content.decode() if isinstance(resp.content, bytes) else resp.content
-        assert "Access Denied" in content
-        assert mock_allowed.mock_calls == [call()]
 
     @patch(f"{UI_MODULE}.render_admin_page", return_value="<html>Admin Page</html>")
-    @patch(f"{UI_MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
-    def test_access_granted_authorized_staff(self, mock_allowed, mock_render):
-        """Staff on the allowed list gets the admin UI page."""
-        handler = _make_ui_handler(staff_id="staff-1")
+    def test_access_granted_listed_staff_undashed(self, mock_render):
+        """Caller staff_id (undashed) matches an undashed entry in the secret."""
+        handler = _make_ui_handler(
+            staff_id=_STAFF_HEX,
+            secrets={"allowed-staff-keys": _STAFF_HEX},
+        )
         result = handler.get_admin_ui()
-
-        resp = result[0]
-        assert resp.status_code == HTTPStatus.OK
-        content = resp.content.decode() if isinstance(resp.content, bytes) else resp.content
-        assert "Admin Page" in content
-        assert mock_allowed.mock_calls == [call()]
+        assert result[0].status_code == HTTPStatus.OK
+        assert "Admin Page" in result[0].content.decode()
         assert mock_render.mock_calls == [call()]
 
-    @patch(f"{UI_MODULE}.get_allowed_staff", return_value=["staff-1"])
-    def test_empty_staff_id_denied(self, mock_allowed):
-        """Empty string staff_id is denied when access list is non-empty."""
-        handler = _make_ui_handler(staff_id="")
+    @patch(f"{UI_MODULE}.render_admin_page", return_value="<html>Admin Page</html>")
+    def test_dashed_secret_matches_undashed_header(self, mock_render):
+        """Regression for PR #339-comment: dashed UUID in secret + undashed header → allowed."""
+        handler = _make_ui_handler(
+            staff_id=_STAFF_HEX,
+            secrets={"allowed-staff-keys": _STAFF_DASHED},
+        )
         result = handler.get_admin_ui()
+        assert result[0].status_code == HTTPStatus.OK
+        assert "Admin Page" in result[0].content.decode()
+        assert mock_render.mock_calls == [call()]
 
-        resp = result[0]
-        assert resp.status_code == HTTPStatus.FORBIDDEN
-        assert mock_allowed.mock_calls == [call()]
-
-    @patch(f"{UI_MODULE}.get_allowed_staff", return_value=["staff-1"])
-    def test_none_staff_id_denied(self, mock_allowed):
-        """None staff_id attribute is denied when access list is non-empty."""
-        handler = _make_ui_handler()
-        handler.request.staff_id = None
+    def test_access_denied_unlisted_staff(self):
+        handler = _make_ui_handler(
+            staff_id=_OTHER_HEX,
+            secrets={"allowed-staff-keys": _STAFF_HEX},
+        )
         result = handler.get_admin_ui()
+        assert result[0].status_code == HTTPStatus.FORBIDDEN
+        assert "Access Denied" in result[0].content.decode()
 
-        resp = result[0]
-        assert resp.status_code == HTTPStatus.FORBIDDEN
-        assert mock_allowed.mock_calls == [call()]
+    def test_missing_header_denied_when_secret_set(self):
+        handler = _make_ui_handler(
+            staff_id=None,
+            secrets={"allowed-staff-keys": _STAFF_HEX},
+        )
+        result = handler.get_admin_ui()
+        assert result[0].status_code == HTTPStatus.FORBIDDEN
 
 
 # ── get_admin_css ────────────────────────────────────────────────────────

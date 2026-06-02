@@ -37,7 +37,7 @@ Provider availability engine with rule-based scheduling, real-time slot calculat
 | `ProviderAvailabilityApp` | Application | Provider menu item that opens the admin UI |
 | `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, admin UI serving |
 | `UIApi` | SimpleAPI | Serves the admin HTML interface (Application iframe) |
-| `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and allowed-staff management |
+| `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and practice-timezone management |
 | `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window (every 5 min) |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
 | `OnStaffDeactivated` | Protocol | Cleans up rules and calendar events when a provider is deactivated |
@@ -87,10 +87,6 @@ Provider availability engine with rule-based scheduling, real-time slot calculat
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/provision/run` | Create Clinic calendars and Available events for all active providers |
-| GET | `/provision/allowed-staff` | List staff IDs with admin UI edit access |
-| PUT | `/provision/allowed-staff` | Replace full allowed staff list |
-| POST | `/provision/allowed-staff` | Add a staff ID to the allowed list |
-| DELETE | `/provision/allowed-staff/<staff_id>` | Remove a staff ID from the allowed list |
 | GET | `/provision/timezone` | Get practice timezone |
 | PUT | `/provision/timezone` | Set practice timezone |
 
@@ -101,7 +97,7 @@ Provider availability engine with rule-based scheduling, real-time slot calculat
 | Secret | Purpose |
 |--------|---------|
 | `simpleapi-api-key` | API key for ProvisionAPI authentication |
-| `allowed-staff-keys` | Comma-separated staff IDs allowed to edit rules in the admin UI |
+| `allowed-staff-keys` | Comma-separated staff UUIDs allowed to open the admin UI and edit rules. Dashed or undashed UUIDs both work. Leave empty/unset to allow any logged-in Canvas staff member (bootstrap). |
 
 ### Data Model
 

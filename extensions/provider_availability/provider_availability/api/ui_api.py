@@ -9,7 +9,7 @@ from canvas_sdk.effects.simple_api import HTMLResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
-from provider_availability.engine.storage import get_allowed_staff
+from provider_availability.api._auth import is_authorized
 from provider_availability.templates.admin_ui import render_admin_page
 
 ACCESS_DENIED_HTML = """<!DOCTYPE html>
@@ -46,11 +46,8 @@ class UIApi(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/availability-admin")
     def get_admin_ui(self) -> list[Response | Effect]:
         """Serve the main admin UI page."""
-        allowed = get_allowed_staff()
-        if allowed:
-            staff_id = getattr(self.request, "staff_id", None) or ""
-            if not staff_id or str(staff_id) not in allowed:
-                return [HTMLResponse(ACCESS_DENIED_HTML, status_code=HTTPStatus.FORBIDDEN)]
+        if not is_authorized(self.secrets, self.request):
+            return [HTMLResponse(ACCESS_DENIED_HTML, status_code=HTTPStatus.FORBIDDEN)]
         html = render_admin_page()
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
 
