@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calendar Busy Blocks</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 600px; }
+    label { display: block; margin: 12px 0 4px; font-weight: 600; }
+    input[type="url"] { width: 100%; padding: 8px; font-size: 14px; box-sizing: border-box; }
+    button { padding: 8px 16px; font-size: 14px; cursor: pointer; margin-top: 12px; }
+    .error { color: #b00; }
+    .status { color: #060; }
+  </style>
+</head>
+<body>
+  <h1>Calendar Busy Blocks</h1>
+  {% if connected %}
+    <p class="status">Connected.</p>
+    {% if feed.last_sync_at %}<p>Last sync: {{ feed.last_sync_at }}</p>{% endif %}
+    {% if feed.last_error %}<p class="error">Last error: {{ feed.last_error }}</p>{% endif %}
+    <form method="post" action="{{ delete_url }}">
+      <button type="submit">Disconnect</button>
+    </form>
+  {% else %}
+    <p>Paste your personal calendar's secret iCal URL below. Canvas will fetch your busy times every 15 minutes and add them to your schedule as "Busy" blocks.</p>
+    <form method="post" action="{{ post_url }}">
+      <label for="ics_url">Secret iCal URL</label>
+      <input type="url" id="ics_url" name="ics_url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" required />
+      <button type="submit">Connect</button>
+    </form>
+  {% endif %}
+</body>
+</html>
