@@ -19,11 +19,22 @@ def _mock_response(status_code: int, text: str = "") -> MagicMock:
 
 
 def _mock_patient_with_contacts(contacts: list[dict]) -> MagicMock:
-    """Build a mock Patient whose ``telecom`` queryset behaves like Django's."""
-    rows = [MagicMock(**c) for c in contacts]
+    """Build a mock Patient whose ``telecom`` queryset behaves like Django's.
 
-    def filter_(system: str) -> MagicMock:
-        filtered = [r for r in rows if r.system == system]
+    Each contact dict may set ``has_consent`` / ``opted_out`` / ``state``;
+    when omitted they default to a messageable contact point (consented, not
+    opted out, active) so happy-path tests stay concise. ``filter`` matches
+    every keyword predicate against the row attributes (like Django's
+    field-equality lookups).
+    """
+    defaults = {"has_consent": True, "opted_out": False, "state": "active"}
+    rows = [MagicMock(**{**defaults, **c}) for c in contacts]
+
+    def filter_(**kwargs: object) -> MagicMock:
+        filtered = [
+            r for r in rows
+            if all(getattr(r, key) == value for key, value in kwargs.items())
+        ]
         ordered = sorted(filtered, key=lambda r: r.rank)
         qs = MagicMock()
         qs.order_by.return_value.first.return_value = ordered[0] if ordered else None
@@ -55,6 +66,33 @@ def test_patient_email_strips_whitespace_and_treats_blank_as_none() -> None:
         {"system": "email", "value": "  ", "rank": 1},
     ])
     assert patient_email_address(patient) is None
+
+
+def test_patient_email_skips_non_messageable_contacts() -> None:
+    """Email must honor the same consent gates as the portal channel.
+
+    An email contact point that has not consented, has opted out, or is not
+    active must NOT receive the magic link — the channel fails closed, mirroring
+    ``_patient_has_messageable_channel`` used for the portal Message.
+    """
+    for override in (
+        {"has_consent": False},
+        {"opted_out": True},
+        {"state": "old"},
+    ):
+        patient = _mock_patient_with_contacts([
+            {"system": "email", "value": "opted-out@example.com", "rank": 1, **override},
+        ])
+        assert patient_email_address(patient) is None, f"should skip when {override}"
+
+
+def test_patient_email_returns_messageable_when_some_contacts_blocked() -> None:
+    """A consented active email is still selected even if a blocked one ranks higher."""
+    patient = _mock_patient_with_contacts([
+        {"system": "email", "value": "opted-out@example.com", "rank": 1, "opted_out": True},
+        {"system": "email", "value": "ok@example.com", "rank": 2},
+    ])
+    assert patient_email_address(patient) == "ok@example.com"
 
 
 def test_send_magic_link_email_posts_with_bearer_and_payload() -> None:
