@@ -311,7 +311,7 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
         assert sonos is not None
         try:
             return [JSONResponse(sonos.get_households(), status_code=HTTPStatus.OK)]
-        except Exception as e:
+        except http_requests.exceptions.RequestException as e:
             log.warning("[sonos_audio] households error: %s", e)
             return [JSONResponse({"error": str(e)}, status_code=HTTPStatus.BAD_GATEWAY)]
 
@@ -326,7 +326,7 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
         assert sonos is not None
         try:
             return [JSONResponse(sonos.get_groups(household_id), status_code=HTTPStatus.OK)]
-        except Exception as e:
+        except http_requests.exceptions.RequestException as e:
             log.warning("[sonos_audio] players error: %s", e)
             return [JSONResponse({"error": str(e)}, status_code=HTTPStatus.BAD_GATEWAY)]
 
@@ -341,7 +341,7 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
         assert sonos is not None
         try:
             return [JSONResponse(sonos.get_favorites(household_id), status_code=HTTPStatus.OK)]
-        except Exception as e:
+        except http_requests.exceptions.RequestException as e:
             log.warning("[sonos_audio] favorites error: %s", e)
             return [JSONResponse({"error": str(e)}, status_code=HTTPStatus.BAD_GATEWAY)]
 
@@ -621,7 +621,7 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
                 try:
                     sonos.load_favorite(group_id, favorite_id, play_on_completion=True)
                     sonos.set_volume(group_id, volume)
-                except Exception as e:
+                except http_requests.exceptions.RequestException as e:
                     error_message = str(e)
                     log.warning("[sonos_audio] play error: %s", e)
 
@@ -688,7 +688,7 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
             if not demo and sonos is not None:
                 try:
                     sonos.pause(speaker.group_id or speaker.player_id)
-                except Exception as e:
+                except http_requests.exceptions.RequestException as e:
                     error_message = str(e)
                     log.warning("[sonos_audio] pause error: %s", e)
             SonosPlaybackLog.objects.create(
@@ -741,7 +741,7 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
             if not demo and sonos is not None:
                 try:
                     sonos.set_volume(speaker.group_id or speaker.player_id, volume)
-                except Exception as e:
+                except http_requests.exceptions.RequestException as e:
                     error_message = str(e)
                     log.warning("[sonos_audio] volume error: %s", e)
             # Persist as the speaker's default volume so it sticks.

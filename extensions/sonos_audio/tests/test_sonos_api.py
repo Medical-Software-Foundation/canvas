@@ -10,6 +10,8 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
+import requests as http_requests
+
 import pytest
 
 MODELS = "sonos_audio.models.custom_data"
@@ -293,7 +295,7 @@ def test_households_connected_success_and_error():
         Cr.objects.first.return_value = Mock(refresh_token="rt")
         out = api.sonos_households()
         assert body_of(out[0])["households"][0]["id"] == "h"
-        client.get_households.side_effect = RuntimeError("boom")
+        client.get_households.side_effect = http_requests.exceptions.RequestException("boom")
         out = api.sonos_households()
         assert out[0].status_code == 502
 
@@ -315,7 +317,7 @@ def test_players_demo():
 def test_players_connected_error():
     api = make_api(secrets=CONNECTED_SECRETS, query={"household_id": "hh"})
     client = Mock()
-    client.get_groups.side_effect = RuntimeError("x")
+    client.get_groups.side_effect = http_requests.exceptions.RequestException("x")
     with patch(f"{MODELS}.SonosOAuthCredential") as Cr, patch(f"{APP}.SonosClient", return_value=client):
         Cr.objects.first.return_value = Mock(refresh_token="rt")
         out = api.sonos_players()
@@ -608,7 +610,7 @@ def test_play_non_demo_all_error_returns_502():
                    body=json.dumps({"location_id": "loc1", "favorite_id": "fX"}))
     speaker = fake_speaker()
     client = Mock()
-    client.load_favorite.side_effect = RuntimeError("net")
+    client.load_favorite.side_effect = http_requests.exceptions.RequestException("net")
     with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset"), \
          patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosOAuthCredential") as Cr, \
          patch(f"{APP}.SonosClient", return_value=client):
@@ -691,7 +693,7 @@ def test_pause_paths():
 def test_pause_non_demo_error():
     api = make_api(secrets=CONNECTED_SECRETS, body=json.dumps({"location_id": "loc1"}))
     client = Mock()
-    client.pause.side_effect = RuntimeError("x")
+    client.pause.side_effect = http_requests.exceptions.RequestException("x")
     with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr, patch(f"{APP}.SonosClient", return_value=client):
         Cr.objects.first.return_value = Mock(refresh_token="rt")
@@ -734,7 +736,7 @@ def test_volume_paths():
 def test_volume_non_demo_error():
     api = make_api(secrets=CONNECTED_SECRETS, body=json.dumps({"location_id": "loc1", "volume": 30}))
     client = Mock()
-    client.set_volume.side_effect = RuntimeError("x")
+    client.set_volume.side_effect = http_requests.exceptions.RequestException("x")
     with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr, patch(f"{APP}.SonosClient", return_value=client):
         Cr.objects.first.return_value = Mock(refresh_token="rt")
@@ -896,7 +898,7 @@ def test_execute_non_demo_play_and_error():
                  location_name="Main", volume=30, favorite_id="f1")
     speaker = fake_speaker()
     client = Mock()
-    client.load_favorite.side_effect = RuntimeError("boom")
+    client.load_favorite.side_effect = http_requests.exceptions.RequestException("boom")
     with patch(f"{MODELS}.PlaybackSchedule") as Ps, patch(f"{MODELS}.SonosSpeaker") as Sp, \
          patch(f"{MODELS}.SonosPlaybackLog") as Log, patch(f"{MODELS}.SonosOAuthCredential") as Cr, \
          patch("sonos_audio.handlers.scheduler.SonosClient", return_value=client):

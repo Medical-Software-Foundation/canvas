@@ -9,6 +9,7 @@ Matching is to the minute, which lines up with the once-a-minute cron tick.
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import requests as http_requests  # type: ignore[import-untyped]
 from logger import log
 
 from canvas_sdk.effects import Effect
@@ -105,7 +106,7 @@ class PlaybackScheduler(CronTask):
                             client.set_volume(group_id, volume)
                         else:
                             client.pause(group_id)
-                    except Exception as e:  # noqa: BLE001 - log and record, never crash the cron tick
+                    except http_requests.exceptions.RequestException as e:
                         error_message = str(e)
                         log.warning("[sonos_audio] schedule %s error: %s", action, e)
 

@@ -431,12 +431,14 @@ async function saveMapping(){
   const idx = document.getElementById('map-player').value;
   if(!locId || idx===''){ toast('Pick a location and a speaker.'); return; }
   const p = discoveredPlayers[Number(idx)];
-  await apiFetch('/sonos/speakers', {method:'POST', body:JSON.stringify({
-    location_id: locId, location_name: locName(locId),
-    player_id: p.player_id, group_id: p.group_id, player_name: p.name,
-    household_id: state.status.household_id || 'demo-household-001',
-  })});
-  closeModal('map-modal'); await loadSpeakers(); await loadStatus(); toast('Speaker mapped.');
+  try{
+    await apiFetch('/sonos/speakers', {method:'POST', body:JSON.stringify({
+      location_id: locId, location_name: locName(locId),
+      player_id: p.player_id, group_id: p.group_id, player_name: p.name,
+      household_id: state.status.household_id || 'demo-household-001',
+    })});
+    closeModal('map-modal'); await loadSpeakers(); await loadStatus(); toast('Speaker mapped.');
+  }catch(e){ toast(e.message); }
 }
 
 // ---- presets ----
