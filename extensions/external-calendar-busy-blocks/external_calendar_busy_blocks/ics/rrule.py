@@ -1,6 +1,9 @@
+from calendar import monthrange
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+
+from dateutil.relativedelta import relativedelta
 
 from external_calendar_busy_blocks.ics.types import IcsParseError
 
@@ -107,7 +110,6 @@ def expand_rrule(
 ) -> Iterator[datetime]:
     """Yield occurrences of dtstart within [window_start, window_end).
 
-    DAILY/WEEKLY implemented here; MONTHLY/YEARLY added in Task 9.
     Always stops at min(rule.count, cap, end-of-window, rule.until).
     COUNT is consumed absolutely (per RFC 5545): occurrences outside the
     window still tick the count even if not yielded.
@@ -116,9 +118,10 @@ def expand_rrule(
         yield from _expand_daily(rule, dtstart, window_start, window_end, cap)
     elif rule.freq == "WEEKLY":
         yield from _expand_weekly(rule, dtstart, window_start, window_end, cap)
-    else:
-        # MONTHLY/YEARLY handled in Task 9.
-        return
+    elif rule.freq == "MONTHLY":
+        yield from _expand_monthly(rule, dtstart, window_start, window_end, cap)
+    elif rule.freq == "YEARLY":
+        yield from _expand_yearly(rule, dtstart, window_start, window_end, cap)
 
 
 def _expand_daily(
@@ -185,4 +188,126 @@ def _expand_weekly(
         week_no += rule.interval
         next_week = week_start + timedelta(weeks=week_no)
         if next_week >= window_end:
+            return
+
+
+def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> int | None:
+    """Return the day-of-month for the Nth (1-based) weekday in (year, month)."""
+    _, last_day = monthrange(year, month)
+    if n > 0:
+        first_match = ((weekday - datetime(year, month, 1).weekday()) % 7) + 1
+        day = first_match + 7 * (n - 1)
+        return day if day <= last_day else None
+    if n < 0:
+        last_match = last_day - ((datetime(year, month, last_day).weekday() - weekday) % 7)
+        day = last_match - 7 * (-n - 1)
+        return day if day >= 1 else None
+    return None
+
+
+def _candidate_days_in_month(rule: RRule, year: int, month: int, dtstart: datetime) -> list[int]:
+    days: set[int] = set()
+    if rule.byday:
+        for pos, day in rule.byday:
+            weekday = WEEKDAY_TO_NUM[day]
+            if pos == 0:
+                _, last = monthrange(year, month)
+                for d in range(1, last + 1):
+                    if datetime(year, month, d).weekday() == weekday:
+                        days.add(d)
+            else:
+                d = _nth_weekday_of_month(year, month, weekday, pos)
+                if d is not None:
+                    days.add(d)
+    if rule.bymonthday:
+        _, last = monthrange(year, month)
+        for d in rule.bymonthday:
+            if d > 0 and d <= last:
+                days.add(d)
+            elif d < 0 and (last + d + 1) >= 1:
+                days.add(last + d + 1)
+    if not rule.byday and not rule.bymonthday:
+        days.add(dtstart.day if dtstart.day <= monthrange(year, month)[1] else monthrange(year, month)[1])
+    return sorted(days)
+
+
+def _next_month(year: int, month: int, interval: int) -> tuple[int, int]:
+    new = datetime(year, month, 1) + relativedelta(months=interval)
+    return new.year, new.month
+
+
+def _expand_monthly(
+    rule: RRule,
+    dtstart: datetime,
+    window_start: datetime,
+    window_end: datetime,
+    cap: int,
+) -> Iterator[datetime]:
+    cursor_year, cursor_month = dtstart.year, dtstart.month
+    produced = 0
+    while produced < cap:
+        if rule.bymonth and cursor_month not in rule.bymonth:
+            cursor_year, cursor_month = _next_month(cursor_year, cursor_month, rule.interval)
+            continue
+        for d in _candidate_days_in_month(rule, cursor_year, cursor_month, dtstart):
+            moment = datetime(
+                cursor_year, cursor_month, d,
+                dtstart.hour, dtstart.minute, dtstart.second,
+                tzinfo=dtstart.tzinfo,
+            )
+            if moment < dtstart:
+                continue
+            if rule.count is not None and produced >= rule.count:
+                return
+            if rule.until is not None and moment > rule.until:
+                return
+            if moment >= window_end:
+                return
+            if moment >= window_start:
+                yield moment
+            produced += 1
+            if produced >= cap:
+                return
+        cursor_year, cursor_month = _next_month(cursor_year, cursor_month, rule.interval)
+        if datetime(cursor_year, cursor_month, 1, tzinfo=dtstart.tzinfo) >= window_end:
+            return
+
+
+def _expand_yearly(
+    rule: RRule,
+    dtstart: datetime,
+    window_start: datetime,
+    window_end: datetime,
+    cap: int,
+) -> Iterator[datetime]:
+    cursor_year = dtstart.year
+    produced = 0
+    while produced < cap:
+        months = rule.bymonth if rule.bymonth else [dtstart.month]
+        for m in sorted(set(months)):
+            days = _candidate_days_in_month(rule, cursor_year, m, dtstart) or [dtstart.day]
+            for d in days:
+                try:
+                    moment = datetime(
+                        cursor_year, m, d,
+                        dtstart.hour, dtstart.minute, dtstart.second,
+                        tzinfo=dtstart.tzinfo,
+                    )
+                except ValueError:
+                    continue
+                if moment < dtstart:
+                    continue
+                if rule.count is not None and produced >= rule.count:
+                    return
+                if rule.until is not None and moment > rule.until:
+                    return
+                if moment >= window_end:
+                    return
+                if moment >= window_start:
+                    yield moment
+                produced += 1
+                if produced >= cap:
+                    return
+        cursor_year += rule.interval
+        if datetime(cursor_year, 1, 1, tzinfo=dtstart.tzinfo) >= window_end:
             return

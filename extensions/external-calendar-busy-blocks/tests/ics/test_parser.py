@@ -208,3 +208,50 @@ def test_parse_malformed_raises(ics_fixture) -> None:
             now=datetime(2026, 6, 1, tzinfo=timezone.utc),
             lookahead_days=90,
         )
+
+
+def test_parse_weekly_recurring(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("weekly_recurring.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    # MO 6/1, WE 6/3, MO 6/8, WE 6/10
+    assert len(events) == 4
+    days = sorted(e.starts_at.day for e in events)
+    assert days == [1, 3, 8, 10]
+    assert all(e.uid == "weekly-1@test" for e in events)
+
+
+def test_parse_rrule_with_exdate(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("rrule_with_exdate.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    # 4 Mondays: 6/1, 6/8, 6/15, 6/22. EXDATE excludes 6/15.
+    days = sorted(e.starts_at.day for e in events)
+    assert days == [1, 8, 22]
+
+
+def test_parse_recurrence_id_override(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("recurrence_id_override.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    # 3 occurrences: 6/1, 6/8 (overridden), 6/15
+    by_day = {e.starts_at.day: e for e in events}
+    assert set(by_day.keys()) == {1, 8, 15}
+    # The 6/8 instance was overridden to start at 16:00 instead of 14:00
+    assert by_day[8].starts_at == datetime(2026, 6, 8, 16, 0, tzinfo=timezone.utc)
+    assert by_day[8].recurrence_id == "20260608T140000Z"
+
+
+def test_parse_oversized_rrule_capped_at_1000(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("oversized_rrule.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=3650,  # huge window to remove that constraint
+    )
+    assert len(events) == 1000

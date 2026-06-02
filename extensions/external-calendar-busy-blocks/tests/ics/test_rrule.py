@@ -82,3 +82,34 @@ def test_expand_respects_cap() -> None:
     window_end = datetime(2030, 1, 1, tzinfo=timezone.utc)
     occurrences = list(expand_rrule(rule, dtstart, window_start, window_end, cap=10))
     assert len(occurrences) == 10
+
+
+def test_expand_monthly_first_monday() -> None:
+    rule = parse_rrule("FREQ=MONTHLY;BYDAY=1MO;COUNT=3")
+    dtstart = datetime(2026, 6, 1, 14, 0, tzinfo=timezone.utc)  # 1st Monday of June
+    window_end = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    occurrences = list(expand_rrule(rule, dtstart, dtstart, window_end, cap=1000))
+    # 1st Mondays: Jun 1 2026, Jul 6 2026, Aug 3 2026
+    assert [(o.year, o.month, o.day) for o in occurrences] == [
+        (2026, 6, 1), (2026, 7, 6), (2026, 8, 3),
+    ]
+
+
+def test_expand_monthly_bymonthday() -> None:
+    rule = parse_rrule("FREQ=MONTHLY;BYMONTHDAY=15;COUNT=2")
+    dtstart = datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc)
+    window_end = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    occurrences = list(expand_rrule(rule, dtstart, dtstart, window_end, cap=1000))
+    assert [(o.year, o.month, o.day) for o in occurrences] == [
+        (2026, 6, 15), (2026, 7, 15),
+    ]
+
+
+def test_expand_yearly_bymonth_bymonthday() -> None:
+    rule = parse_rrule("FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=25;COUNT=2")
+    dtstart = datetime(2026, 12, 25, 14, 0, tzinfo=timezone.utc)
+    window_end = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    occurrences = list(expand_rrule(rule, dtstart, dtstart, window_end, cap=1000))
+    assert [(o.year, o.month, o.day) for o in occurrences] == [
+        (2026, 12, 25), (2027, 12, 25),
+    ]
