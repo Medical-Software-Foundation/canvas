@@ -116,3 +116,95 @@ def test_extract_vevents_ignores_other_components() -> None:
 def test_extract_vevents_raises_on_missing_vcalendar() -> None:
     with pytest.raises(IcsParseError):
         extract_vevents(["BEGIN:VEVENT", "UID:x", "END:VEVENT"])
+
+
+from datetime import datetime, timezone
+
+from external_calendar_busy_blocks.ics.parser import parse_ics
+
+
+def test_parse_simple_confirmed(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("simple_confirmed.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert len(events) == 1
+    e = events[0]
+    assert e.uid == "simple-1@test"
+    assert e.recurrence_id is None
+    assert e.starts_at == datetime(2026, 6, 1, 14, 0, tzinfo=timezone.utc)
+    assert e.ends_at == datetime(2026, 6, 1, 15, 0, tzinfo=timezone.utc)
+    assert e.is_all_day is False
+    assert e.sequence == 0
+
+
+def test_parse_skips_transparent(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("transparent_event.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert events == []
+
+
+def test_parse_skips_tentative(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("tentative_event.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert events == []
+
+
+def test_parse_skips_cancelled(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("cancelled_event.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert events == []
+
+
+def test_parse_all_day(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("all_day_event.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert len(events) == 1
+    assert events[0].is_all_day is True
+    assert events[0].starts_at == datetime(2026, 6, 15, tzinfo=timezone.utc)
+
+
+def test_parse_multi_timezone(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("multi_timezone.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert len(events) == 2
+    # PST 09:00 -> UTC 16:00 (PDT, UTC-7 in June)
+    pst = next(e for e in events if e.uid == "tz-pst@test")
+    assert pst.starts_at == datetime(2026, 6, 1, 16, 0, tzinfo=timezone.utc)
+    utc = next(e for e in events if e.uid == "tz-utc@test")
+    assert utc.starts_at == datetime(2026, 6, 1, 20, 0, tzinfo=timezone.utc)
+
+
+def test_parse_floating_uses_x_wr_timezone(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("floating_time.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    # NY 09:00 (EDT, UTC-4) -> 13:00 UTC
+    assert events[0].starts_at == datetime(2026, 6, 1, 13, 0, tzinfo=timezone.utc)
+
+
+def test_parse_malformed_raises(ics_fixture) -> None:
+    with pytest.raises(IcsParseError):
+        parse_ics(
+            ics_fixture("malformed.ics"),
+            now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            lookahead_days=90,
+        )

@@ -1,4 +1,7 @@
-from external_calendar_busy_blocks.ics.types import IcsParseError
+from datetime import datetime, timedelta
+
+from external_calendar_busy_blocks.ics.datetimes import parse_ics_datetime
+from external_calendar_busy_blocks.ics.types import IcsParseError, ParsedEvent
 
 
 def unfold_lines(body: bytes) -> list[str]:
@@ -88,3 +91,79 @@ def extract_vevents(lines: list[str]) -> list[list[Property]]:
             current.append(parse_property_line(line))
 
     return events
+
+
+def _find_property(props: list[Property], name: str) -> Property | None:
+    name = name.upper()
+    for prop in props:
+        if prop[0] == name:
+            return prop
+    return None
+
+
+def _calendar_default_tz(lines: list[str]) -> str:
+    for line in lines:
+        if line.upper().startswith("X-WR-TIMEZONE:"):
+            return line.split(":", 1)[1].strip()
+    return "UTC"
+
+
+def _should_skip(props: list[Property]) -> bool:
+    status_prop = _find_property(props, "STATUS")
+    if status_prop and status_prop[2].upper() in ("CANCELLED", "TENTATIVE"):
+        return True
+    transp_prop = _find_property(props, "TRANSP")
+    if transp_prop and transp_prop[2].upper() == "TRANSPARENT":
+        return True
+    return False
+
+
+def parse_ics(
+    body: bytes,
+    now: datetime,
+    lookahead_days: int,
+) -> list[ParsedEvent]:
+    """Parse an ICS body to ParsedEvents within [now, now+lookahead_days].
+
+    Non-recurring events are emitted directly. RRULE expansion is added in
+    later tasks; for now, recurring events are emitted only as their base
+    DTSTART instance.
+    """
+    lines = unfold_lines(body)
+    default_tz = _calendar_default_tz(lines)
+    vevents = extract_vevents(lines)
+
+    out: list[ParsedEvent] = []
+    window_end = now + timedelta(days=lookahead_days)
+
+    for props in vevents:
+        if _should_skip(props):
+            continue
+
+        uid_prop = _find_property(props, "UID")
+        dtstart_prop = _find_property(props, "DTSTART")
+        dtend_prop = _find_property(props, "DTEND")
+        if not uid_prop or not dtstart_prop or not dtend_prop:
+            continue
+
+        starts = parse_ics_datetime(dtstart_prop[2], dtstart_prop[1], default_tz)
+        ends = parse_ics_datetime(dtend_prop[2], dtend_prop[1], default_tz)
+
+        if ends.moment <= now or starts.moment >= window_end:
+            continue
+
+        seq_prop = _find_property(props, "SEQUENCE")
+        sequence = int(seq_prop[2]) if seq_prop else 0
+
+        out.append(
+            ParsedEvent(
+                uid=uid_prop[2],
+                recurrence_id=None,
+                starts_at=starts.moment,
+                ends_at=ends.moment,
+                is_all_day=starts.is_all_day,
+                sequence=sequence,
+            )
+        )
+
+    return out
