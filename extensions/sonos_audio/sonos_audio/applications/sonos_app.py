@@ -366,7 +366,7 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
                     "household_id": s.household_id,
                     "default_favorite_id": s.default_favorite_id or "",
                     "default_favorite_name": s.default_favorite_name or "",
-                    "default_volume": s.default_volume or 25,
+                    "default_volume": s.default_volume if s.default_volume is not None else 25,
                 }
                 for s in speakers
             ]
@@ -608,10 +608,11 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
                                 "played": False, "reason": "no station"})
                 continue
 
+            speaker_default_volume = speaker.default_volume if speaker.default_volume is not None else 25
             try:
-                volume = int(req_volume) if req_volume is not None else (speaker.default_volume or 25)
+                volume = int(req_volume) if req_volume is not None else speaker_default_volume
             except (TypeError, ValueError):
-                volume = speaker.default_volume or 25
+                volume = speaker_default_volume
             volume = max(0, min(100, volume))
             group_id = speaker.group_id or speaker.player_id
 

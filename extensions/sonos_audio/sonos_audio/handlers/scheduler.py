@@ -92,7 +92,7 @@ class PlaybackScheduler(CronTask):
 
         for sched, action in firing:
             triggered_by = "schedule_start" if action == "play" else "schedule_stop"
-            volume = max(0, min(100, int(sched.volume or 25)))
+            volume = max(0, min(100, int(sched.volume if sched.volume is not None else 25)))
 
             for speaker in speakers_by_location.get(sched.location_id, []):
                 group_id = speaker.group_id or speaker.player_id

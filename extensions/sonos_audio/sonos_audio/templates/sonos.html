@@ -324,7 +324,7 @@ function renderSpeakers(){
   const groups = [];
   byLoc.forEach((list, locId)=>{
     const name = list[0].location_name || locName(locId);
-    const locVol = list[0].default_volume || 25;
+    const locVol = list[0].default_volume ?? 25;
     const speakers = list.map(s=>`
       <div class="speaker" data-player="${esc(s.player_id)}">
         <div class="row spread">
@@ -337,8 +337,8 @@ function renderSpeakers(){
           <button class="btn ghost sm" onclick="pauseSpeaker('${esc(s.player_id)}')">❚❚ Pause</button>
           <div class="vol">
             <span>Vol</span>
-            <input type="range" min="0" max="100" value="${s.default_volume||25}" oninput="this.nextElementSibling.textContent=this.value+'%'" onchange="setVolume('${esc(s.player_id)}', this.value)">
-            <span class="pct">${s.default_volume||25}%</span>
+            <input type="range" min="0" max="100" value="${s.default_volume ?? 25}" oninput="this.nextElementSibling.textContent=this.value+'%'" onchange="setVolume('${esc(s.player_id)}', this.value)">
+            <span class="pct">${s.default_volume ?? 25}%</span>
           </div>
         </div>
       </div>`).join('');

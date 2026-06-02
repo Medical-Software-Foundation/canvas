@@ -633,6 +633,36 @@ def test_play_uses_preset_key_and_bad_volume_falls_back():
     assert data["results"][0]["volume"] == 42  # bad volume -> speaker default
 
 
+def test_play_volume_zero_is_preserved_not_defaulted():
+    # volume 0 (mute) must not be coerced to 25 by a falsy-zero fallback.
+    api = make_api(body=json.dumps({"location_id": "loc1", "favorite_id": "fX", "volume": 0}))
+    speaker = fake_speaker(default_volume=0)
+    with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset"), \
+         patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosOAuthCredential") as Cr:
+        Cr.objects.first.return_value = None
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
+        out = api.sonos_play()
+    assert body_of(out[0])["results"][0]["volume"] == 0
+
+    # No requested volume + a speaker whose remembered default is 0 → stays 0.
+    api = make_api(body=json.dumps({"location_id": "loc1", "favorite_id": "fX"}))
+    speaker = fake_speaker(default_volume=0)
+    with patch(f"{MODELS}.SonosSpeaker") as Sp, patch(f"{MODELS}.AudioPreset"), \
+         patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosOAuthCredential") as Cr:
+        Cr.objects.first.return_value = None
+        Sp.objects.filter.return_value = FakeQS(items=[speaker])
+        out = api.sonos_play()
+    assert body_of(out[0])["results"][0]["volume"] == 0
+
+
+def test_get_speakers_preserves_zero_default_volume():
+    api = make_api()
+    with patch(f"{MODELS}.SonosSpeaker") as Sp:
+        Sp.objects.filter.return_value.order_by.return_value = [fake_speaker(default_volume=0)]
+        out = api.get_sonos_speakers()
+    assert body_of(out[0])["speakers"][0]["default_volume"] == 0
+
+
 def test_pause_paths():
     with patch(f"{MODELS}.SonosPlaybackLog"), patch(f"{MODELS}.SonosSpeaker"), \
          patch(f"{MODELS}.SonosOAuthCredential") as Cr:
