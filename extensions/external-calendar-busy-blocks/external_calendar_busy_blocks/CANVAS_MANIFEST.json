@@ -1,0 +1,20 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "external_calendar_busy_blocks",
+    "description": "Subscribe Canvas to a provider's personal calendar via ICS and mirror busy times as Admin events.",
+    "components": {
+        "protocols": [],
+        "applications": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["LOOKAHEAD_DAYS"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}

@@ -1,0 +1,35 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"},
+]
+dependencies = [
+  "canvas[test-utils]",
+]
+description = "Subscribe Canvas to a provider's personal calendar via ICS and mirror busy times as Admin events."
+license = "MIT"
+name = "external_calendar_busy_blocks"
+readme = "README.md"
+requires-python = ">=3.12"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.coverage.run]
+source = ["external_calendar_busy_blocks"]
+omit = ["tests/*", "*/__pycache__/*", "*/.venv/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "def __repr__",
+  "raise AssertionError",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+  "pytest-cov>=7.0.0",
+]
