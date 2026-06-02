@@ -20,11 +20,19 @@ def test_config_page_renders_disconnected_state() -> None:
     page.request = request
     page.secrets = {}
 
-    with patch("external_calendar_busy_blocks.ui.pages.StaffCalendarFeed") as MockFeed:
+    with (
+        patch("external_calendar_busy_blocks.ui.pages.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.ui.pages.render_to_string") as mock_render,
+    ):
         MockFeed.objects.filter.return_value.first.return_value = None
+        mock_render.return_value = "<p>Paste your iCal URL</p>"
         responses = page.render()
     html = responses[0].content.decode()
-    assert "Paste" in html or "ical" in html.lower()
+    assert "Paste" in html or "iCal" in html.lower()
+    # Verify the template name and connection state passed through
+    args, kwargs = mock_render.call_args
+    assert args[0] == "templates/config.html"
+    assert args[1]["connected"] is False
 
 
 def test_config_page_renders_connected_state() -> None:
@@ -41,8 +49,15 @@ def test_config_page_renders_connected_state() -> None:
         last_error=None,
         is_active=True,
     )
-    with patch("external_calendar_busy_blocks.ui.pages.StaffCalendarFeed") as MockFeed:
+    with (
+        patch("external_calendar_busy_blocks.ui.pages.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.ui.pages.render_to_string") as mock_render,
+    ):
         MockFeed.objects.filter.return_value.first.return_value = feed
+        mock_render.return_value = "<form>Disconnect</form>"
         responses = page.render()
     html = responses[0].content.decode()
     assert "Disconnect" in html
+    args, kwargs = mock_render.call_args
+    assert args[1]["connected"] is True
+    assert args[1]["feed"] is feed
