@@ -465,18 +465,33 @@ def test_create_preset_paths():
     with patch(f"{MODELS}.AudioPreset"):
         out = make_api(body=json.dumps({"key": "k"})).create_sonos_preset()
         assert out[0].status_code == 400
-    # conflict
+    # conflict only when an ACTIVE preset with that key exists
     api = make_api(body=json.dumps({"key": "k", "name": "n", "match_type": "default"}))
     with patch(f"{MODELS}.AudioPreset") as Ap:
-        Ap.objects.filter.return_value.exists.return_value = True
+        Ap.objects.filter.return_value.first.return_value = Mock(active=True)
         assert api.create_sonos_preset()[0].status_code == 409
-    # create
+    # create new when no row exists
     api = make_api(body=json.dumps({"key": "k2", "name": "n", "match_type": "default"}))
     with patch(f"{MODELS}.AudioPreset") as Ap:
-        Ap.objects.filter.return_value.exists.return_value = False
+        Ap.objects.filter.return_value.first.return_value = None
         Ap.objects.create.return_value = Mock(pk=3)
         out = api.create_sonos_preset()
     assert out[0].status_code == 201
+
+
+def test_create_preset_reactivates_soft_deleted_key():
+    # A previously deleted (active=False) preset key can be recreated.
+    api = make_api(body=json.dumps({"key": "calm", "name": "New Calm", "match_type": "default"}))
+    dead = Mock(pk=8, active=False)
+    dead.save = Mock()
+    with patch(f"{MODELS}.AudioPreset") as Ap:
+        Ap.objects.filter.return_value.first.return_value = dead
+        out = api.create_sonos_preset()
+    assert out[0].status_code == 201
+    assert dead.active is True
+    assert dead.name == "New Calm"
+    dead.save.assert_called_once()
+    Ap.objects.create.assert_not_called()
 
 
 def test_update_preset_not_found_and_success():

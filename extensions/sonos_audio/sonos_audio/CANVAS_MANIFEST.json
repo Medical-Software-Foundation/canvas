@@ -30,7 +30,7 @@
                 "description": "REST API for Sonos OAuth, speaker mapping, presets, playback control, and schedules.",
                 "data_access": {
                     "event": "",
-                    "read": ["Staff"],
+                    "read": ["Staff", "PracticeLocation"],
                     "write": []
                 }
             },

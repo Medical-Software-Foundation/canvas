@@ -482,11 +482,14 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
             if not body.get(field):
                 return [JSONResponse({"error": f"{field} is required"}, status_code=HTTPStatus.BAD_REQUEST)]
 
-        if AudioPreset.objects.filter(key=body["key"]).exists():
+        # `key` is unique, and delete is a soft-delete (active=False). Reuse an
+        # inactive row with the same key so a deleted key can be recreated; only
+        # an *active* preset with that key is a real conflict.
+        existing = AudioPreset.objects.filter(key=body["key"]).first()
+        if existing and existing.active:
             return [JSONResponse({"error": "Preset key already exists"}, status_code=HTTPStatus.CONFLICT)]
 
-        preset = AudioPreset.objects.create(
-            key=body["key"],
+        fields = dict(
             name=body["name"],
             match_type=body["match_type"],
             match_value=body.get("match_value", ""),
@@ -495,6 +498,14 @@ class SonosApi(StaffSessionAuthMixin, SimpleAPI):
             volume=body.get("volume", 25),
             priority=body.get("priority", 0),
         )
+        if existing:
+            for f, v in fields.items():
+                setattr(existing, f, v)
+            existing.active = True
+            existing.save()
+            return [JSONResponse({"success": True, "id": existing.pk}, status_code=HTTPStatus.CREATED)]
+
+        preset = AudioPreset.objects.create(key=body["key"], **fields)
         return [JSONResponse({"success": True, "id": preset.pk}, status_code=HTTPStatus.CREATED)]
 
     @api.put("/sonos/presets/<key>")
