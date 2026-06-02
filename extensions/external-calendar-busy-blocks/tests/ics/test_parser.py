@@ -10,11 +10,20 @@ def test_unfold_lines_no_folding() -> None:
 
 
 def test_unfold_lines_folded_with_space() -> None:
-    body = b"DESCRIPTION:This is a long\r\n description that wraps\r\n"
+    # RFC 5545 line fold: the CRLF + single WSP sequence is removed entirely.
+    # Real feeds preserve a content space by putting it before the CRLF.
+    body = b"DESCRIPTION:This is a long \r\n description that wraps\r\n"
     assert unfold_lines(body) == ["DESCRIPTION:This is a long description that wraps"]
 
 
+def test_unfold_lines_folded_strips_continuation_wsp() -> None:
+    # No content space on either side -> the two halves concatenate directly.
+    body = b"DESCRIPTION:long\r\n word\r\n"
+    assert unfold_lines(body) == ["DESCRIPTION:longword"]
+
+
 def test_unfold_lines_folded_with_tab() -> None:
+    # Tab continuation is also stripped entirely
     body = b"SUMMARY:Multi\r\n\tline\r\n"
     assert unfold_lines(body) == ["SUMMARY:Multiline"]
 

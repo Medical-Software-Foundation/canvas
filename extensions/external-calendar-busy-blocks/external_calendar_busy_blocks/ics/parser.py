@@ -2,7 +2,12 @@ from external_calendar_busy_blocks.ics.types import IcsParseError
 
 
 def unfold_lines(body: bytes) -> list[str]:
-    """Decode and unfold an ICS body into logical lines."""
+    """Decode and unfold an ICS body into logical lines.
+
+    RFC 5545 §3.1: long lines may be folded by inserting CRLF followed by
+    one linear whitespace character. The entire fold sequence (CRLF + WSP)
+    is removed during unfolding.
+    """
     try:
         text = body.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -16,11 +21,7 @@ def unfold_lines(body: bytes) -> list[str]:
         if not line:
             continue
         if line[0] in (" ", "\t") and folded:
-            # RFC 5545: strip the single leading WSP fold indicator.
-            # Space continuations preserve the remaining content as-is
-            # (the space is the fold indicator; content follows without
-            # an additional separator).  Tab continuations strip the tab.
-            folded[-1] += line[1:] if line[0] == "\t" else line
+            folded[-1] += line[1:]
         else:
             folded.append(line)
     return folded
