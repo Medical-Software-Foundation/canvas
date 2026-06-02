@@ -17,7 +17,7 @@ def test_staff_calendar_feed_can_be_saved() -> None:
         is_active=True,
     )
     feed.save()
-    assert feed.id is not None
+    assert feed.dbid is not None
 
 
 @pytest.mark.django_db
@@ -49,7 +49,7 @@ def test_imported_event_can_be_saved() -> None:
         last_seen=datetime(2026, 6, 1, 13, 30, tzinfo=timezone.utc),
     )
     record.save()
-    assert record.id is not None
+    assert record.dbid is not None
 
 
 @pytest.mark.django_db

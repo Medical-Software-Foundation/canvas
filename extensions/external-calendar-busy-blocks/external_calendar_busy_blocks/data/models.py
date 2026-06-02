@@ -1,5 +1,3 @@
-import uuid
-
 from django.db import models
 
 from canvas_sdk.v1.data.base import CustomModel
@@ -16,7 +14,6 @@ class StaffCalendarFeed(CustomModel):
             )
         ]
 
-    id = models.UUIDField(default=uuid.uuid4, editable=False)
     staff_id = models.CharField(max_length=32)
     ics_url = models.TextField()
     is_active = models.BooleanField(default=True)
@@ -39,7 +36,6 @@ class ImportedEvent(CustomModel):
             )
         ]
 
-    id = models.UUIDField(default=uuid.uuid4, editable=False)
     staff_id = models.CharField(max_length=32)
     ics_uid = models.CharField(max_length=512)
     recurrence_id = models.CharField(max_length=64, null=True, blank=True)
