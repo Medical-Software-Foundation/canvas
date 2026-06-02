@@ -14,7 +14,6 @@ INDEX_KEY = "pa:rules:index"
 BLOCK_INDEX_KEY = "pa:blocks:index"
 RECURRING_BLOCK_INDEX_KEY = "pa:recurring_blocks:index"
 EVENT_IDS_PREFIX = "pa:event_ids:"
-ALLOWED_STAFF_KEY = "pa:allowed_staff"
 PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
@@ -475,11 +474,6 @@ def refresh_all_ttls() -> int:
         if current_recurring_index:
             cache.set(RECURRING_BLOCK_INDEX_KEY, current_recurring_index, timeout_seconds=CACHE_TTL_SECONDS)
 
-    # Refresh allowed staff list
-    allowed = cache.get(ALLOWED_STAFF_KEY)
-    if allowed is not None:
-        cache.set(ALLOWED_STAFF_KEY, allowed, timeout_seconds=CACHE_TTL_SECONDS)
-
     # Refresh practice timezone
     tz_val = cache.get(PRACTICE_TZ_KEY)
     if tz_val is not None:
@@ -504,40 +498,6 @@ def refresh_all_ttls() -> int:
     mark_ttl_refresh_done()
 
     return refreshed
-
-
-# ── Allowed staff list ─────────────────────────────────────────────────
-
-
-def get_allowed_staff() -> list[str]:
-    """Get the list of staff IDs allowed to access the admin UI."""
-    cache = _get_cache()
-    data = cache.get(ALLOWED_STAFF_KEY)
-    if data is None:
-        return []
-    return list(data)
-
-
-def set_allowed_staff(ids: list[str]) -> None:
-    """Replace the full allowed staff list."""
-    cache = _get_cache()
-    cache.set(ALLOWED_STAFF_KEY, ids, timeout_seconds=CACHE_TTL_SECONDS)
-
-
-def add_allowed_staff(staff_id: str) -> None:
-    """Add a staff ID to the allowed list."""
-    current = get_allowed_staff()
-    if staff_id not in current:
-        current.append(staff_id)
-        set_allowed_staff(current)
-
-
-def remove_allowed_staff(staff_id: str) -> None:
-    """Remove a staff ID from the allowed list."""
-    current = get_allowed_staff()
-    if staff_id in current:
-        current.remove(staff_id)
-        set_allowed_staff(current)
 
 
 # ── Practice timezone ─────────────────────────────────────────────────

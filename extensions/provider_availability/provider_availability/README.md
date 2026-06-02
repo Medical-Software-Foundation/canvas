@@ -118,8 +118,8 @@ Each row is validated for format and required fields, then the staff key is chec
 | `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, admin UI serving |
 | `CSVImportAPI` | SimpleAPI | Staff-session endpoints for the CSV bulk import (validate / commit / template) |
 | `UIApi` | SimpleAPI | Serves the admin HTML interface (Application iframe) |
-| `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and allowed-staff management |
-| `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window |
+| `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and practice-timezone management |
+| `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window (every 5 min) |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
 | `OnStaffDeactivated` | Protocol | Cleans up rules and calendar events when a provider is deactivated |
 | `OnPluginInstalled` | Protocol | Full sync of all cached rules/blocks to Calendar Events on install and redeploy |
@@ -176,16 +176,21 @@ Each row is validated for format and required fields, then the staff key is chec
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/provision/run` | Create Clinic calendars and Available events for all active providers |
-| GET | `/provision/allowed-staff` | List staff IDs with admin UI edit access |
-| PUT | `/provision/allowed-staff` | Replace full allowed staff list |
-| POST | `/provision/allowed-staff` | Add a staff ID to the allowed list |
-| DELETE | `/provision/allowed-staff/<staff_id>` | Remove a staff ID from the allowed list |
 | GET | `/provision/timezone` | Get practice timezone |
 | PUT | `/provision/timezone` | Set practice timezone |
 
 ## Data Model
 
-**ProviderAvailabilityRule** - Defines when a provider is available:
+### Secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `simpleapi-api-key` | API key for ProvisionAPI authentication |
+| `allowed-staff-keys` | Comma-separated staff UUIDs allowed to open the admin UI and edit rules. Dashed or undashed UUIDs both work. Leave empty/unset to allow any logged-in Canvas staff member (bootstrap). |
+
+### Data Model
+
+**ProviderAvailabilityRule** — Defines when a provider is available:
 - Weekly schedule (time windows per day), location/visit type filters
 - Booking interval (min lead hours, slot granularity)
 - Buffer times (pre/post appointment minutes)

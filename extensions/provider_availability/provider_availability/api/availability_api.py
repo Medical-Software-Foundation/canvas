@@ -51,7 +51,6 @@ from provider_availability.engine.storage import (
     get_all_blocks,
     get_all_rules,
     get_all_recurring_blocks,
-    get_allowed_staff,
     get_block_by_id,
     get_blocks_by_group,
     get_blocks_for_provider,
@@ -70,6 +69,7 @@ from provider_availability.engine.storage import (
     set_practice_timezone,
     set_provider_timezone,
 )
+from provider_availability.api._auth import is_authorized
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
 from provider_availability.engine.provider_resolver import (
     get_provider_displays,
@@ -189,30 +189,11 @@ def _validate_recurrence_payload(body: dict) -> str | None:
 def _check_write_access(request: object, secrets: dict | None = None) -> list[Response] | None:
     """Return an error response list if the user is not authorized for writes, else None.
 
-    Checks the ``allowed-staff-keys`` plugin secret first (comma-separated staff UUIDs).
-    Falls back to cache-based ``get_allowed_staff()`` for backward compat.
-    Empty / missing secret = allow everyone (bootstrap behaviour).
+    Gates on the ``allowed-staff-keys`` plugin secret. Empty / unset secret =
+    any logged-in Canvas staff member is allowed (``StaffSessionAuthMixin``
+    enforces the logged-in baseline).
     """
-    staff_id = str(getattr(request, "staff_id", None) or "")
-
-    # Prefer secret-based access control
-    secret_val = (secrets or {}).get("allowed-staff-keys", "")
-    if secret_val:
-        allowed_keys = [k.strip() for k in secret_val.split(",") if k.strip()]
-        if staff_id and staff_id in allowed_keys:
-            return None
-        return [
-            JSONResponse(
-                {"error": "Access denied. You are not authorized to modify availability rules."},
-                status_code=HTTPStatus.FORBIDDEN,
-            )
-        ]
-
-    # Fallback: cache-based list (backward compat during migration)
-    allowed = get_allowed_staff()
-    if not allowed:
-        return None  # empty list = allow everyone (bootstrap)
-    if staff_id and staff_id in allowed:
+    if is_authorized(secrets, request):
         return None
     return [
         JSONResponse(

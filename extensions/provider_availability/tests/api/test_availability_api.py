@@ -45,73 +45,85 @@ def _parse(response) -> tuple[dict, int]:
     return body, response.status_code
 
 
+_STAFF_HEX = "5e4fb0011234567890abcdef01234567"  # undashed (Staff.id form)
+_STAFF_DASHED = "5e4fb001-1234-5678-90ab-cdef01234567"  # same UUID, dashed
+_OTHER_HEX = "aa11bb22cc33dd44ee55ff6677889900"
+
+
 def _make_handler(
     query_params: dict | None = None,
     path_params: dict | None = None,
     json_body: dict | None = None,
-    staff_id: str = "staff-1",
+    staff_id: str | None = _STAFF_HEX,
+    secrets: dict | None = None,
 ) -> AvailabilityAPI:
-    """Create an AvailabilityAPI handler with a mocked request."""
+    """Create an AvailabilityAPI handler with a header-based request mock."""
     handler = AvailabilityAPI(MagicMock())
     handler.request = MagicMock()
     handler.request.query_params = query_params or {}
     handler.request.path_params = path_params or {}
     handler.request.json.return_value = json_body or {}
-    handler.request.staff_id = staff_id
-    handler.secrets = {}
+    handler.request.headers = (
+        {"canvas-logged-in-user-id": staff_id} if staff_id is not None else {}
+    )
+    handler.secrets = secrets or {}
     return handler
+
+
+def _make_request(staff_id: str | None = _STAFF_HEX) -> MagicMock:
+    """Create a request mock with the header-based staff id."""
+    request = MagicMock()
+    request.headers = (
+        {"canvas-logged-in-user-id": staff_id} if staff_id is not None else {}
+    )
+    return request
 
 
 # ── _check_write_access ─────────────────────────────────────────────────
 
 
 class TestCheckWriteAccess:
-    @patch(f"{MODULE}.get_allowed_staff", return_value=[])
-    def test_empty_list_allows_all(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = "anyone"
-        result = _check_write_access(request)
-        assert result is None
-        assert mock_allowed.mock_calls == [call()]
+    def test_empty_secret_allows_any_staff(self):
+        """Unset/empty allowed-staff-keys → any logged-in staff is allowed."""
+        assert _check_write_access(_make_request(), secrets={}) is None
 
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
-    def test_allowed_staff_returns_none(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = "staff-1"
-        result = _check_write_access(request)
-        assert result is None
-        assert mock_allowed.mock_calls == [call()]
+    def test_listed_staff_undashed_allowed(self):
+        assert (
+            _check_write_access(
+                _make_request(_STAFF_HEX),
+                secrets={"allowed-staff-keys": _STAFF_HEX},
+            )
+            is None
+        )
 
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
-    def test_denied_staff_returns_error(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = "staff-999"
-        result = _check_write_access(request)
+    def test_dashed_secret_matches_undashed_header(self):
+        """Regression for PR #339-comment: dashed UUID in secret + undashed header → allowed."""
+        assert (
+            _check_write_access(
+                _make_request(_STAFF_HEX),
+                secrets={"allowed-staff-keys": _STAFF_DASHED},
+            )
+            is None
+        )
+
+    def test_unlisted_staff_denied(self):
+        result = _check_write_access(
+            _make_request(_OTHER_HEX),
+            secrets={"allowed-staff-keys": _STAFF_HEX},
+        )
         assert result is not None
         body, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
         assert "Access denied" in body["error"]
-        assert mock_allowed.mock_calls == [call()]
 
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1"])
-    def test_missing_staff_id_denied(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = ""
-        result = _check_write_access(request)
+    def test_missing_header_denied_when_secret_set(self):
+        result = _check_write_access(
+            _make_request(staff_id=None),
+            secrets={"allowed-staff-keys": _STAFF_HEX},
+        )
         assert result is not None
         body, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_allowed.mock_calls == [call()]
-
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1"])
-    def test_no_staff_id_attr_denied(self, mock_allowed):
-        """Request object without staff_id attribute is denied."""
-        request = object()
-        result = _check_write_access(request)
-        assert result is not None
-        body, code = _parse(result[0])
-        assert code == HTTPStatus.FORBIDDEN
-        assert mock_allowed.mock_calls == [call()]
 
 
 # ── Enrichment helpers ───────────────────────────────────────────────────
