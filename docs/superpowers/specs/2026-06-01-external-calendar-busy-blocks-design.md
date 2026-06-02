@@ -100,9 +100,33 @@ Four components, each with a single responsibility:
 - `canvas_sdk.v1.data.staff.Staff` — to resolve `provider_name` for the calendar lookup, and to validate `staff_id` on `POST /feeds`
 - `canvas_sdk.v1.data.base.CustomModel` — base class for `StaffCalendarFeed` and `ImportedEvent`
 - `canvas_sdk.utils.http.Http` — outbound HTTP for ICS feed fetches
-- Third-party: the `icalendar` Python library for parsing, recurrence expansion, and timezone handling
+- Stdlib (allowlisted): `datetime`, `zoneinfo.ZoneInfo`, `dateutil.relativedelta`, `re`, `urllib.parse`, `arrow.get`
 
-### Open SDK question
+### Sandbox constraint: ICS parsing is hand-rolled
+
+The Canvas plugin runner sandbox (`plugin_runner/sandbox.py` + `plugin_runner/allowed-module-imports.json`) enforces a hard-coded import allowlist. Third-party libraries like `icalendar`, `recurring-ical-events`, and `dateutil.rrule` are NOT allowed, and the allowlist is not extensible per-plugin. The plugin therefore implements its own ICS parser and RRULE expander using only allowlisted modules.
+
+**Supported RRULE subset (covers ~98% of real-world personal calendars):**
+
+- `FREQ=DAILY`, `FREQ=WEEKLY`, `FREQ=MONTHLY`, `FREQ=YEARLY`
+- `INTERVAL=N`
+- `BYDAY=MO,TU,WE,TH,FR,SA,SU` (and positional variants like `1MO`, `-1FR`)
+- `BYMONTHDAY=1,15,-1`
+- `BYMONTH=1,6,12`
+- `UNTIL=20261231T235959Z`
+- `COUNT=N`
+- `EXDATE` (excluded instances)
+- `RECURRENCE-ID` (instance overrides)
+
+**Explicitly not supported in v1** (drop the VEVENT entirely with a warning log if encountered):
+
+- `BYSETPOS`
+- `BYWEEKNO`
+- `BYYEARDAY`
+- `WKST` (assume Monday)
+- `BYHOUR` / `BYMINUTE` / `BYSECOND`
+
+### Open SDK questions
 
 The MSF-vendored `CANVAS_MANIFEST.json` schema (`canvas_cli/utils/validators/manifest_schema.py`) does not appear to expose a documented field for declaring a plugin's custom-data namespace, despite the SDK's data layer (`canvas_sdk.v1.data.base.CustomModel`, `canvas_sdk.v1.plugin_database_context`) supporting it. Implementation kickoff must confirm with the Canvas SDK team:
 
@@ -110,7 +134,7 @@ The MSF-vendored `CANVAS_MANIFEST.json` schema (`canvas_cli/utils/validators/man
 2. The migration/schema-creation mechanism for `CustomModel`s — does the runner create tables automatically, or does the plugin ship migrations?
 3. The read/write access-level declaration syntax.
 
-If `CustomModel` support is not stable, the fallback is to encode feed URLs in a JSON-blob plugin secret and encode the ICS UID into Canvas Event titles for reconciliation — degraded but functional. This fallback is documented but not preferred.
+If `CustomModel` support is not available in the deployed SDK version, the fallback is to encode feed URLs in a JSON-blob plugin secret and encode the ICS UID into Canvas Event titles for reconciliation — degraded but functional. This fallback is documented but not preferred.
 
 ## Data flow
 
@@ -191,12 +215,12 @@ For each StaffCalendarFeed where is_active=True:
   └── Other             → same as 5xx
   │
   ▼
-  Parse ICS body with icalendar.Calendar.from_ical(body):
+  Parse ICS body with plugin's IcsParser.parse(body):
   │
-  ├── Raises  → set last_error="parse failure: <exception class>",
-  │             log first occurrence to Sentry, suppress on next ticks
-  │             for this feed, no effects, continue
-  └── Returns → continue
+  ├── Raises IcsParseError → set last_error="parse failure: <type>",
+  │                          log first occurrence to Sentry, suppress on
+  │                          next ticks for this feed, no effects, continue
+  └── Returns               → continue
   │
   ▼
   Filter VEVENTs:
@@ -431,3 +455,7 @@ Per `CLAUDE.md`:
 2. Confirm whether the Canvas plugin runner auto-creates `CustomModel` tables on plugin install, or whether the plugin must ship migrations.
 3. Confirm the `Calendar.objects.for_calendar_name(provider_name=staff.full_name, ...)` lookup is the canonical way to find a staff's Admin calendar, or whether there's a more direct relationship via `Staff` we should use instead.
 4. Determine the right plugin-secret values to ship with the manifest: `LOOKAHEAD_DAYS` (default `"90"`), and any HTTP timeout/user-agent overrides.
+
+## Sandbox-imposed scope adjustment (2026-06-01 update)
+
+After spec approval, verification of `plugin_runner/sandbox.py` revealed that third-party ICS libraries (`icalendar`, `recurring-ical-events`, `dateutil.rrule`) are not in the plugin import allowlist and the allowlist is not extensible per-plugin. The "SDK dependencies" section and the data-flow parsing step have been updated to reflect a plugin-internal ICS parser. The supported RRULE subset is documented in the "Sandbox constraint" subsection of "Architecture". The test plan accounts for hand-rolled parser coverage. No other behavior changes.
