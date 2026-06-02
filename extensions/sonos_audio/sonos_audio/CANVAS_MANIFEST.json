@@ -1,0 +1,65 @@
+{
+    "sdk_version": "0.112.0",
+    "plugin_version": "0.1.0",
+    "name": "sonos_audio",
+    "description": "Control Sonos speakers from Canvas: map speakers to practice locations, manage ambient music presets, play/pause/adjust volume by location, and schedule playback windows.",
+    "url_permissions": [
+        {
+            "url": "https://api.sonos.com/*",
+            "permissions": []
+        },
+        {
+            "url": "https://api.ws.sonos.com/*",
+            "permissions": []
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "sonos_audio.applications.sonos_app:SonosApp",
+                "name": "Sonos Audio",
+                "description": "Connect Sonos, map speakers to practice locations, and control ambient music.",
+                "scope": "global",
+                "icon": "assets/logo.png",
+                "show_in_panel": false
+            }
+        ],
+        "protocols": [
+            {
+                "class": "sonos_audio.applications.sonos_app:SonosApi",
+                "description": "REST API for Sonos OAuth, speaker mapping, presets, playback control, and schedules.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Staff"],
+                    "write": []
+                }
+            },
+            {
+                "class": "sonos_audio.handlers.scheduler:PlaybackScheduler",
+                "description": "Runs every minute to start/stop scheduled Sonos playback windows.",
+                "data_access": {
+                    "event": "CRON",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "sonos__audio",
+        "access": "read_write"
+    },
+    "secrets": [
+        "SONOS_CLIENT_ID",
+        "SONOS_CLIENT_SECRET"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

@@ -1,0 +1,16 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Control Sonos speakers from Canvas: map speakers to practice locations, manage ambient music presets, play/pause/adjust volume by location, and schedule playback windows."
+license = "MIT"
+name = "sonos_audio"
+readme = "sonos_audio/README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]

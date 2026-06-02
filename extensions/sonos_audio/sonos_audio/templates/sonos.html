@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonos Audio</title>
+<style>
+  :root{
+    --navy:#1a2b4a; --navy-light:#27406b;
+    --bg:#f5f7fa; --surface:#ffffff; --border:#e4e7eb;
+    --ink:#1f2933; --muted:#6b7480; --faint:#9aa5b1;
+    --teal:#1a7f6b; --teal-light:#e6f4f0;
+    --red:#c0392b; --red-light:#fbeae8;
+    --amber:#b7791f; --amber-light:#fdf6e7;
+    --shadow:0 1px 3px rgba(16,24,40,.08);
+    --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+  header{background:var(--navy);color:#fff;padding:16px 24px;display:flex;align-items:center;gap:12px}
+  header h1{font-size:18px;font-weight:600;margin:0}
+  header .sub{color:#b7c2d6;font-size:13px;margin-left:auto}
+  .wrap{max-width:980px;margin:0 auto;padding:20px 24px 60px}
+
+  .banner{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:10px;margin-bottom:18px;border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow)}
+  .banner .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;background:var(--faint)}
+  .banner.ok .dot{background:var(--teal)} .banner.warn .dot{background:var(--amber)} .banner.off .dot{background:var(--faint)}
+  .banner .msg{flex:1}
+  .banner .msg b{display:block}
+  .banner .msg small{color:var(--muted)}
+
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px}
+  .tab{padding:9px 16px;border:none;background:none;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+  .tab.active{color:var(--navy);border-bottom-color:var(--navy)}
+  .panel{display:none} .panel.active{display:block}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 10px;font-size:15px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .spread{justify-content:space-between}
+  .grow{flex:1;min-width:120px}
+
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+  input,select{font-family:var(--font);font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--ink);width:100%}
+  input[type=range]{padding:0}
+  .btn{font-family:var(--font);font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--navy-light)}
+  .btn.ghost{background:#fff;color:var(--navy)}
+  .btn.ghost:hover{background:#eef2f8}
+  .btn.danger{background:#fff;color:var(--red);border-color:var(--red)}
+  .btn.danger:hover{background:var(--red-light)}
+  .btn.sm{padding:5px 10px;font-size:12px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  .speaker{border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;background:var(--surface);box-shadow:var(--shadow)}
+  .speaker .loc{font-weight:600;font-size:15px}
+  .speaker .dev{color:var(--muted);font-size:12px}
+  .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .vol{display:flex;align-items:center;gap:8px;min-width:180px;flex:1}
+  .vol input{flex:1}
+  .vol .pct{font-variant-numeric:tabular-nums;color:var(--muted);width:38px;text-align:right}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:8px;border-bottom:1px solid var(--border)}
+  td{padding:8px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .empty{color:var(--muted);text-align:center;padding:28px 12px}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:#eef2f8;color:var(--navy)}
+  .pill.err{background:var(--red-light);color:var(--red)}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(16,24,40,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal-bg.show{display:flex}
+  .modal{background:#fff;border-radius:12px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:20px}
+  .modal h3{margin-top:0}
+  .field{margin-bottom:12px}
+  .wk{display:flex;gap:6px;flex-wrap:wrap}
+  .wk label{display:flex;align-items:center;gap:4px;margin:0;font-size:13px;color:var(--ink);border:1px solid var(--border);border-radius:7px;padding:5px 8px;cursor:pointer}
+  .wk input{width:auto}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+  .toast.show{opacity:1}
+  .demo-tag{font-size:11px;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:99px;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sonos Audio</h1>
+  <span class="sub" id="household-sub"></span>
+</header>
+<div class="wrap">
+
+  <div class="banner off" id="banner">
+    <span class="dot"></span>
+    <div class="msg"><b id="banner-title">Checking Sonos connection…</b><small id="banner-detail"></small></div>
+    <div class="row" id="banner-actions"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="speakers">Speakers</button>
+    <button class="tab" data-tab="presets">Presets</button>
+    <button class="tab" data-tab="schedules">Schedules</button>
+    <button class="tab" data-tab="activity">Activity</button>
+  </div>
+
+  <!-- SPEAKERS -->
+  <div class="panel active" id="panel-speakers">
+    <div class="row spread" style="margin-bottom:12px">
+      <h3 style="margin:0">Mapped speakers</h3>
+      <button class="btn" id="btn-add-speaker">+ Map a speaker</button>
+    </div>
+    <div id="speaker-list"></div>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="panel" id="panel-presets">
+    <div class="row spread" style="margin-bottom:12px">
+      <h3 style="margin:0">Audio presets</h3>
+      <div class="row">
+        <button class="btn ghost" id="btn-seed">Seed starter presets</button>
+        <button class="btn" id="btn-add-preset">+ New preset</button>
+      </div>
+    </div>
+    <div class="card"><table>
+      <thead><tr><th>Name</th><th>Station</th><th>Scope</th><th>Vol</th><th></th></tr></thead>
+      <tbody id="preset-rows"></tbody>
+    </table></div>
+  </div>
+
+  <!-- SCHEDULES -->
+  <div class="panel" id="panel-schedules">
+    <div class="row spread" style="margin-bottom:12px">
+      <h3 style="margin:0">Playback schedules</h3>
+      <button class="btn" id="btn-add-schedule">+ New schedule</button>
+    </div>
+    <div class="card"><table>
+      <thead><tr><th>Location</th><th>Station</th><th>Days</th><th>Window</th><th>Vol</th><th></th></tr></thead>
+      <tbody id="schedule-rows"></tbody>
+    </table></div>
+  </div>
+
+  <!-- ACTIVITY -->
+  <div class="panel" id="panel-activity">
+    <div class="row spread" style="margin-bottom:12px">
+      <h3 style="margin:0">Recent activity</h3>
+      <button class="btn ghost" id="btn-refresh-log">Refresh</button>
+    </div>
+    <div class="card"><table>
+      <thead><tr><th>When</th><th>Location</th><th>Action</th><th>By</th><th>Vol</th></tr></thead>
+      <tbody id="log-rows"></tbody>
+    </table></div>
+  </div>
+
+</div>
+
+<!-- Map-speaker modal -->
+<div class="modal-bg" id="map-modal">
+  <div class="modal">
+    <h3>Map a speaker to a location</h3>
+    <div class="field">
+      <label>Practice location</label>
+      <select id="map-location"></select>
+    </div>
+    <div class="field">
+      <label>Sonos speaker / group</label>
+      <select id="map-player"></select>
+      <small id="map-player-hint" style="color:var(--muted)"></small>
+    </div>
+    <div class="row spread" style="margin-top:16px">
+      <button class="btn ghost" onclick="closeModal('map-modal')">Cancel</button>
+      <button class="btn" id="map-save">Map speaker</button>
+    </div>
+  </div>
+</div>
+
+<!-- Preset modal -->
+<div class="modal-bg" id="preset-modal">
+  <div class="modal">
+    <h3 id="preset-modal-title">New preset</h3>
+    <input type="hidden" id="pf-editing">
+    <div class="field"><label>Name</label><input id="pf-name" placeholder="Waiting Room Ambient"></div>
+    <div class="field"><label>Station (Sonos favorite)</label><select id="pf-favorite"></select></div>
+    <div class="field"><label>Scope</label>
+      <select id="pf-match-type">
+        <option value="default">Global default</option>
+        <option value="location">A specific location</option>
+      </select>
+    </div>
+    <div class="field" id="pf-location-wrap" style="display:none"><label>Location</label><select id="pf-location"></select></div>
+    <div class="row">
+      <div class="field grow"><label>Volume</label><input type="number" id="pf-volume" min="0" max="100" value="25"></div>
+      <div class="field grow"><label>Priority</label><input type="number" id="pf-priority" value="0"></div>
+    </div>
+    <div class="row spread" style="margin-top:8px">
+      <button class="btn ghost" onclick="closeModal('preset-modal')">Cancel</button>
+      <button class="btn" id="preset-save">Save preset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule modal -->
+<div class="modal-bg" id="schedule-modal">
+  <div class="modal">
+    <h3 id="schedule-modal-title">New schedule</h3>
+    <input type="hidden" id="sf-editing">
+    <div class="field"><label>Location</label><select id="sf-location"></select></div>
+    <div class="field"><label>Station (Sonos favorite)</label><select id="sf-favorite"></select></div>
+    <div class="field"><label>Days</label>
+      <div class="wk" id="sf-weekdays"></div>
+    </div>
+    <div class="row">
+      <div class="field grow"><label>Start</label><input type="time" id="sf-start" value="09:00"></div>
+      <div class="field grow"><label>Stop</label><input type="time" id="sf-stop" value="17:00"></div>
+    </div>
+    <div class="row">
+      <div class="field grow"><label>Volume</label><input type="number" id="sf-volume" min="0" max="100" value="25"></div>
+      <div class="field grow"><label>UTC offset (minutes)</label><input type="number" id="sf-offset" value="0"></div>
+    </div>
+    <small style="color:var(--muted)">Times are local to the offset above. e.g. -420 = US Pacific (PDT), -300 = US Eastern (EDT), 0 = UTC.</small>
+    <div class="row spread" style="margin-top:14px">
+      <button class="btn ghost" onclick="closeModal('schedule-modal')">Cancel</button>
+      <button class="btn" id="schedule-save">Save schedule</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/plugin-io/api/sonos_audio';
+const WEEKDAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+let state = {
+  status: {}, locations: [], speakers: [], presets: [], schedules: [], favorites: [], favoritesLoaded: false,
+};
+
+async function apiFetch(path, opts = {}){
+  const res = await fetch(`${API}${path}`, {headers:{'Content-Type':'application/json', ...opts.headers}, ...opts});
+  let data = {};
+  try { data = await res.json(); } catch(e) {}
+  if(!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function locName(id){ const l = state.locations.find(x=>x.id===id); return l ? l.name : id; }
+
+// ---- loaders ----
+async function loadStatus(){ state.status = await apiFetch('/sonos/status'); renderBanner(); }
+async function loadLocations(){ const d = await apiFetch('/locations'); state.locations = d.locations || []; }
+async function loadSpeakers(){ const d = await apiFetch('/sonos/speakers'); state.speakers = d.speakers || []; renderSpeakers(); }
+async function loadPresets(){ const d = await apiFetch('/sonos/presets'); state.presets = d.presets || []; renderPresets(); }
+async function loadSchedules(){ const d = await apiFetch('/sonos/schedules'); state.schedules = d.schedules || []; renderSchedules(); }
+async function loadLog(){
+  try { const d = await apiFetch('/sonos/log'); renderLog(d.log || []); }
+  catch(e){ renderLog([]); }
+}
+async function loadFavorites(force){
+  if(state.favoritesLoaded && !force) return;
+  const hh = state.status.household_id || 'demo-household-001';
+  try { const d = await apiFetch(`/sonos/favorites?household_id=${encodeURIComponent(hh)}`); state.favorites = d.items || d.favorites || []; state.favoritesLoaded = true; }
+  catch(e){ state.favorites = []; }
+}
+
+// ---- connection banner ----
+function renderBanner(){
+  const s = state.status, b = document.getElementById('banner');
+  const title = document.getElementById('banner-title'), detail = document.getElementById('banner-detail');
+  const actions = document.getElementById('banner-actions');
+  document.getElementById('household-sub').textContent = s.connected ? (s.household_name || 'Connected') : '';
+  b.className = 'banner ' + (s.connected ? 'ok' : (s.demo_mode ? 'warn' : 'off'));
+  actions.innerHTML = '';
+  if(s.connected){
+    title.innerHTML = `Connected to ${esc(s.household_name||'your Sonos household')}`;
+    detail.textContent = `${s.speaker_count||0} speaker(s) mapped`;
+    const dc = document.createElement('button'); dc.className='btn ghost sm'; dc.textContent='Disconnect'; dc.onclick=disconnectSonos; actions.appendChild(dc);
+  } else if(!s.has_app_keys){
+    title.textContent = 'Add your Sonos app keys to connect';
+    detail.textContent = 'Set SONOS_CLIENT_ID and SONOS_CLIENT_SECRET in Settings → Plugins → sonos_audio → Secrets.';
+    title.insertAdjacentHTML('beforeend', ' <span class="demo-tag">demo mode</span>');
+  } else {
+    title.innerHTML = 'Not connected <span class="demo-tag">demo mode</span>';
+    detail.textContent = 'Connect your Sonos household to control real speakers.';
+    const c = document.createElement('button'); c.className='btn sm'; c.textContent='Connect Sonos'; c.onclick=connectSonos; actions.appendChild(c);
+  }
+}
+function connectSonos(){
+  const w = window.open(`${API}/sonos/oauth/start`, 'sonos_oauth', 'width=520,height=720');
+  if(!w) toast('Allow popups to connect Sonos.');
+}
+window.addEventListener('message', async (e)=>{
+  if(e.data && (e.data.type==='sonos-connected' || e.data.type==='sonos-failed')){
+    await loadStatus();
+    if(e.data.type==='sonos-connected'){ toast('Sonos connected.'); state.favoritesLoaded=false; await loadFavorites(true); }
+    else toast('Sonos connection failed.');
+  }
+});
+async function disconnectSonos(){
+  if(!confirm('Disconnect Sonos? The plugin reverts to demo mode.')) return;
+  await apiFetch('/sonos/oauth/disconnect', {method:'POST', body:'{}'});
+  await loadStatus(); toast('Disconnected.');
+}
+
+// ---- speakers ----
+function favoriteOptions(selectedId){
+  const opts = ['<option value="">— pick a station —</option>'].concat(
+    state.favorites.map(f=>`<option value="${esc(f.id)}" ${f.id===selectedId?'selected':''}>${esc(f.name)}</option>`)
+  );
+  return opts.join('');
+}
+function renderSpeakers(){
+  const host = document.getElementById('speaker-list');
+  if(!state.speakers.length){ host.innerHTML = `<div class="card empty">No speakers mapped yet. Click “Map a speaker” to link a Sonos device to a practice location.</div>`; return; }
+  host.innerHTML = state.speakers.map(s=>`
+    <div class="speaker" data-loc="${esc(s.location_id)}">
+      <div class="row spread">
+        <div><div class="loc">${esc(s.location_name||locName(s.location_id))}</div><div class="dev">${esc(s.player_name)}</div></div>
+        <button class="btn danger sm" onclick="unmapSpeaker('${esc(s.location_id)}')">Unmap</button>
+      </div>
+      <div class="controls">
+        <select class="sp-fav grow">${favoriteOptions(s.default_favorite_id)}</select>
+        <button class="btn sm" onclick="playSpeaker('${esc(s.location_id)}')">▶ Play</button>
+        <button class="btn ghost sm" onclick="pauseSpeaker('${esc(s.location_id)}')">❚❚ Pause</button>
+        <div class="vol">
+          <span>Vol</span>
+          <input type="range" min="0" max="100" value="${s.default_volume||25}" oninput="this.nextElementSibling.textContent=this.value+'%'" onchange="setVolume('${esc(s.location_id)}', this.value)">
+          <span class="pct">${s.default_volume||25}%</span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+function speakerCard(locId){ return document.querySelector(`.speaker[data-loc="${CSS.escape(locId)}"]`); }
+async function playSpeaker(locId){
+  const card = speakerCard(locId); const fav = card.querySelector('.sp-fav').value;
+  const vol = card.querySelector('input[type=range]').value;
+  try{ const r = await apiFetch('/sonos/play', {method:'POST', body:JSON.stringify({location_id:locId, favorite_id:fav||undefined, volume:Number(vol)})});
+    toast(r.demo_mode ? `Demo: would play ${r.favorite_name||'station'}` : `Playing ${r.favorite_name||''}`); loadSpeakers(); }
+  catch(e){ toast(e.message); }
+}
+async function pauseSpeaker(locId){
+  try{ const r = await apiFetch('/sonos/pause', {method:'POST', body:JSON.stringify({location_id:locId})}); toast(r.demo_mode?'Demo: would pause':'Paused'); }
+  catch(e){ toast(e.message); }
+}
+async function setVolume(locId, vol){
+  try{ await apiFetch('/sonos/volume', {method:'POST', body:JSON.stringify({location_id:locId, volume:Number(vol)})}); }
+  catch(e){ toast(e.message); }
+}
+async function unmapSpeaker(locId){
+  if(!confirm('Remove this speaker mapping?')) return;
+  await apiFetch(`/sonos/speakers/${encodeURIComponent(locId)}`, {method:'DELETE'});
+  await loadSpeakers(); await loadStatus(); toast('Speaker unmapped.');
+}
+
+// ---- map speaker modal ----
+let discoveredPlayers = [];
+async function openMapModal(){
+  const locSel = document.getElementById('map-location');
+  const mapped = new Set(state.speakers.map(s=>s.location_id));
+  locSel.innerHTML = state.locations.map(l=>`<option value="${esc(l.id)}">${esc(l.name)}${mapped.has(l.id)?' (remap)':''}</option>`).join('') || '<option value="">No locations found</option>';
+  const playerSel = document.getElementById('map-player');
+  playerSel.innerHTML = '<option>Loading speakers…</option>';
+  openModal('map-modal');
+  const hh = state.status.household_id || 'demo-household-001';
+  try{
+    const d = await apiFetch(`/sonos/players?household_id=${encodeURIComponent(hh)}`);
+    const groups = d.groups || []; const players = d.players || [];
+    discoveredPlayers = groups.length ? groups.map(g=>({group_id:g.id, player_id:(g.playerIds&&g.playerIds[0])||g.id, name:g.name})) :
+                                        players.map(p=>({group_id:'', player_id:p.id, name:p.name}));
+    playerSel.innerHTML = discoveredPlayers.length ? discoveredPlayers.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('')
+                                                   : '<option value="">No speakers found</option>';
+    document.getElementById('map-player-hint').textContent = state.status.demo_mode ? 'Showing demo speakers (Sonos not connected).' : '';
+  }catch(e){ playerSel.innerHTML = `<option value="">${esc(e.message)}</option>`; }
+}
+async function saveMapping(){
+  const locId = document.getElementById('map-location').value;
+  const idx = document.getElementById('map-player').value;
+  if(!locId || idx===''){ toast('Pick a location and a speaker.'); return; }
+  const p = discoveredPlayers[Number(idx)];
+  await apiFetch('/sonos/speakers', {method:'POST', body:JSON.stringify({
+    location_id: locId, location_name: locName(locId),
+    player_id: p.player_id, group_id: p.group_id, player_name: p.name,
+    household_id: state.status.household_id || 'demo-household-001',
+  })});
+  closeModal('map-modal'); await loadSpeakers(); await loadStatus(); toast('Speaker mapped.');
+}
+
+// ---- presets ----
+function renderPresets(){
+  const rows = document.getElementById('preset-rows');
+  if(!state.presets.length){ rows.innerHTML = `<tr><td colspan="5" class="empty">No presets yet.</td></tr>`; return; }
+  rows.innerHTML = state.presets.map(p=>`
+    <tr>
+      <td><b>${esc(p.name)}</b></td>
+      <td>${p.sonos_favorite_name ? esc(p.sonos_favorite_name) : '<span class="pill err">no station</span>'}</td>
+      <td>${p.match_type==='location' ? esc(locName(p.match_value)) : '<span class="pill">global</span>'}</td>
+      <td>${p.volume}%</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn ghost sm" onclick="editPreset('${esc(p.key)}')">Edit</button>
+        <button class="btn danger sm" onclick="deletePreset('${esc(p.key)}')">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+async function openPresetModal(key){
+  await loadFavorites();
+  document.getElementById('preset-modal-title').textContent = key ? 'Edit preset' : 'New preset';
+  document.getElementById('pf-editing').value = key || '';
+  const p = key ? state.presets.find(x=>x.key===key) : null;
+  document.getElementById('pf-name').value = p ? p.name : '';
+  document.getElementById('pf-favorite').innerHTML = favoriteOptions(p ? p.sonos_favorite_id : '');
+  document.getElementById('pf-match-type').value = p ? p.match_type : 'default';
+  document.getElementById('pf-volume').value = p ? p.volume : 25;
+  document.getElementById('pf-priority').value = p ? p.priority : 0;
+  const locSel = document.getElementById('pf-location');
+  locSel.innerHTML = state.locations.map(l=>`<option value="${esc(l.id)}" ${p&&p.match_value===l.id?'selected':''}>${esc(l.name)}</option>`).join('');
+  togglePresetLocation();
+  openModal('preset-modal');
+}
+function togglePresetLocation(){ document.getElementById('pf-location-wrap').style.display = document.getElementById('pf-match-type').value==='location' ? 'block':'none'; }
+function editPreset(key){ openPresetModal(key); }
+async function savePreset(){
+  const key = document.getElementById('pf-editing').value;
+  const favSel = document.getElementById('pf-favorite');
+  const matchType = document.getElementById('pf-match-type').value;
+  const payload = {
+    name: document.getElementById('pf-name').value.trim(),
+    match_type: matchType,
+    match_value: matchType==='location' ? document.getElementById('pf-location').value : '',
+    sonos_favorite_id: favSel.value,
+    sonos_favorite_name: favSel.value ? favSel.options[favSel.selectedIndex].text : '',
+    volume: Number(document.getElementById('pf-volume').value),
+    priority: Number(document.getElementById('pf-priority').value),
+  };
+  if(!payload.name){ toast('Name is required.'); return; }
+  try{
+    if(key){ await apiFetch(`/sonos/presets/${encodeURIComponent(key)}`, {method:'PUT', body:JSON.stringify(payload)}); }
+    else { payload.key = payload.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('preset-'+Date.now());
+           await apiFetch('/sonos/presets', {method:'POST', body:JSON.stringify(payload)}); }
+    closeModal('preset-modal'); await loadPresets(); toast('Preset saved.');
+  }catch(e){ toast(e.message); }
+}
+async function deletePreset(key){ if(!confirm('Delete this preset?')) return; await apiFetch(`/sonos/presets/${encodeURIComponent(key)}`, {method:'DELETE'}); await loadPresets(); toast('Preset deleted.'); }
+async function seedPresets(){ const r = await apiFetch('/sonos/presets/seed', {method:'POST', body:'{}'}); await loadPresets(); toast(`Seeded ${r.presets_created} preset(s).`); }
+
+// ---- schedules ----
+function renderSchedules(){
+  const rows = document.getElementById('schedule-rows');
+  if(!state.schedules.length){ rows.innerHTML = `<tr><td colspan="6" class="empty">No schedules yet.</td></tr>`; return; }
+  rows.innerHTML = state.schedules.map(s=>{
+    const days = (s.weekdays||'').split(',').filter(x=>x!=='').map(d=>WEEKDAYS[Number(d)]||'').join(' ');
+    return `<tr>
+      <td><b>${esc(s.location_name||locName(s.location_id))}</b></td>
+      <td>${esc(s.favorite_name||s.favorite_id)}</td>
+      <td>${esc(days)}</td>
+      <td>${esc(s.start_time)}–${esc(s.stop_time)}</td>
+      <td>${s.volume}%</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn ghost sm" onclick="editSchedule(${s.id})">Edit</button>
+        <button class="btn danger sm" onclick="deleteSchedule(${s.id})">Delete</button>
+      </td></tr>`;
+  }).join('');
+}
+function buildWeekdayPicker(selected){
+  const set = new Set((selected||'0,1,2,3,4,5,6').split(',').filter(x=>x!=='').map(Number));
+  document.getElementById('sf-weekdays').innerHTML = WEEKDAYS.map((d,i)=>`<label><input type="checkbox" value="${i}" ${set.has(i)?'checked':''}>${d}</label>`).join('');
+}
+async function openScheduleModal(id){
+  await loadFavorites();
+  document.getElementById('schedule-modal-title').textContent = id ? 'Edit schedule' : 'New schedule';
+  document.getElementById('sf-editing').value = id || '';
+  const s = id ? state.schedules.find(x=>x.id===id) : null;
+  const locSel = document.getElementById('sf-location');
+  locSel.innerHTML = state.locations.map(l=>`<option value="${esc(l.id)}" ${s&&s.location_id===l.id?'selected':''}>${esc(l.name)}</option>`).join('');
+  document.getElementById('sf-favorite').innerHTML = favoriteOptions(s ? s.favorite_id : '');
+  buildWeekdayPicker(s ? s.weekdays : '0,1,2,3,4,5,6');
+  document.getElementById('sf-start').value = s ? s.start_time : '09:00';
+  document.getElementById('sf-stop').value = s ? s.stop_time : '17:00';
+  document.getElementById('sf-volume').value = s ? s.volume : 25;
+  document.getElementById('sf-offset').value = s ? s.utc_offset_minutes : 0;
+  openModal('schedule-modal');
+}
+function editSchedule(id){ openScheduleModal(id); }
+async function saveSchedule(){
+  const id = document.getElementById('sf-editing').value;
+  const favSel = document.getElementById('sf-favorite');
+  const locSel = document.getElementById('sf-location');
+  const weekdays = Array.from(document.querySelectorAll('#sf-weekdays input:checked')).map(c=>c.value).join(',');
+  if(!favSel.value){ toast('Pick a station.'); return; }
+  if(!weekdays){ toast('Pick at least one day.'); return; }
+  const payload = {
+    location_id: locSel.value, location_name: locSel.options[locSel.selectedIndex].text,
+    favorite_id: favSel.value, favorite_name: favSel.options[favSel.selectedIndex].text,
+    weekdays, start_time: document.getElementById('sf-start').value, stop_time: document.getElementById('sf-stop').value,
+    volume: Number(document.getElementById('sf-volume').value), utc_offset_minutes: Number(document.getElementById('sf-offset').value),
+  };
+  try{
+    if(id){ await apiFetch(`/sonos/schedules/${id}`, {method:'PUT', body:JSON.stringify(payload)}); }
+    else { await apiFetch('/sonos/schedules', {method:'POST', body:JSON.stringify(payload)}); }
+    closeModal('schedule-modal'); await loadSchedules(); toast('Schedule saved.');
+  }catch(e){ toast(e.message); }
+}
+async function deleteSchedule(id){ if(!confirm('Delete this schedule?')) return; await apiFetch(`/sonos/schedules/${id}`, {method:'DELETE'}); await loadSchedules(); toast('Schedule deleted.'); }
+
+// ---- activity ----
+function renderLog(log){
+  const rows = document.getElementById('log-rows');
+  if(!log.length){ rows.innerHTML = `<tr><td colspan="5" class="empty">No activity yet.</td></tr>`; return; }
+  rows.innerHTML = log.map(e=>{
+    const when = e.created_at ? new Date(e.created_at).toLocaleString() : '';
+    const act = e.action==='error' ? `<span class="pill err">error</span>` : `<span class="pill">${esc(e.action)}</span>`;
+    return `<tr><td>${esc(when)}</td><td>${esc(e.location_name||e.location_id)}</td><td>${act}</td><td>${esc(e.triggered_by)}</td><td>${e.action==='play'||e.action==='volume_change'?e.volume+'%':''}</td></tr>`;
+  }).join('');
+}
+
+// ---- tabs ----
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+  if(t.dataset.tab==='activity') loadLog();
+}));
+
+// ---- wire buttons ----
+document.getElementById('btn-add-speaker').onclick = openMapModal;
+document.getElementById('map-save').onclick = saveMapping;
+document.getElementById('btn-add-preset').onclick = ()=>openPresetModal(null);
+document.getElementById('btn-seed').onclick = seedPresets;
+document.getElementById('preset-save').onclick = savePreset;
+document.getElementById('pf-match-type').onchange = togglePresetLocation;
+document.getElementById('btn-add-schedule').onclick = ()=>openScheduleModal(null);
+document.getElementById('schedule-save').onclick = saveSchedule;
+document.getElementById('btn-refresh-log').onclick = loadLog;
+
+// ---- init ----
+(async function init(){
+  try{
+    await loadStatus();
+    await Promise.all([loadLocations(), loadSpeakers(), loadPresets(), loadSchedules()]);
+    await loadFavorites();
+    renderSpeakers();  // re-render now that favorites are available
+  }catch(e){ toast('Failed to load: '+e.message); }
+})();
+</script>
+</body>
+</html>
