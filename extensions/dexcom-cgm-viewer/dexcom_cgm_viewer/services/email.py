@@ -28,14 +28,26 @@ class EmailDeliveryError(RuntimeError):
 
 
 def patient_email_address(patient: Any) -> Optional[str]:
-    """Return the patient's highest-ranked email address, or ``None``.
+    """Return the patient's highest-ranked *messageable* email address, or ``None``.
 
     Canvas stores contact points on ``Patient.telecom``; we pick the one
     with ``system='email'`` and the lowest ``rank`` (rank 1 == primary).
+
+    The same consent gates the portal channel applies are enforced here so
+    both channels fail closed identically: an email contact point is only
+    used when the patient has consented, has not opted out, and the row is
+    active. Without these predicates an opted-out or stale/entered-in-error
+    email would still receive the magic link even though the portal Message
+    is correctly suppressed.
     """
     contact = (
         patient.telecom
-        .filter(system="email")
+        .filter(
+            system="email",
+            has_consent=True,
+            opted_out=False,
+            state="active",
+        )
         .order_by("rank")
         .first()
     )
