@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from dexcom_cgm_viewer.lib.settings import (
+from dexcom_cgm_viewer.services.settings import (
     DEFAULT_RANGE_DAYS,
     RANGE_OPTIONS,
     dexcom_base_url,

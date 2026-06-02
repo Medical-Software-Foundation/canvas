@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dexcom_cgm_viewer.lib.dexcom_client import (
+from dexcom_cgm_viewer.services.dexcom_client import (
     DexcomAPIError,
     DexcomAuthError,
     DexcomClient,

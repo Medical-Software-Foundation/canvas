@@ -6,7 +6,7 @@ import datetime as dt
 
 import pytest
 
-from dexcom_cgm_viewer.lib import chart_data, storage
+from dexcom_cgm_viewer.services import chart_data, storage
 from dexcom_cgm_viewer.models import DexcomEgv
 
 
@@ -117,7 +117,7 @@ def test_payload_display_time_has_no_offset() -> None:
 
 
 def test_naive_iso_strips_offset_and_handles_none() -> None:
-    from dexcom_cgm_viewer.lib.chart_data import _naive_iso
+    from dexcom_cgm_viewer.services.chart_data import _naive_iso
     assert _naive_iso(None) is None
     tagged = dt.datetime(2026, 5, 6, 8, 30, tzinfo=dt.timezone.utc)
     assert _naive_iso(tagged) == "2026-05-06T08:30:00"

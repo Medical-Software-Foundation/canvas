@@ -11,8 +11,8 @@ import pytest
 
 from canvas_sdk.effects.simple_api import HTMLResponse, Response
 from canvas_sdk.handlers.simple_api.security import Credentials
-from dexcom_cgm_viewer.lib import magic_link, storage
-from dexcom_cgm_viewer.lib.dexcom_client import DexcomAPIError, DexcomAuthError, TokenSet
+from dexcom_cgm_viewer.services import magic_link, storage
+from dexcom_cgm_viewer.services.dexcom_client import DexcomAPIError, DexcomAuthError, TokenSet
 from dexcom_cgm_viewer.protocols.oauth_api import (
     DexcomOAuthAPI,
     _missing_secrets,
@@ -255,7 +255,7 @@ def test_callback_clears_prior_refresh_failed_state() -> None:
     chart_data._resolve_status would still see ``has_tokens AND last_error
     == 'refresh_failed'`` → still "expired" → staff is stuck in the same
     single-button UI even though the patient is actually re-connected."""
-    from dexcom_cgm_viewer.lib import chart_data as _chart_data
+    from dexcom_cgm_viewer.services import chart_data as _chart_data
 
     # Seed a stale refresh_failed state from a prior permanent failure.
     storage.upsert_sync_state(

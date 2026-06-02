@@ -8,7 +8,7 @@ without asserting actual confidentiality.
 
 from __future__ import annotations
 
-from dexcom_cgm_viewer.lib.crypto import TokenCipher
+from dexcom_cgm_viewer.services.crypto import TokenCipher
 
 
 def test_round_trip_returns_input_unchanged() -> None:

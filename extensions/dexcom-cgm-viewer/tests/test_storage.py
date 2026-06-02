@@ -6,7 +6,7 @@ import datetime as dt
 
 import pytest
 
-from dexcom_cgm_viewer.lib import storage
+from dexcom_cgm_viewer.services import storage
 from dexcom_cgm_viewer.models import (
     DexcomEgv,
     DexcomOAuthToken,
