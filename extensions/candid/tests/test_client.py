@@ -1,6 +1,6 @@
 """Tests for CandidClient: token caching, error formatting, secret-driven construction."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from candid.api.client import CandidClient
 
@@ -51,23 +51,23 @@ def test_base_url_trailing_slash_is_stripped() -> None:
 
 def test_token_is_fetched_once_and_reused_across_requests() -> None:
     client = _client()
-    with patch("candid.api.client.requests") as mock_requests:
-        # token endpoint
-        token_response = _ok_response({"access_token": "tok-abc"})
-        # encounter endpoint (used for the second call below)
-        encounter_response = _ok_response({"claims": []})
-        mock_requests.post.return_value = token_response
-        mock_requests.get.return_value = encounter_response
+    client.http = MagicMock()
+    # token endpoint
+    token_response = _ok_response({"access_token": "tok-abc"})
+    # encounter endpoint (used for the second call below)
+    encounter_response = _ok_response({"claims": []})
+    client.http.post.return_value = token_response
+    client.http.get.return_value = encounter_response
 
-        # Two calls that each require auth
-        client.get_encounter("enc-1")
-        client.get_encounter("enc-2")
+    # Two calls that each require auth
+    client.get_encounter("enc-1")
+    client.get_encounter("enc-2")
 
-        token_calls = [
-            c for c in mock_requests.post.call_args_list
-            if c.args and c.args[0].endswith("/api/auth/v2/token")
-        ]
-        assert len(token_calls) == 1
+    token_calls = [
+        c for c in client.http.post.call_args_list
+        if c.args and c.args[0].endswith("/api/auth/v2/token")
+    ]
+    assert len(token_calls) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -77,15 +77,15 @@ def test_token_is_fetched_once_and_reused_across_requests() -> None:
 
 def test_token_missing_in_response_raises() -> None:
     client = _client()
-    with patch("candid.api.client.requests") as mock_requests:
-        mock_requests.post.return_value = _ok_response({})
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({})
 
-        try:
-            client._fetch_token()
-        except RuntimeError as e:
-            assert "Could not fetch Candid API token" in str(e)
-        else:
-            raise AssertionError("Expected RuntimeError")
+    try:
+        client._fetch_token()
+    except RuntimeError as e:
+        assert "Could not fetch Candid API token" in str(e)
+    else:
+        raise AssertionError("Expected RuntimeError")
 
 
 # ---------------------------------------------------------------------------
@@ -95,16 +95,16 @@ def test_token_missing_in_response_raises() -> None:
 
 def test_submit_claim_returns_encounter_id_on_success() -> None:
     client = _client()
-    with patch("candid.api.client.requests") as mock_requests:
-        token_response = _ok_response({"access_token": "tok"})
-        encounter_response = _ok_response({"encounter_id": "enc-xyz"})
-        # First post: token; subsequent post: submit
-        mock_requests.post.side_effect = [token_response, encounter_response]
+    client.http = MagicMock()
+    token_response = _ok_response({"access_token": "tok"})
+    encounter_response = _ok_response({"encounter_id": "enc-xyz"})
+    # First post: token; subsequent post: submit
+    client.http.post.side_effect = [token_response, encounter_response]
 
-        success, message = client.submit_claim({"external_id": "canvas:1"})
+    success, message = client.submit_claim({"external_id": "canvas:1"})
 
-        assert success is True
-        assert message == "enc-xyz"
+    assert success is True
+    assert message == "enc-xyz"
 
 
 def test_submit_claim_returns_formatted_error_on_failure() -> None:
@@ -120,19 +120,19 @@ def test_submit_claim_returns_formatted_error_on_failure() -> None:
         },
     }
 
-    with patch("candid.api.client.requests") as mock_requests:
-        mock_requests.post.side_effect = [
-            _ok_response({"access_token": "tok"}),
-            failure,
-        ]
+    client.http = MagicMock()
+    client.http.post.side_effect = [
+        _ok_response({"access_token": "tok"}),
+        failure,
+    ]
 
-        success, message = client.submit_claim({})
+    success, message = client.submit_claim({})
 
-        assert success is False
-        assert "400" in message
-        assert "HttpRequestValidationError" in message
-        assert "patient.zip" in message
-        assert "is required" in message
+    assert success is False
+    assert "400" in message
+    assert "HttpRequestValidationError" in message
+    assert "patient.zip" in message
+    assert "is required" in message
 
 
 def test_format_error_handles_validations_list() -> None:
@@ -169,26 +169,26 @@ def test_format_error_falls_back_to_text_when_json_unparseable() -> None:
 
 def test_get_patient_payments_returns_list_directly() -> None:
     client = _client()
-    with patch("candid.api.client.requests") as mock_requests:
-        mock_requests.post.return_value = _ok_response({"access_token": "tok"})
-        mock_requests.get.return_value = _ok_response(
-            [{"patient_payment_id": "p1", "amount_cents": 1000}]
-        )
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.get.return_value = _ok_response(
+        [{"patient_payment_id": "p1", "amount_cents": 1000}]
+    )
 
-        payments = client.get_patient_payments("candid-claim-1")
+    payments = client.get_patient_payments("candid-claim-1")
 
-        assert payments == [{"patient_payment_id": "p1", "amount_cents": 1000}]
+    assert payments == [{"patient_payment_id": "p1", "amount_cents": 1000}]
 
 
 def test_get_patient_payments_unwraps_items_field() -> None:
     """Some Candid responses wrap the list under {'items': [...]}; client unwraps."""
     client = _client()
-    with patch("candid.api.client.requests") as mock_requests:
-        mock_requests.post.return_value = _ok_response({"access_token": "tok"})
-        mock_requests.get.return_value = _ok_response(
-            {"items": [{"patient_payment_id": "p2"}]}
-        )
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.get.return_value = _ok_response(
+        {"items": [{"patient_payment_id": "p2"}]}
+    )
 
-        payments = client.get_patient_payments("candid-claim-1")
+    payments = client.get_patient_payments("candid-claim-1")
 
-        assert payments == [{"patient_payment_id": "p2"}]
+    assert payments == [{"patient_payment_id": "p2"}]

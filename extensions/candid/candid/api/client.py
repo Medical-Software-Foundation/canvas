@@ -1,5 +1,11 @@
-import requests
+from typing import TYPE_CHECKING
+from urllib.parse import urlencode
+
+from canvas_sdk.utils.http import Http
 from logger import log
+
+if TYPE_CHECKING:
+    from requests import Response
 
 CACHE_KEY_PREFIX = "candid_bearer_token:"
 # Candid tokens expire after 5 hours (18000s). Cache for 4.5 hours to
@@ -15,6 +21,7 @@ class CandidClient:
         self.client_id = client_id
         self.client_secret = client_secret
         self._instance_token: str | None = None
+        self.http = Http(base_url=self.base_url)
 
     @classmethod
     def from_secrets(cls, secrets: dict) -> "CandidClient":
@@ -57,10 +64,9 @@ class CandidClient:
         return token
 
     def _fetch_token(self) -> str:
-        response = requests.post(
+        response = self.http.post(
             f"{self.base_url}/api/auth/v2/token",
             json={"client_id": self.client_id, "client_secret": self.client_secret},
-            timeout=30,
         )
         response.raise_for_status()
         token = response.json().get("access_token")
@@ -78,11 +84,10 @@ class CandidClient:
         Returns ``(was_successful, message)``. On success, ``message`` is the
         Candid encounter ID. On failure, ``message`` is a human-readable error.
         """
-        response = requests.post(
+        response = self.http.post(
             f"{self.base_url}/api/encounters/v4",
             json=claim_payload,
             headers=self._auth_headers(json_body=True),
-            timeout=30,
         )
         if response.ok:
             return True, response.json().get("encounter_id", "")
@@ -94,11 +99,10 @@ class CandidClient:
         Uses ``GET /api/encounters/v4?external_id=...``. Returns the
         encounter_id if found, or None.
         """
-        response = requests.get(
-            f"{self.base_url}/api/encounters/v4",
-            params={"external_id": external_id, "limit": 1},
+        query = urlencode({"external_id": external_id, "limit": 1})
+        response = self.http.get(
+            f"{self.base_url}/api/encounters/v4?{query}",
             headers=self._auth_headers(),
-            timeout=30,
         )
         if not response.ok:
             return None
@@ -118,11 +122,10 @@ class CandidClient:
         Returns ``(was_successful, message)``. On success, ``message`` is the
         Candid encounter ID. On failure, ``message`` is a human-readable error.
         """
-        response = requests.patch(
+        response = self.http.patch(
             f"{self.base_url}/api/encounters/v4/{encounter_id}",
             json=claim_payload,
             headers=self._auth_headers(json_body=True),
-            timeout=30,
         )
         if response.ok:
             return True, response.json().get("encounter_id", encounter_id)
@@ -132,11 +135,10 @@ class CandidClient:
         self, service_line_id: str, payload: dict
     ) -> tuple[bool, str]:
         """Update a service line via PATCH /api/service-lines/v2/{service_line_id}."""
-        response = requests.patch(
+        response = self.http.patch(
             f"{self.base_url}/api/service-lines/v2/{service_line_id}",
             json=payload,
             headers=self._auth_headers(json_body=True),
-            timeout=30,
         )
         if response.ok:
             return True, service_line_id
@@ -153,11 +155,10 @@ class CandidClient:
         Candid ``patient_payment_id``. On failure, ``message`` is a
         human-readable error.
         """
-        response = requests.post(
+        response = self.http.post(
             f"{self.base_url}/api/patient-payments/v4",
             json=payment_payload,
             headers=self._auth_headers(json_body=True),
-            timeout=30,
         )
         if response.ok:
             return True, response.json().get("patient_payment_id", "")
@@ -175,10 +176,9 @@ class CandidClient:
         adjudication sync (insurance payments, adjustments, patient
         responsibility).
         """
-        response = requests.get(
+        response = self.http.get(
             f"{self.base_url}/api/encounters/v4/{encounter_id}",
             headers=self._auth_headers(),
-            timeout=30,
         )
         response.raise_for_status()
         return response.json()
@@ -193,15 +193,16 @@ class CandidClient:
         Uses ``GET /api/patient-payments/v4?claim_id={claim_id}``, sorted by
         payment_timestamp descending so the most recent payments come first.
         """
-        response = requests.get(
-            f"{self.base_url}/api/patient-payments/v4",
-            params={
+        query = urlencode(
+            {
                 "claim_id": claim_id,
                 "sort": "payment_timestamp",
                 "sort_direction": "desc",
-            },
+            }
+        )
+        response = self.http.get(
+            f"{self.base_url}/api/patient-payments/v4?{query}",
             headers=self._auth_headers(),
-            timeout=30,
         )
         response.raise_for_status()
         data = response.json()
@@ -220,7 +221,7 @@ class CandidClient:
         return headers
 
     @staticmethod
-    def _format_error(response: requests.Response) -> str:
+    def _format_error(response: "Response") -> str:
         try:
             body = response.json()
         except ValueError:

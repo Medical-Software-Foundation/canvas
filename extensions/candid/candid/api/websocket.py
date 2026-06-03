@@ -14,4 +14,5 @@ class CandidTimelineWebSocket(WebSocketAPI):
     """Accept WebSocket connections for claim timeline updates."""
 
     def authenticate(self) -> bool:
-        return bool(self.websocket.logged_in_user.get("id"))
+        user = self.websocket.logged_in_user
+        return bool(user and user.get("type") == "Staff")
