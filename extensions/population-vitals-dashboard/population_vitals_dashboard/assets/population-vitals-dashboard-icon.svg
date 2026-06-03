@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#1a6fc4" />
+
+  <!-- Chart grid lines (subtle) -->
+  <line x1="18" y1="72" x2="82" y2="72" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
+  <line x1="18" y1="57" x2="82" y2="57" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <line x1="18" y1="42" x2="82" y2="42" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- Bar chart: population distribution histogram -->
+  <rect x="20" y="62" width="9" height="10" rx="1.5" fill="rgba(255,255,255,0.55)"/>
+  <rect x="32" y="50" width="9" height="22" rx="1.5" fill="rgba(255,255,255,0.7)"/>
+  <rect x="44" y="38" width="9" height="34" rx="1.5" fill="white"/>
+  <rect x="56" y="44" width="9" height="28" rx="1.5" fill="rgba(255,255,255,0.8)"/>
+  <rect x="68" y="55" width="9" height="17" rx="1.5" fill="rgba(255,255,255,0.6)"/>
+
+  <!-- Trend line overlay -->
+  <polyline
+    points="24,64 37,52 48,40 61,46 72,57"
+    fill="none"
+    stroke="#7dd3f8"
+    stroke-width="2.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Trend line dots -->
+  <circle cx="24" cy="64" r="2.2" fill="#7dd3f8"/>
+  <circle cx="37" cy="52" r="2.2" fill="#7dd3f8"/>
+  <circle cx="48" cy="40" r="2.8" fill="white" stroke="#7dd3f8" stroke-width="1.5"/>
+  <circle cx="61" cy="46" r="2.2" fill="#7dd3f8"/>
+  <circle cx="72" cy="57" r="2.2" fill="#7dd3f8"/>
+
+  <!-- X-axis baseline -->
+  <line x1="16" y1="72" x2="84" y2="72" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
