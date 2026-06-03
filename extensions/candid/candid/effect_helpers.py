@@ -15,10 +15,6 @@ from canvas_sdk.v1.data.claim import ClaimPayerOrder, ClaimQueues
 def get_instance_url(environment: dict) -> str:
     """Derive the Canvas instance URL from the plugin environment."""
     customer_id = environment.get("CUSTOMER_IDENTIFIER", "")
-    if customer_id == "local":
-        return "http://home-app-web:8000"
-    if customer_id == "ci":
-        return "http://localhost:8001"
     return f"https://{customer_id}.canvasmedical.com"
 
 
@@ -57,8 +53,9 @@ def schedule_async_post(
                 "Authorization": auth_header,
             },
             body=json.dumps(body),
-        ).apply()
-        # .set_async(delay_seconds=delay_seconds)
+        )
+        .apply()
+        .set_async(delay_seconds=delay_seconds)
     )
 
 
