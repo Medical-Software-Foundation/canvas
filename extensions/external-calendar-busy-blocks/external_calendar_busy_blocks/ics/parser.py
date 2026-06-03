@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from external_calendar_busy_blocks.ics.datetimes import parse_ics_datetime
 from external_calendar_busy_blocks.ics.rrule import (
@@ -261,10 +261,15 @@ def _parse_base_event(
     # Busy block mid-meeting (its row survives the ends_at>=now filter but the
     # parser wouldn't re-emit it). Each yielded moment is then filtered to drop
     # instances that have already fully ended.
+    # Expand against the LOCAL (tz-aware) DTSTART so BYDAY / BYMONTHDAY land on
+    # the correct local calendar day; convert each occurrence back to UTC at the
+    # boundary. Window bounds stay in UTC — comparing tz-aware datetimes across
+    # zones compares absolute instants, which is correct.
     out: list[ParsedEvent] = []
-    for moment in expand_rrule(
-        rule, starts.moment, now - duration, window_end, cap=RRULE_CAP_PER_VEVENT,
+    for moment_local in expand_rrule(
+        rule, starts.local, now - duration, window_end, cap=RRULE_CAP_PER_VEVENT,
     ):
+        moment = moment_local.astimezone(timezone.utc)
         if moment + duration <= now:
             continue
         if moment in exdates:

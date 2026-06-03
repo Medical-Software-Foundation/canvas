@@ -163,3 +163,22 @@ def test_expand_invalid_bymonth_terminates() -> None:
     window_end = datetime(2027, 6, 1, tzinfo=timezone.utc)
     occurrences = list(expand_rrule(rule, dtstart, dtstart, window_end, cap=1000))
     assert occurrences == []
+
+
+def test_expand_weekly_uses_local_weekday_not_utc() -> None:
+    # expand_rrule must evaluate BYDAY against the timezone of the dtstart it is
+    # given. Feed a Chicago-local Tuesday 19:00 and assert occurrences stay on
+    # local Tuesdays (which are Wednesday 00:00 in UTC).
+    from zoneinfo import ZoneInfo
+
+    chicago = ZoneInfo("America/Chicago")
+    rule = parse_rrule("FREQ=WEEKLY;BYDAY=TU")
+    dtstart = datetime(2026, 6, 2, 19, 0, tzinfo=chicago)
+    window_start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    window_end = datetime(2026, 6, 23, tzinfo=timezone.utc)
+    occurrences = list(expand_rrule(rule, dtstart, window_start, window_end, cap=1000))
+    locals_ = [o.astimezone(chicago) for o in occurrences]
+    assert all(d.weekday() == 1 and d.hour == 19 for d in locals_), locals_
+    assert [d.date().isoformat() for d in locals_] == [
+        "2026-06-02", "2026-06-09", "2026-06-16",
+    ]

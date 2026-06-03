@@ -11,10 +11,11 @@ from external_calendar_busy_blocks.ics.types import IcsParseError
 
 def test_parse_utc_zulu() -> None:
     result = parse_ics_datetime("20260601T140000Z", params={}, default_tz="UTC")
-    assert result == DateValue(
-        moment=datetime(2026, 6, 1, 14, 0, tzinfo=timezone.utc),
-        is_all_day=False,
-    )
+    expected = datetime(2026, 6, 1, 14, 0, tzinfo=timezone.utc)
+    assert result.moment == expected
+    assert result.is_all_day is False
+    # For a Zulu value the evaluation zone is UTC, so local == moment.
+    assert result.local == expected
 
 
 def test_parse_tzid_converts_to_utc() -> None:
@@ -26,6 +27,24 @@ def test_parse_tzid_converts_to_utc() -> None:
     )
     assert result.moment == datetime(2026, 6, 1, 13, 0, tzinfo=timezone.utc)
     assert result.is_all_day is False
+    # local preserves the source wall-clock time and zone for RRULE math.
+    assert result.local.hour == 9
+    assert result.local.utcoffset().total_seconds() == -4 * 3600
+    # Same absolute instant either way.
+    assert result.local == result.moment
+
+
+def test_parse_tzid_local_preserves_calendar_day_across_utc_midnight() -> None:
+    # Tue 19:00 America/Chicago is Wed 00:00 UTC. `local` must still read as
+    # Tuesday so RRULE BYDAY math lands on the right day.
+    result = parse_ics_datetime(
+        "20260602T190000",
+        params={"TZID": "America/Chicago"},
+        default_tz="UTC",
+    )
+    assert result.moment == datetime(2026, 6, 3, 0, 0, tzinfo=timezone.utc)
+    assert result.local.weekday() == 1  # Tuesday (UTC moment would be Wednesday=2)
+    assert result.local.hour == 19
 
 
 def test_parse_floating_uses_default_tz() -> None:

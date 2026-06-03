@@ -7,10 +7,20 @@ from external_calendar_busy_blocks.ics.types import IcsParseError
 
 @dataclass(frozen=True)
 class DateValue:
-    """A parsed ICS date or datetime value, always tz-aware UTC."""
+    """A parsed ICS date or datetime value.
+
+    `moment` is the absolute instant in UTC (used for ordering, windowing, and
+    persistence). `local` is the same instant expressed in the value's own
+    evaluation timezone (the TZID, the calendar default for floating times, or
+    UTC for Zulu/all-day values). RRULE expansion must evaluate BYDAY /
+    BYMONTHDAY in `local` so occurrences land on the correct local calendar day
+    (RFC 5545 §3.3.10); converting to UTC first would shift the day for any
+    event whose wall-clock time crosses midnight UTC.
+    """
 
     moment: datetime
     is_all_day: bool
+    local: datetime
 
 
 def parse_ics_datetime(
@@ -31,15 +41,14 @@ def parse_ics_datetime(
         if len(value) != 8 or not value.isdigit():
             raise IcsParseError(f"malformed DATE value: {value!r}")
         try:
-            return DateValue(
-                moment=datetime(
-                    int(value[0:4]),
-                    int(value[4:6]),
-                    int(value[6:8]),
-                    tzinfo=timezone.utc,
-                ),
-                is_all_day=True,
+            midnight = datetime(
+                int(value[0:4]),
+                int(value[4:6]),
+                int(value[6:8]),
+                tzinfo=timezone.utc,
             )
+            # All-day values are date-only and timezone-agnostic; local == UTC.
+            return DateValue(moment=midnight, is_all_day=True, local=midnight)
         except ValueError as exc:
             raise IcsParseError(f"invalid DATE: {value!r}") from exc
 
@@ -62,7 +71,9 @@ def parse_ics_datetime(
         raise IcsParseError(f"invalid DATE-TIME: {value!r}") from exc
 
     if is_utc:
-        return DateValue(moment=naive.replace(tzinfo=timezone.utc), is_all_day=False)
+        utc_aware = naive.replace(tzinfo=timezone.utc)
+        # Event is defined in UTC; local evaluation zone is UTC.
+        return DateValue(moment=utc_aware, is_all_day=False, local=utc_aware)
 
     tzid = params.get("TZID", default_tz)
     try:
@@ -70,7 +81,9 @@ def parse_ics_datetime(
     except KeyError as exc:
         raise IcsParseError(f"unknown TZID: {tzid!r}") from exc
 
+    local_aware = naive.replace(tzinfo=zone)
     return DateValue(
-        moment=naive.replace(tzinfo=zone).astimezone(timezone.utc),
+        moment=local_aware.astimezone(timezone.utc),
         is_all_day=False,
+        local=local_aware,
     )

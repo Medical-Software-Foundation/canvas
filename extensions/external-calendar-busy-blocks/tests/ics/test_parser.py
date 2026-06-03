@@ -318,3 +318,27 @@ def test_parse_drops_already_ended_recurring_instance(ics_fixture) -> None:
     assert datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc) not in starts
     # The next Monday (6/8) is the earliest remaining instance.
     assert min(starts) == datetime(2026, 6, 8, 9, 0, tzinfo=timezone.utc)
+
+
+def test_parse_weekly_byday_evaluated_in_source_timezone(ics_fixture) -> None:
+    # Regression: BYDAY math must run in DTSTART's local timezone, not UTC.
+    # A Tuesday 19:00 America/Chicago weekly meeting crosses midnight UTC
+    # (becomes Wed 00:00 UTC). If expanded in UTC, occurrences land on the
+    # wrong day (Monday local) and the first instance is dropped.
+    from zoneinfo import ZoneInfo
+
+    events = parse_ics(
+        ics_fixture("weekly_tz_chicago.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=21,
+    )
+    chicago = ZoneInfo("America/Chicago")
+    locals_ = sorted(e.starts_at.astimezone(chicago) for e in events)
+    # Every occurrence must be a Tuesday at 19:00 local.
+    assert all(d.weekday() == 1 and d.hour == 19 for d in locals_), locals_
+    # The DTSTART instance (Tue 6/2) is the first occurrence and must be present.
+    assert locals_[0].date().isoformat() == "2026-06-02"
+    # Tuesdays 6/2, 6/9, 6/16 fall within the 21-day window.
+    assert [d.date().isoformat() for d in locals_] == [
+        "2026-06-02", "2026-06-09", "2026-06-16",
+    ]
