@@ -26,7 +26,7 @@ The remaining centring (age, SBP, eGFR, BMI, non-HDL, HDL) and ``_E``
 trick mirror :mod:`prevent_calculator.services.equations`.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from prevent_calculator.services.equations import (
     PreventInput,
