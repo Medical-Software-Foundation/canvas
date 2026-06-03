@@ -84,36 +84,51 @@ def test_execute_isolates_per_claim_failures(mock_dt, mock_claim, mock_sync, moc
 
 @patch("candid.cron.nightly_sync.Claim")
 @patch("candid.cron.nightly_sync.SyncLog")
-def test_prune_collapses_noop_rows_to_latest_per_claim(mock_synclog, mock_claim):
-    noop = mock_synclog.objects.filter.return_value
-    noop.values.return_value.annotate.return_value.values_list.return_value = [10, 22]
-    noop.exclude.return_value.delete.return_value = (5, {"synclog": 5})
+def test_prune_keeps_latest_noop_row_per_open_claim(mock_synclog, mock_claim):
     mock_claim.objects.filter.return_value.values_list.return_value = []
+    noop = mock_synclog.objects.filter.return_value
+    noop.values_list.return_value.distinct.return_value = ["uuid-1", "uuid-2"]
+    exc = noop.exclude.return_value
+    exc.values.return_value.annotate.return_value.values_list.return_value = [10, 22]
+    exc.delete.return_value = (5, {"synclog": 5})
 
     deleted = _prune_synclog()
 
     mock_synclog.objects.filter.assert_called_once_with(
         log_type=LOG_TYPE_SYNC, payment_effects_count=0, era_ids=""
     )
-    noop.exclude.assert_called_once_with(id__in=[10, 22])
+    # terminal-queue lookup is scoped to claims that still have a no-op row
+    assert mock_claim.objects.filter.call_args.kwargs["id__in"] == ["uuid-1", "uuid-2"]
+    # latest-id query excludes finished claims (none here), delete keeps those ids
+    assert noop.exclude.call_args_list[0].kwargs == {"canvas_claim_id__in": []}
+    assert noop.exclude.call_args_list[1].kwargs == {"id__in": [10, 22]}
     assert deleted == 5
 
 
 @patch("candid.cron.nightly_sync.Claim")
 @patch("candid.cron.nightly_sync.SyncLog")
-def test_prune_purges_terminal_claim_rows(mock_synclog, mock_claim):
-    noop = MagicMock()
-    noop.values.return_value.annotate.return_value.values_list.return_value = []
-    noop.exclude.return_value.delete.return_value = (0, {})
-    terminal = MagicMock()
-    terminal.delete.return_value = (8, {"synclog": 8})
-    mock_synclog.objects.filter.side_effect = [noop, terminal]
+def test_prune_excludes_terminal_claims_from_keep_set(mock_synclog, mock_claim):
     mock_claim.objects.filter.return_value.values_list.return_value = ["uuid-1", "uuid-2"]
+    noop = mock_synclog.objects.filter.return_value
+    noop.values_list.return_value.distinct.return_value = ["uuid-1", "uuid-2", "uuid-3"]
+    exc = noop.exclude.return_value
+    exc.values.return_value.annotate.return_value.values_list.return_value = [10]
+    exc.delete.return_value = (8, {"synclog": 8})
 
     deleted = _prune_synclog()
 
-    terminal_call = mock_synclog.objects.filter.call_args_list[1]
-    assert terminal_call.kwargs == {"canvas_claim_id__in": ["uuid-1", "uuid-2"]}
+    # only claims with a no-op row are checked against the terminal queues
+    assert mock_claim.objects.filter.call_args.kwargs["id__in"] == [
+        "uuid-1",
+        "uuid-2",
+        "uuid-3",
+    ]
+    # finished claims are excluded when choosing which rows to keep, so none of
+    # their no-op rows survive the single delete
+    assert noop.exclude.call_args_list[0].kwargs == {
+        "canvas_claim_id__in": ["uuid-1", "uuid-2"]
+    }
+    assert noop.exclude.call_args_list[1].kwargs == {"id__in": [10]}
     assert deleted == 8
 
 

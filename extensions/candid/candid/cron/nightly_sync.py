@@ -33,48 +33,55 @@ SYNC_QUEUES = (
 # Queues a claim lands in once it is done; its sync logs are pure cruft.
 FINISHED_QUEUES = (ClaimQueues.ZERO_BALANCE, ClaimQueues.TRASH)
 
+# A "no-op" sync row: a sync attempt that recorded no ERA and posted no payment,
+# so it carries nothing the next sync won't. Both prune passes target these.
+NOOP_FILTER = {"log_type": LOG_TYPE_SYNC, "payment_effects_count": 0, "era_ids": ""}
+
 TARGET_HOUR = 2  # 2 AM local time
 
 
 def _prune_synclog() -> int:
-    """Reclaim SyncLog rows that no longer carry information.
+    """Reclaim *no-op* SyncLog rows (no ERA, no payment posted) that no longer
+    carry information. Two rules, both safe to run nightly:
 
-    Two passes, both safe to run nightly:
+    1. For an open claim, keep only the most recent no-op row. These dominate
+       growth -- one row per open claim per night -- and an older "nothing
+       changed" row says nothing the latest one doesn't.
+    2. For a claim that has reached a terminal queue (ZeroBalance / Trash), keep
+       none; it will never sync again, so even the latest no-op row is cruft.
 
-    1. Collapse redundant *no-op* sync rows (no ERA, no payment posted) down to
-       the most recent one per claim. These dominate growth -- one row per open
-       claim per night -- and an older "nothing changed" row says nothing the
-       latest one doesn't.
-    2. Drop every row for claims that have reached a terminal queue
-       (ZeroBalance / Trash); those claims will never sync again.
-
-    Rows that recorded an ERA or a payment are left untouched, so adjudication
-    history is preserved for the life of the claim.
+    Both rules collapse to a single delete: keep the latest no-op row of every
+    claim *except* the finished ones, and drop the rest. Rows that recorded an
+    ERA or a payment are never matched, so adjudication history is preserved for
+    the life of the claim.
     """
     deleted = 0
     try:
-        noop = SyncLog.objects.filter(
-            log_type=LOG_TYPE_SYNC, payment_effects_count=0, era_ids=""
+        noop = SyncLog.objects.filter(**NOOP_FILTER)
+        # Only claims that still have a no-op row matter -- the active sync
+        # working set, not every claim that ever finished. Narrowing the
+        # terminal-queue lookup to these keeps the id list we ship from the core
+        # claim store bounded by recent sync volume instead of all history.
+        noop_claim_ids = list(
+            noop.values_list("canvas_claim_id", flat=True).distinct()
         )
-        keep_ids = list(
-            noop.values("canvas_claim_id")
-            .annotate(latest_id=Max("id"))
-            .values_list("latest_id", flat=True)
-        )
-        deleted += noop.exclude(id__in=keep_ids).delete()[0]
-
         finished_values = [q.value for q in FINISHED_QUEUES]
         finished_claim_ids = [
             str(cid)
             for cid in Claim.objects.filter(
+                id__in=noop_claim_ids,
                 current_queue__queue_sort_ordering__in=finished_values,
                 metadata__key=META_ENCOUNTERS,
             ).values_list("id", flat=True)
         ]
-        if finished_claim_ids:
-            deleted += SyncLog.objects.filter(
-                canvas_claim_id__in=finished_claim_ids
-            ).delete()[0]
+
+        keep_ids = list(
+            noop.exclude(canvas_claim_id__in=finished_claim_ids)
+            .values("canvas_claim_id")
+            .annotate(latest_id=Max("id"))
+            .values_list("latest_id", flat=True)
+        )
+        deleted = deleted + noop.exclude(id__in=keep_ids).delete()[0]
     except Exception as e:
         log.warning(f"Candid nightly sync: failed to prune SyncLog: {e}")
         return deleted
@@ -115,7 +122,7 @@ class NightlyCandidSync(CronTask):
             for claim in claims.iterator(chunk_size=100):
                 try:
                     effects.extend(sync_claim_adjudications(claim, self.secrets))
-                    synced += 1
+                    synced = synced + 1
                 except Exception as e:
                     log.warning(
                         f"Candid nightly sync: failed for claim {claim.id}: {e}"
