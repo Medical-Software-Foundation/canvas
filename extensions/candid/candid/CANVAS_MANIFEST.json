@@ -45,6 +45,10 @@
             {
                 "class": "candid.api.websocket:CandidTimelineWebSocket",
                 "description": "WebSocket for real-time claim timeline updates."
+            },
+            {
+                "class": "candid.api.app:CandidAppAssets",
+                "description": "Serves HTML/CSS/JS for the Candid dashboard and claim-timeline applications."
             }
         ],
         "commands": [],

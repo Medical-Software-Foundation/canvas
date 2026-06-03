@@ -114,13 +114,13 @@ A sidebar application that appears on `/revenue/claims/<id>` pages showing:
 - Summary pills for ERA + payment counts
 - **Sync Now** button to trigger a full adjudication sync on demand
 
-The application uses the `/claim-detail` SimpleAPI endpoint (authenticated via Canvas user session, not API key) to fetch timeline data and trigger syncs. It opens a `LaunchModalEffect` in the `RIGHT_CHART_PANE` and listens for context changes so it re-renders when the user navigates to a different claim.
+The UI (HTML, CSS, and JS) lives in `static/claim-timeline.*` and is served by the `CandidAppAssets` SimpleAPI at `/plugin-io/api/candid/app/claim-timeline`. The application opens a `LaunchModalEffect(url=...)` in the `RIGHT_CHART_PANE` pointing at that page — passing the claim id as a `?claim_id=` query param, which the page exposes to its JS via a `data-claim-id` attribute — and listens for context changes so it re-points at the new claim when the user navigates (the page renders a placeholder when no claim is in context). The page's JS then calls the `/claim-detail` SimpleAPI endpoint (staff-session authenticated) to fetch timeline data and trigger the **Sync Now** full sync.
 
 **Real-time updates:** The application opens a WebSocket to `/plugin-io/ws/candid/claim-<claim_id>/` (`CandidTimelineWebSocket`). Whenever the plugin posts effects to a claim (submit, sync, patient-payment-reported) it emits a `Broadcast({"refresh": true})` to that channel via `notify_claim_updated`, and the client re-fetches `/claim-detail`. If the WebSocket fails or closes, the client falls back to polling every 10s while the panel is visible, and attempts to reconnect every 5s.
 
 ### Candid Dashboard Application
 
-A full-page application launched from the Canvas provider menu that lists all claims submitted to Candid with their current status. Backed by the `/dashboard` SimpleAPI endpoint (session-authenticated).
+A full-page application launched from the Canvas provider menu that lists all claims submitted to Candid with their current status. Its UI lives in `static/dashboard.*`, served by `CandidAppAssets` at `/plugin-io/api/candid/app/dashboard`; the application iframes that page via `LaunchModalEffect(url=...)`. The page's JS fetches claim data from the `/dashboard` SimpleAPI endpoint (staff-session authenticated).
 
 - Shows patient name, Candid status, submission date, last sync date, current queue
 - Highlights errors (submission failures) and denied claims
@@ -138,9 +138,10 @@ candid/
     on_queue_moved.py         # CLAIM_QUEUE_MOVED -> async POST to /submit or /sync-patient-payments
     on_patient_payment.py     # PATIENT_PAYMENT_PROCESSED -> async POST to /report-payment
   api/
+    app.py                    # SimpleAPI: serves the apps' static HTML/CSS/JS (/app/*)
     broadcast.py              # notify_claim_updated: Broadcast effect to the claim WebSocket channel
     client.py                 # CandidClient: OAuth, submit_claim, submit_payment,
-                              #   get_encounter, get_patient_payments
+                              #   get_encounter, get_patient_payments (uses canvas_sdk Http client)
     claim_detail.py           # SimpleAPI: timeline data (GET) + manual full sync (POST) (/claim-detail)
     dashboard.py              # SimpleAPI: aggregated claim list for dashboard (/dashboard)
     payload_builder.py        # Build Candid encounter payloads with claim splitting
@@ -149,6 +150,9 @@ candid/
     sync.py                   # SimpleAPI: trigger full adjudication sync (/sync)
                               #   and patient-payment-only sync (/sync-patient-payments)
     websocket.py              # CandidTimelineWebSocket: per-claim refresh channel
+  static/                     # UI assets served by api/app.py (one file per concern)
+    dashboard.html / .css / .js        # full-page Candid claims dashboard
+    claim-timeline.html / .css / .js   # claim-page Candid activity timeline
   cron/
     nightly_sync.py           # 2 AM daily: sync all claims in 3 queues
   models/
@@ -168,7 +172,7 @@ Declared in `CANVAS_MANIFEST.json` under `"variables"`. Sensitive values are enc
 | `CANDID_BASE_URL` | No | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
 | `namespace_read_write_access_key` | Yes | Access key for the `canvas__candid` custom_data namespace (auto-generated on first install) |
 
-The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no variable needed. The internal SimpleAPI routes use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`), while `/claim-detail` and `/dashboard` are authenticated via the Canvas user session (`SessionCredentials`).
+The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no variable needed. The internal machine-to-machine routes (`/submit`, `/sync`, `/sync-patient-payments`, `/report-payment`) use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`). The user-facing routes — `/claim-detail`, `/dashboard`, and the `/app/*` asset routes — require a logged-in **staff** session (`StaffSessionAuthMixin`), as does the `CandidTimelineWebSocket`.
 
 ## Claim Metadata Keys
 
