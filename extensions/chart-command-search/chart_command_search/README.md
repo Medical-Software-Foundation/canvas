@@ -19,10 +19,10 @@ Patient charts grow large quickly. Finding a specific lab result, a past medicat
 
 ## Screenshots
 
-![Keyword search](chart_command_search/screenshots/keyword-search.png)
-![Keyword search filters](chart_command_search/screenshots/keyword-search-filters.png)
-![AI search home screen](chart_command_search/screenshots/ai-search-home-screen.png)
-![AI search with citations](chart_command_search/screenshots/ai-search-with-supporting-entries.png)
+![Keyword search](screenshots/keyword-search.png)
+![Keyword search filters](screenshots/keyword-search-filters.png)
+![AI search home screen](screenshots/ai-search-home-screen.png)
+![AI search with citations](screenshots/ai-search-with-supporting-entries.png)
 
 ## What it does
 
