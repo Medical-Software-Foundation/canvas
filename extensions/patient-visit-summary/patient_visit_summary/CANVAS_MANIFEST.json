@@ -1,0 +1,64 @@
+{
+    "sdk_version": "0.134.0",
+    "plugin_version": "0.0.70",
+    "name": "patient_visit_summary",
+    "description": "Generate a visit summary printout or customizable print view for a patient note.",
+    "components": {
+        "handlers": [
+            {
+                "class": "patient_visit_summary.handlers.patient_visit_summary:PatientVisitSummaryButton",
+                "description": "Note header button that launches the Patient Visit Summary modal.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_visit_summary.handlers.patient_visit_summary:PatientVisitSummaryAPI",
+                "description": "API endpoint for the Patient Visit Summary HTML.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_visit_summary.handlers.customize_print:CustomizePrintButton",
+                "description": "Note footer button that launches the Customize & Print modal.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "patient_visit_summary.handlers.customize_print:CustomizePrintAPI",
+                "description": "API endpoint for the Customize & Print modal HTML.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "simple-api-key", "sensitive": true},
+        {"name": "fhir-client-id", "sensitive": true},
+        {"name": "fhir-client-secret", "sensitive": true}
+    ],
+    "tags": {},
+    "references": [],
+    "custom_data": {
+        "namespace": "canvas_medical__note_print",
+        "access": "read_write"
+    },
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

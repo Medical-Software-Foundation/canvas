@@ -1,0 +1,742 @@
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Care Plan</title>
+        <!--The css is now in the style tag in order to externally convert the document to a PDF-->
+        <!--link rel="stylesheet" href="style.css" /-->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="/plugin-io/api/patient_visit_summary/style.css?v={{ cache_bust }}">
+    </head>
+    <body>
+        <div id="container">
+            <button class="print-button" onclick="window.print()">🖨️ Print</button>
+            <div id="page-img-header">
+                <div class="header-img float-left">
+                    <img src="data:image/svg+xml;base64,{{ logo_top_left }}" />
+                </div>
+                <div class="header-title">
+                    Patient Visit Summary
+                </div>
+                <div class="header-img float-right">
+                    <img src="data:image/svg+xml;base64,{{ logo_top_right }}" />
+                </div>
+            </div>
+            <table class="header-table">
+                <tr>
+                    <td class="label">Patient</td>
+                    <td>{{ patient.first_name }} {{ patient.last_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Patient DOB</td>
+                    <td>{{ patient.birth_date|date:"n-j-Y" }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Provider</td>
+                    <td>{{ provider.first_name }} {{ provider.last_name }}{% if provider_top_role %}, {{ provider_top_role.public_abbreviation }}{% endif %}</td>
+                </tr>
+                <tr>
+                    <td class="label">Appointment</td>
+                    <td>{{ appointment_date }}</td>
+                </tr>
+            </table>
+            <h2>Summary of Today's Visit</h2>
+
+            <!-- Subjective -->
+
+            {% if reason_for_visit %}
+                <h3>Reason for Visit</h3>
+                <p>{{ reason_for_visit }}{% if reason_for_visit_comment %} - {{ reason_for_visit_comment }}{% endif %}</p>
+            {% endif %}
+            {% if history_of_present_illness_commands_data %}
+                <h3>History of Present Illness</h3>
+                {% for hpi in history_of_present_illness_commands_data %}
+                    <p>{{ hpi.narrative }}</p>
+                {% endfor %}
+            {% endif %}
+            {% if review_of_systems_data %}
+                <h3>Review of Systems</h3>
+                {% for ros in review_of_systems_data %}
+                    <p class="emphasis-text">{{ ros.questionnaire }}</p>
+                    <ul>
+                        {% for q_and_a in ros.questions_and_answers %}
+                            <li><span class="italic">{{ q_and_a.label }}</span>: {{ q_and_a.answer }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+            {% endif %}
+            {% if questionnaire_data %}
+                <h3>Questionnaires</h3>
+                {% for questionnaire in questionnaire_data %}
+                    <p class="emphasis-text">{{ questionnaire.name }}</p>
+                    <ul>
+                        {% for q_and_a in questionnaire.questions_and_answers %}
+                            <li><span class="italic">{{ q_and_a.label }}</span>: {{ q_and_a.answer }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Objective -->
+            {% if vitals_commands_data or physical_exam_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data %}
+                    <hr class="section-divider">
+                {% endif %}
+            {% endif %}
+
+            {% if vitals_commands_data %}
+                <h3>Vitals</h3>
+                {% for vitals in vitals_commands_data %}
+                    <ul>
+                        {% if vitals.height %}
+                            <li><span class="italic">Height</span>: {{ vitals.height }} in</li>
+                        {% endif %}
+                        {% if vitals.weight_lbs %}
+                            <li><span class="italic">Weight</span>: {{ vitals.weight_lbs }} lb{% if vitals.weight_oz %} {{ vitals.weight_oz }} oz{% endif %}{% if vitals.bmi %} (BMI: {{ vitals.bmi }}){% endif %}</li>
+                        {% endif %}
+                        {% if vitals.waist_circumference %}
+                            <li><span class="italic">Waist Circumference</span>: {{ vitals.waist_circumference }} cm</li>
+                        {% endif %}
+                        {% if vitals.body_temperature %}
+                            <li><span class="italic">Temperature</span>: {{ vitals.body_temperature }} °F{% if vitals.body_temperature_site %} <span class="italic">Site</span>: {{ vitals.body_temperature_site }}{% endif %}</li>
+                        {% endif %}
+                        {% if vitals.blood_pressure_systole or vitals.blood_pressure_diastole %}
+                            <li><span class="italic">Blood Pressure</span>: {{ vitals.blood_pressure_systole }} / {{ vitals.blood_pressure_diastole }}{% if vitals.blood_pressure_position_and_site %} <span class="italic">Position and Site</span>: {{ vitals.blood_pressure_position_and_site }}{% endif %}</li>
+                        {% endif %}
+                        {% if vitals.pulse %}
+                            <li><span class="italic">Pulse Rate</span>: {{ vitals.pulse }} bpm{% if vitals.pulse_rhythm %} <span class="italic">Pulse Rhythm</span>: {{ vitals.pulse_rhythm }}{% endif %}</li>
+                        {% endif %}
+                        {% if vitals.respiration_rate %}
+                            <li><span class="italic">Respiration Rate</span>: {{ vitals.respiration_rate }} bpm{% if vitals.oxygen_saturation %} <span class="italic">Oxygen Saturation</span>: {{ vitals.oxygen_saturation }} %{% endif %}</li>
+                        {% endif %}
+                        {% if vitals.note %}
+                            <li><span class="italic">Notes</span>: {{ vitals.note }}</li>
+                        {% endif %}
+                    </ul>
+                {% endfor %}
+            {% endif %}
+            {% if physical_exam_data %}
+                <h3>Physical Examination</h3>
+                {% for exam in physical_exam_data %}
+                    <p class="emphasis-text">{{ exam.questionnaire }}</p>
+                    <ul>
+                        {% for q_and_a in exam.questions_and_answers %}
+                            <li><span class="italic">{{ q_and_a.label }}</span>: {{ q_and_a.answer }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Assessment -->
+            {% if assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data %}
+                    <hr class="section-divider">
+                {% endif %}
+            {% endif %}
+
+            {% if assessments_commands_data %}
+                <h3>Conditions Assessed</h3>
+                <ul>
+                {% for assessment in assessments_commands_data %}
+                    <li>{{ assessment.condition.text }} ({{ assessment.condition.annotations.0 }})
+                        <ul>
+                            {% if assessment.background %}
+                                <li><span class="italic">Background:</span> {{ assessment.background }}</li>
+                            {% endif %}
+                            {% if assessment.status %}
+                                <li><span class="italic">Status:</span> {{ assessment.status|title }}</li>
+                            {% endif %}
+                            {% if assessment.narrative %}
+                                <li><span class="italic">Today's Assessment:</span> {{ assessment.narrative }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_data %}
+                <h3>New Diagnoses</h3>
+                <p class="italic">Your provider diagnosed the following conditions during today's visit, based on your symptoms, history, and clinical evaluation.</p>
+                <h4 class="italic">Summary</h4>
+                <ul>
+                {% for diagnosis in diagnose_commands_data %}
+                    <li>{{ diagnosis.data.diagnose.text }} ({{ diagnosis.data.diagnose.annotations.0 }})</li>
+                {% endfor %}
+                {% for sa_diagnosis in diagnoses_from_structured_assessments %}
+                    <li>{{ sa_diagnosis.0 }} ({{ sa_diagnosis.1 }})</li>
+                {% endfor %}
+                {% for cg_diagnosis_cmd in assess_coding_gap_data %}
+                    {% for cg_diagnosis in cg_diagnosis_cmd.diagnose %}
+                        <li>{{ cg_diagnosis.text }} ({{ cg_diagnosis.annotations.0 }})</li>
+                    {% endfor %}
+                {% endfor %}
+                </ul>
+                {% if diagnose_commands_data or assess_coding_gap_data %}
+                    <h4 class="italic">Details</h4>
+                    <ul>
+                    {% for diagnosis in diagnose_commands_data %}
+                        <li><span class="emphasis-text">{{ diagnosis.data.diagnose.text }}</span> ({{ diagnosis.data.diagnose.annotations.0 }})
+                            <ul>
+                                {% if diagnosis.data.background %}
+                                    <li><span class="italic">Background:</span> {{ diagnosis.data.background }}</li>
+                                {% endif %}
+                                {% if diagnosis.data.today_assessment %}
+                                    <li><span class="italic">Today's Assessment:</span> {{ diagnosis.data.today_assessment }}</li>
+                                {% endif %}
+                                {% if diagnosis.data.approximate_date_of_onset.input %}
+                                    <li><span class="italic">Approximate Date of Onset:</span> {{ diagnosis.data.approximate_date_of_onset.input }}</li>
+                                {% endif %}
+                            </ul>
+                        </li>
+                    {% endfor %}
+                    {% for coding_gap in assess_coding_gap_data %}
+                        <li><span class="emphasis-text">{% for cg_diagnosis in coding_gap.diagnose %}{{ cg_diagnosis.text }} ({{ cg_diagnosis.annotations.0 }}){% if not forloop.last %}, {% endif %}{% endfor %}</span>
+                            <ul>
+                                {% if coding_gap.background %}
+                                    <li><span class="italic">Background:</span> {{ coding_gap.background }}</li>
+                                {% endif %}
+                                {% if coding_gap.todays_assessment %}
+                                    <li><span class="italic">Today's Assessment:</span> {{ coding_gap.todays_assessment }}</li>
+                                {% endif %}
+                                {% if coding_gap.approximate_date_of_onset.input %}
+                                    <li><span class="italic">Approximate Date of Onset:</span> {{ coding_gap.approximate_date_of_onset.input }}</li>
+                                {% endif %}
+                            </ul>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endif %}
+
+            {% if resolve_condition_commands_data %}
+                <h3>Resolved Conditions</h3>
+                <ul>
+                {% for resolve_condition in resolve_condition_commands_data %}
+                    <li>{{ resolve_condition.condition.text }} ({{ resolve_condition.condition.annotations.0 }})
+                        <ul>
+                            <li><span class="italic">Status:</span> Resolved</li>
+                            {% if resolve_condition.rationale %}
+                                <li><span class="italic">Rationale:</span> {{ resolve_condition.rationale }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if change_diagnosis_commands_data %}
+                <h3>Changed Conditions</h3>
+                <ul>
+                {% for change_diagnosis in change_diagnosis_commands_data %}
+                    <li>{{ change_diagnosis.new_condition.text }} ({{ change_diagnosis.new_condition.annotations.0 }})
+                        <ul>
+                            {% if change_diagnosis.condition.text %}
+                                <li><span class="italic">Condition Changed From:</span> {{ change_diagnosis.condition.text }} ({{ change_diagnosis.condition.annotations.0 }})</li>
+                            {% endif %}
+                            {% if change_diagnosis.background %}
+                                <li><span class="italic">Background:</span> {{ change_diagnosis.background }}</li>
+                            {% endif %}
+                            {% if change_diagnosis.narrative %}
+                                <li><span class="italic">Today's Assessment:</span> {{ change_diagnosis.narrative }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if lab_reviews %}
+                <h3>Lab Results Review</h3>
+                <ul>
+                {% for lab_review in lab_reviews %}
+                    <li>
+                        {% for lab_report in lab_review.report %}
+                            <span class="emphasis-text">{{ lab_report.text }}</span> ({{ lab_report.annotations|join:"; "}}){% if not forloop.last %}<br>{% endif %}
+                        {% endfor %}
+                        {% if lab_review.message_to_patient %}
+                            <ul><li>{{ lab_review.message_to_patient }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if imaging_reviews %}
+                <h3>Imaging Review</h3>
+                <ul>
+                {% for imaging_review in imaging_reviews %}
+                    <li>
+                        {% for img_report in imaging_review.report %}
+                            <span class="emphasis-text">{{ img_report.text }}</span> ({{ img_report.annotations|join:"; "}}){% if not forloop.last %}<br>{% endif %}
+                        {% endfor %}
+                        {% if imaging_review.message_to_patient %}
+                            <ul><li>{{ imaging_review.message_to_patient }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if consult_report_reviews %}
+                <h3>Consult Report Review</h3>
+                <ul>
+                {% for consult_review in consult_report_reviews %}
+                    <li>
+                        {% for consult_report in consult_review.report %}
+                            <span class="emphasis-text">{{ consult_report.text }}</span> ({{ consult_report.annotations|join:"; "}}){% if not forloop.last %}<br>{% endif %}
+                        {% endfor %}
+                        {% if consult_review.message_to_patient %}
+                            <ul><li>{{ consult_review.message_to_patient }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if uncategorized_document_reviews %}
+                <h3>Uncategorized Document Review</h3>
+                <ul>
+                {% for uncategorized_document_review in uncategorized_document_reviews %}
+                    <li>
+                        {% for uncategorized_report in uncategorized_document_review.report %}
+                            <span class="emphasis-text">{{ uncategorized_report.text }}</span> ({{ uncategorized_report.annotations|join:"; "}}){% if not forloop.last %}<br>{% endif %}
+                        {% endfor %}
+                        {% if uncategorized_document_review.message_to_patient %}
+                            <ul><li>{{ uncategorized_document_review.message_to_patient }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if structured_assessment_data %}
+                <h3>Structured Assessments</h3>
+                {% for structured_assessment in structured_assessment_data %}
+                    <p class="emphasis-text">{{ structured_assessment.name }}</p>
+                    <ul>
+                        {% for q_and_a in structured_assessment.questions_and_answers %}
+                            <li><span class="italic">{{ q_and_a.label }}</span>: {{ q_and_a.answer }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+            {% endif %}
+
+            <!--Plan-->
+            {% if plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_materials_data or goal_commands_data or update_goal_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data %}
+                    <hr class="section-divider">
+                {% endif %}
+            {% endif %}
+
+            {% if plan_commands_data %}
+                <h3>Plan</h3>
+                <p class="italic">Your provider recommends the following actions based on today's visit:</p>
+                {% for plan in plan_commands_data %}
+                    <p>{{ plan.narrative|linebreaksbr }}</p>
+                {% endfor %}
+            {% endif %}
+
+            {% if prescribe_commands_data %}
+                <h3>Prescribe</h3>
+                <ul>
+                {% for prescription in prescribe_commands_data %}
+                    <li><span class="emphasis-text">{{ prescription.prescribe.text }}</span>: {{ prescription.sig }}
+                        {% if prescription.pharmacy.extra.name %}
+                            <br><span class="italic small-text">Sent to: {{ prescription.pharmacy.extra.name }}, {{ prescription.pharmacy.extra.address }}</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if refill_commands_data %}
+                <h3>Refill</h3>
+                <ul>
+                {% for refill in refill_commands_data %}
+                    <li><span class="emphasis-text">{{ refill.prescribe.text }}</span>: {{ refill.sig }}
+                        {% if refill.pharmacy.extra.name %}
+                            <br><span class="italic small-text">Sent to: {{ refill.pharmacy.extra.name }}, {{ refill.pharmacy.extra.address }}</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if stop_medication_commands_data %}
+                <h3>Stop Medication</h3>
+                <ul>
+                {% for stop_medication in stop_medication_commands_data %}
+                    <li><span class="emphasis-text">{{ stop_medication.medication.text }}</span>
+                        {% if stop_medication.rationale %}
+                            <ul><li><span class="italic">Rationale:</span> {{ stop_medication.rationale }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if adjust_prescription_commands_data %}
+                <h3>Adjust Prescription</h3>
+                <ul>
+                {% for adjust_prescription in adjust_prescription_commands_data %}
+                    {% if adjust_prescription.change_medication_to %}
+                        <li><span class="emphasis-text">{{ adjust_prescription.change_medication_to.text }}</span>: {{ adjust_prescription.sig }}
+                            <ul>
+                                {% if adjust_prescription.prescribe.text %}
+                                    <li><span class="italic">Prescription Changed From:</span> {{ adjust_prescription.prescribe.text }}</li>
+                                {% endif %}
+                                {% if adjust_prescription.pharmacy.extra.name %}
+                                    <li><span class="italic">Sent to:</span> {{ adjust_prescription.pharmacy.extra.name }}, {{ adjust_prescription.pharmacy.extra.address }}</li>
+                                {% endif %}
+                            </ul>
+                    {% else %}
+                        <li><span class="emphasis-text">{{ adjust_prescription.prescribe.text }}</span>: {{ adjust_prescription.sig }}
+                        {% if adjust_prescription.pharmacy.extra.name %}
+                            <br><span class="italic small-text">Sent to: {{ adjust_prescription.pharmacy.extra.name }}, {{ adjust_prescription.pharmacy.extra.address }}</span>
+                        {% endif %}
+                    {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if change_medication_commands_data %}
+                <h3>Change Medication</h3>
+                <p class="italic">Dosage instructions have been changed for the following medication(s):</p>
+                <ul>
+                {% for change_medication in change_medication_commands_data %}
+                    <li><span class="emphasis-text">{{ change_medication.medication.text }}</span>: {{ change_medication.sig }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if referral_commands_data %}
+                <h3>Referrals</h3>
+                <p class="italic">Your provider recommended the following referrals to support your care.</p>
+                <ul>
+                {% for referral in referral_commands_data %}
+                    <li>Consult with <span class="emphasis-text">{{ referral.refer_to.text }}</span>
+                        {% if referral.indications %}
+                            <ul><li><span class="italic">Indications:</span> {% for indication in referral.indications %}{{ indication.text }} ({{ indication.value }}){% if forloop.counter != referral.indications|length %}, {% endif %}{% endfor %}</li></ul>
+                        {% endif %}
+                        {% if referral.refer_to.extra.contact.businessAddress %}
+                            <br><span class="italic small-text">Address:</span> {{ referral.refer_to.extra.contact.firstName }}, {{ referral.refer_to.extra.contact.businessAddress }}
+                            <br><span class="italic small-text">Phone Number:</span> {{ referral.refer_to.extra.contact.businessPhone }}
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if lab_order_commands_data %}
+                <h3>Lab Orders</h3>
+                <div class="info-box italic">Your lab orders have been sent directly to the Diagnostics provider.</div>
+                <p class="italic small-text">
+                    You can schedule an appointment with the Diagnostics provider or walk in at your convenience.
+                </p>
+                <ul>
+                {% for lab_order in lab_order_commands_data %}
+                    <li>COMPLETE {% for lab_test in lab_order.tests %}<span class="emphasis-text">{{ lab_test.text }}{% if forloop.counter != lab_order.tests|length %}, {% endif %}</span>{% endfor %}
+                        {% if lab_order.fasting_status %}
+                            <ul><li><span class="italic">Fasting Required:</span> Yes</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if imaging_order_commands_data %}
+                <h3>Imaging & Diagnostic Orders</h3>
+                <p class="italic">Your provider has ordered imaging or diagnostic testing. Please contact the imaging center to set up an appointment.</p>
+                <ul>
+                {% for imaging_order in imaging_order_commands_data %}
+                    <li>Complete {{ imaging_order.image.text }}
+                        {% if imaging_order.imaging_center.extra.contact.businessAddress %}
+                            <br><span class="italic small-text">Address:</span> {{ imaging_order.imaging_center.extra.contact.firstName }}, {{ imaging_order.imaging_center.extra.contact.businessAddress }}
+                            <br><span class="italic small-text">Phone Number:</span> {{ imaging_order.imaging_center.extra.contact.businessPhone }}
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if instruct_commands_data %}
+                <h3>Instruct</h3>
+                <p class="italic">Your provider has discussed the following instructions with you in today's visit:</p>
+                <ul>
+                {% for instruct in instruct_commands_data %}
+                    <li>{{ instruct.instruct.text }}
+                        {% if instruct.narrative %}
+                            <br><span class="small-text">{{ instruct.narrative }}</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if educational_materials_data %}
+                <h3>Educational Materials</h3>
+                <p class="italic">Your provider has shared the following educational materials for your review:</p>
+                <ul>
+                {% for material in educational_materials_data %}
+                    <li>{{ material.title }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if goal_commands_data %}
+                <h3>Goal</h3>
+                <p class="italic">Your provider has set and discussed the following goals with you today:</p>
+                <ul>
+                {% for goal in goal_commands_data %}
+                    <li>{{ goal.goal_statement }}
+                        <ul>
+                            {% if goal.start_date %}
+                                <li><span class="italic">Start Date:</span> {{ goal.start_date }}</li>
+                            {% endif %}
+                            {% if goal.due_date %}
+                                <li><span class="italic">Due Date:</span> {{ goal.due_date }}</li>
+                            {% endif %}
+                            {% if goal.achievement_status %}
+                                <li><span class="italic">Status:</span> {{ goal.achievement_status }}</li>
+                            {% endif %}
+                            {% if goal.priority %}
+                                <li><span class="italic">Priority:</span> {{ goal.priority }}</li>
+                            {% endif %}
+                            {% if goal.progress %}
+                                <li><span class="italic">Progress/Barriers:</span> {{ goal.progress }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if update_goal_commands_data %}
+                <h3>Update Goal</h3>
+                <p class="italic">Your provider has reviewed and updated the following previously set goals with you today:</p>
+                <ul>
+                {% for update_goal in update_goal_commands_data %}
+                    <li>{{ update_goal.goal_statement.text }}
+                        <ul>
+                            {% if update_goal.due_date %}
+                                <li><span class="italic">Due Date:</span> {{ update_goal.due_date }}</li>
+                            {% endif %}
+                            {% if update_goal.achievement_status %}
+                                <li><span class="italic">Status:</span> {{ update_goal.achievement_status }}</li>
+                            {% endif %}
+                            {% if update_goal.priority %}
+                                <li><span class="italic">Priority:</span> {{ update_goal.priority }}</li>
+                            {% endif %}
+                            {% if update_goal.progress %}
+                                <li><span class="italic">Progress/Barriers:</span> {{ update_goal.progress }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if close_goal_commands_data %}
+                <h3>Close Goal</h3>
+                <p class="italic">Your provider has closed the following previously set goals:</p>
+                <ul>
+                {% for close_goal in close_goal_commands_data %}
+                    <li>{{ close_goal.goal_statement }}
+                        <ul>
+                            {% if close_goal.achievement_status %}
+                                <li><span class="italic">Status:</span> {{ close_goal.achievement_status }}</li>
+                            {% endif %}
+                            {% if close_goal.progress %}
+                                <li><span class="italic">Progress/Barriers:</span> {{ close_goal.progress }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            <!--Procedures-->
+            {% if immunize_commands_data or perform_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or goal_commands_data or update_goal_commands_data %}
+                    <hr class="section-divider">
+                {% endif %}
+            {% endif %}
+
+            {% if immunize_commands_data %}
+                <h3>Immunize</h3>
+                <p class="italic">You were administered the following immunizations during today's visit:</p>
+                <ul>
+                {% for immunize in immunize_commands_data %}
+                    <li>{{ immunize.coded_title }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if perform_commands_data %}
+                <h3>Perform</h3>
+                <p class="italic">The following procedures were performed during today's visit:</p>
+                <ul>
+                {% for perform in perform_commands_data %}
+                    <li>{{ perform.coded_title }}
+                        {% if perform.notes %}
+                            <ul><li><span class="italic">Notes:</span> {{ perform.notes }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            <!--History-->
+            {% if allergy_commands_data or remove_allergy_commands_data or medication_statement_commands_data or immunization_statement_commands_data or patient_family_history_commands_data or medical_history_commands_data or surgical_history_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or goal_commands_data or update_goal_commands_data or immunize_commands_data or perform_commands_data %}
+                    <hr class="section-divider">
+                {% endif %}
+            {% endif %}
+
+            {% if allergy_commands_data %}
+                <h3>Allergy</h3>
+                <ul>
+                {% for allergy_cmd in allergy_commands_data %}
+                    <li><span class="emphasis-text">{{ allergy_cmd.allergy.text }}</span>
+                        <ul>
+                            <li><span class="italic">Severity</span>: {{ allergy_cmd.severity|title }}</li>
+                            <li><span class="italic">Reaction</span>: {{ allergy_cmd.narrative }}</li>
+                            <li><span class="italic">Approximate Date</span>: {{ allergy_cmd.approximate_date.date }}</li>
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if remove_allergy_commands_data %}
+                <h3>Remove Allergy</h3>
+                <ul>
+                {% for remove_allergy_cmd in remove_allergy_commands_data %}
+                    <li><span class="emphasis-text">{{ remove_allergy_cmd.allergy.text }}</span>
+                        <ul>
+                            <li><span class="italic">Rationale</span>: {{ remove_allergy_cmd.narrative }}</li>
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if medication_statement_commands_data %}
+                <h3>Medication Statement</h3>
+                <ul>
+                {% for med_statement in medication_statement_commands_data %}
+                    <li><span class="emphasis-text">{{ med_statement.medication.text }}</span>
+                        {% if med_statement.sig %}
+                            <ul><li><span class="italic">SIG:</span> {{ med_statement.sig }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if immunization_statement_commands_data %}
+                <h3>Immunization Statement</h3>
+                <ul>
+                {% for immunization_statement in immunization_statement_commands_data %}
+                    <li><span class="emphasis-text">{{ immunization_statement.coded_title }}</span>
+                        <ul>
+                            <li><span class="italic">Approximate Date of Immunization</span>: {{ immunization_statement.date.date }}</li>
+                            <li><span class="italic">Comments</span>: {{ immunization_statement.comments }}</li>
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if patient_family_history_commands_data %}
+                <h3>Family History</h3>
+                <ul>
+                {% for family_history in patient_family_history_commands_data %}
+                    <li><span class="emphasis-text">{{ family_history.family_history.text }}</span>
+                        <ul>
+                            {% if family_history.relative.text %}
+                                <li><span class="italic">Relative:</span> {{ family_history.relative.text }}</li>
+                            {% endif %}
+                            {% if family_history.note %}
+                                <li><span class="italic">Note:</span> {{ family_history.note }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if medical_history_commands_data %}
+                <h3>Past Medical History</h3>
+                <ul>
+                {% for med_history_cmd in medical_history_commands_data %}
+                    <li>{{ med_history_cmd.past_medical_history.text }} ({{ med_history_cmd.past_medical_history.annotations.0 }})
+                        <ul>
+                            {% if med_history_cmd.comments %}
+                                <li><span class="italic">Comments:</span> {{ med_history_cmd.comments }}</li>
+                            {% endif %}
+                            {% if med_history_cmd.approximate_start_date.date %}
+                                <li><span class="italic">Approximate Start Date:</span> {{ med_history_cmd.approximate_start_date.date }}</li>
+                            {% endif %}
+                            {% if med_history_cmd.approximate_end_date.date %}
+                                <li><span class="italic">Approximate End Date:</span> {{ med_history_cmd.approximate_end_date.date }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if surgical_history_commands_data %}
+                <h3>Past Surgical History</h3>
+                <ul>
+                {% for surgical_history_cmd in surgical_history_commands_data %}
+                    <li>{{ surgical_history_cmd.past_surgical_history.text }}
+                        <ul>
+                            {% if surgical_history_cmd.comment %}
+                                <li><span class="italic">Comments:</span> {{ surgical_history_cmd.comment }}</li>
+                            {% endif %}
+                            {% if surgical_history_cmd.approximate_date.date %}
+                                <li><span class="italic">Approximate Date:</span> {{ surgical_history_cmd.approximate_date.date }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if billing_line_items_data %}
+                <h2>Billed Services</h2>
+                <p class="italic">The following services and codes were billed for today's visit:</p>
+                <ul>
+                {% for billing in billing_line_items_data %}
+                    <li>{% if billing.description %}{{ billing.description }} ({{ billing.code }}){% else %}{{ billing.code }}{% endif %}{% if billing.units %} &times;{{ billing.units }}{% endif %}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if follow_up_date %}
+            <h2>Next Steps</h2>
+                <h3>Follow Up</h3>
+                <div class="info-box italic">Please contact our office to schedule your next appointment.</div>
+                <p>Follow up with the scheduling office to schedule an appointment around <span class="emphasis-text">{{ follow_up_date }}</span>{% if follow_up_rfv %} for <span class="emphasis-text">{{ follow_up_rfv }}{% if follow_up_note_type %} ({{ follow_up_note_type }}){% endif %}</span>{% endif %}.</p>
+                <p class="italic small-text emphasis-text">Additional Notes:</p>
+                <p class="italic small-text">We recommend booking your next visit as soon as you can. Our providers often book out weeks in advance, and early scheduling helps prevent any delays in your care.</p>
+            {% endif %}
+
+            <h4 class="italic">Signed</h4>
+            <p class="medium-text italic">
+                {{ provider.first_name }} {{ provider.last_name }}{% if provider_top_role %} {{ provider_top_role.public_abbreviation }}{% endif %}<br />
+                NPI: {{ provider.npi_number }}<br />
+                {{ organization_info.name }}<br />
+                {{ organization_info.address1 }}, {{ organization_info.address2 }}<br />
+                {{ organization_info.city }}, {{ organization_info.state_code }} {{ organization_info.postal_code }}<br />
+                Phone: {{ organization_info.phone }}<br />
+                Fax: {{ organization_info.fax }}
+            </p>
+        </div>
+    </body>
+</html>
