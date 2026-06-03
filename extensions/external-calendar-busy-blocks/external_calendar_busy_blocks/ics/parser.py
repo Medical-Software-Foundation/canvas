@@ -97,7 +97,15 @@ def extract_vevents(lines: list[str]) -> list[list[Property]]:
             current = None
             continue
         if in_vevent and current is not None:
-            current.append(parse_property_line(line))
+            try:
+                current.append(parse_property_line(line))
+            except IcsParseError as exc:
+                # A single malformed line must not kill the whole feed. Poison
+                # this VEVENT and skip the rest of its lines until END:VEVENT;
+                # other VEVENTs in the body still parse.
+                log.warning("Dropping VEVENT with malformed line: %s", exc)
+                current = None
+                in_vevent = False
 
     return events
 
@@ -136,6 +144,44 @@ def _collect_exdates(props: list[Property], default_tz: str) -> set[datetime]:
             dv = parse_ics_datetime(piece, params, default_tz)
             out.add(dv.moment)
     return out
+
+
+def _build_override_event(
+    override_props: list[Property],
+    uid: str,
+    rid_key: str,
+    base_duration: timedelta,
+    sequence: int,
+    default_tz: str,
+) -> "ParsedEvent | None":
+    """Build a ParsedEvent from a RECURRENCE-ID override VEVENT.
+
+    Returns None when the override is unusable (missing DTSTART, or DTSTART/
+    DTEND that cannot be parsed) so the caller can fall back to the base
+    occurrence rather than dropping it — and, critically, rather than letting a
+    parse error escape and discard the whole recurring series. A missing DTEND
+    inherits the base occurrence's duration, matching real calendar clients.
+    """
+    ovs_prop = _find_property(override_props, "DTSTART")
+    if ovs_prop is None:
+        return None
+    try:
+        ovs = parse_ics_datetime(ovs_prop[2], ovs_prop[1], default_tz)
+        ove_prop = _find_property(override_props, "DTEND")
+        if ove_prop is not None:
+            ends_at = parse_ics_datetime(ove_prop[2], ove_prop[1], default_tz).moment
+        else:
+            ends_at = ovs.moment + base_duration
+    except IcsParseError:
+        return None
+    return ParsedEvent(
+        uid=uid,
+        recurrence_id=rid_key,
+        starts_at=ovs.moment,
+        ends_at=ends_at,
+        is_all_day=ovs.is_all_day,
+        sequence=sequence,
+    )
 
 
 def _format_recurrence_id(moment: datetime, is_all_day: bool) -> str:
@@ -229,7 +275,12 @@ def _parse_base_event(
     duration = ends.moment - starts.moment
 
     seq_prop = _find_property(props, "SEQUENCE")
-    sequence = int(seq_prop[2]) if seq_prop else 0
+    try:
+        sequence = int(seq_prop[2]) if seq_prop else 0
+    except ValueError as exc:
+        # Convert to IcsParseError so the per-VEVENT guard drops just this
+        # event instead of letting a ValueError abort the whole cron tick.
+        raise IcsParseError(f"invalid SEQUENCE: {seq_prop[2]!r}") from exc
 
     rrule_prop = _find_property(props, "RRULE")
     if rrule_prop is None:
@@ -278,24 +329,21 @@ def _parse_base_event(
         override_props = overrides.get((uid_prop[2], rid_key))
         if override_props is not None:
             if _should_skip(override_props):
+                # The override cancels/declines this specific instance.
                 continue
-            ovs_prop = _find_property(override_props, "DTSTART")
-            ove_prop = _find_property(override_props, "DTEND")
-            if ovs_prop is None or ove_prop is None:
-                continue
-            ovs = parse_ics_datetime(ovs_prop[2], ovs_prop[1], default_tz)
-            ove = parse_ics_datetime(ove_prop[2], ove_prop[1], default_tz)
-            out.append(
-                ParsedEvent(
-                    uid=uid_prop[2],
-                    recurrence_id=rid_key,
-                    starts_at=ovs.moment,
-                    ends_at=ove.moment,
-                    is_all_day=ovs.is_all_day,
-                    sequence=sequence,
-                )
+            override_event = _build_override_event(
+                override_props, uid_prop[2], rid_key, duration, sequence, default_tz
             )
-            continue
+            if override_event is not None:
+                out.append(override_event)
+                continue
+            # Override unparseable or missing DTSTART -> fall through to the
+            # base occurrence rather than dropping the instance or the series.
+            log.warning(
+                "Override for uid=%s rid=%s unusable; using base time",
+                uid_prop[2],
+                rid_key,
+            )
         out.append(
             ParsedEvent(
                 uid=uid_prop[2],

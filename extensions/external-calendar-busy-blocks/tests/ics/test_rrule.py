@@ -182,3 +182,13 @@ def test_expand_weekly_uses_local_weekday_not_utc() -> None:
     assert [d.date().isoformat() for d in locals_] == [
         "2026-06-02", "2026-06-09", "2026-06-16",
     ]
+
+
+def test_parse_rrule_rejects_zero_interval() -> None:
+    with pytest.raises(RRuleUnsupported):
+        parse_rrule("FREQ=DAILY;INTERVAL=0")
+
+
+def test_parse_rrule_rejects_negative_count() -> None:
+    with pytest.raises(RRuleUnsupported):
+        parse_rrule("FREQ=DAILY;COUNT=0")

@@ -64,12 +64,19 @@ def parse_rrule(value: str) -> RRule:
             rule.interval = int(parts["INTERVAL"])
         except ValueError as exc:
             raise IcsParseError(f"INTERVAL is not an integer: {parts['INTERVAL']!r}") from exc
+        # RFC 5545 §3.3.10 requires INTERVAL >= 1. INTERVAL=0 would never advance
+        # the cursor, producing cap-many duplicate occurrences that collide on
+        # the unique (staff_id, ics_uid, recurrence_id) key. Drop the VEVENT.
+        if rule.interval < 1:
+            raise RRuleUnsupported(f"RRULE INTERVAL must be >= 1, got {rule.interval}")
 
     if "COUNT" in parts:
         try:
             rule.count = int(parts["COUNT"])
         except ValueError as exc:
             raise IcsParseError(f"COUNT is not an integer: {parts['COUNT']!r}") from exc
+        if rule.count < 1:
+            raise RRuleUnsupported(f"RRULE COUNT must be >= 1, got {rule.count}")
 
     if "UNTIL" in parts:
         u = parts["UNTIL"]

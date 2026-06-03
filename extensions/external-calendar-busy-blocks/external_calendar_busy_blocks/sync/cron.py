@@ -40,7 +40,18 @@ class SyncCron(CronTask):
         effects: list[Effect] = []
 
         for feed in StaffCalendarFeed.objects.filter(is_active=True):
-            effects.extend(self._sync_feed(feed, now, lookahead))
+            try:
+                effects.extend(self._sync_feed(feed, now, lookahead))
+            except Exception as exc:  # noqa: BLE001 — isolate per-feed failures
+                # One provider's feed must never abort the whole tick or skip
+                # the remaining feeds. Log with traceback (Sentry-visible) and
+                # record the error, then carry on with the next feed.
+                log.exception("Unexpected error syncing feed %s; skipping", feed.id)
+                try:
+                    feed.last_error = f"unexpected error: {type(exc).__name__}"
+                    feed.save()
+                except Exception:
+                    log.exception("Failed to record last_error for feed %s", feed.id)
         return effects
 
     def _lookahead_days(self) -> int:

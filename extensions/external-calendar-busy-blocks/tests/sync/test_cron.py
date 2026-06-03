@@ -278,3 +278,36 @@ def test_existing_query_excludes_past_events(patch_sync_deps) -> None:
     ends_at_gte = kwargs.get("ends_at__gte")
     assert isinstance(ends_at_gte, datetime)
     assert ends_at_gte.tzinfo is not None
+
+
+def test_one_feed_failure_does_not_abort_other_feeds(patch_sync_deps) -> None:
+    # A per-feed isolation backstop: if syncing one feed raises an unexpected
+    # exception, the cron must record the error, skip that feed, and continue
+    # syncing the others — not abort the whole tick.
+    from external_calendar_busy_blocks.http.fetcher import FetchOk
+
+    feed_a = _stub_feed(staff_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ics_url="https://a/x.ics")
+    feed_b = _stub_feed(staff_id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", ics_url="https://b/x.ics")
+    patch_sync_deps["feed_model"].objects.filter.return_value = [feed_a, feed_b]
+    patch_sync_deps["imported_model"].objects.filter.return_value = []
+
+    # Feed A blows up unexpectedly; Feed B returns a valid single event.
+    def fetch_side_effect(url, etag, last_modified):
+        if url == "https://a/x.ics":
+            raise RuntimeError("unexpected boom")
+        return FetchOk(
+            body=_ok_body("ev-b@x", "20260615T140000Z", "20260615T150000Z"),
+            etag=None,
+            last_modified=None,
+        )
+
+    patch_sync_deps["fetch"].side_effect = fetch_side_effect
+
+    effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
+
+    # Feed B's create effect still emitted despite feed A blowing up.
+    create_effects = [e for e in effects if e.type == _CREATE]
+    assert len(create_effects) == 1
+    # Feed A recorded an error and was saved.
+    assert feed_a.last_error and "unexpected" in feed_a.last_error.lower()
+    assert feed_a.save.called

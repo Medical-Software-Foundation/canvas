@@ -342,3 +342,62 @@ def test_parse_weekly_byday_evaluated_in_source_timezone(ics_fixture) -> None:
     assert [d.date().isoformat() for d in locals_] == [
         "2026-06-02", "2026-06-09", "2026-06-16",
     ]
+
+
+def test_parse_colonless_property_drops_only_that_vevent(ics_fixture) -> None:
+    # A property line with no colon must not kill the whole feed.
+    events = parse_ics(
+        ics_fixture("colonless_property.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert [e.uid for e in events] == ["good@google.com"]
+
+
+def test_parse_zero_interval_drops_only_that_vevent(ics_fixture) -> None:
+    # INTERVAL=0 is invalid (RFC 5545); it must be dropped, not expanded into
+    # 1000 duplicate-keyed occurrences. The other event still parses.
+    events = parse_ics(
+        ics_fixture("zero_interval.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert [e.uid for e in events] == ["good@google.com"]
+
+
+def test_parse_bad_sequence_drops_only_that_vevent(ics_fixture) -> None:
+    events = parse_ics(
+        ics_fixture("bad_sequence.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert [e.uid for e in events] == ["good@google.com"]
+
+
+def test_parse_override_bad_tzid_keeps_series_at_base_time(ics_fixture) -> None:
+    # An override whose DTSTART has an unparseable TZID must fall back to the
+    # base instance time, not drop the whole recurring series.
+    events = parse_ics(
+        ics_fixture("override_bad_tzid.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    by_day = {e.starts_at.day: e for e in events}
+    assert set(by_day.keys()) == {1, 8, 15}  # full series survives
+    # The bad override fell back to the base 14:00 time for 6/8.
+    assert by_day[8].starts_at == datetime(2026, 6, 8, 14, 0, tzinfo=timezone.utc)
+
+
+def test_parse_override_missing_dtend_uses_base_duration(ics_fixture) -> None:
+    # An override with DTSTART but no DTEND must inherit the base duration,
+    # not silently drop the occurrence.
+    events = parse_ics(
+        ics_fixture("override_missing_dtend.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    by_day = {e.starts_at.day: e for e in events}
+    assert set(by_day.keys()) == {1, 8, 15}
+    # 6/8 override moved start to 16:00; base duration is 1h -> ends 17:00.
+    assert by_day[8].starts_at == datetime(2026, 6, 8, 16, 0, tzinfo=timezone.utc)
+    assert by_day[8].ends_at == datetime(2026, 6, 8, 17, 0, tzinfo=timezone.utc)
