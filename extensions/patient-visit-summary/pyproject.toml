@@ -1,0 +1,31 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Generate a print-ready patient visit summary from a clinical note, with a customizable print view and optional FHIR DocumentReference output."
+license = "MIT"
+name = "patient-visit-summary"
+readme = "patient_visit_summary/README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["patient_visit_summary"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]

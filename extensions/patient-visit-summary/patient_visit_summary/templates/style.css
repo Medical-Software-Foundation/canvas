@@ -1,0 +1,286 @@
+body {
+    font-family: "Nunito", "Lato", sans-serif;
+    font-size: 10pt;
+    font-weight: 400;
+    font-style: normal;
+    color: #333;
+    background-color: #f8f9fa;
+    padding: 20px;
+}
+
+#container {
+    max-width: 900px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 30px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+}
+
+.print-button {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background-color: #1B5E7B;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    font-size: 10pt;
+    font-family: "Nunito", "Lato", sans-serif;
+    cursor: pointer;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transition: background-color 0.3s;
+}
+
+.print-button:hover {
+    background-color: #2471A3;
+}
+
+.emphasis-text {
+    font-weight: 600;
+    color: #1B5E7B;
+}
+
+.small-text {
+    font-size: 9pt;
+}
+
+.italic {
+    font-style: italic;
+}
+
+.underline {
+    text-decoration: underline;
+}
+
+h1, h2, h3, th {
+    font-weight: 600;
+    color: #1B5E7B;
+}
+
+h2 {
+    font-size: 16pt;
+    border-bottom: 3px solid #1B5E7B;
+    padding-bottom: 8px;
+    margin-top: 40px;
+    margin-bottom: 25px;
+}
+
+h3 {
+    font-size: 13pt;
+    color: #2980B9;
+    padding-left: 0;
+    margin-top: 25px;
+    margin-bottom: 10px;
+}
+
+h4 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #2C7A8E;
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+
+/* Table styling for header */
+.header-table {
+    width: 100%;
+    border: 2px solid #1B5E7B;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-bottom: 25px;
+    background-color: #F4F9FC;
+    border-radius: 4px;
+}
+
+.header-table td {
+    padding: 12px 15px;
+    border: 1px solid #C5D9E2;
+}
+
+.header-table .label {
+    font-weight: 600;
+    color: #1B5E7B;
+    width: 150px;
+    background-color: #E0EEF4;
+}
+
+.medium-text {
+    font-size: 11pt;
+}
+
+/* List styling */
+ul {
+    margin: 4px 0 12px 20px;
+    padding: 0;
+    list-style-type: disc;
+}
+
+ul ul {
+    list-style-type: circle;
+    margin-top: 2px;
+    margin-bottom: 0;
+}
+
+li {
+    margin-bottom: 4px;
+    line-height: 1.6;
+    color: #333;
+}
+
+ul ul li {
+    color: #4A6670;
+}
+
+#page-img-header {
+    display: inline-block;
+    height: 120px;
+    width: 100%;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    position: relative;
+}
+
+.header-img img {
+    height: 100px;
+    display: inline-block;
+}
+
+.header-title {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24pt;
+    font-weight: 700;
+    color: #1B5E7B;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.float-left {
+    float: left;
+}
+
+.float-right {
+    float: right;
+}
+
+/* Section styling */
+.section-container {
+    border: 2px solid #C5D9E2;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 25px;
+    background-color: #ffffff;
+}
+
+/* Data table styling */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    border: 1px solid #C5D9E2;
+}
+
+.data-table th {
+    background-color: #1B5E7B;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.data-table td {
+    padding: 10px 12px;
+    border: 1px solid #C5D9E2;
+    background-color: #F4F9FC;
+}
+
+.data-table tr:nth-child(even) td {
+    background-color: #ffffff;
+}
+
+/* Info boxes */
+.info-box {
+    background-color: #E5F2F0;
+    border-left: 4px solid #1B5E7B;
+    padding: 12px 16px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-size: 10.5pt;
+    line-height: 1.6;
+}
+
+.info-box.italic {
+    color: #4A6670;
+}
+
+/* Section dividers */
+.section-divider {
+    border: 0;
+    height: 2px;
+    background: linear-gradient(to right, #1B5E7B, transparent);
+    margin: 30px 0 20px 0;
+}
+
+p {
+    margin: 4px 0 8px 0;
+    line-height: 1.6;
+}
+
+@media print {
+    body {
+        background-color: white;
+        padding: 0;
+    }
+
+    #container {
+        box-shadow: none;
+        padding: 20px;
+    }
+
+    .print-button {
+        display: none;
+    }
+
+    @page {
+        padding-top: 30px;
+        margin: 1cm;
+    }
+
+    @page :first {
+        padding-top: 0;
+    }
+
+    h2 {
+        page-break-after: avoid;
+    }
+
+    .section-container {
+        page-break-inside: avoid;
+    }
+
+    .educational-material-page {
+        page-break-before: always;
+    }
+
+    .pdf-pages canvas {
+        width: 100%;
+    }
+}
+
+/* Educational Material embedded PDFs */
+.educational-material-page {
+    margin-top: 40px;
+    border-top: 2px solid #1B5E7B;
+    padding-top: 15px;
+}
+
+.pdf-pages canvas {
+    width: 100%;
+    border: 1px solid #C5D9E2;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
