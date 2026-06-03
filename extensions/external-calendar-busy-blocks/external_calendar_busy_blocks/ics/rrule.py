@@ -1,11 +1,18 @@
-from calendar import monthrange
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from dateutil.relativedelta import relativedelta
 
 from external_calendar_busy_blocks.ics.types import IcsParseError
+
+
+def _last_day_of_month(year: int, month: int) -> int:
+    """Return the last day-of-month for the given year and month."""
+    if month == 12:
+        next_first = datetime(year + 1, 1, 1)
+    else:
+        next_first = datetime(year, month + 1, 1)
+    return (next_first - timedelta(days=1)).day
 
 
 class RRuleUnsupported(Exception):
@@ -107,7 +114,7 @@ def expand_rrule(
     window_start: datetime,
     window_end: datetime,
     cap: int,
-) -> Iterator[datetime]:
+):
     """Yield occurrences of dtstart within [window_start, window_end).
 
     Always stops at min(rule.count, cap, end-of-window, rule.until).
@@ -130,7 +137,7 @@ def _expand_daily(
     window_start: datetime,
     window_end: datetime,
     cap: int,
-) -> Iterator[datetime]:
+):
     cur = dtstart
     produced = 0
     while produced < cap:
@@ -152,7 +159,7 @@ def _expand_weekly(
     window_start: datetime,
     window_end: datetime,
     cap: int,
-) -> Iterator[datetime]:
+):
     # If no BYDAY, the rule recurs only on the DTSTART weekday.
     weekdays = [WEEKDAY_TO_NUM[d] for _, d in rule.byday] if rule.byday else [dtstart.weekday()]
     weekdays = sorted(set(weekdays))
@@ -193,7 +200,7 @@ def _expand_weekly(
 
 def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> int | None:
     """Return the day-of-month for the Nth (1-based) weekday in (year, month)."""
-    _, last_day = monthrange(year, month)
+    last_day = _last_day_of_month(year, month)
     if n > 0:
         first_match = ((weekday - datetime(year, month, 1).weekday()) % 7) + 1
         day = first_match + 7 * (n - 1)
@@ -211,7 +218,7 @@ def _candidate_days_in_month(rule: RRule, year: int, month: int, dtstart: dateti
         for pos, day in rule.byday:
             weekday = WEEKDAY_TO_NUM[day]
             if pos == 0:
-                _, last = monthrange(year, month)
+                last = _last_day_of_month(year, month)
                 for d in range(1, last + 1):
                     if datetime(year, month, d).weekday() == weekday:
                         days.add(d)
@@ -220,14 +227,15 @@ def _candidate_days_in_month(rule: RRule, year: int, month: int, dtstart: dateti
                 if d is not None:
                     days.add(d)
     if rule.bymonthday:
-        _, last = monthrange(year, month)
+        last = _last_day_of_month(year, month)
         for d in rule.bymonthday:
             if d > 0 and d <= last:
                 days.add(d)
             elif d < 0 and (last + d + 1) >= 1:
                 days.add(last + d + 1)
     if not rule.byday and not rule.bymonthday:
-        days.add(dtstart.day if dtstart.day <= monthrange(year, month)[1] else monthrange(year, month)[1])
+        last = _last_day_of_month(year, month)
+        days.add(dtstart.day if dtstart.day <= last else last)
     return sorted(days)
 
 
@@ -242,7 +250,7 @@ def _expand_monthly(
     window_start: datetime,
     window_end: datetime,
     cap: int,
-) -> Iterator[datetime]:
+):
     cursor_year, cursor_month = dtstart.year, dtstart.month
     produced = 0
     while produced < cap:
@@ -279,7 +287,7 @@ def _expand_yearly(
     window_start: datetime,
     window_end: datetime,
     cap: int,
-) -> Iterator[datetime]:
+):
     cursor_year = dtstart.year
     produced = 0
     while produced < cap:

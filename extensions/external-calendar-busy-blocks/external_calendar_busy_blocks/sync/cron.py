@@ -1,7 +1,8 @@
-import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+
+from logger import log
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Event
@@ -24,8 +25,6 @@ from external_calendar_busy_blocks.http.fetcher import (
 )
 from external_calendar_busy_blocks.ics.parser import parse_ics
 from external_calendar_busy_blocks.ics.types import IcsParseError, ParsedEvent
-
-log = logging.getLogger(__name__)
 
 LOOKAHEAD_DAYS_DEFAULT = 90
 
@@ -59,7 +58,7 @@ class SyncCron(CronTask):
     ) -> list[Effect]:
         try:
             staff = Staff.objects.get(id=feed.staff_id)
-        except Exception:
+        except Staff.DoesNotExist:
             log.warning("Skipping feed %s: staff %s not found", feed.id, feed.staff_id)
             feed.last_error = f"staff {feed.staff_id} not found"
             feed.save()

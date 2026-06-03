@@ -1,4 +1,11 @@
-from django.db import models
+from django.db.models import (
+    BooleanField,
+    CharField,
+    DateTimeField,
+    IntegerField,
+    TextField,
+    UniqueConstraint,
+)
 
 from canvas_sdk.v1.data.base import CustomModel
 
@@ -8,21 +15,21 @@ class StaffCalendarFeed(CustomModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
+            UniqueConstraint(
                 fields=["staff_id"],
                 name="external_calendar_busy_blocks_feed_staff_unique",
             )
         ]
 
-    staff_id = models.CharField(max_length=32)
-    ics_url = models.TextField()
-    is_active = models.BooleanField(default=True)
-    last_sync_at = models.DateTimeField(null=True, blank=True)
-    last_etag = models.CharField(max_length=256, null=True, blank=True)
-    last_modified = models.CharField(max_length=64, null=True, blank=True)
-    last_error = models.TextField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    staff_id = CharField(max_length=32)
+    ics_url = TextField()
+    is_active = BooleanField(default=True)
+    last_sync_at = DateTimeField(null=True, blank=True)
+    last_etag = CharField(max_length=256, null=True, blank=True)
+    last_modified = CharField(max_length=64, null=True, blank=True)
+    last_error = TextField(null=True, blank=True)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
 
 
 class ImportedEvent(CustomModel):
@@ -30,19 +37,19 @@ class ImportedEvent(CustomModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
+            UniqueConstraint(
                 fields=["staff_id", "ics_uid", "recurrence_id"],
                 name="external_calendar_busy_blocks_event_unique",
             )
         ]
 
-    staff_id = models.CharField(max_length=32)
-    ics_uid = models.CharField(max_length=512)
-    recurrence_id = models.CharField(max_length=64, null=True, blank=True)
-    canvas_event_id = models.CharField(max_length=64)
-    sequence = models.IntegerField(default=0)
-    starts_at = models.DateTimeField()
-    ends_at = models.DateTimeField()
-    is_all_day = models.BooleanField(default=False)
-    last_seen = models.DateTimeField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    staff_id = CharField(max_length=32)
+    ics_uid = CharField(max_length=512)
+    recurrence_id = CharField(max_length=64, null=True, blank=True)
+    canvas_event_id = CharField(max_length=64)
+    sequence = IntegerField(default=0)
+    starts_at = DateTimeField()
+    ends_at = DateTimeField()
+    is_all_day = BooleanField(default=False)
+    last_seen = DateTimeField()
+    created_at = DateTimeField(auto_now_add=True)

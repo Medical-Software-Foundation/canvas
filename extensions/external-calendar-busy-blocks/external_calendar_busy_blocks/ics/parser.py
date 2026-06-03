@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime, timedelta
 
 from external_calendar_busy_blocks.ics.datetimes import parse_ics_datetime
@@ -7,9 +6,9 @@ from external_calendar_busy_blocks.ics.rrule import (
     expand_rrule,
     parse_rrule,
 )
-from external_calendar_busy_blocks.ics.types import IcsParseError, ParsedEvent
+from logger import log
 
-log = logging.getLogger(__name__)
+from external_calendar_busy_blocks.ics.types import IcsParseError, ParsedEvent
 
 RRULE_CAP_PER_VEVENT = 1000
 

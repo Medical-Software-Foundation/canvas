@@ -1,6 +1,5 @@
 import re
 from dataclasses import dataclass
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 from canvas_sdk.utils.http import Http
 
@@ -33,33 +32,41 @@ FetchResult = FetchOk | NotModified | Unauthorized | NotFound | TransientError
 
 
 _SECRET_LIKE_PATH_SEGMENT = re.compile(r"^[A-Za-z0-9_-]{16,}$")
+_URL_REGEX = re.compile(r"^(https?://[^/?#]+)(/[^?#]*)?(\?[^#]*)?(.*)$")
+_SECRET_QUERY_PARAM_NAME = re.compile(r"(?i)(token|key|secret|auth)")
 
 
 def redact_url(url: str) -> str:
     """Mask probable secret tokens in a URL so it's safe to log."""
-    try:
-        parsed = urlparse(url)
-    except ValueError:
+    match = _URL_REGEX.match(url)
+    if not match:
         return "***"
-    new_path_parts = []
-    for segment in parsed.path.split("/"):
-        if _SECRET_LIKE_PATH_SEGMENT.fullmatch(segment):
-            new_path_parts.append("***")
-        else:
-            new_path_parts.append(segment)
-    new_path = "/".join(new_path_parts)
+    scheme_host, path, query, rest = match.groups()
+    path = path or ""
+    query = query or ""
 
-    new_query_pairs = []
-    for k, v in parse_qsl(parsed.query, keep_blank_values=True):
-        if len(v) >= 16 or k.lower() in ("token", "key", "secret", "auth"):
-            new_query_pairs.append((k, "***"))
-        else:
-            new_query_pairs.append((k, v))
-    new_query = urlencode(new_query_pairs)
-
-    return urlunparse(
-        (parsed.scheme, parsed.netloc, new_path, parsed.params, new_query, parsed.fragment)
+    # Redact secret-looking path segments
+    redacted_path = "/".join(
+        "***" if _SECRET_LIKE_PATH_SEGMENT.fullmatch(seg) else seg
+        for seg in path.split("/")
     )
+
+    # Redact secret-looking query values
+    if query.startswith("?"):
+        pairs = []
+        for chunk in query[1:].split("&"):
+            if not chunk:
+                continue
+            if "=" in chunk:
+                k, v = chunk.split("=", 1)
+            else:
+                k, v = chunk, ""
+            if len(v) >= 16 or _SECRET_QUERY_PARAM_NAME.fullmatch(k):
+                v = "***"
+            pairs.append(f"{k}={v}" if "=" in chunk else k)
+        query = "?" + "&".join(pairs)
+
+    return scheme_host + redacted_path + query + rest
 
 
 def fetch_feed(

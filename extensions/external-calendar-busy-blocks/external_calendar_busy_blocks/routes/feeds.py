@@ -1,5 +1,5 @@
 import json
-from urllib.parse import urlparse
+import re
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Event
@@ -73,10 +73,8 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
     def _logged_in_staff_id(self) -> str | None:
         return self.request.headers.get("canvas-logged-in-user-id")
 
+    _HTTPS_URL_REGEX = re.compile(r"^https://[^/?#\s]+", re.IGNORECASE)
+
     @staticmethod
     def _is_https_url(url: str) -> bool:
-        try:
-            parsed = urlparse(url)
-        except ValueError:
-            return False
-        return parsed.scheme == "https" and bool(parsed.netloc)
+        return bool(FeedsAPI._HTTPS_URL_REGEX.match(url))

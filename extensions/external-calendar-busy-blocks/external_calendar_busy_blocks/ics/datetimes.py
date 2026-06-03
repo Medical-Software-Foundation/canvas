@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo
 
 from external_calendar_busy_blocks.ics.types import IcsParseError
 
@@ -67,7 +67,7 @@ def parse_ics_datetime(
     tzid = params.get("TZID", default_tz)
     try:
         zone = ZoneInfo(tzid)
-    except ZoneInfoNotFoundError as exc:
+    except KeyError as exc:
         raise IcsParseError(f"unknown TZID: {tzid!r}") from exc
 
     return DateValue(
