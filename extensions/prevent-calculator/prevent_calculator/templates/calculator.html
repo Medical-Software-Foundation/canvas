@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PREVENT CVD Risk Calculator</title>
+<style>
+  :root {
+    --primary: #156785;
+    --primary-dark: #0e4a61;
+    --bg: #ffffff;
+    --bg-alt: #f5f7fa;
+    --border: #e2e6eb;
+    --text: #1f2933;
+    --text-muted: #5b6873;
+    --warn-bg: #fff7e0;
+    --warn-border: #f3c25c;
+    --warn-text: #7a4f00;
+    --success: #2f7d4f;
+    --danger: #b03030;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    /* Wider right padding so labels and range hints don't crowd the modal
+       edge — addresses the "increase right border" review feedback. */
+    padding: 24px 36px 32px 28px;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; color: var(--primary-dark); }
+  .subtitle { color: var(--text-muted); margin-bottom: 20px; }
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+    margin-bottom: 20px;
+  }
+  .field { display: flex; flex-direction: column; }
+  .field label {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .field label .range-hint {
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  details.about {
+    margin: 16px 0;
+    padding: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  details.about summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--primary);
+    padding: 6px 0;
+  }
+  details.about summary:hover { color: var(--primary-dark); }
+  details.about p { margin: 4px 0; line-height: 1.5; }
+  details.about a { color: var(--primary); }
+  .availability {
+    margin: 12px 0 16px;
+    padding: 10px 12px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .availability h3 {
+    font-size: 11px;
+    margin: 0 0 6px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .availability ul { list-style: none; padding: 0; margin: 0; }
+  .availability li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+  }
+  .availability li.ok { color: var(--success); }
+  .availability li.miss { color: var(--text-muted); }
+  .availability .icon {
+    display: inline-block;
+    width: 14px;
+    text-align: center;
+    font-weight: 700;
+  }
+  .availability .why {
+    color: var(--text-muted);
+    font-style: italic;
+    margin-left: 4px;
+  }
+  .field input, .field select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg);
+  }
+  .field input:focus, .field select:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: -1px;
+    border-color: var(--primary);
+  }
+  .field-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 16px;
+  }
+  .stale {
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    border: 1px solid var(--warn-border);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  button {
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: white;
+  }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-primary:disabled {
+    background: #b6c2cb;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    background: white;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+  }
+  .results {
+    background: var(--bg-alt);
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    display: none;
+  }
+  .results.visible { display: block; }
+  .results h2 {
+    font-size: 14px;
+    margin: 0 0 12px;
+    color: var(--primary-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px 16px;
+    align-items: center;
+  }
+  .results-grid .row-header {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .results-grid .row-label { font-weight: 500; }
+  .results-grid .pct {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    min-width: 64px;
+  }
+  .results-grid .pct.na {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-style: italic;
+  }
+  .save-status {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--success);
+  }
+  .partial-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--warn-text);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    display: none;
+  }
+  .partial-note.visible { display: block; }
+  .error-banner {
+    background: #fde8e8;
+    color: var(--danger);
+    border: 1px solid #f5b7b7;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .error-banner.visible { display: block; }
+  .error-banner ul { margin: 6px 0 0; padding-left: 20px; }
+  .error-banner li { margin: 2px 0; }
+  .field input.has-error,
+  .field select.has-error {
+    border-color: var(--danger);
+    background: #fff5f5;
+  }
+  .field .inline-error {
+    color: var(--danger);
+    font-size: 11px;
+    margin-top: 2px;
+    display: none;
+  }
+  .field .inline-error.visible { display: block; }
+</style>
+</head>
+<body>
+<h1>PREVENT CVD Risk Calculator</h1>
+<p class="subtitle">
+  AHA PREVENT base model. Pre-fills from this patient's chart;
+  fields older than one year are flagged. Edit anything before
+  calculating.
+</p>
+
+<div id="error-banner" class="error-banner" role="alert"></div>
+
+<form id="prevent-form" novalidate>
+  <div class="form-grid">
+
+    <div class="field">
+      <label for="sex">Sex</label>
+      <select id="sex" name="sex" required>
+        <option value="">--</option>
+        <option value="0">Male</option>
+        <option value="1">Female</option>
+      </select>
+      <div class="field-meta" data-meta-for="sex"></div>
+    </div>
+
+    <div class="field">
+      <label for="age">Age (years) <span class="range-hint">30–79 (30-yr risk: 30–59)</span></label>
+      <input type="number" id="age" name="age" min="30" max="79" step="1" required>
+      <div class="field-meta" data-meta-for="age"></div>
+    </div>
+
+    <div class="field">
+      <label for="total_cholesterol">Total cholesterol (mg/dL) <span class="range-hint">130–320 · needed for CVD &amp; ASCVD</span></label>
+      <input type="number" id="total_cholesterol" name="total_cholesterol" min="130" max="320" step="1">
+      <div class="field-meta" data-meta-for="total_cholesterol"></div>
+    </div>
+
+    <div class="field">
+      <label for="hdl_cholesterol">HDL cholesterol (mg/dL) <span class="range-hint">20–100 · needed for CVD &amp; ASCVD</span></label>
+      <input type="number" id="hdl_cholesterol" name="hdl_cholesterol" min="20" max="100" step="1">
+      <div class="field-meta" data-meta-for="hdl_cholesterol"></div>
+    </div>
+
+    <div class="field">
+      <label for="systolic_bp">Systolic BP (mmHg) <span class="range-hint">90–200</span></label>
+      <input type="number" id="systolic_bp" name="systolic_bp" min="90" max="200" step="1" required>
+      <div class="field-meta" data-meta-for="systolic_bp"></div>
+    </div>
+
+    <div class="field">
+      <label for="bmi">BMI (kg/m&sup2;) <span class="range-hint">18.5–39.9 · needed for HF</span></label>
+      <input type="number" id="bmi" name="bmi" min="18.5" max="39.9" step="0.1">
+      <div class="field-meta" data-meta-for="bmi"></div>
+    </div>
+
+    <div class="field">
+      <label for="egfr">eGFR (mL/min/1.73m&sup2;) <span class="range-hint">&gt; 0</span></label>
+      <input type="number" id="egfr" name="egfr" min="1" step="1" required>
+      <div class="field-meta" data-meta-for="egfr"></div>
+    </div>
+
+    <div class="field">
+      <label for="diabetes">Diabetes</label>
+      <select id="diabetes" name="diabetes">
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+      </select>
+      <div class="field-meta" data-meta-for="diabetes"></div>
+    </div>
+
+    <div class="field">
+      <label for="smoking">Current smoker</label>
+      <select id="smoking" name="smoking">
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+      </select>
+      <div class="field-meta" data-meta-for="smoking"></div>
+    </div>
+
+    <div class="field">
+      <label for="bp_treatment">On BP treatment</label>
+      <select id="bp_treatment" name="bp_treatment">
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+      </select>
+      <div class="field-meta" data-meta-for="bp_treatment"></div>
+    </div>
+
+    <div class="field">
+      <label for="statin">On statin therapy <span class="range-hint">needed for CVD &amp; ASCVD</span></label>
+      <select id="statin" name="statin">
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+      </select>
+      <div class="field-meta" data-meta-for="statin"></div>
+    </div>
+  </div>
+
+  <h2 style="font-size: 14px; margin: 16px 0 6px; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.5px;">
+    PREVENT enhanced inputs <span style="font-weight: 400; text-transform: none; color: var(--text-muted); font-size: 12px;">(optional — switches to the full model when any are filled)</span>
+  </h2>
+  <div class="form-grid">
+    <div class="field">
+      <label for="hba1c">HbA1c (%) <span class="range-hint">3.0–20.0 · refines all scores</span></label>
+      <input type="number" id="hba1c" name="hba1c" min="3" max="20" step="0.1">
+      <div class="field-meta" data-meta-for="hba1c"></div>
+    </div>
+
+    <div class="field">
+      <label for="uacr">UACR (mg/g) <span class="range-hint">0.1–25000 · refines all scores</span></label>
+      <input type="number" id="uacr" name="uacr" min="0.1" max="25000" step="0.1">
+      <div class="field-meta" data-meta-for="uacr"></div>
+    </div>
+
+    <div class="field">
+      <label for="sdi_decile">SDI decile <span class="range-hint">1 (least)–10 (most deprived)</span></label>
+      <input type="number" id="sdi_decile" name="sdi_decile" min="1" max="10" step="1">
+      <div class="field-meta" data-meta-for="sdi_decile"></div>
+    </div>
+  </div>
+
+  <section class="availability" aria-live="polite">
+    <h3>Scores that will compute with current values</h3>
+    <ul id="availability-list"></ul>
+  </section>
+
+  <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; font-size: 12px; color: var(--text-muted); cursor: pointer;">
+    <input type="checkbox" id="save_inputs_to_chart" name="save_inputs_to_chart">
+    Save any values I typed manually back to the chart so the next visit's calculation pre-fills from them. Only fields you changed from the chart pre-fill get saved.
+  </label>
+
+  <div class="actions">
+    <button type="submit" id="calculate-btn" class="btn-primary">Calculate</button>
+    <button type="button" id="reset-btn" class="btn-secondary">Reset to chart</button>
+  </div>
+
+  <details class="about">
+    <summary>About these input limits</summary>
+    <p>
+      The ranges above come from the official AHA PREVENT
+      reference equations
+      (<a href="https://github.com/AHA-DS-Analytics/PREVENT" target="_blank" rel="noopener">AHAprevent v1.0.0</a>;
+      Khan et al., <em>Circulation</em> 2024,
+      DOI&nbsp;10.1161/CIRCULATIONAHA.123.067626). They reflect the
+      data the regression was developed and validated on.
+    </p>
+    <p>
+      For values outside these ranges (e.g. SBP&nbsp;&gt;&nbsp;200,
+      age&nbsp;&gt;&nbsp;79), the AHA does not endorse using PREVENT —
+      the model can give clinically misleading risk percentages because
+      those values weren't represented in the development cohort. This
+      calculator follows the AHA convention of refusing to compute,
+      matching the behavior of the public AHA PREVENT web tool.
+    </p>
+    <p>
+      For patients outside the validated range, use clinical judgment
+      and consider an alternative tool (e.g. the older Pooled Cohort
+      Equations, or specialty-specific guidelines).
+    </p>
+  </details>
+</form>
+
+<section id="results" class="results" aria-live="polite">
+  <h2>PREVENT Risk Scores</h2>
+  <div class="results-grid">
+    <div class="row-header"></div>
+    <div class="row-header">10-year</div>
+    <div class="row-header">30-year</div>
+
+    <div class="row-label">Total CVD</div>
+    <div class="pct na" data-pct="risk_10yr_cvd">—</div>
+    <div class="pct na" data-pct="risk_30yr_cvd">—</div>
+
+    <div class="row-label">ASCVD</div>
+    <div class="pct na" data-pct="risk_10yr_ascvd">—</div>
+    <div class="pct na" data-pct="risk_30yr_ascvd">—</div>
+
+    <div class="row-label">Heart Failure</div>
+    <div class="pct na" data-pct="risk_10yr_hf">—</div>
+    <div class="pct na" data-pct="risk_30yr_hf">—</div>
+  </div>
+  <div id="save-status" class="save-status"></div>
+  <div id="partial-note" class="partial-note" role="note"></div>
+</section>
+
+<script>
+(function () {
+  var PATIENT_ID = "{{ patient_id|escapejs }}";
+  var PREFILL = {{ prefill_json|safe }};
+
+  // ----- helpers -------------------------------------------------------
+  var STALE_DAYS = 365;
+  var ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  var FIELD_KEYS = [
+    "sex", "age", "total_cholesterol", "hdl_cholesterol",
+    "systolic_bp", "bmi", "egfr", "diabetes", "smoking",
+    "bp_treatment", "statin",
+    "hba1c", "uacr", "sdi_decile"
+  ];
+
+  function daysAgo(isoDate) {
+    if (!isoDate) return null;
+    var parsed = Date.parse(isoDate);
+    if (isNaN(parsed)) return null;
+    var diff = Date.now() - parsed;
+    return Math.floor(diff / ONE_DAY_MS);
+  }
+
+  function formatDate(isoDate) {
+    if (!isoDate) return "";
+    var parsed = new Date(isoDate);
+    if (isNaN(parsed.getTime())) return "";
+    var month = parsed.getUTCMonth() + 1;
+    var day = parsed.getUTCDate();
+    var year = parsed.getUTCFullYear();
+    return month + "/" + day + "/" + year;
+  }
+
+  function setMeta(key, html) {
+    var meta = document.querySelector('[data-meta-for="' + key + '"]');
+    if (meta) meta.innerHTML = html;
+  }
+
+  function metaForEntry(entry) {
+    // Derive the "where did this value come from" text based on the
+    // resolver's source field.
+    var src = entry.source || "observation";
+    if (src === "patient_record") return "From patient record";
+    if (src === "default_no_record") return "No record found in chart — defaulted to No";
+    if (!entry.clinical_date) return "";
+    var days = daysAgo(entry.clinical_date);
+    var date = formatDate(entry.clinical_date);
+    var prefix;
+    if (src === "condition") prefix = "Condition onset ";
+    else if (src === "medication") prefix = "Started ";
+    else prefix = "Last value ";
+    var staleHtml = "";
+    if (days !== null && days > STALE_DAYS) {
+      staleHtml = ' <span class="stale">&#9888; ' + days + 'd old</span>';
+    }
+    // Always show the actual clinical date — clinicians shouldn't have to
+    // guess what "today" means after the modal sat open for a while or
+    // when the row is reviewed later. (Addresses review feedback.)
+    return prefix + date + staleHtml;
+  }
+
+  function applyPrefill() {
+    FIELD_KEYS.forEach(function (key) {
+      var el = document.getElementById(key);
+      var entry = PREFILL[key];
+      if (!el || !entry) {
+        setMeta(key, "");
+        return;
+      }
+      el.value = String(entry.value);
+      setMeta(key, metaForEntry(entry));
+    });
+  }
+
+  function readForm() {
+    var data = {};
+    FIELD_KEYS.forEach(function (key) {
+      var el = document.getElementById(key);
+      if (!el) return;
+      var v = el.value;
+      data[key] = v === "" ? null : v;
+    });
+    return data;
+  }
+
+  // Numeric input keys are the only ones we can save as Observations.
+  // Categorical / demographic fields (sex, age, dm, smoking, bptreat,
+  // statin, sdi_decile) don't map cleanly to a lab Observation, so we
+  // exclude them from the "save manual values" flow regardless of
+  // whether the user changed them.
+  var SAVEABLE_INPUT_KEYS = [
+    "total_cholesterol", "hdl_cholesterol", "systolic_bp",
+    "bmi", "egfr", "hba1c", "uacr"
+  ];
+
+  function computeModifiedFields() {
+    // A field counts as "manually added" if the user changed it away
+    // from the chart pre-fill OR there was no pre-fill and they filled
+    // it in. Empty fields are never saved.
+    var modified = [];
+    SAVEABLE_INPUT_KEYS.forEach(function (key) {
+      var el = document.getElementById(key);
+      if (!el) return;
+      var current = el.value;
+      if (current === "" || current === null) return;
+      var prefill = PREFILL[key];
+      if (!prefill || prefill.value === null || prefill.value === undefined) {
+        // No prefill → the value is necessarily manual
+        modified.push(key);
+        return;
+      }
+      // Compare numerically when possible so "120" vs " 120 " or 120.0
+      // vs 120 doesn't get flagged as edited
+      var prefillNum = parseFloat(prefill.value);
+      var currentNum = parseFloat(current);
+      if (isNaN(prefillNum) || isNaN(currentNum)) {
+        if (String(prefill.value) !== String(current)) modified.push(key);
+      } else if (Math.abs(prefillNum - currentNum) > 1e-9) {
+        modified.push(key);
+      }
+    });
+    return modified;
+  }
+
+  var FIELD_LABELS = {
+    sex: "Sex",
+    age: "Age",
+    total_cholesterol: "Total cholesterol",
+    hdl_cholesterol: "HDL cholesterol",
+    systolic_bp: "Systolic BP",
+    bmi: "BMI",
+    egfr: "eGFR",
+    diabetes: "Diabetes",
+    smoking: "Current smoker",
+    bp_treatment: "On BP treatment",
+    statin: "On statin therapy",
+    hba1c: "HbA1c",
+    uacr: "UACR",
+    sdi_decile: "SDI decile"
+  };
+
+  function showError(msg, fieldErrors) {
+    var b = document.getElementById("error-banner");
+    // Build the banner via DOM nodes so server-supplied strings (`msg` and
+    // each `fieldErrors[field]`) can't smuggle HTML in. The previous
+    // implementation used `innerHTML` with string concatenation, which
+    // would have allowed a stored-DOM-XSS if any future backend change
+    // ever echoed user input into an error message. Today the backend
+    // errors are static Python constants but defending here is cheap.
+    b.textContent = "";
+    var msgDiv = document.createElement("div");
+    msgDiv.textContent = msg;
+    b.appendChild(msgDiv);
+    if (fieldErrors && Object.keys(fieldErrors).length) {
+      var ul = document.createElement("ul");
+      Object.keys(fieldErrors).forEach(function (field) {
+        var label = FIELD_LABELS[field] || field;
+        var li = document.createElement("li");
+        var strong = document.createElement("strong");
+        strong.textContent = label + ":";
+        li.appendChild(strong);
+        li.appendChild(document.createTextNode(" " + fieldErrors[field]));
+        ul.appendChild(li);
+      });
+      b.appendChild(ul);
+    }
+    b.classList.add("visible");
+    var first = null;
+    if (fieldErrors) {
+      Object.keys(fieldErrors).forEach(function (field) {
+        var el = document.getElementById(field);
+        if (el) {
+          el.classList.add("has-error");
+          if (!first) first = el;
+        }
+      });
+    }
+    if (first) {
+      first.focus();
+      first.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+  function clearError() {
+    var b = document.getElementById("error-banner");
+    b.textContent = "";
+    b.classList.remove("visible");
+    FIELD_KEYS.forEach(function (key) {
+      var el = document.getElementById(key);
+      if (el) el.classList.remove("has-error");
+    });
+  }
+  // Clear an individual field's red border once the user starts editing it,
+  // and refresh the score-availability preview.
+  function wireFieldErrorClearing() {
+    FIELD_KEYS.forEach(function (key) {
+      var el = document.getElementById(key);
+      if (!el) return;
+      var onChange = function () {
+        el.classList.remove("has-error");
+        renderAvailability();
+      };
+      el.addEventListener("input", onChange);
+      el.addEventListener("change", onChange);
+    });
+  }
+
+  function readNumber(id) {
+    var el = document.getElementById(id);
+    if (!el || el.value === "") return null;
+    var v = parseFloat(el.value);
+    return isNaN(v) ? null : v;
+  }
+  function readSelect(id) {
+    var el = document.getElementById(id);
+    if (!el || el.value === "") return null;
+    return el.value;
+  }
+  function inRange(v, lo, hi) {
+    return v !== null && v >= lo && v <= hi;
+  }
+  function inRangeExclusiveHigh(v, lo, hi) {
+    return v !== null && v >= lo && v < hi;
+  }
+
+  function computeAvailability() {
+    var sex = readSelect("sex");
+    var age = readNumber("age");
+    var sbp = readNumber("systolic_bp");
+    var egfr = readNumber("egfr");
+    var tc = readNumber("total_cholesterol");
+    var hdl = readNumber("hdl_cholesterol");
+    var bmi = readNumber("bmi");
+    var statin = readSelect("statin");
+
+    var commonReasons = [];
+    if (sex === null) commonReasons.push("sex");
+    if (!inRange(age, 30, 79)) commonReasons.push("age (30–79)");
+    if (!inRange(sbp, 90, 200)) commonReasons.push("systolic BP (90–200)");
+    if (egfr === null || egfr <= 0) commonReasons.push("eGFR (> 0)");
+
+    var cvdAscvdReasons = commonReasons.slice();
+    if (!inRange(tc, 130, 320)) cvdAscvdReasons.push("total cholesterol (130–320)");
+    if (!inRange(hdl, 20, 100)) cvdAscvdReasons.push("HDL (20–100)");
+    if (statin === null) cvdAscvdReasons.push("statin status");
+
+    var hfReasons = commonReasons.slice();
+    if (!inRangeExclusiveHigh(bmi, 18.5, 40)) hfReasons.push("BMI (18.5–39.9)");
+
+    var thirty10Restrictions = [];
+    if (age !== null && age > 59) thirty10Restrictions.push("age > 59 (AHA spec)");
+
+    var cvdAscvdOk = cvdAscvdReasons.length === 0;
+    var hfOk = hfReasons.length === 0;
+    var thirtyCvdAscvdOk = cvdAscvdOk && thirty10Restrictions.length === 0;
+    var thirtyHfOk = hfOk && thirty10Restrictions.length === 0;
+
+    var rows = [
+      ["10-year Total CVD", cvdAscvdOk, cvdAscvdReasons],
+      ["10-year ASCVD", cvdAscvdOk, cvdAscvdReasons],
+      ["10-year Heart Failure", hfOk, hfReasons],
+      ["30-year Total CVD", thirtyCvdAscvdOk, cvdAscvdOk ? thirty10Restrictions : cvdAscvdReasons],
+      ["30-year ASCVD", thirtyCvdAscvdOk, cvdAscvdOk ? thirty10Restrictions : cvdAscvdReasons],
+      ["30-year Heart Failure", thirtyHfOk, hfOk ? thirty10Restrictions : hfReasons]
+    ];
+    return rows;
+  }
+
+  function renderAvailability() {
+    var rows = computeAvailability();
+    var html = rows.map(function (r) {
+      var name = r[0], ok = r[1], reasons = r[2];
+      if (ok) {
+        return '<li class="ok"><span class="icon">&#10003;</span>' + name + "</li>";
+      }
+      var why = reasons.length ? '<span class="why">— needs ' + reasons.join(", ") + "</span>" : "";
+      return '<li class="miss"><span class="icon">&times;</span>' + name + why + "</li>";
+    }).join("");
+    document.getElementById("availability-list").innerHTML = html;
+  }
+
+  function explainPartialScores(scores) {
+    // When some scores compute and others don't, tell the user which inputs
+    // would unlock the missing ones. Returns an array of human messages.
+    var notes = [];
+    var ageEl = document.getElementById("age");
+    var ageVal = ageEl ? parseFloat(ageEl.value) : NaN;
+    var allCvdAscvdMissing =
+      scores.risk_10yr_cvd === null && scores.risk_10yr_ascvd === null;
+    var allHfMissing = scores.risk_10yr_hf === null;
+    var thirtyMissing =
+      scores.risk_30yr_cvd === null &&
+      scores.risk_30yr_ascvd === null &&
+      scores.risk_30yr_hf === null;
+
+    if (allCvdAscvdMissing) {
+      notes.push("CVD and ASCVD risks need total cholesterol, HDL, and statin status. Fill in those fields and recalculate.");
+    }
+    if (allHfMissing) {
+      notes.push("Heart Failure risk needs BMI (18.5–39.9 kg/m²). Add a BMI to compute it.");
+    }
+    if (thirtyMissing && !isNaN(ageVal) && ageVal > 59) {
+      notes.push("30-year risks are not computed for ages over 59 (per AHA PREVENT specification).");
+    }
+    return notes;
+  }
+  function setPartialNote(notes) {
+    var box = document.getElementById("partial-note");
+    if (!notes || notes.length === 0) {
+      box.innerHTML = "";
+      box.classList.remove("visible");
+      return;
+    }
+    box.innerHTML = notes.map(function (n) { return "<div>" + n + "</div>"; }).join("");
+    box.classList.add("visible");
+  }
+
+  function fmtPct(v) {
+    if (v === null || v === undefined) return null;
+    if (typeof v !== "number" || isNaN(v)) return null;
+    return v.toFixed(1) + "%";
+  }
+
+  function renderScores(scores) {
+    var ids = [
+      "risk_10yr_cvd", "risk_30yr_cvd",
+      "risk_10yr_ascvd", "risk_30yr_ascvd",
+      "risk_10yr_hf", "risk_30yr_hf"
+    ];
+    ids.forEach(function (key) {
+      var cell = document.querySelector('[data-pct="' + key + '"]');
+      if (!cell) return;
+      var pretty = fmtPct(scores[key]);
+      if (pretty) {
+        cell.textContent = pretty;
+        cell.classList.remove("na");
+      } else {
+        cell.textContent = "—";
+        cell.classList.add("na");
+      }
+    });
+    document.getElementById("results").classList.add("visible");
+  }
+
+  function setSaveStatus(text) {
+    document.getElementById("save-status").textContent = text;
+  }
+
+  function calculate(event) {
+    event.preventDefault();
+    clearError();
+    setSaveStatus("");
+    var btn = document.getElementById("calculate-btn");
+    btn.disabled = true;
+    btn.textContent = "Calculating...";
+
+    var url = "/plugin-io/api/prevent_calculator/calculate?patient_id=" + encodeURIComponent(PATIENT_ID);
+    var payload = readForm();
+    var saveCheckbox = document.getElementById("save_inputs_to_chart");
+    payload.save_inputs_to_chart = !!(saveCheckbox && saveCheckbox.checked);
+    // Send only the fields the user actually edited (or filled in when
+    // there was no chart pre-fill). The backend uses this to avoid
+    // saving duplicate Observations of chart values that already exist.
+    payload.modified_fields = computeModifiedFields();
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) {
+        return r.json().then(function (json) { return { status: r.status, body: json }; });
+      })
+      .then(function (resp) {
+        if (resp.status >= 400) {
+          showError(
+            (resp.body && resp.body.error) || "Calculation failed",
+            resp.body && resp.body.field_errors
+          );
+          return;
+        }
+        var scores = resp.body.scores || {};
+        renderScores(scores);
+        var savedCount = 0;
+        ["risk_10yr_cvd", "risk_10yr_ascvd", "risk_10yr_hf",
+         "risk_30yr_cvd", "risk_30yr_ascvd", "risk_30yr_hf"].forEach(function (k) {
+          if (typeof scores[k] === "number") savedCount++;
+        });
+        var pieces = [];
+        if (savedCount > 0) {
+          pieces.push(savedCount + " score(s) saved to chart as lab observations.");
+        }
+        if (resp.body.model_used === "full") {
+          pieces.push("Used the PREVENT full model (UACR/HbA1c/SDI extension).");
+        }
+        var inputsSaved = (resp.body.inputs_saved || []).length;
+        if (inputsSaved > 0) {
+          pieces.push(inputsSaved + " input value(s) saved to chart for future calculations.");
+        }
+        setSaveStatus(pieces.join(" "));
+        setPartialNote(explainPartialScores(scores));
+      })
+      .catch(function () {
+        showError("Network error - please retry");
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = "Calculate";
+      });
+  }
+
+  // ----- wire up -------------------------------------------------------
+  // The modal is sometimes injected after DOMContentLoaded fires (Canvas
+  // chart-action button flow) and sometimes before it (direct GET).
+  // Without a guard, both the DOMContentLoaded handler AND the
+  // already-fired branch below would run `applyPrefill`,
+  // `wireFieldErrorClearing`, and `renderAvailability` — meaning every
+  // input would get two `change` listeners and every keystroke would
+  // trigger two `renderAvailability` calls. `_initialized` ensures
+  // initialisation runs exactly once regardless of which path wins.
+  var _initialized = false;
+  function init() {
+    if (_initialized) return;
+    _initialized = true;
+    applyPrefill();
+    wireFieldErrorClearing();
+    renderAvailability();
+    var form = document.getElementById("prevent-form");
+    if (form) form.addEventListener("submit", calculate);
+    var resetBtn = document.getElementById("reset-btn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", function () {
+        applyPrefill();
+        document.getElementById("results").classList.remove("visible");
+        setSaveStatus("");
+        setPartialNote([]);
+        clearError();
+      });
+    }
+  }
+
+  if (document.readyState !== "loading") {
+    init();
+  } else {
+    document.addEventListener("DOMContentLoaded", init);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{
+    "sdk_version": "0.35.0",
+    "plugin_version": "0.1.0",
+    "name": "prevent_calculator",
+    "description": "Embeds the AHA PREVENT cardiovascular risk calculator on the chart conditions section. Pulls the latest patient values from the chart, computes 10-year and 30-year risks for ASCVD, Heart Failure, and Total CVD, and saves all six scores back as laboratory Observations.",
+    "components": {
+        "protocols": [
+            {
+                "class": "prevent_calculator.protocols.button:PreventCalculatorButton",
+                "description": "Action button on the chart conditions section that opens the PREVENT calculator modal.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "prevent_calculator.protocols.calculator_api:PreventCalculatorAPI",
+                "description": "SimpleAPI route that renders the calculator modal and computes/saves the PREVENT risk scores.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Patient",
+                        "Observation",
+                        "Condition",
+                        "Medication",
+                        "InterviewQuestionResponse",
+                        "Note"
+                    ],
+                    "write": [
+                        "Observation"
+                    ]
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "prevent_calculator.applications.prevent_app:PreventCalculatorApp",
+                "name": "PREVENT CVD Calculator",
+                "description": "Open the AHA PREVENT cardiovascular risk calculator from the chart Plugins tab.",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
