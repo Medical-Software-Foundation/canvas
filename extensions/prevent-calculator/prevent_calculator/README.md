@@ -154,5 +154,5 @@ tricky natural-log helper used for UACR.
 
 ## Info
 
-This plugin was developed and contributed by [Vicert](https://vicert.com).
+*This plugin was developed and contributed by [Vicert](https://vicert.com).*
 Contact: engineering@vicert.com
