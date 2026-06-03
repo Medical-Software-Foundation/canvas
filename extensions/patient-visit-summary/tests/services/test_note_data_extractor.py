@@ -1,6 +1,6 @@
 """Additional targeted tests for NoteDataExtractor to close coverage gaps.
 
-These complement tests/protocols/test_patient_visit_summary.py (which must not
+These complement tests/handlers/test_patient_visit_summary.py (which must not
 be edited). Each test here targets a specific previously-uncovered branch:
 
   - 81-82:   __init__ DB lookups

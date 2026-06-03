@@ -8,14 +8,14 @@ from uuid import UUID
 import pytest
 from requests import RequestException
 
-from patient_visit_summary.protocols.customize_print import (
+from patient_visit_summary.handlers.customize_print import (
     CustomizePrintAPI,
     CustomizePrintButton,
     _compute_age,
     build_customize_print_context,
 )
 
-_CP = "patient_visit_summary.protocols.customize_print"
+_CP = "patient_visit_summary.handlers.customize_print"
 
 
 # --- CustomizePrintButton ---

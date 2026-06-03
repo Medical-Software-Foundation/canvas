@@ -1,7 +1,7 @@
 """Shared service for extracting all command data from a note.
 
 This class centralizes the DB queries and data formatting logic
-so that multiple UI protocols (Patient Visit Summary, Customize & Print)
+so that multiple UI handlers (Patient Visit Summary, Customize & Print)
 can consume the same data without duplicating queries.
 """
 

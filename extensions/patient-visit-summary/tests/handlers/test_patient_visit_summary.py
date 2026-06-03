@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from patient_visit_summary.protocols.patient_visit_summary import (
+from patient_visit_summary.handlers.patient_visit_summary import (
     PatientVisitSummaryAPI,
     PatientVisitSummaryButton,
 )
@@ -65,9 +65,9 @@ class TestCustomHTMLActionButton:
         handler = CustomHTMLActionButton.__new__(CustomHTMLActionButton)
         assert handler.visible() is True
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.LaunchModalEffect")
-    @patch("patient_visit_summary.protocols.patient_visit_summary.Note")
-    @patch("patient_visit_summary.protocols.patient_visit_summary.log")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.LaunchModalEffect")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.Note")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.log")
     def test_handle_resolves_note_uuid_into_url(self, mock_log, mock_note_cls, mock_modal):
         note = MagicMock()
         note.id = "note-uuid-xyz"
@@ -90,9 +90,9 @@ class TestCustomHTMLActionButton:
         assert "patient_id=patient-123" in url
         assert "&v=" in url  # cache-busting token on the modal URL
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.LaunchModalEffect")
-    @patch("patient_visit_summary.protocols.patient_visit_summary.Note")
-    @patch("patient_visit_summary.protocols.patient_visit_summary.log")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.LaunchModalEffect")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.Note")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.log")
     def test_handle_missing_note_yields_empty_note_id(self, mock_log, mock_note_cls, mock_modal):
         mock_note_cls.objects.filter.return_value.first.return_value = None
         handler = CustomHTMLActionButton.__new__(CustomHTMLActionButton)
@@ -119,7 +119,7 @@ class TestAuthentication:
         handler.secrets = secrets
         return handler
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.SessionCredentials")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.SessionCredentials")
     def test_staff_session_authenticates(self, mock_session_cls, mock_request, mock_secrets):
         mock_session_cls.return_value.logged_in_user = {"id": "staff-1", "type": "Staff"}
         handler = self._make_handler(mock_request, mock_secrets)
@@ -129,7 +129,7 @@ class TestAuthentication:
         assert result is True
         assert mock_session_cls.mock_calls == [call(mock_request)]
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.SessionCredentials")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.SessionCredentials")
     def test_non_staff_session_falls_to_api_key(self, mock_session_cls, mock_request, mock_secrets):
         mock_session_cls.return_value.logged_in_user = {"id": "patient-1", "type": "Patient"}
         mock_request.headers = {"Authorization": "test-secret-key-123"}
@@ -139,7 +139,7 @@ class TestAuthentication:
 
         assert result is True
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.SessionCredentials")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.SessionCredentials")
     def test_invalid_session_falls_to_api_key(self, mock_session_cls, mock_request, mock_secrets):
         from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 
@@ -151,7 +151,7 @@ class TestAuthentication:
 
         assert result is True
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.SessionCredentials")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.SessionCredentials")
     def test_invalid_api_key_rejected(self, mock_session_cls, mock_request, mock_secrets):
         from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 
@@ -163,7 +163,7 @@ class TestAuthentication:
 
         assert result is False
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.SessionCredentials")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.SessionCredentials")
     def test_missing_secret_rejected(self, mock_session_cls, mock_request):
         from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 
@@ -175,7 +175,7 @@ class TestAuthentication:
 
         assert result is False
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.SessionCredentials")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.SessionCredentials")
     def test_missing_auth_header_rejected(self, mock_session_cls, mock_request, mock_secrets):
         from canvas_sdk.handlers.simple_api.exceptions import InvalidCredentialsError
 
@@ -602,8 +602,8 @@ class TestIndex:
         handler.secrets = {"display_timezone": "US/Eastern"}
         return handler
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.render_to_string")
-    @patch("patient_visit_summary.protocols.patient_visit_summary.NoteDataExtractor")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.render_to_string")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.NoteDataExtractor")
     def test_returns_html_response(self, mock_extractor_cls, mock_render, mock_request, mock_patient, mock_note, mock_provider):
         mock_request.query_params = {"patient_id": "p1", "note_id": "n1"}
         mock_extractor = MagicMock()
@@ -623,8 +623,8 @@ class TestIndex:
         response = result[0]
         assert response.status_code == HTTPStatus.OK
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.render_to_string")
-    @patch("patient_visit_summary.protocols.patient_visit_summary.NoteDataExtractor")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.render_to_string")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.NoteDataExtractor")
     def test_falls_back_to_note_provider_when_no_appointment(self, mock_extractor_cls, mock_render, mock_request, mock_patient, mock_note, mock_provider):
         mock_request.query_params = {"patient_id": "p1", "note_id": "n1"}
         mock_extractor = MagicMock()
@@ -641,8 +641,8 @@ class TestIndex:
 
         assert len(result) == 1
 
-    @patch("patient_visit_summary.protocols.patient_visit_summary.render_to_string")
-    @patch("patient_visit_summary.protocols.patient_visit_summary.NoteDataExtractor")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.render_to_string")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.NoteDataExtractor")
     def test_unstructured_rfv_uses_comment(self, mock_extractor_cls, mock_render, mock_request, mock_patient, mock_note, mock_provider):
         mock_request.query_params = {"patient_id": "p1", "note_id": "n1"}
         mock_extractor = MagicMock()
@@ -970,7 +970,7 @@ class TestQuestionnaireNameFiltering:
 
 
 class TestGetCss:
-    @patch("patient_visit_summary.protocols.patient_visit_summary.render_to_string")
+    @patch("patient_visit_summary.handlers.patient_visit_summary.render_to_string")
     def test_returns_css_response(self, mock_render):
         mock_render.return_value = "body { color: red; }"
         handler = CustomerHTMLApi.__new__(CustomerHTMLApi)

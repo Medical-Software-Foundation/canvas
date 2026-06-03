@@ -65,14 +65,14 @@ text, preview, and generate the finalized PDF that is attached to the chart.
 
 The plugin declares four components in `CANVAS_MANIFEST.json`:
 
-1. **`PatientVisitSummaryButton`** (`protocols/patient_visit_summary.py`) — note-header
+1. **`PatientVisitSummaryButton`** (`handlers/patient_visit_summary.py`) — note-header
    `ActionButton` that launches the summary modal.
-2. **`PatientVisitSummaryAPI`** (`protocols/patient_visit_summary.py`) — SimpleAPI that
+2. **`PatientVisitSummaryAPI`** (`handlers/patient_visit_summary.py`) — SimpleAPI that
    fetches the note's clinical data (via `services/note_data_extractor.py`) and
    renders `templates/patient_visit_summary.html`.
-3. **`CustomizePrintButton`** (`protocols/customize_print.py`) — note-footer
+3. **`CustomizePrintButton`** (`handlers/customize_print.py`) — note-footer
    `ActionButton` that launches the customize/print panel.
-4. **`CustomizePrintAPI`** (`protocols/customize_print.py`) — SimpleAPI that renders the
+4. **`CustomizePrintAPI`** (`handlers/customize_print.py`) — SimpleAPI that renders the
    customize UI, persists the selection to the `CustomizedNotePrint` custom
    model, generates the PDF, and creates the FHIR `DocumentReference`.
 
