@@ -2,7 +2,7 @@
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
-from canvas_sdk.handlers.simple_api import SessionCredentials, SimpleAPIRoute
+from canvas_sdk.handlers.simple_api import SimpleAPIRoute, StaffSessionAuthMixin
 from canvas_sdk.v1.data.claim import Claim
 from logger import log
 
@@ -42,13 +42,10 @@ def _get_posting_info(claim: Claim) -> dict[str, dict]:
     return info
 
 
-class CandidClaimDetailAPI(SimpleAPIRoute):
+class CandidClaimDetailAPI(StaffSessionAuthMixin, SimpleAPIRoute):
     """Serve Candid timeline data and trigger syncs for a single claim."""
 
     PATH = "/claim-detail"
-
-    def authenticate(self, credentials: SessionCredentials) -> bool:
-        return bool(credentials.logged_in_user.get("id"))
 
     def get(self) -> list[Response | Effect]:
         """Return Candid metadata timeline for a claim."""

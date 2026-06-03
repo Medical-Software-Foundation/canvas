@@ -4,7 +4,7 @@ from django.db.models import Q
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
-from canvas_sdk.handlers.simple_api import SessionCredentials, SimpleAPIRoute
+from canvas_sdk.handlers.simple_api import SimpleAPIRoute, StaffSessionAuthMixin
 from canvas_sdk.v1.data.claim import Claim
 
 from candid.effect_helpers import (
@@ -19,13 +19,10 @@ from candid.effect_helpers import (
 PAGE_SIZE = 50
 
 
-class CandidDashboardAPI(SimpleAPIRoute):
+class CandidDashboardAPI(StaffSessionAuthMixin, SimpleAPIRoute):
     """List Candid-submitted claims with status for the dashboard application."""
 
     PATH = "/dashboard"
-
-    def authenticate(self, credentials: SessionCredentials) -> bool:
-        return bool(credentials.logged_in_user.get("id"))
 
     def get(self) -> list[Response | Effect]:
         params = self.request.query_params
