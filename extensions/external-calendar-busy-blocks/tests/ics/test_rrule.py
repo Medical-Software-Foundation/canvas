@@ -113,3 +113,53 @@ def test_expand_yearly_bymonth_bymonthday() -> None:
     assert [(o.year, o.month, o.day) for o in occurrences] == [
         (2026, 12, 25), (2027, 12, 25),
     ]
+
+
+def test_expand_daily_historical_dtstart_still_yields_window() -> None:
+    # Regression: a daily event whose DTSTART is years before the window must
+    # still yield the in-window occurrences. The cap bounds YIELDED events, not
+    # candidates considered — otherwise the cap is burned on pre-window days and
+    # zero events reach the schedule.
+    rule = parse_rrule("FREQ=DAILY")
+    dtstart = datetime(2022, 1, 1, 14, 0, tzinfo=timezone.utc)
+    window_start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    window_end = datetime(2026, 6, 8, tzinfo=timezone.utc)
+    occurrences = list(
+        expand_rrule(rule, dtstart, window_start, window_end, cap=1000)
+    )
+    # 6/1 14:00 .. 6/7 14:00 -> 7 occurrences inside the window.
+    assert [o.day for o in occurrences] == [1, 2, 3, 4, 5, 6, 7]
+
+
+def test_expand_weekly_historical_dtstart_still_yields_window() -> None:
+    rule = parse_rrule("FREQ=WEEKLY;BYDAY=MO,WE,FR")
+    dtstart = datetime(2022, 1, 3, 9, 0, tzinfo=timezone.utc)  # a Monday in 2022
+    window_start = datetime(2026, 6, 1, tzinfo=timezone.utc)   # Monday 2026-06-01
+    window_end = datetime(2026, 6, 8, tzinfo=timezone.utc)
+    occurrences = list(
+        expand_rrule(rule, dtstart, window_start, window_end, cap=1000)
+    )
+    # Mon 6/1, Wed 6/3, Fri 6/5 of 2026.
+    assert [o.day for o in occurrences] == [1, 3, 5]
+
+
+def test_expand_cap_limits_yielded_not_candidates() -> None:
+    # With a historical DTSTART and a small cap, the cap must limit how many
+    # in-window events are yielded, not be consumed by pre-window candidates.
+    rule = parse_rrule("FREQ=DAILY")
+    dtstart = datetime(2020, 1, 1, 9, 0, tzinfo=timezone.utc)
+    window_start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    window_end = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    occurrences = list(expand_rrule(rule, dtstart, window_start, window_end, cap=5))
+    assert len(occurrences) == 5
+    assert occurrences[0].day == 1 and occurrences[0].month == 6
+
+
+def test_expand_invalid_bymonth_terminates() -> None:
+    # A BYMONTH that never matches must not loop forever; it should simply
+    # yield nothing and return.
+    rule = parse_rrule("FREQ=MONTHLY;BYMONTH=13")
+    dtstart = datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
+    window_end = datetime(2027, 6, 1, tzinfo=timezone.utc)
+    occurrences = list(expand_rrule(rule, dtstart, dtstart, window_end, cap=1000))
+    assert occurrences == []

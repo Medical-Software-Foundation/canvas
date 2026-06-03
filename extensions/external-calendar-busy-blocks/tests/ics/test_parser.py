@@ -288,3 +288,33 @@ def test_parse_bad_tzid_drops_only_that_event(ics_fixture) -> None:
     assert len(events) == 1
     assert events[0].uid == "good@google.com"
     assert events[0].starts_at == datetime(2026, 6, 16, 14, 0, tzinfo=timezone.utc)
+
+
+def test_parse_keeps_in_progress_recurring_instance(ics_fixture) -> None:
+    # Regression: a recurring instance currently in progress (started before
+    # `now`, ends after `now`) must still be yielded, mirroring the
+    # non-recurring path. Otherwise the cron's diff deletes the Busy block
+    # mid-meeting. Event is Mondays 09:00-10:00 UTC; now is 09:15 on a Monday.
+    events = parse_ics(
+        ics_fixture("weekly_in_progress.ics"),
+        now=datetime(2026, 6, 1, 9, 15, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    first = min(events, key=lambda e: e.starts_at)
+    assert first.starts_at == datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc)
+    assert first.ends_at == datetime(2026, 6, 1, 10, 0, tzinfo=timezone.utc)
+
+
+def test_parse_drops_already_ended_recurring_instance(ics_fixture) -> None:
+    # The complement: once an instance has fully ended, it must NOT be yielded.
+    # now is 10:30 on the first Monday, after that day's 09:00-10:00 instance.
+    events = parse_ics(
+        ics_fixture("weekly_in_progress.ics"),
+        now=datetime(2026, 6, 1, 10, 30, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    starts = {e.starts_at for e in events}
+    # The 6/1 09:00-10:00 instance has fully ended -> excluded.
+    assert datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc) not in starts
+    # The next Monday (6/8) is the earliest remaining instance.
+    assert min(starts) == datetime(2026, 6, 8, 9, 0, tzinfo=timezone.utc)

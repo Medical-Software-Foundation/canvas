@@ -4,6 +4,7 @@ from canvas_sdk.effects.simple_api import HTMLResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
+from external_calendar_busy_blocks.auth import canonical_staff_id
 from external_calendar_busy_blocks.data.models import StaffCalendarFeed
 
 
@@ -12,7 +13,7 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/pages/config")
     def render(self) -> list[Response]:
-        staff_id = self.request.headers.get("canvas-logged-in-user-id")
+        staff_id = canonical_staff_id(self.request.headers)
         feed = StaffCalendarFeed.objects.filter(staff_id=staff_id).first() if staff_id else None
         html = render_to_string(
             "templates/config.html",

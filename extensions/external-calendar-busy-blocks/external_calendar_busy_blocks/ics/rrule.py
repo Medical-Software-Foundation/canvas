@@ -22,6 +22,11 @@ class RRuleUnsupported(Exception):
 SUPPORTED_FREQS = {"DAILY", "WEEKLY", "MONTHLY", "YEARLY"}
 UNSUPPORTED_PARTS = {"BYSETPOS", "BYWEEKNO", "BYYEARDAY", "BYHOUR", "BYMINUTE", "BYSECOND"}
 
+# Backstop against pathological inputs (e.g. a DTSTART centuries before the
+# window, or a BYMONTH that never matches). Normal termination is via window_end
+# or rule.count/until; this only guards against runaway iteration.
+ITER_SAFETY_CAP = 200_000
+
 WEEKDAY_TO_NUM = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
 
@@ -117,9 +122,11 @@ def expand_rrule(
 ):
     """Yield occurrences of dtstart within [window_start, window_end).
 
-    Always stops at min(rule.count, cap, end-of-window, rule.until).
-    COUNT is consumed absolutely (per RFC 5545): occurrences outside the
-    window still tick the count even if not yielded.
+    Termination: stops at the earliest of window_end, rule.until, the RFC 5545
+    COUNT (counted over ALL occurrences from DTSTART, in-window or not), or the
+    yield cap. `cap` bounds the number of YIELDED in-window events — it is not
+    consumed by pre-window candidates, so a DTSTART years before the window
+    still yields its in-window occurrences.
     """
     if rule.freq == "DAILY":
         yield from _expand_daily(rule, dtstart, window_start, window_end, cap)
@@ -139,9 +146,12 @@ def _expand_daily(
     cap: int,
 ):
     cur = dtstart
-    produced = 0
-    while produced < cap:
-        if rule.count is not None and produced >= rule.count:
+    occurrences = 0  # all occurrences from DTSTART; gates RFC COUNT
+    yielded = 0      # in-window emissions; gates the cap
+    iterations = 0
+    while iterations < ITER_SAFETY_CAP:
+        iterations += 1
+        if rule.count is not None and occurrences >= rule.count:
             return
         if rule.until is not None and cur > rule.until:
             return
@@ -149,7 +159,10 @@ def _expand_daily(
             return
         if cur >= window_start:
             yield cur
-        produced += 1
+            yielded += 1
+            if yielded >= cap:
+                return
+        occurrences += 1
         cur = cur + timedelta(days=rule.interval)
 
 
@@ -173,15 +186,18 @@ def _expand_weekly(
         microsecond=0,
     )
 
-    produced = 0
+    occurrences = 0  # all occurrences from DTSTART; gates RFC COUNT
+    yielded = 0      # in-window emissions; gates the cap
+    iterations = 0
     week_no = 0
-    while produced < cap:
+    while iterations < ITER_SAFETY_CAP:
+        iterations += 1
         for wd in weekdays:
             moment = week_start + timedelta(weeks=week_no, days=wd)
             if moment < dtstart:
                 # Pre-DTSTART candidates are not occurrences; don't tick COUNT.
                 continue
-            if rule.count is not None and produced >= rule.count:
+            if rule.count is not None and occurrences >= rule.count:
                 return
             if rule.until is not None and moment > rule.until:
                 return
@@ -189,9 +205,10 @@ def _expand_weekly(
                 return
             if moment >= window_start:
                 yield moment
-            produced += 1
-            if produced >= cap:
-                return
+                yielded += 1
+                if yielded >= cap:
+                    return
+            occurrences += 1
         week_no += rule.interval
         next_week = week_start + timedelta(weeks=week_no)
         if next_week >= window_end:
@@ -252,8 +269,15 @@ def _expand_monthly(
     cap: int,
 ):
     cursor_year, cursor_month = dtstart.year, dtstart.month
-    produced = 0
-    while produced < cap:
+    occurrences = 0  # all occurrences from DTSTART; gates RFC COUNT
+    yielded = 0      # in-window emissions; gates the cap
+    iterations = 0
+    while iterations < ITER_SAFETY_CAP:
+        iterations += 1
+        # Terminate at the top so the BYMONTH-skip path below can't spin forever
+        # on a BYMONTH that never matches.
+        if datetime(cursor_year, cursor_month, 1, tzinfo=dtstart.tzinfo) >= window_end:
+            return
         if rule.bymonth and cursor_month not in rule.bymonth:
             cursor_year, cursor_month = _next_month(cursor_year, cursor_month, rule.interval)
             continue
@@ -265,7 +289,7 @@ def _expand_monthly(
             )
             if moment < dtstart:
                 continue
-            if rule.count is not None and produced >= rule.count:
+            if rule.count is not None and occurrences >= rule.count:
                 return
             if rule.until is not None and moment > rule.until:
                 return
@@ -273,12 +297,11 @@ def _expand_monthly(
                 return
             if moment >= window_start:
                 yield moment
-            produced += 1
-            if produced >= cap:
-                return
+                yielded += 1
+                if yielded >= cap:
+                    return
+            occurrences += 1
         cursor_year, cursor_month = _next_month(cursor_year, cursor_month, rule.interval)
-        if datetime(cursor_year, cursor_month, 1, tzinfo=dtstart.tzinfo) >= window_end:
-            return
 
 
 def _expand_yearly(
@@ -289,8 +312,13 @@ def _expand_yearly(
     cap: int,
 ):
     cursor_year = dtstart.year
-    produced = 0
-    while produced < cap:
+    occurrences = 0  # all occurrences from DTSTART; gates RFC COUNT
+    yielded = 0      # in-window emissions; gates the cap
+    iterations = 0
+    while iterations < ITER_SAFETY_CAP:
+        iterations += 1
+        if datetime(cursor_year, 1, 1, tzinfo=dtstart.tzinfo) >= window_end:
+            return
         months = rule.bymonth if rule.bymonth else [dtstart.month]
         for m in sorted(set(months)):
             days = _candidate_days_in_month(rule, cursor_year, m, dtstart) or [dtstart.day]
@@ -305,7 +333,7 @@ def _expand_yearly(
                     continue
                 if moment < dtstart:
                     continue
-                if rule.count is not None and produced >= rule.count:
+                if rule.count is not None and occurrences >= rule.count:
                     return
                 if rule.until is not None and moment > rule.until:
                     return
@@ -313,9 +341,10 @@ def _expand_yearly(
                     return
                 if moment >= window_start:
                     yield moment
-                produced += 1
-                if produced >= cap:
-                    return
+                    yielded += 1
+                    if yielded >= cap:
+                        return
+                occurrences += 1
         cursor_year += rule.interval
         if datetime(cursor_year, 1, 1, tzinfo=dtstart.tzinfo) >= window_end:
             return

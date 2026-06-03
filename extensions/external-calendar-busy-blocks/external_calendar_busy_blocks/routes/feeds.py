@@ -6,6 +6,7 @@ from canvas_sdk.effects.calendar import Event
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
+from external_calendar_busy_blocks.auth import canonical_staff_id
 from external_calendar_busy_blocks.data.models import (
     ImportedEvent,
     StaffCalendarFeed,
@@ -77,7 +78,7 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         return [*effects, JSONResponse({"status": "disconnected"}, status_code=200)]
 
     def _logged_in_staff_id(self) -> str | None:
-        return self.request.headers.get("canvas-logged-in-user-id")
+        return canonical_staff_id(self.request.headers)
 
     _HTTPS_URL_REGEX = re.compile(r"^https://[^/?#\s]+", re.IGNORECASE)
 

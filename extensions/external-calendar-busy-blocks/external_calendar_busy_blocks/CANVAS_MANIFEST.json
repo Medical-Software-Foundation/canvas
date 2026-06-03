@@ -40,5 +40,9 @@
     "references": [],
     "license": "MIT",
     "diagram": false,
-    "readme": "../README.md"
+    "readme": "../README.md",
+    "custom_data": {
+        "namespace": "canvas_medical__external_calendar_busy_blocks",
+        "access": "read_write"
+    }
 }

@@ -79,14 +79,16 @@ def test_post_creates_feed_when_valid() -> None:
         api = _api_with_request(
             "POST",
             b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics"}',
-            logged_in_staff="staff-abc",
+            # Header arrives as a UUID with dashes; must be canonicalized to the
+            # dashless form that matches Staff.id (uuid4().hex).
+            logged_in_staff="00000000-0000-0000-0000-000000000001",
         )
         responses = api.create_feed()
 
     assert responses[0].status_code == 200
     MockFeed.assert_called_once()
     kwargs = MockFeed.call_args.kwargs
-    assert kwargs["staff_id"] == "staff-abc"
+    assert kwargs["staff_id"] == "00000000000000000000000000000001"
     assert kwargs["ics_url"] == "https://calendar.google.com/calendar/ical/me/basic.ics"
 
 
@@ -103,10 +105,11 @@ def test_post_ignores_staff_id_in_body() -> None:
             "POST",
             b'{"ics_url":"https://outlook.office365.com/owa/calendar/x/calendar.ics",'
             b'"staff_id":"impersonated"}',
-            logged_in_staff="staff-real",
+            logged_in_staff="00000000-0000-0000-0000-000000000002",
         )
         api.create_feed()
-    assert MockFeed.call_args.kwargs["staff_id"] == "staff-real"
+    # Session header wins (canonicalized), body staff_id ignored.
+    assert MockFeed.call_args.kwargs["staff_id"] == "00000000000000000000000000000002"
 
 
 def test_delete_idempotent_when_no_feed() -> None:

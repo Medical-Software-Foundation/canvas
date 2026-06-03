@@ -254,10 +254,19 @@ def _parse_base_event(
 
     exdates = _collect_exdates(props, default_tz)
 
+    # Expand from `now - duration` so an occurrence that is currently in
+    # progress (started before now, ends after now) is still produced — the
+    # same guarantee the non-recurring branch gives via `ends.moment <= now`.
+    # Without this, the cron's diff would delete an in-progress recurrence's
+    # Busy block mid-meeting (its row survives the ends_at>=now filter but the
+    # parser wouldn't re-emit it). Each yielded moment is then filtered to drop
+    # instances that have already fully ended.
     out: list[ParsedEvent] = []
     for moment in expand_rrule(
-        rule, starts.moment, now, window_end, cap=RRULE_CAP_PER_VEVENT,
+        rule, starts.moment, now - duration, window_end, cap=RRULE_CAP_PER_VEVENT,
     ):
+        if moment + duration <= now:
+            continue
         if moment in exdates:
             continue
         rid_key = _format_recurrence_id(moment, starts.is_all_day)
