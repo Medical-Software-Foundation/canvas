@@ -168,86 +168,128 @@ def parse_ics(
         uid_prop = _find_property(props, "UID")
         rid_prop = _find_property(props, "RECURRENCE-ID")
         if uid_prop and rid_prop:
-            overrides[(uid_prop[2], rid_prop[2])] = props
+            # Normalize the RECURRENCE-ID key the same way the expansion lookup
+            # does, so feeds that express RECURRENCE-ID in a local TZID (Google,
+            # Outlook, Apple) match the UTC-normalized key produced during
+            # expansion. Indexing by the raw string would only match feeds that
+            # happen to emit UTC Zulu.
+            try:
+                rid_dv = parse_ics_datetime(rid_prop[2], rid_prop[1], default_tz)
+            except IcsParseError as exc:
+                log.warning(
+                    "Dropping RECURRENCE-ID override uid=%s: %s", uid_prop[2], exc
+                )
+                continue
+            rid_key = _format_recurrence_id(rid_dv.moment, rid_dv.is_all_day)
+            overrides[(uid_prop[2], rid_key)] = props
         else:
             base_events.append(props)
 
     out: list[ParsedEvent] = []
     for props in base_events:
-        if _should_skip(props):
-            continue
         uid_prop = _find_property(props, "UID")
-        dtstart_prop = _find_property(props, "DTSTART")
-        dtend_prop = _find_property(props, "DTEND")
-        if not uid_prop or not dtstart_prop or not dtend_prop:
-            continue
-
-        starts = parse_ics_datetime(dtstart_prop[2], dtstart_prop[1], default_tz)
-        ends = parse_ics_datetime(dtend_prop[2], dtend_prop[1], default_tz)
-        duration = ends.moment - starts.moment
-
-        seq_prop = _find_property(props, "SEQUENCE")
-        sequence = int(seq_prop[2]) if seq_prop else 0
-
-        rrule_prop = _find_property(props, "RRULE")
-        if rrule_prop is None:
-            if ends.moment <= now or starts.moment >= window_end:
-                continue
-            out.append(
-                ParsedEvent(
-                    uid=uid_prop[2],
-                    recurrence_id=None,
-                    starts_at=starts.moment,
-                    ends_at=ends.moment,
-                    is_all_day=starts.is_all_day,
-                    sequence=sequence,
-                )
-            )
-            continue
-
+        # Isolate per-VEVENT failures: a single event with an unrecognized TZID
+        # (e.g. Outlook's "Eastern Standard Time") or malformed date must not
+        # discard every other valid event in the feed. Drop it and continue,
+        # matching the RRuleUnsupported handling below.
         try:
-            rule = parse_rrule(rrule_prop[2])
-        except RRuleUnsupported as exc:
-            log.warning("Dropping VEVENT uid=%s: %s", uid_prop[2], exc)
+            out.extend(
+                _parse_base_event(props, overrides, default_tz, now, window_end)
+            )
+        except IcsParseError as exc:
+            uid = uid_prop[2] if uid_prop else "<unknown>"
+            log.warning("Dropping VEVENT uid=%s: %s", uid, exc)
             continue
+    return out
 
-        exdates = _collect_exdates(props, default_tz)
 
-        for moment in expand_rrule(
-            rule, starts.moment, now, window_end, cap=RRULE_CAP_PER_VEVENT,
-        ):
-            if moment in exdates:
+def _parse_base_event(
+    props: list[Property],
+    overrides: dict[tuple[str, str], list[Property]],
+    default_tz: str,
+    now: datetime,
+    window_end: datetime,
+) -> list[ParsedEvent]:
+    """Expand one base VEVENT into its in-window ParsedEvents.
+
+    Raises IcsParseError on unparseable dates/timezones so the caller can drop
+    just this event. Returns an empty list for events that are filtered out
+    (skipped status, missing fields, unsupported recurrence, out of window).
+    """
+    if _should_skip(props):
+        return []
+    uid_prop = _find_property(props, "UID")
+    dtstart_prop = _find_property(props, "DTSTART")
+    dtend_prop = _find_property(props, "DTEND")
+    if not uid_prop or not dtstart_prop or not dtend_prop:
+        return []
+
+    starts = parse_ics_datetime(dtstart_prop[2], dtstart_prop[1], default_tz)
+    ends = parse_ics_datetime(dtend_prop[2], dtend_prop[1], default_tz)
+    duration = ends.moment - starts.moment
+
+    seq_prop = _find_property(props, "SEQUENCE")
+    sequence = int(seq_prop[2]) if seq_prop else 0
+
+    rrule_prop = _find_property(props, "RRULE")
+    if rrule_prop is None:
+        if ends.moment <= now or starts.moment >= window_end:
+            return []
+        return [
+            ParsedEvent(
+                uid=uid_prop[2],
+                recurrence_id=None,
+                starts_at=starts.moment,
+                ends_at=ends.moment,
+                is_all_day=starts.is_all_day,
+                sequence=sequence,
+            )
+        ]
+
+    try:
+        rule = parse_rrule(rrule_prop[2])
+    except RRuleUnsupported as exc:
+        log.warning("Dropping VEVENT uid=%s: %s", uid_prop[2], exc)
+        return []
+
+    exdates = _collect_exdates(props, default_tz)
+
+    out: list[ParsedEvent] = []
+    for moment in expand_rrule(
+        rule, starts.moment, now, window_end, cap=RRULE_CAP_PER_VEVENT,
+    ):
+        if moment in exdates:
+            continue
+        rid_key = _format_recurrence_id(moment, starts.is_all_day)
+        override_props = overrides.get((uid_prop[2], rid_key))
+        if override_props is not None:
+            if _should_skip(override_props):
                 continue
-            rid_key = _format_recurrence_id(moment, starts.is_all_day)
-            override_props = overrides.get((uid_prop[2], rid_key))
-            if override_props is not None:
-                if _should_skip(override_props):
-                    continue
-                ovs_prop = _find_property(override_props, "DTSTART")
-                ove_prop = _find_property(override_props, "DTEND")
-                if ovs_prop is None or ove_prop is None:
-                    continue
-                ovs = parse_ics_datetime(ovs_prop[2], ovs_prop[1], default_tz)
-                ove = parse_ics_datetime(ove_prop[2], ove_prop[1], default_tz)
-                out.append(
-                    ParsedEvent(
-                        uid=uid_prop[2],
-                        recurrence_id=rid_key,
-                        starts_at=ovs.moment,
-                        ends_at=ove.moment,
-                        is_all_day=ovs.is_all_day,
-                        sequence=sequence,
-                    )
-                )
+            ovs_prop = _find_property(override_props, "DTSTART")
+            ove_prop = _find_property(override_props, "DTEND")
+            if ovs_prop is None or ove_prop is None:
                 continue
+            ovs = parse_ics_datetime(ovs_prop[2], ovs_prop[1], default_tz)
+            ove = parse_ics_datetime(ove_prop[2], ove_prop[1], default_tz)
             out.append(
                 ParsedEvent(
                     uid=uid_prop[2],
                     recurrence_id=rid_key,
-                    starts_at=moment,
-                    ends_at=moment + duration,
-                    is_all_day=starts.is_all_day,
+                    starts_at=ovs.moment,
+                    ends_at=ove.moment,
+                    is_all_day=ovs.is_all_day,
                     sequence=sequence,
                 )
             )
+            continue
+        out.append(
+            ParsedEvent(
+                uid=uid_prop[2],
+                recurrence_id=rid_key,
+                starts_at=moment,
+                ends_at=moment + duration,
+                is_all_day=starts.is_all_day,
+                sequence=sequence,
+            )
+        )
     return out

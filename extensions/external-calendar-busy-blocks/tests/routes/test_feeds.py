@@ -55,11 +55,14 @@ def test_post_rejects_non_ics_body() -> None:
         from external_calendar_busy_blocks.http.fetcher import FetchOk
         mock_fetch.return_value = FetchOk(body=b"<html>not ics</html>", etag=None, last_modified=None)
         api = _api_with_request(
-            "POST", b'{"ics_url":"https://x.com/x.ics"}',
+            "POST",
+            b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics"}',
             logged_in_staff="staff-abc",
         )
         responses = api.create_feed()
     assert responses[0].status_code == 400
+    # Reached the body-probe stage (host was allowlisted) and rejected the HTML.
+    mock_fetch.assert_called_once()
 
 
 def test_post_creates_feed_when_valid() -> None:
@@ -74,7 +77,8 @@ def test_post_creates_feed_when_valid() -> None:
         )
         MockFeed.objects.filter.return_value.first.return_value = None
         api = _api_with_request(
-            "POST", b'{"ics_url":"https://x.com/x.ics"}',
+            "POST",
+            b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics"}',
             logged_in_staff="staff-abc",
         )
         responses = api.create_feed()
@@ -83,7 +87,7 @@ def test_post_creates_feed_when_valid() -> None:
     MockFeed.assert_called_once()
     kwargs = MockFeed.call_args.kwargs
     assert kwargs["staff_id"] == "staff-abc"
-    assert kwargs["ics_url"] == "https://x.com/x.ics"
+    assert kwargs["ics_url"] == "https://calendar.google.com/calendar/ical/me/basic.ics"
 
 
 def test_post_ignores_staff_id_in_body() -> None:
@@ -97,7 +101,8 @@ def test_post_ignores_staff_id_in_body() -> None:
         MockFeed.objects.filter.return_value.first.return_value = None
         api = _api_with_request(
             "POST",
-            b'{"ics_url":"https://x.com/x.ics","staff_id":"impersonated"}',
+            b'{"ics_url":"https://outlook.office365.com/owa/calendar/x/calendar.ics",'
+            b'"staff_id":"impersonated"}',
             logged_in_staff="staff-real",
         )
         api.create_feed()
@@ -130,3 +135,60 @@ def test_delete_removes_feed_and_emits_delete_effects() -> None:
     effects_emitted = [r for r in responses if hasattr(r, "type")]
     assert len(effects_emitted) == 2
     feed.delete.assert_called_once()
+
+
+# --- SSRF: host allowlist -----------------------------------------------------
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://169.254.169.254/latest/meta-data/",  # cloud metadata
+        "https://127.0.0.1/x.ics",                     # loopback
+        "https://10.0.0.5/x.ics",                      # RFC1918
+        "https://192.168.1.1/x.ics",                   # RFC1918
+        "https://localhost/x.ics",                     # internal name
+        "https://internal-service.corp/x.ics",         # arbitrary internal host
+        "https://evil.com/x.ics",                      # arbitrary public host
+        "https://calendar.google.com.evil.com/x.ics",  # suffix-spoof attempt
+        "https://notgoogle.com/x.ics",
+    ],
+)
+def test_post_rejects_disallowed_hosts(url) -> None:
+    """SSRF guard: only known calendar-provider hosts may be fetched."""
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed"),
+    ):
+        body = ('{"ics_url":"' + url + '"}').encode()
+        api = _api_with_request("POST", body, logged_in_staff="staff-abc")
+        responses = api.create_feed()
+    assert responses[0].status_code == 400
+    # The fetch must never be issued for a disallowed host.
+    mock_fetch.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://calendar.google.com/calendar/ical/me/basic.ics",
+        "https://outlook.office365.com/owa/calendar/x/calendar.ics",
+        "https://outlook.live.com/owa/calendar/x/calendar.ics",
+        "https://p31-caldav.icloud.com/published/2/x",
+        "https://CALENDAR.GOOGLE.COM/calendar/ical/me/basic.ics",  # case-insensitive
+    ],
+)
+def test_post_accepts_allowlisted_hosts(url) -> None:
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+    ):
+        from external_calendar_busy_blocks.http.fetcher import FetchOk
+        mock_fetch.return_value = FetchOk(
+            body=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", etag=None, last_modified=None
+        )
+        MockFeed.objects.filter.return_value.first.return_value = None
+        body = ('{"ics_url":"' + url + '"}').encode()
+        api = _api_with_request("POST", body, logged_in_staff="staff-abc")
+        responses = api.create_feed()
+    assert responses[0].status_code == 200
+    mock_fetch.assert_called_once()

@@ -82,7 +82,9 @@ def fetch_feed(
         headers["If-Modified-Since"] = last_modified
 
     try:
-        response = Http().get(url, headers=headers, timeout=30)
+        # canvas_sdk's Http.get takes only (url, headers); it enforces its own
+        # request timeout internally. Passing timeout= raises TypeError.
+        response = Http().get(url, headers=headers)
     except Exception as exc:  # noqa: BLE001 — surface all transient errors uniformly
         return TransientError(reason=f"{type(exc).__name__}: {exc}")
 

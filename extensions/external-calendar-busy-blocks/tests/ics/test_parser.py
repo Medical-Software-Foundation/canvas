@@ -255,3 +255,36 @@ def test_parse_oversized_rrule_capped_at_1000(ics_fixture) -> None:
         lookahead_days=3650,  # huge window to remove that constraint
     )
     assert len(events) == 1000
+
+
+def test_parse_recurrence_id_override_with_tzid(ics_fixture) -> None:
+    # Regression: when the feed expresses RECURRENCE-ID in a local TZID (as
+    # Google/Outlook/Apple all do), the override must still apply. The base
+    # event is Mondays 10:00 America/New_York (EDT = UTC-4 in June -> 14:00 UTC);
+    # the 6/8 instance is moved to 12:00 ET (16:00 UTC).
+    events = parse_ics(
+        ics_fixture("recurrence_id_override_tzid.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    by_day = {e.starts_at.day: e for e in events}
+    assert set(by_day.keys()) == {1, 8, 15}
+    # The 6/8 instance was overridden from 10:00 ET (14:00 UTC) to 12:00 ET (16:00 UTC).
+    assert by_day[8].starts_at == datetime(2026, 6, 8, 16, 0, tzinfo=timezone.utc)
+    # Unmodified instances keep the base 14:00 UTC time.
+    assert by_day[1].starts_at == datetime(2026, 6, 1, 14, 0, tzinfo=timezone.utc)
+    assert by_day[15].starts_at == datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc)
+
+
+def test_parse_bad_tzid_drops_only_that_event(ics_fixture) -> None:
+    # Regression: an unrecognized TZID (Outlook's "Eastern Standard Time") on
+    # one VEVENT must not discard the rest of the feed. The good Google event
+    # should still parse.
+    events = parse_ics(
+        ics_fixture("bad_tzid_plus_good.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    assert len(events) == 1
+    assert events[0].uid == "good@google.com"
+    assert events[0].starts_at == datetime(2026, 6, 16, 14, 0, tzinfo=timezone.utc)

@@ -80,3 +80,16 @@ def test_fetch_exception_returns_transient() -> None:
         MockHttp.return_value.get.side_effect = RuntimeError("network down")
         result = fetch_feed("https://example.com/x.ics", etag=None, last_modified=None)
     assert isinstance(result, TransientError)
+
+
+def test_fetch_calls_get_with_only_url_and_headers() -> None:
+    # Regression: canvas_sdk's Http.get(url, headers=...) takes no `timeout`
+    # kwarg. Passing one raises TypeError at runtime (swallowed into a
+    # TransientError), silently breaking every real fetch. Lock the call shape.
+    response = MagicMock(status_code=200, content=b"BEGIN:VCALENDAR\r\n", headers={})
+    with patch("external_calendar_busy_blocks.http.fetcher.Http") as MockHttp:
+        MockHttp.return_value.get.return_value = response
+        fetch_feed("https://example.com/x.ics", etag=None, last_modified=None)
+    _, kwargs = MockHttp.return_value.get.call_args
+    assert "timeout" not in kwargs
+    assert set(kwargs) == {"headers"}

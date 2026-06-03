@@ -30,6 +30,12 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         url = (body.get("ics_url") or "").strip()
         if not self._is_https_url(url):
             return [JSONResponse({"error": "ICS URL must be HTTPS"}, status_code=400)]
+        if not self._is_allowed_host(url):
+            return [JSONResponse(
+                {"error": "ICS URL host is not a supported calendar provider "
+                          "(Google, Outlook/Office 365, or Apple iCloud)"},
+                status_code=400,
+            )]
 
         # Probe: must respond with something that starts with BEGIN:VCALENDAR
         result = fetch_feed(url, etag=None, last_modified=None)
@@ -75,6 +81,40 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
 
     _HTTPS_URL_REGEX = re.compile(r"^https://[^/?#\s]+", re.IGNORECASE)
 
+    # Extract the host (authority) portion of an https URL: everything between
+    # "https://" and the next "/", "?", "#", or end-of-string. Strips any
+    # userinfo ("user@") and port (":443").
+    _HOST_REGEX = re.compile(r"^https://(?:[^/@?#\s]*@)?([^/:?#\s]+)", re.IGNORECASE)
+
+    # Allowlist of calendar-provider host suffixes. The SSRF mitigation: the
+    # feed fetcher issues server-side GETs from Canvas's network, so an
+    # unrestricted host would let an authenticated provider probe internal
+    # services (169.254.169.254, 127.0.0.1, RFC1918 hosts). The plugin sandbox
+    # does not allowlist `socket`/`ipaddress`, so IP-range blocking and DNS
+    # resolution are unavailable; a provider-host allowlist is the robust
+    # in-sandbox mitigation. v1 limitation: self-hosted ICS feeds (Nextcloud,
+    # Fastmail, etc.) are not supported.
+    _ALLOWED_HOST_SUFFIXES = (
+        ".google.com",          # calendar.google.com
+        ".calendar.google.com",
+        ".outlook.com",         # outlook.office365.com, outlook.live.com
+        ".outlook.office365.com",
+        ".office365.com",
+        ".live.com",
+        ".icloud.com",          # p##-caldav.icloud.com, *.icloud.com
+    )
+
     @staticmethod
     def _is_https_url(url: str) -> bool:
         return bool(FeedsAPI._HTTPS_URL_REGEX.match(url))
+
+    @staticmethod
+    def _is_allowed_host(url: str) -> bool:
+        match = FeedsAPI._HOST_REGEX.match(url)
+        if not match:
+            return False
+        host = match.group(1).lower().rstrip(".")
+        return any(
+            host == suffix.lstrip(".") or host.endswith(suffix)
+            for suffix in FeedsAPI._ALLOWED_HOST_SUFFIXES
+        )

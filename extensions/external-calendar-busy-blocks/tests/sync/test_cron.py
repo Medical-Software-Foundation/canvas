@@ -250,3 +250,31 @@ def test_no_admin_calendar_records_error_and_skips(patch_sync_deps) -> None:
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
     assert effects == []
     assert feed.last_error and "no admin calendar" in feed.last_error.lower()
+
+
+def test_existing_query_excludes_past_events(patch_sync_deps) -> None:
+    # Regression: the reconciliation must only consider events that haven't
+    # ended yet. Past ImportedEvent rows must NOT be loaded, otherwise the diff
+    # treats them as removed-from-feed and deletes them every tick.
+    from external_calendar_busy_blocks.http.fetcher import FetchOk
+
+    now = datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)
+    feed = _stub_feed()
+    patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
+    patch_sync_deps["imported_model"].objects.filter.return_value = []
+    patch_sync_deps["fetch"].return_value = FetchOk(
+        body=_ok_body("ev-1@x", "20260615T140000Z", "20260615T150000Z"),
+        etag=None,
+        last_modified=None,
+    )
+
+    _new_cron(now).execute()
+
+    # The ImportedEvent query must be scoped to ends_at >= now. (The cron uses
+    # its own wall-clock now internally, so assert the kwarg is present and is
+    # a tz-aware datetime rather than equal to a fabricated timestamp.)
+    _, kwargs = patch_sync_deps["imported_model"].objects.filter.call_args
+    assert kwargs.get("staff_id") == "staff-abc"
+    ends_at_gte = kwargs.get("ends_at__gte")
+    assert isinstance(ends_at_gte, datetime)
+    assert ends_at_gte.tzinfo is not None

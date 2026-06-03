@@ -103,7 +103,14 @@ class SyncCron(CronTask):
             feed.save()
             return []
 
-        existing = list(ImportedEvent.objects.filter(staff_id=feed.staff_id))
+        # Only reconcile events that haven't ended yet. The parser never yields
+        # past occurrences, so including past ImportedEvent rows here would make
+        # the diff treat them as "removed from the feed" and delete them within
+        # ~15 min of the meeting ending. Per the spec, past events age out
+        # naturally on the source calendar rather than being deleted by the cron.
+        existing = list(
+            ImportedEvent.objects.filter(staff_id=feed.staff_id, ends_at__gte=now)
+        )
 
         if not parsed and existing:
             feed.last_error = "feed parsed but empty; deletions skipped"
