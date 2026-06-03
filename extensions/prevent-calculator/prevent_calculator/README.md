@@ -93,12 +93,16 @@ service credentials.
 
 ## Screenshots
 
-![PREVENT calculator modal in use](assets/screenshot-modal.png)
+**Pre-fill state** — the modal opens with the latest chart values
+filled in and a live preview of which scores will compute:
 
-*The PREVENT CVD Score modal opens from the chart's conditions section,
-pre-fills from the latest chart values, computes all six 10-year and
-30-year scores, and offers to save manually-edited inputs back to the
-chart.*
+![PREVENT calculator modal pre-filled from chart data](assets/screenshot-modal.png)
+
+**Results state** — after clicking **Calculate**, the six PREVENT
+risk percentages render alongside a confirmation that the scores
+were saved to the chart as `laboratory` Observations:
+
+![PREVENT calculator results panel showing computed risk percentages](assets/screenshot-results.png)
 
 ## Source
 
