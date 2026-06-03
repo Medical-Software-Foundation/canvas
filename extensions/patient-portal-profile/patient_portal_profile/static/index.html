@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Profile</title>
+    <link rel="stylesheet" href="styles.css?v={{ cache_bust }}">
+    <script type="text/javascript" src="main.js?v={{ cache_bust }}"></script>
+</head>
+<body>
+    <div class="profile-container">
+        <h1 class="page-title">My Profile</h1>
+
+        <section class="identity-section">
+            <div class="photo-wrapper">
+                <img
+                    class="patient-photo"
+                    src="{{ photo_url }}"
+                    alt="Profile photo"
+                />
+            </div>
+            <div class="identity-details">
+                <h2 class="patient-name">{{ patient.first_name }}{% if patient.middle_name %} {{ patient.middle_name }}{% endif %} {{ patient.last_name }}{% if patient.suffix %}, {{ patient.suffix }}{% endif %}</h2>
+                {% if preferred_full_name != patient.first_name|add:" "|add:patient.last_name %}
+                <p class="preferred-name">Preferred: {{ preferred_full_name }}</p>
+                {% endif %}
+                <p class="birthdate">DOB: {{ patient.birth_date }}</p>
+            </div>
+        </section>
+
+        {% if portal_user %}
+        <section class="info-section">
+            <h3 class="section-title">Patient portal registration</h3>
+            <dl class="info-list">
+                <div class="info-row">
+                    <dt>Email</dt>
+                    <dd>{{ portal_user.email }}</dd>
+                </div>
+                {% if portal_user.phone_number %}
+                <div class="info-row">
+                    <dt>Phone</dt>
+                    <dd>{{ portal_user.phone_number }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </section>
+        {% endif %}
+
+        {% if addresses %}
+        <section class="info-section">
+            <h3 class="section-title">Addresses</h3>
+            <ul class="address-list">
+                {% for addr in addresses %}
+                <li class="address-item">
+                    <span class="address-label">{{ addr.get_use_display }}{% if addr.type %} — {% endif %}</span>
+                    <span class="address-text">
+                        {{ addr.line1 }}{% if addr.line2 %}, {{ addr.line2 }}{% endif %},
+                        {{ addr.city }}{% if addr.state_code %} {{ addr.state_code }}{% endif %}{% if addr.postal_code %} {{ addr.postal_code }}{% endif %}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        {% if care_team %}
+        <section class="info-section">
+            <h3 class="section-title">Care team</h3>
+            <ul class="care-team-list">
+                {% for member in care_team %}
+                <li class="care-team-member">
+                    {% if member.photo_url %}
+                    <img class="member-photo" src="{{ member.photo_url }}" alt="{{ member.display_name }}" />
+                    {% endif %}
+                    <div class="member-info">
+                        <span class="member-name">{{ member.display_name }}</span>
+                        {% if member.role %}
+                        <span class="member-role">{{ member.role }}</span>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        {% if preferred_pharmacy %}
+        <section class="info-section">
+            <h3 class="section-title">Preferred pharmacy</h3>
+            <div class="pharmacy-details">
+                {% if preferred_pharmacy.pharmacy_name %}
+                <p class="pharmacy-name">{{ preferred_pharmacy.pharmacy_name }}</p>
+                {% endif %}
+                {% if preferred_pharmacy.pharmacy_address %}
+                <p class="pharmacy-address">{{ preferred_pharmacy.pharmacy_address }}</p>
+                {% endif %}
+                {% if preferred_pharmacy.pharmacy_phone_number %}
+                <p class="pharmacy-phone">{{ preferred_pharmacy.pharmacy_phone_number }}</p>
+                {% endif %}
+            </div>
+        </section>
+        {% endif %}
+    </div>
+</body>
+</html>

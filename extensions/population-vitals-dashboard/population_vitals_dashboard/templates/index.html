@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Population Vitals Dashboard</title>
+  <link rel="stylesheet" href="{{ api_prefix }}/app/styles.css?v={{ cache_bust }}" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1 class="header__title">Population Vitals Dashboard</h1>
+    </header>
+
+    <div class="filters">
+      <div class="filters__row">
+
+        <div class="filter-group">
+          <label class="filter-group__label" for="metric">Metric</label>
+          <select id="metric" class="filter-group__input">
+            <option value="weight">Weight</option>
+            <option value="bmi">BMI</option>
+            <option value="height">Height</option>
+            <option value="systolic">BP Systolic</option>
+            <option value="diastolic">BP Diastolic</option>
+          </select>
+        </div>
+
+        <div class="filter-group" id="unit-group" style="display: none;">
+          <label class="filter-group__label" for="unit">Unit</label>
+          <select id="unit" class="filter-group__input"></select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-group__label" for="min_age">Min Age</label>
+          <input id="min_age" type="number" min="0" max="120" placeholder="any" class="filter-group__input filter-group__input--narrow" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-group__label" for="max_age">Max Age</label>
+          <input id="max_age" type="number" min="0" max="120" placeholder="any" class="filter-group__input filter-group__input--narrow" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-group__label" for="sex">Sex</label>
+          <select id="sex" class="filter-group__input">
+            <option value="all">All</option>
+            <option value="F">Female</option>
+            <option value="M">Male</option>
+            <option value="O">Other</option>
+            <option value="UNK">Unknown</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-group__label" for="start">From</label>
+          <input id="start" type="date" class="filter-group__input" />
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-group__label" for="end">To</label>
+          <input id="end" type="date" class="filter-group__input" />
+        </div>
+
+        <button id="apply-btn" class="btn btn--primary">Apply</button>
+      </div>
+    </div>
+
+    <div id="status-banner" class="status-banner status-banner--hidden" role="alert"></div>
+
+    <div id="summary-cards" class="summary-cards summary-cards--hidden">
+      <div class="card">
+        <div class="card__label">Cohort Size</div>
+        <div id="stat-cohort" class="card__value">—</div>
+      </div>
+      <div class="card">
+        <div class="card__label">Mean</div>
+        <div id="stat-mean" class="card__value">—</div>
+      </div>
+      <div class="card">
+        <div class="card__label">Median</div>
+        <div id="stat-median" class="card__value">—</div>
+      </div>
+    </div>
+
+    <div id="charts-row" class="charts-row charts-row--hidden">
+      <div class="chart-container">
+        <h2 class="chart-title">Distribution</h2>
+        <canvas id="histogram-chart"></canvas>
+      </div>
+      <div class="chart-container">
+        <h2 class="chart-title">Monthly Trend (Median)</h2>
+        <canvas id="trend-chart"></canvas>
+      </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay loading-overlay--hidden">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <script src="{{ api_prefix }}/app/main.js?v={{ cache_bust }}"></script>
+</body>
+</html>

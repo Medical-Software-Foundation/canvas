@@ -89,6 +89,7 @@ Admin-UI access to plugin secrets is governed per-plugin by a **Managing users**
 | `practice-phone` | "P:" entry in the print header / footer. |
 | `practice-fax` | "F:" entry in the print header / footer. |
 | `simple-api-key` | Auth fallback for `PrintNutritionNoteAPI` outside a staff session. Optional. |
+| `namespace_read_write_access_key` | Auto-declared because the plugin has a `custom_data` block; auto-managed by Canvas on install. No manual configuration required. |
 
 If any practice secret is unset, that line renders empty in the print header rather than failing.
 

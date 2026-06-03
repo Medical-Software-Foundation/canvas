@@ -17,21 +17,13 @@
             },
             {
                 "class": "exam_chart_app.api.exam_api:ExamChartingAPI",
-                "description": "Form-state load/save + finalize handler for the Exam tab",
-                "data_access": {
-                    "event": "",
-                    "read": ["AttributeHub", "Condition", "Questionnaire", "Staff"],
-                    "write": ["AttributeHub"]
-                }
+                "description": "Form-state load/save + finalize handler for the Exam tab. Reads/writes the plugin's own AttributeHub namespace (see custom_data block); reads Condition, Questionnaire, Staff via the SDK ORM. data_access read/write left empty: populated arrays on SimpleAPI handlers silently break route registration in the plugin runtime (observed against canvas_sdk 0.142.0). Matches the prevailing MSF-merged convention for SimpleAPI handlers (portal-content, encounter_list, provider-calendaring use empty arrays).",
+                "data_access": { "event": "", "read": [], "write": [] }
             },
             {
                 "class": "exam_chart_app.api.exam_search_api:ExamSearchAPI",
-                "description": "Database-backed search endpoints (RFV codings, ICD-10, etc.) powering the form dropdowns",
-                "data_access": {
-                    "event": "",
-                    "read": ["LabPartner", "LabPartnerTest", "ReasonForVisitSettingCoding", "ServiceProvider", "Staff"],
-                    "write": []
-                }
+                "description": "Database-backed search endpoints (RFV codings, ICD-10, labs, medications, imaging, service providers, staff) powering the form dropdowns. data_access arrays empty for the same reason as ExamChartingAPI above.",
+                "data_access": { "event": "", "read": [], "write": [] }
             },
             {
                 "class": "exam_chart_app.protocols.additional_fields:ExamSectionAdditionalFieldsHandler",

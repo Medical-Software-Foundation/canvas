@@ -1,0 +1,30 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+authors = [
+  {email = "engineering@vicert.com", name = "Vicert Team"}
+]
+name = "provider-availability"
+version = "1.0.0"
+license = "MIT"
+description = "Admin UI for managing provider availability — flexible recurrence (weekly, daily, every-N), one-off and recurring blocks with all-day and multi-date support, date overrides, and same/next-day hold rules."
+requires-python = ">=3.12"
+dependencies = [
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]

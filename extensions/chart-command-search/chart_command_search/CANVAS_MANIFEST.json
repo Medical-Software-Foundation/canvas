@@ -1,0 +1,153 @@
+{
+    "sdk_version": "0.154.1",
+    "plugin_version": "0.11.0",
+    "name": "chart_command_search",
+    "description": "Unified keyword and AI-powered search across commands, notes, appointments, letters, messages, and lab reports in a patient chart",
+    "url_permissions": [
+        {
+            "url": "https://api.anthropic.com",
+            "permissions": []
+        },
+        {
+            "url": "https://*.canvasmedical.com",
+            "permissions": []
+        }
+    ],
+    "components": {
+        "protocols": [
+            {
+                "class": "chart_command_search.handlers.search_api:ChartSearchAPI",
+                "description": "Unified chart search API endpoint",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Command",
+                        "v1.Note",
+                        "v1.NoteType",
+                        "v1.Appointment",
+                        "v1.Letter",
+                        "v1.LetterActionEvent",
+                        "v1.Message",
+                        "v1.LabOrder",
+                        "v1.LabReport",
+                        "v1.LabReview",
+                        "v1.LabTest",
+                        "v1.LabValue",
+                        "v1.Prescription"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "chart_command_search.handlers.ai_search_api:AIChartSearchAPI",
+                "description": "AI-powered natural language chart search endpoint",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Patient",
+                        "v1.PatientContactPoint",
+                        "v1.PatientAddress",
+                        "v1.Condition",
+                        "v1.AllergyIntolerance",
+                        "v1.Medication",
+                        "v1.LabReport",
+                        "v1.LabValue",
+                        "v1.LabOrder",
+                        "v1.LabReview",
+                        "v1.LabTest",
+                        "v1.Observation",
+                        "v1.Immunization",
+                        "v1.Prescription",
+                        "v1.Goal",
+                        "v1.Referral",
+                        "v1.ImagingOrder",
+                        "v1.Assessment",
+                        "v1.PatientConsent",
+                        "v1.PatientConsentCoding",
+                        "v1.CareTeamMembership",
+                        "v1.PatientSetting",
+                        "v1.Coverage",
+                        "v1.Claim",
+                        "v1.Command",
+                        "v1.Note",
+                        "v1.NoteType",
+                        "v1.Appointment",
+                        "v1.Letter",
+                        "v1.LetterActionEvent",
+                        "v1.Message"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "chart_command_search.handlers.feedback_api:FeedbackSubmitAPI",
+                "description": "AI search feedback submission endpoint",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Staff"
+                    ],
+                    "write": [
+                        "SearchFeedback"
+                    ]
+                }
+            },
+            {
+                "class": "chart_command_search.handlers.feedback_api:FeedbackQueryAPI",
+                "description": "AI search feedback retrieval and stats endpoint for external services",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Staff",
+                        "SearchFeedback"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "chart_command_search.handlers.panel_config:HideLegacyNoteSearch",
+                "description": "Hides legacy Note search button from patient chart panel",
+                "data_access": {
+                    "event": "PANEL_SECTIONS_CONFIGURATION",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": [
+            {
+                "class": "chart_command_search.handlers.application:ChartSearchApp",
+                "name": "Chart Search",
+                "description": "Search across the full patient chart",
+                "icon": "assets/icon.png",
+                "scope": "patient_specific",
+                "show_in_panel": true
+            }
+        ]
+    },
+    "custom_data": {
+        "namespace": "chart_command_search__feedback",
+        "access": "read_write"
+    },
+    "secrets": [
+        "ANTHROPIC_API_KEY",
+        "SUGGESTED_PROMPTS",
+        "AI_SEARCH_ENABLED",
+        "FEEDBACK_API_KEY",
+        "namespace_read_write_access_key"
+    ],
+    "tags": {
+        "category": "chart",
+        "feature": "search",
+        "ai": "true"
+    },
+    "references": [
+        "https://vicert.ai"
+    ],
+    "license": "MIT",
+    "readme": "./README.md"
+}

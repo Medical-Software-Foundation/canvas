@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.94.0",
-    "plugin_version": "0.3.0",
+    "plugin_version": "0.4.0",
     "name": "dea_prescriber_filter",
     "description": "Filters prescribe actions based on NPI matching between user and selected prescriber",
     "license": "MIT",
@@ -57,7 +57,7 @@
             }
         ]
     },
-    "secrets": ["ADMIN_STAFF_IDS"],
+    "secrets": ["ADMIN_STAFF_IDS", "STATE_VALIDATION_ENFORCE"],
     "tags": {},
     "references": [],
     "diagram": false,

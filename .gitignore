@@ -170,3 +170,7 @@ cython_debug/
 
 # Canvas plugin workflow artifacts
 .cpa-workflow-artifacts/
+
+# Claude Code local settings (may be created in any plugin subdirectory)
+.claude/settings.local.json
+**/.claude/settings.local.json

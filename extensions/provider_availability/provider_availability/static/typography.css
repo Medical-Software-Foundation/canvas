@@ -1,0 +1,34 @@
+/* Typography rules matching Canvas Semantic UI heading and paragraph styles.
+   Load alongside tokens.css in plugin HTML.
+   Loads Lato from Google Fonts (400, 700, 400italic, 700italic).
+   Plugin iframes do not inherit the parent page's fonts. */
+
+@import url('https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin');
+
+h1, h2, h3, h4, h5 {
+  margin: calc(2rem - .14285714em) 0 1rem;
+  font-family: var(--font-family, lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  line-height: 1.28571429em;
+  font-weight: 700;
+  padding: 0;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.71428571rem; }
+h3 { font-size: 1.28571429rem; }
+h4 { font-size: 1.07142857rem; }
+h5 { font-size: 1rem; }
+
+h1:first-child, h2:first-child, h3:first-child,
+h4:first-child, h5:first-child { margin-top: 0; }
+
+h1:last-child, h2:last-child, h3:last-child,
+h4:last-child, h5:last-child { margin-bottom: 0; }
+
+p {
+  margin: 0 0 1em;
+  line-height: 1.4285em;
+}
+
+p:first-child { margin-top: 0; }
+p:last-child { margin-bottom: 0; }

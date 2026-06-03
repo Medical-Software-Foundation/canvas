@@ -402,8 +402,12 @@ class AdjustPrescriptionActionFilter(PrescribeActionFilter):
 
 class PrescribeValidation(BaseProtocol):
     """
-    Validates user authorization (via cached user key) and that the prescriber's
-    license state matches the pharmacy's state.
+    Validates user authorization (via cached user key). Optionally also blocks
+    when the selected prescriber's license state does not match the pharmacy's
+    state — controlled by the STATE_VALIDATION_ENFORCE plugin secret
+    (default: enforce, for backward compatibility with 0.3.0).
+
+    Dropdown state annotations are independent of this setting and always show.
     """
 
     RESPONDS_TO = [
@@ -441,11 +445,27 @@ class PrescribeValidation(BaseProtocol):
                 "skipping auth error message. Action filter still blocks signing."
             )
 
-        state_error = self._check_pharmacy_state(prescriber_key)
-        if state_error:
-            effect.add_error(state_error)
+        if self._state_validation_enforced():
+            state_error = self._check_pharmacy_state(prescriber_key)
+            if state_error:
+                effect.add_error(state_error)
 
         return [effect.apply()]
+
+    def _state_validation_enforced(self) -> bool:
+        """Whether to block on pharmacy/prescriber state mismatch.
+
+        Reads the STATE_VALIDATION_ENFORCE plugin secret. Accepts
+        true/1/yes (enforce) and false/0/no (don't enforce), case- and
+        whitespace-insensitive. Anything else — including unset — defaults
+        to True to preserve 0.3.0 behavior on upgrade.
+        """
+        raw = (self.secrets.get("STATE_VALIDATION_ENFORCE", "") or "").strip().lower()
+        if raw in ("true", "1", "yes"):
+            return True
+        if raw in ("false", "0", "no"):
+            return False
+        return True
 
     def _get_prescriber_key(self) -> str | None:
         """Get prescriber key from the Command object (same approach as action filter)."""
@@ -529,12 +549,12 @@ class PrescribeValidation(BaseProtocol):
 
 
 class RefillValidation(PrescribeValidation):
-    """Authorization + state validation for refill commands."""
+    """Authorization + optional state validation for refill commands."""
     RESPONDS_TO = [EventType.Name(EventType.REFILL_COMMAND__POST_VALIDATION)]
 
 
 class AdjustPrescriptionValidation(PrescribeValidation):
-    """Authorization + state validation for adjust prescription commands."""
+    """Authorization + optional state validation for adjust prescription commands."""
     RESPONDS_TO = [EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION)]
 
 

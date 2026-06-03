@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questionnaires</title>
+    <style type="text/css">
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+
+        /* Header */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .page-header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .assign-button {
+            background-color: #1d1d1f;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background-color 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .assign-button:hover {
+            background-color: #2d2d2f;
+        }
+
+        .plus-icon {
+            font-size: 14px;
+            font-weight: 300;
+        }
+
+        /* Tabs */
+        .list-tabs {
+            display: flex;
+            gap: 24px;
+            border-bottom: 1px solid #d2d2d7;
+            margin-bottom: 16px;
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 8px 0 10px;
+            margin-bottom: -1px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6e6e73;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .tab-button:hover {
+            color: #1d1d1f;
+        }
+
+        .tab-button.active {
+            color: #000;
+            border-bottom-color: #000;
+        }
+
+        .tab-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            background-color: #e8e8ed;
+            color: #1d1d1f;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .tab-button.active .tab-count {
+            background-color: #000;
+            color: #fff;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .empty-state-tab {
+            display: none;
+        }
+
+        .tab-panel:not(:has(.questionnaire-card)) .empty-state-tab {
+            display: block;
+        }
+
+        /* Questionnaires List */
+        .questionnaires-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Questionnaire Card */
+        .questionnaire-card {
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .questionnaire-card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        .card-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px 16px;
+            gap: 12px;
+            flex-wrap: nowrap;
+        }
+
+        .card-main {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .questionnaire-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .card-details {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .detail-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #86868b;
+            font-size: 12px;
+        }
+
+        .icon {
+            color: #86868b;
+            flex-shrink: 0;
+        }
+
+        .separator {
+            margin: 0 4px;
+            color: #86868b;
+        }
+
+        .due-date,
+        .completion-date,
+        .provider-name {
+            color: #86868b;
+        }
+
+        /* Card Actions */
+        .card-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .action-button {
+            background: white;
+            border: 1.5px solid #d2d2d7;
+            border-radius: 12px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #1d1d1f;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .action-button:hover {
+            background-color: #f5f5f7;
+            border-color: #a1a1a6;
+        }
+
+        .status-badge {
+            border-radius: 12px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            white-space: nowrap;
+        }
+
+        .status-badge.completed {
+            background-color: #1d1d1f;
+            color: white;
+        }
+
+        .status-badge.assigned {
+            background: white;
+            border: 1.5px solid #d2d2d7;
+            color: #1d1d1f;
+        }
+
+        .status-badge.pending-responses {
+            background-color: #fff7ed;
+            border: 1.5px solid #fed7aa;
+            color: #9a3412;
+        }
+
+        .status-badge.pending-responses svg {
+            color: #c2410c;
+        }
+
+        .check-icon,
+        .bell-icon,
+        .calendar-small-icon {
+            flex-shrink: 0;
+        }
+
+        .completed-badge-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .status-badge.completed {
+            padding-right: 6px;
+        }
+
+        .history-info-button {
+            background: transparent;
+            border: none;
+            padding: 0;
+            margin-left: 4px;
+            width: 18px;
+            height: 18px;
+            color: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            opacity: 0.7;
+            transition: opacity 0.15s ease, background-color 0.15s ease;
+        }
+
+        .history-info-button:hover,
+        .history-info-button.active {
+            opacity: 1;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .history-popover {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.12), 0 4px 8px -2px rgba(0, 0, 0, 0.06);
+            min-width: 220px;
+            max-width: 280px;
+            z-index: 20;
+            padding: 12px 14px;
+            color: #1d1d1f;
+        }
+
+        .history-popover[hidden] {
+            display: none;
+        }
+
+        .history-popover.flip-up {
+            top: auto;
+            bottom: calc(100% + 6px);
+        }
+
+        .history-popover-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .history-dates-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .history-date-item {
+            font-size: 13px;
+            color: #1d1d1f;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-date-item::before {
+            content: "";
+            width: 5px;
+            height: 5px;
+            background-color: #1d1d1f;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .history-view-more {
+            background: none;
+            border: none;
+            padding: 8px 0 0 0;
+            margin-top: 4px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            color: #0071e3;
+            cursor: pointer;
+            display: block;
+            text-align: left;
+        }
+
+        .history-view-more[hidden] {
+            display: none;
+        }
+
+        .history-view-more:hover {
+            text-decoration: underline;
+        }
+
+        /* Empty State */
+        .empty-state {
+            background: white;
+            border-radius: 6px;
+            padding: 48px 24px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08);
+        }
+
+        .empty-state-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            color: #d2d2d7;
+        }
+
+        .empty-state-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .empty-state-description {
+            font-size: 13px;
+            color: #86868b;
+            line-height: 1.5;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            max-width: 560px;
+            width: 90%;
+            max-height: 90vh;
+            min-height: min(600px, 90vh);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 20px 24px 16px 24px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-title-section {
+            flex: 1;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 6px;
+        }
+
+        .modal-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #6b7280;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-left: 16px;
+        }
+
+        .modal-close:hover {
+            color: #1d1d1f;
+        }
+
+        .modal-body {
+            padding: 24px;
+            flex: 1;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 13px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            background: white;
+            color: #1d1d1f;
+            font-family: inherit;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #1d1d1f;
+        }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        .multiselect-wrapper {
+            position: relative;
+        }
+
+        .multiselect-trigger {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 13px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            background: white;
+            color: #1d1d1f;
+            font-family: inherit;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-align: left;
+        }
+
+        .multiselect-trigger:hover {
+            border-color: #9ca3af;
+        }
+
+        .multiselect-trigger.active {
+            border-color: #1d1d1f;
+        }
+
+        .multiselect-placeholder {
+            color: #6b7280;
+        }
+
+        .multiselect-arrow {
+            color: #6b7280;
+            transition: transform 0.2s;
+        }
+
+        .multiselect-trigger.active .multiselect-arrow {
+            transform: rotate(180deg);
+        }
+
+        .multiselect-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            z-index: 10;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .multiselect-dropdown.active {
+            display: block;
+        }
+
+        .multiselect-search-wrapper {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 8px 10px;
+            border-bottom: 1px solid #e5e7eb;
+            z-index: 1;
+        }
+
+        .multiselect-search-inner {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .multiselect-search-icon {
+            position: absolute;
+            left: 10px;
+            width: 14px;
+            height: 14px;
+            color: #9ca3af;
+            pointer-events: none;
+        }
+
+        .multiselect-search-input {
+            width: 100%;
+            padding: 8px 32px 8px 32px;
+            font-size: 13px;
+            font-family: inherit;
+            color: #1d1d1f;
+            background: #f5f5f7;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            transition: border-color 0.15s ease, background-color 0.15s ease;
+        }
+
+        .multiselect-search-input:focus {
+            outline: none;
+            background: white;
+            border-color: #1d1d1f;
+        }
+
+        .multiselect-search-input::placeholder {
+            color: #9ca3af;
+        }
+
+        .multiselect-search-clear {
+            position: absolute;
+            right: 6px;
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            cursor: pointer;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .multiselect-search-clear:hover {
+            background-color: #e5e7eb;
+            color: #1d1d1f;
+        }
+
+        .multiselect-search-clear.visible {
+            display: inline-flex;
+        }
+
+        .multiselect-no-matches {
+            padding: 16px 12px;
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+            display: none;
+        }
+
+        .multiselect-no-matches.visible {
+            display: block;
+        }
+
+        .multiselect-option {
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: background-color 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .multiselect-option:hover {
+            background-color: #f5f5f7;
+        }
+
+        .multiselect-option.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .multiselect-option.disabled:hover {
+            background-color: transparent;
+        }
+
+        .multiselect-checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+
+        .multiselect-option input:checked + .multiselect-checkbox {
+            background-color: #1d1d1f;
+            border-color: #1d1d1f;
+        }
+
+        .multiselect-option input:disabled + .multiselect-checkbox {
+            background-color: #e5e7eb;
+            border-color: #d1d5db;
+        }
+
+        .multiselect-option input:disabled:checked + .multiselect-checkbox {
+            background-color: #9ca3af;
+            border-color: #9ca3af;
+        }
+
+        .multiselect-checkbox svg {
+            display: none;
+            color: white;
+        }
+
+        .multiselect-option input:checked + .multiselect-checkbox svg {
+            display: block;
+        }
+
+        .multiselect-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .multiselect-label {
+            font-size: 13px;
+            color: #1d1d1f;
+            flex: 1;
+        }
+
+        .multiselect-selected-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .multiselect-tag {
+            background-color: #f3f4f6;
+            color: #1d1d1f;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .date-input-wrapper {
+            position: relative;
+        }
+
+        .date-input-wrapper svg {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+            pointer-events: none;
+        }
+
+        .date-input-wrapper input {
+            padding-left: 40px;
+        }
+
+        .toggle-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .toggle-label-section {
+            flex: 1;
+        }
+
+        .toggle-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 4px;
+        }
+
+        .toggle-description {
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+            margin-left: 16px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #d1d5db;
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #1d1d1f;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 16px 24px 24px 24px;
+        }
+
+        .modal-button {
+            padding: 10px 20px;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+        }
+
+        .modal-button-cancel {
+            background: white;
+            color: #1d1d1f;
+            border: 1.5px solid #d1d5db;
+        }
+
+        .modal-button-cancel:hover {
+            background-color: #f5f5f7;
+        }
+
+        .modal-button-submit {
+            background-color: #1d1d1f;
+            color: white;
+        }
+
+        .modal-button-submit:hover:not(:disabled) {
+            background-color: #2d2d2f;
+        }
+
+        .modal-button-submit:disabled {
+            background-color: #d1d5db;
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 320px) {
+            .container {
+                padding: 8px;
+            }
+
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .card-content {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 12px 16px;
+            }
+
+            .card-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .questionnaire-title {
+                font-size: 16px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <h1>Questionnaires</h1>
+            <button class="assign-button">
+                <span class="plus-icon">+</span>
+                Assign
+            </button>
+        </header>
+
+        {% if pending_items or completed_groups %}
+        <div class="list-tabs" role="tablist">
+            <button type="button" class="tab-button active" role="tab" data-tab="pending" aria-selected="true">
+                Pending <span class="tab-count" data-count-for="pending">0</span>
+            </button>
+            <button type="button" class="tab-button" role="tab" data-tab="completed" aria-selected="false">
+                Completed <span class="tab-count" data-count-for="completed">0</span>
+            </button>
+        </div>
+
+        <div class="tab-panel active" data-tab-panel="pending">
+            <div class="questionnaires-list">
+                {% for item in pending_items %}
+                    <div class="questionnaire-card">
+                        <div class="card-content">
+                            <div class="card-main">
+                                <h2 class="questionnaire-title">{{ item.questionnaire_name }}</h2>
+
+                                <div class="card-details">
+                                    <div class="detail-item">
+                                        <svg class="icon calendar-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">
+                                            <rect x="3" y="4" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                                            <path d="M3 8h14M7 2v4M13 2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                        </svg>
+                                        <span class="due-date">Due <span class="format-date">{{ item.due_date }}</span></span>
+                                    </div>
+
+                                    <div class="detail-item">
+                                        <svg class="icon person-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">
+                                            <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
+                                            <path d="M5 17c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                        </svg>
+                                        <span class="provider-name">Assigned by {{ item.assigning_provider.name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-actions">
+                                <button class="action-button remind-button"
+                                        data-questionnaire-name="{{ item.questionnaire_name }}"
+                                        data-provider-key="{{ item.assigning_provider.key }}"
+                                        data-provider-name="{{ item.assigning_provider.name }}"
+                                        data-due-date="{{ item.due_date }}">
+                                    <svg class="icon bell-icon" width="12" height="12" viewBox="0 0 18 18" fill="none">
+                                        <path d="M13.5 6a4.5 4.5 0 10-9 0c0 4.5-1.5 6-1.5 6h12s-1.5-1.5-1.5-6zM10.5 15a1.5 1.5 0 01-3 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    Remind
+                                </button>
+                                <button class="action-button unassign-button"
+                                        data-questionnaire-name="{{ item.questionnaire_name }}"
+                                        data-provider-key="{{ item.assigning_provider.key }}"
+                                        data-provider-name="{{ item.assigning_provider.name }}"
+                                        data-due-date="{{ item.due_date }}">
+                                    <svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                        <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    Unassign
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                <div class="empty-state empty-state-tab" data-empty-for="pending">
+                    <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.66 0 3.22.45 4.56 1.24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <div class="empty-state-title">No Pending Questionnaires</div>
+                    <div class="empty-state-description">All assigned questionnaires have been completed.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-panel" data-tab-panel="completed">
+            <div class="questionnaires-list">
+                {% for group in completed_groups %}
+                    <div class="questionnaire-card completed-card">
+                        <div class="card-content">
+                            <div class="card-main">
+                                <h2 class="questionnaire-title">{{ group.questionnaire_name }}</h2>
+
+                                <div class="card-details">
+                                    <div class="detail-item">
+                                        <svg class="icon calendar-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">
+                                            <rect x="3" y="4" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                                            <path d="M3 8h14M7 2v4M13 2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                        </svg>
+                                        <span class="completion-date">
+                                            {% if group.submission_count > 1 %}Last completed{% else %}Completed{% endif %}
+                                            <span class="format-date">{{ group.latest_completed_date }}</span>
+                                        </span>
+                                    </div>
+
+                                    <div class="detail-item">
+                                        <svg class="icon person-icon" width="14" height="14" viewBox="0 0 20 20" fill="none">
+                                            <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
+                                            <path d="M5 17c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                        </svg>
+                                        <span class="provider-name">Assigned by {{ group.latest_assigning_provider.name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-actions">
+                                {% if group.has_pending %}
+                                <span class="status-badge pending-responses" title="This questionnaire has an active pending assignment.">
+                                    <svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+                                        <path d="M8 5v3.2L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    Pending responses
+                                </span>
+                                {% endif %}
+                                <span class="completed-badge-wrapper">
+                                    <span class="status-badge completed">
+                                        <svg class="check-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                            <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        Completed
+                                        <button type="button"
+                                                class="history-info-button"
+                                                aria-label="View submission history"
+                                                data-submission-dates='{{ group.submission_dates_json }}'
+                                                data-submission-count="{{ group.submission_count }}">
+                                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+                                                <circle cx="8" cy="5" r="0.85" fill="currentColor"/>
+                                                <path d="M8 7.75v3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                            </svg>
+                                        </button>
+                                    </span>
+                                    <div class="history-popover" hidden role="dialog" aria-label="Submission history">
+                                        <div class="history-popover-title">Submission history</div>
+                                        <ul class="history-dates-list"></ul>
+                                        <button type="button" class="history-view-more" hidden></button>
+                                    </div>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+                <div class="empty-state empty-state-tab" data-empty-for="completed">
+                    <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <div class="empty-state-title">No completed questionnaires yet</div>
+                    <div class="empty-state-description">Completed questionnaires will appear here once the patient submits them.</div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+            <div class="empty-state">
+                <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <div class="empty-state-title">No Questionnaires Assigned</div>
+                <div class="empty-state-description">Click the "Assign" button above to assign questionnaires to this patient.</div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Assign Modal -->
+    <div class="modal-overlay" id="assignModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title-section">
+                    <h2 class="modal-title">Assign Questionnaires</h2>
+                    <p class="modal-subtitle">Select a questionnaires and due date to assign to this patient.</p>
+                </div>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="assignForm">
+                    <div class="form-group">
+                        <label class="form-label">Questionnaire</label>
+                        <div class="multiselect-wrapper">
+                            <div class="multiselect-trigger" id="multiselectTrigger">
+                                <span class="multiselect-placeholder" id="multiselectDisplay">Select questionnaires</span>
+                                <svg class="multiselect-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                    <path d="M6 9L1 4h10z" fill="currentColor"/>
+                                </svg>
+                            </div>
+                            <div class="multiselect-dropdown" id="multiselectDropdown">
+                                <div class="multiselect-search-wrapper">
+                                    <div class="multiselect-search-inner">
+                                        <svg class="multiselect-search-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                            <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
+                                            <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                        </svg>
+                                        <input type="text"
+                                               id="multiselectSearch"
+                                               class="multiselect-search-input"
+                                               placeholder="Search questionnaires"
+                                               autocomplete="off"
+                                               aria-label="Search questionnaires">
+                                        <button type="button"
+                                                id="multiselectSearchClear"
+                                                class="multiselect-search-clear"
+                                                aria-label="Clear search">
+                                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                                <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% for questionnaire in questionnaire_assignment_choices %}
+                                <label class="multiselect-option" data-questionnaire-name="{{ questionnaire.name }}">
+                                    <input type="checkbox" name="questionnaire" value="{{ questionnaire.id }}" data-label="{{ questionnaire.name }}">
+                                    <div class="multiselect-checkbox">
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                            <path d="M2 6l3 3 5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <span class="multiselect-label">{{ questionnaire.name }}</span>
+                                </label>
+                                {% endfor %}
+                                <div class="multiselect-no-matches" id="multiselectNoMatches">No questionnaires match your search.</div>
+                            </div>
+                            <script>
+                                // Only pending assignments are treated as "already assigned" in
+                                // the dropdown. Completed ones stay reselectable so providers can
+                                // manually reassign a recurring questionnaire.
+                                const assignedQuestionnaires = [
+                                    {% for name in pending_names %}"{{ name }}"{% if not forloop.last %},{% endif %}{% endfor %}
+                                ];
+                            </script>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="dueDate">Due Date</label>
+                        <div class="date-input-wrapper">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                                <rect x="3" y="4" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M3 8h14M7 2v4M13 2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                            <input type="date" class="form-input" id="dueDate" name="dueDate" required>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="modal-button modal-button-cancel" id="cancelModal">Cancel</button>
+                <button type="button" class="modal-button modal-button-submit" id="submitAssign" disabled>Assign Questionnaires</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Format dates on page load
+        function formatDate(dateString) {
+            if (!dateString) return '';
+
+            // Check if it's a simple date format (YYYY-MM-DD) without time
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+                // Parse as local date to avoid timezone issues
+                const [year, month, day] = dateString.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                const options = { year: 'numeric', month: 'short', day: 'numeric' };
+                return date.toLocaleDateString('en-US', options);
+            }
+
+            // For datetime strings, use regular parsing
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString; // Return original if invalid
+
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        // Format all dates with class 'format-date'
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.format-date').forEach(element => {
+                const formattedDate = formatDate(element.textContent.trim());
+                if (formattedDate) {
+                    element.textContent = formattedDate;
+                }
+            });
+
+            // Mark already assigned questionnaires as checked and disabled
+            if (typeof assignedQuestionnaires !== 'undefined') {
+                document.querySelectorAll('.multiselect-option').forEach(option => {
+                    const questionnaireName = option.dataset.questionnaireName;
+                    if (assignedQuestionnaires.includes(questionnaireName)) {
+                        const checkbox = option.querySelector('input[type="checkbox"]');
+                        checkbox.checked = true;
+                        checkbox.disabled = true;
+                        option.classList.add('disabled');
+                    }
+                });
+            }
+
+            // Populate tab counts and toggle per-tab empty states from the rendered cards.
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                const key = panel.dataset.tabPanel;
+                const count = panel.querySelectorAll('.questionnaire-card').length;
+                const countEl = document.querySelector(`[data-count-for="${key}"]`);
+                if (countEl) countEl.textContent = count;
+                const emptyState = panel.querySelector('.empty-state-tab');
+                if (emptyState) emptyState.style.display = count === 0 ? 'block' : 'none';
+            });
+
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    document.querySelectorAll('.tab-button').forEach(b => {
+                        const isActive = b === btn;
+                        b.classList.toggle('active', isActive);
+                        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                    });
+                    document.querySelectorAll('.tab-panel').forEach(p => {
+                        p.classList.toggle('active', p.dataset.tabPanel === tab);
+                    });
+                });
+            });
+
+            initSubmissionHistoryPopovers();
+        });
+
+        function closeAllHistoryPopovers() {
+            document.querySelectorAll('.history-popover').forEach(p => p.setAttribute('hidden', ''));
+            document.querySelectorAll('.history-info-button').forEach(b => b.classList.remove('active'));
+        }
+
+        function renderHistoryDates(popover, dates, expanded) {
+            const list = popover.querySelector('.history-dates-list');
+            const viewMore = popover.querySelector('.history-view-more');
+            list.innerHTML = '';
+            const visible = expanded ? dates : dates.slice(0, 3);
+            visible.forEach(d => {
+                const li = document.createElement('li');
+                li.className = 'history-date-item';
+                li.textContent = formatDate(d);
+                list.appendChild(li);
+            });
+            if (!expanded && dates.length > 3) {
+                viewMore.textContent = `View all (${dates.length})`;
+                viewMore.hidden = false;
+                viewMore.onclick = (e) => {
+                    e.stopPropagation();
+                    renderHistoryDates(popover, dates, true);
+                    // Re-check vertical fit after the list grows.
+                    popover.classList.remove('flip-up');
+                    const rect = popover.getBoundingClientRect();
+                    if (rect.bottom > window.innerHeight - 96) {
+                        popover.classList.add('flip-up');
+                    }
+                };
+            } else {
+                viewMore.hidden = true;
+                viewMore.onclick = null;
+            }
+        }
+
+        function initSubmissionHistoryPopovers() {
+            document.querySelectorAll('.history-info-button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const wrapper = btn.closest('.completed-badge-wrapper');
+                    if (!wrapper) return;
+                    const popover = wrapper.querySelector('.history-popover');
+                    if (!popover) return;
+                    const isOpen = !popover.hasAttribute('hidden');
+
+                    closeAllHistoryPopovers();
+                    if (isOpen) return;
+
+                    let dates = [];
+                    try {
+                        dates = JSON.parse(btn.dataset.submissionDates || '[]');
+                    } catch (err) {
+                        dates = [];
+                    }
+                    renderHistoryDates(popover, dates, false);
+                    popover.classList.remove('flip-up');
+                    popover.removeAttribute('hidden');
+                    btn.classList.add('active');
+
+                    // If the popover would be occluded by the viewport bottom
+                    // (e.g. the floating chat button), flip it above the badge.
+                    // Reserve ~96px to clear a typical floating action button.
+                    const rect = popover.getBoundingClientRect();
+                    const safeBottom = window.innerHeight - 96;
+                    if (rect.bottom > safeBottom) {
+                        popover.classList.add('flip-up');
+                    }
+                });
+            });
+
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.history-popover') || e.target.closest('.history-info-button')) return;
+                closeAllHistoryPopovers();
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeAllHistoryPopovers();
+            });
+        }
+
+        // Get modal elements
+        const modal = document.getElementById('assignModal');
+        const assignButton = document.querySelector('.assign-button');
+        const closeModalBtn = document.getElementById('closeModal');
+        const cancelModalBtn = document.getElementById('cancelModal');
+        const submitBtn = document.getElementById('submitAssign');
+        const form = document.getElementById('assignForm');
+
+        // Multi-select elements
+        const multiselectTrigger = document.getElementById('multiselectTrigger');
+        const multiselectDropdown = document.getElementById('multiselectDropdown');
+        const multiselectDisplay = document.getElementById('multiselectDisplay');
+        const multiselectSearch = document.getElementById('multiselectSearch');
+        const multiselectSearchClear = document.getElementById('multiselectSearchClear');
+        const multiselectNoMatches = document.getElementById('multiselectNoMatches');
+        const questionnaireCheckboxes = document.querySelectorAll('input[name="questionnaire"]');
+
+        function filterMultiselectOptions(query) {
+            const normalized = (query || '').trim().toLowerCase();
+            let visibleCount = 0;
+            document.querySelectorAll('.multiselect-option').forEach(option => {
+                const name = (option.dataset.questionnaireName || '').toLowerCase();
+                const matches = !normalized || name.includes(normalized);
+                option.style.display = matches ? '' : 'none';
+                if (matches) visibleCount += 1;
+            });
+            multiselectNoMatches.classList.toggle('visible', visibleCount === 0);
+            multiselectSearchClear.classList.toggle('visible', Boolean(normalized));
+        }
+
+        function resetMultiselectSearch() {
+            multiselectSearch.value = '';
+            filterMultiselectOptions('');
+        }
+
+        // Toggle multi-select dropdown
+        multiselectTrigger.addEventListener('click', () => {
+            const willOpen = !multiselectDropdown.classList.contains('active');
+            multiselectTrigger.classList.toggle('active', willOpen);
+            multiselectDropdown.classList.toggle('active', willOpen);
+            if (willOpen) {
+                // Give the browser a tick to render before focusing the search field.
+                setTimeout(() => multiselectSearch.focus(), 0);
+            }
+        });
+
+        multiselectSearch.addEventListener('input', (e) => {
+            filterMultiselectOptions(e.target.value);
+        });
+
+        // Prevent the trigger's outside-click handler from closing the dropdown
+        // when the user clicks inside the search input.
+        multiselectSearch.addEventListener('click', (e) => e.stopPropagation());
+
+        multiselectSearchClear.addEventListener('click', (e) => {
+            e.stopPropagation();
+            resetMultiselectSearch();
+            multiselectSearch.focus();
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!multiselectTrigger.contains(e.target) && !multiselectDropdown.contains(e.target)) {
+                multiselectTrigger.classList.remove('active');
+                multiselectDropdown.classList.remove('active');
+            }
+        });
+
+        // Check if form is valid and update button state
+        function updateSubmitButtonState() {
+            const hasSelectedQuestionnaires = Array.from(questionnaireCheckboxes).some(cb => cb.checked);
+            const hasDueDate = document.getElementById('dueDate').value !== '';
+
+            submitBtn.disabled = !(hasSelectedQuestionnaires && hasDueDate);
+        }
+
+        // Update display when checkboxes change
+        function updateMultiselectDisplay() {
+            const selected = Array.from(questionnaireCheckboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.dataset.label);
+
+            if (selected.length === 0) {
+                multiselectDisplay.innerHTML = '<span class="multiselect-placeholder">Select questionnaires</span>';
+            } else if (selected.length === 1) {
+                multiselectDisplay.textContent = selected[0];
+            } else {
+                multiselectDisplay.textContent = `${selected.length} questionnaires selected`;
+            }
+
+            updateSubmitButtonState();
+        }
+
+        questionnaireCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateMultiselectDisplay);
+        });
+
+        // Update button state when due date changes
+        document.getElementById('dueDate').addEventListener('change', updateSubmitButtonState);
+
+        // Open modal
+        assignButton.addEventListener('click', () => {
+            modal.classList.add('active');
+            updateSubmitButtonState();
+        });
+
+        // Close modal functions
+        const closeModal = () => {
+            modal.classList.remove('active');
+            form.reset();
+            updateMultiselectDisplay();
+            multiselectTrigger.classList.remove('active');
+            multiselectDropdown.classList.remove('active');
+            resetMultiselectSearch();
+        };
+
+        closeModalBtn.addEventListener('click', closeModal);
+        cancelModalBtn.addEventListener('click', closeModal);
+
+        // Close modal when clicking outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Handle form submission
+        submitBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            const selectedQuestionnaires = Array.from(questionnaireCheckboxes)
+                .filter(cb => cb.checked && !cb.disabled)
+                .map(cb => cb.dataset.label);
+
+            const dueDate = document.getElementById('dueDate').value;
+
+            // Validate that at least one questionnaire is selected and date is filled
+            if (selectedQuestionnaires.length === 0) {
+                alert('Please select at least one questionnaire');
+                return;
+            }
+
+            if (!dueDate) {
+                alert('Please select a due date');
+                return;
+            }
+
+            const formData = {
+                questionnaires: selectedQuestionnaires.map(name => ({
+                    questionnaire_name: name,
+                    assigning_provider: {
+                        key: "{{ staff.id }}",
+                        name: "{{ staff.credentialed_name }}"
+                    },
+                    due_date: dueDate
+                }))
+            };
+
+            console.log('Form data:', formData);
+
+            // Disable submit button during submission
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Assigning...';
+
+            try {
+                const response = await fetch('/plugin-io/api/patient_portal_forms/provider-view/patient/{{ patient_id }}/assign', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    // Success - reload the page to show updated questionnaires
+                    window.location.reload();
+                } else {
+                    const error = await response.text();
+                    alert('Error assigning questionnaires: ' + error);
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Assign Questionnaires';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error assigning questionnaires. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Assign Questionnaires';
+            }
+        });
+
+        // Handle unassign button clicks
+        document.addEventListener('click', async (e) => {
+            if (e.target.closest('.unassign-button')) {
+                const button = e.target.closest('.unassign-button');
+
+                const questionnaireData = {
+                    questionnaire_name: button.dataset.questionnaireName,
+                    assigning_provider: {
+                        key: button.dataset.providerKey,
+                        name: button.dataset.providerName
+                    },
+                    due_date: button.dataset.dueDate
+                };
+
+                console.log('Unassign data:', questionnaireData);
+
+                // Disable button during submission
+                button.disabled = true;
+                button.textContent = 'Unassigning...';
+
+                // Wait half a second before submitting
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                try {
+                    const response = await fetch('/plugin-io/api/patient_portal_forms/provider-view/patient/{{ patient_id }}/unassign', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(questionnaireData)
+                    });
+
+                    if (response.ok) {
+                        // Success - reload the page to show updated questionnaires
+                        window.location.reload();
+                    } else {
+                        const error = await response.text();
+                        alert('Error unassigning questionnaire: ' + error);
+                        button.disabled = false;
+                        button.innerHTML = '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Unassign';
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error unassigning questionnaire. Please try again.');
+                    button.disabled = false;
+                    button.innerHTML = '<svg class="icon" width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M12 4L4 12M4 4l8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Unassign';
+                }
+            }
+        });
+
+        // Handle remind button clicks
+        document.addEventListener('click', async (e) => {
+            if (e.target.closest('.remind-button')) {
+                const button = e.target.closest('.remind-button');
+
+                const questionnaireData = {
+                    questionnaire_name: button.dataset.questionnaireName,
+                    assigning_provider: {
+                        key: button.dataset.providerKey,
+                        name: button.dataset.providerName
+                    },
+                    due_date: button.dataset.dueDate
+                };
+
+                console.log('Remind data:', questionnaireData);
+
+                // Disable button during submission
+                button.disabled = true;
+                const originalContent = button.innerHTML;
+                button.innerHTML = '<svg class="icon bell-icon" width="12" height="12" viewBox="0 0 18 18" fill="none"><path d="M13.5 6a4.5 4.5 0 10-9 0c0 4.5-1.5 6-1.5 6h12s-1.5-1.5-1.5-6zM10.5 15a1.5 1.5 0 01-3 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Sending...';
+
+                try {
+                    // Wait for both the request and a minimum delay to complete
+                    const [response] = await Promise.all([
+                        fetch('/plugin-io/api/patient_portal_forms/provider-view/patient/{{ patient_id }}/remind', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(questionnaireData)
+                        }),
+                        new Promise(resolve => setTimeout(resolve, 1000))
+                    ]);
+
+                    if (response.ok) {
+                        // Success - show confirmation
+                        button.innerHTML = '<svg class="icon bell-icon" width="12" height="12" viewBox="0 0 18 18" fill="none"><path d="M13.5 6a4.5 4.5 0 10-9 0c0 4.5-1.5 6-1.5 6h12s-1.5-1.5-1.5-6zM10.5 15a1.5 1.5 0 01-3 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Sent!';
+
+                        // Reset button after 2 seconds
+                        setTimeout(() => {
+                            button.disabled = false;
+                            button.innerHTML = originalContent;
+                        }, 2000);
+                    } else {
+                        const error = await response.text();
+                        alert('Error sending reminder: ' + error);
+                        button.disabled = false;
+                        button.innerHTML = originalContent;
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error sending reminder. Please try again.');
+                    button.disabled = false;
+                    button.innerHTML = originalContent;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

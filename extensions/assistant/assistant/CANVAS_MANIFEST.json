@@ -1,0 +1,60 @@
+{
+    "sdk_version": "0.81.0",
+    "plugin_version": "0.13.0",
+    "name": "assistant",
+    "description": "Answer natural-language questions about patients using Claude",
+    "components": {
+        "handlers": [
+            {
+                "class": "assistant.handlers.assistant:Assistant",
+                "description": "Natural-language patient query API backed by Claude"
+            }
+        ],
+        "applications": [
+            {
+                "class": "assistant.handlers.chat_app:ChatApp",
+                "name": "Assistant",
+                "description": "Ask about this patient or the practice.",
+                "icon": "static/bot-message-square.png",
+                "scope": "patient_specific",
+                "show_in_panel": true
+            },
+            {
+                "class": "assistant.handlers.chat_app:ChatAppGlobal",
+                "name": "Assistant",
+                "description": "Ask anything about the practice.",
+                "icon": "static/bot-message-square.png",
+                "scope": "global",
+                "show_in_panel": true
+            },
+            {
+                "class": "assistant.handlers.chat_app:ChatAppCompanionPatient",
+                "name": "Assistant",
+                "description": "Ask about this patient or the practice.",
+                "icon": "static/bot-message-square.png",
+                "scope": "provider_companion_patient_specific",
+                "show_in_panel": true
+            },
+            {
+                "class": "assistant.handlers.chat_app:ChatAppCompanionGlobal",
+                "name": "Assistant",
+                "description": "Ask anything about the practice.",
+                "icon": "static/bot-message-square.png",
+                "scope": "provider_companion_global",
+                "show_in_panel": true
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "AnthropicKey", "sensitive": true}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ tab_name }}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #ffffff;
+            color: #1d2433;
+            padding: 16px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1d2433;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status {
+            font-size: 12px;
+            color: #8b95a5;
+            transition: color 0.15s;
+        }
+        .status.saved { color: #16a34a; }
+        .status.saving { color: #d97706; }
+        .status.error { color: #dc2626; }
+
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e2e5ea;
+            border-radius: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #1d2433;
+            resize: none;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        textarea:focus {
+            border-color: #4f6bed;
+            box-shadow: 0 0 0 2px rgba(79, 107, 237, 0.15);
+        }
+
+        textarea::placeholder {
+            color: #b0b8c5;
+        }
+
+        .save-btn {
+            height: 36px;
+            padding: 0 20px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            border: none;
+            background: #052B49;
+            color: #fff;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+        .save-btn:hover:not(:disabled) {
+            background: #0a3d66;
+        }
+        .save-btn:active:not(:disabled) {
+            opacity: 0.7;
+        }
+        .save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ tab_name }}</h1>
+        <div class="header-right">
+            <span id="status" class="status"></span>
+            <button id="save-btn" class="save-btn" disabled>Save</button>
+        </div>
+    </div>
+    <div class="editor-container">
+        <textarea
+            id="editor"
+            placeholder="Enter notes here..."
+            autofocus
+        ></textarea>
+    </div>
+
+    <script>
+        const NOTE_ID = {{ note_id_json|safe }};
+        const BASE = "/plugin-io/api/custom_visit_notes/notes";
+
+        const editor = document.getElementById("editor");
+        const statusEl = document.getElementById("status");
+        const saveBtn = document.getElementById("save-btn");
+
+        let lastSavedContent = "";
+        let saving = false;
+
+        const initialContent = {{ content|safe }};
+        editor.value = initialContent;
+        lastSavedContent = initialContent;
+
+        function setStatus(text, className) {
+            statusEl.textContent = text;
+            statusEl.className = "status " + (className || "");
+        }
+
+        function updateSaveBtn() {
+            const hasChanges = editor.value !== lastSavedContent;
+            saveBtn.disabled = !hasChanges || saving;
+        }
+
+        async function save() {
+            const content = editor.value;
+            if (content === lastSavedContent || saving) return;
+
+            saving = true;
+            saveBtn.disabled = true;
+            setStatus("Saving...", "saving");
+
+            try {
+                const resp = await fetch(`${BASE}/save?note_id=${NOTE_ID}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ content }),
+                });
+                if (!resp.ok) throw new Error(`Save failed: ${resp.status}`);
+                lastSavedContent = content;
+                setStatus("Saved", "saved");
+                setTimeout(() => {
+                    if (statusEl.textContent === "Saved") setStatus("");
+                }, 2000);
+            } catch (err) {
+                console.error("Save error:", err);
+                setStatus("Save failed", "error");
+            } finally {
+                saving = false;
+                updateSaveBtn();
+            }
+        }
+
+        editor.addEventListener("input", () => {
+            updateSaveBtn();
+            if (editor.value !== lastSavedContent) {
+                setStatus("Unsaved changes", "");
+            }
+        });
+
+        saveBtn.addEventListener("click", save);
+
+        document.addEventListener("keydown", (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+                e.preventDefault();
+                save();
+            }
+        });
+
+        let messagePort = null;
+        window.addEventListener("message", (event) => {
+            if (event.data?.type === "INIT_CHANNEL" && event.ports?.[0]) {
+                messagePort = event.ports[0];
+                messagePort.start();
+            }
+        });
+    </script>
+</body>
+</html>

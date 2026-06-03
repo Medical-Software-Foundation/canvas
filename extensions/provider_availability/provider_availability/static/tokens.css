@@ -1,0 +1,73 @@
+:root {
+  /* Raw palette (named by color, not by role) */
+  --palette-green: #22BA45;
+  --palette-blue: #2185D0;
+  --palette-red: #BD0B00;
+  --palette-orange: #ED4A0B;
+  --palette-yellow: #fbbd08;
+  --palette-olive: #b5cc18;
+  --palette-teal: #00b5ad;
+  --palette-violet: #6435c9;
+  --palette-purple: #a333c8;
+  --palette-pink: #e03997;
+  --palette-brown: #935330;
+  --palette-grey: #767676;
+  --palette-black: #1b1c1d;
+  --palette-white: #FFFFFF;
+
+  /* Surfaces and backgrounds */
+  --palette-bg: #F5F5F5;
+  --palette-border: rgba(34, 36, 38, 0.15);
+
+  /* Text */
+  --palette-text: rgba(0, 0, 0, 0.87);
+  --palette-text-active: rgba(0, 0, 0, 0.95);
+  --palette-text-muted: #767676;
+
+  /* Error state */
+  --palette-error-bg: #fff6f6;
+  --palette-error-border: #e0b4b4;
+  --palette-error-text: #9f3a38;
+
+  /* Semantic aliases (named by role, resolve through palette) */
+  --color-primary: var(--palette-green, #22BA45);
+  --color-secondary: var(--palette-blue, #2185D0);
+  --color-danger: var(--palette-red, #BD0B00);
+  --color-warning: var(--palette-orange, #ED4A0B);
+  --color-text: var(--palette-text, rgba(0, 0, 0, 0.87));
+  --color-text-active: var(--palette-text-active, rgba(0, 0, 0, 0.95));
+  --color-text-muted: var(--palette-text-muted, #767676);
+  --color-bg: var(--palette-bg, #F5F5F5);
+  --color-border: var(--palette-border, rgba(34, 36, 38, 0.15));
+  --color-surface: var(--palette-white, #FFFFFF);
+
+  /* Typography */
+  --font-family: lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-base: 16px;
+  --font-size-label: .92857143em;
+  --font-weight-bold: 700;
+  --line-height-base: 1.4285em;
+
+  /* Spacing (4px grid) */
+  --space-mini: 4px;
+  --space-tiny: 8px;
+  --space-small: 12px;
+  --space-medium: 16px;
+  --space-large: 20px;
+  --space-huge: 24px;
+
+  /* Shape */
+  --radius: .28571429rem;
+  --border-width: 1px;
+
+  /* Transitions */
+  --transition-fast: 200ms;
+  --transition-base: 250ms;
+
+  /* Shadow */
+  --shadow: 0 1px 2px 0 rgba(34, 36, 38, 0.15);
+
+  /* Focus */
+  --focus-ring: 2px solid var(--color-secondary, #2185D0);
+  --focus-ring-offset: 2px;
+}

@@ -1,0 +1,41 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "new-staff-password"
+version = "0.0.2"
+description = "Sends a Canvas password-reset email when a staff member is activated, via the FHIR Practitioner $send-reset-password-email operation."
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+authors = [
+    {name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com"},
+]
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.coverage.run]
+source = ["new_staff_password"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

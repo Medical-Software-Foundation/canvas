@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Hospitalization</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      color: #1a202c;
+      background: #ffffff;
+      padding: 16px;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #2d3748;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    label .required { color: #e53e3e; }
+    input[type="text"],
+    input[type="date"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e0;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #1a202c;
+      background: #ffffff;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #4299e1;
+      box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.3);
+    }
+    textarea { resize: vertical; min-height: 64px; }
+    .row { display: flex; gap: 12px; }
+    .row .form-group { flex: 1; }
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+    }
+    .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+    .checkbox-group label {
+      margin: 0;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 14px;
+      font-weight: normal;
+      cursor: pointer;
+    }
+    #icu-duration-group { display: none; }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-cancel {
+      background: #edf2f7;
+      color: #4a5568;
+    }
+    .btn-cancel:hover { background: #e2e8f0; }
+    .btn-submit {
+      background: #3182ce;
+      color: #ffffff;
+    }
+    .btn-submit:hover { background: #2b6cb0; }
+    .btn-submit:disabled { background: #a0aec0; cursor: not-allowed; }
+    .error-msg {
+      display: none;
+      color: #e53e3e;
+      font-size: 12px;
+      margin-top: 16px;
+      padding: 8px;
+      background: #fff5f5;
+      border: 1px solid #feb2b2;
+      border-radius: 4px;
+    }
+    .success-msg {
+      display: none;
+      color: #276749;
+      font-size: 12px;
+      margin-top: 16px;
+      padding: 8px;
+      background: #f0fff4;
+      border: 1px solid #9ae6b4;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Add Hospitalization</h2>
+  <form id="hospitalization-form">
+    <div class="row">
+      <div class="form-group">
+        <label for="admission_date">Admission Date <span class="required">*</span></label>
+        <input type="date" id="admission_date" name="admission_date" required>
+      </div>
+      <div class="form-group">
+        <label for="discharge_date">Discharge Date</label>
+        <input type="date" id="discharge_date" name="discharge_date">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="hospital_name">Hospital Name <span class="required">*</span></label>
+      <input type="text" id="hospital_name" name="hospital_name" placeholder="e.g. General Hospital" required>
+    </div>
+
+    <div class="form-group">
+      <label for="reason_for_admission">Reason for Admission <span class="required">*</span></label>
+      <input type="text" id="reason_for_admission" name="reason_for_admission" placeholder="e.g. Chest pain, shortness of breath" required>
+    </div>
+
+    <div class="form-group">
+      <label for="principal_diagnosis">Principal Diagnosis</label>
+      <input type="text" id="principal_diagnosis" name="principal_diagnosis" placeholder="e.g. STEMI, Pneumonia">
+    </div>
+
+    <div class="form-group">
+      <label for="treating_physician">Treating Physician</label>
+      <input type="text" id="treating_physician" name="treating_physician" placeholder="e.g. Dr. Smith">
+    </div>
+
+    <div class="checkbox-group">
+      <input type="checkbox" id="icu_stay" name="icu_stay">
+      <label for="icu_stay">ICU Stay</label>
+    </div>
+
+    <div class="form-group" id="icu-duration-group">
+      <label for="icu_duration_days">ICU Duration (days)</label>
+      <input type="number" id="icu_duration_days" name="icu_duration_days" min="1" placeholder="e.g. 3">
+    </div>
+
+    <div class="form-group">
+      <label for="discharge_disposition">Discharge Disposition</label>
+      <input type="text" id="discharge_disposition" name="discharge_disposition" placeholder="e.g. Home, Skilled Nursing Facility">
+    </div>
+
+    <div class="checkbox-group">
+      <input type="checkbox" id="readmission_within_30_days" name="readmission_within_30_days">
+      <label for="readmission_within_30_days">Readmission within 30 days</label>
+    </div>
+
+    <div class="form-group" style="margin-top: 8px;">
+      <label for="notes">Notes</label>
+      <textarea id="notes" name="notes" placeholder="Additional clinical notes..."></textarea>
+    </div>
+
+    <div class="error-msg" id="error-msg"></div>
+    <div class="success-msg" id="success-msg">Hospitalization recorded successfully.</div>
+
+    <div class="actions">
+      <button type="button" class="btn-cancel" id="cancel-btn">Cancel</button>
+      <button type="submit" class="btn-submit" id="submit-btn">Save</button>
+    </div>
+  </form>
+
+  <script>
+    const PATIENT_ID = "{{ patient_id }}";
+    const NOTE_ID = "{{ note_id }}";
+
+    // ICU toggle
+    document.getElementById('icu_stay').addEventListener('change', function() {
+      document.getElementById('icu-duration-group').style.display = this.checked ? 'block' : 'none';
+    });
+
+    let messagePort = null;
+
+    function sendResize() {
+      if (messagePort) {
+        messagePort.postMessage({ type: 'RESIZE', height: document.body.scrollHeight });
+      }
+    }
+
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'INIT_CHANNEL' && event.ports && event.ports[0]) {
+        messagePort = event.ports[0];
+        messagePort.start();
+        sendResize();
+        new ResizeObserver(sendResize).observe(document.body);
+      }
+    });
+
+    function closeModal() {
+      if (messagePort) {
+        messagePort.postMessage({ type: 'CLOSE_MODAL' });
+      }
+    }
+
+    document.getElementById('cancel-btn').addEventListener('click', closeModal);
+
+    document.getElementById('hospitalization-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submit-btn');
+      const errorMsg = document.getElementById('error-msg');
+      const successMsg = document.getElementById('success-msg');
+      errorMsg.style.display = 'none';
+      successMsg.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+
+      const icuStay = document.getElementById('icu_stay').checked;
+      const icuDurationRaw = document.getElementById('icu_duration_days').value;
+
+      const payload = {
+        patient_id: PATIENT_ID,
+        note_id: NOTE_ID,
+        admission_date: document.getElementById('admission_date').value,
+        discharge_date: document.getElementById('discharge_date').value || null,
+        hospital_name: document.getElementById('hospital_name').value,
+        reason_for_admission: document.getElementById('reason_for_admission').value,
+        principal_diagnosis: document.getElementById('principal_diagnosis').value,
+        treating_physician: document.getElementById('treating_physician').value,
+        icu_stay: icuStay,
+        icu_duration_days: (icuStay && icuDurationRaw) ? parseInt(icuDurationRaw, 10) : null,
+        discharge_disposition: document.getElementById('discharge_disposition').value,
+        readmission_within_30_days: document.getElementById('readmission_within_30_days').checked,
+        notes: document.getElementById('notes').value,
+      };
+
+      try {
+        const resp = await fetch('/plugin-io/api/hospitalization_tracker/hospitalizations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'include',
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          successMsg.style.display = 'block';
+          setTimeout(closeModal, 1200);
+        } else {
+          errorMsg.textContent = data.error || 'An error occurred. Please try again.';
+          errorMsg.style.display = 'block';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Save';
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Network error. Please try again.';
+        errorMsg.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save';
+      }
+    });
+  </script>
+</body>
+</html>

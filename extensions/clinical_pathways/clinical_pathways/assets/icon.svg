@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Decision tree / branching pathway icon -->
+  <!-- Root → splits into two child branches -->
+
+  <!-- Connecting branches (drawn first so nodes sit on top) -->
+  <line x1="50" y1="32" x2="26" y2="68" stroke="#2b6cb0" stroke-width="5" stroke-linecap="round" />
+  <line x1="50" y1="32" x2="74" y2="68" stroke="#2b6cb0" stroke-width="5" stroke-linecap="round" />
+
+  <!-- Root node -->
+  <circle cx="50" cy="24" r="12" fill="#2b6cb0" />
+
+  <!-- Left child node -->
+  <circle cx="22" cy="74" r="10" fill="#4299e1" />
+
+  <!-- Right child node -->
+  <circle cx="78" cy="74" r="10" fill="#4299e1" />
+</svg>

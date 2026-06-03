@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ questionnaire_name }}</title>
+    <style type="text/css">
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 20px 32px 20px;
+        }
+
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            margin: 0 -20px 12px;
+            background-color: rgba(245, 245, 247, 0.96);
+            backdrop-filter: saturate(180%) blur(12px);
+            -webkit-backdrop-filter: saturate(180%) blur(12px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .sticky-header-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 40px;
+            padding: 0 16px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            height: 32px;
+            padding: 0 12px 0 10px;
+            flex-shrink: 0;
+            color: #000;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 16px;
+            background-color: rgba(0, 0, 0, 0.06);
+        }
+
+        .back-link:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .back-link .back-arrow {
+            font-size: 17px;
+            font-weight: 600;
+            line-height: 1;
+        }
+
+        .compact-title {
+            flex: 1;
+            min-width: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #000;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .completed-badge {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1b7a3e;
+            background-color: #e8f5ee;
+            border: 1px solid #b7e2c5;
+            padding: 3px 8px;
+            border-radius: 20px;
+        }
+
+        .meta-caption {
+            font-size: 13px;
+            color: #6e6e73;
+            margin-bottom: 12px;
+        }
+
+        .submission-picker {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 12px;
+        }
+
+        .submission-picker-trigger {
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 20px;
+            padding: 6px 10px 6px 14px;
+            font-family: inherit;
+            font-size: 13px;
+            color: #6e6e73;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .submission-picker-trigger:hover,
+        .submission-picker-trigger:focus-visible {
+            background-color: #fafafa;
+            border-color: rgba(0, 0, 0, 0.2);
+            outline: none;
+        }
+
+        .submission-picker-date {
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .submission-picker-chevron {
+            width: 10px;
+            height: 10px;
+            flex-shrink: 0;
+            color: #6e6e73;
+            transition: transform 0.2s ease;
+        }
+
+        .submission-picker.open .submission-picker-chevron {
+            transform: rotate(180deg);
+        }
+
+        .submission-picker-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.12), 0 4px 8px -2px rgba(0, 0, 0, 0.06);
+            min-width: 240px;
+            max-width: 300px;
+            z-index: 20;
+            padding: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .submission-picker-menu[hidden] {
+            display: none;
+        }
+
+        .submission-picker-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #6e6e73;
+            padding: 6px 10px 8px;
+        }
+
+        .submission-picker-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .submission-picker-item {
+            font-size: 14px;
+            color: #1d1d1f;
+            padding: 8px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+        }
+
+        .submission-picker-item:hover {
+            background-color: #f5f5f7;
+        }
+
+        .submission-picker-item.selected {
+            background-color: #f0f0f3;
+            font-weight: 600;
+        }
+
+        .submission-picker-item-check {
+            width: 14px;
+            height: 14px;
+            color: #1d1d1f;
+            flex-shrink: 0;
+            opacity: 0;
+        }
+
+        .submission-picker-item.selected .submission-picker-item-check {
+            opacity: 1;
+        }
+
+        .questions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .question-card {
+            background: white;
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .question-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #000;
+            margin-bottom: 12px;
+            line-height: 1.35;
+        }
+
+        .answer-value {
+            font-size: 15px;
+            color: #1d1d1f;
+        }
+
+        .answer-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .answer-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 15px;
+            color: #1d1d1f;
+        }
+
+        .answer-chip::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            background-color: #34c759;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .answer-empty {
+            font-size: 14px;
+            font-style: italic;
+            color: #8e8e93;
+        }
+
+        @media (min-width: 769px) {
+            .compact-title {
+                font-size: 17px;
+            }
+
+            .question-card {
+                padding: 28px;
+            }
+
+            .question-title {
+                font-size: 17px;
+            }
+
+            .answer-value,
+            .answer-chip {
+                font-size: 17px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sticky-header">
+            <div class="sticky-header-row">
+                <a href="/plugin-io/api/patient_portal_forms/patient-view/patient/{{ patient_id }}"
+                   class="back-link"
+                   aria-label="Back to Forms"
+                   title="Back to Forms">
+                    <span class="back-arrow" aria-hidden="true">←</span>
+                    <span>Back</span>
+                </a>
+                <span class="compact-title">{{ questionnaire_name }}</span>
+                <span class="completed-badge">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Completed
+                </span>
+            </div>
+        </div>
+
+        {% if submission_count > 1 %}
+        <div class="submission-picker" id="submissionPicker">
+            <button type="button" class="submission-picker-trigger" id="submissionPickerTrigger"
+                    aria-haspopup="listbox" aria-expanded="false">
+                <span>Submitted on</span>
+                <span class="submission-picker-date format-date" id="submissionPickerDate">{{ completed_date }}</span>
+                <svg class="submission-picker-chevron" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <div class="submission-picker-menu" id="submissionPickerMenu" hidden role="listbox">
+                <div class="submission-picker-title">Submission history ({{ submission_count }})</div>
+                <ul class="submission-picker-list" id="submissionPickerList"></ul>
+            </div>
+        </div>
+        {% else %}
+        <p class="meta-caption">Submitted on <span class="format-date">{{ completed_date }}</span></p>
+        {% endif %}
+
+        <div class="questions-list">
+            {% for q in questions %}
+            <div class="question-card" data-question-id="{{ q.question_id }}">
+                <h2 class="question-title">{{ forloop.counter }}. {{ q.question_text }}</h2>
+                <div class="question-answer">
+                    {% if q.answer_display %}
+                        {% if q.answer_display|length == 1 %}
+                            <div class="answer-value">{{ q.answer_display.0 }}</div>
+                        {% else %}
+                            <div class="answer-list">
+                                {% for a in q.answer_display %}
+                                <span class="answer-chip">{{ a }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="answer-empty">No answer provided</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {{ submissions|json_script:"submissions-data" }}
+
+    <script>
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+                const [year, month, day] = dateString.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                return date.toLocaleDateString('en-US', options);
+            }
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString;
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.format-date').forEach(element => {
+                const formatted = formatDate(element.textContent.trim());
+                if (formatted) element.textContent = formatted;
+            });
+            installFormsMenuInterceptor('{{ patient_id }}');
+            initSubmissionPicker();
+        });
+
+        function buildAnswerHtml(answerValues) {
+            if (!answerValues || answerValues.length === 0) {
+                return '<div class="answer-empty">No answer provided</div>';
+            }
+            const escape = (s) => String(s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            if (answerValues.length === 1) {
+                return `<div class="answer-value">${escape(answerValues[0])}</div>`;
+            }
+            const chips = answerValues
+                .map(a => `<span class="answer-chip">${escape(a)}</span>`)
+                .join('');
+            return `<div class="answer-list">${chips}</div>`;
+        }
+
+        function applySubmission(submission) {
+            if (!submission || !submission.answers_by_qid) return;
+            document.querySelectorAll('.question-card[data-question-id]').forEach(card => {
+                const qid = card.dataset.questionId;
+                const container = card.querySelector('.question-answer');
+                if (!container) return;
+                container.innerHTML = buildAnswerHtml(submission.answers_by_qid[qid] || []);
+            });
+        }
+
+        function initSubmissionPicker() {
+            const dataEl = document.getElementById('submissions-data');
+            if (!dataEl) return;
+            let submissions = [];
+            try {
+                submissions = JSON.parse(dataEl.textContent) || [];
+            } catch (err) {
+                submissions = [];
+            }
+            const picker = document.getElementById('submissionPicker');
+            if (!picker || submissions.length <= 1) return;
+
+            const trigger = document.getElementById('submissionPickerTrigger');
+            const menu = document.getElementById('submissionPickerMenu');
+            const dateLabel = document.getElementById('submissionPickerDate');
+            const list = document.getElementById('submissionPickerList');
+            let selectedIndex = 0;
+
+            const renderList = () => {
+                list.innerHTML = '';
+                submissions.forEach((sub, i) => {
+                    const li = document.createElement('li');
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'submission-picker-item' + (i === selectedIndex ? ' selected' : '');
+                    btn.setAttribute('role', 'option');
+                    btn.setAttribute('aria-selected', i === selectedIndex ? 'true' : 'false');
+                    btn.innerHTML = `
+                        <svg class="submission-picker-item-check" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                            <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>${formatDate(sub.completed_date) || sub.completed_date || ''}</span>
+                    `;
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        selectedIndex = i;
+                        dateLabel.textContent = formatDate(sub.completed_date) || sub.completed_date || '';
+                        applySubmission(sub);
+                        closeMenu();
+                        renderList();
+                    });
+                    li.appendChild(btn);
+                    list.appendChild(li);
+                });
+            };
+
+            const openMenu = () => {
+                renderList();
+                menu.removeAttribute('hidden');
+                picker.classList.add('open');
+                trigger.setAttribute('aria-expanded', 'true');
+            };
+            const closeMenu = () => {
+                menu.setAttribute('hidden', '');
+                picker.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+            };
+
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (picker.classList.contains('open')) closeMenu(); else openMenu();
+            });
+            document.addEventListener('click', (e) => {
+                if (!picker.contains(e.target)) closeMenu();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeMenu();
+            });
+        }
+
+        function installFormsMenuInterceptor(patientId) {
+            try {
+                if (!window.parent || window.parent === window) return;
+                if (window.parent.__ppfFormsInterceptorInstalled) return;
+                const listPath = `/plugin-io/api/patient_portal_forms/patient-view/patient/${patientId}`;
+                const handler = (e) => {
+                    let el = e.target;
+                    while (el && el.nodeType === 1) {
+                        const role = el.getAttribute && el.getAttribute('role');
+                        const isClickable = el.tagName === 'A' || el.tagName === 'BUTTON' ||
+                            role === 'menuitem' || role === 'button' || role === 'link';
+                        if (isClickable) {
+                            const text = (el.innerText || el.textContent || '').trim();
+                            if (text === 'Forms') {
+                                if (window.location.pathname !== listPath) {
+                                    window.location.href = listPath;
+                                }
+                                return;
+                            }
+                        }
+                        el = el.parentNode;
+                    }
+                };
+                window.parent.document.addEventListener('click', handler, true);
+                window.parent.__ppfFormsInterceptorInstalled = true;
+            } catch (err) {}
+        }
+
+        document.addEventListener('click', () => {
+            try {
+                window.parent.postMessage({ type: 'plugin-content-click' }, '*');
+            } catch (err) {}
+            setTimeout(() => {
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.document.body.dispatchEvent(
+                            new MouseEvent('click', { bubbles: true, cancelable: true })
+                        );
+                    }
+                } catch (err) {}
+            }, 0);
+        });
+    </script>
+</body>
+</html>

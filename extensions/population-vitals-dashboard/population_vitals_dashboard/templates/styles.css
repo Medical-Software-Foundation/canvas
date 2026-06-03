@@ -1,0 +1,236 @@
+/* Population Vitals Dashboard styles */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #f4f6fa;
+  color: #1a2035;
+  min-height: 100vh;
+}
+
+/* ── header ────────────────────────────────────────────────────────────────── */
+
+.header {
+  background: #1a6fc4;
+  color: white;
+  padding: 16px 24px;
+}
+
+.header__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ── filters ────────────────────────────────────────────────────────────────── */
+
+.filters {
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 24px;
+}
+
+.filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.filter-group__input {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  color: #1a2035;
+  min-width: 120px;
+}
+
+.filter-group__input--narrow {
+  min-width: 72px;
+  width: 72px;
+}
+
+.filter-group__input:focus {
+  outline: 2px solid #1a6fc4;
+  outline-offset: 1px;
+  border-color: #1a6fc4;
+}
+
+/* ── buttons ────────────────────────────────────────────────────────────────── */
+
+.btn {
+  height: 36px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn--primary {
+  background: #1a6fc4;
+  color: white;
+}
+
+.btn--primary:hover {
+  background: #155fa0;
+}
+
+.btn--primary:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* ── status banner ──────────────────────────────────────────────────────────── */
+
+.status-banner {
+  margin: 16px 24px 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status-banner--hidden {
+  display: none;
+}
+
+.status-banner--info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+.status-banner--warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.status-banner--error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+/* ── summary cards ──────────────────────────────────────────────────────────── */
+
+.summary-cards {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px 0;
+  flex-wrap: wrap;
+}
+
+.summary-cards--hidden {
+  display: none;
+}
+
+.card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 24px;
+  min-width: 140px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.card__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.card__value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1a6fc4;
+}
+
+/* ── charts ─────────────────────────────────────────────────────────────────── */
+
+.charts-row {
+  display: flex;
+  gap: 16px;
+  padding: 16px 24px 24px;
+  flex-wrap: wrap;
+}
+
+.charts-row--hidden {
+  display: none;
+}
+
+.chart-container {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  flex: 1;
+  min-width: 280px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.chart-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── loading overlay ─────────────────────────────────────────────────────────── */
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.loading-overlay--hidden {
+  display: none;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #1a6fc4;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
