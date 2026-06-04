@@ -71,6 +71,14 @@ META_SYNCED_ERA_IDS = "candid_synced_adjudication_ids"
 META_SYNCED_PAYMENT_IDS = "candid_synced_payment_ids"
 META_SYNCED_AMOUNTS = "candid_synced_amounts"
 META_SUBMISSION_ERROR = "candid_submission_error"
+META_SYNC_HISTORY = "candid_sync_history"
+
+# Sync-history entry types and the cap on retained entries per claim. The
+# history is a capped JSON list under META_SYNC_HISTORY (newest first), so it
+# is bounded by construction -- no separate pruning needed.
+LOG_TYPE_SYNC = "sync"
+LOG_TYPE_PAYMENT_REPORTED = "payment_reported"
+MAX_SYNC_HISTORY = 20
 
 PATIENT_COVERAGE_ID = "patient"
 DEFAULT_CLAIM_STATUS = "synced"
@@ -112,6 +120,23 @@ def get_claim_metadata_set(claim: Claim, key: str) -> set[str]:
     """Read a metadata value as a set of strings, defaulting to empty."""
     raw = get_claim_metadata(claim, key)
     return set(raw) if isinstance(raw, list) else set()
+
+
+def append_sync_history(
+    claim: Claim, claim_effect: ClaimEffect, entry: dict
+) -> Effect:
+    """Prepend a sync-history entry to the claim's metadata, capped at MAX_SYNC_HISTORY.
+
+    Returns the upsert effect so the history write rides the same effect batch
+    as the sync it records. Entries are stored newest-first in the shape the
+    claim-detail API serves directly.
+    """
+    history = get_claim_metadata(claim, META_SYNC_HISTORY)
+    history = history if isinstance(history, list) else []
+    return claim_effect.upsert_metadata(
+        key=META_SYNC_HISTORY,
+        value=json.dumps([entry, *history][:MAX_SYNC_HISTORY]),
+    )
 
 
 def active_coverages_ordered(claim: Claim) -> list:

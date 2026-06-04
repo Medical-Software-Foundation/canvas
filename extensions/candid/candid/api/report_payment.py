@@ -1,6 +1,7 @@
 """SimpleAPI endpoint that reports a patient payment to Candid."""
 
 import json
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from canvas_sdk.effects import Effect
@@ -14,15 +15,16 @@ from logger import log
 from candid.api.broadcast import notify_claim_updated
 from candid.api.client import CandidClient
 from candid.effect_helpers import (
+    LOG_TYPE_PAYMENT_REPORTED,
     META_ENCOUNTERS,
     META_REPORTED_PAYMENT_IDS,
     META_SYNCED_PAYMENT_IDS,
     PATIENT_PAYMENT_DESC_PREFIX,
+    append_sync_history,
     check_internal_auth,
     get_claim_metadata,
     get_claim_metadata_set,
 )
-from candid.models.sync_state import LOG_TYPE_PAYMENT_REPORTED, SyncLog
 
 
 def _unattributed(amount_cents: int) -> dict:
@@ -163,23 +165,31 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
             f"(patient_payment_id={payment_id})"
         )
 
+        now = datetime.now(UTC).isoformat()
         effects: list[Effect] = []
         for claim_ext_id, reported_set in reportable_claims:
+            claim_effect = ClaimEffect(claim_id=claim_ext_id)
             merged = sorted(reported_set | {payment_id})
             effects.append(
-                ClaimEffect(claim_id=claim_ext_id).upsert_metadata(
+                claim_effect.upsert_metadata(
                     key=META_REPORTED_PAYMENT_IDS,
                     value=json.dumps(merged),
                 )
             )
-            try:
-                SyncLog.objects.create(
-                    canvas_claim_id=claim_ext_id,
-                    log_type=LOG_TYPE_PAYMENT_REPORTED,
-                    detail=f"${total_cents / 100:.2f} | payment_id={payment_id}",
+            effects.append(
+                append_sync_history(
+                    claims_by_id[claim_ext_id],
+                    claim_effect,
+                    {
+                        "synced_at": now,
+                        "log_type": LOG_TYPE_PAYMENT_REPORTED,
+                        "status": "",
+                        "effects": 0,
+                        "era_ids": [],
+                        "detail": f"${total_cents / 100:.2f} | payment_id={payment_id}",
+                    },
                 )
-            except Exception:
-                log.warning(f"Candid: failed to write SyncLog for claim {claim_ext_id}")
+            )
             effects.append(notify_claim_updated(claim_ext_id))
 
         return effects

@@ -10,18 +10,25 @@ configured time zone (``INSTALLATION_TIME_ZONE``). This avoids hardcoding
 a UTC hour that maps to a different local time for each customer.
 """
 
+import json
+from collections import defaultdict
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.claim import ClaimEffect
 from canvas_sdk.handlers.cron_task import CronTask
 from canvas_sdk.v1.data.claim import Claim, ClaimQueues
-from django.db.models import Max
 from logger import log
 
 from candid.adjudication_sync import sync_claim_adjudications
-from candid.effect_helpers import META_ENCOUNTERS
-from candid.models.sync_state import LOG_TYPE_SYNC, SyncLog
+from candid.effect_helpers import (
+    META_ENCOUNTERS,
+    META_SYNC_HISTORY,
+    MAX_SYNC_HISTORY,
+    get_claim_metadata,
+)
+from candid.models.sync_state import SyncLog
 
 SYNC_QUEUES = (
     ClaimQueues.FILED_AWAITING_RESPONSE,
@@ -30,70 +37,83 @@ SYNC_QUEUES = (
     ClaimQueues.REJECTED_NEEDS_REVIEW,
 )
 
-# Queues a claim lands in once it is done; its sync logs are pure cruft.
-FINISHED_QUEUES = (ClaimQueues.ZERO_BALANCE, ClaimQueues.TRASH)
-
-# A "no-op" sync row: a sync attempt that recorded no ERA and posted no payment,
-# so it carries nothing the next sync won't. Both prune passes target these.
-NOOP_FILTER = {"log_type": LOG_TYPE_SYNC, "payment_effects_count": 0, "era_ids": ""}
-
 TARGET_HOUR = 2  # 2 AM local time
-SYNCLOG_RETENTION_DAYS = 90
-
-# Claims in these queues are "done" — their SyncLog rows can be pruned.
-FINISHED_QUEUES = (
-    ClaimQueues.ZERO_BALANCE,
-    ClaimQueues.TRASH,
-)
 
 
-def _prune_synclog() -> int:
-    """Reclaim *no-op* SyncLog rows (no ERA, no payment posted) that no longer
-    carry information. Two rules, both safe to run nightly:
+def _row_to_entry(row: SyncLog) -> dict:
+    """Render a legacy SyncLog row in the metadata sync-history entry shape."""
+    return {
+        "synced_at": row.synced_at.isoformat() if row.synced_at else None,
+        "log_type": row.log_type,
+        "status": row.candid_claim_status,
+        "effects": row.payment_effects_count,
+        "era_ids": row.era_ids.split(",") if row.era_ids else [],
+        "detail": row.detail,
+    }
 
-    1. For an open claim, keep only the most recent no-op row. These dominate
-       growth -- one row per open claim per night -- and an older "nothing
-       changed" row says nothing the latest one doesn't.
-    2. For a claim that has reached a terminal queue (ZeroBalance / Trash), keep
-       none; it will never sync again, so even the latest no-op row is cruft.
 
-    Both rules collapse to a single delete: keep the latest no-op row of every
-    claim *except* the finished ones, and drop the rest. Rows that recorded an
-    ERA or a payment are never matched, so adjudication history is preserved for
-    the life of the claim.
+def _merge_history(existing: list, legacy: list) -> list:
+    """Fold legacy entries under any existing (post-migration) ones.
+
+    Existing entries win on collision so a backfill can never clobber history
+    written since the migration. Deduped by (synced_at, log_type, detail), sorted
+    newest-first, capped at MAX_SYNC_HISTORY.
     """
-    deleted = 0
-    try:
-        noop = SyncLog.objects.filter(**NOOP_FILTER)
-        # Only claims that still have a no-op row matter -- the active sync
-        # working set, not every claim that ever finished. Narrowing the
-        # terminal-queue lookup to these keeps the id list we ship from the core
-        # claim store bounded by recent sync volume instead of all history.
-        noop_claim_ids = list(noop.values_list("canvas_claim_id", flat=True).distinct())
-        finished_values = [q.value for q in FINISHED_QUEUES]
-        finished_claim_ids = [
-            str(cid)
-            for cid in Claim.objects.filter(
-                id__in=noop_claim_ids,
-                current_queue__queue_sort_ordering__in=finished_values,
-                metadata__key=META_ENCOUNTERS,
-            ).values_list("id", flat=True)
-        ]
+    seen: set[tuple] = set()
+    merged: list = []
+    for entry in [*existing, *legacy]:
+        key = (entry.get("synced_at"), entry.get("log_type"), entry.get("detail"))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(entry)
+    merged.sort(key=lambda e: e.get("synced_at") or "", reverse=True)
+    return merged[:MAX_SYNC_HISTORY]
 
-        keep_ids = list(
-            noop.exclude(canvas_claim_id__in=finished_claim_ids)
-            .values("canvas_claim_id")
-            .annotate(latest_id=Max("id"))
-            .values_list("latest_id", flat=True)
+
+def _backfill_sync_history() -> list[Effect]:
+    """One-time migration of legacy SyncLog rows into claim metadata.
+
+    Self-terminating: rows are deleted as they are migrated, so once every
+    environment has run this the SyncLog table is empty and this is a no-op.
+    Safe to re-run -- ``_merge_history`` dedupes, so a partial failure just
+    retries the next night. Orphaned rows (claim no longer exists) are dropped.
+    """
+    queryset = SyncLog.objects.all()
+    rows = list(queryset)
+    if not rows:
+        return []
+
+    rows_by_claim: dict[str, list[SyncLog]] = defaultdict(list)
+    for row in rows:
+        rows_by_claim[row.canvas_claim_id].append(row)
+
+    claims = {
+        str(c.id): c
+        for c in Claim.objects.filter(id__in=list(rows_by_claim.keys()))
+    }
+
+    effects: list[Effect] = []
+    for claim_id, claim_rows in rows_by_claim.items():
+        claim = claims.get(claim_id)
+        if claim is None:
+            continue  # orphaned rows -- deleted below, nowhere to migrate to
+        existing = get_claim_metadata(claim, META_SYNC_HISTORY)
+        existing = existing if isinstance(existing, list) else []
+        merged = _merge_history(existing, [_row_to_entry(r) for r in claim_rows])
+        effects.append(
+            ClaimEffect(claim_id=claim_id).upsert_metadata(
+                key=META_SYNC_HISTORY,
+                value=json.dumps(merged),
+            )
         )
-        deleted = deleted + noop.exclude(id__in=keep_ids).delete()[0]
-    except Exception as e:
-        log.warning(f"Candid nightly sync: failed to prune SyncLog: {e}")
-        return deleted
 
-    if deleted:
-        log.info(f"Candid nightly sync: pruned {deleted} SyncLog rows")
-    return deleted
+    deleted = queryset.delete()[0]
+    log.info(
+        f"Candid sync-history backfill: migrated {len(effects)} claims, "
+        f"deleted {deleted} legacy rows"
+    )
+    return effects
 
 
 class NightlyCandidSync(CronTask):
@@ -111,13 +131,16 @@ class NightlyCandidSync(CronTask):
         local_hour = datetime.now(UTC).astimezone(tz).hour
         if local_hour != TARGET_HOUR:
             return []
+
+        # One-time legacy backfill; a no-op once the SyncLog table is drained.
+        effects: list[Effect] = _backfill_sync_history()
+
         queue_values = [q.value for q in SYNC_QUEUES]
         claims = Claim.objects.filter(
             current_queue__queue_sort_ordering__in=queue_values,
             metadata__key=META_ENCOUNTERS,
         )
 
-        effects: list[Effect] = []
         count = claims.count()
         if count == 0:
             log.info("Candid nightly sync: no claims to sync")
@@ -134,5 +157,4 @@ class NightlyCandidSync(CronTask):
                     )
             log.info(f"Candid nightly sync: processed {synced}/{count} claims")
 
-        _prune_synclog()
         return effects

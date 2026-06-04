@@ -16,14 +16,13 @@ from candid.effect_helpers import (
     META_REPORTED_PAYMENT_IDS,
     META_SUBMISSION_ERROR,
     META_SUBMITTED_AT,
+    META_SYNC_HISTORY,
     META_SYNCED_ERA_IDS,
     META_SYNCED_PAYMENT_IDS,
+    MAX_SYNC_HISTORY,
     PATIENT_PAYMENT_DESC_PREFIX,
     get_claim_metadata,
 )
-from candid.models.sync_state import SyncLog
-
-MAX_SYNC_HISTORY = 20
 
 
 def _get_posting_info(claim: Claim) -> dict[str, dict]:
@@ -70,22 +69,10 @@ class CandidClaimDetailAPI(StaffSessionAuthMixin, SimpleAPIRoute):
 
         posting_info = _get_posting_info(claim)
 
-        try:
-            sync_history = [
-                {
-                    "synced_at": s.synced_at.isoformat() if s.synced_at else None,
-                    "log_type": s.log_type,
-                    "status": s.candid_claim_status,
-                    "effects": s.payment_effects_count,
-                    "era_ids": s.era_ids.split(",") if s.era_ids else [],
-                    "detail": s.detail,
-                }
-                for s in SyncLog.objects.filter(
-                    canvas_claim_id=canvas_claim_id
-                ).order_by("-synced_at")[:MAX_SYNC_HISTORY]
-            ]
-        except Exception:
-            sync_history = []
+        # Stored newest-first and capped on write; slice defensively in case an
+        # older, longer history predates the cap.
+        history = get_claim_metadata(claim, META_SYNC_HISTORY)
+        sync_history = (history if isinstance(history, list) else [])[:MAX_SYNC_HISTORY]
 
         banner_alert = claim.banner_alerts.filter(
             key=BANNER_KEY, status="active"

@@ -374,7 +374,6 @@ def test_sync_posts_from_era_and_schedules_verify() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = []
@@ -416,7 +415,6 @@ def test_sync_skips_already_synced_era() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = []
@@ -428,7 +426,7 @@ def test_sync_skips_already_synced_era() -> None:
 
 
 def test_sync_skips_when_no_encounters_metadata() -> None:
-    """No encounters metadata → early return, no SyncLog written."""
+    """No encounters metadata → early return, no sync history written."""
     claim = _fake_claim([], metadata={})
 
     with patch("candid.adjudication_sync.ClaimEffect"):
@@ -457,7 +455,6 @@ def test_sync_posts_patient_payment() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = [
@@ -497,7 +494,6 @@ def test_sync_skips_already_synced_patient_payment() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = [
@@ -526,7 +522,6 @@ def test_sync_extracts_status_from_claim() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner") as mock_banner,
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = []
@@ -624,7 +619,6 @@ def test_sync_posts_secondary_insurance_payment() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = []
@@ -663,7 +657,6 @@ def test_sync_posts_tertiary_insurance_payment() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = []
@@ -696,7 +689,6 @@ def test_sync_skips_secondary_when_no_secondary_coverage() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = []
@@ -741,7 +733,6 @@ def test_sync_does_not_create_separate_patient_posting_for_pr() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         MC.from_secrets.return_value.get_encounter.return_value = encounter
         MC.from_secrets.return_value.get_patient_payments.return_value = []
@@ -790,7 +781,6 @@ def test_sync_dedupes_patient_payment_across_encounters() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         client_mock = MC.from_secrets.return_value
         client_mock.get_encounter.side_effect = [encounter_1, encounter_2]
@@ -832,7 +822,6 @@ def test_sync_skips_encounter_on_fetch_failure_and_continues() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         client_mock = MC.from_secrets.return_value
         client_mock.get_encounter.side_effect = [
@@ -868,7 +857,6 @@ def test_sync_continues_when_patient_payments_fetch_fails() -> None:
         patch("candid.adjudication_sync.CandidClient") as MC,
         patch("candid.adjudication_sync.ClaimEffect") as MCE,
         patch("candid.adjudication_sync.sync_banner"),
-        patch("candid.adjudication_sync.SyncLog"),
     ):
         client_mock = MC.from_secrets.return_value
         client_mock.get_encounter.return_value = encounter

@@ -34,14 +34,15 @@ from candid.effect_helpers import (
     META_SYNCED_AMOUNTS,
     META_SYNCED_ERA_IDS,
     META_SYNCED_PAYMENT_IDS,
+    LOG_TYPE_SYNC,
     PATIENT_COVERAGE_ID,
     PATIENT_PAYMENT_DESC_PREFIX,
     active_coverages_ordered,
+    append_sync_history,
     get_claim_metadata,
     get_claim_metadata_set,
     sync_banner,
 )
-from candid.models.sync_state import SyncLog
 
 # Patient-responsibility CARC codes
 PR_DEDUCTIBLE = "PR-1"
@@ -687,25 +688,24 @@ def _finalize_effects(state: _SyncState, claim: Claim) -> None:
             ),
         )
 
-
-def _record_sync_log(state: _SyncState) -> None:
-    """Write one SyncLog row capturing what this sync attempted."""
     era_details = [
         f"{eid}: ${state.era_totals.get(eid, 0) / 100:.2f}"
         for eid in state.attempted_era_ids
     ]
-    try:
-        SyncLog.objects.create(
-            canvas_claim_id=state.canvas_claim_id,
-            candid_claim_status=state.claim_status,
-            payment_effects_count=state.payment_effect_count,
-            era_ids=",".join(state.attempted_era_ids),
-            detail=" | ".join(era_details) if era_details else "",
+    state.effects.append(
+        append_sync_history(
+            claim,
+            state.claim_effect,
+            {
+                "synced_at": now,
+                "log_type": LOG_TYPE_SYNC,
+                "status": state.claim_status,
+                "effects": state.payment_effect_count,
+                "era_ids": list(state.attempted_era_ids),
+                "detail": " | ".join(era_details) if era_details else "",
+            },
         )
-    except Exception:
-        log.warning(
-            f"Candid sync: failed to write SyncLog for claim {state.canvas_claim_id}"
-        )
+    )
 
 
 def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
@@ -755,7 +755,6 @@ def sync_claim_adjudications(claim: Claim, secrets: dict) -> list[Effect]:
         f"for claim {state.canvas_claim_id} (status={state.claim_status})"
     )
 
-    _record_sync_log(state)
     state.effects.append(notify_claim_updated(state.canvas_claim_id))
     return state.effects
 

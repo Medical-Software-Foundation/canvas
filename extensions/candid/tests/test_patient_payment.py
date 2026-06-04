@@ -72,7 +72,6 @@ def _run_endpoint(body: dict, submit_result: tuple = (True, "pay-id-456")):
     with (
         patch("candid.api.report_payment.CandidClient") as MockClient,
         patch("candid.api.report_payment.ClaimEffect"),
-        patch("candid.api.report_payment.SyncLog"),
         patch("candid.api.report_payment.Claim") as MockClaim,
         patch("candid.api.report_payment.get_claim_metadata_set", return_value=set()),
         patch("candid.api.report_payment.notify_claim_updated", return_value=MagicMock()),
@@ -144,7 +143,6 @@ def test_endpoint_unattributed_when_claim_has_no_encounter_metadata() -> None:
     with (
         patch("candid.api.report_payment.CandidClient") as MockClient,
         patch("candid.api.report_payment.ClaimEffect"),
-        patch("candid.api.report_payment.SyncLog"),
         patch("candid.api.report_payment.Claim") as MockClaim,
         patch("candid.api.report_payment.get_claim_metadata", return_value=None),
         patch("candid.api.report_payment.get_claim_metadata_set", return_value=set()),

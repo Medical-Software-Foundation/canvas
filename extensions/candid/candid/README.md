@@ -60,7 +60,7 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 **Triggers:**
 - **Event-driven:** When a claim enters the **Patient Balance** queue, the plugin asynchronously POSTs to its own `/sync-patient-payments` SimpleAPI route to pull just the patient payments for that claim (full ERA/adjudication sync is left to the nightly cron)
 - **Manual:** The "Sync Now" button on the claim timeline application POSTs to `/claim-detail`, which runs a full adjudication sync inline
-- **Nightly cron (2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, and **PatientBalance** queues that have Candid encounter metadata, then runs full adjudication sync on each
+- **Nightly cron (2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, and **PatientBalance** queues that have Candid encounter metadata, then runs full adjudication sync on each. It also runs a one-time backfill that migrates any legacy `SyncLog` rows into `candid_sync_history` metadata and deletes them; once the table is drained this is a no-op (see [Sync history backfill](#sync-history-backfill))
 
 **Insurance adjudication (ERA data):**
 - Fetches each encounter stored in claim metadata via `GET /encounters/v4/{candid_encounter_id}`
@@ -78,7 +78,7 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
   - `"none"` / `"primary"` → no transfer
 - **ERA-to-payer mapping:** ERAs are ordered by payer tier (index 0 = primary, 1 = secondary, 2 = tertiary). Each posting uses the correct ERA's check number, check date, and era_id for its description
 - After payments post, the claim is moved to **PatientBalance** (if only patient balance remains) or **AdjudicatedOpenBalance** based on the encounter's per-service-line `insurance_balance_cents` and `patient_balance_cents` totals
-- Each sync attempt writes a `SyncLog` row (custom model) so the timeline UI can show sync history
+- Each sync attempt appends an entry to the claim's `candid_sync_history` metadata (a capped, newest-first JSON list) so the timeline UI can show sync history
 
 **Patient payment sync (Candid -> Canvas):**
 - For each Candid claim within the encounter, queries `GET /patient-payments/v4?claim_id={candid_claim_id}`
@@ -95,7 +95,7 @@ When a patient payment is processed in Canvas (via the `PATIENT_PAYMENT_PROCESSE
 - Handles partial allocations (allocated amounts go to specific encounters, remainder goes as unattributed)
 - Submits the payment to Candid's `POST /api/patient-payments/v4`
 - Stores the returned `patient_payment_id` on each allocated claim's metadata so the sync knows not to re-post it
-- Writes a `payment_reported` `SyncLog` row per allocated claim for the timeline UI
+- Appends a `payment_reported` entry to each allocated claim's `candid_sync_history` metadata for the timeline UI
 - Skips reporting if the originating payment description matches `Candid patient payment ` — this prevents a feedback loop where a payment pulled from Candid is reported right back
 - On failure, creates a Canvas Task labeled "Candid Integration" with the error details to notify clinicians
 
@@ -154,9 +154,11 @@ candid/
     dashboard.html / .css / .js        # full-page Candid claims dashboard
     claim-timeline.html / .css / .js   # claim-page Candid activity timeline
   cron/
-    nightly_sync.py           # 2 AM daily: sync all claims in 3 queues
+    nightly_sync.py           # 2 AM daily: sync all claims in 3 queues;
+                              #   also runs the one-time SyncLog -> metadata backfill
   models/
-    sync_state.py             # SyncLog custom model: per-claim sync history for the timeline UI
+    sync_state.py             # Legacy SyncLog custom model: read-only, retained only
+                              #   for the one-time backfill into candid_sync_history metadata
   adjudication_sync.py        # Core sync logic: pull ERA + patient payments, post to Canvas
   effect_helpers.py           # Shared: banners, metadata keys, success/failure handlers
 ```
@@ -187,6 +189,7 @@ The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is de
 | `candid_synced_amounts` | JSON `{primary, secondary, tertiary}` cumulative paid cents posted so far | Adjudication sync |
 | `candid_synced_payment_ids` | JSON list of patient payment IDs synced from Candid | Adjudication sync / patient-payment sync |
 | `candid_reported_payment_ids` | JSON list of patient payment IDs we reported to Candid | Patient payment handler |
+| `candid_sync_history` | JSON list (newest-first, capped at 20) of activity entries `{synced_at, log_type, status, effects, era_ids, detail}` for the timeline UI | Adjudication sync / patient payment handler |
 
 ## Idempotency
 
@@ -203,6 +206,17 @@ Patient payments are deduped by `patient_payment_id` across two sources:
 - **Inbound** (Candid -> Canvas): When the sync pulls patient payments, it checks against both reported and previously-synced IDs before posting. Synced IDs are written to `candid_synced_payment_ids` in the same effect batch
 
 This prevents double-posting regardless of whether the payment originated in Canvas or in Candid.
+
+## Sync history backfill
+
+Sync history originally lived in a `SyncLog` custom model (one row per activity event per claim). It now lives on each claim's `candid_sync_history` metadata, which removed the need for the nightly `SyncLog` pruning job — the list is capped at write time, so it's bounded by construction.
+
+To preserve existing timelines, the nightly cron runs a one-time migration (`_backfill_sync_history` in `cron/nightly_sync.py`):
+
+- Reads any remaining `SyncLog` rows, groups them by claim, and **merges** them under whatever `candid_sync_history` the claim already has (existing entries win on collision; deduped by `(synced_at, log_type, detail)`, newest-first, capped at 20). The merge means it can't clobber entries written since the migration and is safe to re-run.
+- Deletes the migrated rows, so it self-terminates: once the `SyncLog` table is empty it returns immediately. Orphaned rows (claim no longer exists) are dropped without a metadata write.
+
+The `models/sync_state.py` model is retained read-only solely for this backfill. Once the migration has run in every environment, the model and its table can be dropped in a follow-up.
 
 ## Rollout
 
