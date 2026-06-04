@@ -43,6 +43,10 @@
                 "description": "Nightly cron (2 AM) that syncs adjudication data for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance, and PatientBalance."
             },
             {
+                "class": "candid.cron.backfill_sync_history:CandidSyncHistoryBackfill",
+                "description": "One-time cron (midnight) that migrates legacy SyncLog rows into candid_sync_history metadata; a no-op once the table is drained."
+            },
+            {
                 "class": "candid.api.websocket:CandidTimelineWebSocket",
                 "description": "WebSocket for real-time claim timeline updates."
             },

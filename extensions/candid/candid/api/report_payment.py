@@ -75,9 +75,14 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
         )
 
         allocations: list[dict] = []
-        # (claim_id, reported_payment_ids_set) — cached so the success path
-        # doesn't re-read META_REPORTED_PAYMENT_IDS for each claim.
-        reportable_claims: list[tuple[str, set[str]]] = []
+        # {claim_id: reported_payment_ids_set} — cached so the success path
+        # doesn't re-read META_REPORTED_PAYMENT_IDS, and keyed by claim_id so a
+        # claim that appears in multiple claim_payments gets exactly one set of
+        # post-success effects. Two metadata writes to the same key in one batch
+        # would race (each reads the pre-handler snapshot; last write wins),
+        # clobbering candid_sync_history. The allocations list is NOT deduped --
+        # multiple allocations to the same encounter correctly sum on Candid.
+        reportable_claims: dict[str, set[str]] = {}
         unallocated_cents = total_cents
 
         for cp in claim_payments:
@@ -116,7 +121,7 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
                         "amount_cents": cp_cents,
                     }
                 )
-                reportable_claims.append((claim_ext_id, reported_set))
+                reportable_claims.setdefault(claim_ext_id, reported_set)
             else:
                 log.info(
                     f"Candid: claim {claim_ext_id} has no encounter metadata — "
@@ -167,7 +172,7 @@ class CandidReportPaymentAPI(SimpleAPIRoute):
 
         now = datetime.now(UTC).isoformat()
         effects: list[Effect] = []
-        for claim_ext_id, reported_set in reportable_claims:
+        for claim_ext_id, reported_set in reportable_claims.items():
             claim_effect = ClaimEffect(claim_id=claim_ext_id)
             merged = sorted(reported_set | {payment_id})
             effects.append(

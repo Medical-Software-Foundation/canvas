@@ -60,7 +60,9 @@ Candid has no webhooks, so the plugin pulls adjudication data via `GET /api/enco
 **Triggers:**
 - **Event-driven:** When a claim enters the **Patient Balance** queue, the plugin asynchronously POSTs to its own `/sync-patient-payments` SimpleAPI route to pull just the patient payments for that claim (full ERA/adjudication sync is left to the nightly cron)
 - **Manual:** The "Sync Now" button on the claim timeline application POSTs to `/claim-detail`, which runs a full adjudication sync inline
-- **Nightly cron (2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, and **PatientBalance** queues that have Candid encounter metadata, then runs full adjudication sync on each. It also runs a one-time backfill that migrates any legacy `SyncLog` rows into `candid_sync_history` metadata and deletes them; once the table is drained this is a no-op (see [Sync history backfill](#sync-history-backfill))
+- **Nightly cron (2 AM):** Queries Canvas for all claims in **FiledAwaitingResponse**, **AdjudicatedOpenBalance**, and **PatientBalance** queues that have Candid encounter metadata, then runs full adjudication sync on each
+
+A separate one-time **midnight cron** migrates legacy `SyncLog` rows into `candid_sync_history` metadata — see [Sync history backfill](#sync-history-backfill).
 
 **Insurance adjudication (ERA data):**
 - Fetches each encounter stored in claim metadata via `GET /encounters/v4/{candid_encounter_id}`
@@ -154,8 +156,9 @@ candid/
     dashboard.html / .css / .js        # full-page Candid claims dashboard
     claim-timeline.html / .css / .js   # claim-page Candid activity timeline
   cron/
-    nightly_sync.py           # 2 AM daily: sync all claims in 3 queues;
-                              #   also runs the one-time SyncLog -> metadata backfill
+    nightly_sync.py           # 2 AM daily: sync all claims in 3 queues
+    backfill_sync_history.py  # midnight: one-time SyncLog -> candid_sync_history
+                              #   metadata migration (self-terminating)
   models/
     sync_state.py             # Legacy SyncLog custom model: read-only, retained only
                               #   for the one-time backfill into candid_sync_history metadata
@@ -211,12 +214,14 @@ This prevents double-posting regardless of whether the payment originated in Can
 
 Sync history originally lived in a `SyncLog` custom model (one row per activity event per claim). It now lives on each claim's `candid_sync_history` metadata, which removed the need for the nightly `SyncLog` pruning job — the list is capped at write time, so it's bounded by construction.
 
-To preserve existing timelines, the nightly cron runs a one-time migration (`_backfill_sync_history` in `cron/nightly_sync.py`):
+To preserve existing timelines, a dedicated **midnight cron** (`CandidSyncHistoryBackfill` in `cron/backfill_sync_history.py`) runs a one-time migration:
 
-- Reads any remaining `SyncLog` rows, groups them by claim, and **merges** them under whatever `candid_sync_history` the claim already has (existing entries win on collision; deduped by `(synced_at, log_type, detail)`, newest-first, capped at 20). The merge means it can't clobber entries written since the migration and is safe to re-run.
+- Reads any remaining `SyncLog` rows, groups them by claim, and **merges** them under whatever `candid_sync_history` the claim already has (existing entries win on collision; deduped by `(synced_at, log_type, detail)`, newest-first, capped at 20). The merge means it can't clobber entries written in a *later* run and is safe to re-run.
 - Deletes the migrated rows, so it self-terminates: once the `SyncLog` table is empty it returns immediately. Orphaned rows (claim no longer exists) are dropped without a metadata write.
 
-The `models/sync_state.py` model is retained read-only solely for this backfill. Once the migration has run in every environment, the model and its table can be dropped in a follow-up.
+**Why a separate cron two hours before the 2 AM sync:** both the backfill and the sync's `append_sync_history` write the `candid_sync_history` key, and an effect reads the *pre-handler DB snapshot*. If they ran in the same effect batch the sync would never see the backfill's queued write, and its own write would clobber the merged legacy history (effects apply last-write-wins). Running the backfill at midnight lets its merged metadata commit well before the 2 AM sync reads it, so the sync correctly merges fresh entries on top. (This was an actual bug: a first version ran the backfill inside the nightly sync's pass and lost the migrated history.)
+
+The `models/sync_state.py` model is retained read-only solely for this backfill. Once the migration has run in every environment, the model, `cron/backfill_sync_history.py`, and the table can be dropped in a follow-up.
 
 ## Rollout
 
