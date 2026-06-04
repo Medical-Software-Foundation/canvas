@@ -75,7 +75,17 @@ Namespace: `supervisor__cosign` (read_write).
 
 ## Screenshots
 
-> Screenshots and a screen recording will be added once the plugin is deployed to a clean instance.
+**1. Co-sign button on a locked note.** After a supervisee locks their note, a `Co-sign` button appears in the note header and a co-sign task is created for their supervisor.
+
+![Co-sign button in the note header](docs/screenshots/01-cosign-button.png)
+
+**2. Attestation modal.** The supervisor opens the note and clicks `Co-sign`. They pick an attestation template (or write their own), optionally add comments, and submit.
+
+![Supervisor co-sign attestation modal](docs/screenshots/02-attestation-modal.png)
+
+**3. Co-signed result.** The attestation is written into the note as an `Attestation Review` command and the note is re-signed in the supervisor's name. The supervisor's co-sign task is completed automatically.
+
+![Note showing the committed Attestation Review and supervisor signature](docs/screenshots/03-cosigned-note.png)
 
 ## License
 
