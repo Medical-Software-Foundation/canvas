@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#0f6cbf"/>
+
+  <!-- Clipboard body -->
+  <rect x="22" y="28" width="56" height="58" rx="4" ry="4" fill="white"/>
+
+  <!-- Clipboard top clip -->
+  <rect x="38" y="22" width="24" height="12" rx="3" ry="3" fill="white" stroke="#0f6cbf" stroke-width="2"/>
+  <rect x="42" y="24" width="16" height="6" rx="2" ry="2" fill="#0f6cbf"/>
+
+  <!-- Glance/preview lines on clipboard - representing a brief -->
+  <!-- Header line (person indicator) -->
+  <circle cx="35" cy="46" r="5" fill="#0f6cbf" opacity="0.85"/>
+  <rect x="44" y="43" width="24" height="3" rx="1.5" fill="#0f6cbf" opacity="0.85"/>
+  <rect x="44" y="49" width="16" height="2.5" rx="1.25" fill="#0f6cbf" opacity="0.4"/>
+
+  <!-- Divider -->
+  <line x1="28" y1="58" x2="72" y2="58" stroke="#e3e8ef" stroke-width="1.5"/>
+
+  <!-- Content lines row 1 -->
+  <rect x="28" y="62" width="10" height="2.5" rx="1.25" fill="#0f6cbf" opacity="0.6"/>
+  <rect x="42" y="62" width="30" height="2.5" rx="1.25" fill="#0f6cbf" opacity="0.25"/>
+
+  <!-- Content lines row 2 -->
+  <rect x="28" y="68" width="10" height="2.5" rx="1.25" fill="#0f6cbf" opacity="0.6"/>
+  <rect x="42" y="68" width="22" height="2.5" rx="1.25" fill="#0f6cbf" opacity="0.25"/>
+
+  <!-- Content lines row 3 -->
+  <rect x="28" y="74" width="10" height="2.5" rx="1.25" fill="#0f6cbf" opacity="0.6"/>
+  <rect x="42" y="74" width="26" height="2.5" rx="1.25" fill="#0f6cbf" opacity="0.25"/>
+</svg>

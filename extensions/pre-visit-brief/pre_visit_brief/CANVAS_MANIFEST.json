@@ -1,0 +1,47 @@
+{
+    "sdk_version": "0.155.0",
+    "plugin_version": "0.1.8",
+    "name": "pre_visit_brief",
+    "description": "Global companion app that shows a stack of prep cards (up to 3) for the logged-in provider's upcoming appointments today. Each card displays the patient's prior-visit summary, active problem list, allergies, current medications, and most recent vitals.",
+    "components": {
+        "applications": [
+            {
+                "class": "pre_visit_brief.applications.prep_app:PreVisitBriefApp",
+                "name": "Pre-Visit Brief",
+                "description": "Prep cards for the next 1-3 patients on today's schedule.",
+                "scope": "provider_companion_global",
+                "icon": "assets/pre-visit-brief-icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "pre_visit_brief.handlers.brief_api:BriefAPI",
+                "description": "Serves the pre-visit brief modal UI and data.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "Appointment",
+                        "Patient",
+                        "Note",
+                        "Command",
+                        "Condition",
+                        "AllergyIntolerance",
+                        "Medication",
+                        "Observation"
+                    ],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
