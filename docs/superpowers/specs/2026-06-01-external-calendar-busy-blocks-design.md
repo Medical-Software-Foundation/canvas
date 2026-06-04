@@ -123,7 +123,7 @@ The Canvas plugin runner sandbox (`plugin_runner/sandbox.py` + `plugin_runner/al
 - `BYSETPOS`
 - `BYWEEKNO`
 - `BYYEARDAY`
-- `WKST` (assume Monday)
+- `WKST` other than `MO` (the expander assumes a Monday week start; `WKST=MO` and the omitted default are accepted, a non-`MO` value drops the VEVENT)
 - `BYHOUR` / `BYMINUTE` / `BYSECOND`
 
 ### Open SDK questions

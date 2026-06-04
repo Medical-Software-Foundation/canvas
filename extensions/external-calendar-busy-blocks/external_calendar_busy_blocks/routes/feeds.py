@@ -82,10 +82,10 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
 
     _HTTPS_URL_REGEX = re.compile(r"^https://[^/?#\s]+", re.IGNORECASE)
 
-    # Extract the host (authority) portion of an https URL: everything between
-    # "https://" and the next "/", "?", "#", or end-of-string. Strips any
-    # userinfo ("user@") and port (":443").
-    _HOST_REGEX = re.compile(r"^https://(?:[^/@?#\s]*@)?([^/:?#\s]+)", re.IGNORECASE)
+    # The authority is everything between "https://" and the next "/", "?", or
+    # "#". Host extraction below must then split it the same way requests/
+    # urllib3 do (userinfo ends at the LAST "@"); see _extract_host.
+    _AUTHORITY_REGEX = re.compile(r"^https://([^/?#\s]*)", re.IGNORECASE)
 
     # Allowlist of calendar-provider host suffixes. The SSRF mitigation: the
     # feed fetcher issues server-side GETs from Canvas's network, so an
@@ -110,11 +110,34 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         return bool(FeedsAPI._HTTPS_URL_REGEX.match(url))
 
     @staticmethod
-    def _is_allowed_host(url: str) -> bool:
-        match = FeedsAPI._HOST_REGEX.match(url)
+    def _extract_host(url: str) -> str | None:
+        """Return the host the HTTP client will actually connect to, or None.
+
+        Mirrors RFC 3986 / requests/urllib3: within the authority, userinfo
+        ends at the LAST "@", and the host precedes the port. The sandbox does
+        not allowlist urllib.parse.urlsplit, so this is done with re + string
+        ops — but it must agree with what the client dials, otherwise a
+        `user@allowed.com@169.254.169.254` URL passes the allowlist while the
+        client connects to the trailing internal host.
+        """
+        match = FeedsAPI._AUTHORITY_REGEX.match(url)
         if not match:
+            return None
+        authority = match.group(1)
+        if "@" in authority:
+            authority = authority.rsplit("@", 1)[1]  # host follows the last "@"
+        if authority.startswith("["):  # IPv6 literal, e.g. [::1]:443
+            end = authority.find("]")
+            host = authority[1:end] if end != -1 else authority
+        else:
+            host = authority.split(":", 1)[0]  # strip port
+        return host.lower().rstrip(".") or None
+
+    @staticmethod
+    def _is_allowed_host(url: str) -> bool:
+        host = FeedsAPI._extract_host(url)
+        if not host:
             return False
-        host = match.group(1).lower().rstrip(".")
         return any(
             host == suffix.lstrip(".") or host.endswith(suffix)
             for suffix in FeedsAPI._ALLOWED_HOST_SUFFIXES

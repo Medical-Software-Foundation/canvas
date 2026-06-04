@@ -154,6 +154,12 @@ def test_delete_removes_feed_and_emits_delete_effects() -> None:
         "https://evil.com/x.ics",                      # arbitrary public host
         "https://calendar.google.com.evil.com/x.ics",  # suffix-spoof attempt
         "https://notgoogle.com/x.ics",
+        # Double-@ userinfo bypass: the client dials the host after the LAST
+        # '@', so the allowlist must read the same host (not the one before it).
+        "https://attacker.com@calendar.google.com:443@169.254.169.254/latest/meta-data/",
+        "https://x@calendar.google.com:80@127.0.0.1/x.ics",
+        "https://x@outlook.office365.com:443@10.0.0.5/x.ics",
+        "https://x@p31-caldav.icloud.com:443@internal-postgres:5432/x.ics",
     ],
 )
 def test_post_rejects_disallowed_hosts(url) -> None:

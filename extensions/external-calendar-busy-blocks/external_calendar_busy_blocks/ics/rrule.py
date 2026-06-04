@@ -57,6 +57,15 @@ def parse_rrule(value: str) -> RRule:
     if freq not in SUPPORTED_FREQS:
         raise RRuleUnsupported(f"RRULE FREQ={freq!r} is not supported")
 
+    # The expander anchors weeks to Monday, so WKST=MO (and the omitted default,
+    # which is MO) expand correctly. A non-MO WKST changes interval-week
+    # boundaries (RFC 5545 §3.3.10) and we can't honor it, so drop the VEVENT
+    # rather than emit wrong-day occurrences. WKST=MO is NOT dropped — that
+    # would needlessly lose the many feeds that state the default explicitly.
+    wkst = parts.get("WKST", "MO").upper()
+    if wkst != "MO":
+        raise RRuleUnsupported(f"RRULE WKST={wkst!r} is not supported (only MO)")
+
     rule = RRule(freq=freq)
 
     if "INTERVAL" in parts:
@@ -259,7 +268,12 @@ def _candidate_days_in_month(rule: RRule, year: int, month: int, dtstart: dateti
                 days.add(last + d + 1)
     if not rule.byday and not rule.bymonthday:
         last = _last_day_of_month(year, month)
-        days.add(dtstart.day if dtstart.day <= last else last)
+        # RFC 5545 §3.3.10: an instance on a day the month doesn't have (e.g. a
+        # day-31 monthly rule in February) is invalid and MUST be skipped, not
+        # clamped to the last day. Returning an empty list makes the caller skip
+        # this month, matching the explicit BYMONTHDAY=N path.
+        if dtstart.day <= last:
+            days.add(dtstart.day)
     return sorted(days)
 
 

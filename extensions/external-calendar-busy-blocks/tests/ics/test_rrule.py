@@ -192,3 +192,42 @@ def test_parse_rrule_rejects_zero_interval() -> None:
 def test_parse_rrule_rejects_negative_count() -> None:
     with pytest.raises(RRuleUnsupported):
         parse_rrule("FREQ=DAILY;COUNT=0")
+
+
+def test_expand_monthly_day31_skips_short_months() -> None:
+    # FREQ=MONTHLY on day 31 (no BY*) must skip months without a 31st,
+    # not clamp to the last day (RFC 5545 §3.3.10).
+    rule = parse_rrule("FREQ=MONTHLY")
+    dtstart = datetime(2026, 1, 31, 14, 0, tzinfo=timezone.utc)
+    occ = list(expand_rrule(
+        rule, dtstart,
+        datetime(2026, 1, 1, tzinfo=timezone.utc),
+        datetime(2026, 7, 1, tzinfo=timezone.utc),
+        cap=1000,
+    ))
+    assert [(o.month, o.day) for o in occ] == [(1, 31), (3, 31), (5, 31)]
+
+
+def test_expand_yearly_feb29_skips_non_leap_years() -> None:
+    rule = parse_rrule("FREQ=YEARLY")
+    dtstart = datetime(2024, 2, 29, 14, 0, tzinfo=timezone.utc)
+    occ = list(expand_rrule(
+        rule, dtstart,
+        datetime(2024, 1, 1, tzinfo=timezone.utc),
+        datetime(2030, 1, 1, tzinfo=timezone.utc),
+        cap=1000,
+    ))
+    # Only leap years 2024 and 2028; no spurious Feb 28 in 2025/26/27/29.
+    assert [(o.year, o.month, o.day) for o in occ] == [(2024, 2, 29), (2028, 2, 29)]
+
+
+def test_parse_rrule_rejects_non_mo_wkst() -> None:
+    with pytest.raises(RRuleUnsupported):
+        parse_rrule("FREQ=WEEKLY;BYDAY=SU,SA;INTERVAL=2;WKST=SU")
+
+
+def test_parse_rrule_accepts_default_mo_wkst() -> None:
+    # WKST=MO is the default our expander already assumes; it must NOT be
+    # dropped (that would lose legitimate recurring events).
+    rule = parse_rrule("FREQ=WEEKLY;BYDAY=MO;WKST=MO")
+    assert rule.freq == "WEEKLY"
