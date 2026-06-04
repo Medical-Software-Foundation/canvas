@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Red heart, ~70% of canvas, centered -->
+  <path
+    d="M50,86 C22,62 6,46 6,28 C6,15 17,5 30,5 C39,5 47,11 50,19 C53,11 61,5 70,5 C83,5 94,15 94,28 C94,46 78,62 50,86 Z"
+    fill="#d92f2f"
+    stroke="#a81e1e"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+  <!-- White EKG/ECG trace crossing horizontally through the heart -->
+  <polyline
+    points="14,46 30,46 36,46 40,38 44,55 48,28 52,60 56,46 64,46 86,46"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
