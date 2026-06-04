@@ -19,8 +19,13 @@ dev = [
     "pytest-mock>=3.12.0",
 ]
 
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
 [tool.pytest.ini_options]
 python_files = ["*_tests.py", "test_*.py", "tests.py"]
+markers = ["integtest: marks tests that use the real database"]
 
 [tool.coverage.run]
 omit = ["tests/*"]
