@@ -137,6 +137,14 @@ def test_load_role_map_skips_non_string_values() -> None:
     assert handler._load_role_map() == {"RN": "SCHEDULE"}
 
 
+def test_load_role_map_skips_blank_keys_and_values() -> None:
+    """Entries that normalize to an empty key or value are dropped."""
+    handler = make_handler(
+        actor_id="1", role_map={"   ": "PATIENTS", "MD": "   ", "RN": "SCHEDULE"}
+    )
+    assert handler._load_role_map() == {"RN": "SCHEDULE"}
+
+
 # --------------------------------------------------------------------------------------------
 # Role-based routing against the test database
 # --------------------------------------------------------------------------------------------
@@ -172,6 +180,20 @@ def test_highest_privilege_role_wins() -> None:
         [
             {"internal_code": "CC", "name": "Care Coordinator", "domain_privilege_level": 100},
             {"internal_code": "MD", "name": "Physician", "domain_privilege_level": 100000},
+        ]
+    )
+    handler = make_handler(actor_id=str(staff.user.dbid), role_map=ROLE_MAP)
+    assert page_value(handler.compute()) == DefaultHomepageEffect.Pages.SCHEDULE.value
+
+
+@pytest.mark.integtest
+def test_highest_privilege_wins_regardless_of_role_order() -> None:
+    """Tie-break is order-independent: the higher-privilege role wins even when it is
+    encountered before the lower-privilege one (MD created first, then CC)."""
+    staff = _staff_with_roles(
+        [
+            {"internal_code": "MD", "name": "Physician", "domain_privilege_level": 100000},
+            {"internal_code": "CC", "name": "Care Coordinator", "domain_privilege_level": 100},
         ]
     )
     handler = make_handler(actor_id=str(staff.user.dbid), role_map=ROLE_MAP)
