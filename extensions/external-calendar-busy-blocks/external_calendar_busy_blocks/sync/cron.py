@@ -46,12 +46,12 @@ class SyncCron(CronTask):
                 # One provider's feed must never abort the whole tick or skip
                 # the remaining feeds. Log with traceback (Sentry-visible) and
                 # record the error, then carry on with the next feed.
-                log.exception("Unexpected error syncing feed %s; skipping", feed.id)
+                log.exception("Unexpected error syncing feed %s; skipping", feed.dbid)
                 try:
                     feed.last_error = f"unexpected error: {type(exc).__name__}"
                     feed.save()
                 except Exception:
-                    log.exception("Failed to record last_error for feed %s", feed.id)
+                    log.exception("Failed to record last_error for feed %s", feed.dbid)
         return effects
 
     def _lookahead_days(self) -> int:
@@ -70,7 +70,7 @@ class SyncCron(CronTask):
         try:
             staff = Staff.objects.get(id=feed.staff_id)
         except Staff.DoesNotExist:
-            log.warning("Skipping feed %s: staff %s not found", feed.id, feed.staff_id)
+            log.warning("Skipping feed %s: staff %s not found", feed.dbid, feed.staff_id)
             feed.last_error = f"staff {feed.staff_id} not found"
             feed.save()
             return []
@@ -84,7 +84,7 @@ class SyncCron(CronTask):
         result = fetch_feed(feed.ics_url, etag=feed.last_etag, last_modified=feed.last_modified)
         log.info(
             "Synced feed %s url=%s result=%s",
-            feed.id,
+            feed.dbid,
             redact_url(feed.ics_url),
             type(result).__name__,
         )
@@ -109,7 +109,7 @@ class SyncCron(CronTask):
         try:
             parsed = parse_ics(result.body, now=now, lookahead_days=lookahead_days)
         except IcsParseError as exc:
-            log.warning("Parse failure feed=%s err=%s", feed.id, exc)
+            log.warning("Parse failure feed=%s err=%s", feed.dbid, exc)
             feed.last_error = f"parse failure: {type(exc).__name__}"
             feed.save()
             return []

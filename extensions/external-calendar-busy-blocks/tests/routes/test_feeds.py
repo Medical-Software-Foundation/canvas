@@ -201,3 +201,27 @@ def test_post_accepts_allowlisted_hosts(url) -> None:
         responses = api.create_feed()
     assert responses[0].status_code == 200
     mock_fetch.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://calendar.google.com\t@169.254.169.254/latest/meta-data/",  # tab
+        "https://calendar.google.com @169.254.169.254/x.ics",               # space
+        "https://calendar.google.com\n@169.254.169.254/x.ics",              # LF
+        "https://calendar.google.com\r@169.254.169.254/x.ics",              # CR
+        "https://calendar.google.com\xa0@169.254.169.254/x.ics",            # NBSP
+    ],
+)
+def test_post_rejects_whitespace_injection(url) -> None:
+    """SSRF guard: a URL with internal whitespace must be rejected before the
+    host check, since requests percent-encodes it and dials the trailing host."""
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed"),
+    ):
+        body = json.dumps({"ics_url": url}).encode()
+        api = _api_with_request("POST", body, logged_in_staff="staff-abc")
+        responses = api.create_feed()
+    assert responses[0].status_code == 400
+    mock_fetch.assert_not_called()

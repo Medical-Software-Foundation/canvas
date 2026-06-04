@@ -25,7 +25,7 @@ def _new_cron(timestamp: datetime) -> SyncCron:
 
 def _stub_feed(staff_id: str = "staff-abc", ics_url: str = "https://x.com/x.ics", **kw):
     defaults = dict(
-        id="feed-1",
+        dbid="feed-1",
         staff_id=staff_id,
         ics_url=ics_url,
         is_active=True,
@@ -34,6 +34,10 @@ def _stub_feed(staff_id: str = "staff-abc", ics_url: str = "https://x.com/x.ics"
     )
     defaults.update(kw)
     feed = MagicMock(**defaults)
+    # StaffCalendarFeed (a CustomModel) has no `id` — its PK is `dbid`. Make the
+    # stub raise on `.id` like the real model so any feed.id access fails the
+    # test instead of silently passing on a MagicMock auto-attribute.
+    del feed.id
     return feed
 
 

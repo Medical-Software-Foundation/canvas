@@ -401,3 +401,16 @@ def test_parse_override_missing_dtend_uses_base_duration(ics_fixture) -> None:
     # 6/8 override moved start to 16:00; base duration is 1h -> ends 17:00.
     assert by_day[8].starts_at == datetime(2026, 6, 8, 16, 0, tzinfo=timezone.utc)
     assert by_day[8].ends_at == datetime(2026, 6, 8, 17, 0, tzinfo=timezone.utc)
+
+
+def test_parse_bad_exdate_tzid_keeps_series(ics_fixture) -> None:
+    # An unparseable EXDATE (non-IANA Windows TZID) must drop only that
+    # exclusion, not the whole recurring series. 3 Mondays, none excluded
+    # (the bad EXDATE is ignored rather than killing the VEVENT).
+    events = parse_ics(
+        ics_fixture("exdate_bad_tzid.ics"),
+        now=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        lookahead_days=90,
+    )
+    days = sorted(e.starts_at.day for e in events)
+    assert days == [1, 8, 15]

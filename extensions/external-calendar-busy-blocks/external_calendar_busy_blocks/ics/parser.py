@@ -141,7 +141,17 @@ def _collect_exdates(props: list[Property], default_tz: str) -> set[datetime]:
         if name != "EXDATE":
             continue
         for piece in value.split(","):
-            dv = parse_ics_datetime(piece, params, default_tz)
+            # EXDATE is supplementary ("skip this one date"). An unparseable
+            # value (e.g. a non-IANA Windows TZID like "Eastern Standard Time")
+            # must drop only that exclusion, not the whole recurring series —
+            # which would otherwise cascade through the per-VEVENT guard and
+            # make the cron delete every future occurrence. Worst case here is a
+            # conservative over-block on a cancelled date, never an under-block.
+            try:
+                dv = parse_ics_datetime(piece, params, default_tz)
+            except IcsParseError as exc:
+                log.warning("Ignoring unparseable EXDATE %r: %s", piece, exc)
+                continue
             out.add(dv.moment)
     return out
 

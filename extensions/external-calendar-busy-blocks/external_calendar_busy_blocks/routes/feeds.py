@@ -31,6 +31,16 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         url = (body.get("ics_url") or "").strip()
         if not self._is_https_url(url):
             return [JSONResponse({"error": "ICS URL must be HTTPS"}, status_code=400)]
+        # Reject internal whitespace before host extraction. A real ICS URL
+        # never contains raw whitespace (it would be percent-encoded). The host
+        # regex terminates the authority at whitespace, but requests/urllib3
+        # percent-encode it and keep parsing — so a tab/space/newline lets the
+        # allowlist read one host while the client dials another (SSRF).
+        if re.search(r"\s", url):
+            return [JSONResponse(
+                {"error": "ICS URL must not contain whitespace"},
+                status_code=400,
+            )]
         if not self._is_allowed_host(url):
             return [JSONResponse(
                 {"error": "ICS URL host is not a supported calendar provider "
