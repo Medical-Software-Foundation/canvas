@@ -157,11 +157,6 @@ candid/
     claim-timeline.html / .css / .js   # claim-page Candid activity timeline
   cron/
     nightly_sync.py           # 2 AM daily: sync all claims in 3 queues
-    backfill_sync_history.py  # midnight: one-time SyncLog -> candid_sync_history
-                              #   metadata migration (self-terminating)
-  models/
-    sync_state.py             # Legacy SyncLog custom model: read-only, retained only
-                              #   for the one-time backfill into candid_sync_history metadata
   adjudication_sync.py        # Core sync logic: pull ERA + patient payments, post to Canvas
   effect_helpers.py           # Shared: banners, metadata keys, success/failure handlers
 ```
@@ -175,7 +170,6 @@ Declared in `CANVAS_MANIFEST.json` under `"variables"`. Sensitive values are enc
 | `CANDID_CLIENT_ID` | Yes | Candid OAuth2 client ID |
 | `CANDID_CLIENT_SECRET` | Yes | Candid OAuth2 client secret — also used as the shared API key on the plugin's own `/submit`, `/sync`, `/sync-patient-payments`, and `/report-payment` SimpleAPI routes |
 | `CANDID_BASE_URL` | No | Candid API base URL (e.g. `https://api.joincandidhealth.com`) |
-| `namespace_read_write_access_key` | Yes | Access key for the `canvas__candid` custom_data namespace (auto-generated on first install) |
 
 The instance URL for self-calls (e.g. `/submit`, `/sync-patient-payments`) is derived automatically from `self.environment["CUSTOMER_IDENTIFIER"]` — no variable needed. The internal machine-to-machine routes (`/submit`, `/sync`, `/sync-patient-payments`, `/report-payment`) use `CANDID_CLIENT_SECRET` as a shared API key (`APIKeyCredentials`). The user-facing routes — `/claim-detail`, `/dashboard`, and the `/app/*` asset routes — require a logged-in **staff** session (`StaffSessionAuthMixin`), as does the `CandidTimelineWebSocket`.
 
@@ -210,18 +204,11 @@ Patient payments are deduped by `patient_payment_id` across two sources:
 
 This prevents double-posting regardless of whether the payment originated in Canvas or in Candid.
 
-## Sync history backfill
+## Sync history
 
-Sync history originally lived in a `SyncLog` custom model (one row per activity event per claim). It now lives on each claim's `candid_sync_history` metadata, which removed the need for the nightly `SyncLog` pruning job — the list is capped at write time, so it's bounded by construction.
+Sync history lives on each claim's `candid_sync_history` metadata — a JSON list (newest-first, capped at 20) of activity entries appended by the adjudication sync and the patient-payment handler (see [Claim Metadata Keys](#claim-metadata-keys)). The cap is applied on write, so the list is bounded by construction.
 
-To preserve existing timelines, a dedicated **midnight cron** (`CandidSyncHistoryBackfill` in `cron/backfill_sync_history.py`) runs a one-time migration:
-
-- Reads any remaining `SyncLog` rows, groups them by claim, and **merges** them under whatever `candid_sync_history` the claim already has (existing entries win on collision; deduped by `(synced_at, log_type, detail)`, newest-first, capped at 20). The merge means it can't clobber entries written in a *later* run and is safe to re-run.
-- Deletes the migrated rows, so it self-terminates: once the `SyncLog` table is empty it returns immediately. Orphaned rows (claim no longer exists) are dropped without a metadata write.
-
-**Why a separate cron two hours before the 2 AM sync:** both the backfill and the sync's `append_sync_history` write the `candid_sync_history` key, and an effect reads the *pre-handler DB snapshot*. If they ran in the same effect batch the sync would never see the backfill's queued write, and its own write would clobber the merged legacy history (effects apply last-write-wins). Running the backfill at midnight lets its merged metadata commit well before the 2 AM sync reads it, so the sync correctly merges fresh entries on top. (This was an actual bug: a first version ran the backfill inside the nightly sync's pass and lost the migrated history.)
-
-The `models/sync_state.py` model is retained read-only solely for this backfill. Once the migration has run in every environment, the model, `cron/backfill_sync_history.py`, and the table can be dropped in a follow-up.
+> **History:** activity originally lived in a `SyncLog` custom data model (one row per event per claim), which required a nightly pruning job to bound its growth. It was migrated into `candid_sync_history` metadata by a one-time midnight cron (`CandidSyncHistoryBackfill`) that merged legacy rows under any existing entries, then deleted them. Once that backfill had run in every environment, the cron, the `SyncLog` model, and its table were removed.
 
 ## Rollout
 

@@ -122,9 +122,7 @@ def get_claim_metadata_set(claim: Claim, key: str) -> set[str]:
     return set(raw) if isinstance(raw, list) else set()
 
 
-def append_sync_history(
-    claim: Claim, claim_effect: ClaimEffect, entry: dict
-) -> Effect:
+def append_sync_history(claim: Claim, claim_effect: ClaimEffect, entry: dict) -> Effect:
     """Prepend a sync-history entry to the claim's metadata, capped at MAX_SYNC_HISTORY.
 
     Returns the upsert effect so the history write rides the same effect batch
