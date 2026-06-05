@@ -26,6 +26,51 @@ SUBMISSION_QUEUE = ClaimQueues.QUEUED_FOR_SUBMISSION
 # uses diagnosis_ids instead of diagnoses, and does not accept service_lines.
 PATCH_EXCLUDED_FIELDS = {"diagnoses", "service_lines"}
 
+# POST /service-lines/v2 links diagnoses by Candid diagnosis_id, not the
+# integer diagnosis_pointers used inside the encounter payload.
+DIAGNOSIS_ID_KEYS = (
+    "diagnosis_id_zero",
+    "diagnosis_id_one",
+    "diagnosis_id_two",
+    "diagnosis_id_three",
+)
+
+
+def _standalone_service_line(
+    line: dict, claim_id: str, code_to_diagnosis_id: dict, note_diagnoses: list
+) -> dict:
+    """Translate an encounter-embedded service line into the standalone
+    POST /service-lines/v2 schema.
+
+    The standalone endpoint references diagnoses by Candid diagnosis_id
+    (diagnosis_id_zero..three), so each integer diagnosis_pointer is resolved
+    back to its code via the note diagnosis list, then to the encounter's
+    diagnosis_id. The endpoint has no ordering field — service line order is
+    the order they are created, so callers must POST in note order.
+    """
+    standalone: dict = {
+        "claim_id": claim_id,
+        "procedure_code": line["procedure_code"],
+        "units": line.get("units", "UN"),
+        "quantity": line.get("quantity", "1"),
+    }
+    if "charge_amount_cents" in line:
+        standalone["charge_amount_cents"] = int(line["charge_amount_cents"])
+    if line.get("modifiers"):
+        standalone["modifiers"] = line["modifiers"]
+    if line.get("external_id"):
+        standalone["external_id"] = line["external_id"]
+
+    diagnosis_ids: list = []
+    for pointer in line.get("diagnosis_pointers", []):
+        if 0 <= pointer < len(note_diagnoses):
+            dx_id = code_to_diagnosis_id.get(note_diagnoses[pointer].get("code"))
+            if dx_id and dx_id not in diagnosis_ids:
+                diagnosis_ids.append(dx_id)
+    standalone.update(zip(DIAGNOSIS_ID_KEYS, diagnosis_ids))
+
+    return standalone
+
 
 class CandidSubmitAPI(SimpleAPIRoute):
     """SimpleAPI endpoint that submits a claim to Candid after the grace period.
@@ -197,6 +242,14 @@ class CandidSubmitAPI(SimpleAPIRoute):
             )
             return
 
+        code_to_diagnosis_id = {
+            d.get("code"): d.get("diagnosis_id")
+            for candid_claim in candid_claims
+            for d in candid_claim.get("diagnoses", [])
+            if d.get("code") and d.get("diagnosis_id")
+        }
+        note_diagnoses = payload.get("diagnoses", [])
+
         for candid_claim in candid_claims:
             for sl in candid_claim.get("service_lines", []):
                 sl_id = sl.get("service_line_id")
@@ -210,8 +263,13 @@ class CandidSubmitAPI(SimpleAPIRoute):
                         f"Candid: failed to delete service line {sl_id}: {msg}"
                     )
 
+        # POST in note order — the create endpoint has no ordering field, so
+        # service line order on the claim follows creation order.
         for line in payload.get("service_lines", []):
-            ok, msg = client.create_service_line({**line, "claim_id": claim_id})
+            standalone = _standalone_service_line(
+                line, claim_id, code_to_diagnosis_id, note_diagnoses
+            )
+            ok, msg = client.create_service_line(standalone)
             if ok:
                 log.info(f"Candid: created service line {msg}")
             else:
