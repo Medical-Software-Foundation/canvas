@@ -65,8 +65,9 @@ def _standalone_service_line(
         standalone["charge_amount_cents"] = int(line["charge_amount_cents"])
     if line.get("modifiers"):
         standalone["modifiers"] = line["modifiers"]
-    if line.get("external_id"):
-        standalone["external_id"] = line["external_id"]
+    # external_id is omitted on recreate: Candid keeps it reserved per claim
+    # even after the original line is deleted, so reusing it raises 409
+    # EntityConflictError.
 
     diagnosis_ids: list = []
     for pointer in line.get("diagnosis_pointers", []):

@@ -394,7 +394,9 @@ def test_standalone_service_line_maps_pointers_and_coerces_charge() -> None:
     assert result["quantity"] == "2"
     assert result["charge_amount_cents"] == 6000
     assert result["modifiers"] == ["95"]
-    assert result["external_id"] == "li-1"
+    # external_id is dropped on recreate even when present on the line, so a
+    # resubmitted line can't collide with Candid's retained per-claim external_id.
+    assert "external_id" not in result
     # pointers [1, 0] -> codes [I10, E11.9] -> ids, in that order
     assert result["diagnosis_id_zero"] == "dx-i10"
     assert result["diagnosis_id_one"] == "dx-e11"
