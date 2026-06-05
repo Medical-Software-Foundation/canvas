@@ -252,14 +252,15 @@ def test_submit_handles_exception_during_submit_call() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Resubmission: replace service lines on duplicate external_id
+# Resubmission: reconcile service lines against the claim's line items
 # ---------------------------------------------------------------------------
 
 
-def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
-    """On EncounterExternalIdUniquenessError, PATCH the encounter, then delete
-    every existing service line and POST the current ones to /service-lines/v2
-    in note order, mapping diagnosis_pointers to the encounter's diagnosis_ids.
+def test_resubmit_reconciles_service_lines() -> None:
+    """On EncounterExternalIdUniquenessError, PATCH the encounter, then reconcile
+    its service lines against the claim's current line items, keyed on
+    external_id: matched lines are PATCHed in place, lines dropped from the
+    claim are deleted, and lines new on the claim are POSTed.
 
     Note codes are dotless (E119, as Canvas stores them); Candid returns them
     dotted (E11.9) under the encounter-level diagnoses array — the mapping must
@@ -277,6 +278,7 @@ def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
                 "units": "UN",
                 "quantity": "1",
                 "charge_amount_cents": "6000",
+                "external_id": "li-1",
                 "diagnosis_pointers": [0],
             },
             {
@@ -284,7 +286,16 @@ def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
                 "units": "UN",
                 "quantity": "1",
                 "charge_amount_cents": "3000",
+                "external_id": "li-2",
                 "diagnosis_pointers": [0, 1],
+            },
+            {
+                "procedure_code": "G0023",
+                "units": "UN",
+                "quantity": "1",
+                "charge_amount_cents": "4500",
+                "external_id": "li-3",
+                "diagnosis_pointers": [1],
             },
         ],
     }
@@ -316,12 +327,14 @@ def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
                 {
                     "claim_id": "candid-claim-1",
                     "service_lines": [
-                        {"service_line_id": "old-sl-1"},
-                        {"service_line_id": "old-sl-2"},
+                        {"service_line_id": "sl-1", "external_id": "li-1"},
+                        {"service_line_id": "sl-2", "external_id": "li-2"},
+                        {"service_line_id": "sl-old", "external_id": "li-old"},
                     ],
                 }
             ],
         }
+        client.update_service_line.return_value = (True, "ok")
         client.delete_service_line.return_value = (True, "ok")
         client.create_service_line.return_value = (True, "new-sl")
         mock_success.return_value = ["success-effect"]
@@ -331,45 +344,65 @@ def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
 
         assert result[0] == "success-effect"
         mock_failure.assert_not_called()
-        # Every existing line deleted
-        deleted = sorted(c.args[0] for c in client.delete_service_line.call_args_list)
-        assert deleted == ["old-sl-1", "old-sl-2"]
-        # New lines created in note order, each carrying the Candid claim_id
+
+        # Lines still on the claim are PATCHed in place (matched by external_id),
+        # never deleted + recreated.
+        updates = {
+            c.args[0]: c.args[1] for c in client.update_service_line.call_args_list
+        }
+        assert sorted(updates) == ["sl-1", "sl-2"]
+        # update payload omits claim_id and external_id, maps diagnoses, coerces charge
+        assert "claim_id" not in updates["sl-1"]
+        assert "external_id" not in updates["sl-1"]
+        assert updates["sl-1"]["procedure_code"] == "G0019"
+        assert updates["sl-1"]["charge_amount_cents"] == 6000
+        assert updates["sl-1"]["diagnosis_id_zero"] == "dx-e11"
+        assert "diagnosis_id_one" not in updates["sl-1"]
+        assert updates["sl-2"]["diagnosis_id_zero"] == "dx-e11"
+        assert updates["sl-2"]["diagnosis_id_one"] == "dx-i10"
+
+        # The line new on the claim is POSTed with claim_id + external_id.
         created = [c.args[0] for c in client.create_service_line.call_args_list]
-        assert [c["procedure_code"] for c in created] == ["G0019", "G0022"]
-        assert all(c["claim_id"] == "candid-claim-1" for c in created)
-        # diagnosis_pointers translated to Candid diagnosis_ids; charge coerced to int
-        assert created[0]["diagnosis_id_zero"] == "dx-e11"
-        assert "diagnosis_id_one" not in created[0]
-        assert created[0]["charge_amount_cents"] == 6000
-        assert created[1]["diagnosis_id_zero"] == "dx-e11"
-        assert created[1]["diagnosis_id_one"] == "dx-i10"
-        # the encounter-only integer pointers never reach the standalone endpoint
-        assert all("diagnosis_pointers" not in c for c in created)
+        assert len(created) == 1
+        assert created[0]["procedure_code"] == "G0023"
+        assert created[0]["claim_id"] == "candid-claim-1"
+        assert created[0]["external_id"] == "li-3"
+        assert created[0]["diagnosis_id_zero"] == "dx-i10"
+
+        # The line no longer on the claim is deleted; matched lines are not.
+        deleted = [c.args[0] for c in client.delete_service_line.call_args_list]
+        assert deleted == ["sl-old"]
+
+        # The encounter-only integer pointers never reach the standalone endpoint.
+        assert all(
+            "diagnosis_pointers" not in p for p in [*updates.values(), *created]
+        )
 
 
-def test_replace_service_lines_skips_when_encounter_has_no_claim_id() -> None:
-    """If the fetched encounter has no claim_id, neither delete nor create runs."""
+def test_reconcile_service_lines_skips_when_encounter_has_no_claim_id() -> None:
+    """If the fetched encounter has no claim_id, nothing is changed."""
     client = MagicMock()
     client.get_encounter.return_value = {"claims": [{"service_lines": []}]}
 
-    CandidSubmitAPI._replace_service_lines(
+    CandidSubmitAPI._reconcile_service_lines(
         client, "enc-1", {"service_lines": [{"procedure_code": "G0019"}]}
     )
 
-    client.delete_service_line.assert_not_called()
+    client.update_service_line.assert_not_called()
     client.create_service_line.assert_not_called()
+    client.delete_service_line.assert_not_called()
 
 
-def test_replace_service_lines_handles_encounter_fetch_failure() -> None:
-    """A failed encounter fetch is logged and swallowed — no delete/create."""
+def test_reconcile_service_lines_handles_encounter_fetch_failure() -> None:
+    """A failed encounter fetch is logged and swallowed — no changes."""
     client = MagicMock()
     client.get_encounter.side_effect = requests.RequestException("boom")
 
-    CandidSubmitAPI._replace_service_lines(client, "enc-1", {"service_lines": []})
+    CandidSubmitAPI._reconcile_service_lines(client, "enc-1", {"service_lines": []})
 
-    client.delete_service_line.assert_not_called()
+    client.update_service_line.assert_not_called()
     client.create_service_line.assert_not_called()
+    client.delete_service_line.assert_not_called()
 
 
 def test_standalone_service_line_maps_pointers_and_coerces_charge() -> None:
@@ -384,7 +417,7 @@ def test_standalone_service_line_maps_pointers_and_coerces_charge() -> None:
         "diagnosis_pointers": [1, 0],
     }
     note_diagnoses = [{"code": "E11.9"}, {"code": "I10"}]
-    # map keys are normalized (dotless), as _replace_service_lines builds them
+    # map keys are normalized (dotless), as _reconcile_service_lines builds them
     code_to_diagnosis_id = {"E119": "dx-e11", "I10": "dx-i10"}
 
     result = _standalone_service_line(line, "claim-1", code_to_diagnosis_id, note_diagnoses)
@@ -394,9 +427,9 @@ def test_standalone_service_line_maps_pointers_and_coerces_charge() -> None:
     assert result["quantity"] == "2"
     assert result["charge_amount_cents"] == 6000
     assert result["modifiers"] == ["95"]
-    # external_id is dropped on recreate even when present on the line, so a
-    # resubmitted line can't collide with Candid's retained per-claim external_id.
-    assert "external_id" not in result
+    # external_id is preserved so the line can be matched (and PATCHed in place)
+    # on a later resubmit
+    assert result["external_id"] == "li-1"
     # pointers [1, 0] -> codes [I10, E11.9] -> ids, in that order
     assert result["diagnosis_id_zero"] == "dx-i10"
     assert result["diagnosis_id_one"] == "dx-e11"

@@ -244,3 +244,17 @@ def test_delete_service_line_calls_delete_with_id() -> None:
     assert message == "sl-1"
     url = client.http.delete.call_args.args[0]
     assert url.endswith("/api/service-lines/v2/sl-1")
+
+
+def test_update_service_line_patches_v2_and_returns_id() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.patch.return_value = _ok_response({"service_line_id": "sl-1"})
+
+    success, message = client.update_service_line("sl-1", {"charge_amount_cents": 6000})
+
+    assert success is True
+    assert message == "sl-1"
+    url = client.http.patch.call_args.args[0]
+    assert url.endswith("/api/service-lines/v2/sl-1")

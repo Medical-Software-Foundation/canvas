@@ -149,6 +149,23 @@ class CandidClient:
             return True, response.json().get("service_line_id", "")
         return False, self._format_error(response)
 
+    def update_service_line(
+        self, service_line_id: str, payload: dict
+    ) -> tuple[bool, str]:
+        """Update a service line via PATCH /api/service-lines/v2/{service_line_id}.
+
+        Returns ``(was_successful, message)``. On success, ``message`` is the
+        service_line_id. On failure, ``message`` is a human-readable error.
+        """
+        response = self.http.patch(
+            f"{self.base_url}/api/service-lines/v2/{service_line_id}",
+            json=payload,
+            headers=self._auth_headers(json_body=True),
+        )
+        if response.ok:
+            return True, response.json().get("service_line_id", service_line_id)
+        return False, self._format_error(response)
+
     def delete_service_line(self, service_line_id: str) -> tuple[bool, str]:
         """Delete a service line via DELETE /api/service-lines/v2/{service_line_id}."""
         response = self.http.delete(

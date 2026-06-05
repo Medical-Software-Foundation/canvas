@@ -65,9 +65,12 @@ def _standalone_service_line(
         standalone["charge_amount_cents"] = int(line["charge_amount_cents"])
     if line.get("modifiers"):
         standalone["modifiers"] = line["modifiers"]
-    # external_id is omitted on recreate: Candid keeps it reserved per claim
-    # even after the original line is deleted, so reusing it raises 409
-    # EntityConflictError.
+    # external_id (the Canvas line-item id) keys the line for future resubmits
+    # and adjudication matching. On resubmit, persistent lines are PATCHed in
+    # place rather than recreated, so a create only ever carries a brand-new id
+    # — it never collides with Candid's per-claim external_id reservation.
+    if line.get("external_id"):
+        standalone["external_id"] = line["external_id"]
 
     diagnosis_ids: list = []
     for pointer in line.get("diagnosis_pointers", []):
@@ -189,9 +192,9 @@ class CandidSubmitAPI(SimpleAPIRoute):
                             f"Candid update failed ({split_label}): {e}",
                         )
 
-                    # PATCH can't touch service lines — replace them wholesale
+                    # PATCH can't touch service lines — reconcile them separately
                     if success:
-                        self._replace_service_lines(client, encounter_id, payload)
+                        self._reconcile_service_lines(client, encounter_id, payload)
 
             if not success:
                 log.warning(
@@ -220,23 +223,31 @@ class CandidSubmitAPI(SimpleAPIRoute):
         )
 
     @staticmethod
-    def _replace_service_lines(
+    def _reconcile_service_lines(
         client: CandidClient, encounter_id: str, payload: dict
     ) -> None:
-        """Delete the encounter's existing service lines and create new ones.
+        """Reconcile the encounter's service lines with the claim's line items.
 
-        PATCH /encounters can't modify service lines, so on resubmission we
-        replace them wholesale: delete every line from the prior submission,
-        then POST the current line items to /service-lines/v2. This avoids
-        stale or mis-ordered lines lingering when the claim changed between
-        submissions.
+        PATCH /encounters can't modify service lines, so on resubmission we diff
+        the lines already on the encounter against the claim's current line
+        items, keyed on external_id (the Canvas line-item id):
+
+        - on both          -> PATCH the existing line in place
+        - only on encounter -> DELETE it
+        - only on the claim -> POST a new line
+
+        Updating in place rather than deleting and recreating keeps the Candid
+        service line order aligned with the note (reordering a note line creates
+        a new line at the bottom, which we mirror) and avoids reusing an
+        external_id, which Candid reserves per claim even after a delete and
+        rejects with 409 EntityConflictError.
         """
         try:
             encounter = client.get_encounter(encounter_id)
         except requests.RequestException as e:
             log.warning(
                 f"Candid: failed to fetch encounter {encounter_id} "
-                f"for service line replacement: {e}"
+                f"for service line reconciliation: {e}"
             )
             return
 
@@ -247,7 +258,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
         if not claim_id:
             log.warning(
                 f"Candid: encounter {encounter_id} has no claim_id; "
-                "cannot replace service lines"
+                "cannot reconcile service lines"
             )
             return
 
@@ -259,27 +270,61 @@ class CandidSubmitAPI(SimpleAPIRoute):
         }
         note_diagnoses = payload.get("diagnoses", [])
 
-        for candid_claim in candid_claims:
-            for sl in candid_claim.get("service_lines", []):
-                sl_id = sl.get("service_line_id")
-                if not sl_id:
-                    continue
-                ok, msg = client.delete_service_line(sl_id)
-                if ok:
-                    log.info(f"Candid: deleted service line {sl_id}")
-                else:
-                    log.warning(
-                        f"Candid: failed to delete service line {sl_id}: {msg}"
-                    )
+        existing_lines = [
+            sl
+            for candid_claim in candid_claims
+            for sl in candid_claim.get("service_lines", [])
+            if sl.get("service_line_id")
+        ]
+        existing_by_external_id = {
+            sl["external_id"]: sl["service_line_id"]
+            for sl in existing_lines
+            if sl.get("external_id")
+        }
 
-        # POST in note order — the create endpoint has no ordering field, so
-        # service line order on the claim follows creation order.
+        # Update matched lines and create new ones, in note order so created
+        # lines append in the note's order.
+        current_external_ids: set[str] = set()
         for line in payload.get("service_lines", []):
             standalone = _standalone_service_line(
                 line, claim_id, code_to_diagnosis_id, note_diagnoses
             )
-            ok, msg = client.create_service_line(standalone)
-            if ok:
-                log.info(f"Candid: created service line {msg}")
+            external_id = standalone.get("external_id")
+            if external_id:
+                current_external_ids.add(external_id)
+            service_line_id = (
+                existing_by_external_id.get(external_id) if external_id else None
+            )
+            if service_line_id:
+                # PATCH can't take claim_id, and external_id is already set on
+                # the line — sending it again risks tripping uniqueness.
+                update = {
+                    k: v
+                    for k, v in standalone.items()
+                    if k not in ("claim_id", "external_id")
+                }
+                ok, msg = client.update_service_line(service_line_id, update)
+                if ok:
+                    log.info(f"Candid: updated service line {service_line_id}")
+                else:
+                    log.warning(
+                        f"Candid: failed to update service line {service_line_id}: {msg}"
+                    )
             else:
-                log.warning(f"Candid: failed to create service line: {msg}")
+                ok, msg = client.create_service_line(standalone)
+                if ok:
+                    log.info(f"Candid: created service line {msg}")
+                else:
+                    log.warning(f"Candid: failed to create service line: {msg}")
+
+        # Delete lines on the encounter that are no longer on the claim
+        # (including any legacy line missing an external_id, which can't match).
+        for sl in existing_lines:
+            if sl.get("external_id") in current_external_ids:
+                continue
+            sl_id = sl["service_line_id"]
+            ok, msg = client.delete_service_line(sl_id)
+            if ok:
+                log.info(f"Candid: deleted service line {sl_id}")
+            else:
+                log.warning(f"Candid: failed to delete service line {sl_id}: {msg}")
