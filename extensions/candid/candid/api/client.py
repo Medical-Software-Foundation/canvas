@@ -131,14 +131,29 @@ class CandidClient:
             return True, response.json().get("encounter_id", encounter_id)
         return False, self._format_error(response)
 
-    def update_service_line(
-        self, service_line_id: str, payload: dict
-    ) -> tuple[bool, str]:
-        """Update a service line via PATCH /api/service-lines/v2/{service_line_id}."""
-        response = self.http.patch(
-            f"{self.base_url}/api/service-lines/v2/{service_line_id}",
+    def create_service_line(self, payload: dict) -> tuple[bool, str]:
+        """Create a service line via POST /api/service-lines/v2.
+
+        ``payload`` must include ``claim_id`` (the Candid claim UUID) alongside
+        the service line fields (procedure_code, quantity, units, ...).
+
+        Returns ``(was_successful, message)``. On success, ``message`` is the
+        new service_line_id. On failure, ``message`` is a human-readable error.
+        """
+        response = self.http.post(
+            f"{self.base_url}/api/service-lines/v2",
             json=payload,
             headers=self._auth_headers(json_body=True),
+        )
+        if response.ok:
+            return True, response.json().get("service_line_id", "")
+        return False, self._format_error(response)
+
+    def delete_service_line(self, service_line_id: str) -> tuple[bool, str]:
+        """Delete a service line via DELETE /api/service-lines/v2/{service_line_id}."""
+        response = self.http.delete(
+            f"{self.base_url}/api/service-lines/v2/{service_line_id}",
+            headers=self._auth_headers(),
         )
         if response.ok:
             return True, service_line_id

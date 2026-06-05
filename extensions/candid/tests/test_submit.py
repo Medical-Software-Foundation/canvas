@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
+import requests
 from canvas_sdk.v1.data.claim import ClaimQueues
 
 from candid.api.submit import CandidSubmitAPI
@@ -248,6 +249,93 @@ def test_submit_handles_exception_during_submit_call() -> None:
         assert result[0] == "failure-effect"
         message = mock_failure.call_args[0][1]
         assert "network down" in message
+
+
+# ---------------------------------------------------------------------------
+# Resubmission: replace service lines on duplicate external_id
+# ---------------------------------------------------------------------------
+
+
+def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
+    """On EncounterExternalIdUniquenessError, PATCH the encounter, then delete
+    every existing service line and POST the current ones to /service-lines/v2."""
+    claim = _claim_in_submission_queue()
+    payload = {
+        "external_id": "canvas:claim-1",
+        "service_lines": [
+            {"procedure_code": "G0019", "units": "UN", "quantity": "1"},
+            {"procedure_code": "G0022", "units": "UN", "quantity": "1"},
+        ],
+    }
+
+    with (
+        patch("candid.api.submit.Claim") as MockClaim,
+        patch("candid.api.submit.CandidClient") as MC,
+        patch("candid.api.submit.build_split_payloads") as mock_build,
+        patch("candid.api.submit.handle_submit_success") as mock_success,
+        patch("candid.api.submit.handle_submit_failure") as mock_failure,
+        patch("candid.api.submit.notify_claim_updated"),
+    ):
+        MockClaim.objects.filter.return_value.first.return_value = claim
+        mock_build.return_value = [(payload, [])]
+        client = MC.from_secrets.return_value
+        client.submit_claim.return_value = (
+            False,
+            "<422 EncounterExternalIdUniquenessError>",
+        )
+        client.find_encounter_by_external_id.return_value = "enc-1"
+        client.update_claim.return_value = (True, "enc-1")
+        client.get_encounter.return_value = {
+            "claims": [
+                {
+                    "claim_id": "candid-claim-1",
+                    "service_lines": [
+                        {"service_line_id": "old-sl-1"},
+                        {"service_line_id": "old-sl-2"},
+                    ],
+                }
+            ]
+        }
+        client.delete_service_line.return_value = (True, "ok")
+        client.create_service_line.return_value = (True, "new-sl")
+        mock_success.return_value = ["success-effect"]
+
+        handler = _build_handler(claim)
+        result = handler.post()
+
+        assert result[0] == "success-effect"
+        mock_failure.assert_not_called()
+        # Every existing line deleted
+        deleted = sorted(c.args[0] for c in client.delete_service_line.call_args_list)
+        assert deleted == ["old-sl-1", "old-sl-2"]
+        # New lines created in note order, each carrying the Candid claim_id
+        created = [c.args[0] for c in client.create_service_line.call_args_list]
+        assert [c["procedure_code"] for c in created] == ["G0019", "G0022"]
+        assert all(c["claim_id"] == "candid-claim-1" for c in created)
+
+
+def test_replace_service_lines_skips_when_encounter_has_no_claim_id() -> None:
+    """If the fetched encounter has no claim_id, neither delete nor create runs."""
+    client = MagicMock()
+    client.get_encounter.return_value = {"claims": [{"service_lines": []}]}
+
+    CandidSubmitAPI._replace_service_lines(
+        client, "enc-1", {"service_lines": [{"procedure_code": "G0019"}]}
+    )
+
+    client.delete_service_line.assert_not_called()
+    client.create_service_line.assert_not_called()
+
+
+def test_replace_service_lines_handles_encounter_fetch_failure() -> None:
+    """A failed encounter fetch is logged and swallowed — no delete/create."""
+    client = MagicMock()
+    client.get_encounter.side_effect = requests.RequestException("boom")
+
+    CandidSubmitAPI._replace_service_lines(client, "enc-1", {"service_lines": []})
+
+    client.delete_service_line.assert_not_called()
+    client.create_service_line.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

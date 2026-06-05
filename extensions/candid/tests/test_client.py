@@ -192,3 +192,55 @@ def test_get_patient_payments_unwraps_items_field() -> None:
     payments = client.get_patient_payments("candid-claim-1")
 
     assert payments == [{"patient_payment_id": "p2"}]
+
+
+# ---------------------------------------------------------------------------
+# create_service_line / delete_service_line
+# ---------------------------------------------------------------------------
+
+
+def test_create_service_line_posts_to_v2_and_returns_id() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.side_effect = [
+        _ok_response({"access_token": "tok"}),
+        _ok_response({"service_line_id": "sl-new"}),
+    ]
+
+    success, message = client.create_service_line(
+        {"claim_id": "candid-claim-1", "procedure_code": "G0019"}
+    )
+
+    assert success is True
+    assert message == "sl-new"
+    url = client.http.post.call_args_list[-1].args[0]
+    assert url.endswith("/api/service-lines/v2")
+
+
+def test_create_service_line_returns_formatted_error_on_failure() -> None:
+    client = _client()
+    failure = MagicMock()
+    failure.ok = False
+    failure.status_code = 422
+    failure.json.return_value = {"errorName": "HttpRequestValidationError", "content": {}}
+    client.http = MagicMock()
+    client.http.post.side_effect = [_ok_response({"access_token": "tok"}), failure]
+
+    success, message = client.create_service_line({"claim_id": "c1"})
+
+    assert success is False
+    assert "422" in message
+
+
+def test_delete_service_line_calls_delete_with_id() -> None:
+    client = _client()
+    client.http = MagicMock()
+    client.http.post.return_value = _ok_response({"access_token": "tok"})
+    client.http.delete.return_value = _ok_response({})
+
+    success, message = client.delete_service_line("sl-1")
+
+    assert success is True
+    assert message == "sl-1"
+    url = client.http.delete.call_args.args[0]
+    assert url.endswith("/api/service-lines/v2/sl-1")
