@@ -7,7 +7,16 @@
         "protocols": [
             {
                 "class": "telehealth_disclaimer.protocols.telehealth_disclaimer:TelehealthDisclaimer",
-                "description": "Inserts a telehealth disclaimer custom command when a telehealth note is created"
+                "description": "Inserts a telehealth disclaimer custom command when a telehealth note is created",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": [
+                        "Note"
+                    ],
+                    "write": [
+                        "Command"
+                    ]
+                }
             }
         ],
         "commands": [

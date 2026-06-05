@@ -35,7 +35,10 @@ class TelehealthDisclaimer(BaseProtocol):
         if not note_id:
             return []
 
-        note = Note.objects.select_related("note_type_version").get(id=note_id)
+        try:
+            note = Note.objects.select_related("note_type_version").get(id=note_id)
+        except Note.DoesNotExist:
+            return []
 
         if not note.note_type_version.is_telehealth:
             return []

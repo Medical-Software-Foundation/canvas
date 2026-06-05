@@ -97,6 +97,33 @@ class TestGuardClauses:
 
         assert effects == []
 
+    def test_missing_note_returns_no_effects(self, handler):
+        handler.event.context = {"state": "NEW", "note_id": "missing-note"}
+
+        class _DoesNotExist(Exception):
+            pass
+
+        p_note, p_cmd, p_render, p_uuid, p_log = _patches()
+        with p_note as mock_note, p_cmd as mock_cmd, p_render as mock_render, \
+                p_uuid as mock_uuid, p_log as mock_log:
+            mock_note.DoesNotExist = _DoesNotExist
+            mock_note.objects.select_related.return_value.get.side_effect = _DoesNotExist()
+
+            effects = handler.compute()
+
+            # Lookup was attempted, raised DoesNotExist, and was swallowed.
+            assert mock_note.mock_calls == [
+                call.objects.select_related("note_type_version"),
+                call.objects.select_related().get(id="missing-note"),
+            ]
+            assert mock_cmd.mock_calls == []
+            assert mock_render.mock_calls == []
+            assert mock_uuid.mock_calls == []
+            assert mock_log.mock_calls == []
+            assert handler.event.mock_calls == []
+
+        assert effects == []
+
 
 class TestTelehealthNote:
     """compute() originates the disclaimer command for a telehealth note."""
