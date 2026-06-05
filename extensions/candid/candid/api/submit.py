@@ -36,6 +36,13 @@ DIAGNOSIS_ID_KEYS = (
 )
 
 
+def _normalize_dx_code(code: str | None) -> str:
+    """Canvas stores ICD-10 codes without the decimal point (E119); Candid
+    returns them in canonical dotted form (E11.9). Strip the dot so the two
+    sides match."""
+    return (code or "").replace(".", "").strip().upper()
+
+
 def _standalone_service_line(
     line: dict, claim_id: str, code_to_diagnosis_id: dict, note_diagnoses: list
 ) -> dict:
@@ -64,7 +71,8 @@ def _standalone_service_line(
     diagnosis_ids: list = []
     for pointer in line.get("diagnosis_pointers", []):
         if 0 <= pointer < len(note_diagnoses):
-            dx_id = code_to_diagnosis_id.get(note_diagnoses[pointer].get("code"))
+            code = _normalize_dx_code(note_diagnoses[pointer].get("code"))
+            dx_id = code_to_diagnosis_id.get(code)
             if dx_id and dx_id not in diagnosis_ids:
                 diagnosis_ids.append(dx_id)
     standalone.update(zip(DIAGNOSIS_ID_KEYS, diagnosis_ids))
@@ -242,10 +250,10 @@ class CandidSubmitAPI(SimpleAPIRoute):
             )
             return
 
+        # Candid stores diagnoses at the encounter level, not under claims.
         code_to_diagnosis_id = {
-            d.get("code"): d.get("diagnosis_id")
-            for candid_claim in candid_claims
-            for d in candid_claim.get("diagnoses", [])
+            _normalize_dx_code(d.get("code")): d.get("diagnosis_id")
+            for d in encounter.get("diagnoses", [])
             if d.get("code") and d.get("diagnosis_id")
         }
         note_diagnoses = payload.get("diagnoses", [])

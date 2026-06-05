@@ -259,12 +259,16 @@ def test_submit_handles_exception_during_submit_call() -> None:
 def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
     """On EncounterExternalIdUniquenessError, PATCH the encounter, then delete
     every existing service line and POST the current ones to /service-lines/v2
-    in note order, mapping diagnosis_pointers to the encounter's diagnosis_ids."""
+    in note order, mapping diagnosis_pointers to the encounter's diagnosis_ids.
+
+    Note codes are dotless (E119, as Canvas stores them); Candid returns them
+    dotted (E11.9) under the encounter-level diagnoses array — the mapping must
+    bridge both."""
     claim = _claim_in_submission_queue()
     payload = {
         "external_id": "canvas:claim-1",
         "diagnoses": [
-            {"code": "E11.9", "code_type": "ABK"},
+            {"code": "E119", "code_type": "ABK"},
             {"code": "I10", "code_type": "ABF"},
         ],
         "service_lines": [
@@ -303,19 +307,20 @@ def test_resubmit_deletes_old_and_creates_new_service_lines() -> None:
         client.find_encounter_by_external_id.return_value = "enc-1"
         client.update_claim.return_value = (True, "enc-1")
         client.get_encounter.return_value = {
+            "encounter_id": "enc-1",
+            "diagnoses": [
+                {"diagnosis_id": "dx-e11", "code": "E11.9"},
+                {"diagnosis_id": "dx-i10", "code": "I10"},
+            ],
             "claims": [
                 {
                     "claim_id": "candid-claim-1",
-                    "diagnoses": [
-                        {"diagnosis_id": "dx-e11", "code": "E11.9"},
-                        {"diagnosis_id": "dx-i10", "code": "I10"},
-                    ],
                     "service_lines": [
                         {"service_line_id": "old-sl-1"},
                         {"service_line_id": "old-sl-2"},
                     ],
                 }
-            ]
+            ],
         }
         client.delete_service_line.return_value = (True, "ok")
         client.create_service_line.return_value = (True, "new-sl")
@@ -379,7 +384,8 @@ def test_standalone_service_line_maps_pointers_and_coerces_charge() -> None:
         "diagnosis_pointers": [1, 0],
     }
     note_diagnoses = [{"code": "E11.9"}, {"code": "I10"}]
-    code_to_diagnosis_id = {"E11.9": "dx-e11", "I10": "dx-i10"}
+    # map keys are normalized (dotless), as _replace_service_lines builds them
+    code_to_diagnosis_id = {"E119": "dx-e11", "I10": "dx-i10"}
 
     result = _standalone_service_line(line, "claim-1", code_to_diagnosis_id, note_diagnoses)
 
@@ -400,7 +406,7 @@ def test_standalone_service_line_skips_unmatched_diagnosis_codes() -> None:
     """A pointer whose code isn't on the encounter is dropped, not sent as null."""
     line = {"procedure_code": "G0022", "diagnosis_pointers": [0, 1]}
     note_diagnoses = [{"code": "E11.9"}, {"code": "Z00.00"}]
-    code_to_diagnosis_id = {"E11.9": "dx-e11"}  # Z00.00 not on the encounter
+    code_to_diagnosis_id = {"E119": "dx-e11"}  # Z0000 not on the encounter
 
     result = _standalone_service_line(line, "claim-1", code_to_diagnosis_id, note_diagnoses)
 
