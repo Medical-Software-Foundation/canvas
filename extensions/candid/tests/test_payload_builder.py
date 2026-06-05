@@ -1,6 +1,6 @@
 """Tests for payload_builder: splitting, service line pointers, and formatting."""
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -265,6 +265,61 @@ def test_diagnosis_pointers_sorted_with_subset() -> None:
 
     pointers = payload["service_lines"][0]["diagnosis_pointers"]
     assert pointers == [0, 2]  # sorted, not [2, 0]
+
+
+# ---------------------------------------------------------------------------
+# _add_service_lines — note billing-line-item ordering
+# ---------------------------------------------------------------------------
+
+
+def _fake_line_item_with_billing(proc_code: str, billing_created: datetime) -> MagicMock:
+    """A claim line item linked to a note billing line item created at ``billing_created``."""
+    li = MagicMock()
+    li.proc_code = proc_code
+    li.charge = 100
+    li.units = 1
+    li.id = f"li-{proc_code}"
+    li.billing_line_item.created = billing_created
+    li.diagnosis_codes.filter.return_value = []
+    li.modifiers.values_list.return_value = []
+    return li
+
+
+def test_service_lines_follow_note_billing_order() -> None:
+    """Service lines follow the note's billing-line-item order, not the claim's default sort.
+
+    get_active_claim_line_items() returns items in -proc_code order, which reverses add-on
+    CPT pairs (e.g. G0022 ahead of G0019). The payload must match the order the clinician
+    entered on the note, because payers process service lines top-down.
+    """
+    payload: dict = {"diagnoses": []}
+
+    # Note order: G0019 entered first (10:00), G0022 second (10:05). The claim default sort
+    # (-proc_code) hands them back reversed (G0022, then G0019).
+    g0022 = _fake_line_item_with_billing("G0022", datetime(2026, 4, 1, 10, 5))
+    g0019 = _fake_line_item_with_billing("G0019", datetime(2026, 4, 1, 10, 0))
+    claim = _fake_claim([g0022, g0019])
+
+    _add_service_lines(claim, payload)
+
+    codes = [sl["procedure_code"] for sl in payload["service_lines"]]
+    assert codes == ["G0019", "G0022"]
+
+
+def test_service_lines_without_billing_sort_last() -> None:
+    """Claim lines with no billing line item (added directly on the claim) sort after note lines."""
+    payload: dict = {"diagnoses": []}
+
+    note_line = _fake_line_item_with_billing("99213", datetime(2026, 4, 1, 10, 0))
+    manual_line = _fake_line_item_with_billing("99214", datetime(2026, 4, 1, 9, 0))
+    manual_line.billing_line_item = None
+    manual_line.created = datetime(2026, 4, 1, 11, 0)
+    claim = _fake_claim([manual_line, note_line])
+
+    _add_service_lines(claim, payload)
+
+    codes = [sl["procedure_code"] for sl in payload["service_lines"]]
+    assert codes == ["99213", "99214"]
 
 
 # ---------------------------------------------------------------------------

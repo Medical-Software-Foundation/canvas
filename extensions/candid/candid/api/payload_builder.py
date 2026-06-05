@@ -266,13 +266,21 @@ def _add_diagnoses(claim: Claim, payload: dict, errors: list[str]) -> None:
     )
 
 
+def _note_order_key(line_item: Any) -> tuple[int, Any]:
+    """Sort key restoring the note's billing-line-item order (the claim's default sort reverses it)."""
+    billing_line_item = line_item.billing_line_item
+    if billing_line_item is not None:
+        return (0, billing_line_item.created)
+    return (1, line_item.created)
+
+
 def _add_service_lines(claim: Claim, payload: dict) -> None:
     lines = []
     diagnosis_code_to_index = {
         d["code"]: i for i, d in enumerate(payload.get("diagnoses", []))
     }
 
-    for line_item in claim.get_active_claim_line_items():
+    for line_item in sorted(claim.get_active_claim_line_items(), key=_note_order_key):
         service_line: dict[str, Any] = {
             "procedure_code": line_item.proc_code,
             "units": "UN",
