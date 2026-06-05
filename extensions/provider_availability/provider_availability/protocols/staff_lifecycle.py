@@ -15,10 +15,10 @@ from logger import log
 
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
+    build_delete_block_effects,
     build_delete_effects,
     build_lead_time_block_effects,
     build_recurring_block_sync_effects,
-    delete_all_plugin_events,
     sync_provider_availability,
 )
 from provider_availability.engine.storage import (
@@ -77,6 +77,7 @@ class OnStaffActivated(BaseProtocol):
             id=calendar_id,
             provider=staff_key,
             type=CalendarType.Clinic,
+            description=staff_key,
         ).create()
 
         log.info(
@@ -163,6 +164,7 @@ class OnPluginInstalled(BaseProtocol):
                     id=calendar_id,
                     provider=staff_key,
                     type=CalendarType.Clinic,
+                    description=staff_key,
                 ).create()
                 effects.append(cal_effect)
                 cal_created += 1
@@ -203,17 +205,23 @@ class OnPluginInstalled(BaseProtocol):
         recurring_synced = 0
 
         if first_install:
-            log.info("OnPluginInstalled: first install, performing full sync")
-            effects.extend(delete_all_plugin_events())
             mark_installed()
-        else:
-            log.info("OnPluginInstalled: redeploy detected, performing full sync")
-            effects.extend(delete_all_plugin_events())
+        log.info(
+            "OnPluginInstalled: %s — reconciling plugin events (non-destructive)",
+            "first install" if first_install else "redeploy",
+        )
 
-        # Step 3: Full sync of all rules, blocks, and recurring blocks
+        # Step 3: Per-entity reconciliation. We deliberately do NOT sweep every
+        # event off the Clinic/Admin calendars — that would delete events this
+        # plugin didn't create (manual entries, other plugins, external sync).
+        # Each builder below deletes only its OWN prior events (scoped by the
+        # plugin's titles / the entity's time range) before recreating, so a
+        # redeploy repairs drift without collateral deletion or duplicates.
         provider_ids_synced: set[str] = set()
         for rule in rules:
             try:
+                # sync_provider_availability deletes this provider's "Available"
+                # events (preserving past) then rebuilds — safe to call directly.
                 if rule.provider_id not in provider_ids_synced:
                     effects.extend(sync_provider_availability(rule.provider_id))
                     provider_ids_synced.add(rule.provider_id)
@@ -230,6 +238,9 @@ class OnPluginInstalled(BaseProtocol):
 
         for block in blocks:
             try:
+                # build_block_event_effects only creates; delete this block's
+                # own prior events first so a redeploy doesn't duplicate them.
+                effects.extend(build_delete_block_effects(block.provider_id, block))
                 effects.extend(build_block_event_effects(block))
                 blocks_synced += 1
             except Exception:

@@ -115,9 +115,8 @@ Each row is validated for format and required fields, then the staff key is chec
 | Component | Handler Type | Description |
 |-----------|-------------|-------------|
 | `ProviderAvailabilityApp` | Application | Provider menu item that opens the admin UI (includes the Bulk Import tab) |
-| `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, admin UI serving |
+| `AvailabilityAPI` | SimpleAPI | REST endpoints for availability queries, rule/block CRUD, and admin UI/asset serving |
 | `CSVImportAPI` | SimpleAPI | Staff-session endpoints for the CSV bulk import (validate / commit / template) |
-| `UIApi` | SimpleAPI | Serves the admin HTML interface (Application iframe) |
 | `ProvisionAPI` | SimpleAPI | API key-authenticated provisioning and practice-timezone management |
 | `CacheRefreshTask` | CronTask | TTL refresh, lead-time block generation, hold block rolling window (every 5 min) |
 | `OnStaffActivated` | Protocol | Creates Clinic calendar when a provider is activated |
@@ -156,12 +155,15 @@ Each row is validated for format and required fields, then the staff key is chec
 | DELETE | `/recurring-blocks/<provider_id>/<block_id>` | Delete a recurring block |
 | GET | `/timezone` | Get practice timezone and available options |
 | PUT | `/timezone` | Set practice timezone (re-syncs all rules/blocks) |
-| GET | `/provider-timezone/<provider_id>` | Get provider-specific timezone |
-| PUT | `/provider-timezone/<provider_id>` | Set provider timezone (re-syncs all rules, blocks, and recurring blocks) |
+| GET | `/provider-timezone?provider_id=` | Get provider-specific timezone |
+| GET | `/provider-timezones/all` | Get all provider timezone overrides |
+| PUT | `/provider-timezone` | Set a provider timezone (re-syncs all their rules, blocks, and recurring blocks) |
+| PUT | `/provider-timezones/bulk` | Set timezones for multiple providers at once |
 | GET | `/availability-admin` | Serve admin UI HTML with preloaded data |
 | POST | `/form-action` | CSP-compliant form dispatch for admin UI writes |
 | GET | `/admin.css` | Admin UI stylesheet |
 | GET | `/admin.js` | Admin UI JavaScript |
+| GET | `/tokens.css`, `/typography.css`, `/canvas-components.js` | Canvas design-system static assets |
 
 ### CSVImportAPI (session-authenticated)
 
