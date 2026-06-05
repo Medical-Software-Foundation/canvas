@@ -766,36 +766,44 @@ def sync_patient_payments(claim: Claim, secrets: dict) -> list[Effect]:
     patient payments by those IDs. See ``sync_claim_adjudications`` docstring
     for the ID glossary.
     """
-    canvas_claim_id = str(claim.id)
-    claim_effect = ClaimEffect(claim_id=canvas_claim_id)
-
     encounters_meta = get_claim_metadata(claim, META_ENCOUNTERS)
     if not encounters_meta:
         log.info(
             f"Candid sync: no candid_encounters metadata for claim "
-            f"{canvas_claim_id}, skipping"
+            f"{claim.id}, skipping"
         )
         return []
-
-    client = CandidClient.from_secrets(secrets)
 
     first_line = claim.line_items.first()
     if not first_line:
         return []
 
+    client = CandidClient.from_secrets(secrets)
+    canvas_claim_id = str(claim.id)
     synced_pmt_ids = get_claim_metadata_set(claim, META_SYNCED_PAYMENT_IDS)
     reported_pmt_ids = get_claim_metadata_set(claim, META_REPORTED_PAYMENT_IDS)
-    known_payment_ids = synced_pmt_ids | reported_pmt_ids
-    first_line_id = str(first_line.id)
 
-    effects: list[Effect] = []
-    attempted_payment_ids: list[str] = []
+    # Reuse the full sync's per-Candid-claim payment posting so the dedup and
+    # posting logic lives in one place; the coverage/ERA fields stay empty
+    # since this path only touches patient payments.
+    state = _SyncState(
+        canvas_claim_id=canvas_claim_id,
+        claim_effect=ClaimEffect(claim_id=canvas_claim_id),
+        line_items=[],
+        first_line=first_line,
+        primary_id=None,
+        secondary_id=None,
+        tertiary_id=None,
+        synced_era_ids=set(),
+        synced_pmt_ids=synced_pmt_ids,
+        known_payment_ids=synced_pmt_ids | reported_pmt_ids,
+        prev_synced_amounts={},
+    )
 
     for encounter_record in encounters_meta:
         candid_encounter_id = encounter_record.get("candid_encounter_id")
         if not candid_encounter_id:
             continue
-
         try:
             encounter_data = client.get_encounter(candid_encounter_id)
         except Exception as e:
@@ -804,45 +812,31 @@ def sync_patient_payments(claim: Claim, secrets: dict) -> list[Effect]:
                 f"for claim {canvas_claim_id}: {e}"
             )
             continue
-
         for candid_claim in encounter_data.get("claims", []):
-            candid_claim_id = candid_claim.get("claim_id", "")
-            if not candid_claim_id:
-                continue
-
-            try:
-                candid_payments = client.get_patient_payments(candid_claim_id)
-            except Exception as e:
-                log.warning(
-                    f"Candid sync: failed to fetch patient payments for "
-                    f"Candid claim {candid_claim_id} on claim {canvas_claim_id}: {e}"
-                )
-                continue
-
-            payment_effects, attempted = _post_patient_payments(
-                claim_effect, candid_payments, known_payment_ids, first_line_id
+            _post_patient_payments_for_candid_claim(
+                state, client, candid_claim.get("claim_id", "")
             )
-            effects.extend(payment_effects)
-            attempted_payment_ids.extend(attempted)
 
-    if effects:
+    if state.effects:
         now = datetime.now(UTC).isoformat()
-        effects.append(claim_effect.upsert_metadata(key=META_LAST_SYNC, value=now))
+        state.effects.append(
+            state.claim_effect.upsert_metadata(key=META_LAST_SYNC, value=now)
+        )
 
-    if attempted_payment_ids:
-        updated_pmt_ids = sorted(synced_pmt_ids | set(attempted_payment_ids))
-        effects.insert(
+    if state.attempted_payment_ids:
+        updated_pmt_ids = sorted(synced_pmt_ids | set(state.attempted_payment_ids))
+        state.effects.insert(
             0,
-            claim_effect.upsert_metadata(
+            state.claim_effect.upsert_metadata(
                 key=META_SYNCED_PAYMENT_IDS,
                 value=json.dumps(updated_pmt_ids),
             ),
         )
 
     log.info(
-        f"Candid sync: posted {len(attempted_payment_ids)} patient payments "
+        f"Candid sync: posted {len(state.attempted_payment_ids)} patient payments "
         f"for claim {canvas_claim_id}"
     )
-    if effects:
-        effects.append(notify_claim_updated(canvas_claim_id))
-    return effects
+    if state.effects:
+        state.effects.append(notify_claim_updated(canvas_claim_id))
+    return state.effects

@@ -1,8 +1,6 @@
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-import requests
-
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.claim import ClaimEffect
 from canvas_sdk.effects.simple_api import Response
@@ -244,7 +242,7 @@ class CandidSubmitAPI(SimpleAPIRoute):
         """
         try:
             encounter = client.get_encounter(encounter_id)
-        except requests.RequestException as e:
+        except Exception as e:
             log.warning(
                 f"Candid: failed to fetch encounter {encounter_id} "
                 f"for service line reconciliation: {e}"

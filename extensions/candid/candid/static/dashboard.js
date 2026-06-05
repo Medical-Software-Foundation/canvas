@@ -160,20 +160,20 @@ function uniqueValues(claims, keyFn) {
   return Array.from(set).sort();
 }
 
-function allStatusOptions() {
-  // Combine server-provided statuses with synthetic keys
-  const set = new Set(allStatuses);
-  // Add synthetic entries that might apply
+function allOptions(serverValues, keyFn) {
+  // Combine server-provided values with synthetic keys derived from the claims.
+  const set = new Set(serverValues);
   const claims = clientMode ? allClaims : cachedClaims;
-  claims.forEach(c => set.add(statusKey(c)));
+  claims.forEach(c => set.add(keyFn(c)));
   return Array.from(set).sort();
 }
 
+function allStatusOptions() {
+  return allOptions(allStatuses, statusKey);
+}
+
 function allQueueOptions() {
-  const set = new Set(allQueues);
-  const claims = clientMode ? allClaims : cachedClaims;
-  claims.forEach(c => set.add(queueKey(c)));
-  return Array.from(set).sort();
+  return allOptions(allQueues, queueKey);
 }
 
 function statusKey(c) {
@@ -485,7 +485,7 @@ function renderBody() {
 
 function updateSummary() {
   const summary = document.getElementById("summary");
-  const hasClientFilter = !!patientSearchQuery || Object.values(filters).some(f => f.selected.size > 0);
+  const hasClientFilter = hasClientFilters();
   const visible = hasClientFilter ? cachedClaims.filter(claimVisible).length : cachedClaims.length;
   const countText = hasClientFilter
     ? `${visible} of ${totalClaims} claim${totalClaims === 1 ? "" : "s"}`
