@@ -1,13 +1,29 @@
 {
-    "sdk_version": "0.1.4",
+    "sdk_version": "0.163.1",
     "plugin_version": "0.0.1",
     "name": "photon_integration",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Adds a 'Send via Photon' option to the Prescribe, Refill, and Adjust Prescription commands. When chosen, Canvas's send and sign-and-send actions are removed (sign and print are kept), and on sign the prescription is pushed to Photon Health end-to-end: the patient is synced, a prescription is created, and an order is placed for pharmacy routing. Photon failures are surfaced as a Canvas Task.",
     "components": {
         "handlers": [
             {
-                "class": "photon_integration.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "photon_integration.handlers.command_field:PhotonFieldHandler",
+                "description": "Adds the 'Send via Photon' field to the Prescribe, Refill, and Adjust Prescription commands."
+            },
+            {
+                "class": "photon_integration.handlers.command_field:PhotonPrescribeActionFilter",
+                "description": "Removes send and sign-and-send actions from Prescribe when 'Send via Photon' is set."
+            },
+            {
+                "class": "photon_integration.handlers.command_field:PhotonRefillActionFilter",
+                "description": "Removes send and sign-and-send actions from Refill when 'Send via Photon' is set."
+            },
+            {
+                "class": "photon_integration.handlers.command_field:PhotonAdjustPrescriptionActionFilter",
+                "description": "Removes send and sign-and-send actions from Adjust Prescription when 'Send via Photon' is set."
+            },
+            {
+                "class": "photon_integration.handlers.dispatch:PhotonDispatchHandler",
+                "description": "On sign, syncs the patient and sends the prescription and order to Photon; creates a Task on failure."
             }
         ],
         "commands": [],
@@ -15,10 +31,20 @@
         "effects": [],
         "views": []
     },
-    "variables": [],
+    "variables": [
+        {"name": "PHOTON_CLIENT_ID", "sensitive": true},
+        {"name": "PHOTON_CLIENT_SECRET", "sensitive": true},
+        {"name": "PHOTON_ENV", "sensitive": false, "default": "sandbox"},
+        {"name": "PHOTON_TEST_PRESCRIBER_ID", "sensitive": false},
+        {"name": "PHOTON_FALLBACK_TEAM_ID", "sensitive": false}
+    ],
     "tags": {},
-    "references": [],
-    "license": "",
+    "references": [
+        "https://docs.photon.health/docs/getting-started",
+        "https://docs.canvasmedical.com/sdk/command-metadata-create-form-effect/",
+        "https://docs.canvasmedical.com/sdk/commands/"
+    ],
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }

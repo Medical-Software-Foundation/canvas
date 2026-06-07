@@ -23,4 +23,8 @@ dev = [
 python_files = ["*_tests.py", "test_*.py", "tests.py"]
 
 [tool.coverage.run]
-omit = ["tests/*"]
+source = ["photon_integration"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
