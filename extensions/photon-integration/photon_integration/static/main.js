@@ -47,6 +47,16 @@
     /* storage unavailable in this sandbox; fall through */
   }
 
+  // The patient id was consumed server-side and stashed above; drop the
+  // ?patient_id query so the iframe URL is the bare modal path. This keeps the
+  // OAuth redirect_uri identical for every patient and free of query params,
+  // matching the single whitelisted callback URL.
+  try {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } catch (e) {
+    /* ignore */
+  }
+
   function mountElements() {
     var client = document.createElement("photon-client");
     client.setAttribute("id", cfg.clientId);
