@@ -902,6 +902,11 @@ def test_open_notes_helper_unknown_patient_returns_empty():
     assert list(result) == []
 
 
+def test_open_notes_helper_non_uuid_returns_empty():
+    # A malformed patient_id must not 500 - it returns no open notes.
+    assert list(favorites_api._open_notes_for_patient("not-a-uuid")) == []
+
+
 def test_open_notes_helper_builds_filtered_queryset():
     patient = MagicMock()
     note_qs = MagicMock()
@@ -911,7 +916,7 @@ def test_open_notes_helper_builds_filtered_queryset():
          patch.object(favorites_api.Note, "objects") as notes:
         states.filter.return_value.values_list.return_value = [1, 2]
         notes.filter.return_value = note_qs
-        result = favorites_api._open_notes_for_patient("pat-1")
+        result = favorites_api._open_notes_for_patient("11111111-1111-1111-1111-111111111111")
     assert result == ["NOTE_QS"]
     assert notes.filter.call_args.kwargs["patient"] is patient
     # The open-note state filter is the safety gate (no staging into locked/signed notes).

@@ -7,6 +7,7 @@ Backs both applications:
 
 import json
 from typing import Any
+from uuid import UUID
 
 from canvas_sdk.commands import LabOrderCommand
 from canvas_sdk.effects import Effect
@@ -585,6 +586,13 @@ def _validate_partner_and_tests(body: dict[str, Any]) -> JSONResponse | None:
 
 def _open_notes_for_patient(patient_id: str):  # type: ignore[no-untyped-def]
     """Return the patient's open notes, most recently modified first."""
+    # Patient.id is a UUIDField - a non-UUID value would raise ValidationError
+    # (not DoesNotExist), so validate the format first and treat bad input as
+    # "no open notes" rather than letting it surface as a 500.
+    try:
+        UUID(patient_id)
+    except (ValueError, AttributeError, TypeError):
+        return Note.objects.none()
     try:
         patient = Patient.objects.get(id=patient_id)
     except Patient.DoesNotExist:

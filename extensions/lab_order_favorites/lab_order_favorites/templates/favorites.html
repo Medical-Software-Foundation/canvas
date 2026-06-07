@@ -247,7 +247,7 @@ function openFix(favId, staleCodes, row) {
     </div>`;
   });
   html += `<button class="primary" data-fav="${favId}" id="fix-save-${favId}" disabled>Save fixes &amp; order</button>`;
-  row.innerHTML = `<div class="skip-name">${fav.name}</div>` + html;
+  row.innerHTML = `<div class="skip-name">${esc(fav.name)}</div>` + html;
   row.querySelectorAll(".fix-search").forEach(inp => { inp.oninput = () => onFixSearch(inp); });
   document.getElementById(`fix-save-${favId}`).onclick = () => saveFix(favId, row);
 }
@@ -310,7 +310,7 @@ async function saveFix(favId, row) {
   const id = await ir.json();
   if (id.success && (id.inserted || []).length) {
     row.className = "skip-row done";
-    row.innerHTML = `<div class="skip-name">✓ ${fav.name}</div><div class="meta">Fixed and staged in the note.</div>`;
+    row.innerHTML = `<div class="skip-name">✓ ${esc(fav.name)}</div><div class="meta">Fixed and staged in the note.</div>`;
   } else {
     btn.disabled = false; btn.textContent = "Save fixes & order";
     row.appendChild(noticeEl("Saved, but still could not order. Check the favorite.", "err"));
