@@ -110,18 +110,6 @@ class PhotonClient:
 
     # -- patients ----------------------------------------------------------
 
-    def find_patient_id_by_external_id(self, external_id: str) -> str | None:
-        """Return the Photon patient id matching ``external_id``, if any."""
-        query = """
-            query patients($externalId: ID) {
-              patients(filter: { externalId: $externalId }) { id }
-            }
-        """
-        patients = self._graphql(query, {"externalId": external_id}).get("patients") or []
-        if patients:
-            return str(patients[0]["id"])
-        return None
-
     def create_patient(self, patient_input: dict[str, Any]) -> str:
         """Create a Photon patient and return its id.
 

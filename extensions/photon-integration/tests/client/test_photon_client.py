@@ -113,16 +113,6 @@ class TestGraphQL:
 
 
 class TestPatients:
-    def test_find_patient_returns_id(self):
-        client, http = _make_client()
-        http.post.return_value = _response(json_body={"data": {"patients": [{"id": "pat_1"}]}})
-        assert client.find_patient_id_by_external_id("ext-1") == "pat_1"
-
-    def test_find_patient_none(self):
-        client, http = _make_client()
-        http.post.return_value = _response(json_body={"data": {"patients": []}})
-        assert client.find_patient_id_by_external_id("ext-1") is None
-
     def test_create_patient_returns_id(self):
         client, http = _make_client()
         http.post.return_value = _response(json_body={"data": {"createPatient": {"id": "pat_2"}}})

@@ -15,6 +15,7 @@ prescriber; unexpected errors propagate to monitoring.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from canvas_sdk.effects import Effect
@@ -123,17 +124,20 @@ class PhotonDispatchHandler(BaseHandler):
     def _resolve_patient(
         self, client: PhotonClient, patient: Patient
     ) -> tuple[str, Effect | None]:
-        """Return (photon_patient_id, optional external-id effect to persist)."""
+        """Return (photon_patient_id, optional external-id effect to persist).
+
+        Photon's `patients` query has no server-side externalId filter, so we
+        rely on the Photon patient id we persist on the Canvas patient after the
+        first sync. When it's absent we create the patient (passing externalId so
+        the mapping is recorded on Photon's side too).
+        """
         stored = patient.external_identifiers.filter(
             system=PHOTON_PATIENT_ID_SYSTEM
         ).first()
         if stored and stored.value:
             return str(stored.value), None
 
-        external_id = str(patient.id)
-        found = client.find_patient_id_by_external_id(external_id)
-        photon_patient_id = found or client.create_patient(self._patient_input(patient))
-
+        photon_patient_id = client.create_patient(self._patient_input(patient))
         persist = CreatePatientExternalIdentifier(
             patient_id=str(patient.id),
             system=PHOTON_PATIENT_ID_SYSTEM,
@@ -313,14 +317,29 @@ class PhotonDispatchHandler(BaseHandler):
         self, patient_id: str, fields: dict[str, Any], reason: str
     ) -> Effect:
         medication = self._medication_term(fields) or "prescription"
-        staff_id = self._prescriber_staff_id(fields)
-        fallback_team = (self.secrets.get("PHOTON_FALLBACK_TEAM_ID") or "").strip()
+        # AddTask assignee/author/team require Canvas Staff/Team UUIDs. The
+        # command's prescriber is a CanvasUser id (usr_...), not a UUID, so only
+        # assign when we actually have a valid UUID; otherwise leave it
+        # unassigned (authored by CanvasBot) rather than failing the Task.
+        staff_id = self._valid_uuid(self._prescriber_staff_id(fields))
+        fallback_team = self._valid_uuid(self.secrets.get("PHOTON_FALLBACK_TEAM_ID"))
         return AddTask(
             patient_id=str(patient_id),
-            assignee_id=staff_id or None,
-            team_id=fallback_team or None,
-            author_id=staff_id or None,
+            assignee_id=staff_id,
+            team_id=fallback_team,
+            author_id=staff_id,
             title=f"Photon send failed for {medication}: {reason}",
             status=TaskStatus.OPEN,
             labels=[PHOTON_TASK_LABEL],
         ).apply()
+
+    @staticmethod
+    def _valid_uuid(value: Any) -> str | None:
+        """Return the value as a string only if it is a valid UUID, else None."""
+        if not value:
+            return None
+        try:
+            uuid.UUID(str(value))
+        except (ValueError, AttributeError, TypeError):
+            return None
+        return str(value)

@@ -14,6 +14,9 @@ from photon_integration.handlers.dispatch import PhotonDispatchHandler
 
 MODULE = "photon_integration.handlers.dispatch"
 
+PRESCRIBER_UUID = "11111111-1111-1111-1111-111111111111"
+TEAM_UUID = "22222222-2222-2222-2222-222222222222"
+
 DEFAULT_SECRETS = {
     "PHOTON_CLIENT_ID": "cid",
     "PHOTON_CLIENT_SECRET": "secret",
@@ -30,7 +33,7 @@ DEFAULT_FIELDS = {
     "refills": 2,
     "substitutions": "Allowed",
     "pharmacy": {"ncpdp": "1234567"},
-    "prescriber": {"id": "staff-1"},
+    "prescriber": {"id": PRESCRIBER_UUID},
     "note_to_pharmacist": "handle with care",
 }
 
@@ -106,7 +109,6 @@ def _patched(*, selected=True, patient=None, client=None):
 
 def _make_client_success():
     client = MagicMock()
-    client.find_patient_id_by_external_id.return_value = None
     client.create_patient.return_value = "pat_new"
     client.find_treatment_id.return_value = "med_1"
     client.find_prescriber_id_by_external_id.return_value = "pro_mapped"
@@ -175,23 +177,9 @@ class TestSuccess:
             effects = handler.compute()
 
         assert effects == []  # nothing persisted, no failure
-        client.find_patient_id_by_external_id.assert_not_called()
         client.create_patient.assert_not_called()
         cpei.assert_not_called()
         assert client.create_prescription.call_args.args[0]["patientId"] == "pat_existing"
-
-    def test_photon_lookup_finds_existing_patient(self):
-        client = _make_client_success()
-        client.find_patient_id_by_external_id.return_value = "pat_found"
-        handler = PhotonDispatchHandler(event=_event(), secrets=DEFAULT_SECRETS)
-        with _patched(patient=_patient(), client=client) as (_, _, cpei):
-            effects = handler.compute()
-
-        client.create_patient.assert_not_called()
-        cpei.assert_called_once_with(
-            patient_id="pt-1", system="https://photon.health/patient", value="pat_found"
-        )
-        assert effects == ["EXT_EFFECT"]
 
     def test_dispense_as_written_when_not_allowed(self):
         client = _make_client_success()
@@ -226,7 +214,7 @@ class TestPrescriberMapping:
         handler = PhotonDispatchHandler(event=_event(), secrets=secrets)
         with _patched(patient=_patient(stored_ext="pat_x"), client=client):
             handler.compute()
-        client.find_prescriber_id_by_external_id.assert_called_once_with("staff-1")
+        client.find_prescriber_id_by_external_id.assert_called_once_with(PRESCRIBER_UUID)
         assert client.create_prescription.call_args.args[0]["prescriberId"] == "pro_mapped"
 
     def test_unmapped_prescriber_creates_task(self):
@@ -252,8 +240,22 @@ class TestFailures:
         client.create_prescription.assert_not_called()
         kwargs = add_task.call_args.kwargs
         assert kwargs["patient_id"] == "pt-1"
-        assert kwargs["assignee_id"] == "staff-1"
+        assert kwargs["assignee_id"] == PRESCRIBER_UUID
         assert kwargs["labels"] == ["photon"]
+
+    def test_non_uuid_prescriber_leaves_task_unassigned(self):
+        client = _make_client_success()
+        client.find_treatment_id.return_value = None
+        # CanvasUser ids (usr_...) are not Staff UUIDs and must not be passed
+        # to AddTask, which would otherwise raise a ValidationError.
+        fields = dict(DEFAULT_FIELDS, prescriber={"id": "usr_01KTFYYT32QNR8ZPCW7QTWBXXD"})
+        handler = PhotonDispatchHandler(event=_event(fields=fields), secrets=DEFAULT_SECRETS)
+        with _patched(patient=_patient(stored_ext="pat_x"), client=client) as (_, add_task, _):
+            effects = handler.compute()
+        assert effects == ["TASK_EFFECT"]
+        kwargs = add_task.call_args.kwargs
+        assert kwargs["assignee_id"] is None
+        assert kwargs["author_id"] is None
 
     def test_new_patient_then_failure_keeps_external_id_and_task(self):
         client = _make_client_success()
@@ -312,10 +314,10 @@ class TestFailures:
         client = _make_client_success()
         client.find_treatment_id.return_value = None
         fields = dict(DEFAULT_FIELDS, prescriber=None)
-        secrets = dict(DEFAULT_SECRETS, PHOTON_FALLBACK_TEAM_ID="team-9")
+        secrets = dict(DEFAULT_SECRETS, PHOTON_FALLBACK_TEAM_ID=TEAM_UUID)
         handler = PhotonDispatchHandler(event=_event(fields=fields), secrets=secrets)
         with _patched(patient=_patient(stored_ext="pat_x"), client=client) as (_, add_task, _):
             handler.compute()
         kwargs = add_task.call_args.kwargs
-        assert kwargs["team_id"] == "team-9"
+        assert kwargs["team_id"] == TEAM_UUID
         assert kwargs["assignee_id"] is None
