@@ -75,7 +75,9 @@
   }
 
   setStatus("Loading Photon Elements…");
-  import("https://esm.sh/@photonhealth/elements")
+  // Same-origin vendored bundle (served by the /elements.js route) — avoids
+  // cross-origin script-src/CSP issues inside the Canvas modal iframe.
+  import("./elements.js")
     .then(function () {
       setStatus("Authenticating with Photon…");
       mountElements();

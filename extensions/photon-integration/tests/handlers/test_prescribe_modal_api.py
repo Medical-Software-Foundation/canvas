@@ -118,6 +118,10 @@ class TestIndex:
 
 
 class TestAssets:
+    def test_elements_js_content_type(self, patched):
+        result = _api().elements_js()
+        assert result[0].headers["Content-Type"] == "text/javascript"
+
     def test_main_js_content_type(self, patched):
         result = _api().main_js()
         assert result[0].headers["Content-Type"] == "text/javascript"

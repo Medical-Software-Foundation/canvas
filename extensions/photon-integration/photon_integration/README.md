@@ -41,9 +41,16 @@ Machine-to-Machine token has `write:patient`/`write:order` but **never**
 | `PHOTON_REDIRECT_URI` | no | Override the Elements SSO redirect URI (defaults to the modal's own URL) |
 | `PHOTON_FALLBACK_TEAM_ID` | no | Team id for failure Tasks when no prescriber is known |
 
-The Elements modal loads from `https://esm.sh` and talks to `*.neutron.health`/
-`*.photon.health`; those are declared in `url_permissions`. The SPA app's
-whitelisted callback URLs in Photon must include the modal's served origin.
+Photon Elements is **vendored** at `static/elements_bundle.js`
+(`@photonhealth/elements@0.23.4`, the jsDelivr `+esm` Rollup bundle wrapped in a
+Django `{% verbatim %}` block) and served same-origin via the `/elements.js`
+route, so it isn't subject to cross-origin script-src/CSP limits inside the
+modal. To update it, re-fetch
+`https://cdn.jsdelivr.net/npm/@photonhealth/elements@<version>/+esm`, re-wrap in
+`{% verbatim %}`…`{% endverbatim %}`, and bump the version here. At runtime the
+modal talks to `*.neutron.health`/`*.photon.health` (declared in
+`url_permissions`); the SPA app's whitelisted callback URLs in Photon must
+include the modal's served origin.
 
 Set these on the plugin's configuration page after install:
 `<emr_base_url>/admin/plugin_io/plugin/<plugin_id>/change/`

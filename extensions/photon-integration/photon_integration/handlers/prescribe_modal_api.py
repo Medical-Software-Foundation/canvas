@@ -84,6 +84,20 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
         )
         return effects
 
+    @api.get("/elements.js")
+    def elements_js(self) -> list[Response | Effect]:
+        # Photon Elements is vendored (static/elements_bundle.js, wrapped in a
+        # Django {% verbatim %} block) and served same-origin so it isn't subject
+        # to cross-origin script-src/CSP restrictions inside the Canvas modal.
+        return [
+            Response(
+                render_to_string("static/elements_bundle.js").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/javascript",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+        ]
+
     @api.get("/main.js")
     def main_js(self) -> list[Response | Effect]:
         return [
