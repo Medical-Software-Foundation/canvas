@@ -148,42 +148,28 @@ class PhotonClient:
     # -- treatments (medication catalog) -----------------------------------
 
     def find_treatment_id(self, term: str) -> str | None:
-        """Look up a Photon treatment (medication) id by search ``term``.
+        """Look up a Photon medication (treatment) id by drug name ``term``.
 
-        Photon's treatment catalog is searched by free-text term (drug name).
-        Direct NDC lookup is not yet generally available, so we match on the
-        medication name from the Canvas command and take the top result.
+        Photon's catalog is queried via ``medications(filter: MedicationFilter)``
+        filtering on the drug name; the returned medication id is used as the
+        prescription's ``treatmentId``. We match on the medication name from the
+        Canvas command and take the top result.
         """
         if not term:
             return None
         query = """
-            query treatments($filter: TreatmentFilter!) {
-              treatments(filter: $filter) { id name }
+            query medications($filter: MedicationFilter, $first: Int) {
+              medications(filter: $filter, first: $first) { id name }
             }
         """
-        treatments = (
-            self._graphql(query, {"filter": {"term": term}}).get("treatments") or []
+        medications = (
+            self._graphql(query, {"filter": {"drug": {"name": term}}, "first": 5}).get(
+                "medications"
+            )
+            or []
         )
-        if treatments:
-            return str(treatments[0]["id"])
-        return None
-
-    # -- prescribers -------------------------------------------------------
-
-    def find_prescriber_id_by_external_id(self, external_id: str) -> str | None:
-        """Return the Photon provider id whose externalId matches ``external_id``."""
-        if not external_id:
-            return None
-        query = """
-            query providers($externalId: ID) {
-              providers(filter: { externalId: $externalId }) { id }
-            }
-        """
-        providers = (
-            self._graphql(query, {"externalId": external_id}).get("providers") or []
-        )
-        if providers:
-            return str(providers[0]["id"])
+        if medications:
+            return str(medications[0]["id"])
         return None
 
     # -- prescriptions & orders --------------------------------------------
@@ -195,33 +181,31 @@ class PhotonClient:
         Canvas refills + 1). Verify this field name against your sandbox account
         during UAT — it is the most integration-specific detail here.
         """
-        # NOTE: prescriberId is passed so the prescription is attributed to the
-        # mapped Photon provider. If your Photon account instead infers the
-        # prescriber from a user-access token, drop this argument during UAT.
+        # createPrescription has no prescriberId argument — the prescriber is
+        # taken from the authenticated identity. ``refillsAllowed`` maps directly
+        # to the Canvas refill count.
         mutation = """
             mutation createPrescription(
               $externalId: ID
               $patientId: ID!
-              $prescriberId: ID
-              $medicationId: ID!
+              $treatmentId: ID!
               $dispenseAsWritten: Boolean
-              $dispenseQuantity: Float!
-              $dispenseUnit: String!
-              $fillsAllowed: Int!
+              $dispenseQuantity: Float
+              $dispenseUnit: String
+              $refillsAllowed: Int
               $daysSupply: Int
-              $instructions: String!
+              $instructions: String
               $notes: String
               $effectiveDate: AWSDate
             ) {
               createPrescription(
                 externalId: $externalId
                 patientId: $patientId
-                prescriberId: $prescriberId
-                medicationId: $medicationId
+                treatmentId: $treatmentId
                 dispenseAsWritten: $dispenseAsWritten
                 dispenseQuantity: $dispenseQuantity
                 dispenseUnit: $dispenseUnit
-                fillsAllowed: $fillsAllowed
+                refillsAllowed: $refillsAllowed
                 daysSupply: $daysSupply
                 instructions: $instructions
                 notes: $notes

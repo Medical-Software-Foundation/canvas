@@ -31,7 +31,6 @@ instead of (or in addition to) Canvas's native pharmacy transmission.
 | `PHOTON_CLIENT_ID` | yes | Photon OAuth client id (use the Machine-to-Machine app) |
 | `PHOTON_CLIENT_SECRET` | yes | Photon OAuth client secret (Machine-to-Machine app) |
 | `PHOTON_ENV` | no | `sandbox` (default, Neutron) or `production` |
-| `PHOTON_TEST_PRESCRIBER_ID` | no | Force one Photon provider for all sends (testing) |
 | `PHOTON_FALLBACK_TEAM_ID` | no | Team id for failure Tasks when no prescriber is known |
 
 Set these on the plugin's configuration page after install:
@@ -50,19 +49,28 @@ Set these on the plugin's configuration page after install:
 canvas install photon_integration
 ```
 
-## ⚠️ Verify against your Photon sandbox during UAT
+## Schema notes (verified against Neutron via introspection)
 
-Photon's GraphQL schema varies by account/version. Confirm these before relying
-on production sends (all isolated in `client/photon_client.py`):
+The GraphQL calls in `client/photon_client.py` match the live Neutron schema:
 
-- **`fillsAllowed` vs `refillsAllowed`** on `createPrescription` (this plugin
-  sends `fillsAllowed = refills + 1`).
-- **`prescriberId` on `createPrescription`** — included here; remove it if your
-  account infers the prescriber from a user-access token instead.
-- **`patients`/`providers` filter shape** for `externalId` lookups.
-- **`treatments(filter: { term })`** medication search — NDC-based lookup is not
-  yet generally available from Photon, so this matches on the medication name.
-- **`AddressInput` field names** (`street1`/`street2`/`city`/`state`/`postalCode`).
+- Medication lookup: `medications(filter: { drug: { name } })` → the returned
+  medication `id` is used as the prescription `treatmentId`. Matches on the
+  medication name from the Canvas command (NDC/code-level lookup needs parent
+  ids, so name search is used).
+- `createPrescription` uses `treatmentId` and `refillsAllowed` (= Canvas
+  refills). **It has no `prescriberId` argument** — the prescriber is taken from
+  the authenticated identity.
+- `createOrder` uses `fills: [{ prescriptionId }]` + `address` (`pharmacyId`
+  optional → patient's preferred pharmacy).
+
+### ⚠️ Open question: prescription authorization
+
+Photon documents that a Machine-to-Machine token "can complete all actions
+**except write prescriptions**, as prescriptions can only be written by
+authorized providers." Patient creation works with the M2M token; if
+`createPrescription` returns an authorization error, the org must either permit
+M2M prescription writes or the flow needs a provider **user-access token**
+(e.g. via Photon Elements). This is the main item still to confirm in UAT.
 
 ## Tests
 

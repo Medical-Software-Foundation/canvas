@@ -5,3 +5,4 @@ __pycache__
 .venv
 *.pyc
 .mypy_cache
+introspect_photon.py

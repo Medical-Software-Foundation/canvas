@@ -80,14 +80,12 @@ class PhotonDispatchHandler(BaseHandler):
                 effects.append(ext_id_effect)
 
             treatment_id = self._resolve_treatment(client, fields)
-            prescriber_id = self._resolve_prescriber(client, fields)
 
             prescription_id = client.create_prescription(
                 self._prescription_input(
                     command_id=command_id,
                     photon_patient_id=photon_patient_id,
                     treatment_id=treatment_id,
-                    prescriber_id=prescriber_id,
                     fields=fields,
                 )
             )
@@ -215,23 +213,6 @@ class PhotonDispatchHandler(BaseHandler):
 
     # -- prescriber --------------------------------------------------------
 
-    def _resolve_prescriber(
-        self, client: PhotonClient, fields: dict[str, Any]
-    ) -> str | None:
-        test_prescriber = (self.secrets.get("PHOTON_TEST_PRESCRIBER_ID") or "").strip()
-        if test_prescriber:
-            return test_prescriber
-
-        staff_id = self._prescriber_staff_id(fields)
-        if not staff_id:
-            raise PhotonError("Prescription has no prescriber to map to Photon")
-        photon_prescriber_id = client.find_prescriber_id_by_external_id(staff_id)
-        if not photon_prescriber_id:
-            raise PhotonError(
-                f"No Photon provider mapped to Canvas staff {staff_id} (externalId)"
-            )
-        return photon_prescriber_id
-
     @staticmethod
     def _prescriber_staff_id(fields: dict[str, Any]) -> str | None:
         prescriber = fields.get("prescriber")
@@ -251,7 +232,6 @@ class PhotonDispatchHandler(BaseHandler):
         command_id: str,
         photon_patient_id: str,
         treatment_id: str,
-        prescriber_id: str | None,
         fields: dict[str, Any],
     ) -> dict[str, Any]:
         sig = (fields.get("sig") or "").strip()
@@ -272,13 +252,12 @@ class PhotonDispatchHandler(BaseHandler):
         return {
             "externalId": str(command_id),
             "patientId": photon_patient_id,
-            "prescriberId": prescriber_id,
-            "medicationId": treatment_id,
+            "treatmentId": treatment_id,
             # DAW = no substitution allowed.
             "dispenseAsWritten": "not" in substitutions,
             "dispenseQuantity": float(quantity),
             "dispenseUnit": dispense_unit,
-            "fillsAllowed": refills + 1,
+            "refillsAllowed": refills,
             "daysSupply": fields.get("days_supply"),
             "instructions": sig,
             "notes": fields.get("note_to_pharmacist") or None,

@@ -111,7 +111,6 @@ def _make_client_success():
     client = MagicMock()
     client.create_patient.return_value = "pat_new"
     client.find_treatment_id.return_value = "med_1"
-    client.find_prescriber_id_by_external_id.return_value = "pro_mapped"
     client.create_prescription.return_value = "rx_1"
     client.create_order.return_value = "ord_1"
     return client
@@ -157,9 +156,9 @@ class TestSuccess:
         # prescription payload mapped correctly
         rx_input = client.create_prescription.call_args.args[0]
         assert rx_input["patientId"] == "pat_new"
-        assert rx_input["medicationId"] == "med_1"
-        assert rx_input["prescriberId"] == "pro_test"  # test override
-        assert rx_input["fillsAllowed"] == 3  # refills(2) + 1
+        assert rx_input["treatmentId"] == "med_1"
+        assert "prescriberId" not in rx_input  # not a createPrescription argument
+        assert rx_input["refillsAllowed"] == 2  # Canvas refills
         assert rx_input["dispenseAsWritten"] is False  # substitutions allowed
         assert rx_input["dispenseQuantity"] == 30.0
         assert rx_input["dispenseUnit"] == "tablet"
@@ -205,28 +204,6 @@ class TestSuccess:
         with _patched(patient=_patient(stored_ext="pat_x"), client=client):
             handler.compute()
         client.find_treatment_id.assert_called_once_with("Amlodipine 5 mg tablet")
-
-
-class TestPrescriberMapping:
-    def test_maps_by_external_id_without_override(self):
-        client = _make_client_success()
-        secrets = {k: v for k, v in DEFAULT_SECRETS.items() if k != "PHOTON_TEST_PRESCRIBER_ID"}
-        handler = PhotonDispatchHandler(event=_event(), secrets=secrets)
-        with _patched(patient=_patient(stored_ext="pat_x"), client=client):
-            handler.compute()
-        client.find_prescriber_id_by_external_id.assert_called_once_with(PRESCRIBER_UUID)
-        assert client.create_prescription.call_args.args[0]["prescriberId"] == "pro_mapped"
-
-    def test_unmapped_prescriber_creates_task(self):
-        client = _make_client_success()
-        client.find_prescriber_id_by_external_id.return_value = None
-        secrets = {k: v for k, v in DEFAULT_SECRETS.items() if k != "PHOTON_TEST_PRESCRIBER_ID"}
-        handler = PhotonDispatchHandler(event=_event(), secrets=secrets)
-        with _patched(patient=_patient(stored_ext="pat_x"), client=client) as (_, add_task, _):
-            effects = handler.compute()
-        assert effects == ["TASK_EFFECT"]
-        client.create_prescription.assert_not_called()
-        assert "No Photon provider" in add_task.call_args.kwargs["title"]
 
 
 class TestFailures:
