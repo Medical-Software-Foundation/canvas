@@ -24,12 +24,12 @@ instead of (or in addition to) Canvas's native pharmacy transmission.
 4. **On any Photon failure**, creates a Canvas **Task** assigned to the
    prescriber (or a fallback team) describing what went wrong.
 
-## Configuration (plugin variables)
+## Configuration (secrets)
 
-| Variable | Required | Description |
+| Secret | Required | Description |
 |---|---|---|
-| `PHOTON_CLIENT_ID` | yes | Photon OAuth client id (sensitive) |
-| `PHOTON_CLIENT_SECRET` | yes | Photon OAuth client secret (sensitive) |
+| `PHOTON_CLIENT_ID` | yes | Photon OAuth client id (use the Machine-to-Machine app) |
+| `PHOTON_CLIENT_SECRET` | yes | Photon OAuth client secret (Machine-to-Machine app) |
 | `PHOTON_ENV` | no | `sandbox` (default, Neutron) or `production` |
 | `PHOTON_TEST_PRESCRIBER_ID` | no | Force one Photon provider for all sends (testing) |
 | `PHOTON_FALLBACK_TEAM_ID` | no | Team id for failure Tasks when no prescriber is known |

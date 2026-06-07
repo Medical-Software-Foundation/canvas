@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.163.1",
-    "plugin_version": "0.0.1",
+    "plugin_version": "0.0.2",
     "name": "photon_integration",
     "description": "Adds a 'Send via Photon' option to the Prescribe, Refill, and Adjust Prescription commands. When chosen, Canvas's send and sign-and-send actions are removed (sign and print are kept), and on sign the prescription is pushed to Photon Health end-to-end: the patient is synced, a prescription is created, and an order is placed for pharmacy routing. Photon failures are surfaced as a Canvas Task.",
     "components": {
@@ -31,12 +31,12 @@
         "effects": [],
         "views": []
     },
-    "variables": [
-        {"name": "PHOTON_CLIENT_ID", "sensitive": true},
-        {"name": "PHOTON_CLIENT_SECRET", "sensitive": true},
-        {"name": "PHOTON_ENV", "sensitive": false, "default": "sandbox"},
-        {"name": "PHOTON_TEST_PRESCRIBER_ID", "sensitive": false},
-        {"name": "PHOTON_FALLBACK_TEAM_ID", "sensitive": false}
+    "secrets": [
+        "PHOTON_CLIENT_ID",
+        "PHOTON_CLIENT_SECRET",
+        "PHOTON_ENV",
+        "PHOTON_TEST_PRESCRIBER_ID",
+        "PHOTON_FALLBACK_TEAM_ID"
     ],
     "tags": {},
     "references": [
