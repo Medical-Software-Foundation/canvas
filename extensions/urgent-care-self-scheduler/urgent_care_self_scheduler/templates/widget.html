@@ -1,0 +1,100 @@
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #064e3b;
+  }
+  .uc-hero {
+    box-sizing: border-box;
+    height: 100%;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid #a7f3d0;
+    border-radius: 12px;
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .uc-hero__title {
+    font-size: 32px;
+    font-weight: 500;
+    font-style: italic;
+    color: #064e3b;
+    margin: 0;
+    line-height: 1.2;
+  }
+  .uc-hero__subtitle {
+    font-size: 17px;
+    color: #065f46;
+    line-height: 1.5;
+    margin: 0;
+    flex: 1 1 auto;
+  }
+  .uc-hero__cta {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 24px 28px;
+    background: #ffffff;
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: 0 1px 2px rgba(6, 78, 59, 0.06);
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.22s ease;
+    will-change: transform;
+  }
+  .uc-hero__cta:hover, .uc-hero__cta:focus {
+    outline: none;
+    transform: translateY(-3px) scale(1.012);
+    box-shadow: 0 12px 24px rgba(6, 78, 59, 0.15);
+  }
+  .uc-hero__cta:active {
+    transform: translateY(0) scale(0.995);
+    box-shadow: 0 1px 2px rgba(6, 78, 59, 0.06);
+  }
+  .uc-hero__cta-icon {
+    flex: 0 0 auto;
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    background: #d1fae5;
+    color: #047857;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .uc-hero__cta-icon svg { width: 32px; height: 32px; }
+  .uc-hero__cta-text { display: flex; flex-direction: column; gap: 4px; }
+  .uc-hero__cta-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+    line-height: 1.2;
+  }
+  .uc-hero__cta-subtitle {
+    font-size: 15px;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.4;
+  }
+</style>
+<div class="uc-hero">
+  <h2 class="uc-hero__title">Need to be seen today?</h2>
+  <p class="uc-hero__subtitle">Book a virtual urgent-care visit in the next few days. A provider will see you over telehealth — no waiting room.</p>
+  <a class="uc-hero__cta" href="{{ wizard_path }}" target="_top">
+    <div class="uc-hero__cta-icon" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"></circle>
+        <polyline points="12 7 12 12 15 14"></polyline>
+      </svg>
+    </div>
+    <div class="uc-hero__cta-text">
+      <p class="uc-hero__cta-title">Schedule an Urgent Care Visit</p>
+      <p class="uc-hero__cta-subtitle">Book your virtual visit</p>
+    </div>
+  </a>
+</div>

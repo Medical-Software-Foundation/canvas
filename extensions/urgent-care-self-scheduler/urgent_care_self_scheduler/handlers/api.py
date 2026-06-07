@@ -1,0 +1,500 @@
+import datetime
+import json
+import uuid
+from http import HTTPStatus
+from typing import Any, Iterable
+from zoneinfo import ZoneInfo
+
+from canvas_sdk.effects import Effect
+from canvas_sdk.effects.note.appointment import Appointment as AppointmentEffect
+from canvas_sdk.effects.note.base import AppointmentIdentifier
+from canvas_sdk.effects.patient_metadata import PatientMetadata
+from canvas_sdk.effects.simple_api import JSONResponse, Response
+from canvas_sdk.effects.task import AddTask, AddTaskComment, TaskStatus
+from canvas_sdk.handlers.simple_api import PatientSessionAuthMixin, SimpleAPIRoute
+from logger import log
+
+from urgent_care_self_scheduler.slot_search import (
+    find_available_slots,
+    resolve_urgent_care_note_type,
+)
+
+DEFAULT_LEAD_TIME_MINUTES = 30
+SLOT_WINDOW_DAYS = 3
+EXTERNAL_ID_SYSTEM = "urgent-care-self-scheduler"
+PENDING_RFV_KEY_PREFIX = "pending_rfv_"
+RFV_MAX_CHARS = 500
+# Appointment statuses that DON'T count as the patient already having a visit that day.
+_NON_BOOKABLE_APPOINTMENT_STATUSES = ("cancelled", "noshow", "entered-in-error")
+# Buffer to absorb timezone offset when querying appointments by a UTC window.
+_APPOINTMENT_QUERY_BUFFER = datetime.timedelta(hours=16)
+
+
+def _patient_has_upcoming_urgent_care_visit(
+    patient_id: str,
+    *,
+    note_type: Any,
+    window_start: datetime.datetime,
+    window_end: datetime.datetime,
+) -> bool:
+    """True if the patient already has a (non-cancelled) urgent-care visit in the window.
+
+    Urgent-care visits are appointments of the configured urgent-care NoteType
+    (`Appointment.note_type`). Used to block a patient from self-booking a second
+    urgent-care visit on any day while one is already upcoming.
+    """
+    from canvas_sdk.v1.data.appointment import Appointment
+
+    return bool(
+        Appointment.objects.filter(
+            patient__id=patient_id,
+            note_type=note_type,
+            start_time__gte=window_start - _APPOINTMENT_QUERY_BUFFER,
+            start_time__lt=window_end + _APPOINTMENT_QUERY_BUFFER,
+        )
+        .exclude(status__in=_NON_BOOKABLE_APPOINTMENT_STATUSES)
+        .exists()
+    )
+
+
+def _first_coding_display(record: Any) -> str | None:
+    """Returns the first coding's display string, using the prefetch cache.
+
+    Uses `list(record.codings.all())[0]` rather than `.first()` so callers
+    using `prefetch_related('codings')` actually hit the cache; `.first()`
+    can re-query even when codings are prefetched.
+    """
+    try:
+        codings = list(record.codings.all())
+    except AttributeError:
+        # Record type doesn't expose a `codings` relation.
+        return None
+    if codings and getattr(codings[0], "display", None):
+        return str(codings[0].display)
+    return None
+
+
+def _medication_label(medication: Any) -> str:
+    return _first_coding_display(medication) or "Unknown medication"
+
+
+def _allergy_label(allergy: Any) -> str:
+    # Prefer the structured coding display — that's the actual allergen.
+    # `narrative` is free-text and is sometimes only the *reaction* (e.g., "rash"),
+    # which doesn't tell the patient what they're allergic to.
+    coding_display = _first_coding_display(allergy)
+    if coding_display:
+        return coding_display
+    narrative = getattr(allergy, "narrative", "") or ""
+    if narrative:
+        return str(narrative)
+    return "Unknown allergy"
+
+
+def _format_medications(medications: Iterable[Any]) -> list[dict]:
+    return [{"id": str(m.id), "label": _medication_label(m)} for m in medications]
+
+
+def _format_allergies(allergies: Iterable[Any]) -> list[dict]:
+    return [{"id": str(a.id), "label": _allergy_label(a)} for a in allergies]
+
+
+def _patient_review(patient_id: str) -> dict | None:
+    """Returns the active medication + allergy review payload for `patient_id`.
+
+    Returns None if the patient cannot be found.
+    """
+    from canvas_sdk.v1.data.allergy_intolerance import AllergyIntolerance
+    from canvas_sdk.v1.data.medication import Medication
+    from canvas_sdk.v1.data.patient import Patient
+
+    try:
+        patient = Patient.objects.get(id=patient_id)
+    except Patient.DoesNotExist:
+        return None
+
+    medications = (
+        Medication.objects.filter(patient=patient, deleted=False)
+        .exclude(entered_in_error__isnull=False)
+        .active()
+        .prefetch_related("codings")
+    )
+    allergies = (
+        AllergyIntolerance.objects.filter(patient=patient, deleted=False, status="active")
+        .exclude(entered_in_error__isnull=False)
+        .committed()
+        .prefetch_related("codings")
+    )
+    return {
+        "medications": _format_medications(medications),
+        "allergies": _format_allergies(allergies),
+    }
+
+
+def _parse_lead_time(value: Any) -> int:
+    if value is None:
+        return DEFAULT_LEAD_TIME_MINUTES
+    try:
+        n = int(str(value).strip())
+    except (TypeError, ValueError):
+        return DEFAULT_LEAD_TIME_MINUTES
+    return n if n >= 0 else DEFAULT_LEAD_TIME_MINUTES
+
+
+def _resolve_timezone(tz_string: str | None) -> ZoneInfo:
+    if not tz_string:
+        return ZoneInfo("UTC")
+    try:
+        return ZoneInfo(tz_string)
+    except (KeyError, ValueError):
+        # Unknown timezone key (ZoneInfoNotFoundError subclasses KeyError) or a
+        # malformed value in the practice-location setting. NB: catch KeyError
+        # rather than importing ZoneInfoNotFoundError — the Canvas plugin-runner
+        # sandbox only allowlists `ZoneInfo` from the zoneinfo module.
+        return ZoneInfo("UTC")
+
+
+def _active_location() -> tuple[str | None, ZoneInfo]:
+    """Returns (active practice location id, its timezone) in a single lookup.
+
+    Returns (None, UTC) when there is no active location. Callers needing both
+    values (e.g. booking) use this to avoid querying PracticeLocation twice.
+    """
+    from canvas_sdk.v1.data.practicelocation import PracticeLocation, PracticeLocationSetting
+
+    location = PracticeLocation.objects.filter(active=True).first()
+    if not location:
+        return None, ZoneInfo("UTC")
+    setting = PracticeLocationSetting.objects.filter(
+        practice_location=location, name="last_known_timezone"
+    ).first()
+    return str(location.id), _resolve_timezone(setting.value if setting else None)
+
+
+def _practice_timezone() -> ZoneInfo:
+    """Returns the timezone of the active practice location, or UTC if unset."""
+    return _active_location()[1]
+
+
+class MeAPI(PatientSessionAuthMixin, SimpleAPIRoute):
+    """Returns the logged-in patient's active medications + allergies for the wizard's review step."""
+
+    PATH = "/api/me"
+
+    def get(self) -> list[Response | Effect]:
+        patient_id = self.request.headers.get("canvas-logged-in-user-id")
+        if not patient_id:
+            return [JSONResponse({"error": "no session"}, status_code=HTTPStatus.UNAUTHORIZED)]
+
+        review = _patient_review(patient_id)
+        if review is None:
+            log.error(f"MeAPI: patient {patient_id} not found")
+            return [JSONResponse({"error": "patient not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        return [JSONResponse(review)]
+
+
+class SlotsAPI(PatientSessionAuthMixin, SimpleAPIRoute):
+    """Returns available urgent-care slots for the next few days."""
+
+    PATH = "/api/slots"
+
+    def get(self) -> list[Response | Effect]:
+        secrets = getattr(self, "secrets", {}) or {}
+        note_type_name = (secrets.get("URGENT_CARE_NOTE_TYPE_NAME") or "").strip()
+        if not note_type_name:
+            log.error("SlotsAPI: URGENT_CARE_NOTE_TYPE_NAME secret is not set")
+            return [
+                JSONResponse(
+                    {"error": "scheduler unavailable"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            ]
+
+        patient_id = self.request.headers.get("canvas-logged-in-user-id")
+        lead_time = _parse_lead_time(secrets.get("URGENT_CARE_LEAD_TIME_MINUTES"))
+        fallback_phone = (secrets.get("URGENT_CARE_FALLBACK_PHONE") or "").strip()
+        practice_tz = _practice_timezone()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        window_end = now + datetime.timedelta(days=SLOT_WINDOW_DAYS)
+        # Resolve the NoteType once and reuse it for both slot search and the
+        # existing-visit check, rather than resolving twice.
+        note_type = resolve_urgent_care_note_type(note_type_name)
+        slots = find_available_slots(
+            note_type_name=note_type_name,
+            window_start=now,
+            window_end=window_end,
+            practice_timezone=practice_tz,
+            now=now,
+            lead_time_minutes=lead_time,
+            note_type=note_type,
+        )
+        existing_urgent_care = False
+        if patient_id and note_type is not None:
+            existing_urgent_care = _patient_has_upcoming_urgent_care_visit(
+                patient_id, note_type=note_type, window_start=now, window_end=window_end
+            )
+        return [
+            JSONResponse(
+                {
+                    "slots": slots,
+                    "fallback_phone": fallback_phone,
+                    "existing_urgent_care_visit": existing_urgent_care,
+                }
+            )
+        ]
+
+
+def _validate_intake_payload(intake: Any) -> str | None:
+    if not isinstance(intake, dict):
+        return "intake must be an object"
+    rfv = (intake.get("reason_for_visit") or "").strip()
+    if not rfv:
+        return "reason_for_visit is required"
+    if len(intake.get("reason_for_visit") or "") > RFV_MAX_CHARS:
+        return f"reason_for_visit exceeds {RFV_MAX_CHARS} characters"
+    if not (intake.get("symptom_duration") or "").strip():
+        return "symptom_duration is required"
+    return None
+
+
+def _build_task_title(patient_name: str, reason_for_visit: str) -> str:
+    rfv_short = (reason_for_visit or "").strip().replace("\n", " ")
+    if len(rfv_short) > 80:
+        rfv_short = rfv_short[:77] + "..."
+    return f"Urgent care intake — {patient_name}: {rfv_short}"
+
+
+def _flagged_change_lines(intake: dict) -> list[str]:
+    """Returns one line per medication/allergy change the patient flagged."""
+    lines: list[str] = []
+    for label_word, key in (("Medication", "medications"), ("Allergy", "allergies")):
+        section = intake.get(key) or {}
+        for change in section.get("changes") or []:
+            item = (change.get("label") or "").strip() or f"(unknown {label_word.lower()})"
+            note = (change.get("note") or "").strip()
+            lines.append(f"{label_word}: {item}" + (f" — {note}" if note else ""))
+    return lines
+
+
+def _build_task_comment(intake: dict) -> str | None:
+    """Builds the intake summary surfaced as a comment on the care-team task:
+    symptom duration plus any flagged medication/allergy changes.
+
+    The encounter note's HPI carries the same detail, but the care team triages
+    from the task queue — so the duration and flagged changes are surfaced here
+    too rather than left only on the note. Returns None if there's nothing to add.
+    """
+    lines: list[str] = []
+    duration = (intake.get("symptom_duration") or "").strip()
+    if duration:
+        lines.append(f"Symptom duration: {duration}")
+    change_lines = _flagged_change_lines(intake)
+    if change_lines:
+        lines.append("Patient flagged the following during intake:")
+        lines.extend(f"• {line}" for line in change_lines)
+    return "\n".join(lines) if lines else None
+
+
+def _intake_to_metadata_value(intake: dict) -> str:
+    return json.dumps(intake, separators=(",", ":"))
+
+
+def _patient_full_name(patient_id: str) -> str:
+    from canvas_sdk.v1.data.patient import Patient
+
+    try:
+        patient = Patient.objects.only("first_name", "last_name").get(id=patient_id)
+    except Patient.DoesNotExist:
+        return "patient"
+    first = (patient.first_name or "").strip()
+    last = (patient.last_name or "").strip()
+    return f"{first} {last}".strip() or "patient"
+
+
+class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
+    """POST /api/book — books the urgent-care visit, returning effects for the appointment + task + RFV stash."""
+
+    PATH = "/api/book"
+
+    def post(self) -> list[Response | Effect]:
+        secrets = getattr(self, "secrets", {}) or {}
+        note_type_name = (secrets.get("URGENT_CARE_NOTE_TYPE_NAME") or "").strip()
+        if not note_type_name:
+            return [
+                JSONResponse(
+                    {"error": "scheduler unavailable"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            ]
+
+        patient_id = self.request.headers.get("canvas-logged-in-user-id")
+        if not patient_id:
+            return [JSONResponse({"error": "no session"}, status_code=HTTPStatus.UNAUTHORIZED)]
+
+        try:
+            body = json.loads(self.request.body or b"{}")
+        except json.JSONDecodeError:
+            return [JSONResponse({"error": "invalid JSON"}, status_code=HTTPStatus.BAD_REQUEST)]
+
+        slot = body.get("slot") or {}
+        intake = body.get("intake") or {}
+
+        validation_error = _validate_intake_payload(intake)
+        if validation_error:
+            return [
+                JSONResponse({"error": validation_error}, status_code=HTTPStatus.BAD_REQUEST)
+            ]
+
+        provider_id = (slot.get("provider_id") or "").strip()
+        start_iso = (slot.get("start_iso") or "").strip()
+        if not provider_id or not start_iso:
+            return [
+                JSONResponse(
+                    {"error": "slot.provider_id and slot.start_iso are required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        # Resolve the urgent-care NoteType once and reuse it for both the slot
+        # re-validation and the appointment effect below.
+        note_type = resolve_urgent_care_note_type(note_type_name)
+        if note_type is None:
+            return [
+                JSONResponse(
+                    {"error": "scheduler misconfigured"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            ]
+        duration_minutes = note_type.online_duration
+
+        # Re-validate the slot is still on offer.
+        lead_time = _parse_lead_time(secrets.get("URGENT_CARE_LEAD_TIME_MINUTES"))
+        practice_location_id, practice_tz = _active_location()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        available = find_available_slots(
+            note_type_name=note_type_name,
+            window_start=now,
+            window_end=now + datetime.timedelta(days=SLOT_WINDOW_DAYS),
+            practice_timezone=practice_tz,
+            now=now,
+            lead_time_minutes=lead_time,
+            note_type=note_type,
+        )
+        match = next(
+            (s for s in available if s["provider_id"] == provider_id and s["start_iso"] == start_iso),
+            None,
+        )
+        if match is None:
+            return [
+                JSONResponse({"error": "slot_taken"}, status_code=HTTPStatus.CONFLICT)
+            ]
+
+        # Build the booking effects.
+        try:
+            start_time = datetime.datetime.fromisoformat(start_iso)
+        except ValueError:
+            return [
+                JSONResponse({"error": "invalid start_iso"}, status_code=HTTPStatus.BAD_REQUEST)
+            ]
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=practice_tz)
+
+        # Hard block: don't let a patient self-book a second urgent-care visit
+        # while one is already upcoming in the window (any day). The wizard blocks
+        # this in the UI; this enforces it server-side if the client is bypassed.
+        if _patient_has_upcoming_urgent_care_visit(
+            patient_id,
+            note_type=note_type,
+            window_start=now,
+            window_end=now + datetime.timedelta(days=SLOT_WINDOW_DAYS),
+        ):
+            return [
+                JSONResponse(
+                    {"error": "already_has_urgent_care"}, status_code=HTTPStatus.CONFLICT
+                )
+            ]
+
+        if not practice_location_id:
+            log.error("BookAPI: no active PracticeLocation found")
+            return [
+                JSONResponse(
+                    {"error": "scheduler misconfigured"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            ]
+
+        correlation_id = str(uuid.uuid4())
+
+        from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
+
+        appointment = AppointmentEffect(
+            appointment_note_type_id=str(note_type.id),
+            patient_id=patient_id,
+            start_time=start_time,
+            duration_minutes=duration_minutes,
+            practice_location_id=practice_location_id,
+            provider_id=provider_id,
+            status=AppointmentProgressStatus.CONFIRMED,
+            external_identifiers=[
+                AppointmentIdentifier(system=EXTERNAL_ID_SYSTEM, value=correlation_id)
+            ],
+        )
+
+        patient_full_name = _patient_full_name(patient_id)
+        task_team_id = (secrets.get("URGENT_CARE_TASK_TEAM_ID") or "").strip()
+        has_flagged_changes = bool(_flagged_change_lines(intake))
+        task_comment = _build_task_comment(intake)
+        task_title = _build_task_title(patient_full_name, intake.get("reason_for_visit", ""))
+        if has_flagged_changes:
+            # Flag at-a-glance in the queue; full detail goes in the task comment below.
+            task_title += " — med/allergy changes flagged"
+        task_id = str(uuid.uuid4())
+        task_kwargs: dict[str, Any] = {
+            "id": task_id,
+            "title": task_title,
+            "patient_id": patient_id,
+            "due": start_time,
+            "status": TaskStatus.OPEN,
+            "labels": ["urgent-care-intake"] + ([] if task_team_id else ["unassigned"]),
+        }
+        if task_team_id:
+            task_kwargs["team_id"] = task_team_id
+        task = AddTask(**task_kwargs)
+
+        # Stash the intake payload for the UrgentCareRfvOriginator handler, which
+        # originates the RFV/HPI commands once the appointment's note exists.
+        rfv_stash = PatientMetadata(
+            patient_id=patient_id, key=f"{PENDING_RFV_KEY_PREFIX}{correlation_id}"
+        )
+
+        # Order matters: write the intake stash FIRST so it is committed before
+        # `appointment.create()` fires APPOINTMENT_CREATED. Otherwise the
+        # UrgentCareRfvOriginator handler runs before the metadata exists and
+        # finds nothing to originate (the RFV/HPI never land on the note).
+        effects = [
+            rfv_stash.upsert(value=_intake_to_metadata_value(intake)),
+            appointment.create(),
+            task.apply(),
+        ]
+        if task_comment:
+            # Surface the intake summary (symptom duration + any flagged med/allergy
+            # changes) directly on the intake task, referencing it by the id we
+            # assigned above, so the care team sees it while triaging the queue.
+            effects.append(
+                AddTaskComment(task_id=task_id, body=task_comment).apply()
+            )
+
+        return [
+            *effects,
+            JSONResponse(
+                {
+                    "ok": True,
+                    "start_iso": start_iso,
+                    "provider_name": match["provider_name"],
+                    "duration_minutes": duration_minutes,
+                    "appointments_url": "/app/appointments",
+                }
+            ),
+        ]
+
+

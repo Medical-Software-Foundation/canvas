@@ -1,0 +1,43 @@
+{
+    "sdk_version": "0.140.1",
+    "plugin_version": "0.0.1",
+    "name": "urgent_care_self_scheduler",
+    "description": "Patient portal self-scheduling for virtual urgent-care visits. Adds a portal widget; the wizard collects a chief complaint and intake info, picks a slot from provider clinic calendars, and books the appointment with an RFV command and an intake task.",
+    "components": {
+        "handlers": [
+            {
+                "class": "urgent_care_self_scheduler.handlers.widget:UrgentCareWidget",
+                "description": "Renders the urgent-care scheduling card on the patient portal home page."
+            },
+            {
+                "class": "urgent_care_self_scheduler.handlers.web_app:UrgentCareWebApp",
+                "description": "Serves the wizard HTML page at /plugin-io/api/urgent_care_self_scheduler/wizard."
+            },
+            {
+                "class": "urgent_care_self_scheduler.handlers.api:MeAPI",
+                "description": "GET /api/me — returns the logged-in patient's active medications + allergies."
+            },
+            {
+                "class": "urgent_care_self_scheduler.handlers.api:SlotsAPI",
+                "description": "GET /api/slots — returns available urgent-care slots for the next few days."
+            },
+            {
+                "class": "urgent_care_self_scheduler.handlers.api:BookAPI",
+                "description": "POST /api/book — books the urgent-care visit (Appointment + Task + RFV stash)."
+            },
+            {
+                "class": "urgent_care_self_scheduler.handlers.rfv_fallback:UrgentCareRfvOriginator",
+                "description": "Listens for APPOINTMENT_CREATED on plugin-booked visits, originates the ReasonForVisitCommand on the new encounter note from the stashed intake."
+            }
+        ]
+    },
+    "secrets": [
+        "URGENT_CARE_NOTE_TYPE_NAME",
+        "URGENT_CARE_LEAD_TIME_MINUTES",
+        "URGENT_CARE_TASK_TEAM_ID",
+        "URGENT_CARE_FALLBACK_PHONE"
+    ],
+    "tags": {},
+    "license": "MIT",
+    "readme": "../README.md"
+}

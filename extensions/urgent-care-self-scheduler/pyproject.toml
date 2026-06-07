@@ -1,0 +1,30 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "urgent-care-self-scheduler"
+version = "0.0.0"
+description = "Patient portal self-scheduling for virtual urgent-care visits. Adds a portal widget; the wizard collects a chief complaint and intake info, picks a slot from provider clinic calendars, and books the appointment with an RFV command and an intake task."
+authors = [{ name = "Nora Greer", email = "nora.greer@canvasmedical.com" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
