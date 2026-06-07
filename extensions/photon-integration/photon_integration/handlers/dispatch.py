@@ -19,22 +19,21 @@ import uuid
 from typing import Any
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.patient import CreatePatientExternalIdentifier
 from canvas_sdk.effects.task import AddTask, TaskStatus
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
-from canvas_sdk.v1.data.common import ContactPointSystem
 from canvas_sdk.v1.data.patient import Patient
 from logger import log
 
 from photon_integration.client.photon_client import PhotonClient, PhotonError
-from photon_integration.constants import (
-    PHOTON_PATIENT_ID_SYSTEM,
-    PHOTON_TASK_LABEL,
-)
+from photon_integration.constants import PHOTON_TASK_LABEL
 from photon_integration.handlers.command_field import _photon_send_selected
+from photon_integration.patient_sync import (
+    build_address,
+    build_client,
+    resolve_photon_patient,
+)
 
-_SEX_MAP = {"F": "FEMALE", "M": "MALE"}
 _MEDICATION_NAME_KEYS = ("text", "label", "name", "description", "display")
 _PRESCRIBER_ID_KEYS = ("id", "key", "staff", "staff_id")
 
@@ -71,9 +70,9 @@ class PhotonDispatchHandler(BaseHandler):
 
         effects: list[Effect] = []
         try:
-            client = self._build_client()
+            client = build_client(self.secrets)
 
-            photon_patient_id, ext_id_effect = self._resolve_patient(client, patient)
+            photon_patient_id, ext_id_effect = resolve_photon_patient(patient, client)
             if ext_id_effect is not None:
                 # Persist the Photon id even if a later step fails, so retries
                 # reuse the same Photon patient.
@@ -90,7 +89,7 @@ class PhotonDispatchHandler(BaseHandler):
                 )
             )
 
-            order_address = self._address_input(patient)
+            order_address = build_address(patient)
             if order_address is None:
                 raise PhotonError(f"Patient {patient.id} has no address for the order")
 
@@ -107,84 +106,6 @@ class PhotonDispatchHandler(BaseHandler):
             effects.append(self._failure_task(patient_id, fields, str(exc)))
 
         return effects
-
-    # -- configuration -----------------------------------------------------
-
-    def _build_client(self) -> PhotonClient:
-        return PhotonClient(
-            client_id=self.secrets.get("PHOTON_CLIENT_ID", ""),
-            client_secret=self.secrets.get("PHOTON_CLIENT_SECRET", ""),
-            env=(self.secrets.get("PHOTON_ENV") or "sandbox").strip().lower(),
-        )
-
-    # -- patient -----------------------------------------------------------
-
-    def _resolve_patient(
-        self, client: PhotonClient, patient: Patient
-    ) -> tuple[str, Effect | None]:
-        """Return (photon_patient_id, optional external-id effect to persist).
-
-        Photon's `patients` query has no server-side externalId filter, so we
-        rely on the Photon patient id we persist on the Canvas patient after the
-        first sync. When it's absent we create the patient (passing externalId so
-        the mapping is recorded on Photon's side too).
-        """
-        stored = patient.external_identifiers.filter(
-            system=PHOTON_PATIENT_ID_SYSTEM
-        ).first()
-        if stored and stored.value:
-            return str(stored.value), None
-
-        photon_patient_id = client.create_patient(self._patient_input(patient))
-        persist = CreatePatientExternalIdentifier(
-            patient_id=str(patient.id),
-            system=PHOTON_PATIENT_ID_SYSTEM,
-            value=photon_patient_id,
-        ).create()
-        return photon_patient_id, persist
-
-    def _patient_input(self, patient: Patient) -> dict[str, Any]:
-        if not patient.first_name or not patient.last_name:
-            raise PhotonError(f"Patient {patient.id} is missing a name for Photon sync")
-        if not patient.birth_date:
-            raise PhotonError(f"Patient {patient.id} is missing a date of birth")
-
-        phone = self._contact_value(patient, ContactPointSystem.PHONE)
-        if not phone:
-            raise PhotonError(f"Patient {patient.id} has no phone number for Photon")
-
-        patient_input: dict[str, Any] = {
-            "externalId": str(patient.id),
-            "name": {"first": patient.first_name, "last": patient.last_name},
-            "dateOfBirth": patient.birth_date.isoformat(),
-            "sex": _SEX_MAP.get((patient.sex_at_birth or "").upper(), "UNKNOWN"),
-            "phone": phone,
-            "email": self._contact_value(patient, ContactPointSystem.EMAIL),
-            "gender": None,
-            "address": self._address_input(patient),
-        }
-        return patient_input
-
-    @staticmethod
-    def _contact_value(patient: Patient, system: ContactPointSystem) -> str | None:
-        contact = (
-            patient.telecom.filter(system=system).order_by("rank").first()
-        )
-        return str(contact.value) if contact and contact.value else None
-
-    @staticmethod
-    def _address_input(patient: Patient) -> dict[str, Any] | None:
-        address = patient.addresses.first()
-        if not address:
-            return None
-        return {
-            "street1": address.line1,
-            "street2": address.line2 or None,
-            "city": address.city,
-            "state": address.state_code,
-            "postalCode": address.postal_code,
-            "country": address.country or "US",
-        }
 
     # -- medication --------------------------------------------------------
 

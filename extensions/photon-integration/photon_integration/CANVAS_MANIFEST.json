@@ -1,8 +1,22 @@
 {
     "sdk_version": "0.163.1",
-    "plugin_version": "0.0.4",
+    "plugin_version": "0.1.0",
     "name": "photon_integration",
-    "description": "Adds a 'Send via Photon' option to the Prescribe, Refill, and Adjust Prescription commands. When chosen, Canvas's send and sign-and-send actions are removed (sign and print are kept), and on sign the prescription is pushed to Photon Health end-to-end: the patient is synced, a prescription is created, and an order is placed for pharmacy routing. Photon failures are surfaced as a Canvas Task.",
+    "description": "Integrates Canvas prescribing with Photon Health. Adds a 'Send via Photon' option to the Prescribe, Refill, and Adjust Prescription commands (removing Canvas's send / sign-and-send actions), syncs the patient to Photon via the backend M2M token, and provides a patient-chart 'Prescribe via Photon' app that opens Photon Elements so an authenticated provider can write the prescription and place the order.",
+    "url_permissions": [
+        {
+            "url": "https://esm.sh",
+            "permissions": ["SCRIPTS", "ALLOW_SAME_ORIGIN"]
+        },
+        {
+            "url": "https://*.neutron.health",
+            "permissions": ["SCRIPTS", "ALLOW_SAME_ORIGIN"]
+        },
+        {
+            "url": "https://*.photon.health",
+            "permissions": ["SCRIPTS", "ALLOW_SAME_ORIGIN"]
+        }
+    ],
     "components": {
         "handlers": [
             {
@@ -23,7 +37,20 @@
             },
             {
                 "class": "photon_integration.handlers.dispatch:PhotonDispatchHandler",
-                "description": "On sign, syncs the patient and sends the prescription and order to Photon; creates a Task on failure."
+                "description": "On sign, syncs the patient to Photon and places an order; surfaces failures as a Canvas Task."
+            },
+            {
+                "class": "photon_integration.handlers.prescribe_modal_api:PhotonPrescribeModalAPI",
+                "description": "Serves the Photon Elements prescribe modal (HTML/JS/CSS) and resolves the patient's Photon id."
+            }
+        ],
+        "applications": [
+            {
+                "class": "photon_integration.applications.photon_prescribe_app:PhotonPrescribeApp",
+                "name": "Prescribe via Photon",
+                "description": "Open Photon Elements to prescribe for this patient with an authenticated provider.",
+                "scope": "patient_specific",
+                "icon": "assets/icon.png"
             }
         ],
         "commands": [],
@@ -35,13 +62,16 @@
         "PHOTON_CLIENT_ID",
         "PHOTON_CLIENT_SECRET",
         "PHOTON_ENV",
-        "PHOTON_FALLBACK_TEAM_ID"
+        "PHOTON_FALLBACK_TEAM_ID",
+        "PHOTON_SPA_CLIENT_ID",
+        "PHOTON_ORG_ID",
+        "PHOTON_REDIRECT_URI"
     ],
     "tags": {},
     "references": [
+        "https://docs.photon.health/docs/elements",
         "https://docs.photon.health/docs/getting-started",
-        "https://docs.canvasmedical.com/sdk/command-metadata-create-form-effect/",
-        "https://docs.canvasmedical.com/sdk/commands/"
+        "https://docs.canvasmedical.com/sdk/handlers-applications/"
     ],
     "license": "MIT",
     "diagram": false,

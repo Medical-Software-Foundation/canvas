@@ -1,0 +1,38 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  color: #1a2233;
+  background: #f7f9fc;
+}
+
+#root {
+  min-height: 100%;
+  padding: 16px;
+}
+
+.status {
+  margin: 24px auto;
+  max-width: 480px;
+  padding: 14px 16px;
+  border-radius: 4px;
+  background: #eef3fb;
+  color: #2a3b5e;
+  font-size: 14px;
+  text-align: center;
+}
+
+.status.error {
+  background: #fdecea;
+  color: #9b1c14;
+}
+
+photon-client {
+  display: block;
+}

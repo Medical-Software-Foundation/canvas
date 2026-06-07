@@ -3,35 +3,47 @@
 Routes signed prescriptions through [Photon Health](https://docs.photon.health/)
 instead of (or in addition to) Canvas's native pharmacy transmission.
 
+## Architecture
+
+Photon only lets an **authenticated provider** write prescriptions (the backend
+Machine-to-Machine token has `write:patient`/`write:order` but **never**
+`write:prescription`). So the integration is split:
+
+- **Backend (M2M token):** patient sync (and, where applicable, orders + status).
+- **Frontend (Photon Elements):** a provider authenticates in the browser and
+  writes the prescription with their own token.
+
 ## What it does
 
-1. **Adds a "Send via Photon" field** to the **Prescribe**, **Refill**, and
-   **Adjust Prescription** commands (single-option select; leaving it empty uses
-   the normal Canvas flow).
-2. **Removes the *send* and *sign & send* actions** from those commands when the
-   field is set. *Sign* and *print* remain — signing is what triggers the Photon
-   push, and you can still print a paper copy.
-3. **On sign** (`*_COMMAND__POST_COMMIT`), for Photon-flagged commands it:
-   - Resolves the patient in Photon — reuses the stored Photon id, else looks up
-     by `externalId` (Canvas patient id), else creates the patient — and
-     **persists Photon's patient id** back onto the Canvas patient as an external
-     identifier (`https://photon.health/patient`) for future sends.
-   - Looks up the medication as a Photon **treatment** (by name).
-   - Resolves the **prescriber** (test override, or by external id mapping).
-   - Creates the **prescription**, then an **order** so Photon routes it to a
-     pharmacy (the patient's preferred pharmacy when no Photon pharmacy id is
-     available).
-4. **On any Photon failure**, creates a Canvas **Task** assigned to the
-   prescriber (or a fallback team) describing what went wrong.
+1. **"Send via Photon" field** on the **Prescribe**, **Refill**, and **Adjust
+   Prescription** commands (single-option select). When set, the Canvas *send* /
+   *sign & send* actions are removed (*sign* and *print* remain).
+2. **Patient sync (backend, M2M).** On sign, and when the prescribe modal opens,
+   the patient is resolved in Photon — reusing the stored Photon id, else
+   creating the patient — and Photon's patient id is **persisted** on the Canvas
+   patient as an external identifier (`https://photon.health/patient`).
+3. **"Prescribe via Photon" app (frontend, Elements).** A patient-chart
+   application opens a modal embedding Photon **Elements**
+   (`photon-prescribe-workflow`). The provider authenticates via Photon SSO and
+   writes the prescription / places the order with their user token.
+4. **On a backend Photon failure**, a Canvas **Task** is created (assigned to the
+   prescriber when a valid Staff UUID is available, else a fallback team).
 
 ## Configuration (secrets)
 
 | Secret | Required | Description |
 |---|---|---|
-| `PHOTON_CLIENT_ID` | yes | Photon OAuth client id (use the Machine-to-Machine app) |
-| `PHOTON_CLIENT_SECRET` | yes | Photon OAuth client secret (Machine-to-Machine app) |
+| `PHOTON_CLIENT_ID` | yes | M2M client id (backend patient sync) |
+| `PHOTON_CLIENT_SECRET` | yes | M2M client secret (backend patient sync) |
+| `PHOTON_SPA_CLIENT_ID` | yes (modal) | **Single Page Application** client id used by Photon Elements for provider SSO |
+| `PHOTON_ORG_ID` | yes (modal) | Photon organization id (`org_…`) |
 | `PHOTON_ENV` | no | `sandbox` (default, Neutron) or `production` |
+| `PHOTON_REDIRECT_URI` | no | Override the Elements SSO redirect URI (defaults to the modal's own URL) |
 | `PHOTON_FALLBACK_TEAM_ID` | no | Team id for failure Tasks when no prescriber is known |
+
+The Elements modal loads from `https://esm.sh` and talks to `*.neutron.health`/
+`*.photon.health`; those are declared in `url_permissions`. The SPA app's
+whitelisted callback URLs in Photon must include the modal's served origin.
 
 Set these on the plugin's configuration page after install:
 `<emr_base_url>/admin/plugin_io/plugin/<plugin_id>/change/`

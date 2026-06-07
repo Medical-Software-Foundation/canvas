@@ -99,10 +99,12 @@ def _patched(*, selected=True, patient=None, client=None):
             patient_cls.objects.get.side_effect = patient_cls.DoesNotExist
         else:
             patient_cls.objects.get.return_value = patient if patient is not None else _patient()
-        stack.enter_context(patch(f"{MODULE}.PhotonClient", return_value=client))
+        stack.enter_context(patch(f"{MODULE}.build_client", return_value=client))
         add_task = stack.enter_context(patch(f"{MODULE}.AddTask"))
         add_task.return_value.apply.return_value = "TASK_EFFECT"
-        cpei = stack.enter_context(patch(f"{MODULE}.CreatePatientExternalIdentifier"))
+        cpei = stack.enter_context(
+            patch("photon_integration.patient_sync.CreatePatientExternalIdentifier")
+        )
         cpei.return_value.create.return_value = "EXT_EFFECT"
         yield client, add_task, cpei
 
