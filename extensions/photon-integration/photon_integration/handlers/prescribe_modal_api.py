@@ -37,9 +37,12 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/")
     def index(self) -> list[Response | Effect]:
-        patient_id = (self.request.query_params.get("patient_id") or "").strip()
-        if not patient_id:
-            return [self._error_page("No patient was provided to the Photon modal.")]
+        params = self.request.query_params
+        patient_id = (params.get("patient_id") or "").strip()
+        # After provider SSO, Auth0 redirects back here with code/state and no
+        # patient_id; render the shell so photon-client can finish the login (the
+        # browser carries the Photon patient id across the redirect).
+        is_oauth_callback = bool(params.get("code") and params.get("state"))
 
         spa_client_id = (self.secrets.get("PHOTON_SPA_CLIENT_ID") or "").strip()
         org_id = (self.secrets.get("PHOTON_ORG_ID") or "").strip()
@@ -51,19 +54,24 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        try:
-            patient = Patient.objects.get(id=patient_id)
-        except Patient.DoesNotExist:
-            return [self._error_page("Patient not found.")]
-
         effects: list[Response | Effect] = []
-        try:
-            photon_patient_id, ext_id_effect = resolve_photon_patient(
-                patient, build_client(self.secrets)
-            )
-        except PhotonError as exc:
-            log.error("Photon patient sync failed for %s: %s", patient_id, exc)
-            return [self._error_page(f"Could not sync the patient to Photon: {exc}")]
+        photon_patient_id = ""
+        if patient_id:
+            try:
+                patient = Patient.objects.get(id=patient_id)
+            except Patient.DoesNotExist:
+                return [self._error_page("Patient not found.")]
+            try:
+                photon_patient_id, ext_id_effect = resolve_photon_patient(
+                    patient, build_client(self.secrets)
+                )
+            except PhotonError as exc:
+                log.error("Photon patient sync failed for %s: %s", patient_id, exc)
+                return [self._error_page(f"Could not sync the patient to Photon: {exc}")]
+            if ext_id_effect is not None:
+                effects.append(ext_id_effect)
+        elif not is_oauth_callback:
+            return [self._error_page("No patient was provided to the Photon modal.")]
 
         env = (self.secrets.get("PHOTON_ENV") or "sandbox").strip().lower()
         config = {
@@ -77,8 +85,6 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
             "static/index.html",
             {"cache_bust": _CACHE_BUST, "config_json": json.dumps(config)},
         )
-        if ext_id_effect is not None:
-            effects.append(ext_id_effect)
         effects.append(
             HTMLResponse(html, status_code=HTTPStatus.OK, headers={"Cache-Control": "no-store"})
         )

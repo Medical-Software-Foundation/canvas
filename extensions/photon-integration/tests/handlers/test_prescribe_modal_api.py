@@ -98,6 +98,17 @@ class TestIndex:
         assert patched.rts.call_args.args[0] == "static/error.html"
         patched.resolve.assert_not_called()
 
+    def test_oauth_callback_without_patient_renders_shell(self, patched):
+        # Auth0 redirects back with code/state and no patient_id; render the
+        # shell (no patient sync) so photon-client can finish the login.
+        api = _api(query_params={"code": "abc", "state": "xyz"})
+        result = api.index()
+        assert patched.rts.call_args.args[0] == "static/index.html"
+        config = json.loads(patched.rts.call_args.args[1]["config_json"])
+        assert config["patientId"] == ""
+        patched.resolve.assert_not_called()
+        assert len(result) == 1  # shell only, no external-id effect
+
     def test_missing_config_is_error(self, patched):
         api = _api(query_params={"patient_id": "ptn-1"}, secrets={"PHOTON_ENV": "sandbox"})
         api.index()

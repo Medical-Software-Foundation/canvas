@@ -29,9 +29,22 @@
   }
 
   var cfg = window.PHOTON_CONFIG || {};
-  if (!cfg.clientId || !cfg.patientId) {
-    setStatus("Photon modal is misconfigured (missing client id or patient).", true);
+  if (!cfg.clientId) {
+    setStatus("Photon modal is misconfigured (missing client id).", true);
     return;
+  }
+
+  // Carry the Photon patient id across the SSO redirect: Auth0 returns to this
+  // page without patient_id, so stash it on the way out and restore it on return.
+  var PATIENT_KEY = "photon_patient_id";
+  try {
+    if (cfg.patientId) {
+      sessionStorage.setItem(PATIENT_KEY, cfg.patientId);
+    } else {
+      cfg.patientId = sessionStorage.getItem(PATIENT_KEY) || "";
+    }
+  } catch (e) {
+    /* storage unavailable in this sandbox; fall through */
   }
 
   function mountElements() {
@@ -42,10 +55,14 @@
     client.setAttribute("dev-mode", cfg.devMode ? "true" : "false");
     client.setAttribute("auto-login", "true");
 
-    var workflow = document.createElement("photon-prescribe-workflow");
-    workflow.setAttribute("patient-id", cfg.patientId);
-    workflow.setAttribute("enable-order", "true");
-    client.appendChild(workflow);
+    if (cfg.patientId) {
+      var workflow = document.createElement("photon-prescribe-workflow");
+      workflow.setAttribute("patient-id", cfg.patientId);
+      workflow.setAttribute("enable-order", "true");
+      client.appendChild(workflow);
+    } else {
+      setStatus("Completing Photon sign-in…");
+    }
 
     var root = document.getElementById("root");
     root.innerHTML = "";
