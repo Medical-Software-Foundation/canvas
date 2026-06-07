@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "photon_integration",
+    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "components": {
+        "handlers": [
+            {
+                "class": "photon_integration.handlers.event_handlers:NewOfficeVisitNoteHandler",
+                "description": "A handler that listens for an event and sets an inspirational goal."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
