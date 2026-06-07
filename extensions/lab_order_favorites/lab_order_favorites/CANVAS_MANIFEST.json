@@ -1,0 +1,80 @@
+{
+    "sdk_version": "0.157.0",
+    "plugin_version": "0.2.0",
+    "name": "lab_order_favorites",
+    "description": "Create and reuse lab order favorites (single test or multi-test panels) as staged lab order commands, with personal/shared visibility, tags, search, and CSV bulk upload.",
+    "components": {
+        "protocols": [
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:ConfigPageAPI",
+                "description": "Serve the favorites configuration page (opened from the provider menu)"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:FavoritesAPI",
+                "description": "List, create, update, and delete lab order favorites"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:PartnersAPI",
+                "description": "List active lab partners configured in the instance"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:ProvidersAPI",
+                "description": "List selectable ordering providers (active staff with a usable NPI)"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:PartnerTestsAPI",
+                "description": "List the tests a given lab partner offers"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:CSVTemplateAPI",
+                "description": "Download the favorites CSV upload template"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:CSVImportAPI",
+                "description": "Validate and import favorites from an uploaded CSV"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:OpenNotesAPI",
+                "description": "List a patient's open notes for the insert target picker"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:InsertFavoriteAPI",
+                "description": "Validate a favorite and insert it as a staged lab order command"
+            }
+        ],
+        "applications": [
+            {
+                "class": "lab_order_favorites.applications.config_app:LabFavoritesConfigApp",
+                "name": "Lab Favorites Config",
+                "description": "Create, edit, share, tag, and bulk-upload lab order favorites",
+                "icon": "assets/config_icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "bottom",
+                "menu_order": 100
+            },
+            {
+                "class": "lab_order_favorites.applications.favorites_app:LabFavoritesApp",
+                "name": "Lab Favorites",
+                "description": "Search lab order favorites and insert one or more as staged lab orders in a selected note",
+                "icon": "assets/favorites_icon.png",
+                "scope": "patient_specific"
+            }
+        ]
+    },
+    "custom_data": {
+        "namespace": "canvas_medical__lab_order_favorites",
+        "access": "read_write"
+    },
+    "variables": [
+        {
+            "name": "SHARED_FAVORITE_EDITORS",
+            "sensitive": false,
+            "default": ""
+        }
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
