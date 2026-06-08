@@ -51,8 +51,6 @@
     /* storage unavailable */
   }
 
-  var hadCallback = /[?&]code=/.test(location.search) && /[?&]state=/.test(location.search);
-
   var CREATE_PRESCRIPTION = [
     "mutation createPrescription($externalId: ID, $patientId: ID!, $treatmentId: ID!,",
     "  $dispenseAsWritten: Boolean, $dispenseQuantity: Float, $dispenseUnit: String,",
@@ -129,25 +127,17 @@
       developmentMode: !!cfg.devMode,
     });
 
-    if (hadCallback) {
-      setStatus("Completing Photon sign-in…");
-      await client.authentication.handleRedirect();
-    }
-    try {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } catch (e) {
-      /* ignore */
-    }
-
+    // Read the cached session ONLY — cacheMode 'cache-only' never triggers the
+    // silent-auth iframe or a redirect (both frame Google and 403 in this modal).
     var token = null;
     try {
-      token = await client.authentication.getAccessToken();
+      token = await client.auth0Client.getTokenSilently({ cacheMode: "cache-only" });
     } catch (e) {
       token = null;
     }
     if (!token) {
-      setStatus("Redirecting to Photon sign-in…");
-      await client.authentication.login({ redirectURI: cfg.redirectUri });
+      setStatus("Sign in to Photon to send these prescriptions.");
+      addSignInButton(client);
       return;
     }
 
@@ -161,7 +151,7 @@
     // the command's prescriber — never under a cached session for someone else.
     var photonUser = null;
     try {
-      photonUser = await client.authentication.getUser();
+      photonUser = await client.auth0Client.getUser();
     } catch (e) {
       /* ignore */
     }
@@ -235,23 +225,29 @@
     }
   }
 
-  // Re-run the Photon sign-in. We deliberately don't call logout() here: the
-  // SDK's logout does a full redirect to Auth0's logout endpoint, which in this
-  // tenant federates out (e.g. to Google) and can leave the user stranded on an
-  // external 403 — outside our modal entirely. login() re-prompts within the
-  // flow we control; the pending prescriptions are restored from sessionStorage
-  // on return. To switch a sticky session, sign out of Photon directly.
+  // Sign in to Photon via a POPUP, not a redirect or silent-iframe auth. Photon's
+  // Auth0 connection is Google-backed, and Google refuses to render its sign-in
+  // inside an iframe (which this modal is) — both loginWithRedirect and the silent
+  // getTokenSilently iframe hit a Google 403. A popup is a top-level window Google
+  // accepts. Popups need a user gesture (hence the button), and the Canvas origin
+  // must be an Allowed Web Origin in the Photon SPA app for the popup to post back.
+  // After sign-in we reload so the server re-gathers the flagged prescriptions.
   function addSignInButton(client) {
     var btn = document.createElement("button");
     btn.className = "switch-btn";
     btn.textContent = "Sign in to Photon";
     btn.addEventListener("click", function () {
       btn.disabled = true;
-      setStatus("Redirecting to Photon sign-in…");
-      client.authentication.login({ redirectURI: cfg.redirectUri }).catch(function (err) {
-        setStatus("Could not start Photon sign-in: " + err, true);
-        btn.disabled = false;
-      });
+      setStatus("Opening Photon sign-in…");
+      client.auth0Client
+        .loginWithPopup({ authorizationParams: { organization: cfg.org } })
+        .then(function () {
+          window.location.reload();
+        })
+        .catch(function (err) {
+          setStatus("Photon sign-in failed: " + (err && err.message ? err.message : err), true);
+          btn.disabled = false;
+        });
     });
     document.getElementById("root").appendChild(btn);
   }

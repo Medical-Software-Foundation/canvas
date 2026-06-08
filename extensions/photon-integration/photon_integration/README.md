@@ -52,12 +52,17 @@ modal talks to `*.neutron.health`/`*.photon.health` (declared in
 `url_permissions`); the SPA app's whitelisted callback URLs in Photon must
 include the modal's served paths (`…/photon/` and `…/photon/send`).
 
-When the signed-in Photon provider doesn't match the logged-in Canvas user (by
-email), the modal surfaces the error in-place and offers a **Sign in to Photon**
-button that re-runs `login()`. It deliberately does **not** call `logout()`: the
-SDK's logout does a full redirect to Auth0's logout endpoint, which can federate
-out to the upstream IdP (e.g. Google) and strand the user on an external 403
-page outside the modal.
+**Provider sign-in uses a popup, not a redirect.** Photon's Auth0 connection is
+Google-backed, and Google refuses to render its sign-in inside an iframe (which
+the Canvas modal is) — both `loginWithRedirect` and Auth0's silent
+`getTokenSilently` iframe hit a Google 403. So the modal reads only the cached
+session (`getTokenSilently({ cacheMode: 'cache-only' })`) and, when there's no
+token, shows a **Sign in to Photon** button that calls `loginWithPopup` (a popup
+is a top-level window Google accepts); on success it reloads. For the popup's
+web-message callback to be accepted, the Canvas instance origin must be listed
+under **Allowed Web Origins** in the Photon SPA app (alongside the Allowed
+Callback URLs). The modal never calls `logout()` — the SDK's logout is a full
+redirect that can federate out to Google and strand the user on an external 403.
 
 The API-direct send flow loads **`@photonhealth/sdk`** (provider auth only) from
 `https://cdn.jsdelivr.net` — it can't be vendored as a single file because its
