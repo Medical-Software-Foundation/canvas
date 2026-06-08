@@ -204,11 +204,17 @@ class NoteDataExtractor:
 
     def _fetch_refill_decision_commands_data(self, schema_key: str) -> list[dict]:
         """Same as ``_fetch_all_commands_data`` but also stamps anchor
-        Prescription details (``_total_quantity``, ``_directions``, ``_pharmacy``)
+        Prescription details (``total_quantity``, ``directions``, ``pharmacy_display``)
         onto each entry. Used by approveRefill / denyRefill / approveChange /
         denyChange — the Canvas command UI surfaces these prescription-derived
         rows above the command's own fields, but ``commands_command.data``
-        only stores the medication reference, not the prescription details."""
+        only stores the medication reference, not the prescription details.
+
+        These keys are intentionally underscore-free (unlike most extractor
+        stamps) because the patient-facing Django template needs to read
+        them, and Django blocks attribute access on names starting with ``_``.
+        ``pharmacy_display`` is suffixed to avoid colliding with the raw
+        ``pharmacy`` data key on some refill commands."""
         values_fields: tuple[str, ...] = ("data", "id", "anchor_object_dbid")
         if _COMMAND_HAS_CUSTOM_HTML:
             values_fields = (*values_fields, "custom_html")
@@ -245,11 +251,11 @@ class NoteDataExtractor:
                 entry["_custom_html"] = custom_html
             if rx := rx_by_dbid.get(row.get("anchor_object_dbid")):
                 if qty := self._format_prescription_total_quantity(rx):
-                    entry["_total_quantity"] = qty
+                    entry["total_quantity"] = qty
                 if directions := (rx.sig_original_input or "").strip():
-                    entry["_directions"] = directions
+                    entry["directions"] = directions
                 if pharmacy := self._format_prescription_pharmacy(rx):
-                    entry["_pharmacy"] = pharmacy
+                    entry["pharmacy_display"] = pharmacy
             out.append(entry)
         return out
 
@@ -465,6 +471,80 @@ class NoteDataExtractor:
                 "<div class='ref-data-heading'>Reference Data:</div>"
                 f"{''.join(bodies)}</div>"
             )
+
+    @staticmethod
+    def _attach_poc_value_rows(entries: list[dict]) -> None:
+        """Stamp ``value_rows`` on each POC Lab Test entry — a template-ordered
+        list of ``{label, units, value}`` dicts pulled from
+        ``template.extra.fields`` + the ``test_values|<lowercase label>`` keys.
+
+        The patient-facing Django template iterates this directly, which it
+        can't do against the raw entry dict because (a) Django can't look up
+        keys with computed names like ``test_values|hemoglobin a1c``, and
+        (b) Django blocks attribute access to names starting with ``_``, so
+        we don't underscore-prefix this stamp. ``_blocks_poc_lab_test``
+        adds it to its ``shown_keys`` set so it doesn't leak into
+        ``extra_blocks``.
+        """
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            template = entry.get("template") if isinstance(entry.get("template"), dict) else {}
+            fields = (template.get("extra") or {}).get("fields") if isinstance(template.get("extra"), dict) else None
+            if not isinstance(fields, list):
+                continue
+            rows: list[dict] = []
+            for f in fields:
+                if not isinstance(f, dict):
+                    continue
+                label = (f.get("label") or "").strip()
+                if not label:
+                    continue
+                rows.append({
+                    "label": label,
+                    "units": (f.get("units") or "").strip(),
+                    "value": entry.get(f"test_values|{label.lower()}") or "",
+                })
+            if rows:
+                entry["value_rows"] = rows
+
+    # Reason-code → display text. Verbatim copy of the same mapping in
+    # ``command_blocks._REFILL_REASON_CODE_DISPLAYS`` so the patient template
+    # can render translated reasons without importing private helpers from
+    # the block-builder module. Kept in sync with home-app's
+    # ``builtin_content/core_types/commands/sdk/deny_refill.py:24-40`` —
+    # the same 14 codes apply to both deny_refill and deny_change.
+    _REFILL_REASON_CODE_DISPLAYS: dict[str, str] = {
+        "AA": "Patient unknown to the prescriber",
+        "AB": "Patient never under provider care",
+        "AC": "Patient no longer under provider care",
+        "AD": "Refill too soon",
+        "AE": "Medication never prescribed for patient",
+        "AF": "Patient should contact provider",
+        "AG": "Refill not appropriate",
+        "AH": "Patient has picked up prescription",
+        "AJ": "Patient has picked up partial fill of prescription",
+        "AK": "Patient has not picked up prescription, drug returned to stock",
+        "AM": "Patient needs appointment",
+        "AN": "Prescriber not associated with this practice or location",
+        "AO": "No attempt will be made to obtain Prior Authorization",
+        "AP": "Request already responded to by other means (e.g. phone or fax)",
+    }
+
+    @classmethod
+    def _attach_refill_reason_displays(cls, entries: list[dict]) -> None:
+        """Stamp ``reason_display`` on each deny refill / deny change entry —
+        the human-readable label for ``reason_code``. Used by the patient
+        template so it doesn't have to render the opaque 2-letter code.
+        Not underscore-prefixed because Django blocks attribute access on
+        ``_``-leading names; ``_blocks_refill_decision`` adds it to its
+        ``shown_keys`` set so ``extra_blocks`` doesn't re-emit it."""
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            code = (entry.get("reason_code") or "").strip()
+            if code:
+                entry["reason_display"] = cls._REFILL_REASON_CODE_DISPLAYS.get(code, code)
 
     def _fetch_commands_fields(self, schema_key: str, *fields: str) -> list[dict]:
         """Fetch specific fields for all committed commands of a type in this note."""
@@ -1393,6 +1473,13 @@ class NoteDataExtractor:
         visual_exam_finding_data = self._fetch_all_commands_data("visualExamFinding")
         chart_section_review_data = self._fetch_all_commands_data("chartSectionReview")
         poc_lab_test_data = self._fetch_all_commands_data("pocLabTest")
+        # The patient-facing Django template can't compute dynamic dict keys
+        # (`test_values|<lowercase label>`) or translate reason codes inline,
+        # so pre-build the patient-friendly fields server-side. Both helpers
+        # are no-ops when their stamp would be empty.
+        self._attach_poc_value_rows(poc_lab_test_data)
+        self._attach_refill_reason_displays(deny_refill_data)
+        self._attach_refill_reason_displays(deny_change_data)
         # Plugin-authored custom commands. `customCommand` is the SDK wrapper
         # name when the plugin author didn't override Meta.schema_key. When
         # they did override it (per home-app's `customize_custom_command`),

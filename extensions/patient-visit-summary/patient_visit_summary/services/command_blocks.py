@@ -1126,7 +1126,7 @@ def _blocks_poc_lab_test(display_name: str, data: Any) -> list[dict]:
 
         out.extend(extra_blocks(
             entry,
-            shown_keys={"template", "indications", "remarks"} | shown_test_value_keys,
+            shown_keys={"template", "indications", "remarks", "value_rows"} | shown_test_value_keys,
         ))
     return out
 
@@ -1182,9 +1182,11 @@ def _blocks_refill_decision(display_name: str, data: Any) -> list[dict]:
     rows (TOTAL QUANTITY / DIRECTIONS / PHARMACY) + decision body. Mirrors the
     Canvas command UI in ``home-app/builtin_content/core_types/commands/sdk/
     approve_refill.py:63-90`` and ``deny_refill.py:86-114``. The Prescription
-    anchor details are stamped onto each entry as ``_total_quantity`` /
-    ``_directions`` / ``_pharmacy`` by ``NoteDataExtractor.
-    _fetch_refill_decision_commands_data``."""
+    anchor details are stamped onto each entry as ``total_quantity`` /
+    ``directions`` / ``pharmacy_display`` by ``NoteDataExtractor.
+    _fetch_refill_decision_commands_data``. (Underscore-free names: the
+    patient-facing Django template also reads these, and Django blocks
+    attribute access on ``_``-leading attribute names.)"""
     out: list[dict] = []
     for entry in data:
         if not isinstance(entry, dict):
@@ -1194,11 +1196,11 @@ def _blocks_refill_decision(display_name: str, data: Any) -> list[dict]:
 
         # Prescription-derived rows — these come from the anchor object and
         # are surfaced above the command's own fields in the Canvas UI.
-        if total_quantity := (entry.get("_total_quantity") or "").strip():
+        if total_quantity := (entry.get("total_quantity") or "").strip():
             out.append(_field("TOTAL QUANTITY", total_quantity))
-        if directions := (entry.get("_directions") or "").strip():
+        if directions := (entry.get("directions") or "").strip():
             out.append(_field("DIRECTIONS", directions))
-        if pharmacy := (entry.get("_pharmacy") or "").strip():
+        if pharmacy := (entry.get("pharmacy_display") or "").strip():
             out.append(_field("PHARMACY", pharmacy))
 
         response_type = (entry.get("response_type") or "").strip()
@@ -1228,6 +1230,12 @@ def _blocks_refill_decision(display_name: str, data: Any) -> list[dict]:
             entry, shown_keys={
                 "prescribe", "refills", "reason_code", "note_to_pharmacist",
                 "response_type", "refill_request",
+                # Extractor-derived stamps (rendered above as TOTAL QUANTITY /
+                # DIRECTIONS / PHARMACY / REASON). Underscore-free because the
+                # patient template also reads them — list them here so
+                # extra_blocks() doesn't re-emit them as stray fields.
+                "total_quantity", "directions", "pharmacy_display",
+                "reason_display",
                 # noisy plumbing fields not useful in the patient print
                 "pharmacy", "prescriber", "days_supply", "indications",
                 "substitutions", "type_to_dispense", "supervising_provider",

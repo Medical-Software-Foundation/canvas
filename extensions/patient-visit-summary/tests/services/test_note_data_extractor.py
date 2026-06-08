@@ -614,3 +614,153 @@ class TestAttachImagingReviewReferenceHtml:
         entries = [{"_command_uuid": "abc"}]
         extractor._attach_imaging_review_reference_html(entries)
         assert "_reference_html" not in entries[0]
+
+
+# --- _attach_poc_value_rows (patient-template helper) ---
+
+
+class TestAttachPocValueRows:
+    """Stamps ``value_rows`` on each POC Lab Test entry so the Django
+    patient template can iterate them — Django can't compute the
+    ``test_values|<lowercase label>`` key lookups inline. (Underscore-free
+    name because Django blocks attribute access on ``_``-leading names.)"""
+
+    def test_stamps_value_rows_in_template_order(self):
+        entry = {
+            "template": {
+                "text": "Urinalysis",
+                "extra": {"fields": [
+                    {"label": "Status", "units": ""},
+                    {"label": "Glucose", "units": "mg/dL"},
+                ]},
+            },
+            "test_values|status": "active",
+            "test_values|glucose": "120",
+        }
+        NoteDataExtractor._attach_poc_value_rows([entry])
+        assert entry["value_rows"] == [
+            {"label": "Status", "units": "", "value": "active"},
+            {"label": "Glucose", "units": "mg/dL", "value": "120"},
+        ]
+
+    def test_blank_values_preserved(self):
+        # Canvas shows empty rows with their label — the patient template
+        # should too, so a blank reading isn't silently dropped.
+        entry = {
+            "template": {"extra": {"fields": [{"label": "Color", "units": "-"}]}},
+            "test_values|color": "",
+        }
+        NoteDataExtractor._attach_poc_value_rows([entry])
+        assert entry["value_rows"] == [{"label": "Color", "units": "-", "value": ""}]
+
+    def test_no_template_fields_does_not_stamp(self):
+        entry = {"template": {"text": "X"}}
+        NoteDataExtractor._attach_poc_value_rows([entry])
+        assert "value_rows" not in entry
+
+    def test_non_dict_entries_skipped(self):
+        # Defensive: a stray non-dict in the list shouldn't crash the helper.
+        NoteDataExtractor._attach_poc_value_rows([None, "string", 42])  # no raise
+
+
+# --- _attach_refill_reason_displays (deny refill / deny change patient text) ---
+
+
+class TestAttachRefillReasonDisplays:
+    def test_translates_known_code(self):
+        entry = {"reason_code": "AD"}
+        NoteDataExtractor._attach_refill_reason_displays([entry])
+        assert entry["reason_display"] == "Refill too soon"
+
+    def test_unknown_code_passes_through(self):
+        entry = {"reason_code": "ZZ"}
+        NoteDataExtractor._attach_refill_reason_displays([entry])
+        assert entry["reason_display"] == "ZZ"
+
+    def test_empty_code_does_not_stamp(self):
+        # If a deny command somehow has no reason code (it shouldn't — the
+        # home-app schema requires reason OR note), don't stamp an empty
+        # `reason_display` — let the template's `{% if %}` skip it.
+        entry = {"reason_code": ""}
+        NoteDataExtractor._attach_refill_reason_displays([entry])
+        assert "reason_display" not in entry
+
+    def test_all_14_codes_match_home_app_source(self):
+        # Spot-check that the extractor's copy of REASON_CODE_CHOICES stays
+        # in sync with the one in command_blocks (lifted from home-app's
+        # deny_refill.py:24-40). Drift here would cause the patient HTML and
+        # the Customize & Print HTML to translate the same code differently.
+        from patient_visit_summary.services import command_blocks as cb
+        assert NoteDataExtractor._REFILL_REASON_CODE_DISPLAYS == cb._REFILL_REASON_CODE_DISPLAYS
+
+
+# --- Patient-template attribute-access constraint ---
+
+
+class TestPatientTemplateStampsAreUnderscoreFree:
+    """Django blocks attribute access on names starting with ``_`` — any
+    extractor stamp the patient-facing template needs to read must NOT use
+    the ``_``-prefix convention. These tests lock that in so a future
+    contributor doesn't accidentally re-introduce ``_total_quantity`` etc."""
+
+    def test_poc_value_rows_stamp_has_no_underscore_prefix(self):
+        entry = {
+            "template": {"extra": {"fields": [{"label": "Glucose", "units": "mg/dL"}]}},
+            "test_values|glucose": "120",
+        }
+        NoteDataExtractor._attach_poc_value_rows([entry])
+        # Affirmative key — must be present, no prefix.
+        assert "value_rows" in entry
+        # And the underscore form must NOT exist (would regress to invisible).
+        assert "_value_rows" not in entry
+
+    def test_refill_reason_display_stamp_has_no_underscore_prefix(self):
+        entry = {"reason_code": "AD"}
+        NoteDataExtractor._attach_refill_reason_displays([entry])
+        assert "reason_display" in entry
+        assert "_reason_display" not in entry
+
+    def test_refill_decision_shown_keys_includes_patient_stamps(self):
+        # `_blocks_refill_decision` must list every patient-template stamp in
+        # its `shown_keys` set so `extra_blocks` doesn't re-emit them as
+        # stray fields in Customize & Print. We probe by feeding an entry
+        # that includes the stamps and checking they're rendered exactly
+        # once (as the structured TOTAL QUANTITY / DIRECTIONS / PHARMACY /
+        # REASON rows), not duplicated as auto-generated fields.
+        from patient_visit_summary.services import command_blocks as cb
+        entry = {
+            "prescribe": {"text": "Med"},
+            "response_type": "D",
+            "reason_code": "AD",
+            "total_quantity": "30 Tablets",
+            "directions": "Take 1 daily",
+            "pharmacy_display": "CVS",
+            "reason_display": "Refill too soon",
+        }
+        result = cb._blocks_refill_decision("Deny Refill", [entry])
+        labels = [b.get("label") for b in result if b.get("kind") == "field"]
+        # Each value renders exactly once — no duplicated auto-emitted
+        # fields like "TOTAL QUANTITY" appearing twice.
+        for label in ("TOTAL QUANTITY", "DIRECTIONS", "PHARMACY", "REASON"):
+            assert labels.count(label) == 1, f"{label!r} should render exactly once, got {labels.count(label)}"
+        # And no auto-generated label derived from the raw key (which would
+        # be "PHARMACY DISPLAY" or "REASON DISPLAY" if the key leaked).
+        assert "PHARMACY DISPLAY" not in labels
+        assert "REASON DISPLAY" not in labels
+
+    def test_poc_lab_test_shown_keys_includes_value_rows(self):
+        # Same guard for the POC builder — `value_rows` must be in the
+        # `shown_keys` set so extra_blocks doesn't emit a "VALUE ROWS" field
+        # with the list repr as the value.
+        from patient_visit_summary.services import command_blocks as cb
+        entry = {
+            "template": {
+                "text": "Glucose",
+                "extra": {"fields": [{"label": "Glucose", "units": "mg/dL"}]},
+            },
+            "test_values|glucose": "120",
+            "value_rows": [{"label": "Glucose", "units": "mg/dL", "value": "120"}],
+        }
+        result = cb._blocks_poc_lab_test("POC Lab Test", [entry])
+        labels = [b.get("label") for b in result if b.get("kind") == "field"]
+        assert "VALUE ROWS" not in labels

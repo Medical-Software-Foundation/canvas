@@ -13,15 +13,14 @@
         <div id="container">
             <button class="print-button" onclick="window.print()">🖨️ Print</button>
             <div id="page-img-header">
-                <div class="header-img float-left">
-                    <img src="data:image/svg+xml;base64,{{ logo_top_left }}" />
-                </div>
                 <div class="header-title">
                     Patient Visit Summary
                 </div>
-                <div class="header-img float-right">
-                    <img src="data:image/svg+xml;base64,{{ logo_top_right }}" />
+                {% if practice_location_info.logo_url %}
+                <div class="header-img">
+                    <img src="{{ practice_location_info.logo_url }}" alt="{{ practice_location_info.name }}" />
                 </div>
+                {% endif %}
             </div>
             <table class="header-table">
                 <tr>
@@ -79,7 +78,7 @@
             {% endif %}
 
             <!-- Objective -->
-            {% if vitals_commands_data or physical_exam_data %}
+            {% if vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data %}
                 {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data %}
                     <hr class="section-divider">
                 {% endif %}
@@ -128,9 +127,21 @@
                 {% endfor %}
             {% endif %}
 
+            {% if visual_exam_finding_commands_data %}
+                <h3>Visual Exam Findings</h3>
+                <ul>
+                {% for finding in visual_exam_finding_commands_data %}
+                    <li><span class="emphasis-text">{{ finding.title }}</span>{% if finding.narrative %}
+                        <ul><li>{{ finding.narrative }}</li></ul>
+                    {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
             <!-- Assessment -->
-            {% if assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data %}
-                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data %}
+            {% if assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
             {% endif %}
@@ -156,7 +167,7 @@
                 </ul>
             {% endif %}
 
-            {% if diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_data %}
+            {% if diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data %}
                 <h3>New Diagnoses</h3>
                 <p class="italic">Your provider diagnosed the following conditions during today's visit, based on your symptoms, history, and clinical evaluation.</p>
                 <h4 class="italic">Summary</h4>
@@ -167,13 +178,13 @@
                 {% for sa_diagnosis in diagnoses_from_structured_assessments %}
                     <li>{{ sa_diagnosis.0 }} ({{ sa_diagnosis.1 }})</li>
                 {% endfor %}
-                {% for cg_diagnosis_cmd in assess_coding_gap_data %}
+                {% for cg_diagnosis_cmd in assess_coding_gap_commands_data %}
                     {% for cg_diagnosis in cg_diagnosis_cmd.diagnose %}
                         <li>{{ cg_diagnosis.text }} ({{ cg_diagnosis.annotations.0 }})</li>
                     {% endfor %}
                 {% endfor %}
                 </ul>
-                {% if diagnose_commands_data or assess_coding_gap_data %}
+                {% if diagnose_commands_data or assess_coding_gap_commands_data %}
                     <h4 class="italic">Details</h4>
                     <ul>
                     {% for diagnosis in diagnose_commands_data %}
@@ -191,7 +202,7 @@
                             </ul>
                         </li>
                     {% endfor %}
-                    {% for coding_gap in assess_coding_gap_data %}
+                    {% for coding_gap in assess_coding_gap_commands_data %}
                         <li><span class="emphasis-text">{% for cg_diagnosis in coding_gap.diagnose %}{{ cg_diagnosis.text }} ({{ cg_diagnosis.annotations.0 }}){% if not forloop.last %}, {% endif %}{% endfor %}</span>
                             <ul>
                                 {% if coding_gap.background %}
@@ -323,9 +334,31 @@
                 {% endfor %}
             {% endif %}
 
+            {% if poc_lab_test_commands_data %}
+                <h3>In-Visit Test Results</h3>
+                <p class="italic">Lab tests performed in the office during today's visit.</p>
+                <ul>
+                {% for poc in poc_lab_test_commands_data %}
+                    <li><span class="emphasis-text">{{ poc.template.text }}</span>
+                        <ul>
+                            {% if poc.indications %}
+                                <li><span class="italic">Indications:</span> {% for indication in poc.indications %}{{ indication.text }} ({{ indication.annotations.0 }}){% if not forloop.last %}, {% endif %}{% endfor %}</li>
+                            {% endif %}
+                            {% for row in poc.value_rows %}
+                                <li><span class="italic">{{ row.label }}{% if row.units %} ({{ row.units }}){% endif %}:</span> {{ row.value }}</li>
+                            {% endfor %}
+                            {% if poc.remarks %}
+                                <li><span class="italic">Comments:</span> {{ poc.remarks }}</li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
             <!--Plan-->
-            {% if plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_materials_data or goal_commands_data or update_goal_commands_data %}
-                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data %}
+            {% if plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or cancel_prescription_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
             {% endif %}
@@ -364,6 +397,52 @@
                 </ul>
             {% endif %}
 
+            {% if approve_refill_commands_data or deny_refill_commands_data %}
+                <h3>Refill Requests</h3>
+                <ul>
+                {% for approve in approve_refill_commands_data %}
+                    <li><span class="emphasis-text">Approved:</span> {{ approve.prescribe.text }}
+                        {% if approve.directions %}
+                            <ul><li><span class="italic">Directions:</span> {{ approve.directions }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                {% for deny in deny_refill_commands_data %}
+                    <li><span class="emphasis-text">Denied:</span> {{ deny.prescribe.text }}
+                        {% if deny.directions or deny.reason_display %}
+                            <ul>
+                                {% if deny.directions %}<li><span class="italic">Directions:</span> {{ deny.directions }}</li>{% endif %}
+                                {% if deny.reason_display %}<li><span class="italic">Reason:</span> {{ deny.reason_display }}</li>{% endif %}
+                            </ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if approve_change_commands_data or deny_change_commands_data %}
+                <h3>Pharmacy Change Requests</h3>
+                <ul>
+                {% for approve in approve_change_commands_data %}
+                    <li><span class="emphasis-text">Approved:</span> {{ approve.prescribe.text }}
+                        {% if approve.directions %}
+                            <ul><li><span class="italic">Directions:</span> {{ approve.directions }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                {% for deny in deny_change_commands_data %}
+                    <li><span class="emphasis-text">Denied:</span> {{ deny.prescribe.text }}
+                        {% if deny.directions or deny.reason_display %}
+                            <ul>
+                                {% if deny.directions %}<li><span class="italic">Directions:</span> {{ deny.directions }}</li>{% endif %}
+                                {% if deny.reason_display %}<li><span class="italic">Reason:</span> {{ deny.reason_display }}</li>{% endif %}
+                            </ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
             {% if stop_medication_commands_data %}
                 <h3>Stop Medication</h3>
                 <ul>
@@ -371,6 +450,21 @@
                     <li><span class="emphasis-text">{{ stop_medication.medication.text }}</span>
                         {% if stop_medication.rationale %}
                             <ul><li><span class="italic">Rationale:</span> {{ stop_medication.rationale }}</li></ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if cancel_prescription_commands_data %}
+                <h3>Cancel Prescription</h3>
+                <ul>
+                {% for cancel in cancel_prescription_commands_data %}
+                    <li><span class="emphasis-text">{{ cancel.selected_prescription.text }}</span>
+                        {% if cancel.rationale %}
+                            <ul>
+                                <li><span class="italic">Rationale:</span> {{ cancel.rationale }}</li>
+                            </ul>
                         {% endif %}
                     </li>
                 {% endfor %}
@@ -476,12 +570,12 @@
                 </ul>
             {% endif %}
 
-            {% if educational_materials_data %}
+            {% if educational_material_commands_data %}
                 <h3>Educational Materials</h3>
                 <p class="italic">Your provider has shared the following educational materials for your review:</p>
                 <ul>
-                {% for material in educational_materials_data %}
-                    <li>{{ material.title }}</li>
+                {% for material in educational_material_commands_data %}
+                    <li>{{ material.title.text|default:material.title }}{% if material.language.text %} <span class="italic">({{ material.language.text }})</span>{% endif %}</li>
                 {% endfor %}
                 </ul>
             {% endif %}
@@ -560,7 +654,7 @@
 
             <!--Procedures-->
             {% if immunize_commands_data or perform_commands_data %}
-                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or goal_commands_data or update_goal_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data or plan_commands_data or prescribe_commands_data or refill_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or stop_medication_commands_data or cancel_prescription_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data or close_goal_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
             {% endif %}
@@ -591,7 +685,7 @@
 
             <!--History-->
             {% if allergy_commands_data or remove_allergy_commands_data or medication_statement_commands_data or immunization_statement_commands_data or patient_family_history_commands_data or medical_history_commands_data or surgical_history_commands_data %}
-                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or goal_commands_data or update_goal_commands_data or immunize_commands_data or perform_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data or plan_commands_data or prescribe_commands_data or refill_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or stop_medication_commands_data or cancel_prescription_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data or close_goal_commands_data or immunize_commands_data or perform_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
             {% endif %}

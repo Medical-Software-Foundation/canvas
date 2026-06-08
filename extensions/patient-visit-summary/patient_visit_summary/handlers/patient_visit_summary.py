@@ -15,7 +15,6 @@ from canvas_sdk.v1.data.note import Note
 
 from logger import log
 
-from patient_visit_summary.images.images_b64 import LOGO_TOP_LEFT, LOGO_TOP_RIGHT
 from patient_visit_summary.services.note_data_extractor import NoteDataExtractor
 
 # Regenerated on every plugin (re)load so served HTML and its asset/modal URLs
@@ -76,10 +75,11 @@ class PatientVisitSummaryAPI(SimpleAPI):
         extractor = NoteDataExtractor(patient_id=patient_id, note_id=note_id)
         context = extractor.get_template_context()
 
-        # Add logo images and org info used only by this template
+        # Add cache-bust + org info used only by this template. The header
+        # logo is sourced from the note's practice location (same as the
+        # Customize & Print modal) — ``template_context["practice_location_info"]``
+        # already carries the ``logo_url`` set on the location's organization.
         context["cache_bust"] = _CACHE_BUST
-        context["logo_top_left"] = LOGO_TOP_LEFT
-        context["logo_top_right"] = LOGO_TOP_RIGHT
         context["organization_info"] = {
             "name": "Example Medical Organization",
             "address1": "1234 Main St.",

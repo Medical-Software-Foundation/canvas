@@ -1348,9 +1348,9 @@ class TestBlocksRefillDecision:
         # (matches the Canvas command UI).
         entry = self._entry(
             refills=0,
-            _total_quantity="30 Tablets",
-            _directions="Take 1 tablet daily",
-            _pharmacy="CVS (555) 123-4567",
+            total_quantity="30 Tablets",
+            directions="Take 1 tablet daily",
+            pharmacy_display="CVS (555) 123-4567",
         )
         result = cb._blocks_refill_decision("Approve Refill", [entry])
         labels = [b.get("label") for b in result if b["kind"] == "field"]
