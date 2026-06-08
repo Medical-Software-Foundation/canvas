@@ -387,18 +387,31 @@ def _slot_instant(slot: dict) -> datetime.datetime:
 def _calendar_timezone(calendar: Any, default: ZoneInfo) -> ZoneInfo:
     """The calendar's own timezone, normalized to a `ZoneInfo`.
 
-    `Calendar.timezone` is a non-null `TimeZoneField`, so every calendar carries
-    its own zone directly — we never infer it from the title/location suffix. The
-    field may surface as a `ZoneInfo` or another tzinfo; coerce by IANA key so the
-    sandbox-allowlisted `ZoneInfo` is what flows downstream. Falls back to `default`
-    only if the value is empty or unparseable.
+    `Calendar.timezone` is the authoritative per-calendar zone — we never infer it
+    from the title/location suffix. It is normally always populated, but we defend
+    against a missing/blank/unparseable value by falling back to `default` and
+    logging it (a blank/bad value is a data problem that would otherwise shift every
+    slot silently by the offset delta). The field may surface as a `ZoneInfo` or
+    another tzinfo; coerce by IANA key so the sandbox-allowlisted `ZoneInfo` flows
+    downstream.
     """
+    from logger import log
+
+    title = getattr(calendar, "title", "?")
     raw = getattr(calendar, "timezone", None)
     if raw is None:
+        log.warning(
+            f"_calendar_timezone: calendar {title!r} has no timezone; "
+            f"falling back to {default.key} — its availability may be off"
+        )
         return default
     try:
         return ZoneInfo(str(raw))
     except (KeyError, ValueError):
+        log.warning(
+            f"_calendar_timezone: calendar {title!r} has unparseable timezone {raw!r}; "
+            f"falling back to {default.key} — its availability may be off"
+        )
         return default
 
 
@@ -590,6 +603,12 @@ def find_available_slots(
         staff = staff_by_name.get(provider_name)
         if staff is not None:
             admin_pairings.append((calendar, staff))
+        else:
+            log.warning(
+                f"slot_search: Administrative calendar {calendar.title!r} provider name "
+                f"{provider_name!r} did not match any active Staff.full_name — that "
+                "provider's blocks will NOT be subtracted (they may be over-booked)"
+            )
 
     block_count = 0
     if admin_pairings:
@@ -636,13 +655,26 @@ def find_available_slots(
             tz = _calendar_timezone(calendar, practice_timezone)
             # Resolve the calendar's location from its title suffix
             # ("{Provider}: Clinic: {Location full_name}") so each slot carries the
-            # location it would book into. Calendars with no suffix → unknown.
+            # location it would book into.
             _, _, location_suffix = parse_calendar_title(calendar.title)
-            location_id, location_name = (
-                location_index.get(location_suffix, (None, location_suffix))
-                if location_suffix
-                else (None, None)
-            )
+            if not location_suffix:
+                # No location in the title (single-site calendar) — booking falls
+                # back to the active location, no label shown.
+                location_id, location_name = None, None
+            elif location_suffix in location_index:
+                location_id, location_name = location_index[location_suffix]
+            else:
+                # Suffix present but matches no active PracticeLocation.full_name
+                # (rename / casing / whitespace mismatch, or an ambiguous-name drop).
+                # Drop the label too — never show a location we can't actually book
+                # into — and log it so the misconfig is fixable. Booking falls back
+                # to the active location.
+                log.error(
+                    f"slot_search: calendar {calendar.title!r} location suffix "
+                    f"{location_suffix!r} matches no active PracticeLocation.full_name; "
+                    "slot will show no location and book the default location"
+                )
+                location_id, location_name = None, None
             log.info(
                 f"slot_search: calendar {calendar.title!r} tz={tz.key} "
                 f"location={location_name!r} ({len(events)} events)"

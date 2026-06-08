@@ -15,6 +15,8 @@ from canvas_sdk.handlers.simple_api import PatientSessionAuthMixin, SimpleAPIRou
 from logger import log
 
 from urgent_care_self_scheduler.slot_search import (
+    _APPOINTMENT_QUERY_BUFFER,
+    _NON_BLOCKING_APPOINTMENT_STATUSES,
     find_available_slots,
     resolve_urgent_care_note_type,
 )
@@ -24,10 +26,9 @@ SLOT_WINDOW_DAYS = 3
 EXTERNAL_ID_SYSTEM = "urgent-care-self-scheduler"
 PENDING_RFV_KEY_PREFIX = "pending_rfv_"
 RFV_MAX_CHARS = 500
-# Appointment statuses that DON'T count as the patient already having an upcoming visit.
-_NON_BOOKABLE_APPOINTMENT_STATUSES = ("cancelled", "noshow", "entered-in-error")
-# Buffer to absorb timezone offset when querying appointments by a UTC window.
-_APPOINTMENT_QUERY_BUFFER = datetime.timedelta(hours=16)
+# Appointment statuses that DON'T count as the patient already having an upcoming
+# visit — the same set slot_search treats as non-blocking; shared from there (and
+# the query buffer) so the two never drift apart.
 
 
 def _patient_has_upcoming_urgent_care_visit(
@@ -52,7 +53,7 @@ def _patient_has_upcoming_urgent_care_visit(
             start_time__gte=window_start - _APPOINTMENT_QUERY_BUFFER,
             start_time__lt=window_end + _APPOINTMENT_QUERY_BUFFER,
         )
-        .exclude(status__in=_NON_BOOKABLE_APPOINTMENT_STATUSES)
+        .exclude(status__in=_NON_BLOCKING_APPOINTMENT_STATUSES)
         .exists()
     )
 
@@ -133,14 +134,21 @@ def _patient_review(patient_id: str) -> dict | None:
 def _resolve_modality(value: Any) -> str:
     """Normalizes the URGENT_CARE_VISIT_MODALITY secret to 'telehealth' | 'in_person'.
 
-    Defaults to 'telehealth' (the original behavior) when unset or unrecognized.
-    Drives only the patient-facing success-pane copy; the appointment's actual
-    video-vs-in-person nature is determined by the configured NoteType, and for a
-    telehealth NoteType Canvas generates and delivers the join link via the portal
-    Appointments tab.
+    Defaults to 'telehealth' when unset. Drives the patient-facing slot labels and
+    success-pane copy; the appointment's actual video-vs-in-person nature is
+    determined by the configured NoteType, and for a telehealth NoteType Canvas
+    generates and delivers the join link via the portal Appointments tab.
     """
     normalized = (str(value).strip().lower() if value is not None else "")
-    return "in_person" if normalized == "in_person" else "telehealth"
+    if normalized in ("", "telehealth", "in_person"):
+        return "in_person" if normalized == "in_person" else "telehealth"
+    # A non-empty value we don't recognize (e.g. the hyphenated "in-person") is a
+    # likely misconfiguration — surface it rather than silently presenting telehealth.
+    log.warning(
+        f"_resolve_modality: unrecognized URGENT_CARE_VISIT_MODALITY {value!r}; "
+        "defaulting to 'telehealth' (expected 'telehealth' or 'in_person')"
+    )
+    return "telehealth"
 
 
 def _parse_lead_time(value: Any) -> int:
@@ -203,13 +211,23 @@ def _location_index() -> dict[str, tuple[str, str]]:
     """
     from canvas_sdk.v1.data.practicelocation import PracticeLocation
 
-    return {
-        location.full_name: (
-            str(location.id),
-            (location.short_name or location.full_name),
+    # Build by accumulating (NOT a dict comprehension) so we can detect and drop
+    # locations that share a full_name — a calendar's title suffix can't pick
+    # between them, and silently keeping one would book at the wrong site. Mirrors
+    # the ambiguous-Staff.full_name handling in slot_search.
+    index: dict[str, tuple[str, str]] = {}
+    ambiguous: set[str] = set()
+    for location in PracticeLocation.objects.filter(active=True):
+        if location.full_name in index:
+            ambiguous.add(location.full_name)
+        index[location.full_name] = (str(location.id), location.short_name or location.full_name)
+    for name in ambiguous:
+        index.pop(name, None)
+        log.error(
+            f"_location_index: multiple active PracticeLocations share full_name {name!r}; "
+            "dropping it so a calendar at that name books the default location, not the wrong site"
         )
-        for location in PracticeLocation.objects.filter(active=True)
-    }
+    return index
 
 
 class MeAPI(PatientSessionAuthMixin, SimpleAPIRoute):
@@ -316,19 +334,21 @@ def _flagged_change_lines(intake: dict) -> list[str]:
     return lines
 
 
-def _build_task_comment(intake: dict) -> str | None:
+def _build_task_comment(intake: dict, change_lines: list[str] | None = None) -> str | None:
     """Builds the intake summary surfaced as a comment on the care-team task:
     symptom duration plus any flagged medication/allergy changes.
 
     The encounter note's HPI carries the same detail, but the care team triages
     from the task queue — so the duration and flagged changes are surfaced here
     too rather than left only on the note. Returns None if there's nothing to add.
+    Pass `change_lines` to reuse an already-computed `_flagged_change_lines(intake)`.
     """
     lines: list[str] = []
     duration = (intake.get("symptom_duration") or "").strip()
     if duration:
         lines.append(f"Symptom duration: {duration}")
-    change_lines = _flagged_change_lines(intake)
+    if change_lines is None:
+        change_lines = _flagged_change_lines(intake)
     if change_lines:
         lines.append("Patient flagged the following during intake:")
         lines.extend(f"• {line}" for line in change_lines)
@@ -500,8 +520,9 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
 
         patient_full_name = _patient_full_name(patient_id)
         task_team_id = (secrets.get("URGENT_CARE_TASK_TEAM_ID") or "").strip()
-        has_flagged_changes = bool(_flagged_change_lines(intake))
-        task_comment = _build_task_comment(intake)
+        flagged_lines = _flagged_change_lines(intake)
+        has_flagged_changes = bool(flagged_lines)
+        task_comment = _build_task_comment(intake, flagged_lines)
         task_title = _build_task_title(patient_full_name, intake.get("reason_for_visit", ""))
         if has_flagged_changes:
             # Flag at-a-glance in the queue; full detail goes in the task comment below.

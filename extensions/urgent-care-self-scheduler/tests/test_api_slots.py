@@ -126,6 +126,9 @@ def test_slots_api_happy_path_returns_slots_and_fallback_phone(mocker) -> None:
     assert body["fallback_phone"] == "555-867-5309"
     # No patient in session here → no existing-visit check performed.
     assert body["existing_urgent_care_visit"] is False
+    # Modality is surfaced so the wizard knows whether to label slots by location;
+    # unset secret defaults to telehealth.
+    assert body["modality"] == "telehealth"
 
     # Verify the slot search was called with the parsed lead time and the
     # configured note-type name; window spans now → now + 3 days.

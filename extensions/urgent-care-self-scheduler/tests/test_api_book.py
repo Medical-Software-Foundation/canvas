@@ -325,6 +325,7 @@ def test_book_api_happy_path_returns_effects_and_response(mocker) -> None:
     assert payload["ok"] is True
     assert payload["start_iso"] == fake_slot["start_iso"]
     assert payload["provider_name"] == "Dr. Smith"
+    assert payload["modality"] == "telehealth"  # unset secret defaults to telehealth
     # Even with no flagged changes, the task comment carries the symptom duration.
     from canvas_sdk.effects import EffectType
     comment_effects = [
@@ -395,6 +396,22 @@ def test_book_api_books_into_the_slots_location(mocker) -> None:
     assert len(appt_effects) == 1
     assert str(slot_location.id) in appt_effects[0].payload
     assert str(active_location.id) not in appt_effects[0].payload
+
+
+def test_location_index_drops_duplicate_full_names() -> None:
+    """Two active PracticeLocations sharing a full_name are ambiguous (a calendar's
+    title suffix can't pick between them) — drop the name rather than book the wrong
+    site. A uniquely-named location resolves to (id, short_name)."""
+    from canvas_sdk.test_utils.factories import PracticeLocationFactory
+    from urgent_care_self_scheduler.handlers.api import _location_index
+
+    PracticeLocationFactory.create(full_name="Shared Name", short_name="A")
+    PracticeLocationFactory.create(full_name="Shared Name", short_name="B")
+    unique = PracticeLocationFactory.create(full_name="Unique Place", short_name="UP")
+
+    index = _location_index()
+    assert "Shared Name" not in index  # ambiguous → dropped
+    assert index["Unique Place"] == (str(unique.id), "UP")
 
 
 def test_book_api_surfaces_flagged_med_allergy_changes_on_task(mocker) -> None:

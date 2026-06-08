@@ -28,7 +28,6 @@ def _format_review_section(
     review: dict,
     *,
     none_label: str,
-    item_kind: str,
 ) -> list[str]:
     """Renders a meds- or allergies-style review block as plaintext lines."""
     if review.get("no_changes"):
@@ -57,7 +56,6 @@ def _build_hpi_narrative(intake: dict) -> str:
             "Medications",
             intake.get("medications") or {},
             none_label="Unknown medication",
-            item_kind="medication",
         )
     )
     sections.append(
@@ -65,7 +63,6 @@ def _build_hpi_narrative(intake: dict) -> str:
             "Allergies",
             intake.get("allergies") or {},
             none_label="Unknown allergy",
-            item_kind="allergy",
         )
     )
 
