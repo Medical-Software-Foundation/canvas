@@ -20,13 +20,22 @@ def _staff(email="kristen@example.com", first="Kristen", last="ONeill", telecom_
     return staff
 
 
-def test_resolves_email_from_canvas_user():
+def test_resolves_email_by_staff_dbid():
     with patch(f"{MODULE}.Staff") as staff_cls:
         staff_cls.objects.filter.return_value.first.return_value = _staff()
         result = prescriber.resolve_prescriber(
-            {"prescriber": {"text": "Kristen ONeill", "value": "stf_1"}}
+            {"prescriber": {"text": "Kristen ONeill", "value": 358}}
         )
     assert result == {"email": "kristen@example.com", "name": "Kristen ONeill"}
+    # numeric prescriber value is the Staff integer pk
+    staff_cls.objects.filter.assert_called_once_with(dbid=358)
+
+
+def test_resolves_by_id_for_non_numeric_ref():
+    with patch(f"{MODULE}.Staff") as staff_cls:
+        staff_cls.objects.filter.return_value.first.return_value = _staff()
+        prescriber.resolve_prescriber({"prescriber": {"value": "stf_abc"}})
+    staff_cls.objects.filter.assert_called_once_with(id="stf_abc")
 
 
 def test_falls_back_to_telecom_email():
@@ -35,7 +44,7 @@ def test_falls_back_to_telecom_email():
             email=None, telecom_email="t@example.com"
         )
         assert prescriber.resolve_prescriber(
-            {"prescriber": {"value": "stf_1"}}
+            {"prescriber": {"value": 358}}
         )["email"] == "t@example.com"
 
 

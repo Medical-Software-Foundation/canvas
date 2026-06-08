@@ -51,19 +51,27 @@ def _staff_email(staff: Staff) -> str | None:
     return None
 
 
+def _staff_for_ref(ref: str) -> Staff | None:
+    """Look up a Staff by the command's prescriber ref.
+
+    The prescriber ``value`` is the Staff integer pk (``dbid``); fall back to the
+    public ``id`` (UUID) for other shapes. Never raises.
+    """
+    try:
+        if ref.isdigit():
+            return Staff.objects.filter(dbid=int(ref)).first()
+        return Staff.objects.filter(id=ref).first()
+    except Exception as exc:  # noqa: BLE001 - never let resolution 500 the modal
+        log.warning("Photon prescriber lookup failed for %r: %s", ref, exc)
+        return None
+
+
 def resolve_prescriber(data: dict[str, Any]) -> dict[str, str | None]:
     """Return {'email', 'name'} for the command's prescriber (best effort)."""
-    prescriber = data.get("prescriber")
-    # Log the raw shape so we can refine resolution against real data.
-    log.info("Photon prescriber field: %r", prescriber)
-    ref, name = _prescriber_ref(prescriber)
+    ref, name = _prescriber_ref(data.get("prescriber"))
     email: str | None = None
     if ref:
-        try:
-            staff = Staff.objects.filter(id=ref).first()
-        except Exception as exc:  # noqa: BLE001 - never let resolution 500 the modal
-            log.warning("Photon prescriber lookup failed for %r: %s", ref, exc)
-            staff = None
+        staff = _staff_for_ref(ref)
         if staff:
             if not name:
                 name = f"{staff.first_name or ''} {staff.last_name or ''}".strip() or None
