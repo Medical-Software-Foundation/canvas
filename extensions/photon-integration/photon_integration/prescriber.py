@@ -58,9 +58,12 @@ def _staff_for_ref(ref: str) -> Staff | None:
     public ``id`` (UUID) for other shapes. Never raises.
     """
     try:
+        # select_related("user") folds the CanvasUser join in so reading
+        # staff.user.email in _staff_email doesn't trigger a second query.
+        staff = Staff.objects.select_related("user")
         if ref.isdigit():
-            return Staff.objects.filter(dbid=int(ref)).first()
-        return Staff.objects.filter(id=ref).first()
+            return staff.filter(dbid=int(ref)).first()
+        return staff.filter(id=ref).first()
     except Exception as exc:  # noqa: BLE001 - never let resolution 500 the modal
         log.warning("Photon prescriber lookup failed for %r: %s", ref, exc)
         return None

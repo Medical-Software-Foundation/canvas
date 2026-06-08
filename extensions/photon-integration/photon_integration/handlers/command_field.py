@@ -42,6 +42,24 @@ def _photon_send_selected(command_id: str) -> bool:
     return stored_value == PHOTON_FIELD_TRUE_VALUE
 
 
+def photon_send_selected_map(command_ids: list[str]) -> dict[str, bool]:
+    """Batched ``_photon_send_selected`` for many commands in a single query.
+
+    Use this instead of calling ``_photon_send_selected`` per command in a loop
+    (which is one query each). Returns ``{command_id: selected}``.
+    """
+    if not command_ids:
+        return {}
+    rows = CommandMetadata.objects.filter(
+        command__id__in=command_ids,
+        key=PHOTON_FIELD_KEY,
+    ).values_list("command__id", "value")
+    return {
+        str(command_id): (value or "").strip() == PHOTON_FIELD_TRUE_VALUE
+        for command_id, value in rows
+    }
+
+
 class PhotonFieldHandler(BaseHandler):
     """Render the single-option 'Send via Photon' field on prescribe/refill/adjust."""
 

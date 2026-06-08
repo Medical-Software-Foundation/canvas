@@ -29,7 +29,7 @@ from logger import log
 from photon_integration.client.photon_client import PhotonClient, PhotonError
 from photon_integration.command_payload import extract_rx
 from photon_integration.constants import PHOTON_COMMAND_SCHEMA_KEYS
-from photon_integration.handlers.command_field import _photon_send_selected
+from photon_integration.handlers.command_field import photon_send_selected_map
 from photon_integration.ontology import fdb_to_rxcui, ndc_to_rxcui
 from photon_integration.prescriber import resolve_prescriber, staff_identity
 from photon_integration.patient_sync import (
@@ -250,16 +250,21 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
         note_id: str, client: PhotonClient
     ) -> tuple[Patient | None, list[dict[str, Any]]]:
         """Return (patient, prescription payloads) for 'Send via Photon' commands."""
-        commands = Command.objects.filter(
-            note__dbid=note_id,
-            schema_key__in=PHOTON_COMMAND_SCHEMA_KEYS,
-            committer__isnull=False,
-            entered_in_error__isnull=True,
+        commands = list(
+            Command.objects.filter(
+                note__dbid=note_id,
+                schema_key__in=PHOTON_COMMAND_SCHEMA_KEYS,
+                committer__isnull=False,
+                entered_in_error__isnull=True,
+            ).select_related("patient")
         )
+        # Resolve the 'Send via Photon' flag for every command in one query rather
+        # than one per command in the loop below.
+        selected = photon_send_selected_map([str(command.id) for command in commands])
         patient: Patient | None = None
         prescriptions: list[dict[str, Any]] = []
         for command in commands:
-            if not _photon_send_selected(command.id):
+            if not selected.get(str(command.id)):
                 continue
             if patient is None:
                 patient = command.patient

@@ -21,6 +21,7 @@ from photon_integration.handlers.command_field import (
     PhotonFieldHandler,
     PhotonPrescribeActionFilter,
     PhotonRefillActionFilter,
+    photon_send_selected_map,
 )
 
 
@@ -207,3 +208,29 @@ class TestPhotonCommandValidation:
             eff.return_value.apply.return_value = "VALIDATION_ERROR"
             handler.compute()
         assert eff.return_value.add_error.call_count == 2
+
+
+class TestPhotonSendSelectedMap:
+    """Batched 'Send via Photon' lookup used by the send modal's command loop."""
+
+    def _patch_rows(self, rows):
+        vl = MagicMock(return_value=MagicMock(values_list=MagicMock(return_value=rows)))
+        return patch(
+            "photon_integration.handlers.command_field.CommandMetadata.objects.filter",
+            vl,
+        )
+
+    def test_empty_input_skips_query(self):
+        with patch(
+            "photon_integration.handlers.command_field.CommandMetadata.objects.filter"
+        ) as flt:
+            assert photon_send_selected_map([]) == {}
+        flt.assert_not_called()
+
+    def test_maps_true_only_for_true_value(self):
+        rows = [("c1", PHOTON_FIELD_TRUE_VALUE), ("c2", "something else"), ("c3", "  ")]
+        with self._patch_rows(rows) as flt:
+            result = photon_send_selected_map(["c1", "c2", "c3"])
+        assert result == {"c1": True, "c2": False, "c3": False}
+        # one query for all command ids, filtered by the photon field key
+        flt.assert_called_once_with(command__id__in=["c1", "c2", "c3"], key=PHOTON_FIELD_KEY)

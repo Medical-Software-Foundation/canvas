@@ -169,7 +169,7 @@ def _command(cmd_id="c1", data=None):
 def send_patched():
     with patch(f"{MODULE}.render_to_string", return_value="<html></html>") as rts, \
         patch(f"{MODULE}.Command") as command_cls, \
-        patch(f"{MODULE}._photon_send_selected", return_value=True) as selected, \
+        patch(f"{MODULE}.photon_send_selected_map", return_value={"c1": True}) as selected, \
         patch(f"{MODULE}.build_client") as build_client, \
         patch(f"{MODULE}.fdb_to_rxcui", return_value="198052") as rxcui, \
         patch(f"{MODULE}.ndc_to_rxcui", return_value=None) as ndc_rxcui, \
@@ -183,7 +183,7 @@ def send_patched():
             "id": "med_1", "name": "Ondansetron 4 mg ODT", "brandName": "Zofran",
             "genericName": "Ondansetron",
         }
-        command_cls.objects.filter.return_value = [_command()]
+        command_cls.objects.filter.return_value.select_related.return_value = [_command()]
         yield SimpleNamespace(rts=rts, command_cls=command_cls, selected=selected,
                               build_client=build_client, rxcui=rxcui, ndc_rxcui=ndc_rxcui)
 
@@ -242,7 +242,7 @@ class TestSend:
             "type_to_dispense": {"text": "0.75 mL syringe"},
             "refills": 3,
         })
-        send_patched.command_cls.objects.filter.return_value = [cmd]
+        send_patched.command_cls.objects.filter.return_value.select_related.return_value = [cmd]
         api = _api(query_params={"note_id": "4567"})
         api.send()
         rx = json.loads(send_patched.rts.call_args.args[1]["config_json"])["prescriptions"][0]
@@ -258,7 +258,7 @@ class TestSend:
         assert "No RxNorm code" in rx["error"]
 
     def test_skips_unflagged_commands(self, send_patched):
-        send_patched.selected.return_value = False
+        send_patched.selected.return_value = {}  # no command flagged 'Send via Photon'
         api = _api(query_params={"note_id": "4567"})
         api.send()
         config = json.loads(send_patched.rts.call_args.args[1]["config_json"])
