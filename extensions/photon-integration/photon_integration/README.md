@@ -50,11 +50,14 @@ modal. To update it, re-fetch
 `{% verbatim %}`…`{% endverbatim %}`, and bump the version here. At runtime the
 modal talks to `*.neutron.health`/`*.photon.health` (declared in
 `url_permissions`); the SPA app's whitelisted callback URLs in Photon must
-include the modal's served paths (`…/photon/` and `…/photon/send`). Those same
-two paths must also be listed as **Allowed Logout URLs** — when the signed-in
-Photon provider doesn't match the logged-in Canvas user, the modal logs the
-stale session out (`logout({ returnTo })`) and bounces back so the right person
-can sign in; an unlisted logout URL makes Photon reject the redirect.
+include the modal's served paths (`…/photon/` and `…/photon/send`).
+
+When the signed-in Photon provider doesn't match the logged-in Canvas user (by
+email), the modal surfaces the error in-place and offers a **Sign in to Photon**
+button that re-runs `login()`. It deliberately does **not** call `logout()`: the
+SDK's logout does a full redirect to Auth0's logout endpoint, which can federate
+out to the upstream IdP (e.g. Google) and strand the user on an external 403
+page outside the modal.
 
 The API-direct send flow loads **`@photonhealth/sdk`** (provider auth only) from
 `https://cdn.jsdelivr.net` — it can't be vendored as a single file because its

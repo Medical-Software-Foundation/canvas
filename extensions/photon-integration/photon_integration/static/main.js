@@ -37,32 +37,6 @@
   // Carry the Photon patient id across the SSO redirect: Auth0 returns to this
   // page without patient_id, so stash it on the way out and restore it on return.
   var PATIENT_KEY = "photon_patient_id";
-  // Marks that we've already auto-logged-out a stale Photon session this tab, so
-  // a silently-restored wrong session can't bounce us through an endless logout
-  // loop. If storage is unavailable, flagGet returns "1" → we never auto-logout
-  // (fall back to the manual button) rather than risk looping.
-  var FORCED_LOGOUT_KEY = "photon_forced_logout";
-  function flagGet(k) {
-    try {
-      return sessionStorage.getItem(k);
-    } catch (e) {
-      return "1";
-    }
-  }
-  function flagSet(k, v) {
-    try {
-      sessionStorage.setItem(k, v);
-    } catch (e) {
-      /* ignore */
-    }
-  }
-  function flagClear(k) {
-    try {
-      sessionStorage.removeItem(k);
-    } catch (e) {
-      /* ignore */
-    }
-  }
   try {
     if (cfg.patientId) {
       sessionStorage.setItem(PATIENT_KEY, cfg.patientId);
@@ -120,35 +94,20 @@
     }
   }
 
-  // Clear the Photon (Auth0) session entirely, not just the local token — only a
-  // logout redirect ends the Auth0 session, so a stale sign-in for someone else
-  // can't be silently reused. On return there's no token and run() re-prompts for
-  // a fresh login. (cfg.redirectUri must be an Allowed Logout URL in Auth0.)
-  function clearPhotonSession(client) {
-    setStatus("Signing out the previous Photon session…");
-    return client.authentication.logout({ returnTo: cfg.redirectUri });
-  }
-
-  // First mismatch: auto-logout so the next user starts clean. If we've already
-  // done so this tab and still mismatch, stop looping and let the user act.
-  async function reauthOnMismatch(client, message) {
-    if (flagGet(FORCED_LOGOUT_KEY)) {
-      setStatus(message, true);
-      addSwitchProviderButton(client);
-      return;
-    }
-    flagSet(FORCED_LOGOUT_KEY, "1");
-    await clearPhotonSession(client);
-  }
-
-  function addSwitchProviderButton(client) {
+  // Re-run the Photon sign-in. We deliberately don't call logout() here: the
+  // SDK's logout does a full redirect to Auth0's logout endpoint, which in this
+  // tenant federates out (e.g. to Google) and can leave the user stranded on an
+  // external 403 — outside our modal entirely. login() re-prompts within the
+  // flow we control. To switch a sticky session, sign out of Photon directly.
+  function addSignInButton(client, label) {
     var btn = document.createElement("button");
     btn.className = "switch-btn";
-    btn.textContent = "Sign in to Photon";
+    btn.textContent = label || "Sign in to Photon";
     btn.addEventListener("click", function () {
       btn.disabled = true;
-      clearPhotonSession(client).catch(function (err) {
-        setStatus("Could not switch Photon provider: " + err, true);
+      setStatus("Redirecting to Photon sign-in…");
+      client.authentication.login({ redirectURI: cfg.redirectUri }).catch(function (err) {
+        setStatus("Could not start Photon sign-in: " + err, true);
         btn.disabled = false;
       });
     });
@@ -198,14 +157,17 @@
     var photonEmail = ((photonUser && photonUser.email) || "").toLowerCase();
     var canvasEmail = (cfg.canvasUserEmail || "").toLowerCase();
     if (!photonEmail || !canvasEmail || photonEmail !== canvasEmail) {
-      await reauthOnMismatch(
-        client,
-        "You're not signed in to Photon. Sign in to Photon to prescribe."
-      );
+      // eslint-disable-next-line no-console
+      console.warn("[photon] identity gate blocked prescribe", {
+        photonEmail: photonEmail,
+        canvasEmail: canvasEmail,
+      });
+      // Stay inside our modal — surface the problem here rather than bouncing
+      // the user out to an external sign-out page.
+      setStatus("You're not signed in to Photon. Sign in to Photon to prescribe.", true);
+      addSignInButton(client);
       return;
     }
-    // Signed in as the right person — clear the loop guard for next time.
-    flagClear(FORCED_LOGOUT_KEY);
 
     setStatus("Loading Photon Elements…");
     await import("./elements.js");
