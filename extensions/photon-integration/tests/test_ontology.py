@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+from requests.exceptions import ConnectionError as RequestsConnectionError
+
 from photon_integration import ontology
 
 MODULE = "photon_integration.ontology"
@@ -67,7 +70,16 @@ def test_none_when_no_rxcui_in_body():
         assert ontology.ndc_to_rxcui("x") is None
 
 
-def test_none_on_exception():
+def test_none_on_request_error():
+    # Network/HTTP failure degrades to None (Rx falls back to the Elements modal).
     with patch(f"{MODULE}.ontologies_http") as http:
-        http.get_json.side_effect = RuntimeError("boom")
+        http.get_json.side_effect = RequestsConnectionError("boom")
         assert ontology.ndc_to_rxcui("x") is None
+
+
+def test_unexpected_error_propagates():
+    # A non-request error is a bug and must surface, not be swallowed.
+    with patch(f"{MODULE}.ontologies_http") as http:
+        http.get_json.side_effect = RuntimeError("schema drift")
+        with pytest.raises(RuntimeError):
+            ontology.ndc_to_rxcui("x")

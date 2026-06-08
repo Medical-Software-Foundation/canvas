@@ -11,6 +11,7 @@ from typing import Any
 
 from canvas_sdk.utils.http import ontologies_http
 from logger import log
+from requests.exceptions import RequestException
 
 
 def _rxcui_from(payload: Any) -> str | None:
@@ -29,7 +30,10 @@ def _rxcui_from(payload: Any) -> str | None:
 def _lookup(path: str, label: str) -> str | None:
     try:
         response = ontologies_http.get_json(path)
-    except Exception as exc:  # noqa: BLE001 - ontology lookup is best-effort
+    except RequestException as exc:
+        # Network/timeout/HTTP failure reaching the Ontologies service: degrade to
+        # "no rxcui" (the Rx is flagged for the Elements modal). Any other error is
+        # a bug and is allowed to surface.
         log.warning("Ontologies %s lookup failed (%s): %s", label, path, exc)
         return None
     if getattr(response, "status_code", None) != 200:

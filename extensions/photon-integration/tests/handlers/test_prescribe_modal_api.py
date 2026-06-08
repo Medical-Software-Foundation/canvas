@@ -278,3 +278,20 @@ class TestSend:
         api = _api(query_params={"note_id": "4567"}, secrets={"PHOTON_ENV": "sandbox"})
         api.send()
         assert send_patched.rts.call_args.args[0] == "static/error.html"
+
+    def test_catalog_lookup_photonerror_is_error_page(self, send_patched):
+        # A Photon outage during the per-command catalog lookup must render the
+        # friendly error page, not 500 the modal.
+        send_patched.build_client.return_value.find_treatment_by_code.side_effect = PhotonError(
+            "GraphQL HTTP 503"
+        )
+        api = _api(query_params={"note_id": "4567"})
+        result = api.send()
+        assert send_patched.rts.call_args.args[0] == "static/error.html"
+        assert result[0].status_code == 200  # HTMLResponse, not an uncaught 500
+
+    def test_patient_sync_photonerror_is_error_page(self, send_patched):
+        with patch(f"{MODULE}.resolve_photon_patient", side_effect=PhotonError("sync boom")):
+            api = _api(query_params={"note_id": "4567"})
+            api.send()
+        assert send_patched.rts.call_args.args[0] == "static/error.html"

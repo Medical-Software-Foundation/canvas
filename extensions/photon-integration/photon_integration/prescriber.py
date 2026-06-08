@@ -3,15 +3,20 @@
 Photon attributes a prescription to the *authenticated* user (createPrescription
 has no prescriberId). To stop a prescription being sent under the wrong Photon
 account, we resolve the command's prescriber to an email and compare it, in the
-browser, to the signed-in Photon user. Resolution is best-effort and never raises
-— a missing email is treated downstream as "can't verify" (fail safe).
+browser, to the signed-in Photon user. Resolution is best-effort: *expected*
+lookup failures (a missing CanvasUser relation, a DB error) degrade to "no email"
+— treated downstream as "can't verify" (fail safe) — while unexpected errors are
+allowed to propagate so they reach Sentry rather than being silently masked.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from canvas_sdk.v1.data.common import ContactPointSystem
 from canvas_sdk.v1.data.staff import Staff
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import DatabaseError
 from logger import log
 
 _PRESCRIBER_ID_KEYS = ("value", "id", "key", "staff", "staff_id")
@@ -33,21 +38,21 @@ def _prescriber_ref(prescriber: Any) -> tuple[str | None, str | None]:
 
 
 def _staff_email(staff: Staff) -> str | None:
-    """Email for a Staff: prefer the linked CanvasUser, fall back to telecom."""
+    """Email for a Staff: prefer the linked CanvasUser, fall back to telecom.
+
+    Catches only the expected failures — a missing ``user`` relation
+    (``ObjectDoesNotExist``) or a DB error — and degrades to ``None``; anything
+    else propagates.
+    """
     try:
         user = staff.user
         if user and getattr(user, "email", None):
             return str(user.email).strip().lower() or None
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        from canvas_sdk.v1.data.common import ContactPointSystem
-
         contact = staff.telecom.filter(system=ContactPointSystem.EMAIL).first()
         if contact and contact.value:
             return str(contact.value).strip().lower() or None
-    except Exception:  # noqa: BLE001
-        pass
+    except (ObjectDoesNotExist, DatabaseError) as exc:
+        log.warning("Photon staff email lookup failed: %s", exc)
     return None
 
 
@@ -55,16 +60,17 @@ def _staff_for_ref(ref: str) -> Staff | None:
     """Look up a Staff by the command's prescriber ref.
 
     The prescriber ``value`` is the Staff integer pk (``dbid``); fall back to the
-    public ``id`` (UUID) for other shapes. Never raises.
+    public ``id`` (UUID) for other shapes. A DB error degrades to ``None``;
+    unexpected errors propagate.
     """
+    # select_related("user") folds the CanvasUser join in so reading
+    # staff.user.email in _staff_email doesn't trigger a second query.
+    staff = Staff.objects.select_related("user")
     try:
-        # select_related("user") folds the CanvasUser join in so reading
-        # staff.user.email in _staff_email doesn't trigger a second query.
-        staff = Staff.objects.select_related("user")
         if ref.isdigit():
             return staff.filter(dbid=int(ref)).first()
         return staff.filter(id=ref).first()
-    except Exception as exc:  # noqa: BLE001 - never let resolution 500 the modal
+    except DatabaseError as exc:
         log.warning("Photon prescriber lookup failed for %r: %s", ref, exc)
         return None
 

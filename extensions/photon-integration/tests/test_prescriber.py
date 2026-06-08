@@ -5,6 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+from django.db import DatabaseError
+
 from photon_integration import prescriber
 
 MODULE = "photon_integration.prescriber"
@@ -74,13 +77,22 @@ def test_staff_not_found_keeps_name_no_email():
     assert result == {"email": None, "name": "Dr X"}
 
 
-def test_never_raises_on_query_error():
+def test_db_error_degrades_to_name_only():
     with patch(f"{MODULE}.Staff") as staff_cls:
         _passthrough_select_related(staff_cls)
-        staff_cls.objects.filter.side_effect = Exception("FieldError")
+        staff_cls.objects.filter.side_effect = DatabaseError("connection lost")
         result = prescriber.resolve_prescriber({"prescriber": {"text": "Dr X", "value": "u1"}})
-    # defensive: returns the name, no email, no exception
+    # expected DB failure degrades safely: name kept, no email, no exception
     assert result == {"email": None, "name": "Dr X"}
+
+
+def test_unexpected_error_propagates():
+    # A non-DB error is a bug and must surface (reach Sentry), not be swallowed.
+    with patch(f"{MODULE}.Staff") as staff_cls:
+        _passthrough_select_related(staff_cls)
+        staff_cls.objects.filter.side_effect = AttributeError("schema drift")
+        with pytest.raises(AttributeError):
+            prescriber.resolve_prescriber({"prescriber": {"text": "Dr X", "value": "u1"}})
 
 
 class TestStaffIdentity:

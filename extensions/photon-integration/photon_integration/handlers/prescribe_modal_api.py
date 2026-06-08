@@ -204,18 +204,22 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
         prescriptions: list[dict[str, Any]] = []
         if note_id:
             client = build_client(self.secrets)
-            patient, prescriptions = self._gather_flagged_prescriptions(note_id, client)
-            if patient is not None:
-                try:
+            try:
+                # Both gathering (per-command catalog lookups) and patient sync
+                # talk to Photon and can raise PhotonError on an outage / expired
+                # M2M credential / GraphQL error — render the friendly error page
+                # rather than 500-ing the modal.
+                patient, prescriptions = self._gather_flagged_prescriptions(note_id, client)
+                if patient is not None:
                     photon_patient_id, ext_id_effect = resolve_photon_patient(patient, client)
-                except PhotonError as exc:
-                    log.error("Photon patient sync failed (send) for note %s: %s", note_id, exc)
-                    return [self._error_page(f"Could not sync the patient to Photon: {exc}")]
-                if ext_id_effect is not None:
-                    effects.append(ext_id_effect)
-                address = build_address(patient)
-                for rx in prescriptions:
-                    rx["patientId"] = photon_patient_id
+                    if ext_id_effect is not None:
+                        effects.append(ext_id_effect)
+                    address = build_address(patient)
+                    for rx in prescriptions:
+                        rx["patientId"] = photon_patient_id
+            except PhotonError as exc:
+                log.error("Photon send setup failed for note %s: %s", note_id, exc)
+                return [self._error_page(f"Could not reach Photon: {exc}")]
         elif not is_oauth_callback:
             return [self._error_page("No note was provided to the Photon send modal.")]
 
