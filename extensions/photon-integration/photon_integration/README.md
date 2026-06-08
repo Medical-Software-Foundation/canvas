@@ -125,6 +125,33 @@ authorized providers." Patient creation works with the M2M token; if
 M2M prescription writes or the flow needs a provider **user-access token**
 (e.g. via Photon Elements). This is the main item still to confirm in UAT.
 
+## Future considerations
+
+Known limitations and follow-ups, grouped by which flow they affect
+(**API-direct** = the note-footer "Send to Photon" button; **Elements** = the
+"Prescribe via Photon" modal; **both** = applies to either):
+
+- **API-direct — RxNorm coverage is limited.** Matching depends on the Canvas
+  FDB/NDC code resolving to an RxNorm `rxcui` that also exists in Photon's
+  catalog. In practice many drugs don't round-trip (no `rxcui`, or brand vs.
+  generic mismatches), so those prescriptions can't be auto-sent and fall back to
+  the Elements modal. Improving fidelity likely needs a richer code mapping (or a
+  Photon-side catalog change) — tracked with the Photon team.
+- **API-direct — the Canvas-selected pharmacy isn't passed.** Canvas identifies a
+  pharmacy by NCPDP, which can't be resolved to a Photon pharmacy id
+  (`phr_…`); `pharmacies` can't be filtered by NCPDP. The plugin therefore blocks
+  at commit when a pharmacy is selected rather than silently dropping it. A future
+  version could map NCPDP → Photon pharmacy once that lookup is available.
+- **API-direct — an Rx can only be sent by its prescriber.** `createPrescription`
+  has no `prescriberId`; Photon attributes the Rx to the authenticated user. So
+  each prescription must be sent while signed in to Photon **as that command's
+  prescriber**, and a note with multiple prescribers needs each to authenticate in
+  turn. See [Prescriber attribution](#prescriber-attribution).
+- **Both — patient coverage (insurance) is not synced.** `resolve_photon_patient`
+  syncs demographics/address only. Pharmacy benefit/coverage information is not
+  pushed to Photon, so coverage-aware routing/pricing on Photon's side isn't
+  available. A future enhancement could include coverage in the patient sync.
+
 ## Tests
 
 ```bash
