@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab Favorites Configuration</title>
+<style>
+  :root { --blue:#0b5fff; --ink:#1a2b3c; --line:#d9e0e8; --bg:#f5f7fa; --muted:#5a6b7b; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--ink); margin:0; background:var(--bg); }
+  .wrap { max-width:860px; margin:0 auto; padding:18px; }
+  h2 { margin:0 0 4px; font-size:18px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:14px; }
+  .tabs { display:flex; gap:6px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+  .tab { padding:9px 14px; cursor:pointer; border:none; background:none; font-size:14px; color:var(--muted); border-bottom:2px solid transparent; }
+  .tab.active { color:var(--blue); border-bottom-color:var(--blue); font-weight:600; }
+  .panel { display:none; }
+  .panel.active { display:block; }
+  label { display:block; font-size:13px; font-weight:600; margin:10px 0 4px; }
+  input[type=text], textarea, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:#fff; }
+  textarea { min-height:64px; resize:vertical; }
+  .row { display:flex; gap:12px; }
+  .row > div { flex:1; }
+  .chk { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:14px; }
+  .chk input { width:auto; }
+  button.primary { background:var(--blue); color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:14px; cursor:pointer; margin-top:14px; }
+  button.ghost { background:#fff; color:var(--blue); border:1px solid var(--blue); padding:7px 12px; border-radius:8px; font-size:13px; cursor:pointer; }
+  button.danger { background:#fff; color:#c0392b; border:1px solid #e2b7b1; padding:5px 10px; border-radius:8px; font-size:12px; cursor:pointer; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+  .card h4 { margin:0 0 4px; font-size:15px; }
+  .meta { font-size:12px; color:var(--muted); }
+  .pill { display:inline-block; background:#eef3fb; color:var(--blue); border-radius:999px; padding:2px 9px; font-size:11px; margin:2px 4px 2px 0; }
+  .pill.shared { background:#e7f7ee; color:#1a8d4f; }
+  .pill.personal { background:#fdf0e6; color:#c97a1f; }
+  .testline { font-size:13px; padding:2px 0; }
+  .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+  .toolbar input { flex:1; }
+  .notice { padding:10px 12px; border-radius:8px; font-size:13px; margin:10px 0; }
+  .notice.err { background:#fdecea; color:#a4302a; }
+  .notice.ok { background:#e7f7ee; color:#1a7f43; }
+  .seltests { border:1px solid var(--line); border-radius:8px; padding:8px; max-height:150px; overflow:auto; background:#fff; }
+  .seltests .opt { padding:4px 6px; cursor:pointer; font-size:13px; border-radius:6px; }
+  .seltests .opt:hover { background:#eef3fb; }
+  .chosen { margin-top:8px; }
+  .empty { color:var(--muted); font-size:13px; padding:20px; text-align:center; }
+  code { background:#eef1f5; padding:1px 5px; border-radius:4px; font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Lab Order Favorites</h2>
+  <div class="sub">Build and manage reusable lab orders. Favorites insert as staged lab order commands inside a patient chart.</div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="manage">Manage</button>
+    <button class="tab" data-tab="add">Add favorite</button>
+    <button class="tab" data-tab="csv">Bulk upload (CSV)</button>
+  </div>
+
+  <div id="msg"></div>
+
+  <div class="panel active" id="panel-manage">
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="Search by name, tag, author, test, or lab...">
+      <select id="filter" style="width:130px">
+        <option value="all">All visible</option>
+        <option value="mine">Mine</option>
+        <option value="shared">Shared</option>
+      </select>
+    </div>
+    <div id="list"><div class="empty">Loading...</div></div>
+  </div>
+
+  <div class="panel" id="panel-add">
+    <input type="hidden" id="edit-id">
+    <label>Favorite name</label>
+    <input type="text" id="f-name" placeholder="e.g. Annual Wellness Panel">
+    <label>Lab partner</label>
+    <select id="f-partner"><option value="">Select a lab partner...</option></select>
+    <label>Add tests <span class="meta">(all tests must belong to the selected partner)</span></label>
+    <input type="text" id="test-search" placeholder="Search tests by name or code...">
+    <div class="seltests" id="test-results"><div class="meta">Pick a lab partner first.</div></div>
+    <div class="chosen" id="chosen-tests"></div>
+    <div class="row">
+      <div><label>Tags <span class="meta">(comma separated)</span></label><input type="text" id="f-tags" placeholder="wellness, annual"></div>
+      <div><label>Diagnosis codes <span class="meta">(ICD-10, comma separated)</span></label><input type="text" id="f-dx" placeholder="Z00.00, E11.9"></div>
+    </div>
+    <label>Ordering provider <span class="meta">(optional - defaults to the person inserting the favorite)</span></label>
+    <input type="text" id="provider-search" placeholder="Search providers by name or NPI...">
+    <div class="seltests" id="provider-results" style="display:none"></div>
+    <div class="meta" id="provider-chosen">No provider set - the inserting user will be the ordering provider.</div>
+    <label>Default comment</label>
+    <textarea id="f-comment" placeholder="Optional instructions carried into the order"></textarea>
+    <div class="chk"><input type="checkbox" id="f-fasting"><label style="margin:0">Fasting required</label></div>
+    <div class="chk"><input type="checkbox" id="f-shared" checked><label style="margin:0">Shared with the whole group (uncheck for personal)</label></div>
+    <button class="primary" id="save-btn">Save favorite</button>
+  </div>
+
+  <div class="panel" id="panel-csv">
+    <p class="meta">One row per favorite. Columns: <code>name</code>, <code>lab_partner</code>, <code>test_order_codes</code> (semicolon separated), <code>tags</code>, <code>is_shared</code>, <code>fasting_required</code>, <code>comment</code>, <code>diagnosis_codes</code>.</p>
+    <button class="ghost" id="dl-template">Download CSV template</button>
+    <label>Paste CSV or choose a file</label>
+    <input type="file" id="csv-file" accept=".csv,text/csv">
+    <textarea id="csv-text" placeholder="name,lab_partner,test_order_codes,tags,is_shared,fasting_required,comment,diagnosis_codes" style="min-height:120px"></textarea>
+    <button class="ghost" id="validate-btn">Validate</button>
+    <button class="primary" id="import-btn" style="display:none">Import valid rows</button>
+    <div id="csv-preview"></div>
+  </div>
+</div>
+
+<script>
+const API = "{{ api_base }}";
+const chosen = [];
+let partnerId = "";
+let providerId = "";
+
+function msg(text, kind) {
+  const m = document.getElementById("msg");
+  if (!text) { m.innerHTML = ""; return; }
+  m.innerHTML = `<div class="notice ${kind}">${text}</div>`;
+}
+
+function splitList(v) { return v.split(",").map(s => s.trim()).filter(Boolean); }
+
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+  t.classList.add("active");
+  document.getElementById("panel-" + t.dataset.tab).classList.add("active");
+  msg("");
+});
+
+async function loadPartners() {
+  const r = await fetch(`${API}/routes/partners`);
+  const d = await r.json();
+  const sel = document.getElementById("f-partner");
+  (d.partners || []).forEach(p => {
+    const o = document.createElement("option");
+    o.value = p.id; o.textContent = p.name; sel.appendChild(o);
+  });
+}
+
+document.getElementById("f-partner").onchange = e => {
+  partnerId = e.target.value;
+  chosen.length = 0; renderChosen();
+  const box = document.getElementById("test-results");
+  box.innerHTML = partnerId ? '<div class="meta">Search tests above.</div>' : '<div class="meta">Pick a lab partner first.</div>';
+  box.style.display = "block";
+};
+
+let testTimer = null;
+document.getElementById("test-search").oninput = e => {
+  clearTimeout(testTimer);
+  const q = e.target.value.trim();
+  if (!partnerId) { return; }
+  testTimer = setTimeout(async () => {
+    const r = await fetch(`${API}/routes/partners/tests?partner_id=${encodeURIComponent(partnerId)}&search=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    const box = document.getElementById("test-results");
+    box.innerHTML = "";
+    (d.tests || []).slice(0, 50).forEach(t => {
+      const div = document.createElement("div");
+      div.className = "opt";
+      div.textContent = `${t.order_name} (${t.order_code})${t.cpt_code ? " · CPT " + t.cpt_code : ""}`;
+      div.onclick = () => {
+        if (!chosen.find(c => c.order_code === t.order_code)) { chosen.push(t); renderChosen(); }
+        // Collapse the suggestion list after picking; clear the box for the next search.
+        document.getElementById("test-search").value = "";
+        box.innerHTML = '<div class="meta">Search to add another test.</div>';
+        box.style.display = "none";
+      };
+      box.appendChild(div);
+    });
+    box.style.display = (d.tests || []).length ? "block" : "none";
+    if (!(d.tests || []).length) { box.innerHTML = '<div class="meta">No matching tests.</div>'; box.style.display = "block"; }
+  }, 200);
+};
+
+// Escape user-controlled text before it goes into innerHTML.
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderChosen() {
+  const c = document.getElementById("chosen-tests");
+  if (!chosen.length) { c.innerHTML = '<div class="meta">No tests added yet.</div>'; return; }
+  c.innerHTML = "<strong style='font-size:13px'>Selected tests</strong>";
+  chosen.forEach((t, i) => {
+    const row = document.createElement("div");
+    row.className = "testline";
+    row.innerHTML = `• ${esc(t.order_name)} (${esc(t.order_code)}) `;
+    const b = document.createElement("button");
+    b.className = "danger"; b.textContent = "remove";
+    b.onclick = () => { chosen.splice(i, 1); renderChosen(); };
+    row.appendChild(b);
+    c.appendChild(row);
+  });
+}
+
+let providerTimer = null;
+document.getElementById("provider-search").oninput = e => {
+  clearTimeout(providerTimer);
+  const q = e.target.value.trim();
+  if (!q) { providerId = ""; setProviderChosen(""); document.getElementById("provider-results").style.display = "none"; return; }
+  providerTimer = setTimeout(async () => {
+    const r = await fetch(`${API}/routes/providers?search=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    const box = document.getElementById("provider-results");
+    box.innerHTML = "";
+    (d.providers || []).slice(0, 30).forEach(p => {
+      const div = document.createElement("div");
+      div.className = "opt";
+      div.textContent = `${p.name}${p.npi ? " · NPI " + p.npi : ""}`;
+      div.onclick = () => {
+        providerId = p.id;
+        document.getElementById("provider-search").value = p.name;
+        setProviderChosen(p.name);
+        box.style.display = "none";
+      };
+      box.appendChild(div);
+    });
+    box.style.display = (d.providers || []).length ? "block" : "none";
+  }, 200);
+};
+
+function setProviderChosen(name) {
+  document.getElementById("provider-chosen").textContent = name
+    ? `Ordering provider: ${name}`
+    : "No provider set - the inserting user will be the ordering provider.";
+}
+
+async function loadList() {
+  const q = document.getElementById("search").value.trim();
+  const f = document.getElementById("filter").value;
+  const r = await fetch(`${API}/routes/favorites?filter=${f}&search=${encodeURIComponent(q)}`);
+  const d = await r.json();
+  const list = document.getElementById("list");
+  if (!d.favorites || !d.favorites.length) { list.innerHTML = '<div class="empty">No favorites yet. Use "Add favorite" or "Bulk upload".</div>'; return; }
+  list.innerHTML = "";
+  d.favorites.forEach(fav => list.appendChild(card(fav)));
+}
+
+function card(fav) {
+  const el = document.createElement("div");
+  el.className = "card";
+  const vis = fav.is_shared ? '<span class="pill shared">Shared</span>' : '<span class="pill personal">Personal</span>';
+  const tags = (fav.tags || []).map(t => `<span class="pill">#${esc(t)}</span>`).join("");
+  const tests = (fav.tests || []).map(t => `<div class="testline">• ${esc(t.order_name)} (${esc(t.order_code)})</div>`).join("");
+  el.innerHTML = `<h4>${esc(fav.name)}</h4>
+    <div class="meta">${esc(fav.lab_partner_name || "Unknown lab")} · by ${esc(fav.created_by_name || "Unknown")} ${vis}</div>
+    <div style="margin:6px 0">${tests}</div>
+    <div>${tags}</div>
+    ${fav.ordering_provider_name ? `<div class="meta">Ordering provider: ${esc(fav.ordering_provider_name)}</div>` : ''}
+    ${fav.fasting_required ? '<div class="meta">Fasting required</div>' : ''}
+    ${fav.comment ? `<div class="meta">Comment: ${esc(fav.comment)}</div>` : ''}`;
+  if (fav.can_edit) {
+    const edit = document.createElement("button");
+    edit.className = "ghost"; edit.textContent = "Edit"; edit.style.marginRight = "6px";
+    edit.onclick = () => startEdit(fav);
+    const del = document.createElement("button");
+    del.className = "danger"; del.textContent = "Delete";
+    del.onclick = () => removeFav(fav.id);
+    const bar = document.createElement("div"); bar.style.marginTop = "8px";
+    bar.appendChild(edit); bar.appendChild(del); el.appendChild(bar);
+  }
+  return el;
+}
+
+function startEdit(fav) {
+  document.querySelector('.tab[data-tab="add"]').click();
+  document.getElementById("edit-id").value = fav.id;
+  document.getElementById("f-name").value = fav.name;
+  document.getElementById("f-partner").value = fav.lab_partner_id;
+  partnerId = fav.lab_partner_id;
+  chosen.length = 0; (fav.tests || []).forEach(t => chosen.push(t)); renderChosen();
+  document.getElementById("f-tags").value = (fav.tags || []).join(", ");
+  document.getElementById("f-dx").value = (fav.diagnosis_codes || []).join(", ");
+  document.getElementById("f-comment").value = fav.comment || "";
+  document.getElementById("f-fasting").checked = !!fav.fasting_required;
+  document.getElementById("f-shared").checked = !!fav.is_shared;
+  providerId = fav.ordering_provider_key || "";
+  document.getElementById("provider-search").value = fav.ordering_provider_name || "";
+  setProviderChosen(fav.ordering_provider_name || "");
+  document.getElementById("save-btn").textContent = "Update favorite";
+}
+
+async function removeFav(id) {
+  const r = await fetch(`${API}/routes/favorites?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const d = await r.json();
+  if (d.success) { msg("Favorite deleted.", "ok"); loadList(); } else { msg(d.error || "Delete failed", "err"); }
+}
+
+document.getElementById("save-btn").onclick = async () => {
+  const id = document.getElementById("edit-id").value;
+  const partner = document.getElementById("f-partner");
+  const payload = {
+    name: document.getElementById("f-name").value.trim(),
+    lab_partner_id: partner.value,
+    lab_partner_name: partner.options[partner.selectedIndex] ? partner.options[partner.selectedIndex].text : "",
+    tests: chosen,
+    tags: splitList(document.getElementById("f-tags").value),
+    diagnosis_codes: splitList(document.getElementById("f-dx").value),
+    comment: document.getElementById("f-comment").value.trim(),
+    fasting_required: document.getElementById("f-fasting").checked,
+    ordering_provider_key: document.getElementById("provider-search").value.trim() ? providerId : "",
+    is_shared: document.getElementById("f-shared").checked
+  };
+  if (!payload.name) { msg("Name is required.", "err"); return; }
+  if (!payload.lab_partner_id) { msg("Lab partner is required.", "err"); return; }
+  if (!payload.tests.length) { msg("Add at least one test.", "err"); return; }
+  const method = id ? "PUT" : "POST";
+  if (id) { payload.id = id; }
+  const r = await fetch(`${API}/routes/favorites`, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const d = await r.json();
+  if (d.success) {
+    msg(id ? "Favorite updated." : "Favorite saved.", "ok");
+    resetForm();
+    document.querySelector('.tab[data-tab="manage"]').click();
+    loadList();
+  } else {
+    msg(d.error || "Save failed" + (d.stale_codes ? " (" + d.stale_codes.join(", ") + ")" : ""), "err");
+  }
+};
+
+function resetForm() {
+  document.getElementById("edit-id").value = "";
+  ["f-name", "f-tags", "f-dx", "f-comment", "test-search", "provider-search"].forEach(i => document.getElementById(i).value = "");
+  document.getElementById("f-partner").value = "";
+  document.getElementById("f-fasting").checked = false;
+  document.getElementById("f-shared").checked = true;
+  partnerId = ""; chosen.length = 0; renderChosen();
+  providerId = ""; setProviderChosen(""); document.getElementById("provider-results").style.display = "none";
+  document.getElementById("save-btn").textContent = "Save favorite";
+}
+
+document.getElementById("search").oninput = () => loadList();
+document.getElementById("filter").onchange = () => loadList();
+
+document.getElementById("dl-template").onclick = () => window.open(`${API}/routes/csv-template`, "_blank");
+
+document.getElementById("csv-file").onchange = e => {
+  const file = e.target.files[0];
+  if (!file) { return; }
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById("csv-text").value = reader.result; };
+  reader.readAsText(file);
+};
+
+let lastCsv = "";
+document.getElementById("validate-btn").onclick = async () => {
+  lastCsv = document.getElementById("csv-text").value;
+  if (!lastCsv.trim()) { msg("Paste CSV or choose a file first.", "err"); return; }
+  const r = await fetch(`${API}/routes/csv-import`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv: lastCsv, commit: false }) });
+  const d = await r.json();
+  renderCsvPreview(d);
+  document.getElementById("import-btn").style.display = d.ready_count > 0 ? "inline-block" : "none";
+};
+
+document.getElementById("import-btn").onclick = async () => {
+  const r = await fetch(`${API}/routes/csv-import`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv: lastCsv, commit: true }) });
+  const d = await r.json();
+  msg(`Imported ${d.created} favorite(s). ${d.error_count} row(s) skipped.`, d.created ? "ok" : "err");
+  document.getElementById("import-btn").style.display = "none";
+  document.getElementById("csv-preview").innerHTML = "";
+};
+
+function renderCsvPreview(d) {
+  const box = document.getElementById("csv-preview");
+  let html = `<div class="notice ok">${d.ready_count} row(s) ready</div>`;
+  (d.ready || []).forEach(r => { html += `<div class="testline">Row ${esc(r.row)}: ${esc(r.name)} · ${esc(r.lab_partner_name)} · ${r.tests.length} test(s)</div>`; });
+  if ((d.errors || []).length) {
+    html += `<div class="notice err">${d.errors.length} row(s) with errors</div>`;
+    d.errors.forEach(e => { html += `<div class="testline">Row ${esc(e.row)}: ${esc(e.errors.join("; "))}</div>`; });
+  }
+  box.innerHTML = html;
+}
+
+loadPartners();
+loadList();
+renderChosen();
+</script>
+</body>
+</html>

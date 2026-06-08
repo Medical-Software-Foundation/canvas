@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab Favorites</title>
+<style>
+  :root { --blue:#0b5fff; --ink:#1a2b3c; --line:#d9e0e8; --bg:#f5f7fa; --muted:#5a6b7b; }
+  * { box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--ink); margin:0; background:var(--bg); }
+  .wrap { padding:14px; padding-bottom:48px; }
+  h2 { margin:0 0 10px; font-size:16px; }
+  input[type=text], select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:#fff; }
+  label { display:block; font-size:12px; font-weight:600; margin:10px 0 4px; color:var(--muted); }
+  .card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:11px 12px; margin:8px 0; cursor:pointer; display:flex; gap:10px; align-items:flex-start; }
+  .card.sel { border-color:var(--blue); border-width:2px; background:#eef4ff; box-shadow:0 0 0 3px rgba(11,95,255,.15); }
+  .card input[type=checkbox] { width:18px; height:18px; margin-top:2px; flex:none; }
+  .card-body { flex:1; }
+  .card h4 { margin:0 0 3px; font-size:14px; }
+  .card .tags { margin-top:2px; }
+  .card .summary { margin-top:3px; }
+  .card-details { display:none; margin-top:4px; }
+  .card:hover .card-details, .card.sel .card-details { display:block; }
+  .meta { font-size:12px; color:var(--muted); }
+  .pill { display:inline-block; background:#eef3fb; color:var(--blue); border-radius:999px; padding:1px 8px; font-size:10px; margin:2px 3px 0 0; }
+  .pill.shared { background:#e7f7ee; color:#1a8d4f; }
+  .pill.personal { background:#fdf0e6; color:#c97a1f; }
+  .testline { font-size:12px; padding:1px 0; }
+  button.primary { background:var(--blue); color:#fff; border:none; padding:10px 16px; border-radius:8px; font-size:14px; cursor:pointer; width:100%; margin-top:10px; }
+  button.primary:disabled { background:#9bb8e8; cursor:not-allowed; }
+  button.ghost { background:#fff; color:var(--blue); border:1px solid var(--blue); padding:6px 12px; border-radius:8px; font-size:13px; cursor:pointer; }
+  .notice { padding:10px 12px; border-radius:8px; font-size:13px; margin:10px 0; }
+  .notice.err { background:#fdecea; color:#a4302a; }
+  .notice.ok { background:#e7f7ee; color:#1a7f43; }
+  .empty { color:var(--muted); font-size:13px; padding:24px; text-align:center; }
+  .insert-box { position:sticky; bottom:0; background:var(--bg); padding-top:8px; padding-bottom:88px; border-top:1px solid var(--line); }
+  .seltests { border:1px solid var(--line); border-radius:8px; padding:6px; max-height:130px; overflow:auto; background:#fff; margin-top:4px; }
+  .seltests .opt { padding:5px 6px; cursor:pointer; font-size:13px; border-radius:6px; }
+  .seltests .opt:hover { background:#eef3fb; }
+  .skip-row { border:1px solid #f0c9c2; background:#fdf4f2; border-radius:10px; padding:10px; margin:8px 0; }
+  .skip-row.done { border-color:#bfe6cd; background:#eef9f1; }
+  .skip-name { font-weight:600; font-size:13px; }
+  .skip-reason { font-size:12px; color:#a4302a; margin:2px 0 6px; }
+  .fix-row { margin:8px 0; }
+  .fix-chosen { font-size:12px; color:#1a7f43; margin-top:3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Lab Order Favorites</h2>
+  <input type="text" id="search" placeholder="Search by name, tag, author, test, or lab...">
+  <div id="msg"></div>
+  <div id="results"></div>
+  <div id="list"><div class="empty">Loading...</div></div>
+
+  <div class="insert-box" id="insert-box" style="display:none">
+    <label>Insert into note</label>
+    <select id="note-select"><option value="">Loading open notes...</option></select>
+    <button class="primary" id="insert-btn" disabled>Insert lab orders</button>
+  </div>
+</div>
+
+<script>
+const API = "{{ api_base }}";
+const PATIENT_ID = "{{ patient_id }}";
+let favorites = [];
+const selectedIds = new Set();
+const fixState = {};   // favId -> { stale: [...], replace: {code: test} }
+const fixTimers = {};
+
+function msg(text, kind) {
+  document.getElementById("msg").innerHTML = text ? `<div class="notice ${kind}">${text}</div>` : "";
+}
+
+let searchTimer = null;
+document.getElementById("search").oninput = e => {
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  searchTimer = setTimeout(() => loadList(q), 200);
+};
+
+async function loadList(q) {
+  const r = await fetch(`${API}/routes/favorites?filter=all&search=${encodeURIComponent(q || "")}`);
+  const d = await r.json();
+  favorites = d.favorites || [];
+  renderList();
+}
+
+// Escape user-controlled text before it goes into innerHTML (favorites are
+// shared across staff, so a malicious name/tag/comment must not execute).
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderList() {
+  const list = document.getElementById("list");
+  if (!favorites.length) { list.innerHTML = '<div class="empty">No matching favorites.</div>'; return; }
+  list.innerHTML = "";
+  favorites.forEach(fav => list.appendChild(card(fav)));
+}
+
+function card(fav) {
+  const el = document.createElement("div");
+  const isSel = selectedIds.has(fav.id);
+  el.className = "card" + (isSel ? " sel" : "");
+  // Shared is the norm on the patient view; only flag the personal ones.
+  const personal = fav.is_shared ? '' : '<span class="pill personal">Personal</span>';
+  const tags = (fav.tags || []).map(t => `<span class="pill">#${esc(t)}</span>`).join("");
+  const tagRow = personal || tags ? `<div class="tags">${personal}${tags}</div>` : '';
+  // Always-visible one-line summary: lab · N tests · Fasting.
+  const n = (fav.tests || []).length;
+  const summaryBits = [esc(fav.lab_partner_name || "Unknown lab"), `${n} test${n === 1 ? "" : "s"}`];
+  if (fav.fasting_required) { summaryBits.push("Fasting"); }
+  const tests = (fav.tests || []).map(t => `<div class="testline">• ${esc(t.order_name)} (${esc(t.order_code)})</div>`).join("");
+  el.innerHTML = `<input type="checkbox" ${isSel ? "checked" : ""}>
+    <div class="card-body">
+      <h4>${esc(fav.name)}</h4>
+      ${tagRow}
+      <div class="meta summary">${summaryBits.join(" · ")}</div>
+      <div class="card-details">
+        <div style="margin:5px 0">${tests}</div>
+        <div class="meta">by ${esc(fav.created_by_name || "Unknown")}</div>
+      </div>
+    </div>`;
+  el.onclick = () => toggleSelect(fav.id);
+  return el;
+}
+
+function toggleSelect(id) {
+  if (selectedIds.has(id)) { selectedIds.delete(id); } else { selectedIds.add(id); }
+  document.getElementById("results").innerHTML = "";   // starting a new batch
+  msg("");
+  renderList();
+  updateInsertBar();
+}
+
+function updateInsertBar() {
+  const n = selectedIds.size;
+  document.getElementById("insert-box").style.display = n ? "block" : "none";
+  const btn = document.getElementById("insert-btn");
+  btn.textContent = n === 1 ? "Insert lab order" : `Insert ${n} lab orders`;
+  btn.disabled = !(n && document.getElementById("note-select").value);
+}
+
+async function loadNotes() {
+  const r = await fetch(`${API}/routes/notes?patient_id=${encodeURIComponent(PATIENT_ID)}`);
+  const d = await r.json();
+  const sel = document.getElementById("note-select");
+  sel.innerHTML = "";
+  if (!d.notes || !d.notes.length) {
+    sel.innerHTML = '<option value="">No open notes - create a note first</option>';
+    return;
+  }
+  d.notes.forEach(n => {
+    const o = document.createElement("option");
+    o.value = n.id; o.textContent = n.title + (n.modified ? " (" + n.modified.slice(0, 10) + ")" : "");
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById("note-select").onchange = updateInsertBar;
+document.getElementById("insert-btn").onclick = () => doInsert([...selectedIds]);
+
+async function doInsert(ids) {
+  const noteUuid = document.getElementById("note-select").value;
+  if (!ids.length || !noteUuid) { return; }
+  const btn = document.getElementById("insert-btn");
+  btn.disabled = true; btn.textContent = "Inserting...";
+  const r = await fetch(`${API}/routes/insert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ favorite_ids: ids, patient_id: PATIENT_ID, note_uuid: noteUuid })
+  });
+  const d = await r.json();
+  updateInsertBar();
+  if (!d.success) { msg(d.error || "Insert failed", "err"); return; }
+  // Done with this batch - clear selection and show outcomes.
+  selectedIds.clear();
+  document.getElementById("insert-box").style.display = "none";
+  renderList();
+  renderResults(d);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderResults(d) {
+  const box = document.getElementById("results");
+  box.innerHTML = "";
+  if ((d.inserted || []).length) {
+    const ok = document.createElement("div");
+    ok.className = "notice ok";
+    // textContent (not innerHTML) - names are inert here.
+    ok.textContent = `${d.inserted.length} lab order(s) staged in the selected note: ` +
+      d.inserted.map(i => i.name).join(", ");
+    box.appendChild(ok);
+  }
+  (d.skipped || []).forEach(s => box.appendChild(skipRow(s)));
+}
+
+function skipRow(s) {
+  const row = document.createElement("div");
+  row.className = "skip-row";
+  row.id = `skip-${s.favorite_id}`;
+  const reasonText = {
+    stale_codes: "Some saved tests are no longer available" + (s.stale_codes ? ` (${esc(s.stale_codes.join(", "))})` : ""),
+    partner_missing: "The lab partner no longer exists",
+    partner_inactive: "The lab partner is not active",
+    not_found: "Favorite not found",
+  }[s.reason] || "Could not order";
+  row.innerHTML = `<div class="skip-name">${esc(s.name)}</div><div class="skip-reason">${reasonText}</div>`;
+
+  if (s.reason === "stale_codes" && s.can_edit) {
+    const btn = document.createElement("button");
+    btn.className = "ghost"; btn.textContent = "Fix & order";
+    btn.onclick = () => openFix(s.favorite_id, s.stale_codes || [], row);
+    row.appendChild(btn);
+  } else {
+    const note = document.createElement("div");
+    note.className = "meta";
+    if (s.reason === "partner_missing" || s.reason === "partner_inactive") {
+      note.textContent = s.can_edit ? "Rebuild it in the Lab Favorites Config app." : `Ask ${s.owner_name || "the owner"} to rebuild it.`;
+    } else if (s.reason === "stale_codes") {
+      note.textContent = `Ask ${s.owner_name || "the owner"} to update this favorite.`;
+    }
+    if (note.textContent) { row.appendChild(note); }
+  }
+  return row;
+}
+
+function openFix(favId, staleCodes, row) {
+  const fav = favorites.find(f => f.id === favId);
+  if (!fav) { return; }
+  fixState[favId] = { stale: staleCodes.slice(), replace: {} };
+  const stale = new Set(staleCodes);
+  let html = '<div class="fix-row"><strong style="font-size:13px">Replace unavailable tests</strong></div>';
+  (fav.tests || []).filter(t => !stale.has(t.order_code)).forEach(t => {
+    html += `<div class="testline">✓ ${esc(t.order_name)} (${esc(t.order_code)})</div>`;
+  });
+  staleCodes.forEach(code => {
+    const orig = (fav.tests || []).find(t => t.order_code === code);
+    const label = orig ? `${esc(orig.order_name)} (${esc(code)})` : esc(code);
+    html += `<div class="fix-row" data-code="${esc(code)}">
+      <div class="testline">✗ ${label}</div>
+      <input type="text" class="fix-search" data-fav="${favId}" data-code="${code}" placeholder="Search a replacement test...">
+      <div class="seltests fix-results" data-code="${code}" style="display:none"></div>
+      <div class="fix-chosen" data-code="${code}"></div>
+    </div>`;
+  });
+  html += `<button class="primary" data-fav="${favId}" id="fix-save-${favId}" disabled>Save fixes &amp; order</button>`;
+  row.innerHTML = `<div class="skip-name">${esc(fav.name)}</div>` + html;
+  row.querySelectorAll(".fix-search").forEach(inp => { inp.oninput = () => onFixSearch(inp); });
+  document.getElementById(`fix-save-${favId}`).onclick = () => saveFix(favId, row);
+}
+
+function onFixSearch(input) {
+  const favId = input.dataset.fav;
+  const code = input.dataset.code;
+  const q = input.value.trim();
+  const box = input.parentElement.querySelector(`.fix-results[data-code="${code}"]`);
+  clearTimeout(fixTimers[favId + code]);
+  if (!q) { box.style.display = "none"; return; }
+  const fav = favorites.find(f => f.id === favId);
+  fixTimers[favId + code] = setTimeout(async () => {
+    const r = await fetch(`${API}/routes/partners/tests?partner_id=${encodeURIComponent(fav.lab_partner_id)}&search=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    box.innerHTML = "";
+    (d.tests || []).slice(0, 30).forEach(t => {
+      const div = document.createElement("div");
+      div.className = "opt";
+      div.textContent = `${t.order_name} (${t.order_code})${t.cpt_code ? " · CPT " + t.cpt_code : ""}`;
+      div.onclick = () => {
+        fixState[favId].replace[code] = t;
+        input.value = `${t.order_name} (${t.order_code})`;
+        input.parentElement.querySelector(`.fix-chosen[data-code="${code}"]`).textContent = `Replacing with ${t.order_name} (${t.order_code})`;
+        box.style.display = "none";
+        const ready = fixState[favId].stale.every(c => fixState[favId].replace[c]);
+        document.getElementById(`fix-save-${favId}`).disabled = !ready;
+      };
+      box.appendChild(div);
+    });
+    box.style.display = (d.tests || []).length ? "block" : "none";
+  }, 200);
+}
+
+async function saveFix(favId, row) {
+  const fav = favorites.find(f => f.id === favId);
+  const st = fixState[favId];
+  const stale = new Set(st.stale);
+  const seen = new Set();
+  const newTests = [];
+  (fav.tests || []).forEach(t => {
+    const next = stale.has(t.order_code) ? st.replace[t.order_code] : t;
+    if (next && !seen.has(next.order_code)) { seen.add(next.order_code); newTests.push(next); }
+  });
+  const btn = document.getElementById(`fix-save-${favId}`);
+  btn.disabled = true; btn.textContent = "Saving...";
+  const pr = await fetch(`${API}/routes/favorites`, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: favId, tests: newTests })
+  });
+  const pd = await pr.json();
+  if (!pd.success) { btn.disabled = false; btn.textContent = "Save fixes & order"; row.appendChild(noticeEl(pd.error || "Could not save the fix.", "err")); return; }
+  fav.tests = pd.favorite.tests;
+  // Re-order just this favorite.
+  const noteUuid = document.getElementById("note-select").value || lastNoteUuid;
+  const ir = await fetch(`${API}/routes/insert`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ favorite_ids: [favId], patient_id: PATIENT_ID, note_uuid: noteUuid })
+  });
+  const id = await ir.json();
+  if (id.success && (id.inserted || []).length) {
+    row.className = "skip-row done";
+    row.innerHTML = `<div class="skip-name">✓ ${esc(fav.name)}</div><div class="meta">Fixed and staged in the note.</div>`;
+  } else {
+    btn.disabled = false; btn.textContent = "Save fixes & order";
+    row.appendChild(noticeEl("Saved, but still could not order. Check the favorite.", "err"));
+  }
+}
+
+function noticeEl(text, kind) {
+  const el = document.createElement("div");
+  el.className = `notice ${kind}`;
+  el.textContent = text;
+  return el;
+}
+
+let lastNoteUuid = "";
+document.getElementById("note-select").addEventListener("change", e => { lastNoteUuid = e.target.value; });
+
+loadList("");
+loadNotes();
+</script>
+</body>
+</html>
