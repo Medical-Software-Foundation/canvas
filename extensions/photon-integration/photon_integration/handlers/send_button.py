@@ -6,11 +6,15 @@ prescribe commands to Photon with the provider's user token.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.action_button import ActionButton
 
 SEND_PATH = "/plugin-io/api/photon_integration/photon/send"
+# Regenerated on each plugin load so a redeploy busts any cached modal page.
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 class PhotonSendButton(ActionButton):
@@ -24,7 +28,7 @@ class PhotonSendButton(ActionButton):
         note_id = self.event.context.get("note_id")
         return [
             LaunchModalEffect(
-                url=f"{SEND_PATH}?note_id={note_id}",
+                url=f"{SEND_PATH}?note_id={note_id}&v={_CACHE_BUST}",
                 target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE_LARGE,
             ).apply()
         ]

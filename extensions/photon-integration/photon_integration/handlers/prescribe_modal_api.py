@@ -314,5 +314,7 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @staticmethod
     def _error_page(message: str) -> HTMLResponse:
-        body = render_to_string("static/error.html", {"message": message})
+        body = render_to_string(
+            "static/error.html", {"message": message, "cache_bust": _CACHE_BUST}
+        )
         return HTMLResponse(body, status_code=HTTPStatus.OK, headers={"Cache-Control": "no-store"})

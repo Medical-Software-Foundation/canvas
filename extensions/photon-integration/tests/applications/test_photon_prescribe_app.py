@@ -5,7 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from photon_integration.applications.photon_prescribe_app import PhotonPrescribeApp
+from photon_integration.applications.photon_prescribe_app import (
+    _CACHE_BUST,
+    PhotonPrescribeApp,
+)
 
 MODULE = "photon_integration.applications.photon_prescribe_app"
 
@@ -25,7 +28,7 @@ def test_on_open_launches_modal_with_patient():
     assert result == "MODAL_EFFECT"
     kwargs = modal.call_args.kwargs
     assert kwargs["url"] == (
-        "/plugin-io/api/photon_integration/photon/?patient_id=pat-123"
+        f"/plugin-io/api/photon_integration/photon/?patient_id=pat-123&v={_CACHE_BUST}"
     )
     assert kwargs["target"] == modal.TargetType.RIGHT_CHART_PANE_LARGE
 
@@ -35,4 +38,4 @@ def test_on_open_handles_missing_patient():
     with patch(f"{MODULE}.LaunchModalEffect") as modal:
         modal.return_value.apply.return_value = "MODAL_EFFECT"
         app.on_open()
-    assert modal.call_args.kwargs["url"].endswith("patient_id=")
+    assert modal.call_args.kwargs["url"].endswith(f"patient_id=&v={_CACHE_BUST}")

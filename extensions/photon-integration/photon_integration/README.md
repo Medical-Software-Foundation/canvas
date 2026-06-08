@@ -112,9 +112,10 @@ the browser's `localStorage` — independent of the Canvas user. To prevent
 sending under the wrong identity, the send modal resolves each command's
 prescriber to an email (Canvas Staff) and **only sends an Rx when the signed-in
 Photon provider's email matches**; otherwise it blocks that Rx and offers a
-"Sign in to Photon as the prescriber" re-auth. This assumes a provider's Photon
-account email equals their Canvas email. Notes with multiple prescribers require
-each provider to authenticate in turn.
+**Sign in to Photon** button (popup re-auth). The same check guards the operator
+(the logged-in Canvas user must be the signed-in Photon provider). This assumes a
+provider's Photon account email equals their Canvas email. Notes with multiple
+prescribers require each provider to authenticate in turn.
 
 ### ⚠️ Open question: prescription authorization
 

@@ -8,11 +8,15 @@ prescribes for the (already-synced) patient.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import Application
 
 MODAL_PATH = "/plugin-io/api/photon_integration/photon/"
+# Regenerated on each plugin load so a redeploy busts any cached modal page.
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 class PhotonPrescribeApp(Application):
@@ -21,6 +25,6 @@ class PhotonPrescribeApp(Application):
     def on_open(self) -> Effect:
         patient_id = (self.event.context.get("patient") or {}).get("id", "")
         return LaunchModalEffect(
-            url=f"{MODAL_PATH}?patient_id={patient_id}",
+            url=f"{MODAL_PATH}?patient_id={patient_id}&v={_CACHE_BUST}",
             target=LaunchModalEffect.TargetType.RIGHT_CHART_PANE_LARGE,
         ).apply()
