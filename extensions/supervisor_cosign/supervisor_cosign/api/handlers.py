@@ -131,7 +131,10 @@ class SupervisorCoSignAPI(StaffSessionAuthMixin, SimpleAPI):
                     payload=json.dumps({"data": {"note": str(note_id)}}),
                 )
             )
-        except Exception as exc:
+        except (ValueError, TypeError, KeyError, RuntimeError) as exc:
+            # Narrow to the construct-time errors the SDK effect builders are expected to
+            # raise (bad payload, rejected unlock, missing field). Anything outside this
+            # set is an unexpected bug and should propagate to Sentry per REVIEW.md.
             log.exception(f"supervisor_cosign.submit: failed to build chart-write effects: {exc}")
             return [
                 JSONResponse(

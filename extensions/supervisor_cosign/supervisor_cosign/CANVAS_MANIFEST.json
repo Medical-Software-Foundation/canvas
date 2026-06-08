@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.113.0",
-    "plugin_version": "0.7.0",
+    "plugin_version": "0.7.1",
     "name": "supervisor_cosign",
     "description": "Supervisor co-signature workflow. Reads Canvas's native Staff.default_supervising_provider; when a supervisee's note locks, creates a co-sign task for the supervisor and exposes a Co-sign button with approve + addendum.",
     "components": {

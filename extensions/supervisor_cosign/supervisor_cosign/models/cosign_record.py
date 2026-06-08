@@ -10,8 +10,8 @@ class CoSignRecord(CustomModel):
     task_id = TextField(default="")
     status = TextField(default="pending")
     selected_at = DateTimeField(auto_now_add=True)
-    due_date = DateField(default=None)
-    cosigned_at = DateTimeField(default=None)
+    due_date = DateField(null=True, blank=True, default=None)
+    cosigned_at = DateTimeField(null=True, blank=True, default=None)
     addendum_text = TextField(default="")
 
     class Meta:
