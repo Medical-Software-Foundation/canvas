@@ -159,11 +159,7 @@
     var photonName = (photonUser && photonUser.name) || photonEmail || "your Photon account";
     var canvasEmail = (cfg.canvasUserEmail || "").toLowerCase();
     if (!photonEmail || !canvasEmail || photonEmail !== canvasEmail) {
-      setStatus(
-        "You're logged into Canvas as " + (cfg.canvasUserName || canvasEmail || "this user") +
-        " but Photon as " + photonName + ". Sign in to Photon as yourself before prescribing.",
-        true
-      );
+      setStatus("You're not signed in to Photon as yourself. Sign in to Photon to prescribe.", true);
       addSwitchProviderButton(client);
       return;
     }

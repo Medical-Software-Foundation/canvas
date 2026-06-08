@@ -172,11 +172,7 @@
     // Photon session (someone else) be used by a different Canvas user.
     var canvasEmail = (cfg.canvasUserEmail || "").toLowerCase();
     if (!photonEmail || !canvasEmail || photonEmail !== canvasEmail) {
-      setStatus(
-        "You're logged into Canvas as " + (cfg.canvasUserName || canvasEmail || "this user") +
-        " but Photon as " + photonName + ". Sign in to Photon as yourself before sending.",
-        true
-      );
+      setStatus("You're not signed in to Photon as yourself. Sign in to Photon to send.", true);
       addSwitchProviderButton(client);
       return;
     }
