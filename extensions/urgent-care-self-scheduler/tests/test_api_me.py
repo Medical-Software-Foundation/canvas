@@ -6,6 +6,7 @@ from urgent_care_self_scheduler.handlers.api import (
     _format_allergies,
     _format_medications,
     _medication_label,
+    _patient_review,
 )
 
 
@@ -183,3 +184,44 @@ def test_patient_review_assembles_meds_and_allergies(mocker) -> None:
         "medications": [{"id": "m1", "label": "Lisinopril 10mg"}],
         "allergies": [{"id": "a1", "label": "Penicillin"}],
     }
+
+
+def test_patient_review_returns_only_active_allergies() -> None:
+    # Guards the status="active" include + resolved/inactive exclude semantics with
+    # REAL rows — not a mock that ignores the filter, and not re-asserting the literal
+    # against itself. Only the active allergy comes back.
+    import datetime
+
+    from canvas_sdk.test_utils.factories import CanvasUserFactory, PatientFactory
+    from canvas_sdk.v1.data.allergy_intolerance import AllergyIntolerance
+
+    patient = PatientFactory.create()
+    committer = CanvasUserFactory.create()  # required for .committed()
+
+    def _mk_allergy(status: str, narrative: str) -> None:
+        AllergyIntolerance.objects.create(
+            patient=patient,
+            committer=committer,
+            deleted=False,
+            note_id=1,
+            allergy_intolerance_type="A",
+            category=1,
+            status=status,
+            severity="",
+            onset_date=datetime.date(2026, 1, 1),
+            onset_date_original_input="",
+            last_occurrence=datetime.date(2026, 1, 1),
+            last_occurrence_original_input="",
+            recorded_date=datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc),
+            narrative=narrative,
+        )
+
+    _mk_allergy("active", "Penicillin")
+    _mk_allergy("resolved", "Sulfa")
+    _mk_allergy("inactive", "Latex")
+
+    review = _patient_review(str(patient.id))
+    labels = [a["label"] for a in review["allergies"]]
+    assert "Penicillin" in labels
+    assert "Sulfa" not in labels
+    assert "Latex" not in labels

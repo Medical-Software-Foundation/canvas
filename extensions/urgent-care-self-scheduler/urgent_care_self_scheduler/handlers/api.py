@@ -121,6 +121,11 @@ def _patient_review(patient_id: str) -> dict | None:
         .active()
         .prefetch_related("codings")
     )
+    # `status="active"` is the verified Canvas clinical-status value — it matches the
+    # SDK's ClinicalStatus.ACTIVE / Medication Status.ACTIVE (all == "active"); the
+    # AllergyIntolerance model stores `status` as a bare CharField with no enum
+    # attached, so the literal is intentional. Filtering to active (vs showing
+    # resolved/inactive) is covered by test_patient_review_returns_only_active_allergies.
     allergies = (
         AllergyIntolerance.objects.filter(patient=patient, deleted=False, status="active")
         .exclude(entered_in_error__isnull=False)
