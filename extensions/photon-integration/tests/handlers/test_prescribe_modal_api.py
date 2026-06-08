@@ -172,7 +172,10 @@ def send_patched():
         patch(f"{MODULE}.ndc_to_rxcui", return_value=None) as ndc_rxcui, \
         patch(f"{MODULE}.resolve_photon_patient", return_value=("pat_999", "EXT_EFFECT")), \
         patch(f"{MODULE}.build_address", return_value={"city": "Town"}):
-        build_client.return_value.find_treatment_id_by_code.return_value = "med_1"
+        build_client.return_value.find_treatment_by_code.return_value = {
+            "id": "med_1", "name": "Ondansetron 4 mg ODT", "brandName": "Zofran",
+            "genericName": "Ondansetron",
+        }
         command_cls.objects.filter.return_value = [_command()]
         yield SimpleNamespace(rts=rts, command_cls=command_cls, selected=selected,
                               build_client=build_client, rxcui=rxcui, ndc_rxcui=ndc_rxcui)
@@ -195,10 +198,12 @@ class TestSend:
         assert rx["rxcui"] == "198052"
         assert rx["dispenseUnit"] == "Tablet"
         assert rx["refillsAllowed"] == 1
+        # the resolved Photon medication is surfaced for provider review
+        assert rx["photonMedication"] == "Zofran — Ondansetron 4 mg ODT"
         assert rx["error"] is None
 
     def test_unmatched_rxcui_flags_error(self, send_patched):
-        send_patched.build_client.return_value.find_treatment_id_by_code.return_value = None
+        send_patched.build_client.return_value.find_treatment_by_code.return_value = None
         api = _api(query_params={"note_id": "4567"})
         api.send()
         rx = json.loads(send_patched.rts.call_args.args[1]["config_json"])["prescriptions"][0]
@@ -223,7 +228,7 @@ class TestSend:
 
     def test_no_rxcui_flags_error(self, send_patched):
         send_patched.rxcui.return_value = None
-        send_patched.build_client.return_value.find_treatment_id_by_code.return_value = None
+        send_patched.build_client.return_value.find_treatment_by_code.return_value = None
         api = _api(query_params={"note_id": "4567"})
         api.send()
         rx = json.loads(send_patched.rts.call_args.args[1]["config_json"])["prescriptions"][0]

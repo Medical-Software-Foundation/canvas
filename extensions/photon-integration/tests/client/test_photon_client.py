@@ -126,12 +126,17 @@ class TestPatients:
 
 
 class TestTreatments:
-    def test_find_treatment_by_code_returns_id(self):
+    def test_find_treatment_by_code_returns_med(self):
         client, http = _make_client()
         http.post.return_value = _response(
-            json_body={"data": {"medications": [{"id": "med_1", "name": "Ondansetron 4 mg"}]}}
+            json_body={"data": {"medications": [
+                {"id": "med_1", "name": "Ondansetron 4 mg", "brandName": None,
+                 "genericName": "Ondansetron"}
+            ]}}
         )
-        assert client.find_treatment_id_by_code("198052") == "med_1"
+        med = client.find_treatment_by_code("198052")
+        assert med["id"] == "med_1"
+        assert med["genericName"] == "Ondansetron"
         # filters the catalog by drug code (RxNorm)
         variables = http.post.call_args.kwargs["json"]["variables"]
         assert variables["filter"] == {"drug": {"code": "198052"}}
@@ -139,11 +144,11 @@ class TestTreatments:
     def test_find_treatment_by_code_no_match(self):
         client, http = _make_client()
         http.post.return_value = _response(json_body={"data": {"medications": []}})
-        assert client.find_treatment_id_by_code("999") is None
+        assert client.find_treatment_by_code("999") is None
 
     def test_find_treatment_by_code_empty(self):
         client, http = _make_client()
-        assert client.find_treatment_id_by_code(None) is None
+        assert client.find_treatment_by_code(None) is None
         http.post.assert_not_called()
 
 

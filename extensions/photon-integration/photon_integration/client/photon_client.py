@@ -146,19 +146,21 @@ class PhotonClient:
 
     # -- treatments (medication catalog) -----------------------------------
 
-    def find_treatment_id_by_code(self, code: str | None) -> str | None:
-        """Resolve a prescribable Photon treatment id by code (RxNorm rxcui).
+    def find_treatment_by_code(self, code: str | None) -> dict[str, Any] | None:
+        """Resolve a Photon treatment by code (RxNorm rxcui).
 
-        Photon's catalog stores RxNorm but generally not NDC, and ``drug.code``
-        matches any code identifier, so we filter ``medications`` by the rxcui
-        resolved from the Canvas medication. An exact code match returns the
-        correct strength/form; no match returns None (the caller should not guess).
+        Returns the matched medication ({id, name, brandName, genericName}) so the
+        caller can show the provider exactly what Photon resolved (catching a
+        brand->generic or wrong-device substitution) before sending. Photon stores
+        RxNorm but generally not NDC, and ``drug.code`` matches any code id.
         """
         if not code:
             return None
         query = """
             query medications($filter: MedicationFilter, $first: Int) {
-              medications(filter: $filter, first: $first) { id name }
+              medications(filter: $filter, first: $first) {
+                id name brandName genericName
+              }
             }
         """
         medications = (
@@ -167,6 +169,4 @@ class PhotonClient:
             )
             or []
         )
-        if medications:
-            return str(medications[0]["id"])
-        return None
+        return medications[0] if medications else None

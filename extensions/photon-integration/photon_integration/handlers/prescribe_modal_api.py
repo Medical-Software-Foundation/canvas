@@ -42,6 +42,15 @@ _GRAPHQL_URLS = {
     "production": "https://api.photon.health/graphql",
 }
 
+
+def _photon_med_label(med: dict[str, Any] | None) -> str | None:
+    """Human label for the Photon match so the provider can verify it."""
+    if not med:
+        return None
+    name = med.get("name") or ""
+    brand = med.get("brandName")
+    return f"{brand} — {name}".strip(" —") if brand else (name or None)
+
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
@@ -233,7 +242,8 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
             # Exact, code-based match: Canvas FDB code (or NDC) -> RxNorm via the
             # Ontologies service -> Photon drug.code. Never guess by name.
             rxcui = fdb_to_rxcui(fdb) or ndc_to_rxcui(ndc)
-            treatment_id = client.find_treatment_id_by_code(rxcui)
+            photon_med = client.find_treatment_by_code(rxcui)
+            treatment_id = str(photon_med["id"]) if photon_med else None
             if not treatment_id and not rxcui:
                 error = "No RxNorm code for this medication — use Prescribe via Photon"
             elif not treatment_id:
@@ -249,6 +259,7 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
                     "externalId": str(command.id),
                     "treatmentId": treatment_id,
                     "medication": term or "prescription",
+                    "photonMedication": _photon_med_label(photon_med),
                     "rxcui": rxcui,
                     "error": error,
                     **rx,

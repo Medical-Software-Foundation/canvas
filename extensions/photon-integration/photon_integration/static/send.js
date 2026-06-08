@@ -154,17 +154,60 @@
       setStatus("No prescriptions are flagged 'Send via Photon' on this note.", true);
       return;
     }
+    reviewThenSend(token);
+  }
 
-    setStatus("Sending " + cfg.prescriptions.length + " prescription(s) to Photon…");
+  // Show what Photon resolved for each prescription and require explicit
+  // confirmation before sending — so a brand->generic or wrong-product match
+  // (e.g. Wegovy -> a differently-packaged semaglutide) can't go out silently.
+  function reviewThenSend(token) {
+    var results = document.getElementById("results");
+    results.innerHTML = "";
+    var sendable = [];
+    cfg.prescriptions.forEach(function (rx) {
+      var li = document.createElement("li");
+      if (rx.error || !rx.treatmentId) {
+        li.className = "result fail";
+        li.textContent = "✗ " + rx.medication + " — " + (rx.error || "cannot send");
+      } else {
+        sendable.push(rx);
+        li.className = "result";
+        li.textContent =
+          rx.medication + "  →  Photon: " + (rx.photonMedication || "(match)") +
+          "  (" + rx.dispenseQuantity + " " + rx.dispenseUnit + ", " + rx.refillsAllowed + " refills)";
+      }
+      results.appendChild(li);
+    });
+
+    if (!sendable.length) {
+      setStatus("Nothing can be sent — see below. Use Prescribe via Photon.", true);
+      return;
+    }
+    setStatus("Verify each Photon match below, then confirm.");
+
+    var btn = document.createElement("button");
+    btn.id = "confirm";
+    btn.className = "confirm-btn";
+    btn.textContent = "Confirm & send " + sendable.length + " to Photon";
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      doSend(token, sendable);
+    });
+    document.getElementById("root").appendChild(btn);
+  }
+
+  async function doSend(token, sendable) {
+    document.getElementById("results").innerHTML = "";
+    setStatus("Sending " + sendable.length + " prescription(s) to Photon…");
     var sent = 0;
-    for (var i = 0; i < cfg.prescriptions.length; i++) {
+    for (var i = 0; i < sendable.length; i++) {
       try {
-        if (await sendOne(token, cfg.prescriptions[i])) sent++;
+        if (await sendOne(token, sendable[i])) sent++;
       } catch (err) {
-        addResult(cfg.prescriptions[i].medication, false, String(err && err.message ? err.message : err));
+        addResult(sendable[i].medication, false, String(err && err.message ? err.message : err));
       }
     }
-    setStatus(sent + " of " + cfg.prescriptions.length + " sent to Photon.");
+    setStatus(sent + " of " + sendable.length + " sent to Photon.");
     try {
       sessionStorage.removeItem(KEY_RX);
     } catch (e) {

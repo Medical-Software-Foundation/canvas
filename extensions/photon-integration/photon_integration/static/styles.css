@@ -61,3 +61,21 @@ photon-client {
   background: #fdecea;
   color: #9b1c14;
 }
+
+.confirm-btn {
+  display: block;
+  margin: 16px auto;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 6px;
+  background: #1f6feb;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm-btn:disabled {
+  background: #9bb7e6;
+  cursor: default;
+}
