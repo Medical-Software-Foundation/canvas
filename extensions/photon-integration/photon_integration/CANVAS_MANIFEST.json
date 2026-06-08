@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.163.1",
-    "plugin_version": "0.1.3",
+    "plugin_version": "0.2.0",
     "name": "photon_integration",
     "description": "Integrates Canvas prescribing with Photon Health. Adds a 'Send via Photon' option to the Prescribe, Refill, and Adjust Prescription commands (removing Canvas's send / sign-and-send actions), syncs the patient to Photon via the backend M2M token, and provides a patient-chart 'Prescribe via Photon' app that opens Photon Elements so an authenticated provider can write the prescription and place the order.",
     "url_permissions": [
@@ -33,7 +33,7 @@
             },
             {
                 "class": "photon_integration.handlers.dispatch:PhotonDispatchHandler",
-                "description": "On sign, syncs the patient to Photon and places an order; surfaces failures as a Canvas Task."
+                "description": "On sign of a 'Send via Photon' command, pre-syncs the patient to Photon (M2M); surfaces sync failures as a Canvas Task."
             },
             {
                 "class": "photon_integration.handlers.prescribe_modal_api:PhotonPrescribeModalAPI",

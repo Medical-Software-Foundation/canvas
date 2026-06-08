@@ -147,31 +147,3 @@ class TestTreatments:
         http.post.assert_not_called()
 
 
-class TestPrescriptionsAndOrders:
-    def test_create_prescription_returns_id(self):
-        client, http = _make_client()
-        http.post.return_value = _response(
-            json_body={"data": {"createPrescription": {"id": "rx_1"}}}
-        )
-        assert client.create_prescription({"patientId": "p"}) == "rx_1"
-
-    def test_create_prescription_no_id_raises(self):
-        client, http = _make_client()
-        http.post.return_value = _response(json_body={"data": {"createPrescription": {}}})
-        with pytest.raises(PhotonError, match="createPrescription"):
-            client.create_prescription({})
-
-    def test_create_order_returns_id(self):
-        client, http = _make_client()
-        http.post.return_value = _response(json_body={"data": {"createOrder": {"id": "ord_1"}}})
-        order_id = client.create_order("pat", "rx", {"city": "x"}, pharmacy_id="phr_9")
-        assert order_id == "ord_1"
-        variables = http.post.call_args.kwargs["json"]["variables"]
-        assert variables["fills"] == [{"prescriptionId": "rx"}]
-        assert variables["pharmacyId"] == "phr_9"
-
-    def test_create_order_no_id_raises(self):
-        client, http = _make_client()
-        http.post.return_value = _response(json_body={"data": {"createOrder": None}})
-        with pytest.raises(PhotonError, match="createOrder"):
-            client.create_order("pat", "rx", {})

@@ -17,7 +17,6 @@ from typing import Any, cast
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.utils.http import Http
-from logger import log
 
 # OAuth tokens are valid for 24h; refresh a little early.
 _TOKEN_TTL_SECONDS = 23 * 60 * 60
@@ -171,92 +170,3 @@ class PhotonClient:
         if medications:
             return str(medications[0]["id"])
         return None
-
-    # -- prescriptions & orders --------------------------------------------
-
-    def create_prescription(self, prescription_input: dict[str, Any]) -> str:
-        """Create a Photon prescription and return its id.
-
-        NOTE: Photon expresses refills as ``fillsAllowed`` (total fills =
-        Canvas refills + 1). Verify this field name against your sandbox account
-        during UAT — it is the most integration-specific detail here.
-        """
-        # createPrescription has no prescriberId argument — the prescriber is
-        # taken from the authenticated identity. ``refillsAllowed`` maps directly
-        # to the Canvas refill count.
-        mutation = """
-            mutation createPrescription(
-              $externalId: ID
-              $patientId: ID!
-              $treatmentId: ID!
-              $dispenseAsWritten: Boolean
-              $dispenseQuantity: Float
-              $dispenseUnit: String
-              $refillsAllowed: Int
-              $daysSupply: Int
-              $instructions: String
-              $notes: String
-              $effectiveDate: AWSDate
-            ) {
-              createPrescription(
-                externalId: $externalId
-                patientId: $patientId
-                treatmentId: $treatmentId
-                dispenseAsWritten: $dispenseAsWritten
-                dispenseQuantity: $dispenseQuantity
-                dispenseUnit: $dispenseUnit
-                refillsAllowed: $refillsAllowed
-                daysSupply: $daysSupply
-                instructions: $instructions
-                notes: $notes
-                effectiveDate: $effectiveDate
-              ) { id }
-            }
-        """
-        created = self._graphql(mutation, prescription_input).get("createPrescription")
-        if not created or not created.get("id"):
-            raise PhotonError("Photon createPrescription did not return an id")
-        return str(created["id"])
-
-    def create_order(
-        self,
-        patient_id: str,
-        prescription_id: str,
-        address: dict[str, Any],
-        pharmacy_id: str | None = None,
-        external_id: str | None = None,
-    ) -> str:
-        """Create a Photon order for a prescription and return its id.
-
-        When ``pharmacy_id`` is omitted Photon routes to the patient's preferred
-        pharmacy.
-        """
-        mutation = """
-            mutation createOrder(
-              $externalId: ID
-              $patientId: ID!
-              $fills: [FillInput!]!
-              $address: AddressInput!
-              $pharmacyId: ID
-            ) {
-              createOrder(
-                externalId: $externalId
-                patientId: $patientId
-                fills: $fills
-                address: $address
-                pharmacyId: $pharmacyId
-              ) { id }
-            }
-        """
-        variables: dict[str, Any] = {
-            "externalId": external_id,
-            "patientId": patient_id,
-            "fills": [{"prescriptionId": prescription_id}],
-            "address": address,
-            "pharmacyId": pharmacy_id,
-        }
-        created = self._graphql(mutation, variables).get("createOrder")
-        if not created or not created.get("id"):
-            raise PhotonError("Photon createOrder did not return an id")
-        log.info("Photon order %s created for prescription %s", created["id"], prescription_id)
-        return str(created["id"])
