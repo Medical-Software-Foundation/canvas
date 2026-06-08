@@ -140,3 +140,90 @@ class TestAssets:
     def test_styles_css_content_type(self, patched):
         result = _api().styles_css()
         assert result[0].headers["Content-Type"] == "text/css"
+
+    def test_sdk_js_content_type(self, patched):
+        result = _api().sdk_js()
+        assert result[0].headers["Content-Type"] == "text/javascript"
+
+    def test_send_js_content_type(self, patched):
+        result = _api().send_js()
+        assert result[0].headers["Content-Type"] == "text/javascript"
+
+
+def _command(cmd_id="c1", data=None):
+    return SimpleNamespace(
+        id=cmd_id,
+        patient=SimpleNamespace(id="ptn-1"),
+        data=data
+        if data is not None
+        else {
+            "prescribe": {"text": "Lisinopril 10 mg tablet"},
+            "sig": "Take 1 daily",
+            "quantity_to_dispense": 30,
+            "type_to_dispense": {"description": "tablet"},
+            "refills": 1,
+        },
+    )
+
+
+@pytest.fixture
+def send_patched():
+    with patch(f"{MODULE}.render_to_string", return_value="<html></html>") as rts, \
+        patch(f"{MODULE}.Command") as command_cls, \
+        patch(f"{MODULE}._photon_send_selected", return_value=True) as selected, \
+        patch(f"{MODULE}.build_client") as build_client, \
+        patch(f"{MODULE}.resolve_photon_patient", return_value=("pat_999", "EXT_EFFECT")), \
+        patch(f"{MODULE}.build_address", return_value={"city": "Town"}):
+        build_client.return_value.find_treatment_id.return_value = "med_1"
+        command_cls.objects.filter.return_value = [_command()]
+        yield SimpleNamespace(rts=rts, command_cls=command_cls, selected=selected,
+                              build_client=build_client)
+
+
+class TestSend:
+    def test_builds_prescription_payloads(self, send_patched):
+        api = _api(query_params={"note_id": "4567"})
+        result = api.send()
+
+        assert result[0] == "EXT_EFFECT"  # external-id effect first
+        config = json.loads(send_patched.rts.call_args.args[1]["config_json"])
+        assert config["patientId"] == "pat_999"
+        assert config["address"] == {"city": "Town"}
+        assert config["graphqlUrl"] == "https://api.neutron.health/graphql"
+        assert len(config["prescriptions"]) == 1
+        rx = config["prescriptions"][0]
+        assert rx["treatmentId"] == "med_1"
+        assert rx["patientId"] == "pat_999"
+        assert rx["dispenseUnit"] == "tablet"
+        assert rx["refillsAllowed"] == 1
+        assert rx["error"] is None
+
+    def test_unmatched_medication_flags_error(self, send_patched):
+        send_patched.build_client.return_value.find_treatment_id.return_value = None
+        api = _api(query_params={"note_id": "4567"})
+        api.send()
+        rx = json.loads(send_patched.rts.call_args.args[1]["config_json"])["prescriptions"][0]
+        assert rx["treatmentId"] is None
+        assert "No Photon match" in rx["error"]
+
+    def test_skips_unflagged_commands(self, send_patched):
+        send_patched.selected.return_value = False
+        api = _api(query_params={"note_id": "4567"})
+        api.send()
+        config = json.loads(send_patched.rts.call_args.args[1]["config_json"])
+        assert config["prescriptions"] == []
+
+    def test_no_note_is_error(self, send_patched):
+        api = _api(query_params={})
+        api.send()
+        assert send_patched.rts.call_args.args[0] == "static/error.html"
+
+    def test_oauth_callback_renders_shell(self, send_patched):
+        api = _api(query_params={"code": "a", "state": "b"})
+        api.send()
+        assert send_patched.rts.call_args.args[0] == "static/send.html"
+
+    def test_missing_config_is_error(self, send_patched):
+        api = _api(query_params={"note_id": "4567"}, secrets={"PHOTON_ENV": "sandbox"})
+        api.send()
+        assert send_patched.rts.call_args.args[0] == "static/error.html"

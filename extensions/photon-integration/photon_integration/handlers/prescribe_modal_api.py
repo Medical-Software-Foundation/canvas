@@ -16,16 +16,30 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from http import HTTPStatus
+from typing import Any
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.patient import Patient
 from logger import log
 
-from photon_integration.client.photon_client import PhotonError
-from photon_integration.patient_sync import build_client, resolve_photon_patient
+from photon_integration.client.photon_client import PhotonClient, PhotonError
+from photon_integration.command_payload import extract_rx
+from photon_integration.constants import PHOTON_COMMAND_SCHEMA_KEYS
+from photon_integration.handlers.command_field import _photon_send_selected
+from photon_integration.patient_sync import (
+    build_address,
+    build_client,
+    resolve_photon_patient,
+)
+
+_GRAPHQL_URLS = {
+    "sandbox": "https://api.neutron.health/graphql",
+    "production": "https://api.photon.health/graphql",
+}
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -124,14 +138,128 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         ]
 
+    @api.get("/sdk.js")
+    def sdk_js(self) -> list[Response | Effect]:
+        # Vendored @photonhealth/sdk (static/sdk_bundle.js, {% verbatim %}-wrapped),
+        # served same-origin for the API-direct send flow.
+        return [
+            Response(
+                render_to_string("static/sdk_bundle.js").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/javascript",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+        ]
+
+    @api.get("/send.js")
+    def send_js(self) -> list[Response | Effect]:
+        return [
+            Response(
+                render_to_string("static/send.js").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/javascript",
+            )
+        ]
+
+    @api.get("/send")
+    def send(self) -> list[Response | Effect]:
+        """API-direct send modal: build the flagged Rx from the note's commands.
+
+        The provider authenticates in the browser (user token) and submits each
+        prescription/order directly via the Photon SDK.
+        """
+        params = self.request.query_params
+        note_id = (params.get("note_id") or "").strip()
+        is_oauth_callback = bool(params.get("code") and params.get("state"))
+
+        spa_client_id = (self.secrets.get("PHOTON_SPA_CLIENT_ID") or "").strip()
+        org_id = (self.secrets.get("PHOTON_ORG_ID") or "").strip()
+        if not spa_client_id or not org_id:
+            return [self._error_page("Photon is not configured (SPA client id / org).")]
+
+        env = (self.secrets.get("PHOTON_ENV") or "sandbox").strip().lower()
+        effects: list[Response | Effect] = []
+        photon_patient_id = ""
+        address: dict[str, Any] | None = None
+        prescriptions: list[dict[str, Any]] = []
+        if note_id:
+            client = build_client(self.secrets)
+            patient, prescriptions = self._gather_flagged_prescriptions(note_id, client)
+            if patient is not None:
+                try:
+                    photon_patient_id, ext_id_effect = resolve_photon_patient(patient, client)
+                except PhotonError as exc:
+                    log.error("Photon patient sync failed (send) for note %s: %s", note_id, exc)
+                    return [self._error_page(f"Could not sync the patient to Photon: {exc}")]
+                if ext_id_effect is not None:
+                    effects.append(ext_id_effect)
+                address = build_address(patient)
+                for rx in prescriptions:
+                    rx["patientId"] = photon_patient_id
+        elif not is_oauth_callback:
+            return [self._error_page("No note was provided to the Photon send modal.")]
+
+        config = {
+            "clientId": spa_client_id,
+            "org": org_id,
+            "patientId": photon_patient_id,
+            "devMode": env != "production",
+            "redirectUri": self._redirect_uri("send"),
+            "graphqlUrl": _GRAPHQL_URLS["sandbox" if env != "production" else "production"],
+            "address": address,
+            "prescriptions": prescriptions,
+        }
+        html = render_to_string(
+            "static/send.html",
+            {"cache_bust": _CACHE_BUST, "config_json": json.dumps(config)},
+        )
+        effects.append(
+            HTMLResponse(html, status_code=HTTPStatus.OK, headers={"Cache-Control": "no-store"})
+        )
+        return effects
+
     # -- helpers -----------------------------------------------------------
 
-    def _redirect_uri(self) -> str:
+    @staticmethod
+    def _gather_flagged_prescriptions(
+        note_id: str, client: PhotonClient
+    ) -> tuple[Patient | None, list[dict[str, Any]]]:
+        """Return (patient, prescription payloads) for 'Send via Photon' commands."""
+        commands = Command.objects.filter(
+            note__dbid=note_id,
+            schema_key__in=PHOTON_COMMAND_SCHEMA_KEYS,
+            committer__isnull=False,
+            entered_in_error__isnull=True,
+        )
+        patient: Patient | None = None
+        prescriptions: list[dict[str, Any]] = []
+        for command in commands:
+            if not _photon_send_selected(command.id):
+                continue
+            if patient is None:
+                patient = command.patient
+            rx = extract_rx(command.data or {})
+            term = rx.pop("term")
+            treatment_id = client.find_treatment_id(term) if term else None
+            prescriptions.append(
+                {
+                    "commandId": str(command.id),
+                    "externalId": str(command.id),
+                    "treatmentId": treatment_id,
+                    "medication": term or "prescription",
+                    "error": None if treatment_id else f"No Photon match for '{term}'",
+                    **rx,
+                }
+            )
+        return patient, prescriptions
+
+    def _redirect_uri(self, path: str = "") -> str:
         override = (self.secrets.get("PHOTON_REDIRECT_URI") or "").strip()
-        if override:
-            return override
-        host = self.request.headers.get("host", "")
-        return f"https://{host}/plugin-io/api/photon_integration/photon/"
+        base = override or (
+            f"https://{self.request.headers.get('host', '')}"
+            "/plugin-io/api/photon_integration/photon/"
+        )
+        return f"{base.rstrip('/')}/{path}" if path else base
 
     @staticmethod
     def _error_page(message: str) -> HTMLResponse:

@@ -36,3 +36,28 @@ body {
 photon-client {
   display: block;
 }
+
+.results {
+  list-style: none;
+  margin: 12px auto;
+  max-width: 480px;
+  padding: 0;
+}
+
+.result {
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  background: #f1f5f9;
+}
+
+.result.ok {
+  background: #e9f7ef;
+  color: #1e7e44;
+}
+
+.result.fail {
+  background: #fdecea;
+  color: #9b1c14;
+}
