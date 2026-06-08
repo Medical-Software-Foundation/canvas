@@ -122,7 +122,9 @@
       clientId: cfg.clientId,
       organization: cfg.org,
       redirectURI: cfg.redirectUri,
-      dev: !!cfg.devMode,
+      // sandbox (Neutron) vs production is selected by `developmentMode`; with it
+      // false the SDK uses auth.photon.health and the sandbox client 404s.
+      developmentMode: !!cfg.devMode,
     });
 
     if (hadCallback) {
