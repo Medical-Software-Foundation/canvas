@@ -70,6 +70,33 @@ class TestGuardClauses:
 
         assert effects == []
 
+    def test_null_note_type_version_returns_no_effects(self, handler):
+        handler.event.context = {"state": "NEW", "note_id": "note-123"}
+
+        mock_note_obj = MagicMock()
+        mock_note_obj.note_type_version = None
+
+        p_note, p_cmd, p_render, p_uuid, p_log = _patches()
+        with p_note as mock_note, p_cmd as mock_cmd, p_render as mock_render, \
+                p_uuid as mock_uuid, p_log as mock_log:
+            mock_note.objects.select_related.return_value.get.return_value = mock_note_obj
+
+            effects = handler.compute()
+
+            # Note fetched, but the null note_type_version gate stopped it before is_telehealth.
+            assert mock_note.mock_calls == [
+                call.objects.select_related("note_type_version"),
+                call.objects.select_related().get(id="note-123"),
+            ]
+            assert mock_note_obj.mock_calls == []
+            assert mock_cmd.mock_calls == []
+            assert mock_render.mock_calls == []
+            assert mock_uuid.mock_calls == []
+            assert mock_log.mock_calls == []
+            assert handler.event.mock_calls == []
+
+        assert effects == []
+
     def test_non_telehealth_note_returns_no_effects(self, handler):
         handler.event.context = {"state": "NEW", "note_id": "note-123"}
 

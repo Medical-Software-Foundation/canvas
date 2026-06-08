@@ -40,7 +40,10 @@ class TelehealthDisclaimer(BaseProtocol):
         except Note.DoesNotExist:
             return []
 
-        if not note.note_type_version.is_telehealth:
+        # note_type_version is a nullable FK (admin-created notes, partially-migrated
+        # FHIR imports can leave it null), so guard before reading is_telehealth.
+        note_type_version = note.note_type_version
+        if note_type_version is None or not note_type_version.is_telehealth:
             return []
 
         log.info(f"Telehealth note detected ({note_id}), inserting disclaimer")
