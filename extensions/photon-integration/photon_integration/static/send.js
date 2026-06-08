@@ -115,7 +115,9 @@
   }
 
   async function run() {
-    var mod = await import("./sdk.js");
+    // Loaded from jsDelivr (allowed by Canvas's script-src) so the SDK's own
+    // /npm/ dependency imports resolve against jsDelivr rather than our origin.
+    var mod = await import("https://cdn.jsdelivr.net/npm/@photonhealth/sdk@1.3.4/+esm");
     var client = new mod.PhotonClient({
       clientId: cfg.clientId,
       organization: cfg.org,

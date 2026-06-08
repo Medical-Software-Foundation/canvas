@@ -141,10 +141,6 @@ class TestAssets:
         result = _api().styles_css()
         assert result[0].headers["Content-Type"] == "text/css"
 
-    def test_sdk_js_content_type(self, patched):
-        result = _api().sdk_js()
-        assert result[0].headers["Content-Type"] == "text/javascript"
-
     def test_send_js_content_type(self, patched):
         result = _api().send_js()
         assert result[0].headers["Content-Type"] == "text/javascript"

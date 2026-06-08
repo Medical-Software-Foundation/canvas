@@ -50,7 +50,15 @@ modal. To update it, re-fetch
 `{% verbatim %}`…`{% endverbatim %}`, and bump the version here. At runtime the
 modal talks to `*.neutron.health`/`*.photon.health` (declared in
 `url_permissions`); the SPA app's whitelisted callback URLs in Photon must
-include the modal's served origin.
+include the modal's served paths (`…/photon/` and `…/photon/send`).
+
+The API-direct send flow loads **`@photonhealth/sdk`** (provider auth only) from
+`https://cdn.jsdelivr.net` — it can't be vendored as a single file because its
+deps (Apollo/auth0) stay external `/npm/...` imports, and loading it same-origin
+404s those. jsDelivr is allowed by Canvas's `script-src` (and listed in
+`url_permissions`), so the SDK and its deps resolve against jsDelivr. The actual
+prescription/order calls use the validated `createPrescription`/`createOrder`
+GraphQL with the provider's user token.
 
 Set these on the plugin's configuration page after install:
 `<emr_base_url>/admin/plugin_io/plugin/<plugin_id>/change/`

@@ -138,19 +138,6 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
             )
         ]
 
-    @api.get("/sdk.js")
-    def sdk_js(self) -> list[Response | Effect]:
-        # Vendored @photonhealth/sdk (static/sdk_bundle.js, {% verbatim %}-wrapped),
-        # served same-origin for the API-direct send flow.
-        return [
-            Response(
-                render_to_string("static/sdk_bundle.js").encode(),
-                status_code=HTTPStatus.OK,
-                content_type="text/javascript",
-                headers={"Cache-Control": "public, max-age=86400"},
-            )
-        ]
-
     @api.get("/send.js")
     def send_js(self) -> list[Response | Effect]:
         return [
