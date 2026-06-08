@@ -28,6 +28,7 @@ Block shape (understood by `templates/command_block.html`):
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from typing import Any, Callable
 
@@ -42,6 +43,10 @@ from patient_visit_summary.services.note_data_extractor import format_icd10_code
 INTERNAL_FIELD_PREFIXES: tuple[str, ...] = ("_", "skip-")
 INTERNAL_FIELD_NAMES: set[str] = {
     "id", "pk", "coding", "entered_in_error", "state", "schema_key", "external_id",
+    # `coded_title` is the heading text computed by `_annotate_coded_titles`
+    # in the extractor — used in the per-row heading, never as a duplicate
+    # field below it.
+    "coded_title",
 }
 
 # Keys whose pretty label differs from `KEY.upper().replace("_", " ")`.
@@ -135,8 +140,19 @@ def review_title(entry: dict) -> str:
     return first_text_from_keys(entry, REVIEW_TITLE_KEYS)
 
 
+_ICD10_VALUE_PATTERN = re.compile(r"^[A-TV-Z]\d{2}[A-Z0-9]*$", re.IGNORECASE)
+
+
 def condition_text(val: Any) -> str:
-    """'<text> (<ICD10>)' for a condition/diagnose dict, text-only if no code."""
+    """'<text> (<ICD10>)' for a condition/diagnose dict, text-only if no code.
+
+    Unstructured free-text entries (e.g. ``value="random unstructured"``)
+    don't have an ICD-10 code; we used to feed any string ``value`` to
+    ``format_icd10_code`` which jammed a dot after the third character —
+    producing nonsense like "RAN.DOM UNSTRUCTURED". The regex guard now
+    confirms the value looks like a real ICD-10 code (e.g. ``E11649``,
+    ``K635``, ``N390``) before formatting; everything else is dropped.
+    """
     if not isinstance(val, dict):
         return value_to_text(val)
     text = (val.get("text") or val.get("display") or "").strip()
@@ -145,10 +161,12 @@ def condition_text(val: Any) -> str:
     icd10 = ""
     if annotations:
         first = annotations[0]
-        if isinstance(first, str) and first.strip():
+        if isinstance(first, str) and first.strip() and _ICD10_VALUE_PATTERN.match(first.strip().replace(".", "")):
             icd10 = first.strip()
     if not icd10 and isinstance(icd10_raw, str) and icd10_raw.strip():
-        icd10 = icd10_raw.strip()
+        candidate = icd10_raw.strip()
+        if _ICD10_VALUE_PATTERN.match(candidate.replace(".", "")):
+            icd10 = candidate
     if icd10:
         icd10_formatted = icd10 if "." in icd10 else format_icd10_code(icd10)
     else:
@@ -179,6 +197,32 @@ def truncate(text: Any, limit: int = 60) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 1].rstrip() + "…"
+
+
+def _metadata_blocks(entry: Any) -> list[dict]:
+    """Render the CommandMetadata rows the extractor attached on `_metadata`.
+
+    Each row becomes a `field` block — the metadata `key` is shown as the
+    field label (replacing underscores with spaces for legibility), and the
+    `value` is the field value. Returns ``[]`` when there's no metadata so
+    the calling code stays simple.
+    """
+    if not isinstance(entry, dict):
+        return []
+    metas = entry.get("_metadata")
+    if not isinstance(metas, list) or not metas:
+        return []
+    out: list[dict] = []
+    for m in metas:
+        if not isinstance(m, dict):
+            continue
+        key = (m.get("key") or "").strip()
+        value = (m.get("value") or "").strip()
+        if not key and not value:
+            continue
+        label = format_field_label(key.replace(":", "_")) if key else ""
+        out.append({"kind": "field", "label": label or "METADATA", "value": value})
+    return out
 
 
 def extra_blocks(entry: Any, shown_keys: set[str]) -> list[dict]:
@@ -372,7 +416,7 @@ def _blocks_vitals(display_name: str, data: Any) -> list[dict]:
 def _blocks_assess(display_name: str, data: Any) -> list[dict]:
     out: list[dict] = []
     for a in data:
-        out.append(_heading("Assessment", condition_text(a.get("condition", {}))))
+        out.append(_heading("Assess Condition", condition_text(a.get("condition", {}))))
         if bg := a.get("background"):
             out.append(_field("BACKGROUND", bg))
         if status := a.get("status"):
@@ -416,9 +460,18 @@ def _blocks_resolve_condition(display_name: str, data: Any) -> list[dict]:
     for entry in data:
         cmd_data = entry.get("data", entry) if isinstance(entry, dict) else {}
         out.append(_heading("Resolve Condition", condition_text(cmd_data.get("condition", {}))))
+        # Match the Canvas UI's field order: SHOW ON CONDITION LIST first,
+        # then RATIONALE. Canvas labels the toggle "SHOW ON CONDITION LIST"
+        # (the JSON key is `show_in_condition_list`).
+        if "show_in_condition_list" in cmd_data:
+            flag = cmd_data.get("show_in_condition_list")
+            shown = ("Yes" if flag else "No") if isinstance(flag, bool) else str(flag)
+            out.append(_field("SHOW ON CONDITION LIST", shown))
         if rationale := cmd_data.get("rationale"):
             out.append(_field("RATIONALE", rationale))
-        out.extend(extra_blocks(cmd_data, shown_keys={"condition", "rationale"}))
+        out.extend(extra_blocks(
+            cmd_data, shown_keys={"condition", "rationale", "show_in_condition_list"},
+        ))
     return out
 
 
@@ -452,19 +505,31 @@ def _med_action_row(entry: dict) -> dict | None:
 
 
 def _blocks_med_action(display_name: str, data: Any) -> list[dict]:
-    """Shared renderer for prescribe / refill / stop / adjust / change medication."""
+    """Shared renderer for prescribe / refill / stop / adjust / change medication.
+
+    For ``adjustPrescription`` the entry carries both ``prescribe`` (the
+    current med) and an optional ``change_medication_to`` (the new med).
+    Canvas's UI keeps the *current* med in the heading and surfaces the
+    change via a ``CHANGE MEDICATION TO`` field — we mirror that here.
+    """
     out: list[dict] = []
     for entry in data:
         if not isinstance(entry, dict):
             continue
-        out.append(_heading_or_plain(display_name, medication_title(entry)))
-
+        # For adjustPrescription, the heading is the CURRENT med (`prescribe`),
+        # not the new one. For other med actions, fall back to the default
+        # title resolution which picks the most specific field.
         cm_to = entry.get("change_medication_to")
-        if cm_to:
-            cm_text = value_to_text(cm_to)
-            prev_text = value_to_text(entry.get("prescribe"))
-            if cm_text and prev_text and cm_text != prev_text:
-                out.append(_field("CHANGE FROM", prev_text))
+        cm_text = value_to_text(cm_to) if cm_to else ""
+        prev_text = value_to_text(entry.get("prescribe"))
+        if cm_text and prev_text and cm_text != prev_text:
+            heading_value = prev_text
+        else:
+            heading_value = medication_title(entry)
+        out.append(_heading_or_plain(display_name, heading_value))
+
+        if cm_text and prev_text and cm_text != prev_text:
+            out.append(_field("CHANGE MEDICATION TO", cm_text))
 
         if ind := _indications_field(entry.get("indications") or []):
             out.append(ind)
@@ -496,7 +561,7 @@ def _blocks_refer(display_name: str, data: Any) -> list[dict]:
     for r in data:
         if not isinstance(r, dict):
             continue
-        out.append(_heading("Referral", value_to_text(r.get("refer_to"))))
+        out.append(_heading("Refer", value_to_text(r.get("refer_to"))))
         if ind := _indications_field(r.get("indications") or []):
             out.append(ind)
         if cq := r.get("clinical_question"):
@@ -546,6 +611,11 @@ def _blocks_lab_order(display_name: str, data: Any) -> list[dict]:
         if "fasting_status" in lo and lo["fasting_status"] is not None:
             out.append(_field("FASTING REQUIRED", "Yes" if lo["fasting_status"] else "No"))
 
+        # Match Canvas's field order: COMMENT prints before any per-test
+        # AOE "NEW QUESTION" rows.
+        if comment := lo.get("comment"):
+            out.append(_field("COMMENT", comment))
+
         aoe_keys_shown: set[str] = set()
         for key, val in lo.items():
             if not key.startswith("aoes|"):
@@ -558,9 +628,6 @@ def _blocks_lab_order(display_name: str, data: Any) -> list[dict]:
             test_text = test_by_code.get(test_code, "")
             label = f"({test_text.upper()}) NEW QUESTION" if test_text else "NEW QUESTION"
             out.append(_field(label, text_val))
-
-        if comment := lo.get("comment"):
-            out.append(_field("COMMENT", comment))
         out.extend(extra_blocks(lo, shown_keys={
             "lab_partner", "tests", "ordering_provider", "diagnosis",
             "fasting_status", "comment",
@@ -582,10 +649,12 @@ def _blocks_imaging_order(display_name: str, data: Any) -> list[dict]:
             out.append(_field("ADDITIONAL ORDER DETAILS", add_details))
         if ic_text := value_to_text(io.get("imaging_center")):
             out.append(_field("IMAGING CENTER", ic_text))
-        if op_text := value_to_text(io.get("ordering_provider")):
-            out.append(_field("ORDERING PROVIDER", op_text))
+        # Match the Canvas UI's field order: INTERNAL COMMENT comes before
+        # ORDERING PROVIDER.
         if comment := io.get("comment"):
             out.append(_field("INTERNAL COMMENT", comment))
+        if op_text := value_to_text(io.get("ordering_provider")):
+            out.append(_field("ORDERING PROVIDER", op_text))
         if linked := _joined_list_field("LINKED ITEMS", io.get("linked_items") or []):
             out.append(linked)
         out.extend(extra_blocks(io, shown_keys={
@@ -612,6 +681,14 @@ def _blocks_review(display_name: str, data: Any) -> list[dict]:
         out.extend(extra_blocks(entry, shown_keys=REVIEW_HEADING_KEYS | {
             "message_to_patient", "communication_method", "linked_items", "internal_comment",
         }))
+        # Reference data — the underlying LabReport / ImagingReport /
+        # ReferralReport / UncategorizedClinicalDocument content, stamped on
+        # the entry as pre-rendered HTML by the extractor's
+        # ``_attach_*_review_reference_html`` helpers. Surfaces inline after
+        # the review's own fields instead of in a separate trailing
+        # "Reference Data" section like home-app does.
+        if ref_html := entry.get("_reference_html"):
+            out.append({"kind": "body_html", "value": ref_html})
     return out
 
 
@@ -757,8 +834,11 @@ def _blocks_immunize(display_name: str, data: Any) -> list[dict]:
         out.append(_heading_or_plain(
             "Immunize", coded_title(immunize_title(entry), entry.get("coding")),
         ))
-        if lot := entry.get("lot_number"):
-            out.append(_field("LOT NUMBER", str(lot)))
+        # `lot_number` is a coded-value dict (``{text, extra, value, ...}``);
+        # ``value_to_text`` unwraps to the human-facing string. ``str(lot)``
+        # was previously dumping the whole dict.
+        if lot_text := (value_to_text(entry.get("lot_number")) or "").strip():
+            out.append(_field("LOT NUMBER", lot_text))
         if mfr := entry.get("manufacturer"):
             out.append(_field("MANUFACTURER", value_to_text(mfr) or str(mfr)))
         if exp_val := (entry.get("expiration_date") or entry.get("exp_date_original")):
@@ -792,8 +872,19 @@ def _billing_title(item: dict) -> str:
     return description or code
 
 
+def _format_coded_pair(entry: dict) -> str:
+    """Render a `{code, display}` entry as ``CODE — display`` (or just CODE)."""
+    code = str(entry.get("code") or "").strip()
+    display = str(entry.get("display") or "").strip()
+    if code and display:
+        return f"{code} — {display}"
+    return display or code
+
+
 def _blocks_billing(display_name: str, data: Any) -> list[dict]:
-    """Patient-facing billed services: CPT (+ modifiers) and description, with units.
+    """Patient-facing billed services: CPT (+ modifiers) and description, with
+    units, the modifier display names, and any ICD-10 diagnoses linked through
+    the line item's Assessments.
 
     No charge amounts — this is a patient handout, not a superbill.
     """
@@ -808,6 +899,20 @@ def _blocks_billing(display_name: str, data: Any) -> list[dict]:
         units = item.get("units")
         if units not in (None, ""):
             out.append(_field("UNITS", str(units)))
+        modifiers = item.get("modifiers") or []
+        modifier_parts = [
+            _format_coded_pair(m) for m in modifiers if isinstance(m, dict)
+        ]
+        modifier_parts = [p for p in modifier_parts if p]
+        if modifier_parts:
+            out.append(_field("MODIFIERS", "; ".join(modifier_parts)))
+        diagnoses = item.get("diagnoses") or []
+        diagnosis_parts = [
+            _format_coded_pair(d) for d in diagnoses if isinstance(d, dict)
+        ]
+        diagnosis_parts = [p for p in diagnosis_parts if p]
+        if diagnosis_parts:
+            out.append(_field("RELATED DIAGNOSES", "; ".join(diagnosis_parts)))
     return out
 
 
@@ -842,8 +947,10 @@ def _blocks_instruct(display_name: str, data: Any) -> list[dict]:
         if not isinstance(entry, dict):
             continue
         out.append(_heading("Instruct", value_to_text(entry.get("instruct"))))
+        # Canvas UI labels this field "COMMENT" even though the underlying
+        # JSON key is `narrative` — match the visible label.
         if narrative := entry.get("narrative"):
-            out.append(_field("NARRATIVE", narrative))
+            out.append(_field("COMMENT", narrative))
         out.extend(extra_blocks(entry, shown_keys={"instruct", "narrative"}))
     return out
 
@@ -877,7 +984,10 @@ def _blocks_goal(display_name: str, data: Any) -> list[dict]:
 def _blocks_allergy(display_name: str, data: Any) -> list[dict]:
     out: list[dict] = []
     for a in data:
-        name = strip_trailing_parens(value_to_text(a.get("allergy")))
+        # Keep the trailing category qualifier (e.g., "Sage (allergy group)")
+        # that Canvas writes into `data.allergy.text` — useful context for
+        # whether the entry is an allergy group, ingredient, or medication.
+        name = value_to_text(a.get("allergy"))
         out.append(_heading("Allergy", name))
         out.extend(extra_blocks(a, shown_keys={"allergy"}))
     return out
@@ -895,6 +1005,573 @@ def _blocks_generic(display_name: str, data: Any) -> list[dict]:
             text = value_to_text(item)
             if text:
                 out.append(_body(text))
+    return out
+
+
+# ---- New block builders -----------------------------------------------------
+
+# Friendly-name lookup for chart sections — keeps the printout from showing
+# raw enum keys like "family_histories".
+_CHART_SECTION_LABELS: dict[str, str] = {
+    "conditions": "Conditions",
+    "medications": "Medications",
+    "allergies": "Allergies",
+    "immunizations": "Immunizations",
+    "family_histories": "Family History",
+    "surgical_history": "Surgical History",
+    "medical_history": "Past Medical History",
+    "goals": "Goals",
+    "vitals": "Vitals",
+}
+
+
+def _humanize_section(value: Any) -> str:
+    raw = (value_to_text(value) or "").strip()
+    if not raw:
+        return ""
+    if raw in _CHART_SECTION_LABELS:
+        return _CHART_SECTION_LABELS[raw]
+    return raw.replace("_", " ").title()
+
+
+def _blocks_chart_section_review(display_name: str, data: Any) -> list[dict]:
+    """One row per reviewed chart section.
+
+    TODO(canvas-plugins#1744): heading-only today. The Canvas UI prints the
+    list of reviewed items beneath the heading (e.g., every condition under
+    "Reviewed: Conditions"). That list is pre-rendered server-side and stored
+    on ``ChartSectionReview.content``, but the anchor model isn't exposed
+    through the SDK / DB views, so a plugin can't read it. Once
+    https://github.com/canvas-medical/canvas-plugins/issues/1744 ships, swap
+    the heading-only render for the contents of that field.
+    """
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        section = _humanize_section(entry.get("section"))
+        out.append(_heading("Reviewed", section or "Section"))
+        out.extend(extra_blocks(entry, shown_keys={"section"}))
+    return out
+
+
+def _blocks_close_goal(display_name: str, data: Any) -> list[dict]:
+    """Close-goal entries: target goal + achievement status + progress note."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        goal = entry.get("goal_id") if isinstance(entry.get("goal_id"), dict) else {}
+        title = value_to_text(goal) or value_to_text(entry.get("goal_statement"))
+        out.append(_heading("Close Goal", title))
+        status = (entry.get("achievement_status") or "").strip()
+        if status:
+            out.append(_field("STATUS", status.replace("_", " ").title()))
+        if progress := (entry.get("progress") or "").strip():
+            out.append(_field("PROGRESS / BARRIERS", progress))
+        out.extend(extra_blocks(
+            entry, shown_keys={"goal_id", "achievement_status", "progress"},
+        ))
+    return out
+
+
+def _blocks_poc_lab_test(display_name: str, data: Any) -> list[dict]:
+    """POC lab test: template name in heading, indications, per-field test
+    values in template order with units, then comments — mirrors the Canvas
+    command UI exactly. Empty rows are kept so the print matches the
+    on-screen panel, where blank measurements still render with their label."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        template = entry.get("template") if isinstance(entry.get("template"), dict) else {}
+        title = value_to_text(template.get("text")) or value_to_text(template)
+        out.append(_heading("POC Lab Test", title))
+
+        indications = entry.get("indications")
+        if isinstance(indications, list) and indications:
+            formatted = [_format_diagnosis_with_icd(i) for i in indications]
+            formatted = [f for f in formatted if f]
+            if formatted:
+                out.append(_field("INDICATIONS", ", ".join(formatted)))
+
+        # Render per-measurement rows in the order defined on the template
+        # (template.extra.fields). The dict keys are `test_values|<label_lower>`.
+        shown_test_value_keys: set[str] = set()
+        fields = (template.get("extra") or {}).get("fields") if isinstance(template.get("extra"), dict) else None
+        if isinstance(fields, list):
+            for f in fields:
+                if not isinstance(f, dict):
+                    continue
+                label = (f.get("label") or "").strip()
+                if not label:
+                    continue
+                key = f"test_values|{label.lower()}"
+                shown_test_value_keys.add(key)
+                units = (f.get("units") or "").strip()
+                display_label = f"{label.upper()} ({units.upper()})" if units else label.upper()
+                out.append(_field(display_label, value_to_text(entry.get(key))))
+        # Catch any test_values keys not declared on the template (shouldn't
+        # happen in practice but keeps us safe if the template definition drifts
+        # from the saved data).
+        for key, val in entry.items():
+            if not isinstance(key, str) or not key.startswith("test_values|") or key in shown_test_value_keys:
+                continue
+            shown_test_value_keys.add(key)
+            label = key.split("|", 1)[1].strip()
+            if label:
+                out.append(_field(label.upper(), value_to_text(val)))
+
+        out.append(_field("COMMENTS", value_to_text(entry.get("remarks"))))
+
+        out.extend(extra_blocks(
+            entry,
+            shown_keys={"template", "indications", "remarks"} | shown_test_value_keys,
+        ))
+    return out
+
+
+def _blocks_cancel_prescription(display_name: str, data: Any) -> list[dict]:
+    """Cancel-prescription: prescription being cancelled + rationale."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        rx = entry.get("selected_prescription") if isinstance(entry.get("selected_prescription"), dict) else {}
+        out.append(_heading("Cancel Prescription", value_to_text(rx)))
+        if entry.get("stop_medication"):
+            out.append(_field("ALSO STOP MEDICATION", "Yes"))
+        if rationale := (entry.get("rationale") or "").strip():
+            out.append(_field("RATIONALE", rationale))
+        out.extend(extra_blocks(
+            entry, shown_keys={"selected_prescription", "rationale", "stop_medication"},
+        ))
+    return out
+
+
+# Reason codes used by deny_refill / deny_change. Lifted verbatim from
+# home-app/builtin_content/core_types/commands/sdk/deny_refill.py (REASON_CODE_CHOICES)
+# and home-app/builtin_content/core_types/commands/deny_change.py — both lists are
+# identical. Used to translate the stored 2-letter code into the human-readable
+# label that the Canvas command UI shows.
+_REFILL_REASON_CODE_DISPLAYS: dict[str, str] = {
+    "AA": "Patient unknown to the prescriber",
+    "AB": "Patient never under provider care",
+    "AC": "Patient no longer under provider care",
+    "AD": "Refill too soon",
+    "AE": "Medication never prescribed for patient",
+    "AF": "Patient should contact provider",
+    "AG": "Refill not appropriate",
+    "AH": "Patient has picked up prescription",
+    "AJ": "Patient has picked up partial fill of prescription",
+    "AK": "Patient has not picked up prescription, drug returned to stock",
+    "AM": "Patient needs appointment",
+    "AN": "Prescriber not associated with this practice or location",
+    "AO": "No attempt will be made to obtain Prior Authorization",
+    "AP": "Request already responded to by other means (e.g. phone or fax)",
+}
+
+_REFILL_RESPONSE_TYPE_DISPLAYS: dict[str, str] = {
+    "A": "Approved",
+    "D": "Denied",
+}
+
+
+def _blocks_refill_decision(display_name: str, data: Any) -> list[dict]:
+    """Approve/deny refill: medication header + prescription-derived read-only
+    rows (TOTAL QUANTITY / DIRECTIONS / PHARMACY) + decision body. Mirrors the
+    Canvas command UI in ``home-app/builtin_content/core_types/commands/sdk/
+    approve_refill.py:63-90`` and ``deny_refill.py:86-114``. The Prescription
+    anchor details are stamped onto each entry as ``_total_quantity`` /
+    ``_directions`` / ``_pharmacy`` by ``NoteDataExtractor.
+    _fetch_refill_decision_commands_data``."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        rx = entry.get("prescribe") if isinstance(entry.get("prescribe"), dict) else {}
+        out.append(_heading(display_name, value_to_text(rx)))
+
+        # Prescription-derived rows — these come from the anchor object and
+        # are surfaced above the command's own fields in the Canvas UI.
+        if total_quantity := (entry.get("_total_quantity") or "").strip():
+            out.append(_field("TOTAL QUANTITY", total_quantity))
+        if directions := (entry.get("_directions") or "").strip():
+            out.append(_field("DIRECTIONS", directions))
+        if pharmacy := (entry.get("_pharmacy") or "").strip():
+            out.append(_field("PHARMACY", pharmacy))
+
+        response_type = (entry.get("response_type") or "").strip()
+        if response_type == "D":
+            # Only deny commands show "RESPONSE: Denied" in the Canvas UI —
+            # approve's action is implicit in the heading.
+            out.append(_field(
+                "RESPONSE",
+                _REFILL_RESPONSE_TYPE_DISPLAYS.get(response_type, response_type),
+            ))
+
+        refills = entry.get("refills")
+        if refills not in (None, ""):
+            # Label matches the ApproveRefill schema's field label.
+            out.append(_field("TOTAL NUMBER OF DISPENSINGS APPROVED", str(refills)))
+
+        if reason_code := (entry.get("reason_code") or "").strip():
+            out.append(_field(
+                "REASON",
+                _REFILL_REASON_CODE_DISPLAYS.get(reason_code, reason_code),
+            ))
+
+        if note := (entry.get("note_to_pharmacist") or "").strip():
+            out.append(_field("NOTE TO PHARMACIST", note))
+
+        out.extend(extra_blocks(
+            entry, shown_keys={
+                "prescribe", "refills", "reason_code", "note_to_pharmacist",
+                "response_type", "refill_request",
+                # noisy plumbing fields not useful in the patient print
+                "pharmacy", "prescriber", "days_supply", "indications",
+                "substitutions", "type_to_dispense", "supervising_provider",
+                "quantity_to_dispense", "sig",
+            },
+        ))
+    return out
+
+
+def _blocks_change_decision(display_name: str, data: Any) -> list[dict]:
+    """Approve/deny change: same shape family as refill decisions."""
+    return _blocks_refill_decision(display_name, data)
+
+
+def _blocks_educational_material(display_name: str, data: Any) -> list[dict]:
+    """Patient-education handout: title + language."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        title = value_to_text(entry.get("title"))
+        out.append(_heading("Educational Material", title))
+        if lang := value_to_text(entry.get("language")):
+            out.append(_field("LANGUAGE", lang))
+        out.extend(extra_blocks(entry, shown_keys={"title", "language"}))
+    return out
+
+
+def _blocks_visual_exam_finding(display_name: str, data: Any) -> list[dict]:
+    """Visual exam finding: title + narrative. The image attachment is
+    intentionally omitted from the print — the stored value is just an
+    opaque filename and we don't embed the image itself.
+
+    TODO(canvas-plugins#1747): once `VisualExamFinding` is exposed in the
+    Data Module with a short-lived S3 presigned URL for the image, render
+    the image alongside the narrative so the print matches the Canvas UI.
+    See https://github.com/canvas-medical/canvas-plugins/issues/1747.
+    """
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        out.append(_heading("Visual Exam Finding", entry.get("title") or ""))
+        if narrative := (entry.get("narrative") or "").strip():
+            out.append(_field("NARRATIVE", narrative))
+        out.extend(extra_blocks(
+            entry, shown_keys={"title", "narrative", "image"},
+        ))
+    return out
+
+
+_BASE64_PATTERN = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+
+
+def _decode_custom_content(raw: Any) -> str:
+    """Decode the HTML payload stored in customCommand `content` /
+    `print_content`. Canvas stores it as base64 when the command is committed
+    via the SDK's standard `originate` path (see home-app's
+    `standalone/custom_command.py`), but some plugin authors write the raw
+    HTML directly. Distinguish heuristically: if the payload looks like pure
+    base64 (no HTML/whitespace/structural characters) try a decode; if the
+    decoded text starts with something HTML-ish, keep it. Otherwise treat
+    the input as already-HTML and return it as-is so plain payloads aren't
+    mangled.
+    """
+    if not isinstance(raw, str) or not raw:
+        return ""
+    candidate = raw.strip()
+    # Raw HTML if it has `<` (markup) or whitespace (line breaks etc.) —
+    # base64 has none of those.
+    if "<" in candidate[:200] or any(c.isspace() for c in candidate[:200]):
+        return raw
+    if not _BASE64_PATTERN.match(candidate):
+        return raw
+    try:
+        import base64 as _b64
+        decoded = _b64.b64decode(candidate, validate=True).decode("utf-8", errors="replace")
+    except Exception:
+        return raw
+    # If the decode result doesn't read like text/HTML, fall back to raw.
+    if "<" not in decoded[:200] and not any(c.isalpha() for c in decoded[:50]):
+        return raw
+    return decoded
+
+
+def _coding_gap_title_from_diagnose(entry: dict) -> str:
+    """First diagnose formatted as ``<text> (<ICD-10>)``.
+
+    Used for ``createCodingGap`` (where the diagnose IS the gap being
+    proposed). Falls back to the detected_issue label if no diagnose is
+    populated.
+    """
+    if not isinstance(entry, dict):
+        return ""
+    diagnoses = entry.get("diagnose") if isinstance(entry.get("diagnose"), list) else []
+    for d in diagnoses:
+        formatted = _format_diagnosis_with_icd(d)
+        if formatted:
+            return formatted
+    return value_to_text(entry.get("detected_issue"))
+
+
+def _coding_gap_title_from_detected_issue(entry: dict) -> str:
+    """Detected-issue label.
+
+    Used for ``assessCodingGap`` / ``validateCodingGap`` /
+    ``deferCodingGap``, which all act ON an existing detected coding gap.
+    The original diagnosis is what identifies the row; the chosen
+    diagnosis (if any) lives in the body as a DIAGNOSE field.
+    """
+    if not isinstance(entry, dict):
+        return ""
+    return value_to_text(entry.get("detected_issue"))
+
+
+def _format_status(value: Any) -> str:
+    """Normalize a status string the way the Canvas UI does: replace
+    underscores with spaces and capitalize only the first letter
+    (``create_and_validate`` → ``Create and validate``, not
+    ``Create And Validate``)."""
+    text = (value_to_text(value) or "").strip()
+    if not text:
+        return ""
+    text = text.replace("_", " ")
+    return text[:1].upper() + text[1:]
+
+
+def _format_diagnosis_with_icd(d: Any) -> str:
+    """Render a diagnose entry as `<text> (<ICD-10>)` — same convention as
+    condition_text — but tolerates the coding-gap data shape where the code
+    lives in `annotations[0]`."""
+    if not isinstance(d, dict):
+        return value_to_text(d)
+    text = (d.get("text") or d.get("display") or "").strip()
+    code = ""
+    annotations = d.get("annotations") or []
+    if annotations and isinstance(annotations[0], str):
+        code = annotations[0].strip()
+    if not code and isinstance(d.get("value"), str):
+        # `value` is usually an unformatted ICD-10 like "N390"; format with dot.
+        code = format_icd10_code(d["value"].strip())
+    if text and code:
+        return f"{text} ({code})"
+    return text or code
+
+
+def _blocks_create_coding_gap(display_name: str, data: Any) -> list[dict]:
+    """Create-coding-gap: matches Canvas's STATUS → DATE → NOTE order.
+
+    Title is the proposed diagnose (the gap being created). Additional
+    diagnoses (when the user picks more than one) trail in the body.
+    """
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        diagnoses = entry.get("diagnose") if isinstance(entry.get("diagnose"), list) else []
+        formatted = [_format_diagnosis_with_icd(d) for d in diagnoses]
+        formatted = [f for f in formatted if f]
+        out.append(_heading("Create Coding Gap", formatted[0] if formatted else ""))
+        if status := _format_status(entry.get("status")):
+            out.append(_field("STATUS", status))
+        if date := (entry.get("date") or "").strip():
+            out.append(_field("DATE", date))
+        if note := (entry.get("details") or "").strip():
+            out.append(_field("NOTE", note))
+        if len(formatted) > 1:
+            out.append(_field("ADDITIONAL DIAGNOSES", "; ".join(formatted[1:])))
+        out.extend(extra_blocks(
+            entry, shown_keys={"diagnose", "date", "status", "details"},
+        ))
+    return out
+
+
+def _blocks_assess_coding_gap(display_name: str, data: Any) -> list[dict]:
+    """Assess-coding-gap: matches Canvas's
+    STATUS → NOTE → DIAGNOSE → BACKGROUND → APPROX DATE OF ONSET →
+    TODAY'S ASSESSMENT order.
+
+    Title is the *detected* issue (the gap being assessed). The diagnose
+    field is the *adopted* condition shown in-body as DIAGNOSE.
+    """
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        out.append(_heading("Assess Coding Gap", value_to_text(entry.get("detected_issue"))))
+        if status := _format_status(entry.get("status")):
+            out.append(_field("STATUS", status))
+        if note := (entry.get("details") or "").strip():
+            out.append(_field("NOTE", note))
+        diagnoses = entry.get("diagnose") if isinstance(entry.get("diagnose"), list) else []
+        formatted = [_format_diagnosis_with_icd(d) for d in diagnoses]
+        formatted = [f for f in formatted if f]
+        if formatted:
+            out.append(_field("DIAGNOSE", "; ".join(formatted)))
+        if bg := (entry.get("background") or "").strip():
+            out.append(_field("BACKGROUND", bg))
+        if onset := entry.get("approximate_date_of_onset"):
+            if isinstance(onset, dict):
+                date = (onset.get("date") or "").strip()
+                input_text = (onset.get("input") or "").strip()
+                if input_text and date and input_text != date:
+                    onset_text = f"{input_text} (around {date})"
+                else:
+                    onset_text = input_text or date
+                if onset_text:
+                    out.append(_field("APPROXIMATE DATE OF ONSET", onset_text))
+        if ta := (entry.get("todays_assessment") or "").strip():
+            out.append(_field("TODAY'S ASSESSMENT", ta))
+        out.extend(extra_blocks(
+            entry,
+            shown_keys={
+                "diagnose", "detected_issue", "status", "approximate_date_of_onset",
+                "background", "todays_assessment", "details",
+            },
+        ))
+    return out
+
+
+def _blocks_validate_coding_gap(display_name: str, data: Any) -> list[dict]:
+    """Validate-coding-gap: STATUS → DATE → NOTE order (matches Canvas)."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        out.append(_heading("Validate Coding Gap", value_to_text(entry.get("detected_issue"))))
+        if status := _format_status(entry.get("status")):
+            out.append(_field("STATUS", status))
+        if date := (entry.get("date") or "").strip():
+            out.append(_field("DATE", date))
+        if note := (entry.get("details") or "").strip():
+            out.append(_field("NOTE", note))
+        out.extend(extra_blocks(
+            entry, shown_keys={"detected_issue", "status", "date", "details"},
+        ))
+    return out
+
+
+def _blocks_defer_coding_gap(display_name: str, data: Any) -> list[dict]:
+    """Defer-coding-gap: detected issue snoozed for later review."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        out.append(_heading("Defer Coding Gap", value_to_text(entry.get("detected_issue"))))
+        out.extend(extra_blocks(entry, shown_keys={"detected_issue"}))
+    return out
+
+
+def _blocks_clipboard(display_name: str, data: Any) -> list[dict]:
+    """Clipboard: a free-form multi-line text scratch the provider added
+    to the note (no fixed schema beyond `text`)."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        text = (entry.get("text") or "").strip()
+        out.append(_heading_or_plain("Clipboard", ""))
+        if text:
+            out.append(_body(text))
+        out.extend(extra_blocks(entry, shown_keys={"text"}))
+    return out
+
+
+def _blocks_snooze_protocol(display_name: str, data: Any) -> list[dict]:
+    """Snooze-protocol: matches Canvas's
+    SNOOZE UNTIL → REASON → COMMENT order and label."""
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        out.append(_heading("Snooze Protocol", value_to_text(entry.get("protocol"))))
+        if until := (entry.get("snooze_until_date") or "").strip():
+            out.append(_field("SNOOZE UNTIL", until))
+        if reason := value_to_text(entry.get("snooze_reason")):
+            out.append(_field("REASON", reason))
+        if comment := (entry.get("snooze_comment") or "").strip():
+            out.append(_field("COMMENT", comment))
+        out.extend(extra_blocks(
+            entry,
+            shown_keys={"protocol", "snooze_reason", "snooze_until_date", "snooze_comment"},
+        ))
+    return out
+
+
+def _humanize_schema_key(key: str) -> str:
+    """Turn ``observationSummary`` / ``health_risk_assessment_summary`` into
+    ``Observation Summary`` / ``Health Risk Assessment Summary``."""
+    if not key:
+        return ""
+    # camelCase → "camel Case"
+    spaced = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", key)
+    spaced = spaced.replace("_", " ").replace("-", " ").strip()
+    return " ".join(w.capitalize() for w in spaced.split())
+
+
+def _blocks_custom_command(display_name: str, data: Any) -> list[dict]:
+    """Plugin-authored custom command. Renders the HTML payload stored on
+    ``data.content`` / ``data.print_content`` (sometimes base64-encoded,
+    sometimes raw HTML — see :func:`_decode_custom_content`).
+
+    Heading uses ``label`` → ``title`` → humanized ``_schema_key`` →
+    ``display_name``. The schema_key fallback matters because plugin-
+    customized commands write the plugin's chosen key (e.g.,
+    ``observationSummary``) rather than the literal ``customCommand``, and
+    we want a sensible label even when the plugin didn't bother to set a
+    ``label`` field on every command instance.
+
+    TODO(canvas-plugins#1745): the plugin author's registered ``label`` /
+    ``section`` (on ``PluginCommand``) isn't reachable from the SDK today.
+    Once https://github.com/canvas-medical/canvas-plugins/issues/1745 ships,
+    look up the matching ``PluginCommand`` row by ``_schema_key`` and prefer
+    its ``label`` over the humanized fallback so the heading reads with the
+    exact branding the plugin author chose.
+    """
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        schema_key = entry.get("_schema_key") or ""
+        title = (
+            value_to_text(entry.get("label"))
+            or value_to_text(entry.get("title"))
+            or _humanize_schema_key(schema_key)
+        )
+        if title and title != display_name:
+            out.append(_heading(display_name, title))
+        else:
+            out.append(_heading_or_plain(display_name, ""))
+        html = _decode_custom_content(entry.get("print_content")) or _decode_custom_content(entry.get("content"))
+        if html:
+            # `body_html` is rendered with |safe in command_block.html so the
+            # decoded HTML payload from the plugin author renders as markup,
+            # not escaped text. customCommand content is platform-trusted
+            # (only plugin authors can produce it).
+            out.append({"kind": "body_html", "value": html})
+        out.extend(extra_blocks(
+            entry,
+            shown_keys={
+                "label", "title", "content", "print_content", "schema_key",
+                "_schema_key",
+            },
+        ))
     return out
 
 
@@ -951,10 +1628,15 @@ BLOCK_BUILDERS: dict[str, BlockBuilder] = {
     "plan": _blocks_plan,
     "med_action": _blocks_med_action,
     "prescribe": _blocks_med_action,  # alias for legacy callers
+    "cancel_prescription": _blocks_cancel_prescription,
+    "refill_decision": _blocks_refill_decision,
+    "change_decision": _blocks_change_decision,
     "refer": _blocks_refer,
     "lab_order": _blocks_lab_order,
     "imaging_order": _blocks_imaging_order,
+    "poc_lab_test": _blocks_poc_lab_test,
     "review": _blocks_review,
+    "chart_section_review": _blocks_chart_section_review,
     "medication_statement": _blocks_medication_statement,
     "remove_allergy": _blocks_remove_allergy,
     "family_history": _blocks_family_history,
@@ -966,7 +1648,17 @@ BLOCK_BUILDERS: dict[str, BlockBuilder] = {
     "task": _blocks_task,
     "instruct": _blocks_instruct,
     "goal": _blocks_goal,
+    "close_goal": _blocks_close_goal,
     "allergy": _blocks_allergy,
+    "educational_material": _blocks_educational_material,
+    "visual_exam_finding": _blocks_visual_exam_finding,
+    "custom_command": _blocks_custom_command,
+    "create_coding_gap": _blocks_create_coding_gap,
+    "assess_coding_gap": _blocks_assess_coding_gap,
+    "validate_coding_gap": _blocks_validate_coding_gap,
+    "defer_coding_gap": _blocks_defer_coding_gap,
+    "snooze_protocol": _blocks_snooze_protocol,
+    "clipboard": _blocks_clipboard,
     "billing": _blocks_billing,
 }
 
@@ -983,15 +1675,21 @@ TITLE_EXTRACTORS: dict[str, TitleExtractor] = {
     "change_diagnosis": lambda e: condition_text(e.get("data", e).get("new_condition")),
     "resolve_condition": lambda e: condition_text(e.get("data", e).get("condition")),
     "review": review_title,
+    "chart_section_review": lambda e: _humanize_section(e.get("section")),
     "med_action": medication_title,
     "prescribe": medication_title,
+    "cancel_prescription": lambda e: value_to_text(e.get("selected_prescription")),
+    "refill_decision": lambda e: value_to_text(e.get("prescribe")),
+    "change_decision": lambda e: value_to_text(e.get("prescribe")) or value_to_text(e.get("medication")),
     "refer": lambda e: value_to_text(e.get("refer_to")),
     "lab_order": lambda e: value_to_text(e.get("lab_partner")),
     "imaging_order": lambda e: value_to_text(e.get("image")),
+    "poc_lab_test": lambda e: value_to_text((e.get("template") or {}).get("text") if isinstance(e.get("template"), dict) else e.get("template")),
     "task": lambda e: e.get("title", ""),
     "instruct": lambda e: value_to_text(e.get("instruct")),
     "goal": _title_goal,
-    "allergy": lambda e: strip_trailing_parens(value_to_text(e.get("allergy"))),
+    "close_goal": lambda e: value_to_text(e.get("goal_id")) or value_to_text(e.get("goal_statement")),
+    "allergy": lambda e: value_to_text(e.get("allergy")),
     "immunize": immunize_title,
     "perform": lambda e: value_to_text(e.get("perform")),
     "medical_history": lambda e: condition_text(e.get("past_medical_history")),
@@ -1000,6 +1698,26 @@ TITLE_EXTRACTORS: dict[str, TitleExtractor] = {
     "family_history": _title_family_history,
     "remove_allergy": lambda e: value_to_text(e.get("allergy")),
     "medication_statement": lambda e: value_to_text(e.get("medication") or e.get("fdbMedId")),
+    "educational_material": lambda e: value_to_text(e.get("title")),
+    "visual_exam_finding": lambda e: (e.get("title") or "") if isinstance(e, dict) else "",
+    # Title-extractor for custom commands: prefer the plugin-supplied label
+    # / title, fall back to a humanized version of the schema_key (e.g.,
+    # ``observationSummary`` → "Observation Summary"). Plugin command names
+    # registered via ``customize_custom_command`` aren't exposed on the SDK,
+    # so the schema_key is the best stable identifier we have.
+    # TODO(canvas-plugins#1745): swap the humanized fallback for a lookup
+    # against PluginCommand.label once that model is exposed via the SDK.
+    "custom_command": lambda e: (
+        value_to_text(e.get("label"))
+        or value_to_text(e.get("title"))
+        or _humanize_schema_key(e.get("_schema_key") or "")
+    ),
+    "create_coding_gap": _coding_gap_title_from_diagnose,
+    "assess_coding_gap": _coding_gap_title_from_detected_issue,
+    "validate_coding_gap": _coding_gap_title_from_detected_issue,
+    "defer_coding_gap": _coding_gap_title_from_detected_issue,
+    "snooze_protocol": lambda e: value_to_text(e.get("protocol")),
+    "clipboard": lambda e: (e.get("text") or "").strip().splitlines()[0] if isinstance(e, dict) and (e.get("text") or "").strip() else "",
     "billing": _billing_title,
 }
 
@@ -1020,7 +1738,7 @@ DEFAULT_SECTIONS: list[dict] = [
             ("reasons_for_visit", "Reason for Visit", "rfv"),
             ("history_of_present_illness_commands_data", "History of Present Illness", "hpi"),
             ("review_of_systems_data", "Review of Systems", "ros"),
-            ("questionnaire_data", "Questionnaires", "questionnaire"),
+            ("questionnaire_data", "Questionnaire", "questionnaire"),
         ],
     },
     {
@@ -1029,17 +1747,26 @@ DEFAULT_SECTIONS: list[dict] = [
         "items": [
             ("vitals_commands_data", "Vitals", "vitals"),
             ("physical_exam_data", "Physical Exam", "exam"),
+            ("visual_exam_finding_commands_data", "Visual Exam Finding", "visual_exam_finding"),
         ],
     },
     {
         "key": "assessment",
         "title": "Assessment",
         "items": [
-            ("assessments_commands_data", "Assessments", "assess"),
-            ("diagnose_commands_data", "Diagnoses", "diagnose"),
-            ("structured_assessment_data", "Structured Assessments", "structured_assessment"),
-            ("resolve_condition_commands_data", "Resolved Conditions", "resolve_condition"),
-            ("change_diagnosis_commands_data", "Changed Diagnoses", "change_diagnosis"),
+            ("assessments_commands_data", "Assess Condition", "assess"),
+            ("diagnose_commands_data", "Diagnose", "diagnose"),
+            ("structured_assessment_data", "Structured Assessment", "structured_assessment"),
+            ("resolve_condition_commands_data", "Resolve Condition", "resolve_condition"),
+            ("change_diagnosis_commands_data", "Change Diagnosis", "change_diagnosis"),
+            # Coding-gap workflow is part of the diagnosis story (proposed
+            # dx → assessed/accepted → validated → deferred), so render
+            # alongside the rest of the Assessment items rather than as a
+            # separate billing-adjacent section.
+            ("create_coding_gap_commands_data", "Create Coding Gap", "create_coding_gap"),
+            ("assess_coding_gap_commands_data", "Assess Coding Gap", "assess_coding_gap"),
+            ("validate_coding_gap_commands_data", "Validate Coding Gap", "validate_coding_gap"),
+            ("defer_coding_gap_commands_data", "Defer Coding Gap", "defer_coding_gap"),
         ],
     },
     {
@@ -1049,7 +1776,8 @@ DEFAULT_SECTIONS: list[dict] = [
             ("lab_reviews", "Lab Review", "review"),
             ("imaging_reviews", "Imaging Review", "review"),
             ("consult_report_reviews", "Consult Report Review", "review"),
-            ("uncategorized_document_reviews", "Document Review", "review"),
+            ("uncategorized_document_reviews", "Uncategorized Document Review", "review"),
+            ("chart_section_review_commands_data", "Chart Section Review", "chart_section_review"),
         ],
     },
     {
@@ -1062,13 +1790,23 @@ DEFAULT_SECTIONS: list[dict] = [
             ("stop_medication_commands_data", "Stop Medication", "med_action"),
             ("adjust_prescription_commands_data", "Adjust Prescription", "med_action"),
             ("change_medication_commands_data", "Change Medication", "med_action"),
-            ("referral_commands_data", "Referrals", "refer"),
-            ("lab_order_commands_data", "Lab Orders", "lab_order"),
-            ("imaging_order_commands_data", "Imaging Orders", "imaging_order"),
-            ("instruct_commands_data", "Instructions", "instruct"),
-            ("task_commands_data", "Tasks", "task"),
-            ("goal_commands_data", "Goals", "goal"),
-            ("update_goal_commands_data", "Updated Goals", "goal"),
+            ("cancel_prescription_commands_data", "Cancel Prescription", "cancel_prescription"),
+            ("approve_refill_commands_data", "Approve Refill", "refill_decision"),
+            ("deny_refill_commands_data", "Deny Refill", "refill_decision"),
+            ("approve_change_commands_data", "Approve Change", "change_decision"),
+            ("deny_change_commands_data", "Deny Change", "change_decision"),
+            ("referral_commands_data", "Refer", "refer"),
+            ("lab_order_commands_data", "Lab Order", "lab_order"),
+            ("imaging_order_commands_data", "Image", "imaging_order"),
+            ("poc_lab_test_commands_data", "POC Lab Test", "poc_lab_test"),
+            ("instruct_commands_data", "Instruct", "instruct"),
+            ("educational_material_commands_data", "Educational Material", "educational_material"),
+            ("task_commands_data", "Task", "task"),
+            ("goal_commands_data", "Goal", "goal"),
+            ("update_goal_commands_data", "Update Goal", "goal"),
+            ("close_goal_commands_data", "Close Goal", "close_goal"),
+            ("snooze_protocol_commands_data", "Snooze Protocol", "snooze_protocol"),
+            ("clipboard_commands_data", "Clipboard", "clipboard"),
         ],
     },
     {
@@ -1076,20 +1814,27 @@ DEFAULT_SECTIONS: list[dict] = [
         "title": "Procedures",
         "items": [
             ("immunize_commands_data", "Immunize", "immunize"),
-            ("perform_commands_data", "Procedures Performed", "perform"),
+            ("perform_commands_data", "Perform", "perform"),
         ],
     },
     {
         "key": "history",
         "title": "History",
         "items": [
-            ("allergy_commands_data", "Allergies", "allergy"),
-            ("remove_allergy_commands_data", "Removed Allergies", "remove_allergy"),
-            ("medication_statement_commands_data", "Medication Statements", "medication_statement"),
-            ("immunization_statement_commands_data", "Immunization Statements", "immunization_statement"),
+            ("allergy_commands_data", "Allergy", "allergy"),
+            ("remove_allergy_commands_data", "Remove Allergy", "remove_allergy"),
+            ("medication_statement_commands_data", "Medication Statement", "medication_statement"),
+            ("immunization_statement_commands_data", "Immunization Statement", "immunization_statement"),
             ("patient_family_history_commands_data", "Family History", "family_history"),
             ("medical_history_commands_data", "Past Medical History", "medical_history"),
             ("surgical_history_commands_data", "Past Surgical History", "surgical_history"),
+        ],
+    },
+    {
+        "key": "custom",
+        "title": "Custom Commands",
+        "items": [
+            ("custom_commands_data", "Custom Command", "custom_command"),
         ],
     },
     {
@@ -1119,7 +1864,8 @@ def enumerate_sections(
                         "display_name": "Plan",
                         "render_type": "plan",
                         "entries": [
-                            {"title": str, "blocks": list[dict], "raw": dict},
+                            {"title": str, "blocks": list[dict], "raw": dict,
+                             "command_uuid": str | None},
                             ...
                         ],
                     },
@@ -1144,14 +1890,41 @@ def enumerate_sections(
             entries = [e for e in entries if e or e == 0]
             if not entries:
                 continue
-            per_entry = [
-                {
+            per_entry = []
+            for idx, entry in enumerate(entries):
+                blocks = build_blocks(display_name, render_type, [entry])
+                # `Command.custom_html` (new field, per docs at
+                # https://docs.canvasmedical.com/sdk/data-command/#command —
+                # "stores HTML content that is rendered alongside the command
+                # in the note") is stamped on the entry as ``_custom_html`` by
+                # the extractor. Insert it as a ``body_html`` block right
+                # after the heading (and before INDICATIONS / fields / etc.)
+                # so plugin authors' custom rendering appears in the print at
+                # the same position the Canvas command UI shows it.
+                if isinstance(entry, dict):
+                    if custom_html := entry.get("_custom_html"):
+                        insert_at = 1 if blocks and blocks[0].get("kind", "").startswith("heading") else 0
+                        blocks.insert(insert_at, {"kind": "body_html", "value": custom_html})
+                # CommandMetadata rows the extractor attached as `_metadata`
+                # are kept *separate* from the main blocks so the print UI can
+                # toggle them on/off via the "Include command metadata"
+                # checkbox. Plugin authors typically store internal workflow
+                # state (`workflow_stage`, `external_id`, JSON payloads, etc.)
+                # in metadata — see https://docs.canvasmedical.com/sdk/data-command/#commandmetadata —
+                # so surfacing it unconditionally would be noisy.
+                metadata_blocks = _metadata_blocks(entry)
+                per_entry.append({
                     "title": title_for_entry(render_type, display_name, entry, idx),
-                    "blocks": build_blocks(display_name, render_type, [entry]),
+                    "blocks": blocks,
+                    "metadata_blocks": metadata_blocks,
                     "raw": entry,
-                }
-                for idx, entry in enumerate(entries)
-            ]
+                    # The command's note-body UUID (when known), so print UIs can
+                    # order entries by `Note.body`. None for synthesized/derived
+                    # entries with no backing command.
+                    "command_uuid": (
+                        entry.get("_command_uuid") if isinstance(entry, dict) else None
+                    ),
+                })
             groups.append({
                 "context_key": context_key,
                 "display_name": display_name,

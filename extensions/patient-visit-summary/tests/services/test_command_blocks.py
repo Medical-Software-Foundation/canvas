@@ -429,7 +429,7 @@ class TestBlocksAssess:
             "extra": "Y",
         }]
         result = cb._blocks_assess("A", data)
-        assert result[0] == {"kind": "heading", "prefix": "Assessment", "value": "Diabetes (E11.65)"}
+        assert result[0] == {"kind": "heading", "prefix": "Assess Condition", "value": "Diabetes (E11.65)"}
         assert {"kind": "field", "label": "BACKGROUND", "value": "bg"} in result
         assert {"kind": "field", "label": "STATUS", "value": "active"} in result
         assert {"kind": "field", "label": "TODAY'S ASSESSMENT", "value": "doing well"} in result
@@ -437,7 +437,7 @@ class TestBlocksAssess:
 
     def test_minimal(self):
         result = cb._blocks_assess("A", [{"condition": {"text": "X"}}])
-        assert result == [{"kind": "heading", "prefix": "Assessment", "value": "X"}]
+        assert result == [{"kind": "heading", "prefix": "Assess Condition", "value": "X"}]
 
 
 # --- _blocks_diagnose ---
@@ -551,7 +551,7 @@ class TestMedAction:
             "extra": "Z",
         }]
         result = cb._blocks_med_action("Med", data)
-        assert {"kind": "field", "label": "CHANGE FROM", "value": "DrugA"} in result
+        assert {"kind": "field", "label": "CHANGE MEDICATION TO", "value": "DrugB"} in result
         assert {"kind": "field", "label": "INDICATIONS", "value": "Pain"} in result
         assert {"kind": "field", "label": "SIG", "value": "1 daily"} in result
         assert {"kind": "field", "label": "SUBSTITUTIONS ALLOWED", "value": "Allowed"} in result
@@ -570,7 +570,7 @@ class TestMedAction:
             "change_medication_to": {"text": "DrugA"},
         }]
         result = cb._blocks_med_action("Med", data)
-        assert not any(b.get("label") == "CHANGE FROM" for b in result)
+        assert not any(b.get("label") == "CHANGE MEDICATION TO" for b in result)
 
 
 # --- _blocks_refer ---
@@ -591,7 +591,7 @@ class TestBlocksRefer:
             "extra": "E",
         }]
         result = cb._blocks_refer("Refer", data)
-        assert result[0] == {"kind": "heading", "prefix": "Referral", "value": "Cardiology"}
+        assert result[0] == {"kind": "heading", "prefix": "Refer", "value": "Cardiology"}
         assert {"kind": "field", "label": "INDICATIONS", "value": "Chest pain"} in result
         assert {"kind": "field", "label": "CLINICAL QUESTION", "value": "why?"} in result
         assert {"kind": "field", "label": "PRIORITY", "value": "urgent"} in result
@@ -1015,7 +1015,7 @@ class TestBlocksInstruct:
     def test_full(self):
         result = cb._blocks_instruct("I", [{"instruct": {"text": "Rest"}, "narrative": "n"}])
         assert result[0] == {"kind": "heading", "prefix": "Instruct", "value": "Rest"}
-        assert {"kind": "field", "label": "NARRATIVE", "value": "n"} in result
+        assert {"kind": "field", "label": "COMMENT", "value": "n"} in result
 
     def test_non_dict(self):
         assert cb._blocks_instruct("I", [1]) == []
@@ -1059,9 +1059,12 @@ class TestBlocksGoal:
 
 
 class TestBlocksAllergy:
-    def test_strips_parens(self):
+    def test_keeps_category_qualifier(self):
+        # The trailing "(allergy group)" / "(ingredient)" / "(medication)"
+        # qualifier is part of the allergy text and stays in the heading so
+        # readers can tell what kind of entry it is.
         result = cb._blocks_allergy("A", [{"allergy": "Sage (allergy group)", "reaction": "rash"}])
-        assert result[0] == {"kind": "heading", "prefix": "Allergy", "value": "Sage"}
+        assert result[0] == {"kind": "heading", "prefix": "Allergy", "value": "Sage (allergy group)"}
         assert {"kind": "field", "label": "REACTION", "value": "rash"} in result
 
 
@@ -1296,3 +1299,378 @@ class TestBlocksBilling:
 
     def test_title_description_only(self):
         assert cb._billing_title({"description": "Flu"}) == "Flu"
+
+
+# --- _blocks_refill_decision (approveRefill / denyRefill / approveChange / denyChange) ---
+
+
+class TestBlocksRefillDecision:
+    def _entry(self, **overrides) -> dict:
+        return {
+            "prescribe": {"text": "Dulera 100 mcg-5 mcg/actuation HFA aerosol inhaler"},
+            **overrides,
+        }
+
+    def test_approve_renders_total_number_label(self):
+        # Per ApproveRefill schema: refills.label == "Total number of dispensings approved"
+        # — make sure we render that exact phrase, not "REFILLS".
+        result = cb._blocks_refill_decision("Approve Refill", [self._entry(refills=2)])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "TOTAL NUMBER OF DISPENSINGS APPROVED" in labels
+        assert "REFILLS" not in labels
+
+    def test_approve_does_not_emit_response_row(self):
+        # Approve's action is implicit in the heading — only deny shows "RESPONSE".
+        result = cb._blocks_refill_decision("Approve Refill", [self._entry(refills=0)])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "RESPONSE" not in labels
+
+    def test_deny_emits_response_denied(self):
+        entry = self._entry(response_type="D", reason_code="AD")
+        result = cb._blocks_refill_decision("Deny Refill", [entry])
+        assert {"kind": "field", "label": "RESPONSE", "value": "Denied"} in result
+
+    def test_deny_translates_reason_code_to_display(self):
+        # Reason code "AD" → "Refill too soon" (lifted from home-app's
+        # deny_refill.REASON_CODE_CHOICES); confirm the translation runs.
+        result = cb._blocks_refill_decision("Deny Refill", [self._entry(reason_code="AD")])
+        assert {"kind": "field", "label": "REASON", "value": "Refill too soon"} in result
+
+    def test_unknown_reason_code_passes_through(self):
+        # If a code we don't know shows up, render the raw value rather than
+        # silently dropping it.
+        result = cb._blocks_refill_decision("Deny Refill", [self._entry(reason_code="ZZ")])
+        assert {"kind": "field", "label": "REASON", "value": "ZZ"} in result
+
+    def test_prescription_anchor_fields_render_in_order(self):
+        # When the extractor has stamped anchor-derived rows on the entry, they
+        # must render TOTAL QUANTITY → DIRECTIONS → PHARMACY → ... in that order
+        # (matches the Canvas command UI).
+        entry = self._entry(
+            refills=0,
+            _total_quantity="30 Tablets",
+            _directions="Take 1 tablet daily",
+            _pharmacy="CVS (555) 123-4567",
+        )
+        result = cb._blocks_refill_decision("Approve Refill", [entry])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        # Heading is at index 0; fields start at 1.
+        assert labels[0] == "TOTAL QUANTITY"
+        assert labels[1] == "DIRECTIONS"
+        assert labels[2] == "PHARMACY"
+
+    def test_note_to_pharmacist_renders_last(self):
+        entry = self._entry(refills=1, note_to_pharmacist="please review")
+        result = cb._blocks_refill_decision("Approve Refill", [entry])
+        last_field = [b for b in result if b["kind"] == "field"][-1]
+        assert last_field == {
+            "kind": "field",
+            "label": "NOTE TO PHARMACIST",
+            "value": "please review",
+        }
+
+    def test_change_decision_delegates_to_refill_decision(self):
+        # _blocks_change_decision is a one-line delegate; this protects against
+        # accidental drift between the two paths.
+        entry = self._entry(response_type="D", reason_code="AD")
+        assert cb._blocks_change_decision("Deny Change", [entry]) == cb._blocks_refill_decision(
+            "Deny Change", [entry]
+        )
+
+
+# --- _REFILL_REASON_CODE_DISPLAYS (matches home-app's REASON_CODE_CHOICES) ---
+
+
+class TestRefillReasonCodeDisplays:
+    def test_known_codes_translate(self):
+        # Spot-check across the alphabet — full list is lifted verbatim from
+        # canvas/home-app/builtin_content/core_types/commands/sdk/deny_refill.py:24-40.
+        m = cb._REFILL_REASON_CODE_DISPLAYS
+        assert m["AA"] == "Patient unknown to the prescriber"
+        assert m["AD"] == "Refill too soon"
+        assert m["AP"] == "Request already responded to by other means (e.g. phone or fax)"
+
+    def test_all_14_codes_present(self):
+        assert set(cb._REFILL_REASON_CODE_DISPLAYS.keys()) == {
+            "AA", "AB", "AC", "AD", "AE", "AF", "AG",
+            "AH", "AJ", "AK", "AM", "AN", "AO", "AP",
+        }
+
+
+# --- _blocks_cancel_prescription ---
+
+
+class TestBlocksCancelPrescription:
+    def test_heading_uses_selected_prescription_text(self):
+        entry = {"selected_prescription": {"text": "swab"}, "rationale": "test"}
+        result = cb._blocks_cancel_prescription("Cancel Prescription", [entry])
+        assert result[0] == {"kind": "heading", "prefix": "Cancel Prescription", "value": "swab"}
+
+    def test_stop_medication_renders_before_rationale(self):
+        # Canvas UI orders STOP MEDICATION first, then RATIONALE — print must match.
+        entry = {
+            "selected_prescription": {"text": "swab"},
+            "stop_medication": True,
+            "rationale": "test",
+        }
+        result = cb._blocks_cancel_prescription("Cancel Prescription", [entry])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert labels.index("ALSO STOP MEDICATION") < labels.index("RATIONALE")
+
+    def test_stop_medication_omitted_when_false(self):
+        entry = {"selected_prescription": {"text": "swab"}, "stop_medication": False}
+        result = cb._blocks_cancel_prescription("Cancel Prescription", [entry])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "ALSO STOP MEDICATION" not in labels
+
+
+# --- _blocks_poc_lab_test ---
+
+
+class TestBlocksPocLabTest:
+    def _entry_urinalysis(self) -> dict:
+        return {
+            "template": {
+                "text": "Urinalysis Dipstick Panel",
+                "extra": {"fields": [
+                    {"label": "Status", "units": ""},
+                    {"label": "Glucose", "units": "mg/dL"},
+                    {"label": "Color", "units": "-"},
+                ]},
+            },
+            "indications": [{
+                "text": "Other specified disorders of eyelid",
+                "annotations": ["H02.89"],
+                "value": "H0289",
+            }],
+            "test_values|status": "active",
+            "test_values|glucose": "10",
+            "test_values|color": "",
+            "remarks": "comment text",
+        }
+
+    def test_heading_pulls_from_template_text(self):
+        result = cb._blocks_poc_lab_test("POC Lab Test", [self._entry_urinalysis()])
+        assert result[0] == {
+            "kind": "heading", "prefix": "POC Lab Test",
+            "value": "Urinalysis Dipstick Panel",
+        }
+
+    def test_fields_rendered_in_template_order(self):
+        # The template's `extra.fields` list defines display order — not dict
+        # insertion order of test_values|* keys. Verify status → glucose → color.
+        result = cb._blocks_poc_lab_test("POC Lab Test", [self._entry_urinalysis()])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        # Strip leading INDICATIONS to focus on the test_values rows.
+        labels = [l for l in labels if l not in {"INDICATIONS", "COMMENTS"}]
+        assert labels == ["STATUS", "GLUCOSE (MG/DL)", "COLOR (-)"]
+
+    def test_units_uppercased_in_label(self):
+        result = cb._blocks_poc_lab_test("POC Lab Test", [self._entry_urinalysis()])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "GLUCOSE (MG/DL)" in labels  # lowercase mg/dL upcased
+        assert "COLOR (-)" in labels        # dash units preserved
+
+    def test_empty_values_kept_so_print_matches_canvas_ui(self):
+        # Canvas shows empty rows with their label — Glucose:10, Color: (blank).
+        # We must render the empty Color row too, otherwise the print falls
+        # out of sync with the on-screen panel.
+        result = cb._blocks_poc_lab_test("POC Lab Test", [self._entry_urinalysis()])
+        color_row = next(b for b in result if b.get("label") == "COLOR (-)")
+        assert color_row["value"] == ""
+
+    def test_indications_formatted_with_icd_in_parens(self):
+        result = cb._blocks_poc_lab_test("POC Lab Test", [self._entry_urinalysis()])
+        indication_row = next(b for b in result if b.get("label") == "INDICATIONS")
+        assert indication_row["value"] == "Other specified disorders of eyelid (H02.89)"
+
+    def test_comments_uses_remarks_not_internal_label(self):
+        # The `remarks` field renders as "COMMENTS:" to match Canvas, not
+        # "REMARKS" (which is the raw data key).
+        result = cb._blocks_poc_lab_test("POC Lab Test", [self._entry_urinalysis()])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "COMMENTS" in labels
+        assert "REMARKS" not in labels
+
+
+# --- _blocks_visual_exam_finding ---
+
+
+class TestBlocksVisualExamFinding:
+    def test_image_filename_not_rendered(self):
+        # We intentionally drop the ATTACHED IMAGE field — the stored value is
+        # an opaque hashed filename and we can't embed the image bytes from a
+        # plugin today (TODO: canvas-plugins#1747).
+        entry = {
+            "title": "Practice",
+            "narrative": "random comment",
+            "image": "20260606_021218_f56e6a008101444e911d97345271391b.png",
+        }
+        result = cb._blocks_visual_exam_finding("Visual Exam Finding", [entry])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "ATTACHED IMAGE" not in labels
+        # narrative still renders
+        assert {"kind": "field", "label": "NARRATIVE", "value": "random comment"} in result
+
+
+# --- _decode_custom_content (base64 vs raw HTML detection) ---
+
+
+class TestDecodeCustomContent:
+    def test_decodes_base64_html(self):
+        import base64
+        raw = base64.b64encode(b"<p>hi</p>").decode("ascii")
+        assert cb._decode_custom_content(raw) == "<p>hi</p>"
+
+    def test_passes_raw_html_through_unchanged(self):
+        # Raw HTML starting with `<` is detected and not double-decoded.
+        assert cb._decode_custom_content("<p>hi</p>") == "<p>hi</p>"
+
+    def test_handles_none_safely(self):
+        assert cb._decode_custom_content(None) == ""
+
+    def test_invalid_base64_falls_back_to_raw(self):
+        # Strings that look base64-ish but aren't valid → render raw rather
+        # than crash on the decode.
+        assert cb._decode_custom_content("not base64!!") == "not base64!!"
+
+
+# --- _metadata_blocks ---
+
+
+class TestMetadataBlocks:
+    def test_renders_each_metadata_row_as_field(self):
+        entry = {"_metadata": [
+            {"key": "Testing Key", "value": "testing value"},
+            {"key": "Other", "value": "v2"},
+        ]}
+        result = cb._metadata_blocks(entry)
+        assert len(result) == 2
+        assert result[0]["kind"] == "field"
+        assert result[0]["value"] == "testing value"
+
+    def test_no_metadata_returns_empty(self):
+        assert cb._metadata_blocks({}) == []
+        assert cb._metadata_blocks({"_metadata": []}) == []
+
+    def test_skips_rows_with_no_key_or_value(self):
+        entry = {"_metadata": [{"key": "", "value": ""}]}
+        assert cb._metadata_blocks(entry) == []
+
+    def test_non_dict_entry_returns_empty(self):
+        assert cb._metadata_blocks(None) == []
+        assert cb._metadata_blocks("string") == []
+
+
+# --- _format_diagnosis_with_icd ---
+
+
+class TestFormatDiagnosisWithIcd:
+    def test_prefers_annotation_for_icd(self):
+        # annotations[0] holds the pre-formatted ICD-10 (with dot); use it
+        # over `value` so we don't have to re-insert the dot.
+        d = {"text": "Mental disorder", "annotations": ["F99"], "value": "F99"}
+        assert cb._format_diagnosis_with_icd(d) == "Mental disorder (F99)"
+
+    def test_falls_back_to_formatted_value(self):
+        # When annotations is empty, format the raw `value` (no dot in storage).
+        d = {"text": "Mental disorder", "value": "F99"}
+        result = cb._format_diagnosis_with_icd(d)
+        # Either F99 or F.99 depending on format_icd10_code behavior; just
+        # confirm both text and code are present.
+        assert "Mental disorder" in result
+        assert "F99" in result or "F.99" in result
+
+    def test_text_only_when_no_code(self):
+        assert cb._format_diagnosis_with_icd({"text": "Headache"}) == "Headache"
+
+    def test_non_dict_passthrough(self):
+        # value_to_text handles strings; we don't break on a non-dict input.
+        assert cb._format_diagnosis_with_icd("Headache") == "Headache"
+
+
+# --- _humanize_schema_key ---
+
+
+class TestHumanizeSchemaKey:
+    def test_camel_case_split(self):
+        # observationSummary → "Observation Summary"
+        assert cb._humanize_schema_key("observationSummary") == "Observation Summary"
+
+    def test_already_humanized_passes_through(self):
+        # No camelCase boundaries → preserve as-is (title-cased single word).
+        assert cb._humanize_schema_key("observation") == "Observation"
+
+    def test_empty_returns_empty(self):
+        assert cb._humanize_schema_key("") == ""
+
+
+# --- _format_status (coding-gap status) ---
+
+
+class TestFormatStatus:
+    def test_sentence_case_not_title_case(self):
+        # Canvas shows "Create and validate" (sentence case), not
+        # "Create And Validate". We use simple capitalize-first, not .title().
+        assert cb._format_status("create_and_validate") == "Create and validate"
+
+    def test_single_word(self):
+        assert cb._format_status("accepted") == "Accepted"
+
+
+# --- enumerate_sections + custom_html + metadata blocks split ---
+
+
+class TestEnumerateSectionsCustomHtmlAndMetadata:
+    def test_custom_html_inserts_after_heading_before_fields(self):
+        # _custom_html (the new Command.custom_html field) gets rendered as a
+        # body_html block right after the heading — before main fields.
+        context = {"hpi_data": [{"narrative": "hi", "_custom_html": "<i>n</i>"}]}
+        sections = [{
+            "key": "s", "title": "S",
+            "items": [("hpi_data", "HPI", "hpi")],
+        }]
+        result = cb.enumerate_sections(context, sections=sections)
+        blocks = result[0]["groups"][0]["entries"][0]["blocks"]
+        assert blocks[0]["kind"].startswith("heading")
+        assert blocks[1] == {"kind": "body_html", "value": "<i>n</i>"}
+
+    def test_metadata_kept_separate_from_main_blocks(self):
+        # Metadata blocks are emitted into a separate `metadata_blocks` array,
+        # not appended to `blocks` — so the modal's "Include command metadata"
+        # toggle can show/hide them without rebuilding.
+        context = {"hpi_data": [{
+            "narrative": "hi",
+            "_metadata": [{"key": "k", "value": "v"}],
+        }]}
+        sections = [{
+            "key": "s", "title": "S",
+            "items": [("hpi_data", "HPI", "hpi")],
+        }]
+        result = cb.enumerate_sections(context, sections=sections)
+        entry = result[0]["groups"][0]["entries"][0]
+        # Main blocks: no metadata field rows.
+        main_labels = [b.get("label") for b in entry["blocks"] if b.get("kind") == "field"]
+        assert "K" not in main_labels
+        # Metadata blocks: separately captured.
+        assert any(b.get("value") == "v" for b in entry["metadata_blocks"])
+
+    def test_reference_html_emitted_as_body_html_after_main_fields(self):
+        # Review commands stamp `_reference_html` — must surface as a
+        # body_html block AFTER the main fields (INTERNAL COMMENT, etc.),
+        # matching the user-requested order.
+        context = {"lab_reviews": [{
+            "communication_method": "EMAIL",
+            "_reference_html": "<div>Reference Data:</div>",
+        }]}
+        sections = [{
+            "key": "s", "title": "S",
+            "items": [("lab_reviews", "Lab Review", "review")],
+        }]
+        result = cb.enumerate_sections(context, sections=sections)
+        blocks = result[0]["groups"][0]["entries"][0]["blocks"]
+        # Last block is the body_html reference data.
+        assert blocks[-1] == {"kind": "body_html", "value": "<div>Reference Data:</div>"}
+        # And there's at least one main field above it.
+        kinds_before = [b["kind"] for b in blocks[:-1]]
+        assert "field" in kinds_before

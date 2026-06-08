@@ -33,6 +33,15 @@
                 }
             },
             {
+                "class": "patient_visit_summary.handlers.customize_print:CustomizePrintHeaderButton",
+                "description": "Note header button that launches the Customize & Print modal (reachable on a locked note without scrolling).",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
                 "class": "patient_visit_summary.handlers.customize_print:CustomizePrintAPI",
                 "description": "API endpoint for the Customize & Print modal HTML.",
                 "data_access": {

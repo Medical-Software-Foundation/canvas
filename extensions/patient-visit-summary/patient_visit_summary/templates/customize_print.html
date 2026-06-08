@@ -19,10 +19,52 @@
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { min-height: 100%; }
+        /* The selection view sets its own height: 100vh; on very short
+           viewports the inner scroll area would collapse, so we let the body
+           scroll as a fallback instead of clipping content. */
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; color: var(--ink); background: var(--bg-soft); }
 
         /* === VIEW 1: Selection UI === */
-        #view-selection { padding: 20px 22px 28px; max-width: 760px; margin: 0 auto; }
+        /* Full-height flex column so the chrome (title, action bar, header
+           textarea, list toolbar, footer textarea) stays anchored and only
+           the command list in the middle scrolls. */
+        /* Bottom padding adds breathing room for the Canvas chat-widget
+           launcher that sits in the lower-right corner of the chart pane. */
+        #view-selection { padding: 20px 22px 80px; max-width: 760px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; }
+        /* Scrollable middle region. min-height is sized so all seven SOAP
+           sections fit on screen when collapsed — i.e. fully-collapsed lists
+           don't show a scrollbar at all. The wide always-visible scrollbar
+           styling kicks in only when overflow appears (overflow-y: auto). */
+        #view-selection .selection-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 380px; margin: 0 -22px; padding: 0 22px; scrollbar-color: #94a3b8 var(--bg-soft); scrollbar-width: auto; scroll-padding-block: 12px; }
+        #view-selection .selection-scroll::-webkit-scrollbar { width: 12px; }
+        #view-selection .selection-scroll::-webkit-scrollbar-track { background: var(--bg-soft); border-left: 1px solid var(--line); }
+        #view-selection .selection-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; border: 2px solid var(--bg-soft); }
+        #view-selection .selection-scroll::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+        /* Sticky gradient sentinels at the top and bottom — only paint when
+           content is actually clipped (no overlap on a non-scrolling list,
+           since they sit at the very edges). */
+        .scroll-fade { position: sticky; height: 18px; pointer-events: none; z-index: 2; margin: 0 -22px; }
+        .scroll-fade-top { top: 0; background: linear-gradient(to bottom, var(--bg-soft) 30%, rgba(250, 249, 246, 0) 100%); }
+        .scroll-fade-bottom { bottom: 0; background: linear-gradient(to top, var(--bg-soft) 30%, rgba(250, 249, 246, 0) 100%); }
+        #view-selection .modal-header,
+        #view-selection .action-bar,
+        #view-selection .list-toolbar,
+        #view-selection > .freetext-block { flex-shrink: 0; }
+        #view-selection > .freetext-block:last-of-type { margin-bottom: 0; margin-top: 14px; }
+        #view-selection > #command-list-pinned { flex-shrink: 0; margin-top: 12px; }
+
+        /* Collapsible section groups: click the gray section title to
+           toggle visibility of the rows beneath it. */
+        .section-group-title { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+        .section-group-title:hover { background: var(--accent-soft); color: var(--accent); }
+        .section-group-title::before { content: "▼"; display: inline-block; font-size: 12px; width: 12px; color: var(--ink-2); transition: transform 0.15s; line-height: 1; }
+        .section-group.collapsed .section-group-title::before { transform: rotate(-90deg); }
+        .section-group.collapsed > .parent-group { display: none; }
+        /* The pinned billing section isn't part of the collapsible flow. */
+        #command-list-pinned .section-group-title { cursor: default; }
+        #command-list-pinned .section-group-title:hover { background: transparent; color: var(--muted); }
+        #command-list-pinned .section-group-title::before { content: none; }
         .modal-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
         .modal-title { font-family: 'Source Serif 4', Georgia, serif; font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
         .save-status { font-size: 12px; color: var(--muted); font-feature-settings: "tnum"; min-width: 90px; text-align: right; }
@@ -32,7 +74,10 @@
         .modal-subtitle { font-size: 13px; color: var(--muted); margin-top: 3px; }
 
         .action-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 18px; }
-        .list-toolbar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 8px; }
+        .list-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .mode-toggle { display: flex; align-items: center; gap: 7px; margin-right: auto; font-size: 13px; color: var(--ink-2); cursor: pointer; user-select: none; }
+        .mode-toggle input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+        #command-list-flat { display: none; }
         .list-toolbar button { padding: 5px 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; background: #fff; color: var(--ink-2); transition: all 0.15s; }
         .list-toolbar button:hover { background: var(--accent-soft); border-color: #c7d4e3; color: var(--accent); }
         .action-bar .btn-primary { margin-left: auto; }
@@ -85,8 +130,12 @@
         .print-freetext-footer { margin: 20px 0 10px; padding: 10px 14px; border-left: 3px solid var(--line); background: var(--bg-soft); border-radius: 0 4px 4px 0; font-style: italic; color: var(--muted); }
 
         /* === VIEW 2: Print Preview === */
-        #view-preview { display: none; padding: 20px 22px 28px; max-width: 860px; margin: 0 auto; }
-        .preview-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
+        /* Full-height flex column. The toolbar (Back / Print buttons) is
+           pinned at the top and only the preview content scrolls. */
+        #view-preview { display: none; padding: 20px 22px 80px; max-width: 860px; margin: 0 auto; height: 100vh; flex-direction: column; }
+        #view-preview.is-visible { display: flex; }
+        #view-preview #preview-content { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+        .preview-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-shrink: 0; background: var(--bg-soft); padding-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
         .pdf-status { flex: 1; text-align: right; font-size: 12px; color: var(--muted); }
         .pdf-status.working { color: var(--ink-2); }
         .pdf-status.done { color: #166534; }
@@ -101,6 +150,10 @@
         .name-card p { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
         .name-card input { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; font-family: inherit; font-size: 14px; color: var(--ink); background: var(--bg-soft); box-sizing: border-box; }
         .name-card input:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px var(--accent-soft); }
+        .name-overlay-comment-label { display: block; margin-top: 14px; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+        .name-overlay-optional { font-weight: 400; color: var(--muted); }
+        .name-card textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; font-family: inherit; font-size: 13px; color: var(--ink); background: var(--bg-soft); box-sizing: border-box; resize: vertical; min-height: 60px; }
+        .name-card textarea:focus { outline: none; border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px var(--accent-soft); }
         .name-card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
         .name-card button { padding: 7px 14px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; background: #fff; color: var(--ink-2); }
         .name-card button.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -116,26 +169,33 @@
         .finals-meta { min-width: 0; flex: 1; }
         .finals-name { font-size: 14px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
         .finals-date { font-size: 12px; color: var(--muted); margin-top: 2px; font-feature-settings: "tnum"; }
+        .finals-comment { font-size: 12.5px; color: var(--ink-2); margin-top: 4px; padding: 6px 8px; background: var(--bg-soft); border-left: 2px solid var(--line); border-radius: 0 4px 4px 0; white-space: pre-wrap; word-break: break-word; }
+        .finals-action { display: flex; gap: 10px; align-items: center; white-space: nowrap; }
         .finals-action a { font-size: 13px; color: var(--accent); text-decoration: none; white-space: nowrap; }
         .finals-action a:hover { text-decoration: underline; }
+        .finals-delete { padding: 4px 9px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: #b91c1c; font-size: 12px; font-weight: 500; cursor: pointer; }
+        .finals-delete:hover:not([disabled]) { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+        .finals-delete[disabled] { opacity: 0.6; cursor: not-allowed; }
+        .finals-error { font-size: 12px; color: #b91c1c; margin-top: 4px; }
         .preview-toolbar button { padding: 7px 14px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; background: #fff; color: var(--ink-2); }
         .preview-toolbar button:hover { background: var(--accent-soft); border-color: #c7d4e3; color: var(--accent); }
-        #preview-content { border: 1px solid var(--line); border-radius: var(--radius); padding: 40px 48px; background: #fff; min-height: 300px; box-shadow: 0 1px 3px rgba(17,24,39,0.04); font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif; font-weight: 400; font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+        #preview-content { border: 1px solid var(--line); border-radius: var(--radius); padding: 40px 48px; background: #fff; min-height: 300px; box-shadow: 0 1px 3px rgba(17,24,39,0.04); font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif; font-weight: 400; font-size: 15px; line-height: 1.55; color: var(--ink); }
 
         /* Print document styles */
         .print-header { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 4px; }
         .print-header-left { flex: 1; }
-        .print-header-right { text-align: right; font-size: 12px; line-height: 1.6; color: var(--ink-2); }
-        .chart-note-label { font-family: 'Inter', sans-serif; font-size: 10.5px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+        .print-header-right { text-align: right; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+        .print-header-right .practice-logo { max-height: 48px; max-width: 180px; margin-bottom: 4px; }
+        .chart-note-label { font-family: 'Inter', sans-serif; font-size: 11.5px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
         .patient-name { font-size: 26px; font-weight: 700; margin: 6px 0 4px; color: var(--ink); letter-spacing: -0.02em; line-height: 1.1; }
         .dob-badge { display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500; margin-right: 8px; color: var(--ink-2); background: var(--bg-soft); }
-        .patient-summary { font-size: 13px; color: var(--ink-2); }
+        .patient-summary { font-size: 14px; color: var(--ink-2); }
         .practice-name { font-weight: 600; color: var(--ink); }
         .print-hr { border: none; border-top: 2px solid var(--accent); margin: 14px 0 6px; }
 
         .section-heading {
             font-family: 'Source Serif 4', Georgia, serif;
-            font-size: 17px;
+            font-size: 19px;
             font-weight: 700;
             color: var(--ink);
             margin: 28px 0 10px;
@@ -148,25 +208,47 @@
         .command-block { padding: 4px 0 8px; border-bottom: 1px dotted var(--line); }
         .command-block:last-child { border-bottom: none; }
 
-        .cmd-heading { margin: 6px 0 2px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+        .cmd-heading { margin: 6px 0 2px; font-size: 15px; font-weight: 600; color: var(--ink); }
         .cmd-heading b, .cmd-heading u { text-decoration: none; font-weight: 600; }
-        .cmd-body { margin: 2px 0 6px; font-size: 13.5px; color: var(--ink-2); }
-        .cmd-field { margin: 2px 0; font-size: 13px; color: var(--ink-2); }
-        .field-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.6px; margin-right: 4px; }
-        .cmd-offset { margin: 2px 0 2px 18px; font-size: 13px; white-space: pre-wrap; color: var(--ink-2); }
+        .cmd-body { margin: 2px 0 6px; font-size: 15px; color: var(--ink-2); }
+        .cmd-field { margin: 2px 0; font-size: 14px; color: var(--ink-2); }
+        .field-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.6px; margin-right: 4px; }
+        .cmd-offset { margin: 2px 0 2px 18px; font-size: 14px; white-space: pre-wrap; color: var(--ink-2); }
         .vitals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 2px 20px; margin-top: 2px; }
-        .vitals-item { font-size: 13px; color: var(--ink-2); }
+        .vitals-item { font-size: 14px; color: var(--ink-2); }
 
-        .print-footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--line); font-family: 'Inter', sans-serif; font-size: 10.5px; color: var(--muted); }
+        /* Reference data — the LabReport / ImagingReport / ReferralReport /
+           UncategorizedClinicalDocument content stamped on review commands by
+           the extractor. Rendered inline below the review's own fields. */
+        .ref-data-report { margin: 6px 0 4px; }
+        .ref-data-heading { font-size: 14px; font-weight: 600; color: var(--ink); margin: 4px 0 4px; }
+        .ref-data-body { font-size: 14px; color: var(--ink-2); white-space: pre-wrap; margin: 2px 0 6px; }
+        .ref-data-table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; font-size: 13px; color: var(--ink-2); font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }
+        .ref-data-table th, .ref-data-table td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+        .ref-data-table th { background: var(--bg-soft); font-weight: 600; }
+
+        /* Billing line items render as a compact table in the print preview. */
+        .billing-table { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 13.5px; color: var(--ink-2); }
+        .billing-table th, .billing-table td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+        .billing-table thead th { background: var(--bg-soft); font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.6px; }
+        .billing-table .billing-code { font-family: 'Inter', sans-serif; white-space: nowrap; font-weight: 500; }
+        .billing-table .billing-units { text-align: center; white-space: nowrap; }
+
+        /* SIGNATURES block at the foot of the print preview. */
+        .signature-line { font-size: 14px; color: var(--ink); margin: 2px 0; }
+
+        .print-footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--line); font-family: 'Inter', sans-serif; font-size: 11.5px; color: var(--muted); }
         .print-footer-line { display: flex; justify-content: space-between; }
-        .confidentiality { font-size: 10.5px; color: var(--muted); margin-top: 3px; letter-spacing: 0.3px; }
+        .confidentiality { font-size: 11.5px; color: var(--muted); margin-top: 3px; letter-spacing: 0.3px; }
+        .generated-at { font-size: 11.5px; color: var(--muted); margin-top: 2px; letter-spacing: 0.3px; }
 
         /* === PRINT STYLES === */
         @media print {
+            html, body { height: auto !important; overflow: visible !important; }
             body { background: #fff; }
             #view-selection, .preview-toolbar, .action-bar { display: none !important; }
-            #view-preview { display: block !important; padding: 0 !important; max-width: none; }
-            #preview-content { border: none !important; padding: 0 !important; box-shadow: none !important; }
+            #view-preview { display: block !important; padding: 0 !important; max-width: none; height: auto !important; }
+            #view-preview #preview-content { flex: none !important; overflow: visible !important; height: auto !important; min-height: 0 !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
             .section-heading { page-break-after: avoid; }
             .cmd-heading { page-break-after: avoid; }
             .cmd-body, .command-block { page-break-inside: avoid; }
@@ -198,7 +280,7 @@
         <div class="save-status" id="save-status" aria-live="polite"></div>
     </div>
     <div class="action-bar">
-        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-cancel" onclick="resetState()" title="Clear all selections, custom order, and header/footer text on this note">Reset</button>
         <button onclick="refreshNoteData()" title="Fetch the latest commands from the note">&#8635; Refresh</button>
         <button onclick="openFinalsOverlay()" title="View previously saved PDFs">Previous Versions</button>
         <button class="btn-primary" onclick="showPreview()">Preview</button>
@@ -209,9 +291,20 @@
         <div id="header-count" class="char-count">0 / 4096</div>
     </div>
     <div class="list-toolbar">
+        <label class="mode-toggle" title="When on, the commands are flattened into a single list in the order they appear in the note body (SOAP section headings removed). You can still drag any row to rearrange — your manual order is saved.">
+            <input type="checkbox" id="note-order-toggle">
+            Match note body order
+        </label>
+        <label class="mode-toggle" title="When on, plugin-authored CommandMetadata rows attached to commands (key/value pairs) are included below each command in the print. Most metadata is internal plugin state, so this is off by default.">
+            <input type="checkbox" id="metadata-toggle">
+            Include command metadata
+        </label>
         <button onclick="toggleAll(true)">Select All</button>
         <button onclick="toggleAll(false)">Deselect All</button>
     </div>
+    <div class="selection-scroll">
+    <div class="scroll-fade scroll-fade-top" aria-hidden="true"></div>
+    <div id="command-list-flat"></div>
     <div id="command-list">
         {% for section in sections %}
             <div class="section-group">
@@ -243,6 +336,37 @@
             </div>
         {% endfor %}
     </div>
+    <div class="scroll-fade scroll-fade-bottom" aria-hidden="true"></div>
+    </div><!-- /.selection-scroll -->
+    {% if pinned_section %}
+        <div id="command-list-pinned">
+            <div class="section-group">
+                <div class="section-group-title">{{ pinned_section.title }}</div>
+                {% for item in pinned_section.items %}
+                    <div class="parent-group" data-id="{{ item.id }}" data-section="{{ pinned_section.key }}">
+                        <div class="cmd-row parent-row">
+                            <label class="cmd-check">
+                                <input type="checkbox" class="parent-check" checked data-cmd-id="{{ item.id }}">
+                                <span class="cmd-label">{{ item.display }}</span>
+                            </label>
+                        </div>
+                        {% if item.children %}
+                            <div class="children-container" data-parent-id="{{ item.id }}">
+                                {% for child in item.children %}
+                                    <div class="cmd-row child-row" data-id="{{ child.id }}" data-parent="{{ item.id }}">
+                                        <label class="cmd-check">
+                                            <input type="checkbox" class="child-check" checked data-cmd-id="{{ child.id }}">
+                                            <span class="cmd-label">{{ child.display }}</span>
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
     <div class="freetext-block">
         <label class="freetext-label" for="footer-text">Footer text</label>
         <textarea id="footer-text" class="freetext-input" rows="2" maxlength="4096" placeholder="Optional text to show at the bottom of the printout"></textarea>
@@ -256,6 +380,8 @@
         <h3 id="name-overlay-title">Name this document</h3>
         <p>This label appears in the patient's chart alongside the saved PDF.</p>
         <input type="text" id="name-overlay-input" placeholder="e.g. Visit Summary — {{ appointment_date }}" maxlength="200" />
+        <label for="name-overlay-comment" class="name-overlay-comment-label">Comment <span class="name-overlay-optional">(optional)</span></label>
+        <textarea id="name-overlay-comment" rows="3" maxlength="2000" placeholder="Optional internal note saved on the document (not printed in the PDF)."></textarea>
         <div class="name-card-actions">
             <button type="button" onclick="closeNameOverlay()">Cancel</button>
             <button type="button" class="btn-primary" onclick="confirmNameOverlay()">Save &amp; Generate PDF</button>
@@ -280,6 +406,8 @@
 // Note data embedded as JSON for client-side preview rendering
 var NOTE_DATA = {{ note_data_json|safe }};
 var NOTE_ID = "{{ note_uuid }}";
+// 'section' = SOAP-grouped (default); 'note' = single flat list in note-body order.
+var MODE = 'section';
 var STATE_URL = "/plugin-io/api/patient_visit_summary/customize/state";
 var PRINT_PDF_URL = "/plugin-io/api/patient_visit_summary/customize/print_pdf";
 var FINALS_URL = "/plugin-io/api/patient_visit_summary/customize/finals";
@@ -309,13 +437,55 @@ function refreshNoteData() {
     window.location.reload();
 }
 
+// Discard every customization saved on this note's draft (header/footer text,
+// per-row selection, custom order, mode) and reload so the modal comes back
+// to defaults: all rows checked, body-order arrangement, section view.
+function resetState() {
+    if (!NOTE_ID) return;
+    if (!window.confirm(
+        'Reset selections, custom order, and header/footer text to defaults? ' +
+        'Finalized PDFs in Previous Versions are not affected.'
+    )) {
+        return;
+    }
+    // Cancel any pending autosave so it can't race ahead of the wipe.
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+    _loading = true;
+    _setSaveStatus('saving', 'Resetting…');
+    fetch(STATE_URL, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            note_id: NOTE_ID,
+            header_text: '',
+            footer_text: '',
+            selection: {},
+        }),
+    }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        window.location.reload();
+    }).catch(function() {
+        _loading = false;
+        _setSaveStatus('error', 'Reset failed');
+    });
+}
+
 // ---- Drag and Drop ----
 // Parents (parent-group) reorder within their section-group.
 // Children (child-row) reorder within their parent's children-container.
 var draggedEl = null;
-var draggedType = null; // 'parent' | 'child'
+var draggedType = null; // 'parent' | 'child' | 'flat'
 
 document.addEventListener('dragstart', function(e) {
+    var flat = e.target.closest('.flat-row');
+    if (flat) {
+        draggedEl = flat;
+        draggedType = 'flat';
+        flat.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        return;
+    }
     var child = e.target.closest('.child-row');
     if (child) {
         draggedEl = child;
@@ -344,7 +514,13 @@ document.addEventListener('dragend', function(e) {
 document.addEventListener('dragover', function(e) {
     if (!draggedEl) return;
     var target = null;
-    if (draggedType === 'child') {
+    if (draggedType === 'flat') {
+        var flatTarget = e.target.closest('.flat-row');
+        if (flatTarget && flatTarget !== draggedEl &&
+            flatTarget.parentNode === draggedEl.parentNode) {
+            target = flatTarget;
+        }
+    } else if (draggedType === 'child') {
         var childTarget = e.target.closest('.child-row');
         if (childTarget && childTarget !== draggedEl &&
             childTarget.parentNode === draggedEl.parentNode) {
@@ -367,7 +543,13 @@ document.addEventListener('dragover', function(e) {
 document.addEventListener('drop', function(e) {
     if (!draggedEl) return;
     var target = null;
-    if (draggedType === 'child') {
+    if (draggedType === 'flat') {
+        var flatTarget = e.target.closest('.flat-row');
+        if (flatTarget && flatTarget !== draggedEl &&
+            flatTarget.parentNode === draggedEl.parentNode) {
+            target = flatTarget;
+        }
+    } else if (draggedType === 'child') {
         var childTarget = e.target.closest('.child-row');
         if (childTarget && childTarget !== draggedEl &&
             childTarget.parentNode === draggedEl.parentNode) {
@@ -429,12 +611,11 @@ document.addEventListener('change', function(e) {
     }
 });
 
-function getSelectedCommandIds() {
-    // Walk parent-groups in DOM order. For each group:
-    //   - If it has children: include each checked child in DOM order.
-    //   - Else: include the parent id if its parent-check is checked.
+function _collectCheckedFromGroups(scope) {
+    // Walk `scope`'s parent-groups in DOM order, returning the ids of every
+    // checked leaf (child if there are children, else parent).
     var ids = [];
-    document.querySelectorAll('.parent-group').forEach(function(group) {
+    scope.querySelectorAll('.parent-group').forEach(function(group) {
         var children = group.querySelectorAll('.child-row');
         if (children.length > 0) {
             children.forEach(function(child) {
@@ -449,6 +630,136 @@ function getSelectedCommandIds() {
     return ids;
 }
 
+function getSelectedCommandIds() {
+    var pinnedScope = document.getElementById('command-list-pinned');
+    var pinnedIds = pinnedScope ? _collectCheckedFromGroups(pinnedScope) : [];
+    // Note-order mode: checked flat rows in their (freely reordered) DOM order,
+    // followed by the pinned-section ids (which print as their own block).
+    if (MODE === 'note') {
+        var flatIds = [];
+        document.querySelectorAll('#command-list-flat .flat-row').forEach(function(row) {
+            var cb = row.querySelector('.flat-check');
+            if (cb && cb.checked) flatIds.push(row.dataset.id);
+        });
+        return flatIds.concat(pinnedIds);
+    }
+    // Section mode: walk parent-groups in `#command-list` (DOM order), then the
+    // pinned block — yielding the pinned section last like the rest of section
+    // view, mirroring its visual placement.
+    var sectionScope = document.getElementById('command-list');
+    var sectionIds = sectionScope ? _collectCheckedFromGroups(sectionScope) : [];
+    return sectionIds.concat(pinnedIds);
+}
+
+// ---- Pinned sections ----
+// Sections in `NOTE_DATA.pinnedSections` render in their own server-side block
+// (`#command-list-pinned`) in both modes and are never part of the flat list.
+function _isPinned(section) {
+    var pinned = NOTE_DATA.pinnedSections || [];
+    return pinned.indexOf(section) !== -1;
+}
+
+// ---- Note-order (flat) view ----
+// Builds a single flat, freely-reorderable list of every leaf command (excluding
+// pinned sections), sorted by the order the commands appear in the note body
+// (NOTE_DATA.bodyOrder). Items with no backing note-body command sort to the end,
+// preserving their original relative order.
+function buildFlatList() {
+    var container = document.getElementById('command-list-flat');
+    if (!container) return;
+    var bodyOrder = NOTE_DATA.bodyOrder || [];
+    var pos = {};
+    bodyOrder.forEach(function(uuid, i) { if (!(uuid in pos)) pos[uuid] = i; });
+    var END = bodyOrder.length + 1;
+
+    var cmds = (NOTE_DATA.commands || [])
+        .filter(function(c) { return !_isPinned(c.section); })
+        .map(function(c, i) { return { c: c, i: i }; });
+    cmds.sort(function(a, b) {
+        var pa = (a.c.commandUuid && pos[a.c.commandUuid] != null) ? pos[a.c.commandUuid] : END;
+        var pb = (b.c.commandUuid && pos[b.c.commandUuid] != null) ? pos[b.c.commandUuid] : END;
+        if (pa !== pb) return pa - pb;
+        return a.i - b.i; // stable: keep original order within the same bucket
+    });
+
+    var rows = '';
+    cmds.forEach(function(item) {
+        var c = item.c;
+        var name = c.displayText || '';
+        var detail = c.label || c.displayText || '';
+        var label = name ? (name + ': ' + detail) : detail;
+
+        rows +=
+            '<div class="cmd-row flat-row" draggable="true" data-id="' + esc(c.id) + '">' +
+                '<span class="drag-handle">&#9776;</span>' +
+                '<label class="cmd-check">' +
+                    '<input type="checkbox" class="flat-check" checked data-cmd-id="' + esc(c.id) + '">' +
+                    '<span class="cmd-label">' + esc(label) + '</span>' +
+                '</label>' +
+            '</div>';
+    });
+    container.innerHTML = '<div class="section-group">' + rows + '</div>';
+}
+
+function _flatContainer() {
+    return document.querySelector('#command-list-flat .section-group');
+}
+
+// Apply a saved flat ordering (array of leaf ids) to the note-order list.
+// Saved orders are keyed on cmd-ids, which are positional — if the underlying
+// command set changes (new section, command added/removed) the saved ids no
+// longer line up with the current rows. Detect that and discard the saved
+// order rather than half-applying an obsolete map.
+function _applyFlatOrder(orderIds) {
+    var container = _flatContainer();
+    if (!container || !orderIds || !orderIds.length) return;
+    var rowsById = {};
+    container.querySelectorAll('.flat-row').forEach(function(r) { rowsById[r.dataset.id] = r; });
+    var currentIds = Object.keys(rowsById);
+    var savedSet = {};
+    orderIds.forEach(function(id) { savedSet[id] = true; });
+    var allCurrentInSaved = currentIds.every(function(id) { return savedSet[id]; });
+    var allSavedInCurrent = orderIds.every(function(id) { return rowsById[id]; });
+    if (!allCurrentInSaved || !allSavedInCurrent) return;
+    orderIds.forEach(function(id) {
+        var r = rowsById[id];
+        if (r && r.parentNode === container) container.appendChild(r);
+    });
+}
+
+function _applyCheckedIdsFlat(checkedSet) {
+    document.querySelectorAll('#command-list-flat .flat-check').forEach(function(cb) {
+        cb.checked = !!checkedSet[cb.dataset.cmdId];
+        cb.indeterminate = false;
+    });
+}
+
+// The set of checked leaf ids in the *currently active* view.
+function _currentCheckedSet() {
+    var set = {};
+    getSelectedCommandIds().forEach(function(id) { set[id] = true; });
+    return set;
+}
+
+// Switch between section and note-order views, carrying the checked set across so
+// the two stay in sync. Pass {silent:true} to suppress the autosave (e.g. on load).
+function setMode(mode, opts) {
+    var checked = _currentCheckedSet();
+    MODE = (mode === 'note') ? 'note' : 'section';
+    var sectionView = document.getElementById('command-list');
+    var flatView = document.getElementById('command-list-flat');
+    if (MODE === 'note') {
+        sectionView.style.display = 'none';
+        flatView.style.display = 'block';
+        _applyCheckedIdsFlat(checked);
+    } else {
+        flatView.style.display = 'none';
+        sectionView.style.display = 'block';
+        _applyCheckedIds(Object.keys(checked));
+    }
+    if (!opts || !opts.silent) queueSave();
+}
+
 // ---- Escape HTML ----
 function esc(str) {
     if (!str) return '';
@@ -457,25 +768,118 @@ function esc(str) {
     return div.innerHTML;
 }
 
+// Format a Date for the PDF footer's "generated on" stamp. Matches the
+// "M/D/YY at h:mm AM/PM TZ" style used by the SIGNATURES block (e.g.
+// "6/5/26 at 2:55 PM EDT"). Falls back gracefully if the browser doesn't
+// expose a short timezone name.
+function _formatGeneratedAt(d) {
+    var month = d.getMonth() + 1;
+    var day = d.getDate();
+    var year = String(d.getFullYear()).slice(-2);
+    var hour24 = d.getHours();
+    var ampm = hour24 >= 12 ? 'PM' : 'AM';
+    var hour = hour24 % 12;
+    if (hour === 0) hour = 12;
+    var minute = String(d.getMinutes()).padStart(2, '0');
+    var tz = '';
+    try {
+        var parts = d.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ');
+        var candidate = parts[parts.length - 1];
+        if (/^[A-Z]{2,5}$/.test(candidate)) tz = candidate;
+    } catch (e) { /* fall through with empty tz */ }
+    var base = month + '/' + day + '/' + year + ' at ' + hour + ':' + minute + ' ' + ampm;
+    return tz ? (base + ' ' + tz) : base;
+}
+
+// Render `{code, display}` arrays (modifiers / diagnoses) as a single
+// semicolon-separated cell of "CODE — display" pieces.
+function _renderCodedPairs(pairs) {
+    if (!pairs || !pairs.length) return '';
+    return pairs.map(function(p) {
+        var code = (p.code || '').trim();
+        var display = (p.display || '').trim();
+        if (code && display) return esc(code) + ' — ' + esc(display);
+        return esc(code || display);
+    }).filter(function(s) { return s; }).join('; ');
+}
+
+// Render the selected Billed Services rows as a single table.
+function _renderBillingTable(rows) {
+    var out = '<table class="billing-table">';
+    out += '<thead><tr>';
+    out += '<th>CPT</th>';
+    out += '<th>Description</th>';
+    out += '<th>Units</th>';
+    out += '<th>Modifiers</th>';
+    out += '<th>Related Diagnoses</th>';
+    out += '</tr></thead><tbody>';
+    rows.forEach(function(row) {
+        out += '<tr>';
+        out += '<td class="billing-code">' + esc(row.code || row.cpt || '') + '</td>';
+        out += '<td>' + esc(row.description || '') + '</td>';
+        out += '<td class="billing-units">' + esc(row.units != null ? String(row.units) : '') + '</td>';
+        out += '<td>' + _renderCodedPairs(row.modifiers) + '</td>';
+        out += '<td>' + _renderCodedPairs(row.diagnoses) + '</td>';
+        out += '</tr>';
+    });
+    out += '</tbody></table>';
+    return out;
+}
+
 // ---- Build print preview from selected commands ----
+// Returns a command's print HTML, with CommandMetadata rows appended when the
+// "Include command metadata" toggle is on. The metadataHtml comes from the
+// server pre-rendered as `cmd-field` blocks so we can splice it in/out without
+// re-fetching.
+function cmdHtml(cmd) {
+    var includeMetadata = false;
+    var toggle = document.getElementById('metadata-toggle');
+    if (toggle) includeMetadata = !!toggle.checked;
+    var main = cmd.printHtml || '';
+    var meta = (includeMetadata && cmd.metadataHtml) ? cmd.metadataHtml : '';
+    return main + meta;
+}
+
 function buildPreviewHtml(selectedIds) {
     var h = NOTE_DATA.header;
     var cmdsById = {};
     NOTE_DATA.commands.forEach(function(c) { cmdsById[c.id] = c; });
 
+    // Split into the user-orderable list and pinned-section commands, which
+    // always print as their own section at the end regardless of mode.
     var orderedCmds = [];
+    var pinnedCmds = [];
     selectedIds.forEach(function(id) {
         var cmd = cmdsById[id];
-        if (cmd) orderedCmds.push(cmd);
+        if (!cmd) return;
+        if (_isPinned(cmd.section)) {
+            pinnedCmds.push(cmd);
+        } else {
+            orderedCmds.push(cmd);
+        }
     });
 
     var patientDisplay = esc(h.patientName);
     if (h.preferredName) patientDisplay += ' (' + esc(h.preferredName) + ')';
 
+    // Practice/organization header block on the top-right of the printout.
+    // Sourced from the note's practice location (mirrors home-app's note print).
     var practiceHtml = '';
+    if (h.clinicLogoUrl) {
+        practiceHtml += '<img class="practice-logo" src="' + esc(h.clinicLogoUrl) + '" alt="" />';
+    }
     if (h.clinicName) practiceHtml += '<div class="practice-name">' + esc(h.clinicName) + '</div>';
-    if (h.practicePhone) practiceHtml += '<div>Phone: ' + esc(h.practicePhone) + '</div>';
-    if (h.practiceFax) practiceHtml += '<div>Fax: ' + esc(h.practiceFax) + '</div>';
+    if (h.clinicAddressLine1) practiceHtml += '<div>' + esc(h.clinicAddressLine1) + '</div>';
+    if (h.clinicAddressLine2) practiceHtml += '<div>' + esc(h.clinicAddressLine2) + '</div>';
+    var cityStateParts = [];
+    if (h.clinicCity) cityStateParts.push(h.clinicCity);
+    if (h.clinicStateCode) cityStateParts.push(h.clinicStateCode);
+    var cityStateLine = cityStateParts.join(', ');
+    if (cityStateLine && h.clinicPostalCode) cityStateLine += ' ' + h.clinicPostalCode;
+    else if (h.clinicPostalCode) cityStateLine = h.clinicPostalCode;
+    if (cityStateLine) practiceHtml += '<div>' + esc(cityStateLine) + '</div>';
+    if (h.clinicPhone) practiceHtml += '<div>Phone: ' + esc(h.clinicPhone) + '</div>';
+    if (h.clinicFax) practiceHtml += '<div>Fax: ' + esc(h.clinicFax) + '</div>';
 
     var html = '';
     html += '<div class="print-header">';
@@ -494,22 +898,72 @@ function buildPreviewHtml(selectedIds) {
         html += '<div class="print-freetext print-freetext-header">' + esc(headerText) + '</div>';
     }
 
+    // Note-order mode prints a single flat sequence with the SOAP section
+    // headings removed; section mode keeps them.
+    var showHeadings = (MODE !== 'note');
     var sectionTitles = NOTE_DATA.sectionTitles || {};
     var lastSection = null;
     orderedCmds.forEach(function(cmd) {
-        if (cmd.section !== lastSection) {
+        if (showHeadings && cmd.section !== lastSection) {
             var title = sectionTitles[cmd.section] || '';
             if (title) {
                 html += '<h2 class="section-heading">' + esc(title) + '</h2>';
             }
             lastSection = cmd.section;
         }
-        html += '<div class="command-block">' + cmd.printHtml + '</div>';
+        html += '<div class="command-block">' + cmdHtml(cmd) + '</div>';
     });
 
+    // Pinned sections (e.g. Billed Services) always print as their own
+    // labeled block after the main content, in both modes. Commands with a
+    // structured `tableRow` (billing line items) collapse into a single
+    // multi-row table; the rest fall through to their per-block printHtml
+    // (e.g. the "Related Diagnosis Codes" footer).
+    var pinnedBySection = {};
+    var pinnedOrder = [];
+    pinnedCmds.forEach(function(cmd) {
+        if (!(cmd.section in pinnedBySection)) {
+            pinnedBySection[cmd.section] = [];
+            pinnedOrder.push(cmd.section);
+        }
+        pinnedBySection[cmd.section].push(cmd);
+    });
+    pinnedOrder.forEach(function(key) {
+        var title = sectionTitles[key] || '';
+        if (title) {
+            html += '<h2 class="section-heading">' + esc(title) + '</h2>';
+        }
+        var tableRows = [];
+        var trailingHtml = '';
+        pinnedBySection[key].forEach(function(cmd) {
+            if (cmd.tableRow) {
+                tableRows.push(cmd.tableRow);
+            } else {
+                trailingHtml += '<div class="command-block">' + cmdHtml(cmd) + '</div>';
+            }
+        });
+        if (tableRows.length > 0) {
+            html += _renderBillingTable(tableRows);
+        }
+        html += trailingHtml;
+    });
+
+    // User-supplied footer text sits between the content and the SIGNATURES
+    // block, so the signature lines remain the last thing on the page.
     var footerText = (document.getElementById('footer-text').value || '').trim();
     if (footerText) {
         html += '<div class="print-freetext print-freetext-footer">' + esc(footerText) + '</div>';
+    }
+
+    // SIGNATURES block (signed-by / amendment / currently-unsigned). Always
+    // rendered at the end of the body, never selectable.
+    var sigLines = NOTE_DATA.signatureLines || [];
+    if (sigLines.length > 0) {
+        html += '<h2 class="section-heading">Signatures</h2>';
+        sigLines.forEach(function(line) {
+            var style = line.italic ? ' style="font-style:italic;"' : '';
+            html += '<div class="signature-line"' + style + '>' + esc(line.text || '') + '</div>';
+        });
     }
 
     html += '<div class="print-footer">';
@@ -517,6 +971,7 @@ function buildPreviewHtml(selectedIds) {
     html += '<span>' + esc(h.patientName) + ' &#8226; DOB ' + esc(h.dob) + '</span>';
     html += '</div>';
     html += '<div class="confidentiality">Contains Confidential Information - Dispose of Properly</div>';
+    html += '<div class="generated-at">PDF generated on ' + esc(_formatGeneratedAt(new Date())) + '</div>';
     html += '</div>';
 
     return html;
@@ -531,12 +986,14 @@ function showPreview() {
     }
     document.getElementById('preview-content').innerHTML = buildPreviewHtml(selectedIds);
     document.getElementById('view-selection').style.display = 'none';
-    document.getElementById('view-preview').style.display = 'block';
+    // `is-visible` flips #view-preview from `display:none` to `display:flex`
+    // so its toolbar pins to the top and only #preview-content scrolls.
+    document.getElementById('view-preview').classList.add('is-visible');
 }
 
 function showSelection() {
-    document.getElementById('view-preview').style.display = 'none';
-    document.getElementById('view-selection').style.display = 'block';
+    document.getElementById('view-preview').classList.remove('is-visible');
+    document.getElementById('view-selection').style.display = 'flex';
 }
 
 // ---- Persistence: load saved state, then autosave on change ----
@@ -574,10 +1031,15 @@ function collectState() {
             order.push(group.dataset.id);
         }
     });
+    // noteOrder: DOM ordering of every leaf id in the note-order (flat) view.
+    var noteOrder = [];
+    document.querySelectorAll('#command-list-flat .flat-row').forEach(function(row) {
+        noteOrder.push(row.dataset.id);
+    });
     return {
         header_text: (document.getElementById('header-text').value || ''),
         footer_text: (document.getElementById('footer-text').value || ''),
-        selection: { checkedIds: checkedIds, order: order },
+        selection: { checkedIds: checkedIds, order: order, noteOrder: noteOrder, mode: MODE },
     };
 }
 
@@ -679,9 +1141,19 @@ function loadState() {
         refreshCharCounts();
         var sel = data.selection || {};
         _applyOrder(sel.order || []);
+        _applyFlatOrder(sel.noteOrder || []);
         // Only override checkbox defaults if we have a saved selection; otherwise keep "all checked" default.
         if (Array.isArray(sel.checkedIds)) {
             _applyCheckedIds(sel.checkedIds);
+            var checkedSet = {};
+            sel.checkedIds.forEach(function(id) { checkedSet[id] = true; });
+            _applyCheckedIdsFlat(checkedSet);
+        }
+        // Restore the note-order toggle last, so both views are already populated.
+        if (sel.mode === 'note') {
+            var toggle = document.getElementById('note-order-toggle');
+            if (toggle) toggle.checked = true;
+            setMode('note', { silent: true });
         }
         if (data.updated_at) {
             _setSaveStatus('saved', 'Saved ' + (_formatTime(data.updated_at) || ''));
@@ -739,8 +1211,31 @@ document.addEventListener('drop', function() { queueSave(); });
 // Flush any pending edits before the modal closes or the tab unloads.
 window.addEventListener('beforeunload', function() { if (_saveTimer) flushSave(); });
 
-// Kick off state load after initial render
-function _initState() { loadState(); refreshCharCounts(); }
+// Note-order toggle: switch views (and persist the choice).
+document.addEventListener('change', function(e) {
+    if (e.target && e.target.id === 'note-order-toggle') {
+        setMode(e.target.checked ? 'note' : 'section');
+    }
+    // Metadata toggle doesn't change the modal sidebar — it only affects the
+    // generated PDF preview. No re-render needed mid-edit; cmdHtml() reads the
+    // checkbox state at preview-build time.
+});
+
+// Collapse/expand a SOAP section by clicking its title row. The pinned
+// billing section opts out via CSS (cursor:default, no chevron).
+document.addEventListener('click', function(e) {
+    var title = e.target.closest('.section-group-title');
+    if (!title) return;
+    var group = title.closest('.section-group');
+    if (!group) return;
+    // Skip the pinned billing block — it's never collapsible.
+    if (group.closest('#command-list-pinned')) return;
+    group.classList.toggle('collapsed');
+});
+
+// Kick off state load after initial render. Build the flat (note-order) list
+// first so loadState can restore its order/selection/mode against it.
+function _initState() { buildFlatList(); loadState(); refreshCharCounts(); }
 document.addEventListener('DOMContentLoaded', _initState);
 if (document.readyState !== 'loading') { _initState(); }
 
@@ -759,17 +1254,144 @@ function _setPdfStatus(kind, html) {
     el.innerHTML = html || '';
 }
 
+// Print the current preview through a hidden child iframe so the browser
+// prints THIS document, not the parent chart page the modal is embedded in.
+// Calling window.print() directly walks up to the host page and renders
+// everything at chart-page scale, which produced the tiny multi-page output
+// we hit earlier.
+//
+// Implementation notes:
+// - Use document.open()/write()/close() (not srcdoc, not Blob URL) — the
+//   former made browsers fall back to the parent URL in the print header,
+//   the latter was either blocked by CSP or unloaded too early in the
+//   parent's chart-pane frame, leading to a blank print.
+// - Wait a beat after the write before calling print() so the printed
+//   doc has time to lay out (fonts, gradient backgrounds, table widths).
+// - Keep the iframe alive long enough for the user to actually finish in
+//   the print dialog before removing it.
+function printPreview() {
+    if (!document.getElementById('preview-content')) return;
+    var html = _buildStandaloneHtml();
+
+    var iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.title = _printDocTitle();
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+    if (!doc) {
+        // Couldn't get a same-origin document; bail rather than print the host page.
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+        _setPdfStatus('error', 'Print failed: could not open print document');
+        return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    var cleanedUp = false;
+    var cleanup = function() {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    };
+
+    // Defer print() a bit so the iframe's layout settles before the
+    // browser snapshots it. 350ms is generous for our inline-only payload.
+    setTimeout(function() {
+        try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+        } catch (e) {
+            _setPdfStatus('error', 'Print failed: ' + (e && e.message ? e.message : 'unknown error'));
+        }
+    }, 350);
+
+    // Keep the iframe in the DOM long enough for the user to finish in
+    // the (modal, blocking) print dialog. 60s gives them plenty of time;
+    // pulling it sooner kills the print mid-dialog.
+    setTimeout(cleanup, 60000);
+}
+
+// Build a print-friendly `<title>` from the header data. Shown in the
+// browser print dialog's title slot, replacing what would otherwise fall
+// back to the parent chart page's URL.
+function _printDocTitle() {
+    var h = (NOTE_DATA && NOTE_DATA.header) || {};
+    var parts = ['Chart Note'];
+    var name = (h.patientName || '').trim();
+    if (name) parts.push(name);
+    var dos = (h.dateOfService || '').trim();
+    if (dos) parts.push(dos);
+    return parts.join(' — ');
+}
+
+// Escape a string for inclusion inside a CSS double-quoted `content`.
+// Backslashes and double quotes need escaping; newlines are emitted as `\A`
+// (which the renderer treats as a line break when `white-space: pre`).
+function _cssQuote(s) {
+    return (s || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 function _buildStandaloneHtml() {
     // Compose a full HTML document that the web-to-pdf service can render.
     // Include the same inline <style> block we use for the preview so print CSS matches.
     var styleEl = document.querySelector('style');
     var styleCss = styleEl ? styleEl.textContent : '';
     var previewBody = document.getElementById('preview-content').innerHTML;
+    var title = esc(_printDocTitle());
+
+    // Compose the three footer lines and pin them in the @page bottom margin
+    // box so they repeat on every printed page. Chromium (both the PDF
+    // service and the browser print pipeline) honors @page margin boxes;
+    // `\A` becomes a literal line break inside the box when `white-space:
+    // pre` is set.
+    var h = (NOTE_DATA && NOTE_DATA.header) || {};
+    var patientLine = (h.patientName || '') + (h.dob ? ' • DOB ' + h.dob : '');
+    var confidentiality = 'Contains Confidential Information - Dispose of Properly';
+    var generated = 'PDF generated on ' + _formatGeneratedAt(new Date());
+    var pageFooterContent = _cssQuote(patientLine) + '\\A ' +
+                            _cssQuote(confidentiality) + '\\A ' +
+                            _cssQuote(generated);
+    var pageCss =
+        '@page {' +
+        '  size: letter;' +
+        '  margin: 0.75in 0.75in 1.1in 0.75in;' +
+        '  @bottom-center {' +
+        '    content: "' + pageFooterContent + '";' +
+        '    white-space: pre;' +
+        '    font-family: \'Inter\', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;' +
+        '    font-size: 10px;' +
+        '    color: #6b7280;' +
+        '    line-height: 1.35;' +
+        '    padding-top: 14px;' +
+        '    border-top: 1px solid #e5e7eb;' +
+        '  }' +
+        '  @bottom-right {' +
+        '    content: "Page " counter(page) " of " counter(pages);' +
+        '    font-family: \'Inter\', sans-serif;' +
+        '    font-size: 10px;' +
+        '    color: #6b7280;' +
+        '  }' +
+        '}' +
+        '/* The on-screen .print-footer block is replaced by the @page margin' +
+        '   box on print, so suppress it in the printed output. */' +
+        '@media print { .print-footer { display: none !important; } }';
+
     return (
         '<!DOCTYPE html><html lang="en"><head>' +
         '<meta charset="UTF-8">' +
+        '<title>' + title + '</title>' +
         '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">' +
         '<style>' + styleCss + '</style>' +
+        '<style>' + pageCss + '</style>' +
         '</head><body>' +
         '<div id="view-preview" style="display:block;padding:0;max-width:none;">' +
         '<div id="preview-content" style="border:none;padding:0;box-shadow:none;">' +
@@ -802,16 +1424,25 @@ function confirmNameOverlay() {
     var inp = document.getElementById('name-overlay-input');
     var name = inp ? (inp.value || '').trim() : '';
     if (!name) name = _defaultDocName();
+    var commentEl = document.getElementById('name-overlay-comment');
+    var comment = commentEl ? (commentEl.value || '').trim() : '';
     closeNameOverlay();
-    generateAndSavePdf(name);
+    generateAndSavePdf(name, comment);
 }
 
-// Submit on Enter, cancel on Escape
+// Submit on Enter (except inside the comment textarea, where Enter inserts
+// a newline), cancel on Escape.
 document.addEventListener('keydown', function(e) {
     var ov = document.getElementById('name-overlay');
     if (!ov || !ov.classList.contains('open')) return;
-    if (e.key === 'Enter') { e.preventDefault(); confirmNameOverlay(); }
-    else if (e.key === 'Escape') { e.preventDefault(); closeNameOverlay(); }
+    if (e.key === 'Enter') {
+        if (e.target && e.target.id === 'name-overlay-comment') return;
+        e.preventDefault();
+        confirmNameOverlay();
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeNameOverlay();
+    }
 });
 // Escape closes the finals overlay too.
 document.addEventListener('keydown', function(e) {
@@ -857,15 +1488,30 @@ function openFinalsOverlay() {
         finals.forEach(function(f) {
             var name = f.description ? esc(f.description) : '(untitled)';
             var when = f.generated_at ? _fmtDateTime(f.generated_at) : '';
+            var commentRaw = (f.comment || '').trim();
             var link = f.pdf_url
                 ? '<a href="' + f.pdf_url + '" target="_blank" rel="noopener">Open PDF</a>'
                 : '<span style="color:#b91c1c;">PDF unavailable</span>';
-            html += '<li class="finals-item">';
+            var rawId = (f.id || '').trim();
+            var rowId = esc(rawId);
+            // Guard against legacy rows where the server couldn't produce a
+            // usable uuid — without this we'd POST `/finals/None` and 400.
+            var canDelete = !!rawId && rawId.toLowerCase() !== 'none';
+            html += '<li class="finals-item" data-final-id="' + rowId + '">';
             html +=   '<div class="finals-meta">';
             html +=     '<div class="finals-name">' + name + '</div>';
             if (when) html += '<div class="finals-date">' + esc(when) + '</div>';
+            if (commentRaw) {
+                html += '<div class="finals-comment">' + esc(commentRaw) + '</div>';
+            }
             html +=   '</div>';
-            html +=   '<div class="finals-action">' + link + '</div>';
+            html +=   '<div class="finals-action">' + link;
+            if (canDelete) {
+                html += ' <button type="button" class="finals-delete"' +
+                        ' data-final-id="' + rowId + '"' +
+                        ' title="Remove this entry from Previous Versions. The PDF will still be a Medical Document on the patient chart — junk that record separately if you want it gone.">Delete</button>';
+            }
+            html +=   '</div>';
             html += '</li>';
         });
         html += '</ul>';
@@ -880,7 +1526,59 @@ function closeFinalsOverlay() {
     if (ov) ov.classList.remove('open');
 }
 
-function generateAndSavePdf(description) {
+// Click handler for the Delete button on each Previous Versions row.
+// Confirms, calls DELETE on the plugin's local row, then refreshes the list.
+// The FHIR DocumentReference on the patient's chart is intentionally NOT
+// touched (the saved PDF stays accessible through Canvas's documents view).
+document.addEventListener('click', function(e) {
+    var btn = e.target && e.target.closest('.finals-delete');
+    if (!btn) return;
+    var id = btn.getAttribute('data-final-id') || '';
+    if (!id) return;
+    if (!window.confirm(
+        'Remove this entry from Previous Versions? ' +
+        'The PDF will still be a Medical Document associate to the patient record, ' +
+        'if you want to remove it you will have to junk that record as well.'
+    )) {
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    fetch(FINALS_URL + '/' + encodeURIComponent(id), {
+        method: 'DELETE',
+        credentials: 'same-origin',
+    }).then(function(resp) {
+        return resp.json().then(function(data) {
+            if (!resp.ok) {
+                var msg = (data && data.error) ? data.error : ('HTTP ' + resp.status);
+                throw new Error(msg);
+            }
+            return data;
+        }, function() {
+            // Body wasn't JSON; fall back to status-only message.
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return {};
+        });
+    }).then(function() {
+        // Reload the overlay so the deleted row drops out and any newly
+        // saved finals show up at the top.
+        openFinalsOverlay();
+    }).catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+        var item = btn.closest('.finals-item');
+        if (item) {
+            var prior = item.querySelector('.finals-error');
+            if (prior) prior.remove();
+            var note = document.createElement('div');
+            note.className = 'finals-error';
+            note.textContent = 'Delete failed: ' + (err && err.message ? err.message : 'unknown error');
+            item.appendChild(note);
+        }
+    });
+});
+
+function generateAndSavePdf(description, comment) {
     if (!NOTE_ID) {
         _setPdfStatus('error', 'Missing note id');
         return;
@@ -897,7 +1595,12 @@ function generateAndSavePdf(description) {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note_id: NOTE_ID, html: html, description: description || '' }),
+        body: JSON.stringify({
+            note_id: NOTE_ID,
+            html: html,
+            description: description || '',
+            comment: comment || '',
+        }),
     }).then(function(resp) {
         return resp.json().then(function(data) {
             if (!resp.ok) throw new Error(data && data.error || ('HTTP ' + resp.status));
@@ -906,10 +1609,12 @@ function generateAndSavePdf(description) {
     }).then(function(data) {
         var attached = data.document_reference_id ? ' · attached to patient' : '';
         _setPdfStatus('done', 'Saved' + attached);
-        // Open the browser's print dialog against the preview we already rendered.
-        // Existing @media print rules hide the toolbar + selection view so the chrome
-        // dialog shows only the chart note.
-        setTimeout(function() { window.print(); }, 150);
+        // After the server confirms the save, pop the browser's print dialog
+        // against the in-modal preview. printPreview() prints through a hidden
+        // same-origin iframe so the dialog targets THIS document at preview
+        // scale, not the parent chart page (which is what window.print() did
+        // and rendered the content microscopically).
+        setTimeout(printPreview, 150);
     }).catch(function(err) {
         _setPdfStatus('error', 'PDF failed: ' + (err && err.message ? err.message : 'unknown error'));
     }).finally(function() {

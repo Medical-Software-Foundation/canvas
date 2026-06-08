@@ -243,6 +243,7 @@ class TestBuildCustomizePrintContext:
                     "rfv": "Recheck",
                     "note_type": "Office Visit",
                     "comment": "bring labs",
+                    "_command_uuid": "follow-up-uuid-1",
                 }
             ],
         }
@@ -255,6 +256,7 @@ class TestBuildCustomizePrintContext:
         note_data = json.loads(result["note_data_json"])
         fu_cmds = [c for c in note_data["commands"] if c["displayText"] == "Follow Up"]
         assert len(fu_cmds) == 1
+        assert fu_cmds[0]["commandUuid"] == "follow-up-uuid-1"
 
     @patch(f"{_CP}.render_blocks")
     @patch(f"{_CP}.enumerate_sections")
@@ -270,8 +272,13 @@ class TestBuildCustomizePrintContext:
             "provider_top_role": None,
             "note": None,
             "follow_ups": [
-                {"date": "2025-06-15", "rfv": "Recheck", "note_type": "Office Visit"},
-                {"date": "", "rfv": "Second", "note_type": ""},
+                {
+                    "date": "2025-06-15",
+                    "rfv": "Recheck",
+                    "note_type": "Office Visit",
+                    "_command_uuid": "follow-up-uuid-1",
+                },
+                {"date": "", "rfv": "Second", "note_type": "", "_command_uuid": "follow-up-uuid-2"},
             ],
         }
 
@@ -281,6 +288,9 @@ class TestBuildCustomizePrintContext:
         assert plan_section["items"][0]["display"] == "Follow Up (2)"
         assert len(plan_section["items"][0]["children"]) == 2
         assert mock_render.call_count == 2
+        note_data = json.loads(result["note_data_json"])
+        fu_cmds = [c for c in note_data["commands"] if c["displayText"] == "Follow Up"]
+        assert [c["commandUuid"] for c in fu_cmds] == ["follow-up-uuid-1", "follow-up-uuid-2"]
 
     @patch(f"{_CP}.render_blocks")
     @patch(f"{_CP}.enumerate_sections")
@@ -640,10 +650,12 @@ class TestListFinals:
 
         doc_ref = MagicMock()
         doc_ref.id = "doc-1"
+        doc_ref.related_object_document_comment = ""
         row = MagicMock()
         row.uuid = "11111111-2222-3333-4444-555555555555"
         row.document_reference = doc_ref
         row.description = "My Print"
+        row.comment = ""
         row.pdf_generated_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
         qs = (
@@ -674,10 +686,12 @@ class TestListFinals:
         doc_ref = MagicMock()
         doc_ref.id = "doc-2"
         doc_ref.related_object_document_title = "Fallback Title"
+        doc_ref.related_object_document_comment = ""
         row = MagicMock()
         row.dbid = 7
         row.document_reference = doc_ref
         row.description = ""
+        row.comment = ""
         row.pdf_generated_at = None
 
         qs = (
@@ -704,6 +718,7 @@ class TestListFinals:
         row.dbid = 8
         row.document_reference = None
         row.description = "Desc"
+        row.comment = ""
         row.pdf_generated_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
         qs = (

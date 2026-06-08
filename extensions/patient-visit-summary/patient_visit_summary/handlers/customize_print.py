@@ -44,12 +44,15 @@ from patient_visit_summary.services.command_blocks import (
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
-class CustomizePrintButton(ActionButton):
-    """Button in the note footer to customize and print a note."""
+class _CustomizePrintButtonBase(ActionButton):
+    """Shared launcher for the Customize & Print modal.
+
+    Two concrete buttons render this — one in the note footer (existing) and
+    one in the note header (so it's reachable after the note is locked
+    without scrolling down).
+    """
 
     BUTTON_TITLE = "Customize & Print"
-    BUTTON_KEY = "CUSTOMIZE_PRINT"
-    BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_FOOTER
 
     def visible(self) -> bool:
         return True
@@ -69,6 +72,21 @@ class CustomizePrintButton(ActionButton):
                 title="Customize & Print",
             ).apply()
         ]
+
+
+class CustomizePrintButton(_CustomizePrintButtonBase):
+    """Button in the note footer to customize and print a note."""
+
+    BUTTON_KEY = "CUSTOMIZE_PRINT"
+    BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_FOOTER
+
+
+class CustomizePrintHeaderButton(_CustomizePrintButtonBase):
+    """Note-header twin of CustomizePrintButton — reachable on a locked note
+    without scrolling to the footer."""
+
+    BUTTON_KEY = "CUSTOMIZE_PRINT_HEADER"
+    BUTTON_LOCATION = ActionButton.ButtonLocation.NOTE_HEADER
 
 
 def _compute_age(birth_date: Any) -> str:
@@ -99,6 +117,7 @@ def build_customize_print_context(template_context: dict[str, Any]) -> dict[str,
     if provider_top_role:
         provider_name += f", {provider_top_role.public_abbreviation}"
 
+    practice = template_context.get("practice_location_info") or {}
     header = {
         "patientName": f"{patient.first_name} {patient.last_name}",
         "dob": str(patient.birth_date) if patient.birth_date else "",
@@ -106,13 +125,29 @@ def build_customize_print_context(template_context: dict[str, Any]) -> dict[str,
         "age": _compute_age(patient.birth_date),
         "providerName": provider_name,
         "dateOfService": template_context.get("appointment_date", ""),
+        # Top-right of the printout header — clinic logo + address block
+        # sourced from the note's practice location (mirrors what home-app's
+        # standard note print renders).
+        "clinicLogoUrl": practice.get("logo_url", ""),
+        "clinicName": practice.get("name", ""),
+        "clinicAddressLine1": practice.get("address_line1", ""),
+        "clinicAddressLine2": practice.get("address_line2", ""),
+        "clinicCity": practice.get("city", ""),
+        "clinicStateCode": practice.get("state_code", ""),
+        "clinicPostalCode": practice.get("postal_code", ""),
+        "clinicPhone": practice.get("phone", ""),
+        "clinicFax": practice.get("fax", ""),
     }
 
     # Walk the enumerated command groups and shape them into the sidebar tree
     # this UI needs. Each section becomes a `{key, title, items: [...]}`. Each
     # group with a single entry becomes a standalone sidebar item; groups with
     # multiple entries become a parent with children (one per entry).
+    # `PINNED_SECTION_KEY` renders as its own block in both views and in print
+    # — never flattened into the note-order list, never SOAP-grouped with others.
+    PINNED_SECTION_KEY = "billing"
     sections = []
+    pinned_section = None
     commands = []
     cmd_id = 0
 
@@ -124,18 +159,49 @@ def build_customize_print_context(template_context: dict[str, Any]) -> dict[str,
             cmd_id += 1
             parent_id = f"cmd-{cmd_id}"
 
+            is_pinned = section["key"] == PINNED_SECTION_KEY
+
+            def _billing_table_row(entry: dict) -> dict | None:
+                # The pinned billing section prints as a single multi-row
+                # table in the preview (built by JS from these structured
+                # rows). Non-billing commands don't get this — they keep
+                # printHtml as-is.
+                if not is_pinned:
+                    return None
+                raw = entry.get("raw") or {}
+                return {
+                    "code": raw.get("code") or "",
+                    "cpt": raw.get("cpt") or "",
+                    "description": raw.get("description") or "",
+                    "units": raw.get("units"),
+                    "modifiers": raw.get("modifiers") or [],
+                    "diagnoses": raw.get("diagnoses") or [],
+                }
+
             if len(entries) > 1:
                 children = []
                 for entry in entries:
                     cmd_id += 1
                     child_id = f"cmd-{cmd_id}"
                     children.append({"id": child_id, "display": entry["title"]})
-                    commands.append({
+                    metadata_blocks = entry.get("metadata_blocks") or []
+                    cmd = {
                         "id": child_id,
                         "section": section["key"],
                         "displayText": display_name,
+                        # Leaf label for the flat (note-order) list — the per-entry
+                        # title, so distinct entries of the same command type differ.
+                        "label": entry["title"],
                         "printHtml": render_blocks(entry["blocks"]),
-                    })
+                        # Rendered separately so the modal's "Include command
+                        # metadata" toggle can append it without re-fetching.
+                        "metadataHtml": render_blocks(metadata_blocks) if metadata_blocks else "",
+                        "commandUuid": entry.get("command_uuid") or "",
+                    }
+                    table_row = _billing_table_row(entry)
+                    if table_row is not None:
+                        cmd["tableRow"] = table_row
+                    commands.append(cmd)
                 section_items.append({
                     "id": parent_id,
                     "display": f"{display_name} ({len(children)})",
@@ -143,22 +209,85 @@ def build_customize_print_context(template_context: dict[str, Any]) -> dict[str,
                 })
             else:
                 only = entries[0]
+                # Prefer the per-entry title for the leaf label so the flat
+                # (note-order) list reads "Display Name: <actual title>"
+                # rather than "Display Name: Display Name" when there's only
+                # one entry. Fall back to display_name for entries whose
+                # title extractor returns nothing.
+                leaf_label = (only.get("title") or "").strip() or display_name
+                # Same idea for the section-view sidebar row: when the entry
+                # has a meaningful per-row title (e.g., a customCommand
+                # whose schema_key humanizes to "Observation Summary"), use
+                # "Display Name: <title>" so the row carries the actual
+                # subject instead of just "Custom Command".
+                only_title = (only.get("title") or "").strip()
+                if only_title and only_title != display_name:
+                    sidebar_display = f"{display_name}: {only_title}"
+                else:
+                    sidebar_display = display_name
                 section_items.append({
                     "id": parent_id,
-                    "display": display_name,
+                    "display": sidebar_display,
                     "children": [],
                 })
-                commands.append({
+                metadata_blocks = only.get("metadata_blocks") or []
+                cmd = {
                     "id": parent_id,
                     "section": section["key"],
                     "displayText": display_name,
+                    "label": leaf_label,
                     "printHtml": render_blocks(only["blocks"]),
-                })
+                    "metadataHtml": render_blocks(metadata_blocks) if metadata_blocks else "",
+                    "commandUuid": only.get("command_uuid") or "",
+                }
+                table_row = _billing_table_row(only)
+                if table_row is not None:
+                    cmd["tableRow"] = table_row
+                commands.append(cmd)
 
-        sections.append({
+        section_data = {
             "key": section["key"],
             "title": section["title"],
             "items": section_items,
+        }
+        if section["key"] == PINNED_SECTION_KEY:
+            pinned_section = section_data
+        else:
+            sections.append(section_data)
+
+    # If we built a billing block, append a "Related Diagnosis Codes" row
+    # listing every billable diagnosis on the note (mimicking the note footer
+    # in home-app). This covers diagnoses that aren't linked to a specific
+    # CPT line item via Assessments.
+    note_diagnoses = template_context.get("note_diagnoses") or []
+    if pinned_section and note_diagnoses:
+        cmd_id += 1
+        diagnoses_id = f"cmd-{cmd_id}"
+        diagnosis_blocks: list[dict] = [
+            {"kind": "heading_plain", "value": "Related Diagnosis Codes"},
+        ]
+        for d in note_diagnoses:
+            code = (d.get("code") or "").strip()
+            display = (d.get("display") or "").strip()
+            if not code and not display:
+                continue
+            if code and display:
+                value = f"{code} — {display}"
+            else:
+                value = code or display
+            diagnosis_blocks.append({"kind": "body", "value": value})
+        pinned_section["items"].append({
+            "id": diagnoses_id,
+            "display": "Related Diagnosis Codes",
+            "children": [],
+        })
+        commands.append({
+            "id": diagnoses_id,
+            "section": PINNED_SECTION_KEY,
+            "displayText": "Related Diagnosis Codes",
+            "label": "Related Diagnosis Codes",
+            "printHtml": render_blocks(diagnosis_blocks),
+            "commandUuid": "",
         })
 
     # Build one item per follow-up command (a note may have multiple).
@@ -198,7 +327,9 @@ def build_customize_print_context(template_context: dict[str, Any]) -> dict[str,
                 "id": parent_id,
                 "section": "plan",
                 "displayText": "Follow Up",
+                "label": "Follow Up",
                 "printHtml": render_blocks(_follow_up_blocks(fu)),
+                "commandUuid": fu.get("_command_uuid") or "",
             })
         else:
             children = []
@@ -211,7 +342,9 @@ def build_customize_print_context(template_context: dict[str, Any]) -> dict[str,
                     "id": child_id,
                     "section": "plan",
                     "displayText": "Follow Up",
+                    "label": child_title,
                     "printHtml": render_blocks(_follow_up_blocks(fu)),
+                    "commandUuid": fu.get("_command_uuid") or "",
                 })
             plan_section["items"].append({
                 "id": parent_id,
@@ -219,16 +352,30 @@ def build_customize_print_context(template_context: dict[str, Any]) -> dict[str,
                 "children": children,
             })
 
+    section_titles = {s["key"]: s["title"] for s in sections}
+    if pinned_section:
+        section_titles[pinned_section["key"]] = pinned_section["title"]
     note_data = {
         "header": header,
         "commands": commands,
-        "sectionTitles": {s["key"]: s["title"] for s in sections},
+        "sectionTitles": section_titles,
+        # Ordered command UUIDs from the note body; the modal's "note order" mode
+        # sorts the flat command list by this, appending non-body items at the end.
+        "bodyOrder": template_context.get("note_body_order") or [],
+        # Section keys that the JS keeps out of the flat list and always renders
+        # in their own block (preview + print). Section view already shows them
+        # in their own server-rendered block too.
+        "pinnedSections": [PINNED_SECTION_KEY] if pinned_section else [],
+        # SIGNATURES footer lines (signed-by / amendment / currently-unsigned).
+        # Always rendered at the end of the print preview, not selectable.
+        "signatureLines": template_context.get("signature_lines") or [],
     }
 
     note = template_context.get("note")
     return {
         "appointment_date": template_context.get("appointment_date", ""),
         "sections": sections,
+        "pinned_section": pinned_section,
         "note_data_json": json.dumps(note_data, default=str),
         "note_dbid": note.dbid if note else "",
         # External UUID — this is what the JS sends as note_id to the API, which
@@ -373,6 +520,14 @@ class CustomizePrintAPI(SimpleAPI):
 
         finals = []
         for row in rows:
+            # Legacy rows pre-date the `uuid` default and have ``None`` here,
+            # which serialized as the string ``"None"`` in the response and
+            # broke the DELETE endpoint. Lazily backfill a fresh UUID on read
+            # so the row becomes addressable.
+            if not row.uuid:
+                from uuid import uuid4
+                row.uuid = str(uuid4())
+                row.save(update_fields=("uuid",))
             doc_ref_fhir_id = ""
             doc_ref = row.document_reference
             description = row.description or ""
@@ -384,6 +539,16 @@ class CustomizePrintAPI(SimpleAPI):
                         or getattr(doc_ref, "document", "")
                         or ""
                     )
+            # Comment is stored locally so we can show it in the Previous
+            # Versions overlay without making a FHIR round-trip per row.
+            comment = row.comment or ""
+            if not comment and doc_ref is not None:
+                # Fall back to whatever the DocumentReference proxy exposes
+                # as the related-object-comment, for rows created before the
+                # local `comment` column was added.
+                comment = (
+                    getattr(doc_ref, "related_object_document_comment", "") or ""
+                )
             # Always link to the local PDF endpoint, addressed by the row's
             # non-enumerable UUID (never the sequential dbid). It returns 404 for
             # the rare row with no stored base64 (`serve_final_pdf`).
@@ -391,6 +556,7 @@ class CustomizePrintAPI(SimpleAPI):
             finals.append({
                 "id": str(row.uuid),
                 "description": description,
+                "comment": comment,
                 "generated_at": row.pdf_generated_at.isoformat() if row.pdf_generated_at else None,
                 "document_reference_id": doc_ref_fhir_id,
                 "pdf_url": local_pdf_url,
@@ -418,6 +584,35 @@ class CustomizePrintAPI(SimpleAPI):
             return [Response(b"", status_code=HTTPStatus.INTERNAL_SERVER_ERROR, content_type="text/plain")]
         return [Response(pdf_bytes, status_code=HTTPStatus.OK, content_type="application/pdf")]
 
+    @api.delete("/finals/<final_uuid>")
+    def delete_final(self) -> list[Response | Effect]:
+        """Delete the local CustomizedNotePrint row for a saved version.
+
+        Only the plugin's custom-data record is removed. The FHIR
+        DocumentReference attached to the patient's chart is **not** touched —
+        the saved PDF remains accessible through the patient's documents list
+        and via the FHIR API, just no longer surfaced in this modal's
+        Previous Versions overlay.
+        """
+        final_uuid = self.request.path_params.get("final_uuid")
+        if not final_uuid:
+            return [JSONResponse({"error": "final_uuid required"}, status_code=HTTPStatus.BAD_REQUEST)]
+        try:
+            parsed_uuid = str(UUID(str(final_uuid)))
+        except (TypeError, ValueError):
+            return [JSONResponse({"error": "invalid uuid"}, status_code=HTTPStatus.BAD_REQUEST)]
+        row = CustomizedNotePrint.objects.filter(uuid=parsed_uuid).first()
+        if row is None:
+            return [JSONResponse({"error": "not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        dbid = row.dbid
+        doc_ref_dbid = getattr(row, "document_reference_id", None)
+        row.delete()
+        log.info(
+            f"CustomizedNotePrint deleted: dbid={dbid} uuid={parsed_uuid} "
+            f"document_reference_id={doc_ref_dbid} (DocumentReference retained)"
+        )
+        return [JSONResponse({"deleted": True}, status_code=HTTPStatus.OK)]
+
     @api.post("/print_pdf")
     def print_pdf(self) -> list[Response | Effect]:
         """Render a PDF from the preview HTML, attach it to the patient as a
@@ -431,6 +626,11 @@ class CustomizePrintAPI(SimpleAPI):
         html = body.get("html") if isinstance(body, dict) else None
         description = (body.get("description") if isinstance(body, dict) else "") or ""
         description = str(description).strip() or "Customized Note Printout"
+        # Internal note saved on the DocumentReference via the Canvas FHIR
+        # `document-reference-comment` extension. Surfaces in the chart's
+        # document detail view; never printed in the PDF body.
+        comment = (body.get("comment") if isinstance(body, dict) else "") or ""
+        comment = str(comment).strip()
         if not note_id or not html:
             return [JSONResponse({"error": "note_id and html required"}, status_code=HTTPStatus.BAD_REQUEST)]
 
@@ -482,29 +682,35 @@ class CustomizePrintAPI(SimpleAPI):
                     dos.date().isoformat() if dos else datetime.now(timezone.utc).date().isoformat()
                 )
                 fhir = CanvasFhir(client_id=client_id, client_secret=client_secret)
+                extensions = [
+                    {
+                        "url": "http://schemas.canvasmedical.com/fhir/document-reference-clinical-date",
+                        "valueDate": clinical_date,
+                    },
+                    {
+                        "url": "http://schemas.canvasmedical.com/fhir/document-reference-reviewer",
+                        "valueReference": {
+                            "reference": f"Practitioner/{reviewer_fhir_id}",
+                            "type": "Practitioner",
+                        },
+                    },
+                    {
+                        "url": "http://schemas.canvasmedical.com/fhir/document-reference-review-mode",
+                        "valueCode": "RN",
+                    },
+                    {
+                        "url": "http://schemas.canvasmedical.com/fhir/document-reference-requires-signature",
+                        "valueBoolean": False,
+                    },
+                ]
+                if comment:
+                    extensions.append({
+                        "url": "http://schemas.canvasmedical.com/fhir/document-reference-comment",
+                        "valueString": comment,
+                    })
                 doc_ref = fhir.create("DocumentReference", {
                     "resourceType": "DocumentReference",
-                    "extension": [
-                        {
-                            "url": "http://schemas.canvasmedical.com/fhir/document-reference-clinical-date",
-                            "valueDate": clinical_date,
-                        },
-                        {
-                            "url": "http://schemas.canvasmedical.com/fhir/document-reference-reviewer",
-                            "valueReference": {
-                                "reference": f"Practitioner/{reviewer_fhir_id}",
-                                "type": "Practitioner",
-                            },
-                        },
-                        {
-                            "url": "http://schemas.canvasmedical.com/fhir/document-reference-review-mode",
-                            "valueCode": "RN",
-                        },
-                        {
-                            "url": "http://schemas.canvasmedical.com/fhir/document-reference-requires-signature",
-                            "valueBoolean": False,
-                        },
-                    ],
+                    "extension": extensions,
                     "status": "current",
                     "description": description,
                     "type": {
@@ -591,6 +797,7 @@ class CustomizePrintAPI(SimpleAPI):
             if doc_ref_sdk is not None:
                 pref.document_reference = doc_ref_sdk
             pref.description = description
+            pref.comment = comment
             pref.html_content = html
             pref.pdf_base64 = base64.b64encode(pdf_bytes).decode("ascii")
             pref.pdf_generated_at = datetime.now(timezone.utc)

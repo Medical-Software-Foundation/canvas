@@ -2,6 +2,13 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 
+[options]
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer-span = "P7D"
+
+[options.exclude-newer-package]
+canvas = { timestamp = "0001-01-01T00:00:00Z", span = "PT1S" }
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.4"
@@ -1086,7 +1093,7 @@ wheels = [
 ]
 
 [[package]]
-name = "patient-visit-summary-printout"
+name = "patient-visit-summary"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
