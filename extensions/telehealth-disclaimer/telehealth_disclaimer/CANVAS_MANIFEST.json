@@ -1,0 +1,42 @@
+{
+    "sdk_version": "0.155.0",
+    "plugin_version": "0.0.3",
+    "name": "telehealth_disclaimer",
+    "description": "Automatically inserts a telehealth disclaimer into the plan section of telehealth notes upon creation.",
+    "components": {
+        "protocols": [
+            {
+                "class": "telehealth_disclaimer.protocols.telehealth_disclaimer:TelehealthDisclaimer",
+                "description": "Inserts a telehealth disclaimer custom command when a telehealth note is created",
+                "data_access": {
+                    "event": "NOTE_STATE_CHANGE_EVENT_CREATED",
+                    "read": [
+                        "Note"
+                    ],
+                    "write": [
+                        "Command"
+                    ]
+                }
+            }
+        ],
+        "commands": [
+            {
+                "name": "TelehealthDisclaimer",
+                "label": "Telehealth Disclaimer",
+                "schema_key": "telehealthDisclaimer",
+                "section": "plan"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "TELEHEALTH_DISCLAIMER_TEXT"
+    ],
+    "tags": [],
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
