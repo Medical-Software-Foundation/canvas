@@ -593,7 +593,7 @@ def test_resolve_modality_normalizes_in_person() -> None:
 # rather than mocked out as in the BookAPI handler tests above.
 
 
-def _make_urgent_care_appt(patient, note_type, start_time, status="confirmed"):
+def _make_urgent_care_appt(patient, note_type, start_time, status="confirmed", entered_in_error=None):
     from canvas_sdk.v1.data.appointment import Appointment
 
     return Appointment.objects.create(
@@ -603,6 +603,7 @@ def _make_urgent_care_appt(patient, note_type, start_time, status="confirmed"):
         duration_minutes=15,
         status=status,
         telehealth_instructions_sent=False,
+        entered_in_error=entered_in_error,
     )
 
 
@@ -633,23 +634,34 @@ def test_has_upcoming_visit_true_for_confirmed_in_window() -> None:
     )
 
 
-def test_has_upcoming_visit_false_when_only_cancelled_or_noshow() -> None:
+def test_has_upcoming_visit_false_for_cancelled_noshowed_or_retracted() -> None:
     import datetime
 
-    from canvas_sdk.test_utils.factories import PatientFactory
+    from canvas_sdk.test_utils.factories import CanvasUserFactory, PatientFactory
+    from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
 
     patient = PatientFactory.create()
     note_type = _uc_note_type()
     now = datetime.datetime.now(datetime.timezone.utc)
-    # All three non-blocking statuses must be excluded by the shared tuple.
+    # Use the REAL SDK enum values so a drift in the production literal (the actual
+    # stored value is "noshowed", not "noshow") fails this test instead of passing
+    # vacuously against a matching-but-wrong constant.
     _make_urgent_care_appt(
-        patient, note_type, now + datetime.timedelta(days=1), status="cancelled"
+        patient, note_type, now + datetime.timedelta(days=1),
+        status=AppointmentProgressStatus.CANCELLED,
     )
     _make_urgent_care_appt(
-        patient, note_type, now + datetime.timedelta(days=2), status="noshow"
+        patient, note_type, now + datetime.timedelta(days=2),
+        status=AppointmentProgressStatus.NOSHOWED,
     )
+    # A retracted (entered-in-error) visit is a CONFIRMED-status appointment with the
+    # entered_in_error FK set — it must not block rebooking. Guards the
+    # entered_in_error__isnull=True filter (the "entered-in-error" string is never a
+    # status value, so the prior status-tuple approach was a no-op for this case).
     _make_urgent_care_appt(
-        patient, note_type, now + datetime.timedelta(hours=12), status="entered-in-error"
+        patient, note_type, now + datetime.timedelta(hours=12),
+        status=AppointmentProgressStatus.CONFIRMED,
+        entered_in_error=CanvasUserFactory.create(),
     )
 
     assert (

@@ -53,6 +53,7 @@ def _patient_has_upcoming_urgent_care_visit(
             note_type=note_type,
             start_time__gte=window_start - _APPOINTMENT_QUERY_BUFFER,
             start_time__lt=window_end + _APPOINTMENT_QUERY_BUFFER,
+            entered_in_error__isnull=True,  # a retracted visit must not block rebooking
         )
         .exclude(status__in=_NON_BLOCKING_APPOINTMENT_STATUSES)
         .exists()

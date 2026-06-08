@@ -4,10 +4,13 @@ from zoneinfo import ZoneInfo
 
 _DAY_INDEX = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
-# Appointment status values that should NOT block a slot. Anything else (confirmed,
-# unconfirmed, arrived, roomed, etc.) blocks. Lowercase strings to match the values
-# the ORM stores for `Appointment.status`.
-_NON_BLOCKING_APPOINTMENT_STATUSES = ("cancelled", "noshow", "entered-in-error")
+# Appointment.status values that should NOT block a slot. Anything else (confirmed,
+# unconfirmed, arrived, roomed, etc.) blocks. These are the literal values the ORM
+# stores — i.e. AppointmentProgressStatus.CANCELLED ("cancelled") and .NOSHOWED
+# ("noshowed", NOT "noshow"). Retracted appointments are NOT a status value — they're
+# tracked via the `entered_in_error` FK, so callers must ALSO filter
+# `entered_in_error__isnull=True` (see both Appointment queries).
+_NON_BLOCKING_APPOINTMENT_STATUSES = ("cancelled", "noshowed")
 
 # Buffer to absorb timezone offset when querying appointments by a window.
 _APPOINTMENT_QUERY_BUFFER = datetime.timedelta(hours=16)
@@ -589,6 +592,7 @@ def find_available_slots(
             provider_id__in=unique_staff_dbids,
             start_time__gte=window_start - _APPOINTMENT_QUERY_BUFFER,
             start_time__lt=window_end + _APPOINTMENT_QUERY_BUFFER,
+            entered_in_error__isnull=True,  # retracted appts don't block a slot
         )
         .exclude(status__in=_NON_BLOCKING_APPOINTMENT_STATUSES)
         .only("provider_id", "start_time", "duration_minutes")
