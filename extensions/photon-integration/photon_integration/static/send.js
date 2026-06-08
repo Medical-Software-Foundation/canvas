@@ -39,6 +39,30 @@
   // Carry patient id + the prescription list across the SSO redirect.
   var KEY_P = "photon_patient_id";
   var KEY_RX = "photon_send_rx";
+  // Once-per-tab guard so auto-logout of a stale Photon session can't loop. If
+  // storage is unavailable, flagGet returns "1" → we skip auto-logout entirely.
+  var FORCED_LOGOUT_KEY = "photon_forced_logout";
+  function flagGet(k) {
+    try {
+      return sessionStorage.getItem(k);
+    } catch (e) {
+      return "1";
+    }
+  }
+  function flagSet(k, v) {
+    try {
+      sessionStorage.setItem(k, v);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  function flagClear(k) {
+    try {
+      sessionStorage.removeItem(k);
+    } catch (e) {
+      /* ignore */
+    }
+  }
   try {
     if (cfg.patientId) sessionStorage.setItem(KEY_P, cfg.patientId);
     else cfg.patientId = sessionStorage.getItem(KEY_P) || "";
@@ -172,10 +196,19 @@
     // Photon session (someone else) be used by a different Canvas user.
     var canvasEmail = (cfg.canvasUserEmail || "").toLowerCase();
     if (!photonEmail || !canvasEmail || photonEmail !== canvasEmail) {
-      setStatus("You're not signed in to Photon as yourself. Sign in to Photon to send.", true);
+      // First mismatch: clear the stale Photon session so the next sign-in starts
+      // clean. If we've already done so this tab, stop looping and let the user act.
+      if (!flagGet(FORCED_LOGOUT_KEY)) {
+        flagSet(FORCED_LOGOUT_KEY, "1");
+        await clearPhotonSession(client);
+        return;
+      }
+      setStatus("You're not signed in to Photon. Sign in to Photon to send.", true);
       addSwitchProviderButton(client);
       return;
     }
+    // Signed in as the right person — clear the loop guard for next time.
+    flagClear(FORCED_LOGOUT_KEY);
 
     function prescriberError(rx) {
       if (!rx.prescriberEmail) {
@@ -228,25 +261,26 @@
     }
   }
 
+  // Clear the Photon (Auth0) session entirely — only a logout redirect ends the
+  // Auth0 session, so a stale sign-in for someone else can't be silently reused.
+  // On return there's no token and run() re-prompts for a fresh login; the pending
+  // prescriptions are restored from sessionStorage. (cfg.redirectUri must be an
+  // Allowed Logout URL in Auth0.)
+  function clearPhotonSession(client) {
+    setStatus("Signing out the previous Photon session…");
+    return client.authentication.logout({ returnTo: cfg.redirectUri });
+  }
+
   function addSwitchProviderButton(client) {
     var btn = document.createElement("button");
     btn.className = "switch-btn";
-    btn.textContent = "Sign in to Photon as the prescriber";
+    btn.textContent = "Sign in to Photon";
     btn.addEventListener("click", function () {
       btn.disabled = true;
-      // Force a fresh login so the correct provider authenticates; the pending
-      // prescriptions are restored from sessionStorage on return.
-      Promise.resolve()
-        .then(function () {
-          return client.authentication.logout();
-        })
-        .catch(function () {})
-        .then(function () {
-          return client.authentication.login({ redirectURI: cfg.redirectUri });
-        })
-        .catch(function (err) {
-          setStatus("Could not switch Photon provider: " + err, true);
-        });
+      clearPhotonSession(client).catch(function (err) {
+        setStatus("Could not switch Photon provider: " + err, true);
+        btn.disabled = false;
+      });
     });
     document.getElementById("root").appendChild(btn);
   }
