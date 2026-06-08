@@ -10,22 +10,33 @@ from photon_integration import prescriber
 MODULE = "photon_integration.prescriber"
 
 
-def _staff(email="kristen@example.com", first="Kristen", last="ONeill"):
+def _staff(email="kristen@example.com", first="Kristen", last="ONeill", telecom_email=None):
     staff = MagicMock()
     staff.first_name = first
     staff.last_name = last
-    contact = SimpleNamespace(value=email) if email else None
+    staff.user = SimpleNamespace(email=email) if email else None
+    contact = SimpleNamespace(value=telecom_email) if telecom_email else None
     staff.telecom.filter.return_value.first.return_value = contact
     return staff
 
 
-def test_resolves_email_and_name_from_staff():
+def test_resolves_email_from_canvas_user():
     with patch(f"{MODULE}.Staff") as staff_cls:
-        staff_cls.objects.filter.return_value.first.side_effect = [_staff(), None]
+        staff_cls.objects.filter.return_value.first.return_value = _staff()
         result = prescriber.resolve_prescriber(
-            {"prescriber": {"text": "Kristen ONeill", "value": "usr_1"}}
+            {"prescriber": {"text": "Kristen ONeill", "value": "stf_1"}}
         )
     assert result == {"email": "kristen@example.com", "name": "Kristen ONeill"}
+
+
+def test_falls_back_to_telecom_email():
+    with patch(f"{MODULE}.Staff") as staff_cls:
+        staff_cls.objects.filter.return_value.first.return_value = _staff(
+            email=None, telecom_email="t@example.com"
+        )
+        assert prescriber.resolve_prescriber(
+            {"prescriber": {"value": "stf_1"}}
+        )["email"] == "t@example.com"
 
 
 def test_no_prescriber():
@@ -38,15 +49,21 @@ def test_no_prescriber():
 def test_staff_not_found_keeps_name_no_email():
     with patch(f"{MODULE}.Staff") as staff_cls:
         staff_cls.objects.filter.return_value.first.return_value = None
-        result = prescriber.resolve_prescriber({"prescriber": {"text": "Dr X", "value": "usr_9"}})
+        result = prescriber.resolve_prescriber({"prescriber": {"text": "Dr X", "value": "u1"}})
+    assert result == {"email": None, "name": "Dr X"}
+
+
+def test_never_raises_on_query_error():
+    with patch(f"{MODULE}.Staff") as staff_cls:
+        staff_cls.objects.filter.side_effect = Exception("FieldError")
+        result = prescriber.resolve_prescriber({"prescriber": {"text": "Dr X", "value": "u1"}})
+    # defensive: returns the name, no email, no exception
     assert result == {"email": None, "name": "Dr X"}
 
 
 def test_email_lowercased():
     with patch(f"{MODULE}.Staff") as staff_cls:
-        staff_cls.objects.filter.return_value.first.side_effect = [
-            _staff(email="MixedCase@Example.com"), None
-        ]
+        staff_cls.objects.filter.return_value.first.return_value = _staff(email="Mixed@Example.com")
         assert prescriber.resolve_prescriber(
-            {"prescriber": {"value": "usr_1"}}
-        )["email"] == "mixedcase@example.com"
+            {"prescriber": {"value": "stf_1"}}
+        )["email"] == "mixed@example.com"
