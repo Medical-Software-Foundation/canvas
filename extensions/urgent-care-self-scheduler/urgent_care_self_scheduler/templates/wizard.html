@@ -124,6 +124,7 @@
     .uc-slot--selected { background: var(--uc-accent); color: #fff; border-color: var(--uc-accent); }
     .uc-slot__time { font-weight: 600; font-size: 15px; display: block; }
     .uc-slot__provider { font-size: 13px; opacity: 0.9; display: block; margin-top: 2px; }
+    .uc-slot__location { font-size: 12px; opacity: 0.85; display: block; margin-top: 2px; }
     .uc-empty {
       padding: 24px;
       text-align: center;
@@ -294,6 +295,7 @@
         selectedSlot: null,
         fallbackPhone: '',
         blockAllBooking: false,  // true when the patient already has an upcoming urgent-care visit
+        modality: 'telehealth',  // 'in_person' labels each slot with its location
       };
       const EXISTING_VISIT_MSG =
         'You already have an upcoming urgent-care visit scheduled. If this is an emergency, call 911.';
@@ -427,6 +429,13 @@
             const time = document.createElement('span'); time.className = 'uc-slot__time';
             time.textContent = `${dayKey(s.start_iso)} • ${TIME_FMT.format(t)}`;
             btn.appendChild(time);
+            // In-person visits span physical locations — label each slot so the
+            // patient can tell which site it's at. Telehealth is virtual: no label.
+            if (state.modality === 'in_person' && s.location_name) {
+              const loc = document.createElement('span'); loc.className = 'uc-slot__location';
+              loc.textContent = s.location_name;
+              btn.appendChild(loc);
+            }
             btn.addEventListener('click', () => selectSlot(s, btn));
             dgGrid.appendChild(btn);
             if (i >= INITIAL_SLOTS_PER_PROVIDER) hiddenCount += 1;
@@ -462,6 +471,7 @@
           state.slots = data.slots || [];
           state.fallbackPhone = data.fallback_phone || '';
           state.blockAllBooking = !!data.existing_urgent_care_visit;
+          state.modality = data.modality || 'telehealth';
           $('uc-slots-fallback-phone').textContent = state.fallbackPhone ? `Call us at ${state.fallbackPhone}.` : '';
           if (state.blockAllBooking) {
             // Patient already has an upcoming urgent-care visit — block booking another.

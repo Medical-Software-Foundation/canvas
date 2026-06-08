@@ -334,6 +334,69 @@ def test_book_api_happy_path_returns_effects_and_response(mocker) -> None:
     assert "Symptom duration: 2 days" in comment_effects[0].payload
 
 
+def test_book_api_books_into_the_slots_location(mocker) -> None:
+    """The appointment books into the LOCATION the chosen slot belongs to (from the
+    server-matched slot), not the arbitrary first active location."""
+    import json as _json
+    from canvas_sdk.test_utils.factories import (
+        NoteTypeFactory,
+        PatientFactory,
+        PracticeLocationFactory,
+        StaffFactory,
+    )
+    from canvas_sdk.v1.data.note import NoteType
+
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    active_location = PracticeLocationFactory.create()
+    slot_location = PracticeLocationFactory.create()  # the location the slot belongs to
+    note_type = NoteTypeFactory.create(
+        name="Urgent Care",
+        is_active=True,
+        is_scheduleable=True,
+        is_scheduleable_via_patient_portal=True,
+        category="encounter",
+        is_telehealth=True,
+    )
+    note_type.online_duration = 15
+    note_type.save()
+
+    fake_slot = {
+        "provider_id": str(provider.id),
+        "provider_name": "Dr. Smith",
+        "start_iso": "2026-05-01T08:00:00+00:00",
+        "end_iso": "2026-05-01T08:15:00+00:00",
+        "location_id": str(slot_location.id),  # distinct from the active location
+        "location_name": "Florida",
+    }
+    mocker.patch(
+        "urgent_care_self_scheduler.handlers.api.find_available_slots", return_value=[fake_slot]
+    )
+    mocker.patch(
+        "urgent_care_self_scheduler.handlers.api._active_location",
+        return_value=(str(active_location.id), __import__("zoneinfo").ZoneInfo("UTC")),
+    )
+    mocker.patch("urgent_care_self_scheduler.handlers.api._patient_full_name", return_value="Jane Doe")
+    mocker.patch("urgent_care_self_scheduler.handlers.api._location_index", return_value={})
+    mocker.patch.object(NoteType.objects, "filter", return_value=[note_type])
+
+    body = _json.dumps({
+        "slot": {"provider_id": str(provider.id), "start_iso": fake_slot["start_iso"]},
+        "intake": _good_intake(),
+    }).encode()
+    api = BookAPI.__new__(BookAPI)
+    api.secrets = {"URGENT_CARE_NOTE_TYPE_NAME": "Urgent Care"}  # type: ignore[attr-defined]
+    api.request = SimpleNamespace(  # type: ignore[attr-defined]
+        headers={"canvas-logged-in-user-id": str(patient.id)}, body=body
+    )
+    response = api.post()
+
+    appt_effects = [e for e in response if "practice_location_id" in getattr(e, "payload", "")]
+    assert len(appt_effects) == 1
+    assert str(slot_location.id) in appt_effects[0].payload
+    assert str(active_location.id) not in appt_effects[0].payload
+
+
 def test_book_api_surfaces_flagged_med_allergy_changes_on_task(mocker) -> None:
     """When the patient flags med/allergy changes, they must be surfaced on the
     intake task (title flag + a task comment), not only in the note's HPI.

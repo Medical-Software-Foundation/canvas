@@ -842,6 +842,52 @@ def test_find_available_slots_dedupes_provider_with_multiple_clinic_calendars(mo
     assert len(slots) == 4
 
 
+def test_find_available_slots_stamps_location_from_index(mocker):
+    # Each slot carries the location resolved from its calendar's title suffix,
+    # so BookAPI can book into the right site and the wizard can label it.
+    _set_note_type_filter(mocker, [_good_nt()])
+    cal = SimpleNamespace(
+        id="cal-1", dbid=10, title="Dr. Smith: Clinic: California Location", timezone=ZoneInfo("UTC")
+    )
+    _set_calendar_filter(mocker, [cal])
+    staff = SimpleNamespace(id="s1", dbid=1, full_name="Dr. Smith", active=True, roles=_roles("PROVIDER"))
+    _set_staff_filter(mocker, [staff])
+    event = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 4, 9, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 10, tzinfo=datetime.timezone.utc),
+        recurrence=None,
+        calendar_id=cal.dbid,
+    )
+    _set_event_filter(mocker, [event])
+    _set_appointment_filter(mocker, [])
+
+    slots = _call_find_slots(location_index={"California Location": ("loc-ca", "California")})
+    assert slots
+    assert all(s["location_id"] == "loc-ca" and s["location_name"] == "California" for s in slots)
+
+
+def test_find_available_slots_location_unknown_when_no_suffix_or_index(mocker):
+    # A location-less calendar title yields no location; a suffix missing from the
+    # index keeps the raw suffix as the display name with no id.
+    _set_note_type_filter(mocker, [_good_nt()])
+    cal = SimpleNamespace(id="cal-1", dbid=10, title="Dr. Smith: Clinic", timezone=ZoneInfo("UTC"))
+    _set_calendar_filter(mocker, [cal])
+    staff = SimpleNamespace(id="s1", dbid=1, full_name="Dr. Smith", active=True, roles=_roles("PROVIDER"))
+    _set_staff_filter(mocker, [staff])
+    event = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 4, 9, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 10, tzinfo=datetime.timezone.utc),
+        recurrence=None,
+        calendar_id=cal.dbid,
+    )
+    _set_event_filter(mocker, [event])
+    _set_appointment_filter(mocker, [])
+
+    slots = _call_find_slots()  # no location_index
+    assert slots
+    assert all(s["location_id"] is None and s["location_name"] is None for s in slots)
+
+
 def test_find_available_slots_subtracts_administrative_blocks(mocker):
     # provider_availability writes blocks to a "{Provider}: Administrative" calendar.
     # The scheduler must subtract those, even though they have no allowed_note_types.

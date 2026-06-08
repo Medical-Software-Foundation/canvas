@@ -267,6 +267,8 @@ def compute_slots_for_provider(
     duration_minutes: int,
     now: datetime.datetime,
     lead_time_minutes: int,
+    location_id: str | None = None,
+    location_name: str | None = None,
 ) -> list[dict]:
     now_local = now.astimezone(timezone).replace(tzinfo=None)
 
@@ -289,6 +291,8 @@ def compute_slots_for_provider(
             "provider_name": provider_name,
             "start_iso": start.replace(tzinfo=timezone).isoformat(),
             "end_iso": end.replace(tzinfo=timezone).isoformat(),
+            "location_id": location_id,
+            "location_name": location_name,
         }
         for start, end in final_slots
     ]
@@ -408,8 +412,9 @@ def find_available_slots(
     lead_time_minutes: int = 30,
     max_results: int = 50,
     note_type: Any = None,
+    location_index: dict[str, tuple[str, str]] | None = None,
 ) -> list[dict]:
-    """Returns slots [{provider_id, provider_name, start_iso, end_iso}], sorted by instant.
+    """Returns slots [{provider_id, provider_name, start_iso, end_iso, location_id, location_name}], sorted by instant.
 
     Each clinic calendar's availability is interpreted in its OWN `Calendar.timezone`
     (a required field — not guessed from the title), with `practice_timezone` as a
@@ -428,6 +433,7 @@ def find_available_slots(
     from canvas_sdk.v1.data.staff import Staff
     from logger import log
 
+    location_index = location_index or {}
     log.info(
         f"slot_search: searching note_type={note_type_name!r} "
         f"window={window_start.isoformat()}..{window_end.isoformat()} "
@@ -628,8 +634,18 @@ def find_available_slots(
             # Interpret this calendar's availability in its OWN timezone — the
             # required Calendar.timezone field, never inferred from the title.
             tz = _calendar_timezone(calendar, practice_timezone)
+            # Resolve the calendar's location from its title suffix
+            # ("{Provider}: Clinic: {Location full_name}") so each slot carries the
+            # location it would book into. Calendars with no suffix → unknown.
+            _, _, location_suffix = parse_calendar_title(calendar.title)
+            location_id, location_name = (
+                location_index.get(location_suffix, (None, location_suffix))
+                if location_suffix
+                else (None, None)
+            )
             log.info(
-                f"slot_search: calendar {calendar.title!r} tz={tz.key} ({len(events)} events)"
+                f"slot_search: calendar {calendar.title!r} tz={tz.key} "
+                f"location={location_name!r} ({len(events)} events)"
             )
             booked_tz = [
                 (
@@ -650,6 +666,8 @@ def find_available_slots(
                     duration_minutes=duration_minutes,
                     now=now,
                     lead_time_minutes=lead_time_minutes,
+                    location_id=location_id,
+                    location_name=location_name,
                 )
             )
 

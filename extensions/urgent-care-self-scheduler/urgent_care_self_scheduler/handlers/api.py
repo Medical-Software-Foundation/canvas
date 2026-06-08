@@ -193,6 +193,25 @@ def _practice_timezone() -> ZoneInfo:
     return _active_location()[1]
 
 
+def _location_index() -> dict[str, tuple[str, str]]:
+    """Maps each active PracticeLocation's `full_name` to `(id, display_name)`.
+
+    Clinic calendars are titled ``"{Provider}: Clinic: {Location full_name}"``, so
+    this lets the slot search resolve which location a slot belongs to and book the
+    appointment there (and label the slot for in-person modality). `display_name`
+    prefers `short_name` for a compact wizard label, falling back to `full_name`.
+    """
+    from canvas_sdk.v1.data.practicelocation import PracticeLocation
+
+    return {
+        location.full_name: (
+            str(location.id),
+            (location.short_name or location.full_name),
+        )
+        for location in PracticeLocation.objects.filter(active=True)
+    }
+
+
 class MeAPI(PatientSessionAuthMixin, SimpleAPIRoute):
     """Returns the logged-in patient's active medications + allergies for the wizard's review step."""
 
@@ -244,6 +263,7 @@ class SlotsAPI(PatientSessionAuthMixin, SimpleAPIRoute):
             now=now,
             lead_time_minutes=lead_time,
             note_type=note_type,
+            location_index=_location_index(),
         )
         existing_urgent_care = False
         if patient_id and note_type is not None:
@@ -256,6 +276,9 @@ class SlotsAPI(PatientSessionAuthMixin, SimpleAPIRoute):
                     "slots": slots,
                     "fallback_phone": fallback_phone,
                     "existing_urgent_care_visit": existing_urgent_care,
+                    # The wizard labels each slot with its location only for in-person
+                    # visits (telehealth is virtual — location is irrelevant there).
+                    "modality": _resolve_modality(secrets.get("URGENT_CARE_VISIT_MODALITY")),
                 }
             )
         ]
@@ -416,6 +439,7 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
             now=now,
             lead_time_minutes=lead_time,
             note_type=note_type,
+            location_index=_location_index(),
         )
         # Match by absolute instant + provider, not by raw ISO string: slots from
         # different-timezone location calendars carry different UTC offsets, so the
@@ -433,6 +457,11 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
             return [
                 JSONResponse({"error": "slot_taken"}, status_code=HTTPStatus.CONFLICT)
             ]
+
+        # Book into the location the matched slot belongs to (resolved server-side,
+        # not trusted from the request body). Falls back to the active location for
+        # calendars with no location suffix (single-site practices).
+        booking_location_id = match.get("location_id") or practice_location_id
 
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=practice_tz)
@@ -461,7 +490,7 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
             patient_id=patient_id,
             start_time=start_time,
             duration_minutes=duration_minutes,
-            practice_location_id=practice_location_id,
+            practice_location_id=booking_location_id,
             provider_id=provider_id,
             status=AppointmentProgressStatus.CONFIRMED,
             external_identifiers=[
