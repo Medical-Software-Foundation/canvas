@@ -139,11 +139,6 @@
     var photonEmail = ((photonUser && photonUser.email) || "").toLowerCase();
     var canvasEmail = (cfg.canvasUserEmail || "").toLowerCase();
     if (!photonEmail || !canvasEmail || photonEmail !== canvasEmail) {
-      // eslint-disable-next-line no-console
-      console.warn("[photon] identity gate blocked prescribe", {
-        photonEmail: photonEmail,
-        canvasEmail: canvasEmail,
-      });
       // Stay inside our modal — surface the problem here rather than bouncing
       // the user out to an external sign-out page.
       setStatus("You're not signed in to Photon. Sign in to Photon to prescribe.", true);

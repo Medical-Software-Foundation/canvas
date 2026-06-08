@@ -44,6 +44,25 @@ _GRAPHQL_URLS = {
 }
 
 
+def _safe_json(obj: Any) -> str:
+    """Serialize ``obj`` for safe embedding in an inline ``<script>`` block.
+
+    ``json.dumps`` does not escape ``</script>`` or the U+2028/U+2029 line
+    separators, so values sourced from patient/staff data (e.g. the patient
+    address) could break out of the script tag and execute. Escaping ``<``/``>``/
+    ``&`` and the two line separators neutralizes that without affecting
+    ``JSON.parse`` (they are valid JSON unicode escapes).
+    """
+    return (
+        json.dumps(obj)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace(" ", "\\u2028")
+        .replace(" ", "\\u2029")
+    )
+
+
 def _photon_med_label(med: dict[str, Any] | None) -> str | None:
     """Human label for the Photon match so the provider can verify it."""
     if not med:
@@ -111,7 +130,7 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
         }
         html = render_to_string(
             "static/index.html",
-            {"cache_bust": _CACHE_BUST, "config_json": json.dumps(config)},
+            {"cache_bust": _CACHE_BUST, "config_json": _safe_json(config)},
         )
         effects.append(
             HTMLResponse(html, status_code=HTTPStatus.OK, headers={"Cache-Control": "no-store"})
@@ -217,7 +236,7 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
         }
         html = render_to_string(
             "static/send.html",
-            {"cache_bust": _CACHE_BUST, "config_json": json.dumps(config)},
+            {"cache_bust": _CACHE_BUST, "config_json": _safe_json(config)},
         )
         effects.append(
             HTMLResponse(html, status_code=HTTPStatus.OK, headers={"Cache-Control": "no-store"})

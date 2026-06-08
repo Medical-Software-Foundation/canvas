@@ -213,6 +213,18 @@ class TestSend:
         assert rx["prescriberName"] == "Kristen ONeill"
         assert rx["error"] is None
 
+    def test_config_json_escapes_script_breakout(self, send_patched):
+        # Patient address is untrusted free text injected into an inline <script>;
+        # a '</script>' payload must not survive into the rendered config_json.
+        with patch(f"{MODULE}.build_address", return_value={"street1": "</script><script>alert(1)</script>"}):
+            api = _api(query_params={"note_id": "4567"})
+            api.send()
+        raw = send_patched.rts.call_args.args[1]["config_json"]
+        assert "</script>" not in raw
+        assert "<" not in raw and ">" not in raw
+        # still valid JSON that round-trips the original value
+        assert json.loads(raw)["address"]["street1"] == "</script><script>alert(1)</script>"
+
     def test_unmatched_rxcui_flags_error(self, send_patched):
         send_patched.build_client.return_value.find_treatment_by_code.return_value = None
         api = _api(query_params={"note_id": "4567"})
