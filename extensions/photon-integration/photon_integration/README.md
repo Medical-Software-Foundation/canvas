@@ -148,6 +148,13 @@ Known limitations and follow-ups, grouped by which flow they affect
   each prescription must be sent while signed in to Photon **as that command's
   prescriber**, and a note with multiple prescribers needs each to authenticate in
   turn. See [Prescriber attribution](#prescriber-attribution).
+- **Elements (embed) — actions aren't written back to Canvas.** When a provider
+  prescribes or places an order inside the embedded Photon Elements modal, those
+  actions are created in **Photon only** — there's no corresponding Canvas
+  prescription/order/command, so the chart doesn't reflect what was prescribed. A
+  future enhancement could write these back to Canvas (e.g. a Photon webhook or
+  poll that materializes the result via SDK command/effect), so the Canvas record
+  stays the source of truth.
 - **Both — patient coverage (insurance) is not synced.** `resolve_photon_patient`
   syncs demographics/address only. Pharmacy benefit/coverage information is not
   pushed to Photon, so coverage-aware routing/pricing on Photon's side isn't
