@@ -234,12 +234,15 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
             # Ontologies service -> Photon drug.code. Never guess by name.
             rxcui = fdb_to_rxcui(fdb) or ndc_to_rxcui(ndc)
             treatment_id = client.find_treatment_id_by_code(rxcui)
-            if treatment_id:
-                error = None
-            elif not rxcui:
+            if not treatment_id and not rxcui:
                 error = "No RxNorm code for this medication — use Prescribe via Photon"
-            else:
+            elif not treatment_id:
                 error = f"No Photon match for RxNorm {rxcui} — use Prescribe via Photon"
+            elif not rx["dispenseUnit"]:
+                # Don't auto-send a wrong unit (e.g. "0.75 mL syringe").
+                error = "Dispense unit not supported by Photon — use Prescribe via Photon"
+            else:
+                error = None
             prescriptions.append(
                 {
                     "commandId": str(command.id),

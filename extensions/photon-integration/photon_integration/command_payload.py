@@ -6,7 +6,6 @@ prescribe/refill/adjust command into the fields the browser submits to Photon.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 _MEDICATION_NAME_KEYS = ("text", "label", "name", "description", "display")
@@ -23,20 +22,25 @@ PHOTON_DISPENSE_UNITS = (
     "Pad", "Patch", "Pen Needle", "Ring", "Sponge", "Stick", "Strip",
     "Suppository", "Swab", "Tablet", "Troche", "Unspecified", "Wafer",
 )
+# Whole-text synonyms ONLY. We deliberately do not pull a unit word out of a
+# compound description: "0.75 mL syringe" must NOT become "Milliliter" (that
+# changes 4 syringes into 4 mL). Such compound/packaging units are rejected so
+# the provider sends them via the Elements modal instead.
 _UNIT_SYNONYMS = {
     "ml": "Milliliter", "milliliter": "Milliliter", "milliliters": "Milliliter",
     "g": "Gram", "gm": "Gram", "gram": "Gram", "grams": "Gram",
     "ea": "Each", "cap": "Capsule", "caps": "Capsule", "tab": "Tablet",
     "tabs": "Tablet",
 }
-_DEFAULT_DISPENSE_UNIT = "Each"
 
 
 def resolve_dispense_unit(text: str | None) -> str | None:
     """Resolve Canvas free-text unit to a valid Photon unit, or None if unmappable.
 
-    Used for pre-commit validation — None means the quantity-to-dispense can't be
-    sent to Photon as-is.
+    STRICT, for clinical safety: only an exact whole-text match to a Photon unit
+    (or a whole-text synonym like "mL") maps. Anything compound — "0.75 mL
+    syringe", "0.5 mL vial" — returns None so it is blocked at commit and not
+    auto-sent with the wrong quantity semantics.
     """
     if not text:
         return None
@@ -44,21 +48,7 @@ def resolve_dispense_unit(text: str | None) -> str | None:
     for unit in PHOTON_DISPENSE_UNITS:
         if unit.lower() == normalized:
             return unit
-    if normalized in _UNIT_SYNONYMS:
-        return _UNIT_SYNONYMS[normalized]
-    words = set(re.findall(r"[a-z]+", normalized))
-    for unit in PHOTON_DISPENSE_UNITS:  # e.g. "0.5 mL vial" has no valid form word
-        if unit.lower() in words:
-            return unit
-    for synonym, canonical in _UNIT_SYNONYMS.items():  # ...but "mL" -> Milliliter
-        if synonym in words:
-            return canonical
-    return None
-
-
-def map_dispense_unit(text: str | None) -> str:
-    """Like resolve_dispense_unit but falls back to 'Each' for the send payload."""
-    return resolve_dispense_unit(text) or _DEFAULT_DISPENSE_UNIT
+    return _UNIT_SYNONYMS.get(normalized)
 
 
 def medication_term(data: dict[str, Any]) -> str | None:
@@ -130,7 +120,9 @@ def extract_rx(data: dict[str, Any]) -> dict[str, Any]:
         "ndc": representative_ndc(data),
         "instructions": (data.get("sig") or "").strip(),
         "dispenseQuantity": float(quantity) if quantity is not None else None,
-        "dispenseUnit": map_dispense_unit(dispense_unit_text(data)),
+        # None when the unit can't be safely represented in Photon's vocabulary;
+        # the caller treats that as "can't send".
+        "dispenseUnit": resolve_dispense_unit(dispense_unit_text(data)),
         "refillsAllowed": int(data.get("refills") or 0),
         "daysSupply": data.get("days_supply"),
         "notes": data.get("note_to_pharmacist") or None,

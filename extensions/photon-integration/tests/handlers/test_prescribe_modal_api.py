@@ -205,6 +205,22 @@ class TestSend:
         assert rx["treatmentId"] is None
         assert "No Photon match for RxNorm 198052" in rx["error"]
 
+    def test_unsupported_unit_flags_error(self, send_patched):
+        # treatment matches, but the dispense unit can't be safely represented.
+        cmd = _command(data={
+            "prescribe": {"text": "Wegovy", "value": "1"},
+            "sig": "inject weekly",
+            "quantity_to_dispense": 4,
+            "type_to_dispense": {"text": "0.75 mL syringe"},
+            "refills": 3,
+        })
+        send_patched.command_cls.objects.filter.return_value = [cmd]
+        api = _api(query_params={"note_id": "4567"})
+        api.send()
+        rx = json.loads(send_patched.rts.call_args.args[1]["config_json"])["prescriptions"][0]
+        assert rx["dispenseUnit"] is None
+        assert "Dispense unit not supported" in rx["error"]
+
     def test_no_rxcui_flags_error(self, send_patched):
         send_patched.rxcui.return_value = None
         send_patched.build_client.return_value.find_treatment_id_by_code.return_value = None

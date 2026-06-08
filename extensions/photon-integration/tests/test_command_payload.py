@@ -6,8 +6,8 @@ import pytest
 
 from photon_integration.command_payload import (
     extract_rx,
-    map_dispense_unit,
     medication_term,
+    resolve_dispense_unit,
 )
 
 FULL = {
@@ -63,18 +63,20 @@ class TestExtractRx:
         assert extract_rx(data)["refillsAllowed"] == 0
 
 
-class TestMapDispenseUnit:
+class TestResolveDispenseUnit:
     @pytest.mark.parametrize("text,expected", [
         ("tablet", "Tablet"),
         ("TABLET", "Tablet"),
         ("capsule", "Capsule"),
         ("mL", "Milliliter"),
         ("milliliter", "Milliliter"),
-        ("0.5 mL vial", "Milliliter"),  # liquid -> dose unit, not the container
-        ("0.4 mL syringe", "Milliliter"),
-        ("", "Each"),
-        (None, "Each"),
-        ("ampule", "Each"),  # unmappable -> default (validation blocks at commit)
+        # Compound/packaging units must NOT resolve — sending them with the
+        # Canvas quantity would be clinically wrong (4 syringes != 4 mL).
+        ("0.5 mL vial", None),
+        ("0.75 mL syringe", None),
+        ("ampule", None),
+        ("", None),
+        (None, None),
     ])
-    def test_mapping(self, text, expected):
-        assert map_dispense_unit(text) == expected
+    def test_resolution(self, text, expected):
+        assert resolve_dispense_unit(text) == expected
