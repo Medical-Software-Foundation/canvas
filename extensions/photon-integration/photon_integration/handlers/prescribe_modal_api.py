@@ -31,6 +31,7 @@ from photon_integration.command_payload import extract_rx
 from photon_integration.constants import PHOTON_COMMAND_SCHEMA_KEYS
 from photon_integration.handlers.command_field import _photon_send_selected
 from photon_integration.ontology import fdb_to_rxcui, ndc_to_rxcui
+from photon_integration.prescriber import resolve_prescriber
 from photon_integration.patient_sync import (
     build_address,
     build_client,
@@ -235,10 +236,12 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
                 continue
             if patient is None:
                 patient = command.patient
-            rx = extract_rx(command.data or {})
+            data = command.data or {}
+            rx = extract_rx(data)
             term = rx.pop("term")
             fdb = rx.pop("fdbCode")
             ndc = rx.pop("ndc")
+            prescriber = resolve_prescriber(data)
             # Exact, code-based match: Canvas FDB code (or NDC) -> RxNorm via the
             # Ontologies service -> Photon drug.code. Never guess by name.
             rxcui = fdb_to_rxcui(fdb) or ndc_to_rxcui(ndc)
@@ -261,6 +264,8 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
                     "medication": term or "prescription",
                     "photonMedication": _photon_med_label(photon_med),
                     "rxcui": rxcui,
+                    "prescriberEmail": prescriber["email"],
+                    "prescriberName": prescriber["name"],
                     "error": error,
                     **rx,
                 }

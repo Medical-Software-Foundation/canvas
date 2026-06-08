@@ -171,6 +171,8 @@ def send_patched():
         patch(f"{MODULE}.fdb_to_rxcui", return_value="198052") as rxcui, \
         patch(f"{MODULE}.ndc_to_rxcui", return_value=None) as ndc_rxcui, \
         patch(f"{MODULE}.resolve_photon_patient", return_value=("pat_999", "EXT_EFFECT")), \
+        patch(f"{MODULE}.resolve_prescriber",
+              return_value={"email": "kristen@example.com", "name": "Kristen ONeill"}), \
         patch(f"{MODULE}.build_address", return_value={"city": "Town"}):
         build_client.return_value.find_treatment_by_code.return_value = {
             "id": "med_1", "name": "Ondansetron 4 mg ODT", "brandName": "Zofran",
@@ -200,6 +202,9 @@ class TestSend:
         assert rx["refillsAllowed"] == 1
         # the resolved Photon medication is surfaced for provider review
         assert rx["photonMedication"] == "Zofran — Ondansetron 4 mg ODT"
+        # prescriber identity for the browser-side match guard
+        assert rx["prescriberEmail"] == "kristen@example.com"
+        assert rx["prescriberName"] == "Kristen ONeill"
         assert rx["error"] is None
 
     def test_unmatched_rxcui_flags_error(self, send_patched):

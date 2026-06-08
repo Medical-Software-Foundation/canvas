@@ -156,21 +156,84 @@
       return;
     }
 
-    setStatus("Sending to Photon…");
-    var sent = 0;
-    for (var i = 0; i < cfg.prescriptions.length; i++) {
-      try {
-        if (await sendOne(token, cfg.prescriptions[i])) sent++;
-      } catch (err) {
-        addResult(cfg.prescriptions[i].medication, false, String(err && err.message ? err.message : err));
-      }
-    }
-    setStatus(sent + " of " + cfg.prescriptions.length + " sent to Photon.");
+    // Photon attributes the prescription to the signed-in user (there is no
+    // prescriberId). Only send an Rx when the signed-in Photon provider matches
+    // the command's prescriber — never under a cached session for someone else.
+    var photonUser = null;
     try {
-      sessionStorage.removeItem(KEY_RX);
+      photonUser = await client.authentication.getUser();
     } catch (e) {
       /* ignore */
     }
+    var photonEmail = ((photonUser && photonUser.email) || "").toLowerCase();
+    var photonName = (photonUser && photonUser.name) || photonEmail || "your Photon account";
+
+    function prescriberError(rx) {
+      if (!rx.prescriberEmail) {
+        return "Could not verify the prescriber's Photon identity — use Prescribe via Photon";
+      }
+      if (!photonEmail || rx.prescriberEmail.toLowerCase() !== photonEmail) {
+        return (
+          "Prescriber is " + (rx.prescriberName || rx.prescriberEmail) +
+          ", but Photon is signed in as " + photonName +
+          ". Sign in to Photon as the prescriber."
+        );
+      }
+      return null;
+    }
+
+    setStatus("Signed in to Photon as " + photonName + ". Sending…");
+    var sent = 0;
+    var mismatch = false;
+    for (var i = 0; i < cfg.prescriptions.length; i++) {
+      var rx = cfg.prescriptions[i];
+      if (!rx.error) {
+        var perr = prescriberError(rx);
+        if (perr) {
+          rx.error = perr;
+          mismatch = true;
+        }
+      }
+      try {
+        if (await sendOne(token, rx)) sent++;
+      } catch (err) {
+        addResult(rx.medication, false, String(err && err.message ? err.message : err));
+      }
+    }
+    setStatus(sent + " of " + cfg.prescriptions.length + " sent to Photon as " + photonName + ".");
+    if (mismatch) {
+      // Keep the pending list so a re-login as the right provider can retry.
+      addSwitchProviderButton(client);
+    } else {
+      try {
+        sessionStorage.removeItem(KEY_RX);
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+
+  function addSwitchProviderButton(client) {
+    var btn = document.createElement("button");
+    btn.className = "switch-btn";
+    btn.textContent = "Sign in to Photon as the prescriber";
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      // Force a fresh login so the correct provider authenticates; the pending
+      // prescriptions are restored from sessionStorage on return.
+      Promise.resolve()
+        .then(function () {
+          return client.authentication.logout();
+        })
+        .catch(function () {})
+        .then(function () {
+          return client.authentication.login({ redirectURI: cfg.redirectUri });
+        })
+        .catch(function (err) {
+          setStatus("Could not switch Photon provider: " + err, true);
+        });
+    });
+    document.getElementById("root").appendChild(btn);
   }
 
   run().catch(function (err) {

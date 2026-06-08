@@ -92,6 +92,18 @@ The GraphQL calls in `client/photon_client.py` match the live Neutron schema:
 - `createOrder` uses `fills: [{ prescriptionId }]` + `address` (`pharmacyId`
   optional → patient's preferred pharmacy).
 
+### Prescriber attribution
+
+Photon attributes a prescription to the **authenticated Photon user** (there is
+no `prescriberId` on `createPrescription`), and the SDK caches that session in
+the browser's `localStorage` — independent of the Canvas user. To prevent
+sending under the wrong identity, the send modal resolves each command's
+prescriber to an email (Canvas Staff) and **only sends an Rx when the signed-in
+Photon provider's email matches**; otherwise it blocks that Rx and offers a
+"Sign in to Photon as the prescriber" re-auth. This assumes a provider's Photon
+account email equals their Canvas email. Notes with multiple prescribers require
+each provider to authenticate in turn.
+
 ### ⚠️ Open question: prescription authorization
 
 Photon documents that a Machine-to-Machine token "can complete all actions
