@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 
+from canvas_sdk.commands.validation import CommandValidationErrorEffect
 from canvas_sdk.effects import Effect, EffectType
 from canvas_sdk.effects.command_metadata import (
     CommandMetadataCreateFormEffect,
@@ -20,6 +21,7 @@ from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data.command import CommandMetadata
 
+from photon_integration.command_payload import dispense_unit_text, resolve_dispense_unit
 from photon_integration.constants import (
     ACTIONS_TO_REMOVE_WHEN_PHOTON,
     PHOTON_COMMAND_SCHEMA_KEYS,
@@ -104,3 +106,32 @@ class PhotonAdjustPrescriptionActionFilter(_PhotonActionFilter):
     """Filter actions on the Adjust Prescription command."""
 
     RESPONDS_TO = EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__AVAILABLE_ACTIONS)
+
+
+class PhotonDispenseUnitValidation(BaseHandler):
+    """Block commit when 'Send via Photon' is set but the quantity-to-dispense
+    unit can't be mapped to a Photon dispense unit (e.g. a packaging unit like
+    a vial), so the provider fixes it before signing rather than at send time."""
+
+    RESPONDS_TO = [
+        EventType.Name(EventType.PRESCRIBE_COMMAND__POST_VALIDATION),
+        EventType.Name(EventType.REFILL_COMMAND__POST_VALIDATION),
+        EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_VALIDATION),
+    ]
+
+    def compute(self) -> list[Effect]:
+        if not _photon_send_selected(self.event.target.id):
+            return []
+
+        unit_text = dispense_unit_text(self.event.context.get("fields") or {})
+        # Only flag a present-but-unmappable unit; a missing unit is Canvas's own
+        # required-field validation, not ours.
+        if not unit_text or resolve_dispense_unit(unit_text) is not None:
+            return []
+
+        effect = CommandValidationErrorEffect()
+        effect.add_error(
+            f"Send via Photon: '{unit_text}' is not a valid Photon dispense unit. "
+            "Choose a different quantity to dispense or uncheck Send via Photon."
+        )
+        return [effect.apply()]

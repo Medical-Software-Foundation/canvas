@@ -17,6 +17,7 @@ from photon_integration.constants import (
 )
 from photon_integration.handlers.command_field import (
     PhotonAdjustPrescriptionActionFilter,
+    PhotonDispenseUnitValidation,
     PhotonFieldHandler,
     PhotonPrescribeActionFilter,
     PhotonRefillActionFilter,
@@ -139,3 +140,36 @@ class TestPhotonActionFilters:
 
         assert len(effects) == 1
         assert json.loads(effects[0].payload) == []
+
+
+def _validation_event(unit_text, target_id="rx-1"):
+    fields = {"type_to_dispense": {"text": unit_text}} if unit_text is not None else {}
+    return SimpleNamespace(context={"fields": fields}, target=SimpleNamespace(id=target_id))
+
+
+class TestPhotonDispenseUnitValidation:
+    def test_no_error_when_not_selected(self):
+        handler = PhotonDispenseUnitValidation(event=_validation_event("vial"))
+        with _patch_metadata("No"):
+            assert handler.compute() == []
+
+    def test_no_error_for_mappable_unit(self):
+        handler = PhotonDispenseUnitValidation(event=_validation_event("tablet"))
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
+            patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
+            assert handler.compute() == []
+        eff.assert_not_called()
+
+    def test_no_error_for_missing_unit(self):
+        handler = PhotonDispenseUnitValidation(event=_validation_event(None))
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE):
+            assert handler.compute() == []
+
+    def test_error_for_unmappable_unit(self):
+        handler = PhotonDispenseUnitValidation(event=_validation_event("ampule"))
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
+            patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
+            eff.return_value.apply.return_value = "VALIDATION_ERROR"
+            result = handler.compute()
+        assert result == ["VALIDATION_ERROR"]
+        assert "ampule" in eff.return_value.add_error.call_args.args[0]

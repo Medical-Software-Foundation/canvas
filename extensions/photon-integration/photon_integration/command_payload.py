@@ -12,15 +12,16 @@ from typing import Any
 _MEDICATION_NAME_KEYS = ("text", "label", "name", "description", "display")
 _DISPENSE_UNIT_KEYS = ("description", "text", "label", "name")
 
-# Photon's controlled DispenseUnit vocabulary (from the `dispenseUnits` query).
-# Canvas sends free text (e.g. "tablet"); we normalize to one of these.
+# Photon's dispense units that are valid for a *prescription* (dosage forms).
+# Note: Photon's full `dispenseUnits` query also returns packaging units
+# (Vial, Syringe, Pen, Drop, Spray, ...) that createPrescription rejects, so
+# they are intentionally excluded — a "0.5 mL vial" maps to its dose unit
+# (Milliliter), not "Vial".
 PHOTON_DISPENSE_UNITS = (
-    "Each", "Milliliter", "Gram", "Applicator", "Blister", "Caplet", "Capsule",
-    "Film", "Gum", "Implant", "Insert", "Kit", "Lancet", "Lozenge", "Packet",
+    "Applicator", "Blister", "Caplet", "Capsule", "Each", "Film", "Gram", "Gum",
+    "Implant", "Insert", "Kit", "Lancet", "Lozenge", "Milliliter", "Packet",
     "Pad", "Patch", "Pen Needle", "Ring", "Sponge", "Stick", "Strip",
-    "Suppository", "Swab", "Tablet", "Troche", "Unspecified", "Wafer", "Carton",
-    "Pen", "Syringe", "Vial", "Auto-injector", "Tube", "Bottle", "Inhaler",
-    "Aerosol", "Can", "Spray", "Drop",
+    "Suppository", "Swab", "Tablet", "Troche", "Unspecified", "Wafer",
 )
 _UNIT_SYNONYMS = {
     "ml": "Milliliter", "milliliter": "Milliliter", "milliliters": "Milliliter",
@@ -31,10 +32,14 @@ _UNIT_SYNONYMS = {
 _DEFAULT_DISPENSE_UNIT = "Each"
 
 
-def map_dispense_unit(text: str | None) -> str:
-    """Map Canvas free-text unit (e.g. 'tablet', '0.5 mL vial') to Photon's vocab."""
+def resolve_dispense_unit(text: str | None) -> str | None:
+    """Resolve Canvas free-text unit to a valid Photon unit, or None if unmappable.
+
+    Used for pre-commit validation — None means the quantity-to-dispense can't be
+    sent to Photon as-is.
+    """
     if not text:
-        return _DEFAULT_DISPENSE_UNIT
+        return None
     normalized = text.strip().lower()
     for unit in PHOTON_DISPENSE_UNITS:
         if unit.lower() == normalized:
@@ -42,14 +47,18 @@ def map_dispense_unit(text: str | None) -> str:
     if normalized in _UNIT_SYNONYMS:
         return _UNIT_SYNONYMS[normalized]
     words = set(re.findall(r"[a-z]+", normalized))
-    # Prefer a specific unit word in the text (e.g. "0.5 mL vial" -> Vial).
-    for unit in PHOTON_DISPENSE_UNITS:
+    for unit in PHOTON_DISPENSE_UNITS:  # e.g. "0.5 mL vial" has no valid form word
         if unit.lower() in words:
             return unit
-    for synonym, canonical in _UNIT_SYNONYMS.items():
+    for synonym, canonical in _UNIT_SYNONYMS.items():  # ...but "mL" -> Milliliter
         if synonym in words:
             return canonical
-    return _DEFAULT_DISPENSE_UNIT
+    return None
+
+
+def map_dispense_unit(text: str | None) -> str:
+    """Like resolve_dispense_unit but falls back to 'Each' for the send payload."""
+    return resolve_dispense_unit(text) or _DEFAULT_DISPENSE_UNIT
 
 
 def medication_term(data: dict[str, Any]) -> str | None:
@@ -95,7 +104,7 @@ def representative_ndc(data: dict[str, Any]) -> str | None:
     return None
 
 
-def _dispense_unit(data: dict[str, Any]) -> str | None:
+def dispense_unit_text(data: dict[str, Any]) -> str | None:
     type_to_dispense = data.get("type_to_dispense")
     if isinstance(type_to_dispense, str) and type_to_dispense.strip():
         return type_to_dispense.strip()
@@ -121,7 +130,7 @@ def extract_rx(data: dict[str, Any]) -> dict[str, Any]:
         "ndc": representative_ndc(data),
         "instructions": (data.get("sig") or "").strip(),
         "dispenseQuantity": float(quantity) if quantity is not None else None,
-        "dispenseUnit": map_dispense_unit(_dispense_unit(data)),
+        "dispenseUnit": map_dispense_unit(dispense_unit_text(data)),
         "refillsAllowed": int(data.get("refills") or 0),
         "daysSupply": data.get("days_supply"),
         "notes": data.get("note_to_pharmacist") or None,

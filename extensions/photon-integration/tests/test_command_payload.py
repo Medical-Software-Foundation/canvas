@@ -70,11 +70,11 @@ class TestMapDispenseUnit:
         ("capsule", "Capsule"),
         ("mL", "Milliliter"),
         ("milliliter", "Milliliter"),
-        ("0.5 mL vial", "Vial"),
-        ("0.4 mL syringe", "Syringe"),
+        ("0.5 mL vial", "Milliliter"),  # liquid -> dose unit, not the container
+        ("0.4 mL syringe", "Milliliter"),
         ("", "Each"),
         (None, "Each"),
-        ("widget", "Each"),
+        ("ampule", "Each"),  # unmappable -> default (validation blocks at commit)
     ])
     def test_mapping(self, text, expected):
         assert map_dispense_unit(text) == expected
