@@ -36,6 +36,8 @@ def patched():
     with patch(f"{MODULE}.render_to_string", return_value="<html></html>") as rts, \
         patch(f"{MODULE}.Patient") as patient_cls, \
         patch(f"{MODULE}.build_client") as build_client, \
+        patch(f"{MODULE}.staff_identity",
+              return_value={"email": "kristen@example.com", "name": "Kristen ONeill"}), \
         patch(f"{MODULE}.resolve_photon_patient") as resolve:
         patient_cls.DoesNotExist = type("DoesNotExist", (Exception,), {})
         patient_cls.objects.get.return_value = SimpleNamespace(id="ptn-1")
@@ -65,6 +67,7 @@ class TestIndex:
         assert config["redirectUri"] == (
             "https://plugin-testing.canvasmedical.com/plugin-io/api/photon_integration/photon/"
         )
+        assert config["canvasUserEmail"] == "kristen@example.com"  # operator gate
 
     def test_no_external_id_effect_when_already_synced(self, patched):
         patched.resolve.return_value = ("pat_999", None)

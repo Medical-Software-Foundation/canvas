@@ -47,15 +47,8 @@
     /* storage unavailable in this sandbox; fall through */
   }
 
-  // The patient id was consumed server-side and stashed above; drop the
-  // ?patient_id query so the iframe URL is the bare modal path. This keeps the
-  // OAuth redirect_uri identical for every patient and free of query params,
-  // matching the single whitelisted callback URL.
-  try {
-    window.history.replaceState({}, document.title, window.location.pathname);
-  } catch (e) {
-    /* ignore */
-  }
+  var hadCallback =
+    /[?&]code=/.test(location.search) && /[?&]state=/.test(location.search);
 
   function mountElements() {
     var client = document.createElement("photon-client");
@@ -101,17 +94,88 @@
     }
   }
 
-  setStatus("Loading Photon Elements…");
-  // Same-origin vendored bundle (served by the /elements.js route) — avoids
-  // cross-origin script-src/CSP issues inside the Canvas modal iframe.
-  import("./elements.js")
-    .then(function () {
-      setStatus("Authenticating with Photon…");
-      mountElements();
-    })
-    .catch(function (err) {
-      setStatus("Failed to load Photon Elements: " + err, true);
-      // eslint-disable-next-line no-console
-      console.error("Photon Elements failed to load", err);
+  function addSwitchProviderButton(client) {
+    var btn = document.createElement("button");
+    btn.className = "switch-btn";
+    btn.textContent = "Sign in to Photon as yourself";
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      Promise.resolve()
+        .then(function () {
+          return client.authentication.logout();
+        })
+        .catch(function () {})
+        .then(function () {
+          return client.authentication.login({ redirectURI: cfg.redirectUri });
+        })
+        .catch(function (err) {
+          setStatus("Could not switch Photon provider: " + err, true);
+        });
     });
+    document.getElementById("root").appendChild(btn);
+  }
+
+  async function run() {
+    // Use the SDK (same Auth0 session as photon-client) to verify identity before
+    // mounting the prescribe workflow — so a cached session for someone else can't
+    // be used by a different Canvas user.
+    var sdk = await import("https://cdn.jsdelivr.net/npm/@photonhealth/sdk@1.3.4/+esm");
+    var client = new sdk.PhotonClient({
+      clientId: cfg.clientId,
+      organization: cfg.org,
+      redirectURI: cfg.redirectUri,
+      developmentMode: !!cfg.devMode,
+    });
+
+    if (hadCallback) {
+      setStatus("Completing Photon sign-in…");
+      await client.authentication.handleRedirect();
+    }
+    try {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (e) {
+      /* ignore */
+    }
+
+    var token = null;
+    try {
+      token = await client.authentication.getAccessToken();
+    } catch (e) {
+      token = null;
+    }
+    if (!token) {
+      setStatus("Redirecting to Photon sign-in…");
+      await client.authentication.login({ redirectURI: cfg.redirectUri });
+      return;
+    }
+
+    var photonUser = null;
+    try {
+      photonUser = await client.authentication.getUser();
+    } catch (e) {
+      /* ignore */
+    }
+    var photonEmail = ((photonUser && photonUser.email) || "").toLowerCase();
+    var photonName = (photonUser && photonUser.name) || photonEmail || "your Photon account";
+    var canvasEmail = (cfg.canvasUserEmail || "").toLowerCase();
+    if (!photonEmail || !canvasEmail || photonEmail !== canvasEmail) {
+      setStatus(
+        "You're logged into Canvas as " + (cfg.canvasUserName || canvasEmail || "this user") +
+        " but Photon as " + photonName + ". Sign in to Photon as yourself before prescribing.",
+        true
+      );
+      addSwitchProviderButton(client);
+      return;
+    }
+
+    setStatus("Loading Photon Elements…");
+    await import("./elements.js");
+    mountElements();
+  }
+
+  run().catch(function (err) {
+    setStatus("Photon modal failed: " + (err && err.message ? err.message : err), true);
+    // eslint-disable-next-line no-console
+    console.error("Photon modal error", err);
+  });
 })();

@@ -99,12 +99,15 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
             return [self._error_page("No patient was provided to the Photon modal.")]
 
         env = (self.secrets.get("PHOTON_ENV") or "sandbox").strip().lower()
+        operator = staff_identity(self.request.headers.get("canvas-logged-in-user-id"))
         config = {
             "clientId": spa_client_id,
             "org": org_id,
             "patientId": photon_patient_id,
             "devMode": env != "production",
             "redirectUri": self._redirect_uri(),
+            "canvasUserEmail": operator["email"],
+            "canvasUserName": operator["name"],
         }
         html = render_to_string(
             "static/index.html",
