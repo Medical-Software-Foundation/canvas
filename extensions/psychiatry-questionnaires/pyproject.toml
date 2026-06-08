@@ -1,0 +1,15 @@
+[project]
+authors = [
+  {email = "alexia.downs@canvasmedical.com", name = "Alexia Downs"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Psychiatry screening questionnaires: ACE (Adverse Childhood Experiences) and PCL-5 (PTSD Checklist for DSM-5)."
+name = "psychiatry_questionnaires"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.0.1"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]

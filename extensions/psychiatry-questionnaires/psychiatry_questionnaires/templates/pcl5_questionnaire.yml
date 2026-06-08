@@ -1,0 +1,587 @@
+name: PCL-5 (PTSD Checklist for DSM-5)
+form_type: QUES
+code_system: LOINC
+code: "77040-1"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+prologue: Below is a list of problems that people sometimes have in response to a very stressful experience. Please read each problem carefully and then select one of the options to indicate how much you have been bothered by that problem in the past month.
+questions:
+  - content: Repeated, disturbing, and unwanted memories of the stressful experience?
+    code_system: LOINC
+    code: "77041-9"
+    code_description: "Repeated, disturbing, and unwanted memories of the stressful experience"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: "Not at all"
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: "A little bit"
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: "Moderately"
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: "Quite a bit"
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: "Extremely"
+        value: "4"
+
+  - content: Repeated, disturbing dreams of the stressful experience?
+    code_system: LOINC
+    code: "77042-7"
+    code_description: "Repeated, disturbing dreams of the stressful experience"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Suddenly feeling or acting as if the stressful experience were actually happening again (as if you were actually back there reliving it)?
+    code_system: LOINC
+    code: "77043-5"
+    code_description: "Suddenly feeling or acting as if the stressful experience were actually happening again"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Feeling very upset when something reminded you of the stressful experience?
+    code_system: LOINC
+    code: "77044-3"
+    code_description: "Feeling very upset when something reminded you of the stressful experience"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Having strong physical reactions when something reminded you of the stressful experience (for example, heart pounding, trouble breathing, sweating)?
+    code_system: LOINC
+    code: "77045-0"
+    code_description: "Having strong physical reactions when something reminded you of the stressful experience"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Avoiding memories, thoughts, or feelings related to the stressful experience?
+    code_system: LOINC
+    code: "77046-8"
+    code_description: "Avoiding memories, thoughts, or feelings related to the stressful experience"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Avoiding external reminders of the stressful experience (for example, people, places, conversations, activities, objects, or situations)?
+    code_system: LOINC
+    code: "77047-6"
+    code_description: "Avoiding external reminders of the stressful experience"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Trouble remembering important parts of the stressful experience?
+    code_system: LOINC
+    code: "77048-4"
+    code_description: "Trouble remembering important parts of the stressful experience"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Having strong negative beliefs about yourself, other people, or the world (for example, having thoughts such as I am bad, there is something seriously wrong with me, no one can be trusted, the world is completely dangerous)?
+    code_system: LOINC
+    code: "77049-2"
+    code_description: "Having strong negative beliefs about yourself, other people, or the world"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Blaming yourself or someone else for the stressful experience or what happened after it?
+    code_system: LOINC
+    code: "77050-0"
+    code_description: "Blaming yourself or someone else for the stressful experience or what happened after it"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Having strong negative feelings such as fear, horror, anger, guilt, or shame?
+    code_system: LOINC
+    code: "77051-8"
+    code_description: "Having strong negative feelings such as fear, horror, anger, guilt, or shame"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Loss of interest in activities that you used to enjoy?
+    code_system: LOINC
+    code: "77052-6"
+    code_description: "Loss of interest in activities that you used to enjoy"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Feeling distant or cut off from other people?
+    code_system: LOINC
+    code: "77053-4"
+    code_description: "Feeling distant or cut off from other people"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Trouble experiencing positive feelings (for example, being unable to feel happiness or have loving feelings for people close to you)?
+    code_system: LOINC
+    code: "77054-2"
+    code_description: "Trouble experiencing positive feelings"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Irritable behavior, angry outbursts, or acting aggressively?
+    code_system: LOINC
+    code: "77055-9"
+    code_description: "Irritable behavior, angry outbursts, or acting aggressively"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Taking too many risks or doing things that could cause you harm?
+    code_system: LOINC
+    code: "77056-7"
+    code_description: "Taking too many risks or doing things that could cause you harm"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Being superalert or watchful or on guard?
+    code_system: LOINC
+    code: "77057-5"
+    code_description: "Being superalert or watchful or on guard"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Feeling jumpy or easily startled?
+    code_system: LOINC
+    code: "77058-3"
+    code_description: "Feeling jumpy or easily startled"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Having difficulty concentrating?
+    code_system: LOINC
+    code: "77059-1"
+    code_description: "Having difficulty concentrating"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
+
+  - content: Trouble falling or staying asleep?
+    code_system: LOINC
+    code: "77060-9"
+    code_description: "Trouble falling or staying asleep"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Not at all"
+        code: "LA6568-5"
+        code_description: ""
+        value: "0"
+      - name: "A little bit"
+        code: "LA13863-8"
+        code_description: ""
+        value: "1"
+      - name: "Moderately"
+        code: "LA13909-9"
+        code_description: ""
+        value: "2"
+      - name: "Quite a bit"
+        code: "LA13902-4"
+        code_description: ""
+        value: "3"
+      - name: "Extremely"
+        code: "LA13942-0"
+        code_description: ""
+        value: "4"
