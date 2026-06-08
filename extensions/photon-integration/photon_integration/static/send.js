@@ -168,6 +168,19 @@
     var photonEmail = ((photonUser && photonUser.email) || "").toLowerCase();
     var photonName = (photonUser && photonUser.name) || photonEmail || "your Photon account";
 
+    // The operator must BE the signed-in Photon provider — don't let a cached
+    // Photon session (someone else) be used by a different Canvas user.
+    var canvasEmail = (cfg.canvasUserEmail || "").toLowerCase();
+    if (!photonEmail || !canvasEmail || photonEmail !== canvasEmail) {
+      setStatus(
+        "You're logged into Canvas as " + (cfg.canvasUserName || canvasEmail || "this user") +
+        " but Photon as " + photonName + ". Sign in to Photon as yourself before sending.",
+        true
+      );
+      addSwitchProviderButton(client);
+      return;
+    }
+
     function prescriberError(rx) {
       if (!rx.prescriberEmail) {
         return "Could not verify the prescriber's Photon identity — use Prescribe via Photon";
@@ -197,7 +210,13 @@
       try {
         if (await sendOne(token, rx)) sent++;
       } catch (err) {
-        addResult(rx.medication, false, String(err && err.message ? err.message : err));
+        var msg = String(err && err.message ? err.message : err);
+        if (/already exists/i.test(msg)) {
+          addResult(rx.medication, true, "already sent to Photon");
+          sent++;
+        } else {
+          addResult(rx.medication, false, msg);
+        }
       }
     }
     setStatus(sent + " of " + cfg.prescriptions.length + " sent to Photon as " + photonName + ".");

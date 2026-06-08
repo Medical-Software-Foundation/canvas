@@ -31,7 +31,7 @@ from photon_integration.command_payload import extract_rx
 from photon_integration.constants import PHOTON_COMMAND_SCHEMA_KEYS
 from photon_integration.handlers.command_field import _photon_send_selected
 from photon_integration.ontology import fdb_to_rxcui, ndc_to_rxcui
-from photon_integration.prescriber import resolve_prescriber
+from photon_integration.prescriber import resolve_prescriber, staff_identity
 from photon_integration.patient_sync import (
     build_address,
     build_client,
@@ -197,6 +197,9 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
         elif not is_oauth_callback:
             return [self._error_page("No note was provided to the Photon send modal.")]
 
+        # The operator (logged-in Canvas user) must be the signed-in Photon
+        # provider, so nobody can send under a cached session for someone else.
+        operator = staff_identity(self.request.headers.get("canvas-logged-in-user-id"))
         config = {
             "clientId": spa_client_id,
             "org": org_id,
@@ -205,6 +208,8 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
             "redirectUri": self._redirect_uri("send"),
             "graphqlUrl": _GRAPHQL_URLS["sandbox" if env != "production" else "production"],
             "address": address,
+            "canvasUserEmail": operator["email"],
+            "canvasUserName": operator["name"],
             "prescriptions": prescriptions,
         }
         html = render_to_string(

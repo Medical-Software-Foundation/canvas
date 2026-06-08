@@ -66,14 +66,20 @@ def _staff_for_ref(ref: str) -> Staff | None:
         return None
 
 
-def resolve_prescriber(data: dict[str, Any]) -> dict[str, str | None]:
-    """Return {'email', 'name'} for the command's prescriber (best effort)."""
-    ref, name = _prescriber_ref(data.get("prescriber"))
+def staff_identity(ref: Any, fallback_name: str | None = None) -> dict[str, str | None]:
+    """Return {'email', 'name'} for a Staff ref (dbid or public id). Never raises."""
+    name = fallback_name
     email: str | None = None
-    if ref:
-        staff = _staff_for_ref(ref)
+    if ref not in (None, ""):
+        staff = _staff_for_ref(str(ref))
         if staff:
             if not name:
                 name = f"{staff.first_name or ''} {staff.last_name or ''}".strip() or None
             email = _staff_email(staff)
     return {"email": email, "name": name}
+
+
+def resolve_prescriber(data: dict[str, Any]) -> dict[str, str | None]:
+    """Return {'email', 'name'} for the command's prescriber (best effort)."""
+    ref, name = _prescriber_ref(data.get("prescriber"))
+    return staff_identity(ref, fallback_name=name)

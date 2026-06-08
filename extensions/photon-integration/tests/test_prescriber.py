@@ -70,6 +70,26 @@ def test_never_raises_on_query_error():
     assert result == {"email": None, "name": "Dr X"}
 
 
+class TestStaffIdentity:
+    def test_resolves_by_dbid(self):
+        with patch(f"{MODULE}.Staff") as staff_cls:
+            staff_cls.objects.filter.return_value.first.return_value = _staff()
+            result = prescriber.staff_identity(358)
+        assert result["email"] == "kristen@example.com"
+        staff_cls.objects.filter.assert_called_once_with(dbid=358)
+
+    def test_resolves_by_public_id(self):
+        with patch(f"{MODULE}.Staff") as staff_cls:
+            staff_cls.objects.filter.return_value.first.return_value = _staff()
+            prescriber.staff_identity("stf_abc")
+        staff_cls.objects.filter.assert_called_once_with(id="stf_abc")
+
+    def test_none_ref(self):
+        with patch(f"{MODULE}.Staff") as staff_cls:
+            assert prescriber.staff_identity(None) == {"email": None, "name": None}
+        staff_cls.objects.filter.assert_not_called()
+
+
 def test_email_lowercased():
     with patch(f"{MODULE}.Staff") as staff_cls:
         staff_cls.objects.filter.return_value.first.return_value = _staff(email="Mixed@Example.com")

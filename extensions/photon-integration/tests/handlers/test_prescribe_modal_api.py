@@ -173,6 +173,8 @@ def send_patched():
         patch(f"{MODULE}.resolve_photon_patient", return_value=("pat_999", "EXT_EFFECT")), \
         patch(f"{MODULE}.resolve_prescriber",
               return_value={"email": "kristen@example.com", "name": "Kristen ONeill"}), \
+        patch(f"{MODULE}.staff_identity",
+              return_value={"email": "kristen@example.com", "name": "Kristen ONeill"}), \
         patch(f"{MODULE}.build_address", return_value={"city": "Town"}):
         build_client.return_value.find_treatment_by_code.return_value = {
             "id": "med_1", "name": "Ondansetron 4 mg ODT", "brandName": "Zofran",
@@ -193,6 +195,7 @@ class TestSend:
         assert config["patientId"] == "pat_999"
         assert config["address"] == {"city": "Town"}
         assert config["graphqlUrl"] == "https://api.neutron.health/graphql"
+        assert config["canvasUserEmail"] == "kristen@example.com"  # operator identity
         assert len(config["prescriptions"]) == 1
         rx = config["prescriptions"][0]
         assert rx["treatmentId"] == "med_1"
