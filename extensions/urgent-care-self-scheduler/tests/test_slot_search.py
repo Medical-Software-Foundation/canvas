@@ -864,11 +864,13 @@ def test_find_available_slots_stamps_location_from_index(mocker):
     slots = _call_find_slots(location_index={"California Location": ("loc-ca", "California")})
     assert slots
     assert all(s["location_id"] == "loc-ca" and s["location_name"] == "California" for s in slots)
+    # Resolved cleanly → not flagged as unresolved.
+    assert all(s["location_unresolved"] is False for s in slots)
 
 
-def test_find_available_slots_location_unknown_when_no_suffix_or_index(mocker):
-    # A location-less calendar title yields no location; a suffix missing from the
-    # index keeps the raw suffix as the display name with no id.
+def test_find_available_slots_location_unknown_when_no_suffix(mocker):
+    # A location-less calendar title yields no location and is NOT flagged unresolved
+    # (benign single-site case — booking falls back to the active location quietly).
     _set_note_type_filter(mocker, [_good_nt()])
     cal = SimpleNamespace(id="cal-1", dbid=10, title="Dr. Smith: Clinic", timezone=ZoneInfo("UTC"))
     _set_calendar_filter(mocker, [cal])
@@ -886,6 +888,7 @@ def test_find_available_slots_location_unknown_when_no_suffix_or_index(mocker):
     slots = _call_find_slots()  # no location_index
     assert slots
     assert all(s["location_id"] is None and s["location_name"] is None for s in slots)
+    assert all(s["location_unresolved"] is False for s in slots)
 
 
 def test_find_available_slots_drops_location_label_when_suffix_unmatched(mocker):
@@ -908,16 +911,21 @@ def test_find_available_slots_drops_location_label_when_suffix_unmatched(mocker)
     _set_event_filter(mocker, [event])
     _set_appointment_filter(mocker, [])
 
-    # "Reno Office" is NOT in the index → no label, no id (not the raw suffix).
+    # "Reno Office" is NOT in the index → no label, no id (not the raw suffix), and
+    # flagged unresolved so BookAPI logs a book-time trace if one is booked.
     slots = _call_find_slots(location_index={"California Location": ("loc-ca", "California")})
     assert slots
     assert all(s["location_id"] is None and s["location_name"] is None for s in slots)
+    assert all(s["location_unresolved"] is True for s in slots)
 
 
-def test_find_available_slots_subtracts_administrative_block_across_timezones(mocker):
-    # The reason blocks are converted to absolute time: a block authored on an
-    # Eastern admin calendar must remove the coinciding slot from a Pacific clinic
-    # calendar. Uses distinct tz on each calendar.
+def test_find_available_slots_subtracts_block_from_a_different_calendar(mocker):
+    # A block on a SEPARATE Administrative calendar (different dbid, here also a
+    # different tz) must remove the coinciding slot from the Clinic calendar — i.e.
+    # the block is matched to the provider and merged into their booked set across
+    # calendars. (Note: a same-date block instant is timezone-invariant on the
+    # round-trip, so this asserts the cross-calendar merge, not tz handling — the
+    # tz round-trip is covered by the union test and DST tests.)
     _set_note_type_filter(mocker, [_good_nt()])
     clinic = SimpleNamespace(
         id="cal-c", dbid=10, title="Dr. Smith: Clinic: West", timezone=ZoneInfo("America/Los_Angeles")
@@ -951,6 +959,73 @@ def test_find_available_slots_subtracts_administrative_block_across_timezones(mo
     # The 9:00 AM PDT slot (16:00 UTC) is blocked; 9:15 (16:15 UTC) survives.
     assert "2026-05-04T09:00:00-07:00" not in times
     assert "2026-05-04T09:15:00-07:00" in times
+
+
+def test_find_available_slots_subtracts_recurring_block_on_a_later_day(mocker):
+    # Admin blocks must expand their recurrence like availability does — exercise a
+    # DAILY block that fires on a day AFTER its starts_at (the prior block tests all
+    # used one-off events, so block recurrence expansion was untested).
+    _set_note_type_filter(mocker, [_good_nt()])
+    clinic = SimpleNamespace(id="cal-c", dbid=10, title="Dr. Smith: Clinic", timezone=ZoneInfo("UTC"))
+    admin = SimpleNamespace(id="cal-a", dbid=20, title="Dr. Smith: Administrative", timezone=ZoneInfo("UTC"))
+    _set_calendar_filter(mocker, [clinic, admin])
+    staff = SimpleNamespace(id="s1", dbid=1, full_name="Dr. Smith", active=True, roles=_roles("PROVIDER"))
+    _set_staff_filter(mocker, [staff])
+    # Daily clinic availability 09:00-10:00 UTC, and a daily block 09:15-09:30 UTC.
+    clinic_event = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 4, 9, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 10, tzinfo=datetime.timezone.utc),
+        recurrence="RRULE:FREQ=DAILY",
+        calendar_id=clinic.dbid,
+    )
+    block_event = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 4, 9, 15, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 9, 30, tzinfo=datetime.timezone.utc),
+        recurrence="RRULE:FREQ=DAILY",
+        calendar_id=admin.dbid,
+    )
+    _set_event_filter(mocker, [clinic_event, block_event])
+    _set_appointment_filter(mocker, [])
+
+    slots = _call_find_slots()  # window 2026-05-04..05-07
+    times = [s["start_iso"] for s in slots]
+    # On 05-05 (a recurrence day AFTER starts_at) the block must still remove 09:15.
+    assert "2026-05-05T09:15:00+00:00" not in times
+    assert "2026-05-05T09:00:00+00:00" in times
+    assert "2026-05-05T09:30:00+00:00" in times
+
+
+def test_find_available_slots_ignores_admin_calendar_with_unmatched_provider(mocker):
+    # An Administrative calendar whose provider name matches no active Staff is
+    # skipped (its blocks are NOT applied to anyone) — exercises the warning branch
+    # and confirms a stray admin calendar can't suppress another provider's slots.
+    _set_note_type_filter(mocker, [_good_nt()])
+    clinic = SimpleNamespace(id="cal-c", dbid=10, title="Dr. Smith: Clinic", timezone=ZoneInfo("UTC"))
+    ghost_admin = SimpleNamespace(
+        id="cal-a", dbid=20, title="Ghost Provider: Administrative", timezone=ZoneInfo("UTC")
+    )
+    _set_calendar_filter(mocker, [clinic, ghost_admin])
+    staff = SimpleNamespace(id="s1", dbid=1, full_name="Dr. Smith", active=True, roles=_roles("PROVIDER"))
+    _set_staff_filter(mocker, [staff])  # only Dr. Smith — no "Ghost Provider"
+    clinic_event = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 4, 9, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 10, tzinfo=datetime.timezone.utc),
+        recurrence=None,
+        calendar_id=clinic.dbid,
+    )
+    block_event = SimpleNamespace(  # 9:15 block on the unmatched Ghost admin calendar
+        starts_at=datetime.datetime(2026, 5, 4, 9, 15, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 9, 30, tzinfo=datetime.timezone.utc),
+        recurrence=None,
+        calendar_id=ghost_admin.dbid,
+    )
+    _set_event_filter(mocker, [clinic_event, block_event])
+    _set_appointment_filter(mocker, [])
+
+    slots = _call_find_slots()
+    times = [s["start_iso"] for s in slots]
+    # The Ghost block is ignored → Dr. Smith's 9:15 slot survives.
+    assert "2026-05-04T09:15:00+00:00" in times
 
 
 def test_find_available_slots_subtracts_administrative_blocks(mocker):

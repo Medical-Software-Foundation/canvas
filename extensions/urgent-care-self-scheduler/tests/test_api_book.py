@@ -641,11 +641,15 @@ def test_has_upcoming_visit_false_when_only_cancelled_or_noshow() -> None:
     patient = PatientFactory.create()
     note_type = _uc_note_type()
     now = datetime.datetime.now(datetime.timezone.utc)
+    # All three non-blocking statuses must be excluded by the shared tuple.
     _make_urgent_care_appt(
         patient, note_type, now + datetime.timedelta(days=1), status="cancelled"
     )
     _make_urgent_care_appt(
         patient, note_type, now + datetime.timedelta(days=2), status="noshow"
+    )
+    _make_urgent_care_appt(
+        patient, note_type, now + datetime.timedelta(hours=12), status="entered-in-error"
     )
 
     assert (

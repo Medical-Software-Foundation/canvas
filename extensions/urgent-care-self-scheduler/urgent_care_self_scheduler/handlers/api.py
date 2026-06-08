@@ -14,6 +14,10 @@ from canvas_sdk.effects.task import AddTask, AddTaskComment, TaskStatus
 from canvas_sdk.handlers.simple_api import PatientSessionAuthMixin, SimpleAPIRoute
 from logger import log
 
+# `_APPOINTMENT_QUERY_BUFFER` and `_NON_BLOCKING_APPOINTMENT_STATUSES` are shared from
+# slot_search (one source of truth) so the duplicate-visit query here and the
+# slot-blocking query there can't drift apart — the statuses that don't block a slot
+# are exactly those that don't count as the patient already having an upcoming visit.
 from urgent_care_self_scheduler.slot_search import (
     _APPOINTMENT_QUERY_BUFFER,
     _NON_BLOCKING_APPOINTMENT_STATUSES,
@@ -26,9 +30,6 @@ SLOT_WINDOW_DAYS = 3
 EXTERNAL_ID_SYSTEM = "urgent-care-self-scheduler"
 PENDING_RFV_KEY_PREFIX = "pending_rfv_"
 RFV_MAX_CHARS = 500
-# Appointment statuses that DON'T count as the patient already having an upcoming
-# visit — the same set slot_search treats as non-blocking; shared from there (and
-# the query buffer) so the two never drift apart.
 
 
 def _patient_has_upcoming_urgent_care_visit(
@@ -143,7 +144,8 @@ def _resolve_modality(value: Any) -> str:
     if normalized in ("", "telehealth", "in_person"):
         return "in_person" if normalized == "in_person" else "telehealth"
     # A non-empty value we don't recognize (e.g. the hyphenated "in-person") is a
-    # likely misconfiguration — surface it rather than silently presenting telehealth.
+    # likely misconfiguration — log it (we still default to telehealth) rather than
+    # swapping modality without a trace.
     log.warning(
         f"_resolve_modality: unrecognized URGENT_CARE_VISIT_MODALITY {value!r}; "
         "defaulting to 'telehealth' (expected 'telehealth' or 'in_person')"
@@ -482,6 +484,16 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
         # not trusted from the request body). Falls back to the active location for
         # calendars with no location suffix (single-site practices).
         booking_location_id = match.get("location_id") or practice_location_id
+        if not match.get("location_id") and match.get("location_unresolved"):
+            # The slot's calendar HAD a location suffix we couldn't resolve — this
+            # booking lands at the default location, which may not be the intended
+            # site. Leave a book-time breadcrumb (the search-time error doesn't tie
+            # to a specific booking); benign single-site calendars don't reach here.
+            log.warning(
+                f"BookAPI: booking provider {provider_id} at {start_iso} into the "
+                f"default location {booking_location_id} — the slot's calendar "
+                "location could not be resolved (check calendar title vs PracticeLocation)"
+            )
 
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=practice_tz)

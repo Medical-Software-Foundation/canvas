@@ -121,8 +121,12 @@ class UrgentCareRfvOriginator(BaseHandler):
             return []  # Not one of ours.
 
         if not appointment.note:
-            log.warning(
-                f"UrgentCareRfvOriginator: appointment {appointment.id} has no linked note"
+            # Our appointment (matched by external id) but no note to originate onto —
+            # the patient's reason-for-visit is permanently lost for this visit (no
+            # retry beyond the two events), so this is an error, not a warning.
+            log.error(
+                f"UrgentCareRfvOriginator: appointment {appointment.id} has no linked note; "
+                "RFV/HPI cannot be originated"
             )
             return []
 

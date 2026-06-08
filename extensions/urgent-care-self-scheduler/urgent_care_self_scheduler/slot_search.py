@@ -269,6 +269,7 @@ def compute_slots_for_provider(
     lead_time_minutes: int,
     location_id: str | None = None,
     location_name: str | None = None,
+    location_unresolved: bool = False,
 ) -> list[dict]:
     now_local = now.astimezone(timezone).replace(tzinfo=None)
 
@@ -293,6 +294,10 @@ def compute_slots_for_provider(
             "end_iso": end.replace(tzinfo=timezone).isoformat(),
             "location_id": location_id,
             "location_name": location_name,
+            # True only when the calendar HAD a location suffix we couldn't resolve
+            # (misconfig) — distinct from a benign single-site calendar with no
+            # suffix. Lets BookAPI log a book-time trace for the former only.
+            "location_unresolved": location_unresolved,
         }
         for start, end in final_slots
     ]
@@ -657,24 +662,28 @@ def find_available_slots(
             # ("{Provider}: Clinic: {Location full_name}") so each slot carries the
             # location it would book into.
             _, _, location_suffix = parse_calendar_title(calendar.title)
+            location_unresolved = False
             if not location_suffix:
                 # No location in the title (single-site calendar) — booking falls
-                # back to the active location, no label shown.
+                # back to the active location, no label shown. Benign, not flagged.
                 location_id, location_name = None, None
             elif location_suffix in location_index:
                 location_id, location_name = location_index[location_suffix]
             else:
-                # Suffix present but matches no active PracticeLocation.full_name
-                # (rename / casing / whitespace mismatch, or an ambiguous-name drop).
-                # Drop the label too — never show a location we can't actually book
-                # into — and log it so the misconfig is fixable. Booking falls back
-                # to the active location.
+                # Suffix present but unresolved — either it matches no active
+                # PracticeLocation.full_name (rename / casing / whitespace mismatch)
+                # or that name was dropped by _location_index as an ambiguous
+                # duplicate. Drop the label (never show a location we can't book
+                # into), log it, and flag the slot so BookAPI logs a book-time trace
+                # when one is actually booked — distinct from the benign no-suffix case.
                 log.error(
                     f"slot_search: calendar {calendar.title!r} location suffix "
-                    f"{location_suffix!r} matches no active PracticeLocation.full_name; "
-                    "slot will show no location and book the default location"
+                    f"{location_suffix!r} did not resolve to an active PracticeLocation "
+                    "(unknown or ambiguous-duplicate name); slot will show no location "
+                    "and book the default location"
                 )
                 location_id, location_name = None, None
+                location_unresolved = True
             log.info(
                 f"slot_search: calendar {calendar.title!r} tz={tz.key} "
                 f"location={location_name!r} ({len(events)} events)"
@@ -700,6 +709,7 @@ def find_available_slots(
                     lead_time_minutes=lead_time_minutes,
                     location_id=location_id,
                     location_name=location_name,
+                    location_unresolved=location_unresolved,
                 )
             )
 
