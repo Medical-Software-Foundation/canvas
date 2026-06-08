@@ -17,7 +17,7 @@ from photon_integration.constants import (
 )
 from photon_integration.handlers.command_field import (
     PhotonAdjustPrescriptionActionFilter,
-    PhotonDispenseUnitValidation,
+    PhotonCommandValidation,
     PhotonFieldHandler,
     PhotonPrescribeActionFilter,
     PhotonRefillActionFilter,
@@ -142,34 +142,68 @@ class TestPhotonActionFilters:
         assert json.loads(effects[0].payload) == []
 
 
-def _validation_event(unit_text, target_id="rx-1"):
-    fields = {"type_to_dispense": {"text": unit_text}} if unit_text is not None else {}
+def _validation_event(unit_text="tablet", pharmacy=None, target_id="rx-1"):
+    fields = {}
+    if unit_text is not None:
+        fields["type_to_dispense"] = {"text": unit_text}
+    if pharmacy is not None:
+        fields["pharmacy"] = pharmacy
     return SimpleNamespace(context={"fields": fields}, target=SimpleNamespace(id=target_id))
 
 
-class TestPhotonDispenseUnitValidation:
+class TestPhotonCommandValidation:
     def test_no_error_when_not_selected(self):
-        handler = PhotonDispenseUnitValidation(event=_validation_event("vial"))
+        handler = PhotonCommandValidation(event=_validation_event("vial", pharmacy={"id": "x"}))
         with _patch_metadata("No"):
             assert handler.compute() == []
 
-    def test_no_error_for_mappable_unit(self):
-        handler = PhotonDispenseUnitValidation(event=_validation_event("tablet"))
+    def test_no_error_for_mappable_unit_no_pharmacy(self):
+        handler = PhotonCommandValidation(event=_validation_event("tablet"))
         with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
             patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
             assert handler.compute() == []
         eff.assert_not_called()
 
     def test_no_error_for_missing_unit(self):
-        handler = PhotonDispenseUnitValidation(event=_validation_event(None))
+        handler = PhotonCommandValidation(event=_validation_event(None))
         with _patch_metadata(PHOTON_FIELD_TRUE_VALUE):
             assert handler.compute() == []
 
     def test_error_for_unmappable_unit(self):
-        handler = PhotonDispenseUnitValidation(event=_validation_event("ampule"))
+        handler = PhotonCommandValidation(event=_validation_event("ampule"))
         with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
             patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
             eff.return_value.apply.return_value = "VALIDATION_ERROR"
             result = handler.compute()
         assert result == ["VALIDATION_ERROR"]
-        assert "ampule" in eff.return_value.add_error.call_args.args[0]
+        assert "ampule" in eff.return_value.add_error.call_args_list[0].args[0]
+
+    def test_error_when_pharmacy_selected(self):
+        handler = PhotonCommandValidation(
+            event=_validation_event("tablet", pharmacy={"name": "Truepill", "id": "p1"})
+        )
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
+            patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
+            eff.return_value.apply.return_value = "VALIDATION_ERROR"
+            result = handler.compute()
+        assert result == ["VALIDATION_ERROR"]
+        assert "Pharmacy blank" in eff.return_value.add_error.call_args_list[0].args[0]
+
+    def test_empty_pharmacy_dict_is_ok(self):
+        handler = PhotonCommandValidation(
+            event=_validation_event("tablet", pharmacy={"id": None})
+        )
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
+            patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
+            assert handler.compute() == []
+        eff.assert_not_called()
+
+    def test_both_errors_when_unit_and_pharmacy_bad(self):
+        handler = PhotonCommandValidation(
+            event=_validation_event("ampule", pharmacy={"id": "p1"})
+        )
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
+            patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
+            eff.return_value.apply.return_value = "VALIDATION_ERROR"
+            handler.compute()
+        assert eff.return_value.add_error.call_count == 2

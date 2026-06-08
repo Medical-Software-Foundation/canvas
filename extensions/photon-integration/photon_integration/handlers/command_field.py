@@ -108,10 +108,20 @@ class PhotonAdjustPrescriptionActionFilter(_PhotonActionFilter):
     RESPONDS_TO = EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__AVAILABLE_ACTIONS)
 
 
-class PhotonDispenseUnitValidation(BaseHandler):
-    """Block commit when 'Send via Photon' is set but the quantity-to-dispense
-    unit can't be mapped to a Photon dispense unit (e.g. a packaging unit like
-    a vial), so the provider fixes it before signing rather than at send time."""
+def _pharmacy_selected(fields: dict) -> bool:
+    """True when a pharmacy is chosen on the command."""
+    pharmacy = fields.get("pharmacy")
+    if isinstance(pharmacy, str):
+        return bool(pharmacy.strip())
+    if isinstance(pharmacy, dict):
+        return any(pharmacy.values())
+    return bool(pharmacy)
+
+
+class PhotonCommandValidation(BaseHandler):
+    """Block commit of a 'Send via Photon' command when it can't be honored by
+    Photon: an unmappable dispense unit, or a selected pharmacy (Photon routes to
+    the patient's Photon pharmacy, so a Canvas pharmacy would be ignored)."""
 
     RESPONDS_TO = [
         EventType.Name(EventType.PRESCRIBE_COMMAND__POST_VALIDATION),
@@ -123,15 +133,27 @@ class PhotonDispenseUnitValidation(BaseHandler):
         if not _photon_send_selected(self.event.target.id):
             return []
 
-        unit_text = dispense_unit_text(self.event.context.get("fields") or {})
+        fields = self.event.context.get("fields") or {}
+        messages: list[str] = []
+
         # Only flag a present-but-unmappable unit; a missing unit is Canvas's own
         # required-field validation, not ours.
-        if not unit_text or resolve_dispense_unit(unit_text) is not None:
-            return []
+        unit_text = dispense_unit_text(fields)
+        if unit_text and resolve_dispense_unit(unit_text) is None:
+            messages.append(
+                f"Send via Photon: '{unit_text}' is not a valid Photon dispense unit. "
+                "Choose a different quantity to dispense or uncheck Send via Photon."
+            )
 
+        if _pharmacy_selected(fields):
+            messages.append(
+                "Send via Photon: leave Pharmacy blank — the selected pharmacy is not "
+                "sent to Photon (Photon routes to the patient's Photon pharmacy)."
+            )
+
+        if not messages:
+            return []
         effect = CommandValidationErrorEffect()
-        effect.add_error(
-            f"Send via Photon: '{unit_text}' is not a valid Photon dispense unit. "
-            "Choose a different quantity to dispense or uncheck Send via Photon."
-        )
+        for message in messages:
+            effect.add_error(message)
         return [effect.apply()]
