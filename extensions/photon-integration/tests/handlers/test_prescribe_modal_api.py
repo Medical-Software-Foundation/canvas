@@ -168,13 +168,14 @@ def send_patched():
         patch(f"{MODULE}.Command") as command_cls, \
         patch(f"{MODULE}._photon_send_selected", return_value=True) as selected, \
         patch(f"{MODULE}.build_client") as build_client, \
-        patch(f"{MODULE}.ndc_to_rxcui", return_value="198052") as rxcui, \
+        patch(f"{MODULE}.fdb_to_rxcui", return_value="198052") as rxcui, \
+        patch(f"{MODULE}.ndc_to_rxcui", return_value=None) as ndc_rxcui, \
         patch(f"{MODULE}.resolve_photon_patient", return_value=("pat_999", "EXT_EFFECT")), \
         patch(f"{MODULE}.build_address", return_value={"city": "Town"}):
         build_client.return_value.find_treatment_id_by_code.return_value = "med_1"
         command_cls.objects.filter.return_value = [_command()]
         yield SimpleNamespace(rts=rts, command_cls=command_cls, selected=selected,
-                              build_client=build_client, rxcui=rxcui)
+                              build_client=build_client, rxcui=rxcui, ndc_rxcui=ndc_rxcui)
 
 
 class TestSend:

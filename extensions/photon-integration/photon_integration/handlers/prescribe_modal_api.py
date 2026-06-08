@@ -30,7 +30,7 @@ from photon_integration.client.photon_client import PhotonClient, PhotonError
 from photon_integration.command_payload import extract_rx
 from photon_integration.constants import PHOTON_COMMAND_SCHEMA_KEYS
 from photon_integration.handlers.command_field import _photon_send_selected
-from photon_integration.ontology import ndc_to_rxcui
+from photon_integration.ontology import fdb_to_rxcui, ndc_to_rxcui
 from photon_integration.patient_sync import (
     build_address,
     build_client,
@@ -228,10 +228,11 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
                 patient = command.patient
             rx = extract_rx(command.data or {})
             term = rx.pop("term")
+            fdb = rx.pop("fdbCode")
             ndc = rx.pop("ndc")
-            # Exact, code-based match: Canvas NDC -> RxNorm (Ontologies) -> Photon
-            # drug.code. Never guess by name for an unattended send.
-            rxcui = ndc_to_rxcui(ndc)
+            # Exact, code-based match: Canvas FDB code (or NDC) -> RxNorm via the
+            # Ontologies service -> Photon drug.code. Never guess by name.
+            rxcui = fdb_to_rxcui(fdb) or ndc_to_rxcui(ndc)
             treatment_id = client.find_treatment_id_by_code(rxcui)
             if treatment_id:
                 error = None

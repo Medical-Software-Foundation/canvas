@@ -16,11 +16,36 @@ def _resp(status=200, body=None):
     return r
 
 
-def test_returns_rxcui_on_success():
+def test_ndc_returns_rxcui_on_success():
     with patch(f"{MODULE}.ontologies_http") as http:
         http.get_json.return_value = _resp(body={"rxnorm_rxcui": "198052"})
         assert ontology.ndc_to_rxcui("00781180501") == "198052"
     http.get_json.assert_called_once_with("/fdb/ndc-to-medication/00781180501/")
+
+
+def test_fdb_returns_rxcui_on_success():
+    with patch(f"{MODULE}.ontologies_http") as http:
+        http.get_json.return_value = _resp(body={"rxnorm_rxcui": "216092"})
+        assert ontology.fdb_to_rxcui("216092") == "216092"
+    http.get_json.assert_called_once_with("/fdb/grouped-medication/216092/")
+
+
+def test_fdb_results_wrapper_shape():
+    with patch(f"{MODULE}.ontologies_http") as http:
+        http.get_json.return_value = _resp(body={"results": [{"rxnorm_rxcui": "313782"}]})
+        assert ontology.fdb_to_rxcui("436095") == "313782"
+
+
+def test_fdb_list_shape():
+    with patch(f"{MODULE}.ontologies_http") as http:
+        http.get_json.return_value = _resp(body=[{"rxnorm_rxcui": "999"}])
+        assert ontology.fdb_to_rxcui("1") == "999"
+
+
+def test_fdb_none_for_empty():
+    with patch(f"{MODULE}.ontologies_http") as http:
+        assert ontology.fdb_to_rxcui(None) is None
+    http.get_json.assert_not_called()
 
 
 def test_none_for_empty_ndc():

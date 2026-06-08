@@ -7,7 +7,7 @@ import pytest
 from photon_integration.command_payload import extract_rx, medication_term
 
 FULL = {
-    "prescribe": {"text": "Lisinopril 10 mg tablet"},
+    "prescribe": {"text": "Lisinopril 10 mg tablet", "value": "216092"},
     "sig": "Take 1 tablet daily",
     "days_supply": 30,
     "quantity_to_dispense": 30,
@@ -40,6 +40,7 @@ class TestExtractRx:
         assert rx["instructions"] == "Take 1 tablet daily"
         assert rx["dispenseQuantity"] == 30.0
         assert rx["dispenseUnit"] == "tablet"
+        assert rx["fdbCode"] == "216092"
         assert rx["ndc"] == "00781180501"
         assert rx["refillsAllowed"] == 2
         assert rx["daysSupply"] == 30

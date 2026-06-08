@@ -27,6 +27,23 @@ def medication_term(data: dict[str, Any]) -> str | None:
     return None
 
 
+def fdb_code(data: dict[str, Any]) -> str | None:
+    """FDB code (med_medication_id) of the selected medication.
+
+    In committed command data the medication lives in ``prescribe`` (or
+    ``change_medication_to`` for Adjust Prescription) as ``{text, value}`` where
+    ``value`` is the FDB code. That code resolves to an RxNorm rxcui via Canvas's
+    Ontologies service.
+    """
+    for source_key in ("change_medication_to", "prescribe"):
+        source = data.get(source_key)
+        if isinstance(source, dict):
+            value = source.get("value")
+            if value not in (None, ""):
+                return str(value)
+    return None
+
+
 def representative_ndc(data: dict[str, Any]) -> str | None:
     """NDC of the dispensed product, used to resolve an RxNorm code."""
     type_to_dispense = data.get("type_to_dispense")
@@ -60,6 +77,7 @@ def extract_rx(data: dict[str, Any]) -> dict[str, Any]:
     substitutions = str(data.get("substitutions") or "").lower()
     return {
         "term": medication_term(data),
+        "fdbCode": fdb_code(data),
         "ndc": representative_ndc(data),
         "instructions": (data.get("sig") or "").strip(),
         "dispenseQuantity": float(quantity) if quantity is not None else None,

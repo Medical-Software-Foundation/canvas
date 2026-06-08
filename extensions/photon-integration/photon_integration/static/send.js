@@ -90,7 +90,7 @@
   async function sendOne(token, rx) {
     if (rx.error || !rx.treatmentId) {
       addResult(rx.medication, false, rx.error || "no Photon medication match");
-      return;
+      return false;
     }
     var presc = await gql(token, CREATE_PRESCRIPTION, {
       externalId: rx.externalId,
@@ -112,6 +112,7 @@
       address: cfg.address || null,
     });
     addResult(rx.medication, true, "sent");
+    return true;
   }
 
   async function run() {
@@ -158,8 +159,7 @@
     var sent = 0;
     for (var i = 0; i < cfg.prescriptions.length; i++) {
       try {
-        await sendOne(token, cfg.prescriptions[i]);
-        sent++;
+        if (await sendOne(token, cfg.prescriptions[i])) sent++;
       } catch (err) {
         addResult(cfg.prescriptions[i].medication, false, String(err && err.message ? err.message : err));
       }
