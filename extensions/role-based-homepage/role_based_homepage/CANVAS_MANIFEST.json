@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "role_based_homepage",
+    "description": "Redirects each staff member to a role-specific default homepage based on their StaffRole internal code.",
+    "components": {
+        "handlers": [
+            {
+                "class": "role_based_homepage.handlers.event_handlers:RoleBasedHomepage",
+                "description": "Sets the default homepage per staff role, driven by the ROLE_HOMEPAGE_MAP secret."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["ROLE_HOMEPAGE_MAP"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
