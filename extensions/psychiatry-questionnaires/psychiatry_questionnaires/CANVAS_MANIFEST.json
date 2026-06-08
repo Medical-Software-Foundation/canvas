@@ -1,0 +1,30 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "psychiatry_questionnaires",
+    "description": "Psychiatry screening questionnaires: ACE (Adverse Childhood Experiences), C-SSRS (Columbia Suicide Severity Rating Scale), and PCL-5 (PTSD Checklist for DSM-5)",
+    "components": {
+        "protocols": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "templates/ace_questionnaire.yml"
+            },
+            {
+                "template": "templates/cssrs_questionnaire.yml"
+            },
+            {
+                "template": "templates/pcl5_questionnaire.yml"
+            }
+        ]
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

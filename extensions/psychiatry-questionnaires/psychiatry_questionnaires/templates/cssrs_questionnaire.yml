@@ -1,0 +1,429 @@
+name: Columbia Suicide Severity Rating Scale (C-SSRS)
+form_type: QUES
+code_system: LOINC
+code: "93373-2"
+can_originate_in_charting: true
+display_results_in_social_history_section: false
+prologue: >
+  The following questions ask about thoughts of suicide and self-harm. Please
+  answer each question as honestly as possible. Your answers will help your
+  provider assess your safety and determine appropriate care.
+questions:
+  # -- Suicidal Ideation --
+
+  - content: "Have you wished you were dead or wished you could go to sleep and not wake up?"
+    code_system: LOINC
+    code: "93269-2"
+    code_description: "Wish to be dead"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: "Yes"
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: "No"
+        value: "0"
+
+  - content: "Have you actually had any thoughts of killing yourself?"
+    code_system: LOINC
+    code: "93270-0"
+    code_description: "Non-specific active suicidal thoughts"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Have you been thinking about how you might do this?"
+    code_system: LOINC
+    code: "93271-8"
+    code_description: "Active suicidal ideation with any methods (not plan) without intent to act"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Have you had these thoughts and had some intention of acting on them?"
+    code_system: LOINC
+    code: "93272-6"
+    code_description: "Active suicidal ideation with some intent to act, without specific plan"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Have you started to work out or worked out the details of how to kill yourself? Do you intend to carry out this plan?"
+    code_system: LOINC
+    code: "93273-4"
+    code_description: "Active suicidal ideation with specific plan and intent"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  # -- Intensity of Ideation (conditional on any ideation) --
+
+  - content: "How often have you had these thoughts?"
+    code_system: LOINC
+    code: "93281-7"
+    code_description: "Frequency of suicidal ideation"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Less than once a week"
+        code: "CSSRS-FREQ-1"
+        code_description: ""
+        value: "1"
+      - name: "Once a week"
+        code: "CSSRS-FREQ-2"
+        code_description: ""
+        value: "2"
+      - name: "2-5 times a week"
+        code: "CSSRS-FREQ-3"
+        code_description: ""
+        value: "3"
+      - name: "Daily or almost daily"
+        code: "CSSRS-FREQ-4"
+        code_description: ""
+        value: "4"
+      - name: "Many times each day"
+        code: "CSSRS-FREQ-5"
+        code_description: ""
+        value: "5"
+
+  - content: "When you have the thoughts, how long do they last?"
+    code_system: LOINC
+    code: "93282-5"
+    code_description: "Duration of suicidal ideation"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Fleeting - a few seconds or minutes"
+        code: "CSSRS-DUR-1"
+        code_description: ""
+        value: "1"
+      - name: "Less than 1 hour / some of the time"
+        code: "CSSRS-DUR-2"
+        code_description: ""
+        value: "2"
+      - name: "1-4 hours / a lot of the time"
+        code: "CSSRS-DUR-3"
+        code_description: ""
+        value: "3"
+      - name: "4-8 hours / most of the day"
+        code: "CSSRS-DUR-4"
+        code_description: ""
+        value: "4"
+      - name: "More than 8 hours / persistent or continuous"
+        code: "CSSRS-DUR-5"
+        code_description: ""
+        value: "5"
+
+  - content: "Could you / can you stop thinking about killing yourself or wanting to die if you want to?"
+    code_system: LOINC
+    code: "93283-3"
+    code_description: "Controllability of suicidal ideation"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Easily able to control thoughts"
+        code: "CSSRS-CTL-0"
+        code_description: ""
+        value: "0"
+      - name: "Can control thoughts with little difficulty"
+        code: "CSSRS-CTL-1"
+        code_description: ""
+        value: "1"
+      - name: "Can control thoughts with some difficulty"
+        code: "CSSRS-CTL-2"
+        code_description: ""
+        value: "2"
+      - name: "Can control thoughts with a lot of difficulty"
+        code: "CSSRS-CTL-3"
+        code_description: ""
+        value: "3"
+      - name: "Unable to control thoughts"
+        code: "CSSRS-CTL-4"
+        code_description: ""
+        value: "4"
+      - name: "Does not attempt to control thoughts"
+        code: "CSSRS-CTL-5"
+        code_description: ""
+        value: "5"
+
+  - content: "Are there things - anyone or anything (e.g., family, religion, pain of death) - that stopped you from wanting to die or acting on thoughts of suicide?"
+    code_system: LOINC
+    code: "93284-1"
+    code_description: "Deterrents to suicidal ideation"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Deterrents definitely stopped you from attempting suicide"
+        code: "CSSRS-DET-0"
+        code_description: ""
+        value: "0"
+      - name: "Deterrents probably stopped you"
+        code: "CSSRS-DET-1"
+        code_description: ""
+        value: "1"
+      - name: "Uncertain that deterrents stopped you"
+        code: "CSSRS-DET-2"
+        code_description: ""
+        value: "2"
+      - name: "Deterrents most likely did not stop you"
+        code: "CSSRS-DET-3"
+        code_description: ""
+        value: "3"
+      - name: "Deterrents definitely did not stop you"
+        code: "CSSRS-DET-4"
+        code_description: ""
+        value: "4"
+      - name: "Does not apply"
+        code: "CSSRS-DET-5"
+        code_description: ""
+        value: "5"
+
+  - content: "What reasons did you have for thinking about wanting to die or killing yourself? Was it to end the pain or stop the way you were feeling, or was it to get attention, revenge, or a reaction from others?"
+    code_system: LOINC
+    code: "93285-8"
+    code_description: "Reasons for suicidal ideation"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93270-0"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Completely to get attention, revenge, or a reaction from others"
+        code: "CSSRS-RSN-0"
+        code_description: ""
+        value: "0"
+      - name: "Mostly to get attention, revenge, or a reaction from others"
+        code: "CSSRS-RSN-1"
+        code_description: ""
+        value: "1"
+      - name: "Equally to get attention and to end/stop the pain"
+        code: "CSSRS-RSN-2"
+        code_description: ""
+        value: "2"
+      - name: "Mostly to end or stop the pain (you wanted to die)"
+        code: "CSSRS-RSN-3"
+        code_description: ""
+        value: "3"
+      - name: "Completely to end or stop the pain (you wanted to die)"
+        code: "CSSRS-RSN-4"
+        code_description: ""
+        value: "4"
+      - name: "Does not apply"
+        code: "CSSRS-RSN-5"
+        code_description: ""
+        value: "5"
+
+  # -- Suicidal Behavior --
+
+  - content: "Have you ever done anything, started to do anything, or prepared to do anything to end your life?"
+    code_system: LOINC
+    code: "93274-2"
+    code_description: "Suicidal behavior - lifetime"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Was this within the past 3 months?"
+    code_system: LOINC
+    code: "93275-9"
+    code_description: "Suicidal behavior - past 3 months"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93274-2"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Have you done anything or prepared to do anything to end your life in the past 3 months? (Examples: collected pills, obtained a gun, gave away valuables, wrote a will or suicide note, took out pills but didn't swallow any, held a gun but changed your mind, went to the roof but didn't jump)"
+    code_system: LOINC
+    code: "93276-7"
+    code_description: "Preparatory acts or behavior"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93275-9"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Have you made a suicide attempt in the past 3 months? (Actually did something to try to end your life)"
+    code_system: LOINC
+    code: "93277-5"
+    code_description: "Actual attempt"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93275-9"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "If yes, how many attempts?"
+    code_system: LOINC
+    code: "93278-3"
+    code_description: "Total number of attempts"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    enabled_behavior: all
+    enabled_conditions:
+      - question_code: "93277-5"
+        operator: "="
+        value_code: "LA33-6"
+    responses:
+      - name: "TXT"
+        code: "CSSRS-ATTEMPTS-COUNT"
+        code_description: "Number of suicide attempts"
+        value: ""
+
+  - content: "Did you do anything to hurt yourself on purpose without wanting to die? (e.g., cutting, burning yourself)"
+    code_system: LOINC
+    code: "93279-1"
+    code_description: "Non-suicidal self-injurious behavior"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Please describe in your own words any additional details about the thoughts or behaviors discussed above."
+    code_system: INTERNAL
+    code: "CSSRS-NARRATIVE"
+    code_description: "Open-ended narrative for additional context"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    display_result_in_social_history_section: false
+    responses:
+      - name: "TXT"
+        code: "CSSRS-NARRATIVE-TXT"
+        code_description: "Free text narrative"
+        value: ""

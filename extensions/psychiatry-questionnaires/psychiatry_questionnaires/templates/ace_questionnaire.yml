@@ -1,0 +1,180 @@
+name: ACE (Adverse Childhood Experiences)
+form_type: QUES
+code_system: LOINC
+code: "62378-5"
+can_originate_in_charting: true
+display_results_in_social_history_section: true
+prologue: >
+  Prior to your 18th birthday, please answer the following questions about
+  events that happened during your childhood. This information will help your
+  provider better understand your health history.
+questions:
+  - content: "Did a parent or other adult in the household often or very often swear at you, insult you, put you down, or humiliate you? Or act in a way that made you afraid that you might be physically hurt?"
+    code_system: LOINC
+    code: "62379-3"
+    code_description: "Emotional abuse"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: "Yes"
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: "No"
+        value: "0"
+
+  - content: "Did a parent or other adult in the household often or very often push, grab, slap, or throw something at you? Or ever hit you so hard that you had marks or were injured?"
+    code_system: LOINC
+    code: "62380-1"
+    code_description: "Physical abuse"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Did an adult or person at least 5 years older than you ever touch or fondle you or have you touch their body in a sexual way? Or attempt or actually have oral, anal, or vaginal intercourse with you?"
+    code_system: LOINC
+    code: "62381-9"
+    code_description: "Sexual abuse"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Did you often or very often feel that no one in your family loved you or thought you were important or special? Or your family didn't look out for each other, feel close to each other, or support each other?"
+    code_system: LOINC
+    code: "62382-7"
+    code_description: "Emotional neglect"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Did you often or very often feel that you didn't have enough to eat, had to wear dirty clothes, and had no one to protect you? Or your parents were too drunk or high to take care of you or take you to the doctor if you needed it?"
+    code_system: LOINC
+    code: "62383-5"
+    code_description: "Physical neglect"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Were your parents ever separated or divorced?"
+    code_system: LOINC
+    code: "62384-3"
+    code_description: "Parental separation or divorce"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Was your mother or stepmother often or very often pushed, grabbed, slapped, or had something thrown at her? Or sometimes, often, or very often kicked, bitten, hit with a fist, or hit with something hard? Or ever repeatedly hit over at least a few minutes or threatened with a gun or knife?"
+    code_system: LOINC
+    code: "62385-0"
+    code_description: "Household domestic violence"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Did you live with anyone who was a problem drinker or alcoholic, or who used street drugs?"
+    code_system: LOINC
+    code: "62386-8"
+    code_description: "Household substance abuse"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Was a household member depressed or mentally ill, or did a household member attempt suicide?"
+    code_system: LOINC
+    code: "62387-6"
+    code_description: "Household mental illness"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
+
+  - content: "Did a household member go to prison?"
+    code_system: LOINC
+    code: "62388-4"
+    code_description: "Household member incarcerated"
+    responses_code_system: LOINC
+    responses_type: SING
+    display_result_in_social_history_section: false
+    responses:
+      - name: "Yes"
+        code: "LA33-6"
+        code_description: ""
+        value: "1"
+      - name: "No"
+        code: "LA32-8"
+        code_description: ""
+        value: "0"
