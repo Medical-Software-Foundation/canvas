@@ -6,10 +6,50 @@ prescribe/refill/adjust command into the fields the browser submits to Photon.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 _MEDICATION_NAME_KEYS = ("text", "label", "name", "description", "display")
 _DISPENSE_UNIT_KEYS = ("description", "text", "label", "name")
+
+# Photon's controlled DispenseUnit vocabulary (from the `dispenseUnits` query).
+# Canvas sends free text (e.g. "tablet"); we normalize to one of these.
+PHOTON_DISPENSE_UNITS = (
+    "Each", "Milliliter", "Gram", "Applicator", "Blister", "Caplet", "Capsule",
+    "Film", "Gum", "Implant", "Insert", "Kit", "Lancet", "Lozenge", "Packet",
+    "Pad", "Patch", "Pen Needle", "Ring", "Sponge", "Stick", "Strip",
+    "Suppository", "Swab", "Tablet", "Troche", "Unspecified", "Wafer", "Carton",
+    "Pen", "Syringe", "Vial", "Auto-injector", "Tube", "Bottle", "Inhaler",
+    "Aerosol", "Can", "Spray", "Drop",
+)
+_UNIT_SYNONYMS = {
+    "ml": "Milliliter", "milliliter": "Milliliter", "milliliters": "Milliliter",
+    "g": "Gram", "gm": "Gram", "gram": "Gram", "grams": "Gram",
+    "ea": "Each", "cap": "Capsule", "caps": "Capsule", "tab": "Tablet",
+    "tabs": "Tablet",
+}
+_DEFAULT_DISPENSE_UNIT = "Each"
+
+
+def map_dispense_unit(text: str | None) -> str:
+    """Map Canvas free-text unit (e.g. 'tablet', '0.5 mL vial') to Photon's vocab."""
+    if not text:
+        return _DEFAULT_DISPENSE_UNIT
+    normalized = text.strip().lower()
+    for unit in PHOTON_DISPENSE_UNITS:
+        if unit.lower() == normalized:
+            return unit
+    if normalized in _UNIT_SYNONYMS:
+        return _UNIT_SYNONYMS[normalized]
+    words = set(re.findall(r"[a-z]+", normalized))
+    # Prefer a specific unit word in the text (e.g. "0.5 mL vial" -> Vial).
+    for unit in PHOTON_DISPENSE_UNITS:
+        if unit.lower() in words:
+            return unit
+    for synonym, canonical in _UNIT_SYNONYMS.items():
+        if synonym in words:
+            return canonical
+    return _DEFAULT_DISPENSE_UNIT
 
 
 def medication_term(data: dict[str, Any]) -> str | None:
@@ -81,7 +121,7 @@ def extract_rx(data: dict[str, Any]) -> dict[str, Any]:
         "ndc": representative_ndc(data),
         "instructions": (data.get("sig") or "").strip(),
         "dispenseQuantity": float(quantity) if quantity is not None else None,
-        "dispenseUnit": _dispense_unit(data),
+        "dispenseUnit": map_dispense_unit(_dispense_unit(data)),
         "refillsAllowed": int(data.get("refills") or 0),
         "daysSupply": data.get("days_supply"),
         "notes": data.get("note_to_pharmacist") or None,

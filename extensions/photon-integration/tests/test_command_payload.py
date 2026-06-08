@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from photon_integration.command_payload import extract_rx, medication_term
+from photon_integration.command_payload import (
+    extract_rx,
+    map_dispense_unit,
+    medication_term,
+)
 
 FULL = {
     "prescribe": {"text": "Lisinopril 10 mg tablet", "value": "216092"},
@@ -39,7 +43,7 @@ class TestExtractRx:
         assert rx["term"] == "Lisinopril 10 mg tablet"
         assert rx["instructions"] == "Take 1 tablet daily"
         assert rx["dispenseQuantity"] == 30.0
-        assert rx["dispenseUnit"] == "tablet"
+        assert rx["dispenseUnit"] == "Tablet"  # normalized to Photon's vocab
         assert rx["fdbCode"] == "216092"
         assert rx["ndc"] == "00781180501"
         assert rx["refillsAllowed"] == 2
@@ -57,3 +61,20 @@ class TestExtractRx:
     def test_missing_refills_defaults_zero(self):
         data = {k: v for k, v in FULL.items() if k != "refills"}
         assert extract_rx(data)["refillsAllowed"] == 0
+
+
+class TestMapDispenseUnit:
+    @pytest.mark.parametrize("text,expected", [
+        ("tablet", "Tablet"),
+        ("TABLET", "Tablet"),
+        ("capsule", "Capsule"),
+        ("mL", "Milliliter"),
+        ("milliliter", "Milliliter"),
+        ("0.5 mL vial", "Vial"),
+        ("0.4 mL syringe", "Syringe"),
+        ("", "Each"),
+        (None, "Each"),
+        ("widget", "Each"),
+    ])
+    def test_mapping(self, text, expected):
+        assert map_dispense_unit(text) == expected

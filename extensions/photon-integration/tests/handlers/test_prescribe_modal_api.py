@@ -193,7 +193,7 @@ class TestSend:
         assert rx["treatmentId"] == "med_1"
         assert rx["patientId"] == "pat_999"
         assert rx["rxcui"] == "198052"
-        assert rx["dispenseUnit"] == "tablet"
+        assert rx["dispenseUnit"] == "Tablet"
         assert rx["refillsAllowed"] == 1
         assert rx["error"] is None
 
