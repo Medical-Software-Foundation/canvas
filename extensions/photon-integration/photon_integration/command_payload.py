@@ -27,6 +27,17 @@ def medication_term(data: dict[str, Any]) -> str | None:
     return None
 
 
+def representative_ndc(data: dict[str, Any]) -> str | None:
+    """NDC of the dispensed product, used to resolve an RxNorm code."""
+    type_to_dispense = data.get("type_to_dispense")
+    if isinstance(type_to_dispense, dict):
+        for key in ("representative_ndc", "ndc", "code"):
+            value = type_to_dispense.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
 def _dispense_unit(data: dict[str, Any]) -> str | None:
     type_to_dispense = data.get("type_to_dispense")
     if isinstance(type_to_dispense, str) and type_to_dispense.strip():
@@ -49,6 +60,7 @@ def extract_rx(data: dict[str, Any]) -> dict[str, Any]:
     substitutions = str(data.get("substitutions") or "").lower()
     return {
         "term": medication_term(data),
+        "ndc": representative_ndc(data),
         "instructions": (data.get("sig") or "").strip(),
         "dispenseQuantity": float(quantity) if quantity is not None else None,
         "dispenseUnit": _dispense_unit(data),

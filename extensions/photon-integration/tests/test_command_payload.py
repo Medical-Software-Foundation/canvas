@@ -11,7 +11,7 @@ FULL = {
     "sig": "Take 1 tablet daily",
     "days_supply": 30,
     "quantity_to_dispense": 30,
-    "type_to_dispense": {"description": "tablet"},
+    "type_to_dispense": {"description": "tablet", "representative_ndc": "00781180501"},
     "refills": 2,
     "substitutions": "Allowed",
     "note_to_pharmacist": "handle with care",
@@ -40,6 +40,7 @@ class TestExtractRx:
         assert rx["instructions"] == "Take 1 tablet daily"
         assert rx["dispenseQuantity"] == 30.0
         assert rx["dispenseUnit"] == "tablet"
+        assert rx["ndc"] == "00781180501"
         assert rx["refillsAllowed"] == 2
         assert rx["daysSupply"] == 30
         assert rx["notes"] == "handle with care"

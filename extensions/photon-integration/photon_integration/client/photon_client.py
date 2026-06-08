@@ -146,15 +146,15 @@ class PhotonClient:
 
     # -- treatments (medication catalog) -----------------------------------
 
-    def find_treatment_id(self, term: str) -> str | None:
-        """Look up a Photon medication (treatment) id by drug name ``term``.
+    def find_treatment_id_by_code(self, code: str | None) -> str | None:
+        """Resolve a prescribable Photon treatment id by code (RxNorm rxcui).
 
-        Photon's catalog is queried via ``medications(filter: MedicationFilter)``
-        filtering on the drug name; the returned medication id is used as the
-        prescription's ``treatmentId``. We match on the medication name from the
-        Canvas command and take the top result.
+        Photon's catalog stores RxNorm but generally not NDC, and ``drug.code``
+        matches any code identifier, so we filter ``medications`` by the rxcui
+        resolved from the Canvas medication. An exact code match returns the
+        correct strength/form; no match returns None (the caller should not guess).
         """
-        if not term:
+        if not code:
             return None
         query = """
             query medications($filter: MedicationFilter, $first: Int) {
@@ -162,7 +162,7 @@ class PhotonClient:
             }
         """
         medications = (
-            self._graphql(query, {"filter": {"drug": {"name": term}}, "first": 5}).get(
+            self._graphql(query, {"filter": {"drug": {"code": code}}, "first": 1}).get(
                 "medications"
             )
             or []

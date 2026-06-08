@@ -6,3 +6,4 @@ __pycache__
 *.pyc
 .mypy_cache
 introspect_photon.py
+probe_medications.py

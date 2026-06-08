@@ -168,12 +168,13 @@ def send_patched():
         patch(f"{MODULE}.Command") as command_cls, \
         patch(f"{MODULE}._photon_send_selected", return_value=True) as selected, \
         patch(f"{MODULE}.build_client") as build_client, \
+        patch(f"{MODULE}.ndc_to_rxcui", return_value="198052") as rxcui, \
         patch(f"{MODULE}.resolve_photon_patient", return_value=("pat_999", "EXT_EFFECT")), \
         patch(f"{MODULE}.build_address", return_value={"city": "Town"}):
-        build_client.return_value.find_treatment_id.return_value = "med_1"
+        build_client.return_value.find_treatment_id_by_code.return_value = "med_1"
         command_cls.objects.filter.return_value = [_command()]
         yield SimpleNamespace(rts=rts, command_cls=command_cls, selected=selected,
-                              build_client=build_client)
+                              build_client=build_client, rxcui=rxcui)
 
 
 class TestSend:
@@ -190,17 +191,26 @@ class TestSend:
         rx = config["prescriptions"][0]
         assert rx["treatmentId"] == "med_1"
         assert rx["patientId"] == "pat_999"
+        assert rx["rxcui"] == "198052"
         assert rx["dispenseUnit"] == "tablet"
         assert rx["refillsAllowed"] == 1
         assert rx["error"] is None
 
-    def test_unmatched_medication_flags_error(self, send_patched):
-        send_patched.build_client.return_value.find_treatment_id.return_value = None
+    def test_unmatched_rxcui_flags_error(self, send_patched):
+        send_patched.build_client.return_value.find_treatment_id_by_code.return_value = None
         api = _api(query_params={"note_id": "4567"})
         api.send()
         rx = json.loads(send_patched.rts.call_args.args[1]["config_json"])["prescriptions"][0]
         assert rx["treatmentId"] is None
-        assert "No Photon match" in rx["error"]
+        assert "No Photon match for RxNorm 198052" in rx["error"]
+
+    def test_no_rxcui_flags_error(self, send_patched):
+        send_patched.rxcui.return_value = None
+        send_patched.build_client.return_value.find_treatment_id_by_code.return_value = None
+        api = _api(query_params={"note_id": "4567"})
+        api.send()
+        rx = json.loads(send_patched.rts.call_args.args[1]["config_json"])["prescriptions"][0]
+        assert "No RxNorm code" in rx["error"]
 
     def test_skips_unflagged_commands(self, send_patched):
         send_patched.selected.return_value = False

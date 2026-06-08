@@ -30,6 +30,7 @@ from photon_integration.client.photon_client import PhotonClient, PhotonError
 from photon_integration.command_payload import extract_rx
 from photon_integration.constants import PHOTON_COMMAND_SCHEMA_KEYS
 from photon_integration.handlers.command_field import _photon_send_selected
+from photon_integration.ontology import ndc_to_rxcui
 from photon_integration.patient_sync import (
     build_address,
     build_client,
@@ -227,14 +228,25 @@ class PhotonPrescribeModalAPI(StaffSessionAuthMixin, SimpleAPI):
                 patient = command.patient
             rx = extract_rx(command.data or {})
             term = rx.pop("term")
-            treatment_id = client.find_treatment_id(term) if term else None
+            ndc = rx.pop("ndc")
+            # Exact, code-based match: Canvas NDC -> RxNorm (Ontologies) -> Photon
+            # drug.code. Never guess by name for an unattended send.
+            rxcui = ndc_to_rxcui(ndc)
+            treatment_id = client.find_treatment_id_by_code(rxcui)
+            if treatment_id:
+                error = None
+            elif not rxcui:
+                error = "No RxNorm code for this medication — use Prescribe via Photon"
+            else:
+                error = f"No Photon match for RxNorm {rxcui} — use Prescribe via Photon"
             prescriptions.append(
                 {
                     "commandId": str(command.id),
                     "externalId": str(command.id),
                     "treatmentId": treatment_id,
                     "medication": term or "prescription",
-                    "error": None if treatment_id else f"No Photon match for '{term}'",
+                    "rxcui": rxcui,
+                    "error": error,
                     **rx,
                 }
             )

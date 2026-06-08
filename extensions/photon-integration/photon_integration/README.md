@@ -80,10 +80,12 @@ canvas install photon_integration
 
 The GraphQL calls in `client/photon_client.py` match the live Neutron schema:
 
-- Medication lookup: `medications(filter: { drug: { name } })` → the returned
-  medication `id` is used as the prescription `treatmentId`. Matches on the
-  medication name from the Canvas command (NDC/code-level lookup needs parent
-  ids, so name search is used).
+- Medication lookup (API-direct send): **code-based, not name.** Photon's catalog
+  stores RxNorm (`rxcui`) but not NDC, so the chain is Canvas NDC →
+  `ontologies_http` `/fdb/ndc-to-medication/<ndc>/` → `rxnorm_rxcui` → Photon
+  `medications(filter: { drug: { code: <rxcui> } })` → exact `treatmentId`
+  (correct strength/form). No RxNorm match → the Rx is flagged for the provider
+  to use the Elements modal rather than auto-sending a guess.
 - `createPrescription` uses `treatmentId` and `refillsAllowed` (= Canvas
   refills). **It has no `prescriberId` argument** — the prescriber is taken from
   the authenticated identity.
