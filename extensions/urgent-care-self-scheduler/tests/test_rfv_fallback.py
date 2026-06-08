@@ -324,13 +324,19 @@ def test_compute_originates_rfv_and_hpi_and_consumes_metadata(mocker):
     rfv_effect = SimpleNamespace(name="rfv")
     hpi_effect = SimpleNamespace(name="hpi")
     upsert_effect = SimpleNamespace(name="upsert")
-    mocker.patch.object(ReasonForVisitCommand, "originate", return_value=rfv_effect)
-    mocker.patch.object(HistoryOfPresentIllnessCommand, "originate", return_value=hpi_effect)
+    rfv_originate = mocker.patch.object(ReasonForVisitCommand, "originate", return_value=rfv_effect)
+    hpi_originate = mocker.patch.object(HistoryOfPresentIllnessCommand, "originate", return_value=hpi_effect)
     mocker.patch.object(PatientMetadata, "upsert", return_value=upsert_effect)
 
     handler = _make_handler_with_event(EventType.APPOINTMENT_CREATED)
     effects = handler.compute()
     assert effects == [rfv_effect, hpi_effect, upsert_effect]
+    # Both commands must be originated STAGED — never committed by the plugin.
+    # `reasonForVisit` is not server-committable inline, and patient-entered input
+    # is left for the provider to confirm.
+    for originate in (rfv_originate, hpi_originate):
+        _, kwargs = originate.call_args
+        assert kwargs.get("commit", False) is not True
 
 
 def test_compute_resolves_appointment_via_note_for_state_change_event(mocker):

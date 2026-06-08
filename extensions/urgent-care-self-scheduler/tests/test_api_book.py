@@ -1,9 +1,12 @@
 from types import SimpleNamespace
 
 from urgent_care_self_scheduler.handlers.api import (
+    SLOT_WINDOW_DAYS,
     BookAPI,
     _build_task_title,
     _intake_to_metadata_value,
+    _patient_has_upcoming_urgent_care_visit,
+    _resolve_modality,
     _validate_intake_payload,
 )
 
@@ -184,7 +187,7 @@ def test_book_api_returns_409_when_slot_no_longer_available(mocker) -> None:
     )
     mocker.patch(
         "urgent_care_self_scheduler.handlers.api._active_location",
-        return_value=(None, __import__("zoneinfo").ZoneInfo("UTC")),
+        return_value=("loc-1", __import__("zoneinfo").ZoneInfo("UTC")),
     )
     body = _json.dumps({
         "slot": {"provider_id": "p-x", "start_iso": "2026-05-01T08:00:00+00:00"},
@@ -193,6 +196,26 @@ def test_book_api_returns_409_when_slot_no_longer_available(mocker) -> None:
     api = _make_book_api(body=body)
     response = api.post()
     assert response[0].status_code == 409
+
+
+def test_book_api_returns_400_for_unparseable_start_iso(mocker) -> None:
+    import json as _json
+    mocker.patch(
+        "urgent_care_self_scheduler.handlers.api.resolve_urgent_care_note_type",
+        return_value=SimpleNamespace(id="nt-1", online_duration=15),
+    )
+    mocker.patch(
+        "urgent_care_self_scheduler.handlers.api._active_location",
+        return_value=("loc-1", __import__("zoneinfo").ZoneInfo("UTC")),
+    )
+    # A non-ISO start_iso is now rejected up front (before slot computation).
+    body = _json.dumps({
+        "slot": {"provider_id": "p-x", "start_iso": "not-a-date"},
+        "intake": _good_intake(),
+    }).encode()
+    api = _make_book_api(body=body)
+    response = api.post()
+    assert response[0].status_code == 400
 
 
 def test_book_api_blocks_when_patient_already_has_urgent_care_visit(mocker) -> None:
@@ -467,3 +490,137 @@ def test_book_api_returns_503_when_no_practice_location(mocker) -> None:
     api = _make_book_api(body=body)
     response = api.post()
     assert response[0].status_code == 503
+
+
+# ---- _resolve_modality -------------------------------------------------------
+
+
+def test_resolve_modality_defaults_to_telehealth() -> None:
+    assert _resolve_modality(None) == "telehealth"
+    assert _resolve_modality("") == "telehealth"
+    assert _resolve_modality("video") == "telehealth"  # unrecognized -> default
+
+
+def test_resolve_modality_normalizes_in_person() -> None:
+    assert _resolve_modality("in_person") == "in_person"
+    assert _resolve_modality("  In_Person  ") == "in_person"
+
+
+# ---- _patient_has_upcoming_urgent_care_visit (exercises the real ORM) --------
+#
+# These create real Appointment rows so the .filter().exclude().exists() query —
+# the server-side enforcement of the duplicate-visit block — is actually run,
+# rather than mocked out as in the BookAPI handler tests above.
+
+
+def _make_urgent_care_appt(patient, note_type, start_time, status="confirmed"):
+    from canvas_sdk.v1.data.appointment import Appointment
+
+    return Appointment.objects.create(
+        patient=patient,
+        note_type=note_type,
+        start_time=start_time,
+        duration_minutes=15,
+        status=status,
+        telehealth_instructions_sent=False,
+    )
+
+
+def _uc_note_type(name="Urgent Care"):
+    from canvas_sdk.test_utils.factories import NoteTypeFactory
+
+    return NoteTypeFactory.create(name=name, category="encounter")
+
+
+def test_has_upcoming_visit_true_for_confirmed_in_window() -> None:
+    import datetime
+
+    from canvas_sdk.test_utils.factories import PatientFactory
+
+    patient = PatientFactory.create()
+    note_type = _uc_note_type()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _make_urgent_care_appt(patient, note_type, now + datetime.timedelta(days=1))
+
+    assert (
+        _patient_has_upcoming_urgent_care_visit(
+            str(patient.id),
+            note_type=note_type,
+            window_start=now,
+            window_end=now + datetime.timedelta(days=SLOT_WINDOW_DAYS),
+        )
+        is True
+    )
+
+
+def test_has_upcoming_visit_false_when_only_cancelled_or_noshow() -> None:
+    import datetime
+
+    from canvas_sdk.test_utils.factories import PatientFactory
+
+    patient = PatientFactory.create()
+    note_type = _uc_note_type()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _make_urgent_care_appt(
+        patient, note_type, now + datetime.timedelta(days=1), status="cancelled"
+    )
+    _make_urgent_care_appt(
+        patient, note_type, now + datetime.timedelta(days=2), status="noshow"
+    )
+
+    assert (
+        _patient_has_upcoming_urgent_care_visit(
+            str(patient.id),
+            note_type=note_type,
+            window_start=now,
+            window_end=now + datetime.timedelta(days=SLOT_WINDOW_DAYS),
+        )
+        is False
+    )
+
+
+def test_has_upcoming_visit_false_for_a_different_note_type() -> None:
+    import datetime
+
+    from canvas_sdk.test_utils.factories import PatientFactory
+
+    patient = PatientFactory.create()
+    uc_note_type = _uc_note_type("Urgent Care")
+    other_note_type = _uc_note_type("Annual Physical")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    # The patient has an upcoming visit, but of a non-urgent-care note type.
+    _make_urgent_care_appt(patient, other_note_type, now + datetime.timedelta(days=1))
+
+    assert (
+        _patient_has_upcoming_urgent_care_visit(
+            str(patient.id),
+            note_type=uc_note_type,
+            window_start=now,
+            window_end=now + datetime.timedelta(days=SLOT_WINDOW_DAYS),
+        )
+        is False
+    )
+
+
+def test_has_upcoming_visit_false_when_outside_window() -> None:
+    import datetime
+
+    from canvas_sdk.test_utils.factories import PatientFactory
+
+    patient = PatientFactory.create()
+    note_type = _uc_note_type()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    # Well beyond window_end + the query buffer.
+    _make_urgent_care_appt(
+        patient, note_type, now + datetime.timedelta(days=SLOT_WINDOW_DAYS + 3)
+    )
+
+    assert (
+        _patient_has_upcoming_urgent_care_visit(
+            str(patient.id),
+            note_type=note_type,
+            window_start=now,
+            window_end=now + datetime.timedelta(days=SLOT_WINDOW_DAYS),
+        )
+        is False
+    )

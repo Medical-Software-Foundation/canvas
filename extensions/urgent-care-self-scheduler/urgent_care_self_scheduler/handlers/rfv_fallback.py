@@ -132,13 +132,21 @@ class UrgentCareRfvOriginator(BaseHandler):
         metadata_key = f"{PENDING_RFV_KEY_PREFIX}{correlation_id}"
         metadata_record = appointment.patient.metadata.filter(key=metadata_key).first()
         if not metadata_record:
+            # Likely the effect-ordering race: APPOINTMENT_CREATED can fire before
+            # the intake stash commits. The companion NOTE_STATE_CHANGE event retries,
+            # so a single occurrence here is expected, not a definitive lost intake.
             log.info(
-                f"UrgentCareRfvOriginator: no intake metadata for {correlation_id} "
-                f"(patient {appointment.patient.id})"
+                f"UrgentCareRfvOriginator: no intake metadata yet for {correlation_id} "
+                f"(patient {appointment.patient.id}); will retry on the companion event"
             )
             return []
         if not metadata_record.value or metadata_record.value == CONSUMED_MARKER:
-            return []  # Already consumed on a previous event.
+            # Benign: the other event already originated the RFV/HPI. Logged (not
+            # silent) so it's distinguishable from the missing-stash case above.
+            log.info(
+                f"UrgentCareRfvOriginator: intake for {correlation_id} already consumed; skipping"
+            )
+            return []
 
         try:
             intake = json.loads(metadata_record.value)
@@ -158,15 +166,20 @@ class UrgentCareRfvOriginator(BaseHandler):
         note_uuid = str(appointment.note.id)
         effects: list[Effect] = []
 
+        # Originate both commands STAGED (uncommitted). The patient-entered reason
+        # and intake narrative are pre-filled on the note for the provider to review
+        # and commit during the visit — clinician confirmation, not auto-finalized.
+        # (Inline `originate(commit=True)` is also rejected server-side for the
+        # reasonForVisit command: "Command with key reasonForVisit is not committable".)
         rfv_command = ReasonForVisitCommand(note_uuid=note_uuid, comment=rfv_text)
-        effects.append(rfv_command.originate(commit=True))
+        effects.append(rfv_command.originate())
 
         hpi_narrative = _build_hpi_narrative(intake)
         if hpi_narrative:
             hpi_command = HistoryOfPresentIllnessCommand(
                 note_uuid=note_uuid, narrative=hpi_narrative
             )
-            effects.append(hpi_command.originate(commit=True))
+            effects.append(hpi_command.originate())
 
         clear_metadata = PatientMetadata(
             patient_id=str(appointment.patient.id),

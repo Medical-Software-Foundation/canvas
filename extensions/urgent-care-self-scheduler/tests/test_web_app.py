@@ -66,7 +66,18 @@ def test_wizard_template_has_back_link_to_portal() -> None:
     assert 'href="/app/"' in html
 
 
-def test_wizard_template_has_success_pane_with_meeting_link_placeholder() -> None:
+def test_wizard_template_success_pane_points_to_appointments_tab() -> None:
     html = TEMPLATE_PATH.read_text(encoding="utf-8")
-    assert "meeting" in html.lower() or "join visit" in html.lower()
-    assert "copy link" in html.lower()
+    # The success pane carries a modality-aware copy line and routes the patient to
+    # the Appointments tab, where Canvas surfaces the real join link / location.
+    assert 'id="uc-success-modality"' in html
+    assert "uc-success-appointments-link" in html
+    assert "/app/appointments" in html
+
+
+def test_wizard_template_has_no_dead_synchronous_meeting_link_ui() -> None:
+    html = TEMPLATE_PATH.read_text(encoding="utf-8")
+    # The dead synchronous meeting-link row/button was removed (Canvas delivers the
+    # link asynchronously via the Appointments tab), so these must not reappear.
+    assert "uc-meeting-link" not in html
+    assert "uc-copy-link" not in html

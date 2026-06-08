@@ -188,22 +188,22 @@ def event_window_on_date(
     return (window_start, window_end)
 
 
-def compute_slots_for_provider(
-    *,
-    provider_id: str,
-    provider_name: str,
+def expand_event_windows(
     events: list[Any],
-    booked: list[tuple[datetime.datetime, datetime.datetime]],
+    *,
     window_start: datetime.datetime,
     window_end: datetime.datetime,
     timezone: ZoneInfo,
-    duration_minutes: int,
-    now: datetime.datetime,
-    lead_time_minutes: int,
-) -> list[dict]:
+) -> list[tuple[datetime.datetime, datetime.datetime]]:
+    """Expand each event's recurrence into naive-local windows within [start, end).
+
+    Walks every date in the query window, asks `event_occurs_on_date` whether each
+    event fires, computes its wall-clock window via `event_window_on_date`, and clips
+    to the query bounds. Output windows are naive datetimes in `timezone`. Shared by
+    availability-slot generation and Administrative-block expansion.
+    """
     window_start_local = window_start.astimezone(timezone).replace(tzinfo=None)
     window_end_local = window_end.astimezone(timezone).replace(tzinfo=None)
-    now_local = now.astimezone(timezone).replace(tzinfo=None)
 
     local_windows: list[tuple[datetime.datetime, datetime.datetime]] = []
     current = window_start_local.date()
@@ -230,7 +230,49 @@ def compute_slots_for_provider(
             we = min(we, window_end_local)
             local_windows.append((ws, we))
         current += datetime.timedelta(days=1)
+    return local_windows
 
+
+def block_intervals_for_calendar(
+    block_events: list[Any],
+    *,
+    window_start: datetime.datetime,
+    window_end: datetime.datetime,
+    timezone: ZoneInfo,
+) -> list[tuple[datetime.datetime, datetime.datetime]]:
+    """Expand Administrative-calendar block events into absolute (tz-aware) busy intervals.
+
+    Blocks (one-off, recurring, holds, lead-time, buffers) are ordinary Events with no
+    `allowed_note_types`. Expanded with the same recurrence machinery as availability,
+    then localized to absolute time so they can be subtracted from any of the provider's
+    slots regardless of which location calendar produced them.
+    """
+    return [
+        (ws.replace(tzinfo=timezone), we.replace(tzinfo=timezone))
+        for ws, we in expand_event_windows(
+            block_events, window_start=window_start, window_end=window_end, timezone=timezone
+        )
+    ]
+
+
+def compute_slots_for_provider(
+    *,
+    provider_id: str,
+    provider_name: str,
+    events: list[Any],
+    booked: list[tuple[datetime.datetime, datetime.datetime]],
+    window_start: datetime.datetime,
+    window_end: datetime.datetime,
+    timezone: ZoneInfo,
+    duration_minutes: int,
+    now: datetime.datetime,
+    lead_time_minutes: int,
+) -> list[dict]:
+    now_local = now.astimezone(timezone).replace(tzinfo=None)
+
+    local_windows = expand_event_windows(
+        events, window_start=window_start, window_end=window_end, timezone=timezone
+    )
     if not local_windows:
         return []
 
@@ -296,31 +338,7 @@ def resolve_urgent_care_note_type(note_type_name: str) -> Any:
     so the NoteType is resolved once per request rather than twice.
     """
     from canvas_sdk.v1.data.note import NoteType
-    from django.db import DatabaseError
     from logger import log
-
-    # Diagnostic: dump every NoteType row named `note_type_name` regardless of
-    # flags. provider_availability's visit-type selector does NOT filter by
-    # is_scheduleable_via_patient_portal, so a rule may store a NoteType.id
-    # that the urgent-care plugin won't resolve.
-    try:
-        all_named = [
-            {
-                "id": getattr(nt, "id", None),
-                "is_active": getattr(nt, "is_active", None),
-                "is_scheduleable": getattr(nt, "is_scheduleable", None),
-                "is_scheduleable_via_patient_portal": getattr(
-                    nt, "is_scheduleable_via_patient_portal", None
-                ),
-                "category": getattr(nt, "category", None),
-            }
-            for nt in NoteType.objects.filter(name=note_type_name)
-        ]
-        log.info(
-            f"slot_search: ALL NoteType rows named {note_type_name!r}: {all_named}"
-        )
-    except DatabaseError as exc:
-        log.warning(f"slot_search: name-dump diagnostic failed: {exc!r}")
 
     # Canvas instances often have multiple NoteTypes that share a name (legacy
     # versions, inactive copies). Pre-filter by the requirements we need so the
@@ -353,6 +371,33 @@ def resolve_urgent_care_note_type(note_type_name: str) -> Any:
     return note_type
 
 
+def _slot_instant(slot: dict) -> datetime.datetime:
+    """Absolute (UTC) instant a slot starts at, for tz-agnostic dedup and sorting.
+
+    A slot's `start_iso` carries its calendar's UTC offset, so slots from
+    different-timezone calendars must be compared by instant, not by string.
+    """
+    return datetime.datetime.fromisoformat(slot["start_iso"]).astimezone(datetime.timezone.utc)
+
+
+def _calendar_timezone(calendar: Any, default: ZoneInfo) -> ZoneInfo:
+    """The calendar's own timezone, normalized to a `ZoneInfo`.
+
+    `Calendar.timezone` is a non-null `TimeZoneField`, so every calendar carries
+    its own zone directly — we never infer it from the title/location suffix. The
+    field may surface as a `ZoneInfo` or another tzinfo; coerce by IANA key so the
+    sandbox-allowlisted `ZoneInfo` is what flows downstream. Falls back to `default`
+    only if the value is empty or unparseable.
+    """
+    raw = getattr(calendar, "timezone", None)
+    if raw is None:
+        return default
+    try:
+        return ZoneInfo(str(raw))
+    except (KeyError, ValueError):
+        return default
+
+
 def find_available_slots(
     *,
     note_type_name: str,
@@ -364,7 +409,15 @@ def find_available_slots(
     max_results: int = 50,
     note_type: Any = None,
 ) -> list[dict]:
-    """Returns sorted slots [{provider_id, provider_name, start_iso, end_iso}] in `practice_timezone`.
+    """Returns slots [{provider_id, provider_name, start_iso, end_iso}], sorted by instant.
+
+    Each clinic calendar's availability is interpreted in its OWN `Calendar.timezone`
+    (a required field — not guessed from the title), with `practice_timezone` as a
+    fallback only if that value fails to resolve. A provider with calendars at more
+    than one location is bookable across the union of all of them, deduped by
+    absolute instant — so a telehealth provider available at two locations at the
+    same moment yields one slot, not two. `max_results` caps slots **per provider**
+    (not globally), so no provider is crowded out of the results.
 
     Returns [] (and logs) if the configured NoteType is missing, ambiguous, or
     misconfigured. Pass a pre-resolved `note_type` (from
@@ -378,7 +431,7 @@ def find_available_slots(
     log.info(
         f"slot_search: searching note_type={note_type_name!r} "
         f"window={window_start.isoformat()}..{window_end.isoformat()} "
-        f"tz={practice_timezone.key} lead={lead_time_minutes}min"
+        f"fallback_tz={practice_timezone.key} lead={lead_time_minutes}min"
     )
 
     if note_type is None:
@@ -492,6 +545,9 @@ def find_available_slots(
     )
 
     # Bulk-fetch booked appointments for all relevant providers in a single query.
+    # Stored as absolute (tz-aware) intervals — each provider calendar converts them
+    # into its own location timezone when filtering, so the comparison stays correct
+    # regardless of which location's calendar a slot came from.
     booked_by_provider_dbid: dict[int, list[tuple[datetime.datetime, datetime.datetime]]] = {}
     appt_count = 0
     for appt in (
@@ -505,49 +561,121 @@ def find_available_slots(
     ):
         if not (appt.start_time and appt.duration_minutes):
             continue
-        start_local = appt.start_time.astimezone(practice_timezone).replace(tzinfo=None)
-        end_local = start_local + datetime.timedelta(minutes=appt.duration_minutes)
+        end_abs = appt.start_time + datetime.timedelta(minutes=appt.duration_minutes)
         booked_by_provider_dbid.setdefault(appt.provider_id, []).append(
-            (start_local, end_local)
+            (appt.start_time, end_abs)
         )
         appt_count += 1
     log.info(f"slot_search: {appt_count} blocking appointments in window")
 
-    all_slots: list[dict] = []
-    seen_provider_ids: set[str] = set()
-    for calendar, staff in pairings:
-        if str(staff.id) in seen_provider_ids:
+    # Honor Administrative-calendar blocks. provider_availability writes one-off
+    # blocks, recurring blocks, holds, lead-time blocks, and appointment buffers to
+    # "{Provider}: Administrative[: {Location}]" calendars (events with no
+    # allowed_note_types). Expand them into absolute busy intervals — in each
+    # calendar's own timezone — and merge into the provider's booked set so they're
+    # subtracted from availability exactly like appointments. A block removes that
+    # absolute instant from ALL of the provider's slots (telehealth-safe: a provider
+    # blocked at an instant isn't bookable at any location).
+    admin_pairings: list[tuple[Any, Any]] = []
+    for calendar in Calendar.objects.filter(title__icontains=": Admin"):
+        provider_name, calendar_type, _ = parse_calendar_title(calendar.title)
+        if not calendar_type.lower().startswith("admin"):
             continue
-        events = events_by_calendar_dbid.get(calendar.dbid, [])
-        if not events:
-            log.warning(
-                f"slot_search: calendar {calendar.title!r} has 0 events with "
-                f"allowed_note_types={note_type_name!r} and is_cancelled=False — "
-                "did you add the urgent-care NoteType to the event's allowed_note_types?"
+        staff = staff_by_name.get(provider_name)
+        if staff is not None:
+            admin_pairings.append((calendar, staff))
+
+    block_count = 0
+    if admin_pairings:
+        admin_events_by_calendar_dbid: dict[Any, list[Any]] = {}
+        for ev in Event.objects.filter(
+            calendar_id__in={c.dbid for c, _ in admin_pairings},
+            is_cancelled=False,
+        ):
+            admin_events_by_calendar_dbid.setdefault(ev.calendar_id, []).append(ev)
+        for calendar, staff in admin_pairings:
+            block_events = admin_events_by_calendar_dbid.get(calendar.dbid, [])
+            if not block_events:
+                continue
+            tz = _calendar_timezone(calendar, practice_timezone)
+            intervals = block_intervals_for_calendar(
+                block_events, window_start=window_start, window_end=window_end, timezone=tz
             )
-            continue
+            booked_by_provider_dbid.setdefault(staff.dbid, []).extend(intervals)
+            block_count += len(intervals)
+    log.info(f"slot_search: {block_count} administrative block intervals in window")
 
-        provider_slots = compute_slots_for_provider(
-            provider_id=str(staff.id),
-            provider_name=staff.full_name,
-            events=events,
-            booked=booked_by_provider_dbid.get(staff.dbid, []),
-            window_start=window_start,
-            window_end=window_end,
-            timezone=practice_timezone,
-            duration_minutes=duration_minutes,
-            now=now,
-            lead_time_minutes=lead_time_minutes,
-        )
+    # Group every clinic calendar a provider owns — possibly several, across
+    # locations — so the provider's availability is the union of all of them.
+    calendars_by_provider: dict[str, tuple[Any, list[Any]]] = {}
+    for calendar, staff in pairings:
+        _, calendars = calendars_by_provider.setdefault(str(staff.id), (staff, []))
+        calendars.append(calendar)
+
+    all_slots: list[dict] = []
+    for provider_id, (staff, calendars) in calendars_by_provider.items():
+        booked_abs = booked_by_provider_dbid.get(staff.dbid, [])
+        provider_slots: list[dict] = []
+        for calendar in calendars:
+            events = events_by_calendar_dbid.get(calendar.dbid, [])
+            if not events:
+                log.warning(
+                    f"slot_search: calendar {calendar.title!r} has 0 events with "
+                    f"allowed_note_types={note_type_name!r} and is_cancelled=False — "
+                    "did you add the urgent-care NoteType to the event's allowed_note_types?"
+                )
+                continue
+            # Interpret this calendar's availability in its OWN timezone — the
+            # required Calendar.timezone field, never inferred from the title.
+            tz = _calendar_timezone(calendar, practice_timezone)
+            log.info(
+                f"slot_search: calendar {calendar.title!r} tz={tz.key} ({len(events)} events)"
+            )
+            booked_tz = [
+                (
+                    b_start.astimezone(tz).replace(tzinfo=None),
+                    b_end.astimezone(tz).replace(tzinfo=None),
+                )
+                for b_start, b_end in booked_abs
+            ]
+            provider_slots.extend(
+                compute_slots_for_provider(
+                    provider_id=provider_id,
+                    provider_name=staff.full_name,
+                    events=events,
+                    booked=booked_tz,
+                    window_start=window_start,
+                    window_end=window_end,
+                    timezone=tz,
+                    duration_minutes=duration_minutes,
+                    now=now,
+                    lead_time_minutes=lead_time_minutes,
+                )
+            )
+
+        # Union across the provider's calendars: one slot per absolute instant,
+        # ordered, then capped PER PROVIDER. Capping per provider (rather than a
+        # single global cap applied after merging) ensures a provider whose
+        # availability falls later in the window is still represented instead of
+        # being crowded out by earlier providers.
+        deduped: list[dict] = []
+        seen_instants: set[datetime.datetime] = set()
+        for slot in sorted(provider_slots, key=_slot_instant):
+            instant = _slot_instant(slot)
+            if instant in seen_instants:
+                continue
+            seen_instants.add(instant)
+            deduped.append(slot)
+        capped = deduped[:max_results]
         log.info(
-            f"slot_search: provider {staff.full_name!r} ({len(events)} events, "
-            f"{len(booked_by_provider_dbid.get(staff.dbid, []))} blocking appts) "
-            f"→ {len(provider_slots)} bookable slots"
+            f"slot_search: provider {staff.full_name!r} across {len(calendars)} calendar(s) "
+            f"→ {len(deduped)} bookable slots (per-provider cap {max_results} → {len(capped)})"
         )
-        all_slots.extend(provider_slots)
-        seen_provider_ids.add(str(staff.id))
+        all_slots.extend(capped)
 
-    all_slots.sort(key=lambda s: s["start_iso"])
-    final = all_slots[:max_results]
-    log.info(f"slot_search: returning {len(final)} total slots (cap={max_results})")
-    return final
+    # Sort the union by absolute instant (NOT by start_iso string — slots from
+    # different-tz locations carry different UTC offsets, so string order isn't
+    # chronological). The result is already bounded by the per-provider cap above.
+    all_slots.sort(key=_slot_instant)
+    log.info(f"slot_search: returning {len(all_slots)} total slots")
+    return all_slots

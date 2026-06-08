@@ -24,7 +24,7 @@ SLOT_WINDOW_DAYS = 3
 EXTERNAL_ID_SYSTEM = "urgent-care-self-scheduler"
 PENDING_RFV_KEY_PREFIX = "pending_rfv_"
 RFV_MAX_CHARS = 500
-# Appointment statuses that DON'T count as the patient already having a visit that day.
+# Appointment statuses that DON'T count as the patient already having an upcoming visit.
 _NON_BOOKABLE_APPOINTMENT_STATUSES = ("cancelled", "noshow", "entered-in-error")
 # Buffer to absorb timezone offset when querying appointments by a UTC window.
 _APPOINTMENT_QUERY_BUFFER = datetime.timedelta(hours=16)
@@ -64,11 +64,10 @@ def _first_coding_display(record: Any) -> str | None:
     using `prefetch_related('codings')` actually hit the cache; `.first()`
     can re-query even when codings are prefetched.
     """
-    try:
-        codings = list(record.codings.all())
-    except AttributeError:
+    if not hasattr(record, "codings"):
         # Record type doesn't expose a `codings` relation.
         return None
+    codings = list(record.codings.all())
     if codings and getattr(codings[0], "display", None):
         return str(codings[0].display)
     return None
@@ -131,6 +130,19 @@ def _patient_review(patient_id: str) -> dict | None:
     }
 
 
+def _resolve_modality(value: Any) -> str:
+    """Normalizes the URGENT_CARE_VISIT_MODALITY secret to 'telehealth' | 'in_person'.
+
+    Defaults to 'telehealth' (the original behavior) when unset or unrecognized.
+    Drives only the patient-facing success-pane copy; the appointment's actual
+    video-vs-in-person nature is determined by the configured NoteType, and for a
+    telehealth NoteType Canvas generates and delivers the join link via the portal
+    Appointments tab.
+    """
+    normalized = (str(value).strip().lower() if value is not None else "")
+    return "in_person" if normalized == "in_person" else "telehealth"
+
+
 def _parse_lead_time(value: Any) -> int:
     if value is None:
         return DEFAULT_LEAD_TIME_MINUTES
@@ -172,7 +184,12 @@ def _active_location() -> tuple[str | None, ZoneInfo]:
 
 
 def _practice_timezone() -> ZoneInfo:
-    """Returns the timezone of the active practice location, or UTC if unset."""
+    """Returns the timezone of the active practice location, or UTC if unset.
+
+    Used only as a fallback for the slot search: each clinic calendar carries its
+    own `Calendar.timezone`, which is authoritative. This default applies only if a
+    calendar's timezone somehow fails to resolve.
+    """
     return _active_location()[1]
 
 
@@ -250,7 +267,7 @@ def _validate_intake_payload(intake: Any) -> str | None:
     rfv = (intake.get("reason_for_visit") or "").strip()
     if not rfv:
         return "reason_for_visit is required"
-    if len(intake.get("reason_for_visit") or "") > RFV_MAX_CHARS:
+    if len(rfv) > RFV_MAX_CHARS:
         return f"reason_for_visit exceeds {RFV_MAX_CHARS} characters"
     if not (intake.get("symptom_duration") or "").strip():
         return "symptom_duration is required"
@@ -370,7 +387,27 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
         # Re-validate the slot is still on offer.
         lead_time = _parse_lead_time(secrets.get("URGENT_CARE_LEAD_TIME_MINUTES"))
         practice_location_id, practice_tz = _active_location()
+        if not practice_location_id:
+            # Guard up front: without an active location the timezone falls back to
+            # UTC, so bail before computing any slots against the wrong zone.
+            log.error("BookAPI: no active PracticeLocation found")
+            return [
+                JSONResponse(
+                    {"error": "scheduler misconfigured"},
+                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                )
+            ]
         now = datetime.datetime.now(datetime.timezone.utc)
+
+        # Parse the requested slot up front so malformed input is rejected before
+        # any slot computation.
+        try:
+            start_time = datetime.datetime.fromisoformat(start_iso)
+        except ValueError:
+            return [
+                JSONResponse({"error": "invalid start_iso"}, status_code=HTTPStatus.BAD_REQUEST)
+            ]
+
         available = find_available_slots(
             note_type_name=note_type_name,
             window_start=now,
@@ -380,8 +417,16 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
             lead_time_minutes=lead_time,
             note_type=note_type,
         )
+        # Match by absolute instant + provider, not by raw ISO string: slots from
+        # different-timezone location calendars carry different UTC offsets, so the
+        # same moment can be spelled more than one way.
         match = next(
-            (s for s in available if s["provider_id"] == provider_id and s["start_iso"] == start_iso),
+            (
+                s
+                for s in available
+                if s["provider_id"] == provider_id
+                and datetime.datetime.fromisoformat(s["start_iso"]) == start_time
+            ),
             None,
         )
         if match is None:
@@ -389,13 +434,6 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
                 JSONResponse({"error": "slot_taken"}, status_code=HTTPStatus.CONFLICT)
             ]
 
-        # Build the booking effects.
-        try:
-            start_time = datetime.datetime.fromisoformat(start_iso)
-        except ValueError:
-            return [
-                JSONResponse({"error": "invalid start_iso"}, status_code=HTTPStatus.BAD_REQUEST)
-            ]
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=practice_tz)
 
@@ -411,15 +449,6 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
             return [
                 JSONResponse(
                     {"error": "already_has_urgent_care"}, status_code=HTTPStatus.CONFLICT
-                )
-            ]
-
-        if not practice_location_id:
-            log.error("BookAPI: no active PracticeLocation found")
-            return [
-                JSONResponse(
-                    {"error": "scheduler misconfigured"},
-                    status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 )
             ]
 
@@ -467,10 +496,12 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
             patient_id=patient_id, key=f"{PENDING_RFV_KEY_PREFIX}{correlation_id}"
         )
 
-        # Order matters: write the intake stash FIRST so it is committed before
-        # `appointment.create()` fires APPOINTMENT_CREATED. Otherwise the
-        # UrgentCareRfvOriginator handler runs before the metadata exists and
-        # finds nothing to originate (the RFV/HPI never land on the note).
+        # Write the intake stash FIRST as a best-effort ordering so it tends to
+        # commit before `appointment.create()` fires APPOINTMENT_CREATED. This is
+        # NOT a hard guarantee — effect commit ordering isn't contractual — so the
+        # real safety net is UrgentCareRfvOriginator, which also listens to
+        # NOTE_STATE_CHANGE_EVENT_CREATED and uses a `__consumed__` marker to
+        # originate the RFV/HPI exactly once whenever the stash becomes visible.
         effects = [
             rfv_stash.upsert(value=_intake_to_metadata_value(intake)),
             appointment.create(),
@@ -492,6 +523,7 @@ class BookAPI(PatientSessionAuthMixin, SimpleAPIRoute):
                     "start_iso": start_iso,
                     "provider_name": match["provider_name"],
                     "duration_minutes": duration_minutes,
+                    "modality": _resolve_modality(secrets.get("URGENT_CARE_VISIT_MODALITY")),
                     "appointments_url": "/app/appointments",
                 }
             ),

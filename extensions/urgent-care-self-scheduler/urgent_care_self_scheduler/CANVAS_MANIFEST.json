@@ -33,6 +33,7 @@
     },
     "secrets": [
         "URGENT_CARE_NOTE_TYPE_NAME",
+        "URGENT_CARE_VISIT_MODALITY",
         "URGENT_CARE_LEAD_TIME_MINUTES",
         "URGENT_CARE_TASK_TEAM_ID",
         "URGENT_CARE_FALLBACK_PHONE"

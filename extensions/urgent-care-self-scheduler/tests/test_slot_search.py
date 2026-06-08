@@ -7,8 +7,11 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from urgent_care_self_scheduler.slot_search import (
+    _calendar_timezone,
+    _slot_instant,
     _validate_note_type,
     apply_lead_time,
+    block_intervals_for_calendar,
     chunk_window_into_slots,
     compute_slots_for_provider,
     event_occurs_on_date,
@@ -537,11 +540,18 @@ def _set_staff_filter(mocker, staff):
     return mocker.patch.object(Staff.objects, "filter", return_value=chain)
 
 
+class _EventQS(list):
+    """List that also answers .distinct() — supports both the availability fetch
+    (Event.objects.filter(...).distinct()) and the admin fetch (direct iteration)."""
+
+    def distinct(self) -> "list":
+        return list(self)
+
+
 def _set_event_filter(mocker, events):
-    """Event.objects.filter(...).distinct() chain."""
+    """Event.objects.filter(...) → iterable QS that also supports .distinct()."""
     from canvas_sdk.v1.data.calendar import Event
-    chain = SimpleNamespace(distinct=lambda: list(events))
-    return mocker.patch.object(Event.objects, "filter", return_value=chain)
+    return mocker.patch.object(Event.objects, "filter", return_value=_EventQS(events))
 
 
 def _set_appointment_filter(mocker, appointments):
@@ -795,12 +805,14 @@ def test_find_available_slots_sorts_and_caps_results(mocker):
     _set_event_filter(mocker, events)
     _set_appointment_filter(mocker, [])
 
-    slots = _call_find_slots(max_results=5)
-    # Capped at 5.
-    assert len(slots) == 5
-    # Sorted by start_iso ascending.
-    starts = [s["start_iso"] for s in slots]
-    assert starts == sorted(starts)
+    slots = _call_find_slots(max_results=2)
+    # max_results caps PER PROVIDER: 3 providers × 2 = 6 (not a global cap of 2),
+    # so every provider is represented rather than crowded out.
+    assert len(slots) == 6
+    assert {s["provider_name"] for s in slots} == {"Dr. Alpha", "Dr. Bravo", "Dr. Charlie"}
+    # Sorted by absolute instant ascending.
+    instants = [_slot_instant(s) for s in slots]
+    assert instants == sorted(instants)
 
 
 def test_find_available_slots_dedupes_provider_with_multiple_clinic_calendars(mocker):
@@ -828,3 +840,127 @@ def test_find_available_slots_dedupes_provider_with_multiple_clinic_calendars(mo
     slots = _call_find_slots()
     # Same provider should only contribute slots once.
     assert len(slots) == 4
+
+
+def test_find_available_slots_subtracts_administrative_blocks(mocker):
+    # provider_availability writes blocks to a "{Provider}: Administrative" calendar.
+    # The scheduler must subtract those, even though they have no allowed_note_types.
+    _set_note_type_filter(mocker, [_good_nt()])
+    clinic = SimpleNamespace(id="cal-c", dbid=10, title="Dr. Smith: Clinic", timezone=ZoneInfo("UTC"))
+    admin = SimpleNamespace(id="cal-a", dbid=20, title="Dr. Smith: Administrative", timezone=ZoneInfo("UTC"))
+    _set_calendar_filter(mocker, [clinic, admin])
+    staff = SimpleNamespace(id="s1", dbid=1, full_name="Dr. Smith", active=True, roles=_roles("PROVIDER"))
+    _set_staff_filter(mocker, [staff])
+    avail = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 4, 9, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 10, tzinfo=datetime.timezone.utc),
+        recurrence=None,
+        calendar_id=clinic.dbid,
+    )
+    block = SimpleNamespace(  # 9:15-9:30 block on the Administrative calendar
+        starts_at=datetime.datetime(2026, 5, 4, 9, 15, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 4, 9, 30, tzinfo=datetime.timezone.utc),
+        recurrence=None,
+        calendar_id=admin.dbid,
+    )
+    _set_event_filter(mocker, [avail, block])
+    _set_appointment_filter(mocker, [])
+
+    slots = _call_find_slots()
+    times = [s["start_iso"] for s in slots]
+    # 9:00-10:00 availability = four 15-min slots; the 9:15 block removes one.
+    assert "2026-05-04T09:15:00+00:00" not in times
+    assert len(slots) == 3
+
+
+def test_block_intervals_for_calendar_expands_recurrence_to_absolute(mocker):
+    # A weekly block expands per occurrence and localizes to absolute instants.
+    block = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 4, 13, tzinfo=datetime.timezone.utc),  # 9 AM EDT
+        ends_at=datetime.datetime(2026, 5, 4, 14, tzinfo=datetime.timezone.utc),
+        recurrence="RRULE:FREQ=WEEKLY;BYDAY=MO",
+    )
+    intervals = block_intervals_for_calendar(
+        [block],
+        window_start=_DEFAULT_WINDOW_START,
+        window_end=_DEFAULT_WINDOW_END,
+        timezone=ZoneInfo("America/New_York"),
+    )
+    assert len(intervals) == 1  # only Monday 2026-05-04 falls in the window
+    start, end = intervals[0]
+    # 9-10 wall-clock in NY round-trips to 13:00-14:00 UTC.
+    assert start.astimezone(datetime.timezone.utc) == datetime.datetime(
+        2026, 5, 4, 13, tzinfo=datetime.timezone.utc
+    )
+    assert end.astimezone(datetime.timezone.utc) == datetime.datetime(
+        2026, 5, 4, 14, tzinfo=datetime.timezone.utc
+    )
+
+
+def test_find_available_slots_unions_calendars_in_different_timezones(mocker):
+    # A telehealth provider with clinic calendars in two timezones is bookable
+    # across the union of both, each interpreted in its OWN Calendar.timezone.
+    _set_note_type_filter(mocker, [_good_nt()])
+    cal_ny = SimpleNamespace(
+        id="cal-ny", dbid=10, title="Dr. Smith: Clinic: East", timezone=ZoneInfo("America/New_York")
+    )
+    cal_la = SimpleNamespace(
+        id="cal-la", dbid=11, title="Dr. Smith: Clinic: West", timezone=ZoneInfo("America/Los_Angeles")
+    )
+    _set_calendar_filter(mocker, [cal_ny, cal_la])
+    staff = SimpleNamespace(id="s1", dbid=1, full_name="Dr. Smith", active=True, roles=_roles("PROVIDER"))
+    _set_staff_filter(mocker, [staff])
+    events = [
+        # 9:00-10:00 local in each zone — different absolute instants.
+        SimpleNamespace(  # 13:00-14:00 UTC == 9-10 EDT
+            starts_at=datetime.datetime(2026, 5, 4, 13, tzinfo=datetime.timezone.utc),
+            ends_at=datetime.datetime(2026, 5, 4, 14, tzinfo=datetime.timezone.utc),
+            recurrence=None,
+            calendar_id=cal_ny.dbid,
+        ),
+        SimpleNamespace(  # 16:00-17:00 UTC == 9-10 PDT
+            starts_at=datetime.datetime(2026, 5, 4, 16, tzinfo=datetime.timezone.utc),
+            ends_at=datetime.datetime(2026, 5, 4, 17, tzinfo=datetime.timezone.utc),
+            recurrence=None,
+            calendar_id=cal_la.dbid,
+        ),
+    ]
+    _set_event_filter(mocker, events)
+    _set_appointment_filter(mocker, [])
+
+    slots = _call_find_slots()
+    times = [s["start_iso"] for s in slots]
+    # Each calendar's first slot reads 9:00 local but carries its own offset.
+    assert "2026-05-04T09:00:00-04:00" in times  # New York
+    assert "2026-05-04T09:00:00-07:00" in times  # Los Angeles
+    # 4 + 4, NOT deduped (different absolute instants), sorted east-before-west.
+    assert len(slots) == 8
+    assert _slot_instant(slots[0]) < _slot_instant(slots[-1])
+
+
+# ---- _calendar_timezone / _slot_instant -------------------------------------
+
+
+def test_calendar_timezone_uses_the_calendar_field() -> None:
+    cal = SimpleNamespace(timezone=ZoneInfo("America/New_York"))
+    assert _calendar_timezone(cal, ZoneInfo("UTC")) == ZoneInfo("America/New_York")
+
+
+def test_calendar_timezone_coerces_a_string_value() -> None:
+    cal = SimpleNamespace(timezone="America/Los_Angeles")
+    assert _calendar_timezone(cal, ZoneInfo("UTC")) == ZoneInfo("America/Los_Angeles")
+
+
+def test_calendar_timezone_falls_back_when_missing_or_invalid() -> None:
+    default = ZoneInfo("America/Chicago")
+    assert _calendar_timezone(SimpleNamespace(timezone=None), default) == default
+    assert _calendar_timezone(SimpleNamespace(timezone="Not/AZone"), default) == default
+    assert _calendar_timezone(SimpleNamespace(), default) == default  # attribute absent
+
+
+def test_slot_instant_compares_across_offsets() -> None:
+    ny = {"start_iso": "2026-05-04T09:00:00-04:00"}  # 13:00 UTC
+    la = {"start_iso": "2026-05-04T09:00:00-07:00"}  # 16:00 UTC
+    same_instant_as_ny = {"start_iso": "2026-05-04T13:00:00+00:00"}
+    assert _slot_instant(ny) < _slot_instant(la)
+    assert _slot_instant(ny) == _slot_instant(same_instant_as_ny)

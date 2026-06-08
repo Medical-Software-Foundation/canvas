@@ -185,19 +185,6 @@
     }
     .uc-success h2 { margin: 0 0 8px; font-size: 24px; }
     .uc-success p  { color: var(--uc-subtle); margin: 0 0 20px; }
-    .uc-meeting-link-row {
-      display: flex; gap: 8px; align-items: center; justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 24px;
-    }
-    .uc-meeting-link {
-      padding: 10px 16px;
-      background: var(--uc-accent);
-      color: #fff;
-      border-radius: 6px;
-      text-decoration: none;
-      font-weight: 600;
-    }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -229,7 +216,7 @@
         <h2>How long have you had these symptoms?</h2>
         <p class="uc-hint">Required.</p>
         <div class="uc-duration">
-          <input type="number" id="uc-duration-value" name="symptom_duration_value" min="1" required aria-label="Duration value">
+          <input type="number" id="uc-duration-value" name="symptom_duration_value" min="1" step="1" required aria-label="Duration value">
           <select id="uc-duration-unit" name="symptom_duration_unit" required aria-label="Duration unit">
             <option value="hours">hours</option>
             <option value="days" selected>days</option>
@@ -287,11 +274,7 @@
     <div class="uc-success__check">✓</div>
     <h2>You're booked</h2>
     <p id="uc-success-summary"></p>
-    <div class="uc-meeting-link-row" id="uc-meeting-link-row" hidden>
-      <a class="uc-meeting-link" id="uc-meeting-link" target="_blank" rel="noopener">Join visit</a>
-      <button type="button" class="uc-button uc-button--secondary" id="uc-copy-link">Copy link</button>
-    </div>
-    <p class="uc-hint">You'll find this visit (and the meeting link) in your Appointments tab.</p>
+    <p class="uc-hint" id="uc-success-modality"></p>
     <a class="uc-button" id="uc-success-appointments-link" href="/app/appointments" target="_top">Go to Appointments</a>
   </main>
 
@@ -379,7 +362,15 @@
           $('uc-meds-empty').hidden = state.meds.length > 0;
           $('uc-allergies-empty').hidden = state.allergies.length > 0;
         } catch (err) {
-          // A failed review fetch must not look like "nothing on file" — say so.
+          // Surface the failure: log it (so it lands in browser diagnostics) and
+          // show a page-level banner. A failed review fetch must not silently look
+          // like "nothing on file" — say so in each section too.
+          console.error('urgent-care: /api/me failed', err);
+          const banner = $('uc-page-banner');
+          if (banner) {
+            banner.hidden = false;
+            banner.textContent = "We couldn't load your medication and allergy list. You can still pick a time, or call to book your appointment.";
+          }
           const medsEmpty = $('uc-meds-empty');
           const allergiesEmpty = $('uc-allergies-empty');
           medsEmpty.textContent = "We couldn't load your medications. You can still pick a time, or call to book your appointment.";
@@ -540,9 +531,12 @@
         // readable HPI narrative without re-querying the patient's records.
         const medLabel = new Map(state.meds.map((m) => [m.id, m.label]));
         const allergyLabel = new Map(state.allergies.map((a) => [a.id, a.label]));
+        // Coerce the duration to a whole number so values like "2.5" or "1e3"
+        // (which a number input accepts) never reach the clinician-facing HPI/task.
+        const durationValue = Math.trunc(Number($('uc-duration-value').value)) || 0;
         return {
           reason_for_visit: $('uc-rfv').value.trim(),
-          symptom_duration: `${$('uc-duration-value').value} ${$('uc-duration-unit').value}`,
+          symptom_duration: `${durationValue} ${$('uc-duration-unit').value}`,
           medications: {
             no_changes: $('uc-meds-no-changes').checked && state.flaggedMeds.size === 0,
             changes: Array.from(state.flaggedMeds.entries()).map(([id, note]) => ({
@@ -568,22 +562,18 @@
         const d = new Date(result.start_iso);
         $('uc-success-summary').textContent =
           `${fmt.format(d)} with ${result.provider_name} — ${result.duration_minutes} minutes`;
-        // The plugin doesn't synchronously return the telehealth meeting link
-        // (Canvas generates it after the appointment lands), so we point the
-        // patient at their Appointments tab instead.
-        if (result.meeting_link) {
-          $('uc-meeting-link-row').hidden = false;
-          $('uc-meeting-link').href = result.meeting_link;
-        }
+        // Canvas delivers the real per-visit details after the appointment lands:
+        // for a telehealth visit it generates the join link and surfaces it on the
+        // portal Appointments tab; for in-person it shows the location there. The
+        // copy adapts to the configured modality and points the patient at that tab.
+        $('uc-success-modality').textContent =
+          result.modality === 'in_person'
+            ? "This is an in-person visit. You'll find the location and details in your Appointments tab."
+            : "This is a video visit. Your join link will be available in your Appointments tab shortly before your visit.";
         if (result.appointments_url) {
           $('uc-success-appointments-link').href = result.appointments_url;
         }
       }
-      $('uc-copy-link').addEventListener('click', async () => {
-        const link = $('uc-meeting-link').href;
-        try { await navigator.clipboard.writeText(link); $('uc-copy-link').textContent = 'Copied!'; setTimeout(() => { $('uc-copy-link').textContent = 'Copy link'; }, 1500); }
-        catch (_) { /* clipboard unsupported */ }
-      });
 
       $('uc-submit').addEventListener('click', async () => {
         if (!validate()) return;

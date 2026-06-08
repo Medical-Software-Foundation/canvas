@@ -33,11 +33,13 @@ Three things must exist on the Canvas side before the plugin can return slots:
    - `category = encounter`
    - `is_scheduleable = True`
    - `is_scheduleable_via_patient_portal = True`
-   - `is_telehealth = True`
    - `is_active = True`
    - `online_duration` set to your desired slot length (minutes)
-2. **Provider availability calendars.** For each provider in the urgent-care pool, a `Clinic`-type `Calendar` exists titled `"{Provider Name}: Clinic"` (or `"{Provider Name}: Clinic: {Location Name}"`) with at least one `Event` whose `allowed_note_types` includes the urgent-care `NoteType`.
-3. **Practice location timezone.** The active `PracticeLocation` must have its `last_known_timezone` setting populated (e.g., `America/New_York`).
+   - `is_telehealth = True` **for video visits** (so Canvas generates the join link and surfaces it on the patient's Appointments tab). For an in-person urgent-care offering, use an `is_telehealth = False` NoteType and set `URGENT_CARE_VISIT_MODALITY=in_person` (see *Configuration options*).
+2. **Provider availability calendars.** For each provider in the urgent-care pool, a `Clinic`-type `Calendar` titled `"{Provider Name}: Clinic"` (or `"{Provider Name}: Clinic: {Location Name}"`) with at least one `Event` whose `allowed_note_types` includes the urgent-care `NoteType`. A provider may have several Clinic calendars (e.g. one per location) — the scheduler offers the **union** of all of them, each interpreted in its own `Calendar.timezone`, deduplicated by absolute instant so the same moment is never offered twice.
+3. **Calendar timezone.** Each `Calendar` carries its own `Calendar.timezone`, which the scheduler uses to interpret that calendar's availability. The active `PracticeLocation`'s `last_known_timezone` is used only as a fallback when a calendar's timezone can't be resolved.
+
+The scheduler removes a slot when it conflicts with a booked appointment **or** with a block on the provider's `Administrative` calendar — one-off blocks, recurring blocks, holds, lead-time blocks, and appointment buffers (e.g. those written by the `provider_availability` plugin) are all honored.
 
 ### Set the secrets
 
@@ -58,7 +60,8 @@ All configuration is via plugin secrets and Canvas-side data — no code changes
 
 | Secret | Required | Default | Purpose |
 |---|---|---|---|
-| `URGENT_CARE_NOTE_TYPE_NAME` | yes | — | Exact, case-sensitive name of an **existing** urgent-care `NoteType` on the instance (e.g. `Urgent Care`). The plugin resolves the NoteType by this name at request time — it does not create one. The named NoteType must exist, be unique among active note types, and be `is_scheduleable`, `is_scheduleable_via_patient_portal`, `is_telehealth`, with non-zero `online_duration`. If it can't be resolved, the scheduler returns "unavailable / misconfigured" and offers no slots. |
+| `URGENT_CARE_NOTE_TYPE_NAME` | yes | — | Exact, case-sensitive name of an **existing** urgent-care `NoteType` on the instance (e.g. `Urgent Care`). The plugin resolves the NoteType by this name at request time — it does not create one. The named NoteType must exist, be unique among active note types, and be `is_scheduleable`, `is_scheduleable_via_patient_portal`, with non-zero `online_duration`. If it can't be resolved, the scheduler returns "unavailable / misconfigured" and offers no slots. |
+| `URGENT_CARE_VISIT_MODALITY` | no | `telehealth` | One of two exact values (lowercase, underscore): **`telehealth`** or **`in_person`**. Controls only the post-booking confirmation copy — `telehealth` tells the patient their video join link will appear on the Appointments tab; `in_person` tells them the visit location is there. The visit's actual video-vs-in-person nature comes from the configured NoteType's `is_telehealth` flag, so set this secret to match it. Unrecognized values — including the hyphenated `in-person` — fall back to `telehealth`. |
 | `URGENT_CARE_LEAD_TIME_MINUTES` | no | `30` | Minimum minutes between "now" and the earliest bookable slot. Buffer for the care team before a visit. |
 | `URGENT_CARE_TASK_TEAM_ID` | no | unassigned | UUID of the `Team` that receives the intake task. If unset, the task lands unassigned with an `unassigned` label. |
 | `URGENT_CARE_FALLBACK_PHONE` | no | hidden | Phone number shown to the patient on the no-slots-available screen. |
@@ -140,4 +143,10 @@ If the patient already has an upcoming urgent-care visit, the wizard blocks book
 
 ![Provider intake task](./docs/screenshots/07-provider-task.png)
 
-An **intake task** drops into the care team's queue (labeled `urgent-care-intake`) with a comment summarizing the symptom duration and any flagged medication/allergy changes. The encounter note is also pre-populated with **Reason for Visit** and **History of Present Illness** commands.
+An **intake task** drops into the care team's queue (labeled `urgent-care-intake`) with a comment summarizing the symptom duration and any flagged medication/allergy changes.
+
+### The encounter note is pre-populated
+
+![Encounter note — Reason for Visit + HPI](./docs/screenshots/08-note-rfv-hpi.png)
+
+The new encounter note is pre-populated with a **Reason for Visit** command (the patient's chief complaint) and a **History of Present Illness** command (symptom duration plus the medication/allergy review). Both are originated **staged** (uncommitted), so the provider reviews and commits them during the visit rather than having patient-entered text auto-finalized into the chart.
