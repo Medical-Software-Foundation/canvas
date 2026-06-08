@@ -112,8 +112,15 @@ def event_occurs_on_date(
     starts_at: datetime.datetime,
     rrule: str | None,
     target_date: datetime.date,
+    timezone: ZoneInfo = ZoneInfo("UTC"),
 ) -> bool:
-    start_date = starts_at.date()
+    # Derive the start date in the CALENDAR's timezone, not UTC. `target_date` comes
+    # from expand_event_windows iterating local dates, so the recurrence anchor must
+    # be local too — otherwise an evening event west of UTC (whose UTC date is the
+    # next day) has its whole recurrence shifted a day: the first weekly occurrence is
+    # dropped, DAILY interval>=2 lands on the wrong days, and WEEKLY-without-BYDAY
+    # picks the wrong weekday. Defaults to UTC (a no-op for UTC-stored events).
+    start_date = starts_at.astimezone(timezone).date()
     if target_date < start_date:
         return False
     if not rrule:
@@ -211,7 +218,10 @@ def expand_event_windows(
     while current <= last:
         for event in events:
             if not event_occurs_on_date(
-                starts_at=event.starts_at, rrule=event.recurrence, target_date=current,
+                starts_at=event.starts_at,
+                rrule=event.recurrence,
+                target_date=current,
+                timezone=timezone,
             ):
                 continue
             window = event_window_on_date(

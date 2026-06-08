@@ -282,6 +282,44 @@ def test_event_occurs_on_date_unsupported_freq_returns_false() -> None:
     )
 
 
+# ---- event_occurs_on_date: recurrence anchored in the CALENDAR's timezone ------
+# An evening event west of UTC has a UTC date one day ahead of its local date, so
+# the recurrence anchor must be derived in the calendar tz (matching the local dates
+# expand_event_windows iterates). These pin all three failure modes.
+#
+# Tue 2026-05-05 17:00 PDT == 2026-05-06 00:00 UTC (UTC date is Wed).
+_PDT_TUE_EVENING = datetime.datetime(2026, 5, 6, 0, 0, tzinfo=datetime.timezone.utc)
+_LA = ZoneInfo("America/Los_Angeles")
+
+
+def test_event_occurs_on_date_weekly_first_occurrence_uses_local_date() -> None:
+    # The first local Tuesday must fire (its UTC date is Wed, which previously
+    # dropped it); the local Wednesday must not.
+    assert event_occurs_on_date(
+        starts_at=_PDT_TUE_EVENING, rrule="RRULE:FREQ=WEEKLY;BYDAY=TU",
+        target_date=datetime.date(2026, 5, 5), timezone=_LA,
+    )
+    assert not event_occurs_on_date(
+        starts_at=_PDT_TUE_EVENING, rrule="RRULE:FREQ=WEEKLY;BYDAY=TU",
+        target_date=datetime.date(2026, 5, 6), timezone=_LA,
+    )
+
+
+def test_event_occurs_on_date_daily_interval_anchored_to_local_date() -> None:
+    # Every-other-day from a Tue evening PDT → local Tue/Thu/Sat, not Wed/Fri/Sun.
+    rrule = "RRULE:FREQ=DAILY;INTERVAL=2"
+    assert event_occurs_on_date(starts_at=_PDT_TUE_EVENING, rrule=rrule, target_date=datetime.date(2026, 5, 5), timezone=_LA)  # Tue
+    assert not event_occurs_on_date(starts_at=_PDT_TUE_EVENING, rrule=rrule, target_date=datetime.date(2026, 5, 6), timezone=_LA)  # Wed
+    assert event_occurs_on_date(starts_at=_PDT_TUE_EVENING, rrule=rrule, target_date=datetime.date(2026, 5, 7), timezone=_LA)  # Thu
+
+
+def test_event_occurs_on_date_weekly_without_byday_uses_local_weekday() -> None:
+    # No BYDAY → recurs on the LOCAL DTSTART weekday (Tue), not the UTC weekday (Wed).
+    rrule = "RRULE:FREQ=WEEKLY"
+    assert event_occurs_on_date(starts_at=_PDT_TUE_EVENING, rrule=rrule, target_date=datetime.date(2026, 5, 12), timezone=_LA)  # next Tue
+    assert not event_occurs_on_date(starts_at=_PDT_TUE_EVENING, rrule=rrule, target_date=datetime.date(2026, 5, 13), timezone=_LA)  # Wed
+
+
 # ---- event_window_on_date (UTC -> local naive, DST safe) --------------------
 
 
@@ -840,6 +878,32 @@ def test_find_available_slots_dedupes_provider_with_multiple_clinic_calendars(mo
     slots = _call_find_slots()
     # Same provider should only contribute slots once.
     assert len(slots) == 4
+
+
+def test_find_available_slots_evening_pdt_weekly_first_occurrence_not_dropped(mocker):
+    # End-to-end guard for the recurrence-tz wiring: a weekly Tue-evening PDT clinic
+    # whose first occurrence (local Tue, UTC Wed) must appear in the window.
+    _set_note_type_filter(mocker, [_good_nt()])
+    cal = SimpleNamespace(
+        id="cal-1", dbid=10, title="Dr. Smith: Clinic", timezone=ZoneInfo("America/Los_Angeles")
+    )
+    _set_calendar_filter(mocker, [cal])
+    staff = SimpleNamespace(id="s1", dbid=1, full_name="Dr. Smith", active=True, roles=_roles("PROVIDER"))
+    _set_staff_filter(mocker, [staff])
+    # Tue 2026-05-05 17:00-20:00 PDT == 2026-05-06 00:00-03:00 UTC.
+    event = SimpleNamespace(
+        starts_at=datetime.datetime(2026, 5, 6, 0, tzinfo=datetime.timezone.utc),
+        ends_at=datetime.datetime(2026, 5, 6, 3, tzinfo=datetime.timezone.utc),
+        recurrence="RRULE:FREQ=WEEKLY;BYDAY=TU",
+        calendar_id=cal.dbid,
+    )
+    _set_event_filter(mocker, [event])
+    _set_appointment_filter(mocker, [])
+
+    slots = _call_find_slots()  # window 2026-05-04..05-07, includes local Tue 05-05
+    times = [s["start_iso"] for s in slots]
+    # The first local-Tuesday evening slot must be offered (was dropped by the bug).
+    assert "2026-05-05T17:00:00-07:00" in times
 
 
 def test_find_available_slots_stamps_location_from_index(mocker):
