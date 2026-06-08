@@ -298,11 +298,18 @@ class TestGetBillingLineItems:
         c.system = system
         return c
 
-    def _assessment(self, codings):
+    def _assessment(self, codings, entered_in_error_id=None, condition_entered_in_error_id=None):
+        # _get_billing_line_items skips assessments/conditions where
+        # entered_in_error_id is set (retracted records must NOT leak into
+        # the printed billing block's Related Diagnoses cell). MagicMock
+        # auto-creates a non-None descendant for any attribute, so we have
+        # to explicitly set these to None for the non-retracted case.
         condition = MagicMock()
         condition.codings.all.return_value = codings
+        condition.entered_in_error_id = condition_entered_in_error_id
         assess = MagicMock()
         assess.condition = condition
+        assess.entered_in_error_id = entered_in_error_id
         return assess
 
     def _item(self, cpt, description="", units=1, modifiers=(), assessments=()):
@@ -391,6 +398,41 @@ class TestGetBillingLineItems:
             },
             {"code": "K63.5", "display": "Polyp of colon"},
         ]
+
+    def test_retracted_assessment_excluded_from_diagnoses(self, mock_patient, mock_note):
+        # When an Assessment has been marked entered-in-error after the
+        # billing line item was created, its diagnoses MUST be filtered out —
+        # otherwise the retracted ICD-10 lands in the printed PDF that's
+        # attached to the chart (REVIEW.md / CLAUDE.md 🔴 rule).
+        extractor = _make_extractor(mock_patient, mock_note)
+        self._wire(mock_note, [self._item("99213", assessments=[
+            self._assessment(
+                [self._diagnosis_coding("E1165", "Diabetes with hyperglycemia")],
+                entered_in_error_id=42,
+            ),
+            self._assessment(
+                [self._diagnosis_coding("K635", "Polyp of colon")],
+            ),
+        ])])
+        result = extractor._get_billing_line_items()
+        # Only the non-retracted Assessment's diagnosis surfaces.
+        assert result[0]["diagnoses"] == [{"code": "K63.5", "display": "Polyp of colon"}]
+
+    def test_retracted_condition_excluded_from_diagnoses(self, mock_patient, mock_note):
+        # Even when the Assessment is fine, a retracted Condition (the
+        # diagnosis was corrected) must be skipped.
+        extractor = _make_extractor(mock_patient, mock_note)
+        self._wire(mock_note, [self._item("99213", assessments=[
+            self._assessment(
+                [self._diagnosis_coding("E1165", "Diabetes with hyperglycemia")],
+                condition_entered_in_error_id=99,
+            ),
+            self._assessment(
+                [self._diagnosis_coding("K635", "Polyp of colon")],
+            ),
+        ])])
+        result = extractor._get_billing_line_items()
+        assert result[0]["diagnoses"] == [{"code": "K63.5", "display": "Polyp of colon"}]
 
 
 # --- _format_prescription_total_quantity ---

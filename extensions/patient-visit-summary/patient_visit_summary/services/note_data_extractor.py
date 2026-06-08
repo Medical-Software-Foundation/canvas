@@ -310,10 +310,19 @@ class NoteDataExtractor:
             return
         # Bulk-prefetch reports → values (+ codings for the test name) and
         # tests (also for the test name on the report header).
+        # ``entered_in_error__isnull=True`` and ``junked=False`` are both
+        # required — retracted lab reports must NOT leak into the Reference
+        # Data block, which lands in a finalized PDF attached to the chart
+        # as a FHIR DocumentReference (REVIEW.md / CLAUDE.md 🔴 rule).
+        # LabReport inherits from AuditedModel so it exposes both fields.
         reports_by_review: dict[int, list[LabReport]] = {}
         report_qs = (
             LabReport.objects
-            .filter(review_id__in=review_dbid_by_cmd.values())
+            .filter(
+                review_id__in=review_dbid_by_cmd.values(),
+                entered_in_error__isnull=True,
+                junked=False,
+            )
             .prefetch_related("values__codings", "tests")
             .order_by("original_date")
         )
@@ -407,10 +416,17 @@ class NoteDataExtractor:
                 review_dbid_by_cmd[str(row["id"])] = dbid
         if not review_dbid_by_cmd:
             return
+        # Filter retracted reports out. ``ReferralReport`` inherits from
+        # ``TimestampedModel`` (not ``AuditedModel``) in the SDK so it doesn't
+        # expose ``entered_in_error`` — ``junked`` is the equivalent retraction
+        # marker on this model (see canvas-plugins ``referral.py:114``).
         reports_by_review: dict[int, list[ReferralReport]] = {}
         for report in (
             ReferralReport.objects
-            .filter(review_id__in=review_dbid_by_cmd.values())
+            .filter(
+                review_id__in=review_dbid_by_cmd.values(),
+                junked=False,
+            )
             .order_by("original_date")
         ):
             reports_by_review.setdefault(report.review_id, []).append(report)
@@ -448,10 +464,18 @@ class NoteDataExtractor:
                 review_dbid_by_cmd[str(row["id"])] = dbid
         if not review_dbid_by_cmd:
             return
+        # Filter retracted documents out. ``UncategorizedClinicalDocument``
+        # inherits from ``TimestampedModel`` (not ``AuditedModel``) in the SDK
+        # so it doesn't expose ``entered_in_error`` — ``junked`` is the
+        # equivalent retraction marker (see canvas-plugins
+        # ``uncategorized_clinical_document.py:75``).
         reports_by_review: dict[int, list[UncategorizedClinicalDocument]] = {}
         for report in (
             UncategorizedClinicalDocument.objects
-            .filter(review_id__in=review_dbid_by_cmd.values())
+            .filter(
+                review_id__in=review_dbid_by_cmd.values(),
+                junked=False,
+            )
         ):
             reports_by_review.setdefault(report.review_id, []).append(report)
         for entry in entries:
@@ -936,12 +960,23 @@ class NoteDataExtractor:
             if description and not cpt_description_by_code.get(cpt):
                 cpt_description_by_code[cpt] = description
             # Pull ICD-10 codings from each associated Assessment's Condition,
-            # deduping by code per line item.
+            # deduping by code per line item. Both the Assessment and the
+            # Condition are skipped when retracted — a billing line item
+            # typically persists through chart corrections, but the
+            # underlying clinical record can be marked entered-in-error
+            # afterward. Without these guards, retracted diagnoses would
+            # leak as ICD-10 codes into the "Related Diagnoses" cell of
+            # the printed billing table — a patient-data correctness defect
+            # on a finalized chart-attached PDF (REVIEW.md / CLAUDE.md 🔴
+            # rule). See ``_get_note_diagnoses`` below for the same pattern
+            # at the note-footer level.
             diagnoses: list[dict] = []
             seen_codes: set[str] = set()
             for assess in item.assessments.all():
+                if assess.entered_in_error_id is not None:
+                    continue
                 condition = getattr(assess, "condition", None)
-                if condition is None:
+                if condition is None or condition.entered_in_error_id is not None:
                     continue
                 for coding in condition.codings.all():
                     if coding.system != "ICD-10":
@@ -1145,6 +1180,7 @@ class NoteDataExtractor:
     _EXCLUDED_FROM_CUSTOM_FALLBACK: set[str] = {
         "privateNotes",
         "reasonForVisit",  # rendered via _get_reasons_for_visit
+        "followUp",        # rendered via _follow_up_blocks in customize_print.py
     }
 
     def _fetch_unknown_command_data(self) -> list[dict]:
