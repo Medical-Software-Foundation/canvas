@@ -57,6 +57,10 @@ class CustomizedNotePrint(CustomModel):
     selection = JSONField(default=dict)
     status = TextField(default=STATUS_DRAFT)
     description = TextField(default="")
+    # Optional internal note saved on the DocumentReference (also stored
+    # locally so the Previous Versions overlay can show it without a FHIR
+    # round-trip). Never printed in the PDF body.
+    comment = TextField(default="")
     html_content = TextField(default="")
     pdf_base64 = TextField(default="")
     document_reference = ForeignKey(

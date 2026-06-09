@@ -132,39 +132,33 @@ ul ul li {
     color: #4A6670;
 }
 
+/* Two-column header: title on the left, practice logo on the right.
+   Switched from the older absolute-centered title / two-floated-logo layout
+   when the static SVG logos were dropped in favor of the practice's
+   PracticeLocation.organization.logo_url — wide real-world logos (e.g.
+   "Canvas") were overlapping the centered title under the old rules. */
 #page-img-header {
-    display: inline-block;
-    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     width: 100%;
     margin-top: 20px;
     margin-bottom: 20px;
     padding-bottom: 20px;
-    position: relative;
+    gap: 24px;
 }
 
 .header-img img {
-    height: 100px;
-    display: inline-block;
+    max-height: 80px;
+    max-width: 240px;
+    display: block;
 }
 
 .header-title {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     font-size: 24pt;
     font-weight: 700;
     color: #1B5E7B;
-    text-align: center;
     white-space: nowrap;
-}
-
-.float-left {
-    float: left;
-}
-
-.float-right {
-    float: right;
 }
 
 /* Section styling */
