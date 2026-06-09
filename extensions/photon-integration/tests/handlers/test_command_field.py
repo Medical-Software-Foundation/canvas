@@ -152,7 +152,24 @@ def _validation_event(unit_text="tablet", pharmacy=None, target_id="rx-1"):
     return SimpleNamespace(context={"fields": fields}, target=SimpleNamespace(id=target_id))
 
 
+_COMPLETE_ADDRESS = {"street1": "1 A St", "city": "Town", "state": "CA", "postalCode": "90001"}
+
+
 class TestPhotonCommandValidation:
+    @pytest.fixture(autouse=True)
+    def _patient_address_ok(self):
+        """Default: the command's patient has a complete address, so the address
+        check passes and each test isolates the unit/pharmacy logic. Tests that
+        target the address rule re-patch ``build_address``."""
+        with patch("photon_integration.handlers.command_field.Command") as cmd, patch(
+            "photon_integration.handlers.command_field.build_address",
+            return_value=dict(_COMPLETE_ADDRESS),
+        ):
+            cmd.objects.filter.return_value.select_related.return_value.first.return_value = (
+                SimpleNamespace(patient=SimpleNamespace())
+            )
+            yield
+
     def test_no_error_when_not_selected(self):
         handler = PhotonCommandValidation(event=_validation_event("vial", pharmacy={"id": "x"}))
         with _patch_metadata("No"):
@@ -208,6 +225,34 @@ class TestPhotonCommandValidation:
             eff.return_value.apply.return_value = "VALIDATION_ERROR"
             handler.compute()
         assert eff.return_value.add_error.call_count == 2
+
+    def test_error_when_patient_has_no_address(self):
+        handler = PhotonCommandValidation(event=_validation_event("tablet"))
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
+            patch("photon_integration.handlers.command_field.build_address", return_value=None), \
+            patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
+            eff.return_value.apply.return_value = "VALIDATION_ERROR"
+            result = handler.compute()
+        assert result == ["VALIDATION_ERROR"]
+        assert "address" in eff.return_value.add_error.call_args_list[0].args[0].lower()
+
+    def test_error_when_address_incomplete(self):
+        incomplete = dict(_COMPLETE_ADDRESS, postalCode=None)  # missing ZIP
+        handler = PhotonCommandValidation(event=_validation_event("tablet"))
+        with _patch_metadata(PHOTON_FIELD_TRUE_VALUE), \
+            patch("photon_integration.handlers.command_field.build_address", return_value=incomplete), \
+            patch("photon_integration.handlers.command_field.CommandValidationErrorEffect") as eff:
+            eff.return_value.apply.return_value = "VALIDATION_ERROR"
+            result = handler.compute()
+        assert result == ["VALIDATION_ERROR"]
+        assert "address" in eff.return_value.add_error.call_args_list[0].args[0].lower()
+
+    def test_no_address_error_when_not_selected(self):
+        # Address rule only applies to Send-via-Photon commands.
+        handler = PhotonCommandValidation(event=_validation_event("tablet"))
+        with _patch_metadata("No"), \
+            patch("photon_integration.handlers.command_field.build_address", return_value=None):
+            assert handler.compute() == []
 
 
 class TestPhotonSendSelectedMap:

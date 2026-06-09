@@ -19,9 +19,10 @@ from canvas_sdk.effects.command_metadata import (
 )
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
-from canvas_sdk.v1.data.command import CommandMetadata
+from canvas_sdk.v1.data.command import Command, CommandMetadata
 
 from photon_integration.command_payload import dispense_unit_text, resolve_dispense_unit
+from photon_integration.patient_sync import build_address
 from photon_integration.constants import (
     ACTIONS_TO_REMOVE_WHEN_PHOTON,
     PHOTON_COMMAND_SCHEMA_KEYS,
@@ -136,10 +137,32 @@ def _pharmacy_selected(fields: dict) -> bool:
     return bool(pharmacy)
 
 
+# Address fields Photon needs to place the order (createOrder address input).
+_REQUIRED_ADDRESS_FIELDS = ("street1", "city", "state", "postalCode")
+
+
+def _missing_address(command_id: str) -> bool:
+    """True when the command's patient has no address usable by Photon.
+
+    Photon's order requires a deliverable address; ``build_address`` returns
+    ``None`` when the patient has no address row, and we additionally require the
+    core fields to be populated.
+    """
+    command = (
+        Command.objects.filter(id=command_id).select_related("patient").first()
+    )
+    patient = command.patient if command else None
+    if patient is None:
+        return False  # no patient to validate (don't block on our account)
+    address = build_address(patient)
+    return not address or not all(address.get(field) for field in _REQUIRED_ADDRESS_FIELDS)
+
+
 class PhotonCommandValidation(BaseHandler):
     """Block commit of a 'Send via Photon' command when it can't be honored by
-    Photon: an unmappable dispense unit, or a selected pharmacy (Photon routes to
-    the patient's Photon pharmacy, so a Canvas pharmacy would be ignored)."""
+    Photon: an unmappable dispense unit, a selected pharmacy (Photon routes to the
+    patient's Photon pharmacy, so a Canvas pharmacy would be ignored), or a patient
+    with no deliverable address (Photon needs one to place the order)."""
 
     RESPONDS_TO = [
         EventType.Name(EventType.PRESCRIBE_COMMAND__POST_VALIDATION),
@@ -167,6 +190,13 @@ class PhotonCommandValidation(BaseHandler):
             messages.append(
                 "Send via Photon: leave Pharmacy blank — the selected pharmacy is not "
                 "sent to Photon (Photon routes to the patient's Photon pharmacy)."
+            )
+
+        if _missing_address(self.event.target.id):
+            messages.append(
+                "Send via Photon: the patient needs a complete address "
+                "(street, city, state, ZIP) before this can be sent. Add the "
+                "patient's address or uncheck Send via Photon."
             )
 
         if not messages:

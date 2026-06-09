@@ -18,15 +18,20 @@ Machine-to-Machine token has `write:patient`/`write:order` but **never**
 1. **"Send via Photon" field** on the **Prescribe**, **Refill**, and **Adjust
    Prescription** commands (single-option select). When set, the Canvas *send* /
    *sign & send* actions are removed (*sign* and *print* remain).
-2. **Patient sync (backend, M2M).** On sign, and when the prescribe modal opens,
+2. **Commit-time validation** (on a Send-via-Photon command) blocks signing when
+   Photon couldn't honor it: a dispense unit that isn't in Photon's controlled
+   vocabulary, a selected Canvas pharmacy (Photon routes to the patient's Photon
+   pharmacy), or a patient without a complete address — street, city, state, ZIP —
+   which Photon requires to place the order.
+3. **Patient sync (backend, M2M).** On sign, and when the prescribe modal opens,
    the patient is resolved in Photon — reusing the stored Photon id, else
    creating the patient — and Photon's patient id is **persisted** on the Canvas
    patient as an external identifier (`https://photon.health/patient`).
-3. **"Prescribe via Photon" app (frontend, Elements).** A patient-chart
+4. **"Prescribe via Photon" app (frontend, Elements).** A patient-chart
    application opens a modal embedding Photon **Elements**
    (`photon-prescribe-workflow`). The provider authenticates via Photon SSO and
    writes the prescription / places the order with their user token.
-4. **On a backend Photon failure**, a Canvas **Task** is created (assigned to the
+5. **On a backend Photon failure**, a Canvas **Task** is created (assigned to the
    prescriber when a valid Staff UUID is available, else a fallback team).
 
 ## Configuration (secrets)
