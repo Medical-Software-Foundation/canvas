@@ -13,6 +13,12 @@
     period: { granularity: "month", count: 3, include_rolling_12: false },
   };
 
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
   fetch(base + "/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -32,7 +38,7 @@
           const cells = periods
             .map((p) => `<td class="num">${row.values[p] ?? "—"}</td>`)
             .join("");
-          return `<tr><td>${row.group_label}</td>${cells}</tr>`;
+          return `<tr><td>${escapeHtml(row.group_label)}</td>${cells}</tr>`;
         })
         .join("");
       statusEl.hidden = true;

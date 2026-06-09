@@ -53,6 +53,8 @@ def run_report(
     dataset = get_dataset(query.dataset_key)
     measure = dataset.measures[query.measure_key]
     specs = count_specs(measure)
+    # Base filters narrow the population for BOTH the numerator and denominator of
+    # a measure; the measure's own num/den count specs further partition within it.
     base_lookups = build_lookups(query.filters)
 
     dim = dataset.dimensions[query.group_by] if query.group_by else None

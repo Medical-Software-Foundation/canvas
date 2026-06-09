@@ -24,9 +24,19 @@ def _today() -> date:
 
 def _build_query(dataset_key: str, body: dict) -> ReportQuery:
     dataset = get_dataset(dataset_key)
+    measure_key = body["measure_key"]
+    if measure_key not in dataset.measures:
+        raise ValueError(f"Unknown measure: {measure_key}")
+    group_by = body.get("group_by")
+    if group_by is not None and group_by not in dataset.dimensions:
+        raise ValueError(f"Unknown grouping: {group_by}")
     clauses: list[FilterClause] = []
     for raw in body.get("filters", []):
+        if raw["field"] not in dataset.fields:
+            raise ValueError(f"Unknown field: {raw['field']}")
         fld = dataset.fields[raw["field"]]
+        if raw["operator"] not in fld.operators:
+            raise ValueError(f"Operator '{raw['operator']}' not allowed for field '{fld.key}'")
         clauses.append(
             FilterClause(orm_path=fld.orm_path, operator=raw["operator"], values=raw["values"])
         )
@@ -41,8 +51,8 @@ def _build_query(dataset_key: str, body: dict) -> ReportQuery:
     return ReportQuery(
         dataset_key=dataset_key,
         filters=clauses,
-        measure_key=body["measure_key"],
-        group_by=body.get("group_by"),
+        measure_key=measure_key,
+        group_by=group_by,
         period=period,
     )
 
@@ -87,6 +97,9 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.post("/run")
     def run(self) -> list[Response | Effect]:
         body = self.request.json() or {}
-        query = _build_query(body["dataset_key"], body)
-        result = run_report(query, anchor=_today())
+        try:
+            query = _build_query(body["dataset_key"], body)
+            result = run_report(query, anchor=_today())
+        except (KeyError, ValueError) as exc:
+            return [JSONResponse({"error": str(exc)}, status_code=HTTPStatus.BAD_REQUEST)]
         return [JSONResponse(result)]

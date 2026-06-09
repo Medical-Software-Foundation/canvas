@@ -53,3 +53,27 @@ def test_run_route_builds_query_and_returns_engine_result():
     assert called_query.dataset_key == "appointments"
     assert called_query.filters[0].orm_path == "status"
     assert called_query.period.count == 3
+
+
+def test_run_unknown_dataset_returns_400():
+    h = _handler({"dataset_key": "nope", "measure_key": "total"})
+    responses = h.run()
+    assert responses[0].status_code == 400
+
+
+def test_run_unknown_measure_returns_400():
+    h = _handler({"dataset_key": "appointments", "measure_key": "nope", "group_by": "provider"})
+    responses = h.run()
+    assert responses[0].status_code == 400
+
+
+def test_run_disallowed_operator_for_field_returns_400():
+    body = {
+        "dataset_key": "appointments",
+        "measure_key": "total",
+        "group_by": "provider",
+        "filters": [{"field": "status", "operator": "gte", "values": ["x"]}],
+    }
+    h = _handler(body)
+    responses = h.run()
+    assert responses[0].status_code == 400
