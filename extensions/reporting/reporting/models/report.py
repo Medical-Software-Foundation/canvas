@@ -1,5 +1,14 @@
 """Persisted saved-report definitions (Canvas-provisioned custom data table)."""
 
+from django.db.models import (
+    DO_NOTHING,
+    DateTimeField,
+    ForeignKey,
+    IntegerField,
+    JSONField,
+    TextField,
+)
+
 from canvas_sdk.v1.data.base import CustomModel
 from reporting.models.proxy import StaffProxy
 
@@ -11,15 +20,6 @@ class Report(CustomModel):
     definition: the JSON report spec consumed by the /run endpoint
         (dataset_key, measure_key, group_by, filters, period).
     """
-
-    from django.db.models import (
-        DO_NOTHING,
-        DateTimeField,
-        ForeignKey,
-        IntegerField,
-        JSONField,
-        TextField,
-    )
 
     owner = ForeignKey(
         StaffProxy,

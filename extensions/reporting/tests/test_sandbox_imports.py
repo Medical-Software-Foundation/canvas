@@ -1,9 +1,10 @@
-"""Guard: no module-level forbidden Django ORM imports (sandbox allowlist).
+"""Guards for sandbox-only failure modes that pytest cannot catch.
 
-pytest stubs django.db.models, so it cannot catch a forbidden import at runtime.
-We scan the plugin source statically instead. The ONLY allowed django.db.models
-import is `Count, Q`, and it must be deferred inside a function (indented), never
-at module top.
+pytest stubs canvas_sdk and django, so it never exercises the real sandbox loader.
+These tests scan the plugin source statically for the patterns that broke us on a
+live instance. The sandbox allowlist is per-NAME (not per-placement), so a Django
+import is fine at module level as long as every imported name is allowed — only the
+forbidden aggregation names below are rejected.
 """
 
 from __future__ import annotations
@@ -16,15 +17,6 @@ _FORBIDDEN = ("Sum", "Avg", "Max", "Min", "Trunc", "ExpressionWrapper", "OuterRe
 
 def _py_files() -> list[pathlib.Path]:
     return list(_PKG.rglob("*.py"))
-
-
-def test_no_module_level_django_import():
-    offenders = []
-    for path in _py_files():
-        for i, line in enumerate(path.read_text().splitlines(), 1):
-            if line.startswith("from django") or line.startswith("import django"):
-                offenders.append(f"{path}:{i}: {line.strip()}")
-    assert not offenders, f"Module-level Django import(s) found (must be deferred): {offenders}"
 
 
 def test_no_forbidden_orm_imports():
