@@ -1,6 +1,6 @@
 from http import HTTPStatus
 
-from canvas_sdk.effects.simple_api import HTMLResponse, Response
+from canvas_sdk.effects.simple_api import HTMLResponse, PlainTextResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 
@@ -24,4 +24,14 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
                 "delete_url": "/plugin-io/api/external_calendar_busy_blocks/feeds/delete",
             },
         )
+        # render_to_string is typed `str | None`. The current SDK raises
+        # FileNotFoundError on a missing template rather than returning None,
+        # but guard against the declared contract so a None can never reach
+        # HTMLResponse (whose content.encode() would raise) — return an
+        # explicit 500 instead.
+        if html is None:
+            return [PlainTextResponse(
+                "Unable to render the configuration page.",
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )]
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]

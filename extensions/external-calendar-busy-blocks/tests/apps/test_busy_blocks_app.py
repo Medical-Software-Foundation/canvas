@@ -61,3 +61,25 @@ def test_config_page_renders_connected_state() -> None:
     args, kwargs = mock_render.call_args
     assert args[1]["connected"] is True
     assert args[1]["feed"] is feed
+
+
+def test_config_page_returns_500_when_render_returns_none() -> None:
+    """render_to_string is typed `str | None`; if it ever returns None we must
+    not pass it to HTMLResponse (whose content.encode() would raise). The guard
+    returns an explicit 500 instead."""
+    from external_calendar_busy_blocks.ui.pages import ConfigPage
+
+    request = MagicMock(headers={"canvas-logged-in-user-id": "staff-abc"})
+    page = ConfigPage.__new__(ConfigPage)
+    page.request = request
+    page.secrets = {}
+
+    with (
+        patch("external_calendar_busy_blocks.ui.pages.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.ui.pages.render_to_string") as mock_render,
+    ):
+        MockFeed.objects.filter.return_value.first.return_value = None
+        mock_render.return_value = None
+        responses = page.render()
+
+    assert responses[0].status_code == 500
