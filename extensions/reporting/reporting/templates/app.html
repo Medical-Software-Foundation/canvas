@@ -8,19 +8,14 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>Reporting</h1>
-    <p class="sub">Build dashboards and reports — no SQL required</p>
+    <div class="topbar-left">
+      <h1>Reporting</h1>
+      <p class="sub">Build reports and dashboards — no SQL required</p>
+    </div>
+    <div class="topbar-actions" id="topbar-actions"></div>
   </header>
-  <main id="app">
-    <section class="card">
-      <h2 id="report-title">No-show rate by provider</h2>
-      <p id="status" class="muted">Loading…</p>
-      <table id="results" hidden>
-        <thead><tr><th>Provider</th><th id="period-cols-head"></th></tr></thead>
-        <tbody id="results-body"></tbody>
-      </table>
-    </section>
-  </main>
+  <div id="view"></div>
+
   <script>window.API_BASE = "{{ api_base }}";</script>
   <script src="{{ api_base }}/app.js"></script>
 </body>
