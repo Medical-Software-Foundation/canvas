@@ -13,13 +13,15 @@ GRANULARITIES = ("month", "week", "quarter")
 class PeriodSpec:
     granularity: str           # "month" | "week" | "quarter"
     count: int                 # number of recent periods (e.g. 3)
-    include_rolling_12: bool    # if True, return 12 monthly periods regardless of count
+    include_rolling_12: bool    # if True (month granularity only), return 12 monthly periods regardless of count
 
     def __post_init__(self) -> None:
         if self.granularity not in GRANULARITIES:
             raise ValueError(f"Unknown granularity: {self.granularity}")
         if self.count < 1:
             raise ValueError("count must be >= 1")
+        if self.include_rolling_12 and self.granularity != "month":
+            raise ValueError("include_rolling_12 is only valid with granularity='month'")
 
 
 @dataclass(frozen=True)

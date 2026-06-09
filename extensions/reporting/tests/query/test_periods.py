@@ -47,3 +47,27 @@ def test_week_windows_start_monday():
     assert periods[-1].start == datetime(2026, 6, 15)
     assert periods[-1].end == datetime(2026, 6, 22)
     assert periods[0].start == datetime(2026, 6, 8)
+
+
+def test_invalid_granularity_raises():
+    import pytest
+    with pytest.raises(ValueError, match="Unknown granularity"):
+        PeriodSpec(granularity="day", count=3, include_rolling_12=False)
+
+
+def test_count_zero_raises():
+    import pytest
+    with pytest.raises(ValueError, match="count must be >= 1"):
+        PeriodSpec(granularity="month", count=0, include_rolling_12=False)
+
+
+def test_rolling_12_requires_month_granularity():
+    import pytest
+    with pytest.raises(ValueError, match="only valid with granularity='month'"):
+        PeriodSpec(granularity="week", count=3, include_rolling_12=True)
+
+
+def test_rolling_12_periods_are_contiguous():
+    spec = PeriodSpec(granularity="month", count=3, include_rolling_12=True)
+    periods = compute_periods(spec, anchor=date(2026, 6, 15))
+    assert all(periods[i].end == periods[i + 1].start for i in range(len(periods) - 1))
