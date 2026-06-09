@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calendar Busy Blocks</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 600px; }
+    label { display: block; margin: 12px 0 4px; font-weight: 600; }
+    input[type="url"] { width: 100%; padding: 8px; font-size: 14px; box-sizing: border-box; }
+    button { padding: 8px 16px; font-size: 14px; cursor: pointer; margin-top: 12px; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .error { color: #b00; }
+    .status { color: #060; }
+    #msg { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Calendar Busy Blocks</h1>
+  <div id="content">
+    {% if connected %}
+      <p class="status">Connected.</p>
+      {% if feed.last_sync_at %}<p>Last sync: {{ feed.last_sync_at }}</p>{% endif %}
+      {% if feed.last_error %}<p class="error">Last error: {{ feed.last_error }}</p>{% endif %}
+      <form id="disconnect-form">
+        <button type="submit">Disconnect</button>
+      </form>
+    {% else %}
+      <p>Paste your personal calendar's secret iCal URL below. Canvas will fetch your busy times every 15 minutes and add them to your schedule as "Busy" blocks.</p>
+      <form id="connect-form">
+        <label for="ics_url">Secret iCal URL</label>
+        <input type="url" id="ics_url" name="ics_url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" required />
+        <button type="submit">Connect</button>
+      </form>
+    {% endif %}
+  </div>
+  <p id="msg"></p>
+
+  <script>
+    (function () {
+      var postUrl = "{{ post_url }}";
+      var deleteUrl = "{{ delete_url }}";
+      var content = document.getElementById("content");
+      var msg = document.getElementById("msg");
+
+      function clearMsg() { msg.textContent = ""; msg.className = ""; }
+      function showError(text) { msg.textContent = text; msg.className = "error"; }
+
+      // The Canvas modal host hands this iframe a MessagePort once. Reloading or
+      // navigating the iframe neuters that port and breaks host messaging
+      // ("DataCloneError: Port ... already neutered"), so we update the DOM in
+      // place instead of calling location.reload().
+      function renderConnected() {
+        content.innerHTML =
+          '<p class="status">Connected.</p>' +
+          '<form id="disconnect-form"><button type="submit">Disconnect</button></form>';
+        bindDisconnect();
+      }
+
+      function renderConnectForm() {
+        content.innerHTML =
+          '<p>Paste your personal calendar\'s secret iCal URL below. Canvas will ' +
+          'fetch your busy times every 15 minutes and add them to your schedule ' +
+          'as "Busy" blocks.</p>' +
+          '<form id="connect-form">' +
+          '<label for="ics_url">Secret iCal URL</label>' +
+          '<input type="url" id="ics_url" name="ics_url" ' +
+          'placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" required />' +
+          '<button type="submit">Connect</button>' +
+          '</form>';
+        bindConnect();
+      }
+
+      // POST a JSON body (the API expects JSON, not a urlencoded form). Same-origin
+      // fetch carries the session so the staff-id header is injected like the GET.
+      function submitJson(url, payload, button, onSuccess) {
+        button.disabled = true;
+        clearMsg();
+        fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }).then(function (resp) {
+          return resp.json().catch(function () { return {}; }).then(function (data) {
+            return { ok: resp.ok, data: data };
+          });
+        }).then(function (res) {
+          if (res.ok) {
+            onSuccess();
+          } else {
+            showError((res.data && res.data.error) || "Request failed. Please try again.");
+            button.disabled = false;
+          }
+        }).catch(function () {
+          showError("Network error. Please try again.");
+          button.disabled = false;
+        });
+      }
+
+      function bindConnect() {
+        var form = document.getElementById("connect-form");
+        if (!form) return;
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var url = document.getElementById("ics_url").value.trim();
+          submitJson(postUrl, { ics_url: url }, form.querySelector("button"), renderConnected);
+        });
+      }
+
+      function bindDisconnect() {
+        var form = document.getElementById("disconnect-form");
+        if (!form) return;
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          submitJson(deleteUrl, {}, form.querySelector("button"), renderConnectForm);
+        });
+      }
+
+      bindConnect();
+      bindDisconnect();
+    })();
+  </script>
+</body>
+</html>
