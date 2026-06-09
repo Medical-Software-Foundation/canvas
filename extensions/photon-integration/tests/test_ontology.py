@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from photon_integration import ontology
 
@@ -71,9 +70,12 @@ def test_none_when_no_rxcui_in_body():
 
 
 def test_none_on_request_error():
-    # Network/HTTP failure degrades to None (Rx falls back to the Elements modal).
+    # Network/HTTP failure (requests' RequestException is an OSError) degrades to
+    # None (Rx falls back to the Elements modal). Builtin ConnectionError is an
+    # OSError subclass, so it exercises the same except branch without importing
+    # `requests` (which the plugin sandbox disallows).
     with patch(f"{MODULE}.ontologies_http") as http:
-        http.get_json.side_effect = RequestsConnectionError("boom")
+        http.get_json.side_effect = ConnectionError("boom")
         assert ontology.ndc_to_rxcui("x") is None
 
 
