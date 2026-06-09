@@ -8,7 +8,7 @@
             {
                 "class": "external_calendar_busy_blocks.routes.feeds:FeedsAPI",
                 "description": "POST /feeds to connect; POST /feeds/delete to disconnect.",
-                "data_access": {"event": "", "read": [], "write": []}
+                "data_access": {"event": "", "read": [], "write": ["Event"]}
             },
             {
                 "class": "external_calendar_busy_blocks.ui.pages:ConfigPage",
@@ -18,7 +18,7 @@
             {
                 "class": "external_calendar_busy_blocks.sync.cron:SyncCron",
                 "description": "Every 15 minutes: fetch each active feed, parse, diff, and emit Event effects.",
-                "data_access": {"event": "", "read": [], "write": []}
+                "data_access": {"event": "", "read": ["Staff", "Calendar"], "write": ["Event"]}
             }
         ],
         "applications": [
