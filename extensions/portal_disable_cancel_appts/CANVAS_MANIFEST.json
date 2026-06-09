@@ -7,7 +7,7 @@
         "protocols": [
             {
                 "class": "portal_disable_cancel_appts.protocols.my_protocol:Protocol",
-                "description": "A protocol that does xyz...",
+                "description": "Hides the cancel option on patient portal appointment cards so patients cannot cancel their own appointments.",
                 "data_access": {
                     "event": "",
                     "read": [],

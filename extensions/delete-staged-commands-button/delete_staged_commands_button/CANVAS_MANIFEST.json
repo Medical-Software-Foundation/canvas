@@ -2,7 +2,7 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "delete_staged_commands_button",
-    "description": "Adds a button to carry forward commands from the previous note to the current note",
+    "description": "Adds a note header button that deletes all staged (uncommitted) commands in the current note.",
     "components": {
         "protocols": [
             {
