@@ -33,6 +33,28 @@ def contact_value(patient: Patient, system: ContactPointSystem) -> str | None:
     return str(contact.value) if contact and contact.value else None
 
 
+def _e164_phone(raw: str | None) -> str | None:
+    """Normalize a Canvas phone to E.164 (``+1XXXXXXXXXX``) for Photon.
+
+    Photon's ``createPatient`` rejects formatted numbers like ``(415) 555-1234``.
+    Handles the common US shapes and already-prefixed international numbers;
+    returns ``None`` when it can't form a plausible E.164 value.
+    """
+    if not raw:
+        return None
+    raw = raw.strip()
+    digits = "".join(c for c in raw if c.isdigit())
+    if not digits:
+        return None
+    if raw.startswith("+"):
+        return f"+{digits}"
+    if len(digits) == 10:  # US local
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):  # US with country code
+        return f"+{digits}"
+    return None
+
+
 def build_address(patient: Patient) -> dict[str, Any] | None:
     address = patient.addresses.first()
     if not address:
@@ -53,8 +75,14 @@ def build_patient_input(patient: Patient) -> dict[str, Any]:
     if not patient.birth_date:
         raise PhotonError(f"Patient {patient.id} is missing a date of birth")
 
-    phone = contact_value(patient, ContactPointSystem.PHONE)
+    raw_phone = contact_value(patient, ContactPointSystem.PHONE)
+    phone = _e164_phone(raw_phone)
     if not phone:
+        if raw_phone:
+            raise PhotonError(
+                f"Patient {patient.id} phone {raw_phone!r} can't be formatted for "
+                "Photon (E.164, e.g. +14155551234 — check the patient's phone)"
+            )
         raise PhotonError(f"Patient {patient.id} has no phone number for Photon")
 
     return {

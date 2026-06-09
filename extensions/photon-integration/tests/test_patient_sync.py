@@ -16,7 +16,8 @@ MODULE = "photon_integration.patient_sync"
 
 
 def _patient(with_phone=True, with_email=True, with_address=True,
-             first="Jane", last="Doe", dob=True, sex="F", stored=None):
+             first="Jane", last="Doe", dob=True, sex="F", stored=None,
+             phone="+15551234567"):
     patient = MagicMock()
     patient.id = "pt-1"
     patient.first_name = first
@@ -31,7 +32,7 @@ def _patient(with_phone=True, with_email=True, with_address=True,
         result = MagicMock()
         value = None
         if system == ContactPointSystem.PHONE and with_phone:
-            value = "+15551234567"
+            value = phone
         elif system == ContactPointSystem.EMAIL and with_email:
             value = "jane@example.com"
         result.order_by.return_value.first.return_value = (
@@ -68,6 +69,25 @@ def test_build_patient_input_happy_path():
 
 def test_build_patient_input_unknown_sex_when_blank():
     assert patient_sync.build_patient_input(_patient(sex=""))["sex"] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("(415) 555-1234", "+14155551234"),   # formatted US 10-digit
+    ("415-555-1234", "+14155551234"),
+    ("4155551234", "+14155551234"),
+    ("1 (415) 555-1234", "+14155551234"),  # US with leading country code
+    ("+14155551234", "+14155551234"),      # already E.164
+    ("+44 20 7946 0958", "+442079460958"), # international with +
+])
+def test_build_patient_input_normalizes_phone(raw, expected):
+    assert patient_sync.build_patient_input(_patient(phone=raw))["phone"] == expected
+
+
+@pytest.mark.parametrize("raw", ["555-1234", "abc", "0000"])
+def test_build_patient_input_rejects_unformattable_phone(raw):
+    # A present-but-unusable phone gives a clear error, not a cryptic Photon one.
+    with pytest.raises(PhotonError, match="E.164"):
+        patient_sync.build_patient_input(_patient(phone=raw))
 
 
 @pytest.mark.parametrize("kwargs,msg", [
