@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reporting</title>
+  <link rel="stylesheet" href="{{ api_base }}/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Reporting</h1>
+    <p class="sub">Build dashboards and reports — no SQL required</p>
+  </header>
+  <main id="app">
+    <section class="card">
+      <h2 id="report-title">No-show rate by provider</h2>
+      <p id="status" class="muted">Loading…</p>
+      <table id="results" hidden>
+        <thead><tr><th>Provider</th><th id="period-cols-head"></th></tr></thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </section>
+  </main>
+  <script>window.API_BASE = "{{ api_base }}";</script>
+  <script src="{{ api_base }}/app.js"></script>
+</body>
+</html>

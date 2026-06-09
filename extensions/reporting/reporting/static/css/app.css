@@ -1,0 +1,20 @@
+:root{
+  --base01:#030B14;--base02:#051222;--base03:#07182D;
+  --primary:#01A4FF;--secondary:#01ECFF;
+  --text:#EBF5FC;--head:#FFFFFF;--muted:#8496AA;
+  --border:rgba(255,255,255,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--base01);color:var(--text);
+  font-family:Inter,system-ui,-apple-system,sans-serif;font-size:14px}
+.topbar{padding:18px 28px;border-bottom:1px solid var(--border)}
+.topbar h1{margin:0;color:var(--head);font-size:20px}
+.topbar .sub{margin:2px 0 0;color:var(--muted);font-size:12px}
+main{padding:24px 28px}
+.card{background:var(--base02);border:1px solid var(--border);border-radius:12px;padding:18px}
+.card h2{margin:0 0 12px;color:var(--head);font-size:16px}
+.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+td.num{text-align:right;color:var(--head);font-variant-numeric:tabular-nums}
