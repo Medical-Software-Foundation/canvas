@@ -12,6 +12,7 @@ def _handler(body=None):
     h.request.headers = {"canvas-logged-in-user-id": "uid"}
     h.request.query_params = {}
     h.request.json = MagicMock(return_value=body or {})
+    h.request.path_params = {}
     return h
 
 
@@ -77,3 +78,47 @@ def test_run_disallowed_operator_for_field_returns_400():
     h = _handler(body)
     responses = h.run()
     assert responses[0].status_code == 400
+
+
+def test_create_report_returns_id():
+    from unittest.mock import patch, MagicMock
+    body = {"name": "No-shows", "category": "Operations", "visibility": "shared",
+            "definition": {"dataset_key": "appointments", "measure_key": "no_show_rate"}}
+    h = _handler(body)
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.report_service.create") as mock_create:
+        mock_create.return_value = MagicMock(dbid=42)
+        responses = h.create_report()
+    assert responses[0].data["id"] == 42
+
+
+def test_list_reports_returns_summaries():
+    from unittest.mock import patch, MagicMock
+    h = _handler()
+    row = MagicMock(dbid=1, category="Operations", visibility="shared", owner_id=5)
+    row.name = "X"
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.report_service.list_visible", return_value=[row]):
+        responses = h.list_reports()
+    assert responses[0].data["reports"][0]["id"] == 1
+    assert "definition" not in responses[0].data["reports"][0]
+
+
+def test_get_report_404_when_missing():
+    from unittest.mock import patch
+    h = _handler()
+    h.request.path_params = {"report_id": "99"}
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.report_service.get_visible", return_value=None):
+        responses = h.get_report()
+    assert responses[0].status_code == 404
+
+
+def test_delete_report_conflict_returns_404():
+    from unittest.mock import patch
+    h = _handler()
+    h.request.path_params = {"report_id": "9"}
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.report_service.delete", return_value=False):
+        responses = h.delete_report()
+    assert responses[0].status_code == 404
