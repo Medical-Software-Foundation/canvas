@@ -5,7 +5,9 @@ from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatu
 from reporting.datasets.base import Dataset, Dimension, Field
 from reporting.query.measures import CountMeasure, RatioMeasure
 
-_NO_SHOW_STATUSES = [AppointmentProgressStatus.NOSHOWED, AppointmentProgressStatus.CANCELLED]
+# A no-show is strictly a missed appointment. Cancellations are a separate event
+# and are intentionally NOT counted here.
+_NO_SHOW_STATUS = AppointmentProgressStatus.NOSHOWED
 
 DATASET = Dataset(
     key="appointments",
@@ -58,12 +60,12 @@ DATASET = Dataset(
     measures={
         "total": CountMeasure(key="total", label="Total appointments"),
         "no_shows": CountMeasure(
-            key="no_shows", label="No-shows", where={"status__in": _NO_SHOW_STATUSES}
+            key="no_shows", label="No-shows", where={"status": _NO_SHOW_STATUS}
         ),
         "no_show_rate": RatioMeasure(
             key="no_show_rate",
             label="No-show rate (%)",
-            numerator_where={"status__in": _NO_SHOW_STATUSES},
+            numerator_where={"status": _NO_SHOW_STATUS},
             as_percent=True,
         ),
     },

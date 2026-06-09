@@ -28,7 +28,7 @@ def test_no_show_rate_measure_present_and_is_ratio():
     m = ds.measures["no_show_rate"]
     assert isinstance(m, RatioMeasure)
     assert m.as_percent is True
-    assert m.numerator_where == {"status__in": ["noshowed", "cancelled"]}
+    assert m.numerator_where == {"status": "noshowed"}  # cancellations excluded
 
 
 def test_status_field_filterable_with_is_one_of():
