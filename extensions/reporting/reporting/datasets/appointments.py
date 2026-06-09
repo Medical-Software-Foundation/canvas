@@ -1,10 +1,8 @@
 """Appointments dataset definition."""
 
-from __future__ import annotations
-
 from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
 
-from reporting.datasets import Dataset, Dimension, Field, register
+from reporting.datasets.base import Dataset, Dimension, Field
 from reporting.query.measures import CountMeasure, RatioMeasure
 
 _NO_SHOW_STATUSES = [AppointmentProgressStatus.NOSHOWED, AppointmentProgressStatus.CANCELLED]
@@ -70,5 +68,3 @@ DATASET = Dataset(
         ),
     },
 )
-
-register(DATASET)

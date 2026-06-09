@@ -5,8 +5,6 @@ Count("dbid", filter=Q(**lookup)) annotation (or Count("dbid") when the spec is 
 runs the grouped query, then calls compute_value() per row to derive the final number.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any, Optional
 

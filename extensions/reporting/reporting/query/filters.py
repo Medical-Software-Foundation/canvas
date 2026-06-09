@@ -1,7 +1,5 @@
 """Translate declarative filter clauses into Django ORM lookup kwargs."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any
 

@@ -1,7 +1,5 @@
 """Period window math for time comparison. Pure Python — no DB truncation."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
