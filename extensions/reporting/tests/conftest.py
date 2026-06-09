@@ -47,6 +47,19 @@ def _install_django_stubs() -> None:
     m.Q = Q
     for name in ("Count", "Case", "When", "Value", "F"):
         setattr(m, name, type(name, (_Expr,), {}))
+
+    class _FieldStub:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+    for _name in (
+        "ForeignKey", "TextField", "JSONField", "IntegerField",
+        "DateTimeField", "CharField", "BooleanField", "UniqueConstraint",
+    ):
+        setattr(m, _name, type(_name, (_FieldStub,), {}))
+    m.DO_NOTHING = "DO_NOTHING"
+
     sys.modules["django.db"] = django_db
     sys.modules["django.db.models"] = m
 
@@ -163,6 +176,26 @@ def _install_canvas_sdk_stubs() -> None:
     appt_mod.Appointment = Appointment
     appt_mod.AppointmentProgressStatus = AppointmentProgressStatus
     data.Appointment = Appointment
+
+    base_mod = _ensure_module("canvas_sdk.v1.data.base")
+
+    class CustomModel:
+        objects = MagicMock()
+
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class ModelExtension:
+        pass
+
+    class Staff:
+        objects = MagicMock()
+
+    base_mod.CustomModel = CustomModel
+    data.CustomModel = CustomModel
+    data.ModelExtension = ModelExtension
+    data.Staff = Staff
 
 
 _install_django_stubs()
