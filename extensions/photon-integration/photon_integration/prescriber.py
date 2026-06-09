@@ -3,10 +3,11 @@
 Photon attributes a prescription to the *authenticated* user (createPrescription
 has no prescriberId). To stop a prescription being sent under the wrong Photon
 account, we resolve the command's prescriber to an email and compare it, in the
-browser, to the signed-in Photon user. Resolution is best-effort: *expected*
-lookup failures (a missing CanvasUser relation, a DB error) degrade to "no email"
-— treated downstream as "can't verify" (fail safe) — while unexpected errors are
-allowed to propagate so they reach Sentry rather than being silently masked.
+browser, to the signed-in Photon user. Expected "no data" cases (a Staff with no
+linked user, no telecom, or no match for the ref) resolve to ``None`` natively —
+no broad ``except`` — so any real error (DB outage, schema bug) surfaces to Sentry
+instead of being silently masked. (The plugin sandbox also forbids importing the
+``django`` exception classes, so catching them by type isn't an option anyway.)
 """
 
 from __future__ import annotations
@@ -15,9 +16,6 @@ from typing import Any
 
 from canvas_sdk.v1.data.common import ContactPointSystem
 from canvas_sdk.v1.data.staff import Staff
-from django.core.exceptions import ObjectDoesNotExist
-from django.db import DatabaseError
-from logger import log
 
 _PRESCRIBER_ID_KEYS = ("value", "id", "key", "staff", "staff_id")
 
@@ -40,19 +38,16 @@ def _prescriber_ref(prescriber: Any) -> tuple[str | None, str | None]:
 def _staff_email(staff: Staff) -> str | None:
     """Email for a Staff: prefer the linked CanvasUser, fall back to telecom.
 
-    Catches only the expected failures — a missing ``user`` relation
-    (``ObjectDoesNotExist``) or a DB error — and degrades to ``None``; anything
-    else propagates.
+    ``Staff.user`` is a nullable OneToOne (``None`` when unset) and ``telecom``
+    yields ``None`` when empty, so the expected "no email" cases need no exception
+    handling; a real error surfaces.
     """
-    try:
-        user = staff.user
-        if user and getattr(user, "email", None):
-            return str(user.email).strip().lower() or None
-        contact = staff.telecom.filter(system=ContactPointSystem.EMAIL).first()
-        if contact and contact.value:
-            return str(contact.value).strip().lower() or None
-    except (ObjectDoesNotExist, DatabaseError) as exc:
-        log.warning("Photon staff email lookup failed: %s", exc)
+    user = staff.user
+    if user and getattr(user, "email", None):
+        return str(user.email).strip().lower() or None
+    contact = staff.telecom.filter(system=ContactPointSystem.EMAIL).first()
+    if contact and contact.value:
+        return str(contact.value).strip().lower() or None
     return None
 
 
@@ -60,19 +55,15 @@ def _staff_for_ref(ref: str) -> Staff | None:
     """Look up a Staff by the command's prescriber ref.
 
     The prescriber ``value`` is the Staff integer pk (``dbid``); fall back to the
-    public ``id`` (UUID) for other shapes. A DB error degrades to ``None``;
-    unexpected errors propagate.
+    public ``id`` (UUID) for other shapes. A missing match resolves to ``None``
+    via ``.first()``; a real DB error surfaces.
     """
     # select_related("user") folds the CanvasUser join in so reading
-    # staff.user.email in _staff_email doesn't trigger a second query.
+    # staff.user in _staff_email doesn't trigger a second query.
     staff = Staff.objects.select_related("user")
-    try:
-        if ref.isdigit():
-            return staff.filter(dbid=int(ref)).first()
-        return staff.filter(id=ref).first()
-    except DatabaseError as exc:
-        log.warning("Photon prescriber lookup failed for %r: %s", ref, exc)
-        return None
+    if ref.isdigit():
+        return staff.filter(dbid=int(ref)).first()
+    return staff.filter(id=ref).first()
 
 
 def staff_identity(ref: Any, fallback_name: str | None = None) -> dict[str, str | None]:

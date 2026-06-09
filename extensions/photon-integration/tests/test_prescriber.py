@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import DatabaseError
 
 from photon_integration import prescriber
 
@@ -77,21 +76,14 @@ def test_staff_not_found_keeps_name_no_email():
     assert result == {"email": None, "name": "Dr X"}
 
 
-def test_db_error_degrades_to_name_only():
+def test_query_error_propagates():
+    # No broad except: a real error from the Staff query surfaces (reaches Sentry)
+    # rather than being silently swallowed. The "not found" case is None via
+    # .first() (test_staff_not_found_keeps_name_no_email), not an exception.
     with patch(f"{MODULE}.Staff") as staff_cls:
         _passthrough_select_related(staff_cls)
-        staff_cls.objects.filter.side_effect = DatabaseError("connection lost")
-        result = prescriber.resolve_prescriber({"prescriber": {"text": "Dr X", "value": "u1"}})
-    # expected DB failure degrades safely: name kept, no email, no exception
-    assert result == {"email": None, "name": "Dr X"}
-
-
-def test_unexpected_error_propagates():
-    # A non-DB error is a bug and must surface (reach Sentry), not be swallowed.
-    with patch(f"{MODULE}.Staff") as staff_cls:
-        _passthrough_select_related(staff_cls)
-        staff_cls.objects.filter.side_effect = AttributeError("schema drift")
-        with pytest.raises(AttributeError):
+        staff_cls.objects.filter.side_effect = RuntimeError("db connection lost")
+        with pytest.raises(RuntimeError):
             prescriber.resolve_prescriber({"prescriber": {"text": "Dr X", "value": "u1"}})
 
 
