@@ -57,14 +57,16 @@ def parse_rrule(value: str) -> RRule:
     if freq not in SUPPORTED_FREQS:
         raise RRuleUnsupported(f"RRULE FREQ={freq!r} is not supported")
 
-    # The expander anchors weeks to Monday, so WKST=MO (and the omitted default,
-    # which is MO) expand correctly. A non-MO WKST changes interval-week
-    # boundaries (RFC 5545 §3.3.10) and we can't honor it, so drop the VEVENT
-    # rather than emit wrong-day occurrences. WKST=MO is NOT dropped — that
-    # would needlessly lose the many feeds that state the default explicitly.
+    # WKST (week start) only affects which occurrences are produced for a
+    # WEEKLY rule with INTERVAL > 1 AND more than one BYDAY weekday — that is the
+    # only case where the week boundary decides which days share an
+    # interval-week (RFC 5545 §3.3.10). For DAILY/MONTHLY/YEARLY, for weekly
+    # rules that fire every week (INTERVAL=1), and for a single weekday, WKST has
+    # no effect on the resulting occurrences, so a non-MO WKST is safely ignored.
+    # The genuinely-affected combination is validated after BYDAY/INTERVAL are
+    # parsed (below) so we drop only that narrow case instead of every recurring
+    # event that merely states Google's default WKST=SU.
     wkst = parts.get("WKST", "MO").upper()
-    if wkst != "MO":
-        raise RRuleUnsupported(f"RRULE WKST={wkst!r} is not supported (only MO)")
 
     rule = RRule(freq=freq)
 
@@ -125,6 +127,22 @@ def parse_rrule(value: str) -> RRule:
             rule.bymonth = [int(x) for x in parts["BYMONTH"].split(",")]
         except ValueError as exc:
             raise IcsParseError(f"invalid BYMONTH: {parts['BYMONTH']!r}") from exc
+
+    # Our weekly expander anchors interval-weeks to Monday. That only produces
+    # wrong occurrences when WKST is non-MO AND the rule actually depends on the
+    # week boundary: WEEKLY, INTERVAL > 1, and more than one distinct BYDAY
+    # weekday. Drop only that narrow case (emitting wrong-day blocks would be
+    # worse than skipping); every other rule expands identically regardless of
+    # WKST, so ignore it.
+    if (
+        wkst != "MO"
+        and rule.freq == "WEEKLY"
+        and rule.interval > 1
+        and len({day for _, day in rule.byday}) > 1
+    ):
+        raise RRuleUnsupported(
+            f"RRULE WKST={wkst!r} with INTERVAL>1 and multiple BYDAY is not supported"
+        )
 
     return rule
 

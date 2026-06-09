@@ -221,9 +221,22 @@ def test_expand_yearly_feb29_skips_non_leap_years() -> None:
     assert [(o.year, o.month, o.day) for o in occ] == [(2024, 2, 29), (2028, 2, 29)]
 
 
-def test_parse_rrule_rejects_non_mo_wkst() -> None:
+def test_parse_rrule_rejects_non_mo_wkst_only_when_significant() -> None:
+    # WKST changes the expansion only for WEEKLY + INTERVAL>1 + multiple BYDAY.
     with pytest.raises(RRuleUnsupported):
         parse_rrule("FREQ=WEEKLY;BYDAY=SU,SA;INTERVAL=2;WKST=SU")
+
+
+def test_parse_rrule_ignores_non_mo_wkst_when_irrelevant() -> None:
+    # WKST=SU is Google's default and has no effect on these expansions, so the
+    # rules must be accepted (previously every one of these was dropped).
+    # Weekly, every week (INTERVAL defaults to 1):
+    assert parse_rrule("FREQ=WEEKLY;BYDAY=TU;WKST=SU").freq == "WEEKLY"
+    # Weekly, single weekday, INTERVAL>1 (week boundary is irrelevant):
+    assert parse_rrule("FREQ=WEEKLY;BYDAY=WE;INTERVAL=2;WKST=SU").interval == 2
+    # Non-weekly frequencies — WKST never applies:
+    assert parse_rrule("FREQ=MONTHLY;BYDAY=2MO;WKST=SU").freq == "MONTHLY"
+    assert parse_rrule("FREQ=DAILY;INTERVAL=3;WKST=SU").freq == "DAILY"
 
 
 def test_parse_rrule_accepts_default_mo_wkst() -> None:
