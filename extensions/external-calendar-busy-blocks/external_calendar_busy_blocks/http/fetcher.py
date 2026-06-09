@@ -86,7 +86,7 @@ def fetch_feed(
         # request timeout internally. Passing timeout= raises TypeError.
         response = Http().get(url, headers=headers)
     except Exception as exc:  # noqa: BLE001 — surface all transient errors uniformly
-        return TransientError(reason=f"{type(exc).__name__}: {exc}")
+        return TransientError(reason=f"{exc.__class__.__name__}: {exc}")
 
     code = response.status_code
     if code == 304:

@@ -48,7 +48,7 @@ class SyncCron(CronTask):
                 # record the error, then carry on with the next feed.
                 log.exception("Unexpected error syncing feed %s; skipping", feed.dbid)
                 try:
-                    feed.last_error = f"unexpected error: {type(exc).__name__}"
+                    feed.last_error = f"unexpected error: {exc.__class__.__name__}"
                     feed.save()
                 except Exception:
                     log.exception("Failed to record last_error for feed %s", feed.dbid)
@@ -86,7 +86,7 @@ class SyncCron(CronTask):
             "Synced feed %s url=%s result=%s",
             feed.dbid,
             redact_url(feed.ics_url),
-            type(result).__name__,
+            result.__class__.__name__,
         )
 
         if isinstance(result, NotModified):
@@ -96,7 +96,7 @@ class SyncCron(CronTask):
             return []
         if isinstance(result, (Unauthorized, NotFound)):
             feed.is_active = False
-            feed.last_error = type(result).__name__
+            feed.last_error = result.__class__.__name__
             feed.save()
             return []
         if isinstance(result, TransientError):
@@ -110,7 +110,7 @@ class SyncCron(CronTask):
             parsed = parse_ics(result.body, now=now, lookahead_days=lookahead_days)
         except IcsParseError as exc:
             log.warning("Parse failure feed=%s err=%s", feed.dbid, exc)
-            feed.last_error = f"parse failure: {type(exc).__name__}"
+            feed.last_error = f"parse failure: {exc.__class__.__name__}"
             feed.save()
             return []
 
