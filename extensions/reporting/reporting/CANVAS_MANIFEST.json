@@ -4,6 +4,10 @@
     "name": "reporting",
     "description": "In-UI report and dashboard builder for non-technical users.",
     "url_permissions": [],
+    "custom_data": {
+        "namespace": "canvas_medical__reporting",
+        "access": "read_write"
+    },
     "components": {
         "protocols": [
             {
@@ -31,7 +35,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["namespace_read_write_access_key"],
     "tags": {},
     "references": [],
     "license": "MIT",
