@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schedule an urgent-care visit</title>
+  <style>
+    :root {
+      --uc-text: #111827;
+      --uc-muted: #6b7280;
+      --uc-subtle: #374151;
+      --uc-border: #e5e7eb;
+      --uc-bg: #f9fafb;
+      --uc-card: #ffffff;
+      --uc-accent: #047857;
+      --uc-accent-hover: #065f46;
+      --uc-danger: #b91c1c;
+      --uc-danger-bg: #fef2f2;
+      --uc-radius: 8px;
+      --uc-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--uc-bg);
+      color: var(--uc-text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    a { color: var(--uc-accent); }
+    a:hover { color: var(--uc-accent-hover); }
+    .uc-container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 16px 140px;
+    }
+    .uc-header { margin-bottom: 24px; }
+    .uc-back {
+      display: inline-block;
+      font-size: 14px;
+      color: var(--uc-muted);
+      text-decoration: none;
+      margin-bottom: 16px;
+    }
+    .uc-back:hover { color: var(--uc-accent); }
+    .uc-header h1 { font-size: 28px; margin: 0 0 8px; }
+    .uc-header p  { color: var(--uc-subtle); margin: 0; }
+    .uc-section {
+      background: var(--uc-card);
+      border: 1px solid var(--uc-border);
+      border-radius: var(--uc-radius);
+      box-shadow: var(--uc-shadow);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .uc-section h2 { font-size: 16px; margin: 0 0 4px; }
+    .uc-hint { color: var(--uc-muted); font-size: 13px; margin: 0 0 8px; }
+    label { display: block; font-weight: 500; font-size: 14px; margin-bottom: 6px; }
+    textarea, input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--uc-border);
+      border-radius: 6px;
+      font: inherit;
+      background: #fff;
+    }
+    textarea { resize: vertical; min-height: 100px; }
+    textarea:focus, input:focus, select:focus { outline: 2px solid var(--uc-accent); outline-offset: -1px; border-color: transparent; }
+    .uc-error { color: var(--uc-danger); font-size: 13px; margin-top: 6px; min-height: 18px; }
+    .uc-field--invalid textarea, .uc-field--invalid input, .uc-field--invalid select {
+      border-color: var(--uc-danger);
+      background: var(--uc-danger-bg);
+    }
+    .uc-duration { display: flex; gap: 8px; align-items: center; }
+    .uc-duration input { flex: 0 0 100px; }
+    .uc-duration select { flex: 1; }
+    .uc-checkbox-row { display: flex; align-items: center; gap: 8px; padding: 4px 0 8px; font-size: 14px; }
+    .uc-checkbox-row input { width: auto; }
+    .uc-review-list { list-style: none; padding: 0; margin: 8px 0 0; }
+    .uc-review-list li {
+      padding: 6px 0;
+      border-top: 1px solid var(--uc-border);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .uc-review-list li:first-child { border-top: 0; }
+    .uc-review-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .uc-review-row .name { font-weight: 500; font-size: 14px; }
+    .uc-flag-btn {
+      padding: 4px 10px;
+      background: #fff;
+      color: var(--uc-subtle);
+      border: 1px solid var(--uc-border);
+      border-radius: 4px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .uc-flag-btn:hover { border-color: var(--uc-accent); color: var(--uc-accent); }
+    .uc-flag-btn--active { background: var(--uc-accent); color: #fff; border-color: var(--uc-accent); }
+    .uc-review-flag-input { margin-top: 4px; font-size: 13px; padding: 6px 8px; }
+    .uc-day-group { margin-bottom: 16px; }
+    .uc-day-group h3 { font-size: 14px; color: var(--uc-muted); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .uc-slot--hidden { display: none; }
+    .uc-show-more-row { display: flex; justify-content: center; margin-top: 8px; }
+    .uc-slot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+    }
+    .uc-slot {
+      padding: 10px 12px;
+      border: 1px solid var(--uc-border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+    }
+    .uc-slot:hover { border-color: var(--uc-accent); }
+    .uc-slot--selected { background: var(--uc-accent); color: #fff; border-color: var(--uc-accent); }
+    .uc-slot__time { font-weight: 600; font-size: 15px; display: block; }
+    .uc-slot__provider { font-size: 13px; opacity: 0.9; display: block; margin-top: 2px; }
+    .uc-slot__location { font-size: 12px; opacity: 0.85; display: block; margin-top: 2px; }
+    .uc-empty {
+      padding: 24px;
+      text-align: center;
+      color: var(--uc-muted);
+      border: 1px dashed var(--uc-border);
+      border-radius: var(--uc-radius);
+    }
+    .uc-banner {
+      padding: 12px 16px;
+      border-radius: var(--uc-radius);
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .uc-banner--error  { background: var(--uc-danger-bg); color: var(--uc-danger); }
+    .uc-banner--info   { background: #eff6ff; color: #1e3a8a; }
+    .uc-submit-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #fff;
+      border-top: 1px solid var(--uc-border);
+      box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.04);
+      padding: 12px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .uc-submit-bar__inner { max-width: 720px; margin: 0 auto; width: 100%; display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+    .uc-summary { font-size: 14px; color: var(--uc-subtle); }
+    .uc-button {
+      padding: 10px 20px;
+      background: var(--uc-accent);
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .uc-button:hover:not(:disabled) { background: var(--uc-accent-hover); }
+    .uc-button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .uc-button--secondary {
+      background: #fff;
+      color: var(--uc-text);
+      border: 1px solid var(--uc-border);
+    }
+    .uc-success {
+      text-align: center;
+      padding: 40px 24px;
+    }
+    .uc-success__check {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: #d1fae5;
+      color: var(--uc-accent);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+    .uc-success h2 { margin: 0 0 8px; font-size: 24px; }
+    .uc-success p  { color: var(--uc-subtle); margin: 0 0 20px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="uc-container" id="uc-form-container">
+    <header class="uc-header">
+      <a class="uc-back" href="/app/" target="_top">← Back to portal</a>
+      <h1>Schedule an urgent-care visit</h1>
+      <p>Tell us why you're being seen and pick a time. A provider will see you over telehealth.</p>
+    </header>
+
+    <div id="uc-page-banner" class="uc-banner uc-banner--error" hidden></div>
+
+    <form id="uc-form" novalidate>
+      <section class="uc-section uc-field" id="uc-rfv-field">
+        <h2>Reason for visit</h2>
+        <p class="uc-hint">A brief description helps the provider prepare. Required.</p>
+        <textarea
+          id="uc-rfv"
+          name="reason_for_visit"
+          maxlength="500"
+          required
+          aria-describedby="uc-rfv-error"
+          placeholder="What's going on? e.g. 'Sore throat, fever for 2 days'"></textarea>
+        <div class="uc-error" id="uc-rfv-error"></div>
+      </section>
+
+      <section class="uc-section uc-field" id="uc-duration-field">
+        <h2>How long have you had these symptoms?</h2>
+        <p class="uc-hint">Required.</p>
+        <div class="uc-duration">
+          <input type="number" id="uc-duration-value" name="symptom_duration_value" min="1" step="1" required aria-label="Duration value">
+          <select id="uc-duration-unit" name="symptom_duration_unit" required aria-label="Duration unit">
+            <option value="hours">hours</option>
+            <option value="days" selected>days</option>
+            <option value="weeks">weeks</option>
+          </select>
+        </div>
+        <div class="uc-error" id="uc-duration-error"></div>
+      </section>
+
+      <section class="uc-section" id="uc-meds-section">
+        <h2>Medications</h2>
+        <p class="uc-hint">Review your active medications. Are there any changes?</p>
+        <label class="uc-checkbox-row">
+          <input type="checkbox" id="uc-meds-no-changes" name="meds_no_changes" checked>
+          <span>No changes</span>
+        </label>
+        <ul class="uc-review-list" id="uc-meds-list"></ul>
+        <p class="uc-hint" id="uc-meds-empty" hidden>No active medications on file.</p>
+      </section>
+
+      <section class="uc-section" id="uc-allergies-section">
+        <h2>Allergies</h2>
+        <p class="uc-hint">Review your active allergies. Are there any changes?</p>
+        <label class="uc-checkbox-row">
+          <input type="checkbox" id="uc-allergies-no-changes" name="allergies_no_changes" checked>
+          <span>No changes</span>
+        </label>
+        <ul class="uc-review-list" id="uc-allergies-list"></ul>
+        <p class="uc-hint" id="uc-allergies-empty" hidden>No active allergies on file.</p>
+      </section>
+
+      <section class="uc-section uc-field" id="uc-slots-field">
+        <h2>Pick a time</h2>
+        <p class="uc-hint">Available appointments in the next few days.</p>
+        <div id="uc-slots-loading" class="uc-hint">Loading available times…</div>
+        <div id="uc-slots-grid"></div>
+        <div id="uc-day-conflict" class="uc-banner uc-banner--error" hidden></div>
+        <div id="uc-slots-empty" class="uc-empty" hidden>
+          No appointments available right now.<br>
+          <span id="uc-slots-fallback-phone"></span>
+        </div>
+        <div class="uc-error" id="uc-slots-error"></div>
+      </section>
+    </form>
+  </main>
+
+  <div class="uc-submit-bar" id="uc-submit-bar">
+    <div class="uc-submit-bar__inner">
+      <div class="uc-summary" id="uc-summary">Pick a time to continue</div>
+      <button type="button" class="uc-button" id="uc-submit" disabled>Book appointment</button>
+    </div>
+  </div>
+
+  <main class="uc-container uc-success" id="uc-success" hidden>
+    <div class="uc-success__check">✓</div>
+    <h2>You're booked</h2>
+    <p id="uc-success-summary"></p>
+    <p class="uc-hint" id="uc-success-modality"></p>
+    <a class="uc-button" id="uc-success-appointments-link" href="/app/appointments" target="_top">Go to Appointments</a>
+  </main>
+
+  <script>
+    (function () {
+      const ENDPOINTS = {
+        me:    '/plugin-io/api/urgent_care_self_scheduler/api/me',
+        slots: '/plugin-io/api/urgent_care_self_scheduler/api/slots',
+        book:  '/plugin-io/api/urgent_care_self_scheduler/api/book',
+      };
+      const state = {
+        meds: [],
+        allergies: [],
+        flaggedMeds: new Map(),       // medication_id -> note
+        flaggedAllergies: new Map(),  // allergy_id -> note
+        slots: [],
+        selectedSlot: null,
+        fallbackPhone: '',
+        blockAllBooking: false,  // true when the patient already has an upcoming urgent-care visit
+        modality: 'telehealth',  // 'in_person' labels each slot with its location
+      };
+      const EXISTING_VISIT_MSG =
+        'You already have an upcoming urgent-care visit scheduled. If this is an emergency, call 911.';
+
+      const $ = (id) => document.getElementById(id);
+      const fmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+      function showError(elId, msg) {
+        const el = $(elId);
+        if (el) el.textContent = msg || '';
+      }
+      function setFieldInvalid(fieldId, invalid) {
+        const f = $(fieldId);
+        if (!f) return;
+        f.classList.toggle('uc-field--invalid', !!invalid);
+      }
+
+      // ---------- /api/me (medications + allergies) -----------------
+      function renderReviewList(listEl, items, kind, flagMap, noChangesCheckbox) {
+        listEl.innerHTML = '';
+        items.forEach((item) => {
+          const li = document.createElement('li');
+          const row = document.createElement('div'); row.className = 'uc-review-row';
+          const name = document.createElement('span'); name.className = 'name'; name.textContent = item.label;
+          const flagBtn = document.createElement('button');
+          flagBtn.type = 'button'; flagBtn.className = 'uc-flag-btn';
+          flagBtn.textContent = 'Flag';
+          row.appendChild(name); row.appendChild(flagBtn);
+          const noteInput = document.createElement('input');
+          noteInput.type = 'text'; noteInput.className = 'uc-review-flag-input';
+          noteInput.placeholder = `What changed about this ${kind}?`;
+          noteInput.hidden = true;
+          flagBtn.addEventListener('click', () => {
+            const flagged = !flagMap.has(item.id);
+            if (flagged) {
+              flagMap.set(item.id, '');
+              flagBtn.classList.add('uc-flag-btn--active');
+              flagBtn.textContent = 'Flagged';
+              noteInput.hidden = false;
+              noteInput.focus();
+              // Flagging a row implies there ARE changes — uncheck "No changes".
+              if (noChangesCheckbox) noChangesCheckbox.checked = false;
+            } else {
+              flagMap.delete(item.id);
+              flagBtn.classList.remove('uc-flag-btn--active');
+              flagBtn.textContent = 'Flag';
+              noteInput.hidden = true;
+            }
+          });
+          noteInput.addEventListener('input', () => { flagMap.set(item.id, noteInput.value); });
+          li.appendChild(row);
+          li.appendChild(noteInput);
+          listEl.appendChild(li);
+        });
+      }
+
+      async function loadPatientReview() {
+        try {
+          const res = await fetch(ENDPOINTS.me, { credentials: 'same-origin' });
+          if (!res.ok) throw new Error(`/me ${res.status}`);
+          const data = await res.json();
+          state.meds = data.medications || [];
+          state.allergies = data.allergies || [];
+          renderReviewList($('uc-meds-list'), state.meds, 'medication', state.flaggedMeds, $('uc-meds-no-changes'));
+          renderReviewList($('uc-allergies-list'), state.allergies, 'allergy', state.flaggedAllergies, $('uc-allergies-no-changes'));
+          $('uc-meds-empty').hidden = state.meds.length > 0;
+          $('uc-allergies-empty').hidden = state.allergies.length > 0;
+        } catch (err) {
+          // Surface the failure: log it (so it lands in browser diagnostics) and
+          // show a page-level banner. A failed review fetch must not silently look
+          // like "nothing on file" — say so in each section too.
+          console.error('urgent-care: /api/me failed', err);
+          const banner = $('uc-page-banner');
+          if (banner) {
+            banner.hidden = false;
+            banner.textContent = "We couldn't load your medication and allergy list. You can still pick a time, or call to book your appointment.";
+          }
+          const medsEmpty = $('uc-meds-empty');
+          const allergiesEmpty = $('uc-allergies-empty');
+          medsEmpty.textContent = "We couldn't load your medications. You can still pick a time, or call to book your appointment.";
+          allergiesEmpty.textContent = "We couldn't load your allergies. You can still pick a time, or call to book your appointment.";
+          medsEmpty.hidden = false;
+          allergiesEmpty.hidden = false;
+        }
+      }
+
+      // ---------- /api/slots ----------------------------------------
+      function dayKey(iso) {
+        const d = new Date(iso);
+        const today = new Date(); today.setHours(0,0,0,0);
+        const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+        const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
+        const dOnly = new Date(d); dOnly.setHours(0,0,0,0);
+        if (dOnly.getTime() === today.getTime()) return 'Today';
+        if (dOnly.getTime() === tomorrow.getTime()) return 'Tomorrow';
+        if (dOnly.getTime() === dayAfter.getTime()) return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(d);
+        return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(d);
+      }
+      const INITIAL_SLOTS_PER_PROVIDER = 3;
+      const TIME_FMT = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+      function renderSlots(slots) {
+        const grid = $('uc-slots-grid');
+        grid.innerHTML = '';
+        if (!slots.length) {
+          $('uc-slots-empty').hidden = false;
+          return;
+        }
+        $('uc-slots-empty').hidden = true;
+
+        // Group by provider, preserving the order providers appear (which roughly
+        // matches earliest availability since slots are pre-sorted by start time).
+        const byProvider = new Map();
+        slots.forEach((s) => {
+          if (!byProvider.has(s.provider_id)) {
+            byProvider.set(s.provider_id, { name: s.provider_name, slots: [] });
+          }
+          byProvider.get(s.provider_id).slots.push(s);
+        });
+
+        let hiddenCount = 0;
+        byProvider.forEach(({ name, slots: providerSlots }) => {
+          const dg = document.createElement('div'); dg.className = 'uc-day-group';
+          const h = document.createElement('h3'); h.textContent = name; dg.appendChild(h);
+          const dgGrid = document.createElement('div'); dgGrid.className = 'uc-slot-grid';
+          providerSlots.forEach((s, i) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'uc-slot' + (i >= INITIAL_SLOTS_PER_PROVIDER ? ' uc-slot--hidden' : '');
+            btn.dataset.slotKey = `${s.provider_id}|${s.start_iso}`;
+            const t = new Date(s.start_iso);
+            const time = document.createElement('span'); time.className = 'uc-slot__time';
+            time.textContent = `${dayKey(s.start_iso)} • ${TIME_FMT.format(t)}`;
+            btn.appendChild(time);
+            // In-person visits span physical locations — label each slot so the
+            // patient can tell which site it's at. Telehealth is virtual: no label.
+            if (state.modality === 'in_person' && s.location_name) {
+              const loc = document.createElement('span'); loc.className = 'uc-slot__location';
+              loc.textContent = s.location_name;
+              btn.appendChild(loc);
+            }
+            btn.addEventListener('click', () => selectSlot(s, btn));
+            dgGrid.appendChild(btn);
+            if (i >= INITIAL_SLOTS_PER_PROVIDER) hiddenCount += 1;
+          });
+          dg.appendChild(dgGrid);
+          grid.appendChild(dg);
+        });
+
+        if (hiddenCount > 0) {
+          const row = document.createElement('div');
+          row.className = 'uc-show-more-row';
+          const moreBtn = document.createElement('button');
+          moreBtn.type = 'button';
+          moreBtn.className = 'uc-button uc-button--secondary';
+          moreBtn.textContent = `Show more times (${hiddenCount})`;
+          moreBtn.addEventListener('click', () => {
+            document.querySelectorAll('.uc-slot--hidden').forEach((b) =>
+              b.classList.remove('uc-slot--hidden')
+            );
+            row.remove();
+          });
+          row.appendChild(moreBtn);
+          grid.appendChild(row);
+        }
+      }
+      async function loadSlots() {
+        $('uc-slots-loading').hidden = false;
+        $('uc-slots-error').textContent = '';
+        try {
+          const res = await fetch(ENDPOINTS.slots, { credentials: 'same-origin' });
+          if (!res.ok) throw new Error(`/slots ${res.status}`);
+          const data = await res.json();
+          state.slots = data.slots || [];
+          state.fallbackPhone = data.fallback_phone || '';
+          state.blockAllBooking = !!data.existing_urgent_care_visit;
+          state.modality = data.modality || 'telehealth';
+          $('uc-slots-fallback-phone').textContent = state.fallbackPhone ? `Call us at ${state.fallbackPhone}.` : '';
+          if (state.blockAllBooking) {
+            // Patient already has an upcoming urgent-care visit — block booking another.
+            $('uc-slots-grid').innerHTML = '';
+            $('uc-slots-empty').hidden = true;
+            const conflictEl = $('uc-day-conflict');
+            conflictEl.textContent = EXISTING_VISIT_MSG;
+            conflictEl.hidden = false;
+            updateSubmitState();
+            return;
+          }
+          $('uc-day-conflict').hidden = true;
+          renderSlots(state.slots);
+        } catch (err) {
+          // Times couldn't load — booking is blocked, so tell the patient
+          // plainly and direct them to call rather than show a bare empty state.
+          state.slots = [];
+          $('uc-slots-grid').innerHTML = '';
+          const empty = $('uc-slots-empty');
+          const phone = state.fallbackPhone
+            ? ` Call us at ${state.fallbackPhone} to book your appointment.`
+            : ' Please call to book your appointment.';
+          empty.textContent = "We couldn't load available times." + phone;
+          empty.hidden = false;
+        } finally {
+          $('uc-slots-loading').hidden = true;
+        }
+      }
+
+      function selectSlot(slot, btn) {
+        document.querySelectorAll('.uc-slot--selected').forEach((b) => b.classList.remove('uc-slot--selected'));
+        btn.classList.add('uc-slot--selected');
+        state.selectedSlot = slot;
+        const d = new Date(slot.start_iso);
+        $('uc-summary').textContent = `${fmt.format(d)} with ${slot.provider_name}`;
+        updateSubmitState();
+      }
+
+      // ---------- form validation -----------------------------------
+      function validate() {
+        let ok = true;
+        const rfv = $('uc-rfv').value.trim();
+        if (!rfv) { showError('uc-rfv-error', 'Please describe your reason for visit.'); setFieldInvalid('uc-rfv-field', true); ok = false; }
+        else { showError('uc-rfv-error', ''); setFieldInvalid('uc-rfv-field', false); }
+
+        const dur = $('uc-duration-value').value;
+        if (!dur || Number(dur) < 1) { showError('uc-duration-error', 'Please enter how long you’ve had symptoms.'); setFieldInvalid('uc-duration-field', true); ok = false; }
+        else { showError('uc-duration-error', ''); setFieldInvalid('uc-duration-field', false); }
+
+        if (!state.selectedSlot) { ok = false; }
+        return ok;
+      }
+      function updateSubmitState() {
+        const rfv = $('uc-rfv').value.trim();
+        const dur = $('uc-duration-value').value;
+        const ready = !!rfv && !!dur && Number(dur) >= 1 && !!state.selectedSlot && !state.blockAllBooking;
+        $('uc-submit').disabled = !ready;
+      }
+      ['uc-rfv', 'uc-duration-value', 'uc-duration-unit'].forEach((id) => {
+        const el = $(id);
+        if (el) el.addEventListener('input', updateSubmitState);
+      });
+
+      // ---------- submit --------------------------------------------
+      function buildIntakePayload() {
+        // Include the label alongside each flagged ID so the server can write a
+        // readable HPI narrative without re-querying the patient's records.
+        const medLabel = new Map(state.meds.map((m) => [m.id, m.label]));
+        const allergyLabel = new Map(state.allergies.map((a) => [a.id, a.label]));
+        // Coerce the duration to a whole number so values like "2.5" or "1e3"
+        // (which a number input accepts) never reach the clinician-facing HPI/task.
+        const durationValue = Math.trunc(Number($('uc-duration-value').value)) || 0;
+        return {
+          reason_for_visit: $('uc-rfv').value.trim(),
+          symptom_duration: `${durationValue} ${$('uc-duration-unit').value}`,
+          medications: {
+            no_changes: $('uc-meds-no-changes').checked && state.flaggedMeds.size === 0,
+            changes: Array.from(state.flaggedMeds.entries()).map(([id, note]) => ({
+              medication_id: id,
+              label: medLabel.get(id) || '',
+              note,
+            })),
+          },
+          allergies: {
+            no_changes: $('uc-allergies-no-changes').checked && state.flaggedAllergies.size === 0,
+            changes: Array.from(state.flaggedAllergies.entries()).map(([id, note]) => ({
+              allergy_id: id,
+              label: allergyLabel.get(id) || '',
+              note,
+            })),
+          },
+        };
+      }
+      function showSuccessPane(result) {
+        $('uc-form-container').hidden = true;
+        $('uc-submit-bar').hidden = true;
+        $('uc-success').hidden = false;
+        const d = new Date(result.start_iso);
+        $('uc-success-summary').textContent =
+          `${fmt.format(d)} with ${result.provider_name} — ${result.duration_minutes} minutes`;
+        // Canvas delivers the real per-visit details after the appointment lands:
+        // for a telehealth visit it generates the join link and surfaces it on the
+        // portal Appointments tab; for in-person it shows the location there. The
+        // copy adapts to the configured modality and points the patient at that tab.
+        $('uc-success-modality').textContent =
+          result.modality === 'in_person'
+            ? "This is an in-person visit. You'll find the location and details in your Appointments tab."
+            : "This is a video visit. Your join link will be available in your Appointments tab shortly before your visit.";
+        if (result.appointments_url) {
+          $('uc-success-appointments-link').href = result.appointments_url;
+        }
+      }
+
+      $('uc-submit').addEventListener('click', async () => {
+        if (!validate()) return;
+        $('uc-submit').disabled = true;
+        $('uc-page-banner').hidden = true;
+        try {
+          const res = await fetch(ENDPOINTS.book, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slot: state.selectedSlot, intake: buildIntakePayload() }),
+          });
+          if (res.status === 409) {
+            const conflict = await res.json().catch(() => ({}));
+            $('uc-page-banner').hidden = false;
+            $('uc-page-banner').textContent =
+              conflict.error === 'already_has_urgent_care'
+                ? EXISTING_VISIT_MSG
+                : 'That slot was just taken — pick another.';
+            await loadSlots();
+            state.selectedSlot = null;
+            $('uc-summary').textContent = 'Pick a time to continue';
+            updateSubmitState();
+            return;
+          }
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            $('uc-page-banner').hidden = false;
+            $('uc-page-banner').textContent = err.error || 'Something went wrong. Try again.';
+            updateSubmitState();
+            return;
+          }
+          const result = await res.json();
+          showSuccessPane(result);
+        } catch (err) {
+          $('uc-page-banner').hidden = false;
+          $('uc-page-banner').textContent = 'Network error. Check your connection and try again.';
+          updateSubmitState();
+        }
+      });
+
+      // ---------- init ----------------------------------------------
+      loadPatientReview();
+      loadSlots();
+      updateSubmitState();
+    })();
+  </script>
+</body>
+</html>
