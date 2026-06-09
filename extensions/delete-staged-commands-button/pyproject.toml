@@ -1,7 +1,7 @@
 [project]
-name = "carry_forward"
+name = "delete_staged_commands_button"
 version = "0.0.1"
-description = "Canvas plugin to carry forward commands from previous notes"
+description = "Canvas plugin that adds a note header button to delete all staged commands in a note"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -10,7 +10,7 @@ python_functions = ["test_*"]
 addopts = "-v"
 
 [tool.coverage.run]
-source = ["carry_forward"]
+source = ["delete_staged_commands_button"]
 omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]

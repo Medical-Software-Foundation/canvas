@@ -1,13 +1,39 @@
 # Delete Staged Commands Button Plugin
 
-## Overview
+## What it does
 
-The Delete Staged Commands Button plugin adds a convenient action button to the Canvas note header that allows users to quickly remove all staged (uncommitted) commands from the current note with a single click.
+Adds a **Delete All Staged Commands** action button to the Canvas note header. One click removes every staged (uncommitted) command in the current note with a single action. Committed commands are never affected. The plugin handles 38+ command types - diagnoses, prescriptions, orders, assessments, history, vitals, and more.
 
-This plugin is useful when:
+## Problem it solves
+
+Removing staged commands one at a time is slow, especially when a clinician wants to start fresh or has left several drafts in a note. This clears them all at once while leaving anything already committed in place. It is useful when:
+
 - A clinician wants to start fresh with their note documentation
-- Staged commands need to be cleared after all needed commands are committed
+- Staged commands need to be cleared after the needed commands are committed
 - Multiple staged commands need to be removed at once instead of individually
+
+## Who it's for
+
+Clinicians and documentation staff who build notes with staged commands and want a fast way to discard the uncommitted ones.
+
+## How to install
+
+1. Download or clone this plugin directory.
+2. From the directory that contains the plugin, install it against your instance:
+   ```
+   canvas install delete_staged_commands_button
+   ```
+3. Confirm it is enabled under **Settings > Plugins** in your instance.
+
+See the [Canvas plugin documentation](https://docs.canvasmedical.com/sdk/plugins-overview/) for CLI setup and authentication.
+
+## Configuration options
+
+None. The button is always visible in the note header once installed and acts only on commands in the `staged` state for the current note. There are no secrets or settings.
+
+## Screenshots or screen recordings
+
+_Screenshots pending. The "Delete All Staged Commands" button appears in the note header; clicking it removes all staged commands from the open note._
 
 ## Features
 
