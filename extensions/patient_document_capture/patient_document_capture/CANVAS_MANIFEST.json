@@ -1,0 +1,40 @@
+{
+    "sdk_version": "0.85.0",
+    "plugin_version": "0.7.6",
+    "name": "patient_document_capture",
+    "description": "Capture a photo of a document or upload a file from the patient chart and save it as a DocumentReference. Auto-associates the patient, supports multi-page capture, and requires a document type, title, and date.",
+    "url_permissions": [
+        {
+            "url": "https://cdn.jsdelivr.net",
+            "permissions": []
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "patient_document_capture.applications.document_app:PatientDocumentCaptureApp",
+                "name": "Add Document",
+                "description": "Capture or upload a document and save it to the patient's chart",
+                "scope": "patient_specific",
+                "icon": "assets/add-document-icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "patient_document_capture.api.document_api:DocumentAPI",
+                "description": "SimpleAPI endpoint that builds a PDF from captured/uploaded pages and creates a DocumentReference via the Canvas FHIR API"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": []
+    },
+    "secrets": ["CANVAS_FHIR_CLIENT_ID", "CANVAS_FHIR_CLIENT_SECRET"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

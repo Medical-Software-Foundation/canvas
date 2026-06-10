@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+.mypy_cache/
+.env
+*.log
+
+# Non-essential / local working content (not part of the plugin)
+.claude/
+.mockups/
+.superpowers/
+.cpa-workflow-artifacts/
+docs/

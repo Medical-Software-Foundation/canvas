@@ -1,0 +1,27 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Capture or upload a document from the patient chart and save it to the chart as a DocumentReference."
+name = "patient-document-capture"
+readme = "patient_document_capture/README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
+
+[tool.coverage.run]
+source = ["patient_document_capture"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.0.0",
+]
