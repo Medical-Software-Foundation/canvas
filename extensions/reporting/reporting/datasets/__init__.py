@@ -10,8 +10,16 @@ fragment across module instances).
 
 from reporting.datasets.appointments import DATASET as _APPOINTMENTS_DATASET
 from reporting.datasets.base import Dataset, Dimension, Field
+from reporting.datasets.claims import DATASET as _CLAIMS_DATASET
+from reporting.datasets.encounters import DATASET as _ENCOUNTERS_DATASET
+from reporting.datasets.patients import DATASET as _PATIENTS_DATASET
 
-_BUILTIN_DATASETS = (_APPOINTMENTS_DATASET,)
+_BUILTIN_DATASETS = (
+    _APPOINTMENTS_DATASET,
+    _PATIENTS_DATASET,
+    _ENCOUNTERS_DATASET,
+    _CLAIMS_DATASET,
+)
 _REGISTRY: dict[str, Dataset] = {d.key: d for d in _BUILTIN_DATASETS}
 
 __all__ = ["Dataset", "Dimension", "Field", "get_dataset", "list_datasets"]

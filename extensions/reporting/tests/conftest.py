@@ -177,6 +177,49 @@ def _install_canvas_sdk_stubs() -> None:
     appt_mod.AppointmentProgressStatus = AppointmentProgressStatus
     data.Appointment = Appointment
 
+    patient_mod = _ensure_module("canvas_sdk.v1.data.patient")
+    encounter_mod = _ensure_module("canvas_sdk.v1.data.encounter")
+    claim_mod = _ensure_module("canvas_sdk.v1.data.claim")
+
+    class SexAtBirth:
+        FEMALE = "F"
+        MALE = "M"
+        OTHER = "O"
+        UNKNOWN = "UNK"
+
+    class EncounterMedium:
+        VOICE = "voice"
+        VIDEO = "video"
+        OFFICE = "office"
+        HOME = "home"
+        OFFSITE = "offsite"
+        LAB = "lab"
+
+    class EncounterState:
+        STARTED = "STA"
+        PLANNED = "PLA"
+        CONCLUDED = "CON"
+        CANCELLED = "CAN"
+
+    class Patient:
+        objects = MagicMock()
+
+    class Encounter:
+        objects = MagicMock()
+
+    class Claim:
+        objects = MagicMock()
+
+    patient_mod.Patient = Patient
+    patient_mod.SexAtBirth = SexAtBirth
+    encounter_mod.Encounter = Encounter
+    encounter_mod.EncounterMedium = EncounterMedium
+    encounter_mod.EncounterState = EncounterState
+    claim_mod.Claim = Claim
+    data.Patient = Patient
+    data.Encounter = Encounter
+    data.Claim = Claim
+
     base_mod = _ensure_module("canvas_sdk.v1.data.base")
 
     class CustomModel:
