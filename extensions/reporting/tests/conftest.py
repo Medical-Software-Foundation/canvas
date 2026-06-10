@@ -220,6 +220,24 @@ def _install_canvas_sdk_stubs() -> None:
     data.Encounter = Encounter
     data.Claim = Claim
 
+    # Clinical-wave models (categorical fields use dynamic options, so no enums needed).
+    _clinical = {
+        "condition": "Condition",
+        "medication": "Medication",
+        "observation": "Observation",
+        "immunization": "Immunization",
+        "allergy_intolerance": "AllergyIntolerance",
+        "goal": "Goal",
+        "referral": "Referral",
+        "care_team": "CareTeamMembership",
+        "lab": "LabReport",
+    }
+    for _modname, _clsname in _clinical.items():
+        _m = _ensure_module("canvas_sdk.v1.data." + _modname)
+        _cls = type(_clsname, (), {"objects": MagicMock()})
+        setattr(_m, _clsname, _cls)
+        setattr(data, _clsname, _cls)
+
     base_mod = _ensure_module("canvas_sdk.v1.data.base")
 
     class CustomModel:
