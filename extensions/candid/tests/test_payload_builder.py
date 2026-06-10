@@ -475,6 +475,55 @@ def test_build_claim_payload_happy_path() -> None:
     assert payload["subscriber_primary"]["insurance_card"]["payer_id"] == "PAYER1"
 
 
+def test_rendering_provider_address_omitted_when_no_zip_plus_four() -> None:
+    """Rendering provider address requires zip+4; omit the address when the
+    provider zip is only 5 digits, but keep the rest of the provider."""
+    claim = _full_claim_for_payload()
+    claim.provider.provider_zip = "62701"
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert payload["rendering_provider"]["npi"] == "0987654321"
+    assert "address" not in payload["rendering_provider"]
+
+
+def test_rendering_provider_address_included_with_zip_plus_four() -> None:
+    """Rendering provider address is sent when a full zip+4 is available."""
+    claim = _full_claim_for_payload()
+    claim.provider.provider_zip = "62701-1234"
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    address = payload["rendering_provider"]["address"]
+    assert address["zip_code"] == "62701"
+    assert address["zip_plus_four_code"] == "1234"
+
+
+def test_billing_provider_uses_9998_when_no_zip_plus_four() -> None:
+    """Billing provider zip+4 is required and the address can't be dropped;
+    fall back to the CMS-accepted 9998 placeholder."""
+    claim = _full_claim_for_payload()
+    claim.provider.billing_provider_zip = "62701"
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert payload["billing_provider"]["address"]["zip_plus_four_code"] == "9998"
+
+
+def test_service_facility_uses_9998_when_no_zip_plus_four() -> None:
+    """Service facility zip+4 is required; fall back to CMS placeholder 9998."""
+    claim = _full_claim_for_payload()
+    claim.provider.facility_zip = "62701"
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert payload["service_facility"]["address"]["zip_plus_four_code"] == "9998"
+
+
 def test_build_claim_payload_self_pay_when_no_coverage() -> None:
     """No coverages → responsible_party = SELF_PAY."""
     claim = _full_claim_for_payload()

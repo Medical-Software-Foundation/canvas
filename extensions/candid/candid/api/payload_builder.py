@@ -389,7 +389,10 @@ def _add_billing_provider(claim: Claim, payload: dict, errors: list[str]) -> Non
             "city": provider.billing_provider_city,
             "state": provider.billing_provider_state,
             "zip_code": zip_code,
-            "zip_plus_four_code": zip_plus_four,
+            # zip_plus_four_code is required for the billing provider address
+            # and the address can't be omitted; fall back to the CMS-accepted
+            # "9998" placeholder when the zip+4 is unavailable.
+            "zip_plus_four_code": zip_plus_four or "9998",
         },
     }
     if provider.billing_provider_addr2:
@@ -424,19 +427,19 @@ def _add_rendering_provider(claim: Claim, payload: dict, errors: list[str]) -> N
     if provider.provider_taxonomy:
         rendering["taxonomy_code"] = provider.provider_taxonomy
 
-    # Address is optional but must be complete if any part is provided
+    # Address is optional, but Candid requires zip_plus_four_code when an
+    # address is sent. Only include the address if every required part —
+    # including zip+4 — is present; otherwise omit it entirely.
     zip_code, zip_plus_four = _split_zip(provider.provider_zip)
-    address_required = {
+    address = {
         "address1": provider.provider_addr1,
         "city": provider.provider_city,
         "state": provider.provider_state,
         "zip_code": zip_code,
+        "zip_plus_four_code": zip_plus_four,
     }
-    if all(address_required.values()):
-        rendering["address"] = {
-            **address_required,
-            "zip_plus_four_code": zip_plus_four,
-        }
+    if all(address.values()):
+        rendering["address"] = address
         if provider.provider_addr2:
             rendering["address"]["address2"] = provider.provider_addr2
 
@@ -466,7 +469,9 @@ def _add_service_facility(claim: Claim, payload: dict, errors: list[str]) -> Non
                 "city": provider.facility_city,
                 "state": provider.facility_state,
                 "zip_code": zip_code,
-                "zip_plus_four_code": zip_plus_four,
+                # zip_plus_four_code is required for the service facility
+                # address; Candid/CMS accept "9998" when it is unavailable.
+                "zip_plus_four_code": zip_plus_four or "9998",
             },
         }
         if provider.facility_addr2:
