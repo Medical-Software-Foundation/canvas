@@ -139,3 +139,46 @@ def test_field_options_400_for_field_without_options():
     h.request.query_params = {"dataset": "appointments", "field": "status"}
     responses = h.field_options()
     assert responses[0].status_code == 400
+
+
+def test_list_dashboards_returns_summaries():
+    from unittest.mock import patch, MagicMock
+    h = _handler()
+    row = MagicMock(dbid=1, visibility="shared", owner_id=5,
+                    layout={"widgets": [{"report_id": 9}]})
+    row.name = "Ops"
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.dash_list_visible", return_value=[row]):
+        responses = h.list_dashboards()
+    assert responses[0].data["dashboards"][0]["widget_count"] == 1
+
+
+def test_create_dashboard_returns_id():
+    from unittest.mock import patch, MagicMock
+    body = {"name": "Ops", "visibility": "shared",
+            "layout": {"widgets": []}, "default_period": {}}
+    h = _handler(body)
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.dash_create", return_value=MagicMock(dbid=7)):
+        responses = h.create_dashboard()
+    assert responses[0].data["id"] == 7
+
+
+def test_get_dashboard_404_when_missing():
+    from unittest.mock import patch
+    h = _handler()
+    h.request.path_params = {"dashboard_id": "99"}
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.dash_get_visible", return_value=None):
+        responses = h.get_dashboard()
+    assert responses[0].status_code == 404
+
+
+def test_delete_dashboard_404_when_not_owner():
+    from unittest.mock import patch
+    h = _handler()
+    h.request.path_params = {"dashboard_id": "7"}
+    with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
+         patch("reporting.routes.reporting_api.dash_delete", return_value=False):
+        responses = h.delete_dashboard()
+    assert responses[0].status_code == 404

@@ -24,6 +24,15 @@ from reporting.services.reports import (
     serialize_summary,
     update as svc_update,
 )
+from reporting.services.dashboards import (
+    create as dash_create,
+    delete as dash_delete,
+    get_visible as dash_get_visible,
+    list_visible as dash_list_visible,
+    serialize_detail as dash_detail,
+    serialize_summary as dash_summary,
+    update as dash_update,
+)
 
 _API_BASE = "/plugin-io/api/reporting/app"
 
@@ -208,6 +217,59 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
         staff_dbid = _current_staff_dbid(self)
         report_id = int(self.request.path_params["report_id"])
         ok = svc_delete(report_id, staff_dbid)
+        if not ok:
+            return [JSONResponse({"error": "not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        return [JSONResponse({"ok": True})]
+
+    @api.get("/dashboards")
+    def list_dashboards(self) -> list[Response | Effect]:
+        staff_dbid = _current_staff_dbid(self)
+        rows = dash_list_visible(staff_dbid)
+        return [JSONResponse({"dashboards": [dash_summary(r) for r in rows]})]
+
+    @api.post("/dashboards")
+    def create_dashboard(self) -> list[Response | Effect]:
+        body = self.request.json() or {}
+        staff_dbid = _current_staff_dbid(self)
+        try:
+            row = dash_create(
+                staff_dbid=staff_dbid,
+                name=body["name"],
+                visibility=body.get("visibility", "private"),
+                layout=body.get("layout", {"widgets": []}),
+                default_period=body.get("default_period", {}),
+            )
+        except KeyError as exc:
+            return [JSONResponse({"error": f"missing field: {exc}"},
+                                 status_code=HTTPStatus.BAD_REQUEST)]
+        return [JSONResponse({"id": row.dbid}, status_code=HTTPStatus.CREATED)]
+
+    @api.get("/dashboards/<dashboard_id>")
+    def get_dashboard(self) -> list[Response | Effect]:
+        staff_dbid = _current_staff_dbid(self)
+        row = dash_get_visible(int(self.request.path_params["dashboard_id"]), staff_dbid)
+        if row is None:
+            return [JSONResponse({"error": "not found"}, status_code=HTTPStatus.NOT_FOUND)]
+        return [JSONResponse(dash_detail(row))]
+
+    @api.patch("/dashboards/<dashboard_id>")
+    def update_dashboard(self) -> list[Response | Effect]:
+        body = self.request.json() or {}
+        staff_dbid = _current_staff_dbid(self)
+        fields = {k: body[k] for k in ("name", "visibility", "layout", "default_period") if k in body}
+        ok = dash_update(
+            dashboard_id=int(self.request.path_params["dashboard_id"]),
+            staff_dbid=staff_dbid, expected_version=int(body.get("version", 0)), fields=fields,
+        )
+        if not ok:
+            return [JSONResponse({"error": "conflict or not owner"},
+                                 status_code=HTTPStatus.CONFLICT)]
+        return [JSONResponse({"ok": True})]
+
+    @api.delete("/dashboards/<dashboard_id>")
+    def delete_dashboard(self) -> list[Response | Effect]:
+        staff_dbid = _current_staff_dbid(self)
+        ok = dash_delete(int(self.request.path_params["dashboard_id"]), staff_dbid)
         if not ok:
             return [JSONResponse({"error": "not found"}, status_code=HTTPStatus.NOT_FOUND)]
         return [JSONResponse({"ok": True})]
