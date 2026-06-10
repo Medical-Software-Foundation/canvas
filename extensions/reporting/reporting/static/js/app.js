@@ -1280,8 +1280,11 @@ function showDashboardEditor(dashId) {
   });
 }
 
+var _dashEditorReports = [];  // saved reports available to add as widgets (editor scope)
+
 function renderDashboardEditor(dashboard, allReports) {
   var view = document.getElementById('view');
+  _dashEditorReports = allReports || [];
 
   var name = dashboard ? escapeHtml(dashboard.name || '') : '';
   var visibility = dashboard ? (dashboard.visibility || 'private') : 'private';
@@ -1406,14 +1409,6 @@ function renderDashboardEditor(dashboard, allReports) {
   }
 }
 
-// Store allReports on the window so widget rows can access them when added dynamically.
-// We serialize them into the DOM via a hidden element to keep it clean.
-function _getAllReportsFromDom() {
-  var el = document.getElementById('dash-all-reports-json');
-  if (!el) return [];
-  try { return JSON.parse(el.textContent); } catch (e) { return []; }
-}
-
 function buildWidgetRowHtml(allReports, widget, idx) {
   widget = widget || {};
   var selectedReportId = widget.report_id || (allReports[0] && allReports[0].id) || '';
@@ -1449,16 +1444,13 @@ function buildWidgetRowHtml(allReports, widget, idx) {
 }
 
 function addDashWidgetRow() {
-  // Gather the current reports from existing select options (first w-report select as reference)
-  var existing = document.querySelector('#dash-widgets [data-role="w-report"]');
-  if (!existing) return;
-  var allReports = Array.prototype.map.call(existing.options, function (o) {
-    return { id: Number(o.value), name: o.text };
-  });
+  // Use the editor-scoped report list so this works even with zero existing rows
+  // (a brand-new dashboard starts empty).
+  if (!_dashEditorReports.length) return;
   var container = document.getElementById('dash-widgets');
   var idx = container.querySelectorAll('.dash-widget-row').length;
   var div = document.createElement('div');
-  div.innerHTML = buildWidgetRowHtml(allReports, {}, idx);
+  div.innerHTML = buildWidgetRowHtml(_dashEditorReports, {}, idx);
   container.appendChild(div.firstChild);
   scheduleDashPreview();
 }
