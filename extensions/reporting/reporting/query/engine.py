@@ -78,10 +78,21 @@ def run_report(
             )
             entry["values"][period.label] = compute_value(measure, row)
 
+    # List highest-first by the most-recent period's value, so a breakdown reads as a
+    # ranked list ("Diabetes 30, Obesity 2, ..."). Cap very high-cardinality breakdowns.
+    rows = list(merged.values())
+    newest = periods[-1].label if periods else None
+    if newest is not None:
+        rows.sort(key=lambda r: (r["values"].get(newest) or 0), reverse=True)
+    max_rows = 200
+    truncated = len(rows) > max_rows
+    rows = rows[:max_rows]
+
     return {
         "dataset": dataset.label,
         "measure": measure.label,
         "group_by": dim.label if dim else None,
         "periods": [p.label for p in periods],
-        "rows": list(merged.values()),
+        "rows": rows,
+        "truncated": truncated,
     }

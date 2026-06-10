@@ -230,7 +230,10 @@ function renderBuilder(datasets, reportDetail) {
   // Build measure options
   var measureOptions = buildMeasureOptions(initialDataset, def.measure_key);
   // Build group-by options
-  var groupByOptions = buildGroupByOptions(initialDataset, def.group_by);
+  // Default a NEW report to grouping by the dataset's primary dimension (so it shows a
+  // breakdown immediately); respect an explicit choice (incl. None) when editing.
+  var initialGroupBy = def.group_by !== undefined ? def.group_by : firstDimensionKey(initialDataset);
+  var groupByOptions = buildGroupByOptions(initialDataset, initialGroupBy);
 
   // Filters html
   var filtersHtml = buildFiltersHtml(initialDataset, def.filters || []);
@@ -396,6 +399,11 @@ function buildMeasureOptions(dataset, selectedKey) {
   }).join('');
 }
 
+function firstDimensionKey(dataset) {
+  var dims = (dataset && dataset.dimensions) || [];
+  return dims.length ? dims[0].key : '';
+}
+
 function buildGroupByOptions(dataset, selectedKey) {
   var noneSelected = (!selectedKey || selectedKey === '') ? ' selected' : '';
   var opts = '<option value=""' + noneSelected + '>None</option>';
@@ -546,7 +554,7 @@ function onDatasetChange() {
   if (measureSel) measureSel.innerHTML = buildMeasureOptions(dataset, null);
 
   var groupBySel = document.getElementById('sel-groupby');
-  if (groupBySel) groupBySel.innerHTML = buildGroupByOptions(dataset, null);
+  if (groupBySel) groupBySel.innerHTML = buildGroupByOptions(dataset, firstDimensionKey(dataset));
 
   schedulePreview();
 }

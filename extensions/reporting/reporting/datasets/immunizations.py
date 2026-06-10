@@ -1,4 +1,4 @@
-"""Immunizations dataset. Counts immunizations by status / administering provider."""
+"""Immunizations dataset. Counts immunizations by VACCINE (coded name) over time."""
 
 from canvas_sdk.v1.data.immunization import Immunization
 
@@ -11,6 +11,11 @@ DATASET = Dataset(
     model=Immunization,
     date_field="date_ordered",
     fields={
+        "vaccine": Field(
+            key="vaccine", label="Vaccine", type="category",
+            orm_path="codings__display", filterable=True, operators=("is", "is_one_of"),
+            groupable=True, options_value_path="codings__display",
+        ),
         "status": Field(
             key="status", label="Status", type="category", orm_path="status",
             filterable=True, operators=("is", "is_one_of"), groupable=True,
@@ -24,6 +29,8 @@ DATASET = Dataset(
         ),
     },
     dimensions={
+        "vaccine": Dimension(key="vaccine", label="Vaccine",
+                             group_path="codings__display", display_paths=[]),
         "status": Dimension(key="status", label="Status", group_path="status", display_paths=[]),
         "provider": Dimension(
             key="provider", label="Administered by", group_path="given_by__id",
