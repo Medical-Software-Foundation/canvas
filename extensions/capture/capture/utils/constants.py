@@ -1,6 +1,6 @@
-"""Shared constants for the patient_document_capture plugin."""
+"""Shared constants for the capture plugin."""
 
-PLUGIN_NAME = "patient_document_capture"
+PLUGIN_NAME = "capture"
 
 # Secret keys (declared in CANVAS_MANIFEST.json)
 SECRET_FHIR_CLIENT_ID = "CANVAS_FHIR_CLIENT_ID"
@@ -48,6 +48,11 @@ DOCUMENT_TYPES = {
 # The browser assembles all captured/uploaded pages into a single PDF (via pdf-lib)
 # and posts that one file. The backend only ever receives a finished PDF.
 PDF_CONTENT_TYPE = "application/pdf"
+
+# Image types accepted for the clinical "Exam photo" / "Profile picture" branches
+# (single image, embedded inline as base64 on a Media / Patient.photo). HEIC is
+# converted to JPEG in the browser before upload, so only JPEG/PNG reach the server.
+IMAGE_CONTENT_TYPES = ("image/jpeg", "image/png")
 
 # Accepted page input types in the browser UI (used for the file picker / drop zone).
 # Camera captures are produced as JPEG by the modal. HEIC is intentionally excluded

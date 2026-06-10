@@ -7,7 +7,7 @@ from canvas_sdk.effects.launch_modal import LaunchModalEffect
 from canvas_sdk.handlers.application import Application
 from canvas_sdk.templates import render_to_string
 
-from patient_document_capture.utils.constants import PLUGIN_NAME
+from capture.utils.constants import PLUGIN_NAME
 
 # Cache bust: generated once at module load, changes on every deploy/restart so the
 # browser fetches the latest modal markup.
@@ -36,7 +36,7 @@ class PatientDocumentCaptureApp(Application):
         return LaunchModalEffect(
             content=html_content,
             target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
-            title="Add Document",
+            title="Capture",
         ).apply()
 
 
@@ -58,8 +58,8 @@ class PatientDocumentCaptureCompanionApp(PatientDocumentCaptureApp):
         """Launch the same modal in the companion via a served URL iframe."""
         patient_id = self.context.get("patient", {}).get("id", "")
         return LaunchModalEffect(
-            url=f"/plugin-io/api/{PLUGIN_NAME}/documents/ui?patient_id={patient_id}",
+            url=f"/plugin-io/api/{PLUGIN_NAME}/documents/ui?patient_id={patient_id}&v={_CACHE_BUST}",
             target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
-            title="Add Document",
+            title="Capture",
         ).apply()
 

@@ -15,16 +15,21 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data.encounter import Encounter
+from canvas_sdk.v1.data.note import CurrentNoteStateEvent, Note, NoteStates
 from canvas_sdk.v1.data.patient import Patient
 
 from logger import log
 
-from patient_document_capture.services.document_fhir import create_document_reference
-from patient_document_capture.utils.constants import (
+from capture.services.document_fhir import create_document_reference
+from capture.services.media_fhir import create_media
+from capture.services.patient_photo import update_patient_photo
+from capture.utils.constants import (
     CLINICAL_DATE_FORMAT,
     DOCUMENT_TYPES,
     IDEMPOTENCY_CACHE_PREFIX,
     IDEMPOTENCY_TTL_SECONDS,
+    IMAGE_CONTENT_TYPES,
     MAX_PDF_BYTES,
     MAX_TITLE_LENGTH,
     PDF_CONTENT_TYPE,
@@ -32,6 +37,24 @@ from patient_document_capture.utils.constants import (
     SECRET_FHIR_CLIENT_ID,
     SECRET_FHIR_CLIENT_SECRET,
 )
+
+# Note states a clinical image can be attached to: editable notes only (excludes
+# LOCKED / SIGNED). Matches CurrentNoteStateEvent.editable() and the simulator picker.
+EDITABLE_NOTE_STATES = [
+    NoteStates.NEW,
+    NoteStates.PUSHED,
+    NoteStates.CONVERTED,
+    NoteStates.UNLOCKED,
+    NoteStates.RESTORED,
+    NoteStates.UNDELETED,
+]
+
+# Image magic bytes — JPEG (FF D8 FF) / PNG (89 50 4E 47).
+_IMAGE_MAGIC = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n")
+
+
+def _is_supported_image(data: bytes) -> bool:
+    return any(data.startswith(sig) for sig in _IMAGE_MAGIC)
 
 # Cache bust for the served modal HTML; regenerated on each deploy/restart.
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
@@ -91,6 +114,179 @@ class DocumentAPI(StaffSessionAuthMixin, SimpleAPI):
                 headers={"Cache-Control": "no-store"},
             )
         ]
+
+    @api.get("/notes")
+    def list_notes(self) -> list[Response | Effect]:
+        """Eligible notes for the Exam-photo picker: the current author's editable
+        notes for this patient that have an encounter (a Media needs one)."""
+        patient_id = (self.request.query_params.get("patient_id") or "").strip()
+        if not patient_id:
+            return _error("patient_id is required.", HTTPStatus.BAD_REQUEST)
+        staff_id = self.request.headers.get("canvas-logged-in-user-id")
+        if not staff_id:
+            return _error("Could not determine the current user.", HTTPStatus.BAD_REQUEST)
+
+        open_ids = CurrentNoteStateEvent.objects.filter(
+            state__in=EDITABLE_NOTE_STATES
+        ).values_list("note_id", flat=True)
+        notes = (
+            Note.objects.filter(
+                dbid__in=open_ids, patient__id=patient_id, provider__id=staff_id
+            )
+            .exclude(encounter__isnull=True)
+            .select_related("note_type_version")
+            .order_by("-datetime_of_service")[:25]
+        )
+        result = [
+            {
+                "id": str(note.id),
+                "note_type": note.note_type_version.name if note.note_type_version else "Note",
+                "title": note.title or "",
+                "datetime_of_service": (
+                    note.datetime_of_service.isoformat() if note.datetime_of_service else ""
+                ),
+            }
+            for note in notes
+        ]
+        return [JSONResponse({"ok": True, "notes": result}, status_code=HTTPStatus.OK)]
+
+    @api.post("/insert-image")
+    def insert_image(self) -> list[Response | Effect]:
+        """Attach a single image to a note as a FHIR Media (Exam photo branch)."""
+        form = self.request.form_data()
+        note_id = _str_field(form, "note_id")
+        idempotency_key = _str_field(form, "idempotency_key").strip()
+        caption = " ".join(_str_field(form, "caption").split())[:MAX_TITLE_LENGTH] or "Clinical photo"
+
+        if not note_id:
+            return _error("note_id is required.", HTTPStatus.BAD_REQUEST)
+        if "image" not in form or not form["image"].is_file():
+            return _error("An image is required.", HTTPStatus.BAD_REQUEST)
+
+        part = form["image"]
+        content_type = (part.content_type or "").lower().split(";")[0].strip()
+        if content_type not in IMAGE_CONTENT_TYPES:
+            return _error("The image must be a JPG or PNG.", HTTPStatus.BAD_REQUEST)
+        image_bytes = part.content
+        if not image_bytes:
+            return _error("The image is empty.", HTTPStatus.BAD_REQUEST)
+        if not _is_supported_image(image_bytes):
+            return _error("The image must be a JPG or PNG.", HTTPStatus.BAD_REQUEST)
+        if len(image_bytes) > MAX_PDF_BYTES:
+            return _error("The image is too large.", HTTPStatus.BAD_REQUEST)
+
+        staff_id = self.request.headers.get("canvas-logged-in-user-id")
+        if not staff_id:
+            return _error("Could not determine the current user.", HTTPStatus.BAD_REQUEST)
+
+        # Re-enforce the picker's rules server-side (the client-side list isn't enough):
+        # the note must be the current user's own, in an editable state (NOT locked/signed),
+        # and have an encounter. Mirrors the GET /notes query for this single note.
+        open_ids = CurrentNoteStateEvent.objects.filter(
+            state__in=EDITABLE_NOTE_STATES
+        ).values_list("note_id", flat=True)
+        note = (
+            Note.objects.filter(id=note_id, dbid__in=open_ids, provider__id=staff_id)
+            .exclude(encounter__isnull=True)
+            .select_related("patient")
+            .first()
+        )
+        if note is None or note.patient is None:
+            return _error(
+                "That note can't accept an image — it must be one of your own open notes.",
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+
+        encounter = Encounter.objects.filter(note__id=note_id).first()
+        if encounter is None:
+            return _error(
+                "This note has no encounter; an image can't be attached.",
+                HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+
+        client_id = self.secrets.get(SECRET_FHIR_CLIENT_ID)
+        client_secret = self.secrets.get(SECRET_FHIR_CLIENT_SECRET)
+        if not client_id or not client_secret:
+            log.error("FHIR client credentials are not configured")
+            return _error("Image service is not configured.", HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        cache = None
+        cache_key = ""
+        if idempotency_key:
+            cache = get_cache()
+            cache_key = f"{IDEMPOTENCY_CACHE_PREFIX}{idempotency_key}"
+            existing = cache.get(cache_key)
+            if existing:
+                log.info(f"Idempotent replay: returning existing Media {existing}")
+                return [JSONResponse({"ok": True, "media_id": existing}, status_code=HTTPStatus.OK)]
+
+        try:
+            media_id = create_media(
+                client_id=client_id,
+                client_secret=client_secret,
+                patient_id=str(note.patient.id),
+                encounter_id=str(encounter.id),
+                image_bytes=image_bytes,
+                content_type=content_type,
+                title=caption,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface clean error, log truncated detail
+            log.error(f"Media create failed: {str(exc)[:500]}")
+            return _error("Could not add the image to the note.", HTTPStatus.BAD_GATEWAY)
+
+        if cache and cache_key:
+            cache.set(cache_key, media_id, timeout_seconds=IDEMPOTENCY_TTL_SECONDS)
+
+        log.info(f"Saved Media id={media_id} note={note_id} patient={note.patient.id}")
+        return [
+            JSONResponse({"ok": True, "media_id": media_id}, status_code=HTTPStatus.CREATED)
+        ]
+
+    @api.post("/set-photo")
+    def set_photo(self) -> list[Response | Effect]:
+        """Set the patient's profile picture (Patient.photo) from a single image."""
+        form = self.request.form_data()
+        patient_id = _str_field(form, "patient_id")
+        if not patient_id:
+            return _error("patient_id is required.", HTTPStatus.BAD_REQUEST)
+        if "image" not in form or not form["image"].is_file():
+            return _error("An image is required.", HTTPStatus.BAD_REQUEST)
+
+        part = form["image"]
+        content_type = (part.content_type or "").lower().split(";")[0].strip()
+        if content_type not in IMAGE_CONTENT_TYPES:
+            return _error("The image must be a JPG or PNG.", HTTPStatus.BAD_REQUEST)
+        image_bytes = part.content
+        if not image_bytes:
+            return _error("The image is empty.", HTTPStatus.BAD_REQUEST)
+        if not _is_supported_image(image_bytes):
+            return _error("The image must be a JPG or PNG.", HTTPStatus.BAD_REQUEST)
+        if len(image_bytes) > MAX_PDF_BYTES:
+            return _error("The image is too large.", HTTPStatus.BAD_REQUEST)
+
+        if not Patient.objects.filter(id=patient_id).exists():
+            return _error("Patient not found.", HTTPStatus.BAD_REQUEST)
+
+        client_id = self.secrets.get(SECRET_FHIR_CLIENT_ID)
+        client_secret = self.secrets.get(SECRET_FHIR_CLIENT_SECRET)
+        if not client_id or not client_secret:
+            log.error("FHIR client credentials are not configured")
+            return _error("Photo service is not configured.", HTTPStatus.INTERNAL_SERVER_ERROR)
+
+        try:
+            update_patient_photo(
+                client_id=client_id,
+                client_secret=client_secret,
+                patient_id=patient_id,
+                image_bytes=image_bytes,
+                content_type=content_type,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface clean error, log truncated detail
+            log.error(f"Patient photo update failed: {str(exc)[:500]}")
+            return _error("Could not update the profile picture.", HTTPStatus.BAD_GATEWAY)
+
+        log.info(f"Updated profile picture for patient={patient_id}")
+        return [JSONResponse({"ok": True}, status_code=HTTPStatus.OK)]
 
     @api.post("/submit")
     def submit_document(self) -> list[Response | Effect]:

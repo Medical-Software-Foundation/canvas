@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from canvas_sdk.clients.canvas_fhir import CanvasFhir
 from canvas_sdk.utils.http import Http
 
-from patient_document_capture.utils.constants import (
+from capture.utils.constants import (
     CATEGORY_SYSTEM,
     CLINICAL_DATE_EXTENSION,
     DOCUMENT_TYPES,

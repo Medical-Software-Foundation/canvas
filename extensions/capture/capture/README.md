@@ -1,15 +1,23 @@
-# Patient Document Capture
+# Capture
 
-Capture a photo of a document or upload a file directly from the patient chart and
-save it to the chart as a native Canvas `DocumentReference`. The patient is
-associated automatically from chart context.
+A **"Capture"** modal launched from the patient chart. The opening screen offers
+three things to add — all auto-associated with the current patient:
+
+1. **Document** — photograph (multi-page) or upload a file, saved as a `DocumentReference`.
+2. **Exam photo** — capture/upload a single image and insert it into one of the provider's
+   open notes as a FHIR `Media` (on the note's encounter).
+3. **Profile picture** — capture/upload a single image and set it as the patient's avatar
+   (`Patient.photo`).
 
 ## Features
 
 - Two entry points, **same workflow and UI**:
   - **App drawer** on the patient chart (`patient_specific` scope).
   - **Provider Companion**, as a tab on the patient's page (`provider_companion_patient_specific` scope).
-- **Camera capture** (multi-page, with crop/rotate) or **file upload**
+- **Exam photo** uses a **note picker** that lists only the current user's **editable** notes
+  for this patient (excludes locked/signed; requires an encounter), with real dates.
+- **Profile picture** uses a **square crop** and sets `Patient.photo` via read-modify-write.
+- **Camera capture** (multi-page for documents, single for photos, with crop/rotate) or **file upload**
   (PDF / JPG / PNG / HEIC), via a portrait modal with a 3:4 viewfinder tuned for
   documents on desktop and iPad. Uploaded images are normalized (EXIF orientation
   corrected, HEIC converted to JPEG) in the browser.
@@ -33,7 +41,7 @@ associated automatically from chart context.
    serves the same template — so both surfaces drive identical UI.
 2. The modal collects pages (camera frames as JPEG, or uploaded PDF/JPG/PNG), assembles
    them into one PDF with `pdf-lib`, and POSTs it as `multipart/form-data` to
-   `/plugin-io/api/patient_document_capture/documents/submit`.
+   `/plugin-io/api/capture/documents/submit`.
 3. `DocumentAPI` (`StaffSessionAuthMixin` + `SimpleAPI`) validates the request, then
    `document_fhir.create_document_reference` creates the `DocumentReference` via the
    Canvas FHIR client.
@@ -53,8 +61,13 @@ saved to the document's `description` (and `content.attachment.title`).
 - `applications/document_app.py` — `PatientDocumentCaptureApp` (patient-chart app-drawer entry,
   inline modal) and `PatientDocumentCaptureCompanionApp` (Provider Companion patient-tab entry,
   served-URL modal). The companion subclasses the former; both share one template and backend.
-- `api/document_api.py` — `DocumentAPI` SimpleAPI endpoint (`GET /documents/ui` serves the modal
-  for the companion; `POST /documents/submit` saves the document).
+- `api/document_api.py` — `DocumentAPI` SimpleAPI: `GET /documents/ui` (serves the modal for
+  the companion), `POST /documents/submit` (document → DocumentReference),
+  `GET /documents/notes` (eligible notes for the exam-photo picker),
+  `POST /documents/insert-image` (exam photo → Media), `POST /documents/set-photo`
+  (profile picture → Patient.photo).
+- `services/media_fhir.py` — builds + creates the `Media`; `services/patient_photo.py` —
+  read-modify-write of `Patient.photo`.
 - `services/document_fhir.py` — builds the payload and creates the `DocumentReference`.
 - `utils/constants.py` — document type → LOINC/category mapping, limits, secret keys.
 - `templates/upload_modal.html` — self-contained capture/upload modal UI.
@@ -66,12 +79,12 @@ the Admin UI and shown as `[set] (sensitive)` in `canvas config list`):
 
 | Variable | Purpose |
 |----------|---------|
-| `CANVAS_FHIR_CLIENT_ID` | OAuth client id for the Canvas FHIR API (write `DocumentReference`). |
+| `CANVAS_FHIR_CLIENT_ID` | OAuth client id for the Canvas FHIR API (write `DocumentReference`, `Media`, and `Patient.photo`). |
 | `CANVAS_FHIR_CLIENT_SECRET` | Corresponding OAuth client secret. |
 
-Create a Canvas API application with permission to write `DocumentReference` resources
-and set these values on the plugin's configuration page after install. Read at runtime via
-`self.secrets[...]`.
+Create a Canvas API application with permission to write `DocumentReference`, `Media`, and
+`Patient` resources, and set these values on the plugin's configuration page after install.
+Read at runtime via `self.secrets[...]`.
 
 ## Limits
 

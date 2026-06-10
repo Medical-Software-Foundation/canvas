@@ -88,6 +88,8 @@
   .crop-stage .cropper-point.point-sw { left:-9px; bottom:-9px; }
   .crop-stage .cropper-point.point-se { right:-9px; bottom:-9px; }
   .crop-stage .cropper-point.point-se:before { display:none; }
+  /* profile avatar: hint the circular crop result */
+  .crop-stage.avatar .cropper-view-box, .crop-stage.avatar .cropper-face { border-radius:50%; }
 
   /* two-button bottom bar */
   .dock2 { margin-top:18px; flex-shrink:0; display:flex; gap:12px; }
@@ -192,8 +194,74 @@
   .linkbtn { margin-top:10px; font-size:13px; font-weight:600; color:var(--slate-2); background:none; border:none; cursor:pointer; padding:9px 18px; border-radius:10px; transition:.15s; }
   .linkbtn:hover { background:#f4f5f8; color:var(--slate); }
 
+  /* header back (re-introduced for the choose/menu navigation) */
+  .hdr-back { display:flex; align-items:center; color:var(--slate); background:none; border:none; cursor:pointer; padding:4px; margin-left:-4px; }
+
+  /* choose / entry menu — responsive: stacked rows (narrow) → 3 tiles (wide) */
+  .choose-hdr { padding:16px 0; border-bottom:1px solid var(--stroke); flex-shrink:0; }
+  .choose-col { width:100%; max-width:780px; margin:0 auto; padding:0 20px; }
+  .choose-hdr-inner { display:flex; align-items:center; justify-content:space-between; }
+  .choose-title { font-size:18px; font-weight:700; letter-spacing:-.3px; }
+  .choose-body { flex:1; min-height:0; display:flex; }
+  .choose-list { display:flex; flex-direction:column; gap:14px; padding-top:18px; padding-bottom:24px; }
+  @keyframes chRise { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+  .choice { display:flex; align-items:center; gap:16px; width:100%; border:1.5px solid #dde3ec; border-radius:18px; background:#fff; padding:18px; cursor:pointer; text-align:left; box-shadow:0 1px 3px rgba(15,23,42,.05); transition:.18s cubic-bezier(.2,.7,.3,1); animation:chRise .42s cubic-bezier(.2,.7,.3,1) both; }
+  .choice:nth-child(1){ animation-delay:.04s; } .choice:nth-child(2){ animation-delay:.11s; } .choice:nth-child(3){ animation-delay:.18s; }
+  .choice .cic { display:flex; align-items:center; justify-content:center; flex-shrink:0; width:54px; height:54px; border-radius:15px; background:#eef1f6; color:var(--slate); transition:.18s; }
+  .choice .cic svg { width:30px; height:30px; }
+  .choice .cic.blue { background:#e7f0ff; color:#2f5fb3; }
+  .choice .cic.green { background:#e9f7f0; color:#0e9f6e; }
+  .choice .cic.violet { background:#f1ecfd; color:#7c5cd6; }
+  .choice .ctext { min-width:0; }
+  .choice .lab { font-size:17px; font-weight:700; line-height:1.1; display:block; }
+  .choice .desc { font-size:12.5px; color:var(--muted); margin-top:3px; display:block; }
+  .choice .cv { margin-left:auto; color:#cdd4df; flex-shrink:0; transition:.18s; }
+  .choice:active { transform:scale(.99); }
+  .choice:hover { box-shadow:0 8px 20px rgba(15,23,42,.10); }
+  .choice.blue:hover { border-color:#2f5fb3; background:#f4f8ff; }
+  .choice.green:hover { border-color:#0e9f6e; background:#f2fbf7; }
+  .choice.violet:hover { border-color:#7c5cd6; background:#f9f6ff; }
+  .choice:hover .cv { color:var(--slate); transform:translateX(2px); }
+  @media (prefers-reduced-motion: reduce) { .choice { animation:none; } }
+  /* WIDE: three tall tiles in a row, top-anchored, aligned to the header column */
+  @media (min-width:560px) {
+    .choose-hdr-inner { max-width:none; padding:0 24px; }   /* title + X to the modal corners */
+    .choose-body { align-items:center; }                     /* cards centered vertically */
+    .choose-list { flex-direction:row; gap:18px; padding-top:0; padding-bottom:0; }
+    .choice { flex:1; min-height:264px; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; border-radius:20px; padding:28px 20px; }
+    .choice .cic { width:72px; height:72px; border-radius:20px; }
+    .choice .cic svg { width:34px; height:34px; }
+    .choice .lab { font-size:19px; }
+    .choice .desc { font-size:13px; margin-top:4px; line-height:1.4; }
+    .choice .cv { display:none; }
+    .choice:active { transform:translateY(-2px) scale(.985); }
+    .choice:hover { transform:translateY(-4px); box-shadow:0 14px 30px rgba(15,23,42,.14); }
+    .choice:hover .cic { transform:scale(1.06); }
+  }
+
+  /* single-image capture (exam / profile): hide the multi-page pill, keep the shutter centered */
+  .dock.single { height:60px; }
+  .dock.single .pill { display:none; }
+
+  /* note picker (Exam photo) */
+  .note-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:4px 2px; }
+  .note-row { display:flex; align-items:center; gap:12px; border:1px solid #e8ebf0; border-radius:14px; padding:13px 14px; background:#fff; box-shadow:var(--elev-sm); cursor:pointer; text-align:left; width:100%; }
+  .note-row.sel { border:1.5px solid var(--slate); box-shadow:0 0 0 2px rgba(71,85,105,.15); }
+  .note-row .nic { width:38px; height:42px; border-radius:8px; background:#fff; border:1px solid #edf0f4; box-shadow:var(--elev-sm); display:flex; align-items:center; justify-content:center; color:#94a3b8; flex-shrink:0; }
+  .note-row .nm { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
+  .note-row .pname { font-size:14px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .note-row .psub { font-size:11.5px; color:var(--muted); }
+  .note-row .ck { margin-left:auto; color:var(--slate); flex-shrink:0; display:none; }
+  .note-row.sel .ck { display:block; }
+  .note-state { font-size:12.5px; color:var(--muted); text-align:center; padding:18px 0; }
+  .note-state.err { color:#e0526b; }
+  .note-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:var(--muted); gap:12px; padding:24px; }
+  .note-empty .eic { width:54px; height:54px; border-radius:15px; background:#f1f4f8; color:#aab2bf; display:flex; align-items:center; justify-content:center; }
+  .note-empty b { color:var(--slate-d); font-size:14px; }
+  .note-empty small { font-size:12px; line-height:1.5; }
+
   .hidden { display:none !important; }
-  .ico { display:block; } .i12{width:12px;height:12px}.i14{width:14px;height:14px}.i16{width:16px;height:16px}.i18{width:18px;height:18px}.i20{width:20px;height:20px}.i22{width:22px;height:22px}.i30{width:30px;height:30px}
+  .ico { display:block; } .i12{width:12px;height:12px}.i14{width:14px;height:14px}.i16{width:16px;height:16px}.i18{width:18px;height:18px}.i20{width:20px;height:20px}.i22{width:22px;height:22px}.i26{width:26px;height:26px}.i28{width:28px;height:28px}.i30{width:30px;height:30px}
 </style>
 {% if not show_close %}
 <!-- Provider Companion surface: hide our in-modal close (X); the companion provides
@@ -223,14 +291,47 @@
   <symbol id="i-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="2.5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-chev-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
 </svg>
 
 <div class="app">
 
+  <!-- CHOOSE (entry menu) -->
+  <div id="screenChoose" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+    <div class="choose-hdr">
+      <div class="choose-col choose-hdr-inner">
+        <span class="choose-title">Capture</span>
+        <button class="hdr-close" id="btnChooseClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button>
+      </div>
+    </div>
+    <div class="choose-body">
+      <div class="choose-col choose-list">
+        <button class="choice blue" id="chooseDoc">
+          <span class="cic blue"><svg class="ico"><use href="#i-doc"/></svg></span>
+          <span class="ctext"><span class="lab">Document</span><span class="desc">Scan or upload a file</span></span>
+          <span class="cv"><svg class="ico i18"><use href="#i-arrow"/></svg></span>
+        </button>
+        <button class="choice green" id="chooseExam">
+          <span class="cic green"><svg class="ico"><use href="#i-scan"/></svg></span>
+          <span class="ctext"><span class="lab">Exam photo</span><span class="desc">Add a photo to a note</span></span>
+          <span class="cv"><svg class="ico i18"><use href="#i-arrow"/></svg></span>
+        </button>
+        <button class="choice violet" id="chooseProfile">
+          <span class="cic violet"><svg class="ico"><use href="#i-user"/></svg></span>
+          <span class="ctext"><span class="lab">Profile picture</span><span class="desc">Update the patient's photo</span></span>
+          <span class="cv"><svg class="ico i18"><use href="#i-arrow"/></svg></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- CAPTURE -->
   <div id="screenCapture" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div class="hdr">
-      <span class="hdr-title">Add Document</span>
+      <button class="hdr-back hidden" id="btnCaptureBack" aria-label="Back"><svg class="ico i18"><use href="#i-chev-left"/></svg></button>
+      <span class="hdr-title" id="captureTitle">Add Document</span>
       <button class="hdr-close" id="btnClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button>
     </div>
     <div class="seg">
@@ -252,11 +353,11 @@
       </div>
       <div class="drop hidden" id="dropZone">
         <div class="du"><svg class="ico i22"><use href="#i-upload"/></svg></div>
-        <b>Drop a PDF or image</b>
-        <small>or browse files — PDF, JPG, PNG, HEIC</small>
+        <b id="dropTitle">Drop a PDF or image</b>
+        <small id="dropSub">or browse files — PDF, JPG, PNG, HEIC</small>
       </div>
       <input type="file" id="fileInput" accept="application/pdf,image/jpeg,image/png,image/heic,image/heif" multiple class="hidden">
-      <div class="dock">
+      <div class="dock" id="captureDock">
         <div class="pill">
           <button class="pill-left" id="pillLeft" type="button" aria-label="Review pages"></button>
           <button class="done idle" id="btnDone" disabled aria-label="Continue"><svg class="ico i16"><use href="#i-arrow"/></svg></button>
@@ -267,26 +368,52 @@
   </div>
 
   <!-- CROP / REVIEW (camera captures only) -->
-  <div id="screenCrop" class="hidden" style="flex-direction:column; flex:1; min-height:0;">
+  <div id="screenCrop" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div class="hdr">
       <span class="hdr-title">Review &amp; Crop</span>
       <button class="hdr-close" id="btnCropClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button>
     </div>
     <div class="body"><div class="colcap">
-      <div class="crop-stage">
+      <div class="crop-stage" id="cropStage">
         <img id="cropImage" alt="">
         <div class="crop-tool"><button class="tbtn" id="btnRotate" aria-label="Rotate"><svg class="ico i18"><use href="#i-rotate"/></svg></button></div>
       </div>
-      <div class="confirm-foot">
+      <div class="confirm-foot" id="cropFootMulti">
         <button class="btn-ghost" id="btnCropAddAnother"><svg class="ico i16"><use href="#i-plus"/></svg> Add another page</button>
         <button class="btn-primary" id="btnContinue">Continue <svg class="ico i16"><use href="#i-arrow"/></svg></button>
         <button class="retake-link" id="btnRetakeLink">Retake</button>
       </div>
+      <div class="confirm-foot hidden" id="cropFootSingle">
+        <button class="btn-primary" id="btnUsePhoto">Use photo</button>
+        <button class="retake-link" id="btnRetakeLink2">Retake</button>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- NOTE PICKER (Exam photo → choose the note to attach to) -->
+  <div id="screenNotePicker" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+    <div class="hdr">
+      <button class="hdr-back" id="btnNotesBack" aria-label="Back"><svg class="ico i18"><use href="#i-chev-left"/></svg></button>
+      <span class="hdr-title">Add to note</span>
+      <button class="hdr-close" id="btnNotesClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="body"><div class="colcap">
+      <div class="note-state" id="notesLoading">Loading your notes…</div>
+      <div class="note-list hidden" id="noteList"></div>
+      <div class="note-empty hidden" id="notesEmpty">
+        <span class="eic"><svg class="ico i30"><use href="#i-doc"/></svg></span>
+        <b>No open notes</b>
+        <small>You don’t have any open notes for this patient.</small>
+      </div>
+      <div class="note-state err hidden" id="notesError">
+        Couldn’t load notes. <button class="linkbtn" id="btnNotesRetry">Try again</button>
+      </div>
+      <button class="btn-primary" id="btnAddToNote" style="margin-top:14px" disabled>Add to note</button>
     </div></div>
   </div>
 
   <!-- CAPTURED PAGES (review / reorder / delete) -->
-  <div id="screenPages" class="hidden" style="flex-direction:column; flex:1; min-height:0;">
+  <div id="screenPages" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div class="hdr">
       <span class="hdr-title">Captured Pages</span>
       <button class="hdr-close" id="btnPagesClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button>
@@ -301,7 +428,7 @@
   </div>
 
   <!-- PREVIEW (photo or multi-page PDF) -->
-  <div id="screenPreview" class="hidden" style="flex-direction:column; flex:1; min-height:0;">
+  <div id="screenPreview" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div class="hdr">
       <span class="hdr-title" id="previewTitle">Preview</span>
       <button class="hdr-close" id="btnPreviewClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button>
@@ -325,7 +452,7 @@
   </div>
 
   <!-- DETAILS -->
-  <div id="screenDetails" class="hidden" style="flex-direction:column; flex:1; min-height:0;">
+  <div id="screenDetails" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
     <div class="hdr">
       <span class="hdr-title">Document Details</span>
       <button class="hdr-close" id="btnDetailsClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button>
@@ -362,7 +489,7 @@
 
   <!-- SAVING -->
   <div id="screenSaving" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
-    <div class="hdr"><span class="hdr-title">Add Document</span><span class="hdr-close" style="opacity:.3"><svg class="ico i18"><use href="#i-x"/></svg></span></div>
+    <div class="hdr"><span class="hdr-title">Capture</span><span class="hdr-close" style="opacity:.3"><svg class="ico i18"><use href="#i-x"/></svg></span></div>
     <div class="body"><div class="center"><div class="scolumn">
       <div class="ring-wrap">
         <div class="ring-track"></div>
@@ -378,11 +505,11 @@
 
   <!-- SUCCESS -->
   <div id="screenSuccess" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
-    <div class="hdr"><span class="hdr-title">Add Document</span></div>
+    <div class="hdr"><span class="hdr-title">Capture</span></div>
     <div class="body"><div class="center"><div class="scolumn">
       <div class="badge-ic ok"><svg class="ico i30"><use href="#i-check"/></svg></div>
-      <div class="stitle">Document saved</div>
-      <div class="ssub2">Added to the chart under Documents</div>
+      <div class="stitle" id="successTitle">Document saved</div>
+      <div class="ssub2" id="successSub">Added to the chart under Documents</div>
       <button class="btn-primary" id="btnSuccessDone" style="width:100%">Done</button>
       <button class="linkbtn" id="btnAddAnother">Add another document</button>
     </div></div></div>
@@ -390,7 +517,7 @@
 
   <!-- ERROR -->
   <div id="screenError" class="hidden" style="display:flex; flex-direction:column; flex:1; min-height:0;">
-    <div class="hdr"><span class="hdr-title">Add Document</span><button class="hdr-close" id="btnErrorClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button></div>
+    <div class="hdr"><span class="hdr-title">Capture</span><button class="hdr-close" id="btnErrorClose" aria-label="Close"><svg class="ico i18"><use href="#i-x"/></svg></button></div>
     <div class="body"><div class="center"><div class="scolumn">
       <div class="badge-ic err-ic"><svg class="ico i30"><use href="#i-x"/></svg></div>
       <div class="stitle" id="errorTitle">Couldn’t save</div>
@@ -410,6 +537,9 @@
 
   var PATIENT_ID = "{{ patient_id }}";
   var SUBMIT_URL = "{{ api_base }}/documents/submit";
+  var NOTES_URL = "{{ api_base }}/documents/notes";
+  var INSERT_IMAGE_URL = "{{ api_base }}/documents/insert-image";
+  var SET_PHOTO_URL = "{{ api_base }}/documents/set-photo";
   var MAX_PAGES = 20;
   var MAX_PDF_BYTES = 10 * 1024 * 1024;   // mirrors server MAX_PDF_BYTES
   var UPLOAD_TIMEOUT_MS = 90000;
@@ -438,7 +568,7 @@
       // Acknowledge the channel. NOTE: do NOT also send a RESIZE message here — on this
       // Canvas version a RESIZE invalidates the channel and CLOSE_MODAL stops working.
       // Responsive sizing is handled purely in CSS (.colcap max-height + fill layout).
-      messagePort.postMessage({ type: "READY", message: "patient_document_capture iframe ready" });
+      messagePort.postMessage({ type: "READY", message: "capture iframe ready" });
     }
   });
   function closeModal() {
@@ -458,8 +588,12 @@
   var pdfDoc = null, pdfPageNum = 1, pdfNumPages = 1;
   var idempotencyKey = null;   // one per document; reused across retries
   var saving = false;          // in-flight guard
+  var mode = null;             // "document" | "exam" | "profile" — set from the choose screen
+  var singleBlob = null;       // the single cropped image (exam / profile branches)
+  var selectedNoteId = null;   // chosen note id in the Exam-photo picker
 
   var screens = {
+    choose: $("screenChoose"), notepicker: $("screenNotePicker"),
     capture: $("screenCapture"), crop: $("screenCrop"), pages: $("screenPages"),
     preview: $("screenPreview"), details: $("screenDetails"), saving: $("screenSaving"),
     success: $("screenSuccess"), error: $("screenError")
@@ -502,17 +636,229 @@
   function openCrop(dataUrl) {
     var img = $("cropImage");
     if (cropper) { cropper.destroy(); cropper = null; }
+    var single = (mode === "exam" || mode === "profile");
+    $("cropFootMulti").classList.toggle("hidden", single);
+    $("cropFootSingle").classList.toggle("hidden", !single);
+    $("cropStage").classList.toggle("avatar", mode === "profile");
+    $("btnUsePhoto").textContent = (mode === "profile") ? "Set as profile picture" : "Use photo";
     show("crop");
     img.onload = function () {
       cropper = new Cropper(img, {
         viewMode: 1, dragMode: "none", autoCropArea: 0.9, background: false,
         guides: true, center: true, cropBoxMovable: true, cropBoxResizable: true,
         toggleDragModeOnDblclick: false, movable: false, zoomable: false,
-        scalable: false, rotatable: true, responsive: true, checkCrossOrigin: false
+        scalable: false, rotatable: true, responsive: true, checkCrossOrigin: false,
+        aspectRatio: (mode === "profile" ? 1 : NaN)   // square avatar for profile
       });
     };
     img.src = dataUrl;
   }
+
+  // Single-image confirm (exam / profile) — store the cropped blob and route by mode.
+  function useSinglePhoto() {
+    if (!cropper || inUsePhoto) return;
+    inUsePhoto = true;
+    var out = cropper.getCroppedCanvas({ maxWidth: 2400, maxHeight: 2400 });
+    if (!out) { inUsePhoto = false; return; }
+    out.toBlob(function (blob) {
+      singleBlob = blob;
+      destroyCropper(); inUsePhoto = false;
+      if (mode === "exam") { openNotePicker(); }
+      else if (mode === "profile") { setProfilePhoto(); }
+    }, "image/jpeg", 0.92);
+  }
+
+  // ---- single-image capture entry (exam / profile) ----
+  function enterSingleCapture(title) {
+    $("captureTitle").textContent = title;
+    $("captureDock").classList.add("single");
+    $("btnCaptureBack").classList.remove("hidden");
+    $("dropTitle").textContent = "Drop an image";
+    $("dropSub").textContent = "or browse — JPG, PNG, HEIC";
+    $("vfHint").textContent = "Frame the photo, then tap the shutter";
+    hideNotice();
+    activateCamera();
+    show("capture");
+  }
+  // Upload path for single-image mode: take the first image, normalize, go straight to crop.
+  function handleSingleFile(list) {
+    hideNotice();
+    var file = (list && list[0]) || null;
+    if (!file) return;
+    var toCrop = function (blob) { openCrop(URL.createObjectURL(blob)); };
+    if (isHeic(file)) {
+      if (!window.heic2any) { showNotice("Couldn’t read that HEIC image."); return; }
+      heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 })
+        .then(function (out) { return normalizeImage(Array.isArray(out) ? out[0] : out); })
+        .then(toCrop).catch(function () { showNotice("Couldn’t read that HEIC image."); });
+    } else if (isImageType(file.type)) {
+      normalizeImage(file).then(toCrop).catch(function () { showNotice("Couldn’t read that image."); });
+    } else {
+      showNotice("Use a JPG, PNG, or HEIC image.");
+    }
+  }
+
+  // ---- note picker (exam) ----
+  function fmtNoteDate(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var h = d.getHours(), m = d.getMinutes(), ap = h >= 12 ? "PM" : "AM", h12 = h % 12 || 12;
+    return months[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear() +
+      " · " + h12 + ":" + (m < 10 ? "0" : "") + m + " " + ap;
+  }
+  function openNotePicker() {
+    selectedNoteId = null;
+    $("btnAddToNote").disabled = true;
+    $("noteList").classList.add("hidden");
+    $("notesEmpty").classList.add("hidden");
+    $("notesError").classList.add("hidden");
+    $("notesLoading").classList.remove("hidden");
+    show("notepicker");
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", NOTES_URL + "?patient_id=" + encodeURIComponent(PATIENT_ID), true);
+    xhr.withCredentials = true;
+    xhr.onerror = showNotesError;
+    xhr.onload = function () {
+      if (xhr.status === 401 || xhr.status === 403) { showSessionExpired(); return; }
+      var data = {};
+      try { data = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok) { renderNotes(data.notes || []); }
+      else { showNotesError(); }
+    };
+    xhr.send();
+  }
+  function showNotesError() {
+    $("notesLoading").classList.add("hidden");
+    $("noteList").classList.add("hidden");
+    $("notesEmpty").classList.add("hidden");
+    $("notesError").classList.remove("hidden");
+  }
+  function renderNotes(notes) {
+    $("notesLoading").classList.add("hidden");
+    $("notesError").classList.add("hidden");
+    if (!notes.length) {
+      $("noteList").classList.add("hidden");
+      $("notesEmpty").classList.remove("hidden");
+      return;
+    }
+    $("notesEmpty").classList.add("hidden");
+    var list = $("noteList");
+    list.innerHTML = "";
+    notes.forEach(function (n) {
+      var row = document.createElement("button");
+      row.className = "note-row"; row.type = "button";
+      row.innerHTML =
+        '<span class="nic"><svg class="ico i16"><use href="#i-doc"/></svg></span>' +
+        '<span class="nm"><span class="pname"></span><span class="psub"></span></span>' +
+        '<span class="ck"><svg class="ico i16"><use href="#i-check"/></svg></span>';
+      row.querySelector(".pname").textContent = n.note_type || n.title || "Note";
+      row.querySelector(".psub").textContent = fmtNoteDate(n.datetime_of_service);
+      row.addEventListener("click", function () {
+        selectedNoteId = n.id;
+        Array.prototype.forEach.call(list.children, function (c) { c.classList.remove("sel"); });
+        row.classList.add("sel");
+        $("btnAddToNote").disabled = false;
+      });
+      list.appendChild(row);
+    });
+    list.classList.remove("hidden");
+  }
+
+  // ---- insert exam image (Media) ----
+  function insertExamImage() {
+    if (!selectedNoteId || !singleBlob || saving) return;
+    if (singleBlob.size > MAX_PDF_BYTES) { showTooLargeServer(); return; }
+    saving = true;
+    if (!idempotencyKey) { idempotencyKey = uuid(); }
+    $("savingSub").textContent = "Adding the photo to the note";
+    $("saveProgress").classList.add("hidden");
+    $("savePct").classList.add("hidden");
+    $("savePct").textContent = ""; $("saveBar").style.width = "0%";
+    show("saving");
+    var fd = new FormData();
+    fd.append("note_id", selectedNoteId);
+    fd.append("image", singleBlob, "image.jpg");
+    fd.append("idempotency_key", idempotencyKey);
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", INSERT_IMAGE_URL, true);
+    xhr.withCredentials = true; xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable) {
+        var pct = Math.round((e.loaded / e.total) * 100);
+        $("saveProgress").classList.remove("hidden"); $("savePct").classList.remove("hidden");
+        $("saveBar").style.width = pct + "%"; $("savePct").textContent = pct + "%";
+        $("savingSub").textContent = "Uploading the photo";
+      }
+    };
+    xhr.upload.onload = function () {
+      $("savingSub").textContent = "Finishing up…";
+      $("saveProgress").classList.add("hidden"); $("savePct").classList.add("hidden");
+    };
+    xhr.ontimeout = function () { saving = false; showTimeout(); };
+    xhr.onerror = function () { saving = false; showError(null); };
+    xhr.onload = function () {
+      saving = false;
+      if (xhr.status === 401 || xhr.status === 403) { showSessionExpired(); return; }
+      var data = {};
+      try { data = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+        $("successTitle").textContent = "Photo added to note";
+        $("successSub").textContent = "The image is attached to the selected note";
+        $("btnAddAnother").textContent = "Add another";
+        $("btnAddAnother").classList.remove("hidden");
+        show("success");
+      } else if (xhr.status === 413) { showTooLargeServer(); }
+      else { showError(data.error); }
+    };
+    xhr.send(fd);
+  }
+  // ---- set profile picture (Patient.photo) ----
+  function setProfilePhoto() {
+    if (!singleBlob || saving) return;
+    if (singleBlob.size > MAX_PDF_BYTES) { showTooLargeServer(); return; }
+    saving = true;
+    $("savingSub").textContent = "Updating the profile picture";
+    $("saveProgress").classList.add("hidden"); $("savePct").classList.add("hidden");
+    $("savePct").textContent = ""; $("saveBar").style.width = "0%";
+    show("saving");
+    var fd = new FormData();
+    fd.append("patient_id", PATIENT_ID);
+    fd.append("image", singleBlob, "photo.jpg");
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", SET_PHOTO_URL, true);
+    xhr.withCredentials = true; xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable) {
+        var pct = Math.round((e.loaded / e.total) * 100);
+        $("saveProgress").classList.remove("hidden"); $("savePct").classList.remove("hidden");
+        $("saveBar").style.width = pct + "%"; $("savePct").textContent = pct + "%";
+        $("savingSub").textContent = "Uploading the photo";
+      }
+    };
+    xhr.upload.onload = function () {
+      $("savingSub").textContent = "Finishing up…";
+      $("saveProgress").classList.add("hidden"); $("savePct").classList.add("hidden");
+    };
+    xhr.ontimeout = function () { saving = false; showTimeout(); };
+    xhr.onerror = function () { saving = false; showError(null); };
+    xhr.onload = function () {
+      saving = false;
+      if (xhr.status === 401 || xhr.status === 403) { showSessionExpired(); return; }
+      var data = {};
+      try { data = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+        $("successTitle").textContent = "Profile picture updated";
+        $("successSub").textContent = "The patient’s photo has been changed";
+        $("btnAddAnother").classList.add("hidden");
+        show("success");
+      } else if (xhr.status === 413) { showTooLargeServer(); }
+      else { showError(data.error); }
+    };
+    xhr.send(fd);
+  }
+
   function destroyCropper() { if (cropper) { cropper.destroy(); cropper = null; } $("cropImage").removeAttribute("src"); }
 
   // Confirm the cropped page, then either loop back to capture ("add") or go to
@@ -842,7 +1188,13 @@
       if (xhr.status === 401 || xhr.status === 403) { showSessionExpired(); return; }
       var data = {};
       try { data = JSON.parse(xhr.responseText || "{}"); } catch (e) {}
-      if (xhr.status >= 200 && xhr.status < 300 && data.ok) { show("success"); }
+      if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+        $("successTitle").textContent = "Document saved";
+        $("successSub").textContent = "Added to the chart under Documents";
+        $("btnAddAnother").textContent = "Add another document";
+        $("btnAddAnother").classList.remove("hidden");
+        show("success");
+      }
       else if (xhr.status === 413) { showTooLargeServer(); }
       else { showError(data.error); }
     };
@@ -865,7 +1217,11 @@
     }
     show("error");
   }
-  function backToDetails() { show("details"); refreshSave(); }
+  function backToDetails() {
+    if (mode === "exam") { show("notepicker"); return; }   // exam: retry → note picker
+    if (mode === "profile") { enterSingleCapture("Profile picture"); return; }  // profile: retry → recapture
+    show("details"); refreshSave();
+  }
   function showError(msg) {
     showErrorScreen({
       title: "Couldn’t save",
@@ -903,7 +1259,7 @@
   function showSessionExpired() {
     showErrorScreen({
       title: "Your session expired",
-      message: "Refresh the patient chart and reopen Add Document to continue.",
+      message: "Refresh the patient chart and reopen Capture to continue.",
       primaryLabel: "Close", onPrimary: closeModal,
       secondaryLabel: null
     });
@@ -915,7 +1271,8 @@
     idempotencyKey = null; saving = false;
     $("titleInput").value = ""; $("dateInput").value = "";
     document.querySelectorAll(".pill-choice").forEach(function (b) { b.classList.remove("sel"); });
-    renderDock(); activateCamera(); show("capture");
+    singleBlob = null; selectedNoteId = null;
+    mode = null; stopCamera(); renderDock(); show("choose");
   }
 
   // ---- wire up ----
@@ -949,6 +1306,31 @@
   $("btnSave").addEventListener("click", saveDocument);
   $("btnSuccessDone").addEventListener("click", closeModal);
   $("btnAddAnother").addEventListener("click", resetAll);
+
+  // ---- entry menu (choose) ----
+  function goToChoose() { stopCamera(); show("choose"); }
+  $("btnChooseClose").addEventListener("click", closeModal);
+  $("chooseDoc").addEventListener("click", function () {
+    mode = "document";
+    $("captureDock").classList.remove("single");
+    $("btnCaptureBack").classList.remove("hidden");   // back-to-menu, matching the photo flows
+    $("captureTitle").textContent = "Add Document";
+    $("dropTitle").textContent = "Drop a PDF or image";
+    $("dropSub").textContent = "or browse files — PDF, JPG, PNG, HEIC";
+    $("vfHint").textContent = "Frame the document, then tap the shutter";
+    renderDock(); activateCamera(); show("capture");
+  });
+  $("chooseExam").addEventListener("click", function () { mode = "exam"; enterSingleCapture("Exam photo"); });
+  $("chooseProfile").addEventListener("click", function () { mode = "profile"; enterSingleCapture("Profile picture"); });
+
+  // ---- exam-photo wiring ----
+  $("btnCaptureBack").addEventListener("click", function () { destroyCropper(); goToChoose(); });
+  $("btnUsePhoto").addEventListener("click", useSinglePhoto);
+  $("btnRetakeLink2").addEventListener("click", function () { destroyCropper(); enterSingleCapture(mode === "profile" ? "Profile picture" : "Exam photo"); });
+  $("btnNotesClose").addEventListener("click", closeModal);
+  $("btnNotesBack").addEventListener("click", function () { enterSingleCapture("Exam photo"); });
+  $("btnNotesRetry").addEventListener("click", openNotePicker);
+  $("btnAddToNote").addEventListener("click", insertExamImage);
   // Error-screen buttons (#btnErrPrimary / #btnErrSecondary) are wired per-variant
   // in showErrorScreen().
 
@@ -1031,6 +1413,7 @@
   var skipped = [];
   var maxReached = false;
   function handleFiles(list) {
+    if (mode === "exam" || mode === "profile") { handleSingleFile(list); return; }
     hideNotice();
     skipped = [];
     maxReached = false;
@@ -1073,8 +1456,8 @@
     });
   }
 
-  // init
-  renderDock(); activateCamera(); show("capture");
+  // init — open on the entry menu; camera starts only when the Document branch is chosen
+  renderDock(); show("choose");
 })();
 </script>
 </body>

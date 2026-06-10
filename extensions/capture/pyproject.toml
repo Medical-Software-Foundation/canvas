@@ -5,9 +5,9 @@ authors = [
 dependencies = [
   "canvas[test-utils]"
 ]
-description = "Capture or upload a document from the patient chart and save it to the chart as a DocumentReference."
-name = "patient-document-capture"
-readme = "patient_document_capture/README.md"
+description = "Add to a patient's chart from the chart or Provider Companion: capture/upload a document, attach an exam photo to a note, or set the patient's profile picture."
+name = "capture"
+readme = "capture/README.md"
 requires-python = ">=3.11"
 version = "0.1.0"
 
@@ -15,7 +15,7 @@ version = "0.1.0"
 python_files = ["*_tests.py", "test_*.py", "tests.py"]
 
 [tool.coverage.run]
-source = ["patient_document_capture"]
+source = ["capture"]
 omit = ["tests/*", "*/tests/*"]
 
 [tool.coverage.report]

@@ -3,11 +3,11 @@
 import base64
 from unittest.mock import patch
 
-from patient_document_capture.services.document_fhir import (
+from capture.services.document_fhir import (
     build_document_reference_payload,
     create_document_reference,
 )
-from patient_document_capture.utils.constants import (
+from capture.utils.constants import (
     CLINICAL_DATE_EXTENSION,
     REQUIRES_SIGNATURE_EXTENSION,
     REVIEW_MODE_EXTENSION,
@@ -83,8 +83,8 @@ def test_payload_administrative_mapping() -> None:
 def _patched_client_and_http():
     """Patch CanvasFhir (auth/base_url) and Http (the POST). Returns (CanvasFhir, Http)."""
     return (
-        patch("patient_document_capture.services.document_fhir.CanvasFhir"),
-        patch("patient_document_capture.services.document_fhir.Http"),
+        patch("capture.services.document_fhir.CanvasFhir"),
+        patch("capture.services.document_fhir.Http"),
     )
 
 
