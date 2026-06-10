@@ -52,3 +52,10 @@ def test_get_unknown_dataset_raises():
 
     with pytest.raises(KeyError):
         get_dataset("nope")
+
+
+def test_provider_field_has_dynamic_options():
+    ds = get_dataset("appointments")
+    f = ds.fields["provider"]
+    assert f.options_value_path == "provider__id"
+    assert f.options_label_paths == ("provider__first_name", "provider__last_name")

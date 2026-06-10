@@ -42,6 +42,8 @@ DATASET = Dataset(
             filterable=True,
             operators=("is", "is_one_of"),
             groupable=True,
+            options_value_path="provider__id",
+            options_label_paths=("provider__first_name", "provider__last_name"),
         ),
         "location": Field(
             key="location",
@@ -51,6 +53,8 @@ DATASET = Dataset(
             filterable=True,
             operators=("is", "is_one_of"),
             groupable=True,
+            options_value_path="location__id",
+            options_label_paths=("location__full_name",),
         ),
     },
     dimensions={

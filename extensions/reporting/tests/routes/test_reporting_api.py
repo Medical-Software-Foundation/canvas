@@ -122,3 +122,20 @@ def test_delete_report_conflict_returns_404():
          patch("reporting.routes.reporting_api.svc_delete", return_value=False):
         responses = h.delete_report()
     assert responses[0].status_code == 404
+
+
+def test_field_options_returns_options():
+    from unittest.mock import patch
+    h = _handler()
+    h.request.query_params = {"dataset": "appointments", "field": "provider"}
+    with patch("reporting.routes.reporting_api._field_options",
+               return_value=[{"value": "p1", "label": "A Alvarez"}]):
+        responses = h.field_options()
+    assert responses[0].data["options"][0]["value"] == "p1"
+
+
+def test_field_options_400_for_field_without_options():
+    h = _handler()
+    h.request.query_params = {"dataset": "appointments", "field": "status"}
+    responses = h.field_options()
+    assert responses[0].status_code == 400

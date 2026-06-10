@@ -4,9 +4,10 @@
    ========================================================= */
 
 /* ===== Globals ===== */
-var _datasets = null;      // cached GET /datasets result
-var _editContext = null;   // { id, version } when editing a saved report
-var _previewTimer = null;  // debounce handle
+var _datasets = null;        // cached GET /datasets result
+var _editContext = null;     // { id, version } when editing a saved report
+var _previewTimer = null;    // debounce handle
+var _fieldOptionsCache = {}; // "<dataset>::<field>" -> [{value,label}] (live options)
 
 /* ===== Utilities ===== */
 
@@ -319,7 +320,8 @@ function renderBuilder(datasets, reportDetail) {
 
     '</div>';
 
-  // Run initial preview if editing
+  // Load live option lists for any reference-field filters (edit mode), then preview.
+  initFilterOptionSelects();
   if (reportDetail) {
     schedulePreview();
   }
@@ -363,11 +365,55 @@ function hasChoices(field) {
   return !!(field && field.choices && field.choices.length);
 }
 
-// Operator control: categorical fields are always "is any of" (multi-select);
+function hasOptions(field) {
+  return !!(field && field.has_options);
+}
+
+function isMultiSelectField(field) {
+  return hasChoices(field) || hasOptions(field);
+}
+
+// Fetch (and cache) the live (value,label) options for a reference field.
+function fetchFieldOptions(datasetKey, fieldKey) {
+  var key = datasetKey + '::' + fieldKey;
+  if (_fieldOptionsCache[key]) return Promise.resolve(_fieldOptionsCache[key]);
+  return api('/field-options?dataset=' + encodeURIComponent(datasetKey) +
+             '&field=' + encodeURIComponent(fieldKey)).then(function (res) {
+    var opts = (res.ok && res.body && res.body.options) ? res.body.options : [];
+    _fieldOptionsCache[key] = opts;
+    return opts;
+  });
+}
+
+// Populate a "Loading…" options multi-select with live data, preselecting data-selected.
+function fillOptionsSelect(selectEl) {
+  var ds = currentDataset();
+  var fieldKey = selectEl.getAttribute('data-options-field');
+  if (!ds || !fieldKey) return;
+  var selected = [];
+  try { selected = JSON.parse(selectEl.getAttribute('data-selected') || '[]'); } catch (e) {}
+  fetchFieldOptions(ds.key, fieldKey).then(function (opts) {
+    if (!opts.length) {
+      selectEl.innerHTML = '<option disabled>No values found</option>';
+      return;
+    }
+    selectEl.innerHTML = opts.map(function (o) {
+      var sel = selected.indexOf(o.value) !== -1 ? ' selected' : '';
+      return '<option value="' + escapeHtml(o.value) + '"' + sel + '>' + escapeHtml(o.label) + '</option>';
+    }).join('');
+  });
+}
+
+function initFilterOptionSelects() {
+  var sels = document.querySelectorAll('#filter-rows [data-options-field]');
+  Array.prototype.forEach.call(sels, function (sel) { fillOptionsSelect(sel); });
+}
+
+// Operator control: dropdown fields (enum OR reference) are always "is any of";
 // other fields show their declared operators.
 function buildOpControl(field, existing) {
   existing = existing || {};
-  if (hasChoices(field)) {
+  if (isMultiSelectField(field)) {
     return '<span class="filter-op-fixed">is any of</span>' +
            '<input type="hidden" data-role="filter-op" value="is_one_of" />';
   }
@@ -378,7 +424,8 @@ function buildOpControl(field, existing) {
   return '<select class="form-control" data-role="filter-op" onchange="schedulePreview()">' + opOptions + '</select>';
 }
 
-// Value control: categorical fields get a multi-select of their choices; others a text box.
+// Value control: enum fields -> multi-select of choices; reference fields -> a
+// multi-select populated from live data; other fields -> a free-text box.
 function buildValueControl(field, existing) {
   existing = existing || {};
   var vals = existing.values || [];
@@ -389,28 +436,36 @@ function buildValueControl(field, existing) {
     }).join('');
     return '<select class="form-control filter-multi" data-role="filter-val" multiple size="5" onchange="schedulePreview()">' + opts + '</select>';
   }
+  if (hasOptions(field)) {
+    var selJson = escapeHtml(JSON.stringify(vals));
+    return '<select class="form-control filter-multi" data-role="filter-val" data-options-field="' +
+      escapeHtml(field.key) + '" data-selected="' + selJson +
+      '" multiple size="5" onchange="schedulePreview()"><option disabled>Loading…</option></select>';
+  }
   var valStr = vals.join(', ');
   return '<input class="form-control" data-role="filter-val" type="text" placeholder="value" value="' + escapeHtml(valStr) + '" onchange="schedulePreview()" />';
 }
 
 function buildFilterRowHtml(dataset, existing) {
   existing = existing || {};
-  var fieldOptions = (dataset.fields || []).map(function (f) {
-    var sel = f.key === existing.field ? ' selected' : '';
-    return '<option value="' + escapeHtml(f.key) + '"' + sel + '>' + escapeHtml(f.label) + '</option>';
-  }).join('');
+  var placeholderSel = existing.field ? '' : ' selected';
+  var fieldOptions = '<option value=""' + placeholderSel + '>Select a field…</option>' +
+    (dataset.fields || []).map(function (f) {
+      var sel = f.key === existing.field ? ' selected' : '';
+      return '<option value="' + escapeHtml(f.key) + '"' + sel + '>' + escapeHtml(f.label) + '</option>';
+    }).join('');
 
   var selectedField = existing.field ? fieldByKey(dataset, existing.field) : null;
+  var controlsInner = selectedField
+    ? (buildOpControl(selectedField, existing) + buildValueControl(selectedField, existing))
+    : '';
 
   return (
     '<div class="filter-row">' +
       '<select class="form-control" data-role="filter-field" onchange="onFilterFieldChange(this)">' +
         fieldOptions +
       '</select>' +
-      '<span class="filter-controls" data-role="filter-controls">' +
-        buildOpControl(selectedField, existing) +
-        buildValueControl(selectedField, existing) +
-      '</span>' +
+      '<span class="filter-controls" data-role="filter-controls">' + controlsInner + '</span>' +
       '<button class="btn-icon" onclick="removeFilterRow(this)" title="Remove filter">✕</button>' +
     '</div>'
   );
@@ -439,11 +494,15 @@ function onFilterFieldChange(selectEl) {
   if (!row) return;
   var dataset = currentDataset();
   var field = dataset ? fieldByKey(dataset, selectEl.value) : null;
-  // Rebuild operator + value controls to match the newly-selected field
-  // (text input vs. multi-select for categorical fields).
   var controls = row.querySelector('[data-role="filter-controls"]');
   if (controls) {
-    controls.innerHTML = buildOpControl(field, {}) + buildValueControl(field, {});
+    if (!field) {
+      controls.innerHTML = '';  // "Select a field…" placeholder -> no value control yet
+    } else {
+      controls.innerHTML = buildOpControl(field, {}) + buildValueControl(field, {});
+      var optSel = controls.querySelector('[data-options-field]');
+      if (optSel) fillOptionsSelect(optSel);  // reference field -> load live options
+    }
   }
   schedulePreview();
 }
@@ -465,11 +524,9 @@ function addFilterRow() {
   var rows = document.getElementById('filter-rows');
   var div = document.createElement('div');
   div.innerHTML = buildFilterRowHtml(dataset, null);
-  var row = div.firstChild;
-  rows.appendChild(row);
-  // Sync the op + value controls to the (defaulted) first field selection.
-  var fieldSel = row.querySelector('[data-role="filter-field"]');
-  if (fieldSel) onFilterFieldChange(fieldSel);
+  // New rows open with the "Select a field…" placeholder and no value control;
+  // controls appear once the user picks a field (onFilterFieldChange).
+  rows.appendChild(div.firstChild);
 }
 
 function removeFilterRow(btn) {
@@ -515,9 +572,10 @@ function collectDefinition() {
   var filterRows = document.querySelectorAll('#filter-rows .filter-row');
   filterRows.forEach(function (row) {
     var fieldEl = row.querySelector('[data-role="filter-field"]');
+    if (!fieldEl || !fieldEl.value) return;  // no field chosen yet
     var opEl = row.querySelector('[data-role="filter-op"]');
     var valEl = row.querySelector('[data-role="filter-val"]');
-    if (!fieldEl || !opEl || !valEl) return;
+    if (!opEl || !valEl) return;
     var operator = opEl.value;
     var values;
     if (valEl.tagName === 'SELECT' && valEl.multiple) {

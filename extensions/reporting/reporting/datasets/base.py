@@ -21,9 +21,15 @@ class Field:
     filterable: bool = False
     operators: tuple[str, ...] = ()
     groupable: bool = False
-    # For category fields: the allowed (value, label) options the UI offers as a
-    # multi-select. Empty -> the UI falls back to a free-text value input.
+    # For category fields with a fixed enum: the allowed (value, label) options the
+    # UI offers as a multi-select.
     choices: tuple[tuple[str, str], ...] = ()
+    # For reference fields whose options are live instance data (e.g. providers,
+    # locations): the ORM paths used to fetch distinct (value, label) options from
+    # the dataset's model. When set, the UI shows a multi-select populated on demand.
+    # Empty choices AND empty options_value_path -> free-text input (e.g. numbers).
+    options_value_path: str | None = None
+    options_label_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

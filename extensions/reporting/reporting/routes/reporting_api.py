@@ -67,6 +67,27 @@ def _build_query(dataset_key: str, body: dict) -> ReportQuery:
     )
 
 
+def _field_options(dataset, field) -> list[dict]:
+    """Distinct (value, label) options for a reference field, from live instance data."""
+    value_path = field.options_value_path
+    label_paths = list(field.options_label_paths)
+    paths = [value_path] + [p for p in label_paths if p != value_path]
+    order = label_paths or [value_path]
+    rows = dataset.model.objects.values(*paths).distinct().order_by(*order)
+    seen = set()
+    out = []
+    for r in rows:
+        val = r.get(value_path)
+        if val is None or val in seen:
+            continue
+        seen.add(val)
+        label = " ".join(str(r.get(p, "")) for p in label_paths).strip() or str(val)
+        out.append({"value": str(val), "label": label})
+        if len(out) >= 1000:
+            break
+    return out
+
+
 def _current_staff_dbid(handler) -> int:
     uuid = handler.request.headers.get("canvas-logged-in-user-id", "")
     return Staff.objects.get(id=uuid).dbid
@@ -102,7 +123,8 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
                 "label": d.label,
                 "fields": [{"key": f.key, "label": f.label, "type": f.type,
                             "operators": list(f.operators),
-                            "choices": [{"value": v, "label": lbl} for v, lbl in f.choices]}
+                            "choices": [{"value": v, "label": lbl} for v, lbl in f.choices],
+                            "has_options": bool(f.options_value_path)}
                            for f in d.fields.values()],
                 "dimensions": [{"key": dim.key, "label": dim.label} for dim in d.dimensions.values()],
                 "measures": [{"key": m.key, "label": m.label} for m in d.measures.values()],
@@ -110,6 +132,19 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
             for d in list_datasets()
         ]
         return [JSONResponse({"datasets": payload})]
+
+    @api.get("/field-options")
+    def field_options(self) -> list[Response | Effect]:
+        params = self.request.query_params
+        try:
+            dataset = get_dataset(params.get("dataset", ""))
+        except KeyError:
+            return [JSONResponse({"error": "unknown dataset"}, status_code=HTTPStatus.BAD_REQUEST)]
+        field = dataset.fields.get(params.get("field", ""))
+        if field is None or not field.options_value_path:
+            return [JSONResponse({"error": "field has no options"},
+                                 status_code=HTTPStatus.BAD_REQUEST)]
+        return [JSONResponse({"options": _field_options(dataset, field)})]
 
     @api.post("/run")
     def run(self) -> list[Response | Effect]:
