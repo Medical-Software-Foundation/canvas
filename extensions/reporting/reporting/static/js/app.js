@@ -8,6 +8,10 @@ var _datasets = null;        // cached GET /datasets result
 var _editContext = null;     // { id, version } when editing a saved report
 var _previewTimer = null;    // debounce handle
 var _fieldOptionsCache = {}; // "<dataset>::<field>" -> [{value,label}] (live options)
+var _libraryTab = 'reports'; // 'reports' | 'dashboards'
+var _dashEditContext = null; // { id, version } when editing a saved dashboard
+var _reportDefCache = {};    // report_id -> report object (for dashboard tile lazy loads)
+var _dashPreviewTimer = null; // debounce handle for dashboard editor preview
 
 /* ===== Utilities ===== */
 
@@ -65,39 +69,67 @@ function formatDelta(delta) {
 
 function showLibrary() {
   _editContext = null;
-  setTopbarActions('<button class="btn btn-primary" onclick="showBuilder(null)">＋ New report</button>');
+  _dashEditContext = null;
   var view = document.getElementById('view');
-  view.innerHTML = '<p class="muted" style="padding:24px">Loading reports…</p>';
+  view.innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
 
-  api('/reports').then(function (res) {
-    if (!res.ok) {
-      view.innerHTML = '<p class="muted" style="padding:24px">Could not load reports.</p>';
-      return;
-    }
-    renderLibrary(res.body.reports || []);
-  });
+  // Render the tab chrome immediately, then load the active tab's content.
+  if (_libraryTab === 'reports') {
+    setTopbarActions('<button class="btn btn-primary" onclick="showBuilder(null)">＋ New report</button>');
+    api('/reports').then(function (res) {
+      if (!res.ok) {
+        renderLibraryShell('<p class="muted" style="padding:24px">Could not load reports.</p>');
+        return;
+      }
+      renderLibraryShell(renderReportsTab(res.body.reports || []));
+    });
+  } else {
+    setTopbarActions('<button class="btn btn-primary" onclick="showDashboardEditor(null)">＋ New dashboard</button>');
+    api('/dashboards').then(function (res) {
+      if (!res.ok) {
+        renderLibraryShell('<p class="muted" style="padding:24px">Could not load dashboards.</p>');
+        return;
+      }
+      renderLibraryShell(renderDashboardsTab(res.body.dashboards || []));
+    });
+  }
 }
 
-function renderLibrary(reports) {
+function setLibraryTab(tab) {
+  _libraryTab = tab;
+  showLibrary();
+}
+
+function renderLibraryShell(contentHtml) {
   var view = document.getElementById('view');
+  var reportsActive = _libraryTab === 'reports' ? ' active' : '';
+  var dashActive = _libraryTab === 'dashboards' ? ' active' : '';
+  view.innerHTML =
+    '<div class="lib-tabs">' +
+      '<button class="lib-tab' + reportsActive + '" onclick="setLibraryTab(\'reports\')">Reports</button>' +
+      '<button class="lib-tab' + dashActive + '" onclick="setLibraryTab(\'dashboards\')">Dashboards</button>' +
+    '</div>' +
+    contentHtml;
+}
+
+function renderReportsTab(reports) {
   if (reports.length === 0) {
-    view.innerHTML =
+    return (
       '<div class="empty-state">' +
         '<div class="empty-icon">📊</div>' +
         '<h3>No reports yet</h3>' +
         '<p>Create your first report to start exploring your data.</p>' +
         '<button class="btn btn-primary" onclick="showBuilder(null)">＋ New report</button>' +
-      '</div>';
-    return;
+      '</div>'
+    );
   }
-
   var cards = reports.map(function (r) {
     var tagCls = categoryTagClass(r.category);
     var catLabel = r.category ? escapeHtml(r.category) : 'Uncategorized';
     var visCls = r.visibility === 'shared' ? 'shared' : '';
     var visLabel = r.visibility === 'shared' ? 'Shared' : 'Private';
     return (
-      '<div class="report-card" onclick="showViewer(' + escapeHtml(String(r.id)) + ')">' +
+      '<div class="report-card" onclick="showViewer(' + r.id + ')">' +
         '<div class="report-card-name">' + escapeHtml(r.name) + '</div>' +
         '<div class="report-card-meta">' +
           '<span class="tag ' + tagCls + '">' + catLabel + '</span>' +
@@ -106,13 +138,43 @@ function renderLibrary(reports) {
       '</div>'
     );
   }).join('');
-
-  view.innerHTML =
-    '<div class="library-header">' +
-      '<h2>Reports</h2>' +
-    '</div>' +
-    '<div class="report-grid">' + cards + '</div>';
+  return (
+    '<div class="library-header"><h2>Reports</h2></div>' +
+    '<div class="report-grid">' + cards + '</div>'
+  );
 }
+
+function renderDashboardsTab(dashboards) {
+  if (dashboards.length === 0) {
+    return (
+      '<div class="empty-state">' +
+        '<div class="empty-icon">🗂️</div>' +
+        '<h3>No dashboards yet</h3>' +
+        '<p>Compose saved reports into a grid to monitor multiple metrics at a glance.</p>' +
+        '<button class="btn btn-primary" onclick="showDashboardEditor(null)">＋ New dashboard</button>' +
+      '</div>'
+    );
+  }
+  var cards = dashboards.map(function (d) {
+    var visCls = d.visibility === 'shared' ? 'shared' : '';
+    var visLabel = d.visibility === 'shared' ? 'Shared' : 'Private';
+    var widgetCount = d.widget_count !== undefined ? d.widget_count : 0;
+    return (
+      '<div class="report-card" onclick="showDashboardViewer(' + d.id + ')">' +
+        '<div class="report-card-name">' + escapeHtml(d.name) + '</div>' +
+        '<div class="report-card-meta">' +
+          '<span class="dash-widget-count">' + widgetCount + ' widget' + (widgetCount === 1 ? '' : 's') + '</span>' +
+          '<span class="vis-badge ' + visCls + '"><span class="dot"></span>' + visLabel + '</span>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+  return (
+    '<div class="library-header"><h2>Dashboards</h2></div>' +
+    '<div class="report-grid">' + cards + '</div>'
+  );
+}
+
 
 /* ===== Builder ===== */
 
@@ -1009,6 +1071,545 @@ function renderKpi(result) {
   }).join('');
 
   return '<div class="kpi-tiles">' + tiles + '</div>';
+}
+
+/* ===== Dashboard Viewer ===== */
+
+function showDashboardViewer(id) {
+  _libraryTab = 'dashboards';
+  setTopbarActions(
+    '<button class="btn btn-ghost btn-sm" onclick="setLibraryTab(\'dashboards\')">← Back to Library</button>'
+  );
+  var view = document.getElementById('view');
+  view.innerHTML = '<p class="muted" style="padding:24px">Loading dashboard…</p>';
+
+  api('/dashboards/' + id).then(function (res) {
+    if (!res.ok) {
+      view.innerHTML = '<p class="muted" style="padding:24px">Dashboard not found.</p>';
+      return;
+    }
+    renderDashboardViewer(res.body, res.body.default_period || {});
+  });
+}
+
+function defaultVizForPeriod(period) {
+  return (period && period.count && period.count > 1) ? 'trend' : 'table';
+}
+
+function renderDashboardViewer(dashboard, overridePeriod) {
+  var view = document.getElementById('view');
+  var visCls = dashboard.visibility === 'shared' ? 'shared' : '';
+  var visLabel = dashboard.visibility === 'shared' ? 'Shared' : 'Private';
+  var period = overridePeriod || dashboard.default_period || {};
+
+  var granularity = period.granularity || 'month';
+  var count = period.count !== undefined ? period.count : 3;
+  var rolling12 = period.include_rolling_12 ? true : false;
+
+  var granOptions = ['month', 'week', 'quarter'].map(function (g) {
+    var sel = g === granularity ? ' selected' : '';
+    var label = g.charAt(0).toUpperCase() + g.slice(1);
+    return '<option value="' + g + '"' + sel + '>' + label + '</option>';
+  }).join('');
+
+  var widgets = (dashboard.layout && dashboard.layout.widgets) ? dashboard.layout.widgets : [];
+
+  var tilesHtml = widgets.map(function (w, idx) {
+    return (
+      '<div class="dash-tile" style="grid-column:span ' + (w.span || 2) + '"' +
+        ' data-report-id="' + Number(w.report_id) + '"' +
+        ' data-viz="' + escapeHtml(w.viz || '') + '"' +
+        ' data-tile-idx="' + idx + '">' +
+        '<div class="dash-tile-header" id="dash-tile-name-' + idx + '">Loading…</div>' +
+        '<div class="dash-tile-body" id="dash-tile-body-' + idx + '"><p class="preview-empty">Loading…</p></div>' +
+      '</div>'
+    );
+  }).join('');
+
+  view.innerHTML =
+    '<div class="viewer-header">' +
+      '<div class="viewer-title">' +
+        '<h2>' + escapeHtml(dashboard.name) + '</h2>' +
+        '<span class="vis-badge ' + visCls + '"><span class="dot"></span>' + visLabel + '</span>' +
+      '</div>' +
+      '<div class="dash-period-controls" id="dash-period-controls">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Granularity</label>' +
+          '<select class="form-control" id="dash-gran" onchange="onDashPeriodChange(' + dashboard.id + ')">' + granOptions + '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Periods</label>' +
+          '<input class="form-control" id="dash-count" type="number" min="1" max="24" value="' + count + '" onchange="onDashPeriodChange(' + dashboard.id + ')" />' +
+        '</div>' +
+      '</div>' +
+      '<div class="viewer-actions">' +
+        '<button class="btn btn-secondary" onclick="showDashboardEditor(' + dashboard.id + ')">Edit</button>' +
+        '<button class="btn btn-danger" onclick="deleteDashboard(' + dashboard.id + ')">Delete</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="dash-grid" id="dash-grid">' + tilesHtml + '</div>';
+
+  // Store period on viewer for re-rendering
+  view.setAttribute('data-dash-id', dashboard.id);
+  view.setAttribute('data-dash-period', JSON.stringify(period));
+
+  // Attach IntersectionObserver for lazy tile loading
+  var tiles = view.querySelectorAll('.dash-tile');
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var tile = entry.target;
+        observer.unobserve(tile);
+        loadDashTile(tile, period);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  tiles.forEach(function (tile) { observer.observe(tile); });
+}
+
+function onDashPeriodChange(dashId) {
+  var gran = document.getElementById('dash-gran');
+  var countInp = document.getElementById('dash-count');
+  if (!gran || !countInp) return;
+  var newPeriod = {
+    granularity: gran.value,
+    count: Math.max(1, parseInt(countInp.value, 10) || 3),
+    include_rolling_12: false,
+  };
+  // Re-render with overridden period (no persistence).
+  api('/dashboards/' + dashId).then(function (res) {
+    if (res.ok) {
+      renderDashboardViewer(res.body, newPeriod);
+    }
+  });
+}
+
+function loadDashTile(tile, inheritedPeriod) {
+  var reportId = Number(tile.getAttribute('data-report-id'));
+  var vizAttr = tile.getAttribute('data-viz') || '';
+  var idx = tile.getAttribute('data-tile-idx');
+  var nameEl = document.getElementById('dash-tile-name-' + idx);
+  var bodyEl = document.getElementById('dash-tile-body-' + idx);
+
+  function getReport() {
+    if (_reportDefCache[reportId]) return Promise.resolve(_reportDefCache[reportId]);
+    return api('/reports/' + reportId).then(function (res) {
+      if (res.ok && res.body && res.body.id) {
+        _reportDefCache[reportId] = res.body;
+        return res.body;
+      }
+      return null;
+    });
+  }
+
+  getReport().then(function (report) {
+    if (!report) {
+      if (nameEl) nameEl.textContent = '(deleted report)';
+      if (bodyEl) bodyEl.innerHTML = '<p class="preview-empty">Report unavailable.</p>';
+      return;
+    }
+    if (nameEl) nameEl.textContent = report.name || 'Report';
+
+    var def = Object.assign({}, report.definition || {});
+    // Apply inherited period from dashboard if it's a non-empty object
+    if (inheritedPeriod && Object.keys(inheritedPeriod).length > 0) {
+      def.period = inheritedPeriod;
+    }
+
+    var vizType = vizAttr || defaultVizForPeriod(def.period);
+
+    if (bodyEl) bodyEl.innerHTML = '<p class="preview-empty"><span class="spinner"></span></p>';
+
+    api('/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(def),
+    }).then(function (runRes) {
+      if (!bodyEl) return;
+      if (runRes.ok) {
+        bodyEl.innerHTML = renderVisualization(vizType, runRes.body);
+      } else {
+        var errMsg = (runRes.body && runRes.body.error) || 'Run failed';
+        bodyEl.innerHTML = '<p class="preview-error">' + escapeHtml(errMsg) + '</p>';
+      }
+    }).catch(function (err) {
+      if (bodyEl) bodyEl.innerHTML = '<p class="preview-error">' + escapeHtml(err.message) + '</p>';
+    });
+  });
+}
+
+function deleteDashboard(dashId) {
+  if (!confirm('Delete this dashboard? This cannot be undone.')) return;
+  api('/dashboards/' + dashId, { method: 'DELETE' }).then(function (res) {
+    if (res.ok) {
+      setLibraryTab('dashboards');
+    } else {
+      alert('Could not delete dashboard.');
+    }
+  });
+}
+
+/* ===== Dashboard Editor ===== */
+
+function showDashboardEditor(dashId) {
+  _libraryTab = 'dashboards';
+  setTopbarActions(
+    '<button class="btn btn-ghost btn-sm" onclick="setLibraryTab(\'dashboards\')">← Back to Library</button>'
+  );
+  var view = document.getElementById('view');
+  view.innerHTML = '<p class="muted" style="padding:24px">Loading editor…</p>';
+
+  var reportsPromise = api('/reports').then(function (res) {
+    return res.ok ? (res.body.reports || []) : [];
+  });
+
+  var dashPromise = dashId
+    ? api('/dashboards/' + dashId).then(function (res) { return res.ok ? res.body : null; })
+    : Promise.resolve(null);
+
+  Promise.all([reportsPromise, dashPromise]).then(function (results) {
+    var allReports = results[0];
+    var dashboard = results[1];
+    if (dashboard) {
+      _dashEditContext = { id: dashboard.id, version: dashboard.version || 0 };
+    } else {
+      _dashEditContext = null;
+    }
+    renderDashboardEditor(dashboard, allReports);
+  });
+}
+
+function renderDashboardEditor(dashboard, allReports) {
+  var view = document.getElementById('view');
+
+  var name = dashboard ? escapeHtml(dashboard.name || '') : '';
+  var visibility = dashboard ? (dashboard.visibility || 'private') : 'private';
+  var defPeriod = (dashboard && dashboard.default_period) ? dashboard.default_period : {};
+  var granularity = defPeriod.granularity || 'month';
+  var count = defPeriod.count !== undefined ? defPeriod.count : 3;
+  var rolling12 = defPeriod.include_rolling_12 ? ' checked' : '';
+  var rolling12Disabled = granularity !== 'month' ? ' disabled' : '';
+
+  var visOpts = ['private', 'shared'].map(function (v) {
+    var sel = v === visibility ? ' selected' : '';
+    return '<option value="' + v + '"' + sel + '>' + (v === 'shared' ? 'Shared' : 'Private') + '</option>';
+  }).join('');
+
+  var granOptions = ['month', 'week', 'quarter'].map(function (g) {
+    var sel = g === granularity ? ' selected' : '';
+    var label = g.charAt(0).toUpperCase() + g.slice(1);
+    return '<option value="' + g + '"' + sel + '>' + label + '</option>';
+  }).join('');
+
+  var existingWidgets = (dashboard && dashboard.layout && dashboard.layout.widgets)
+    ? dashboard.layout.widgets
+    : [];
+
+  if (allReports.length === 0) {
+    view.innerHTML =
+      '<div class="editor-layout">' +
+        '<div class="editor-form">' +
+          '<p class="muted">Create a report first before building a dashboard.</p>' +
+          '<button class="btn btn-ghost" onclick="setLibraryTab(\'reports\')">Go to Reports</button>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
+  var reportSelectOptions = allReports.map(function (r) {
+    return '<option value="' + r.id + '">' + escapeHtml(r.name) + '</option>';
+  }).join('');
+
+  var widgetsHtml = existingWidgets.map(function (w, idx) {
+    return buildWidgetRowHtml(allReports, w, idx);
+  }).join('');
+
+  view.innerHTML =
+    '<div class="editor-layout">' +
+
+      '<div class="editor-form">' +
+
+        '<div class="step-card">' +
+          '<div class="step-body open" style="padding:16px;display:flex;flex-direction:column;gap:12px;">' +
+            '<div class="form-group">' +
+              '<label class="form-label">Dashboard name</label>' +
+              '<input class="form-control" id="dash-name" type="text" placeholder="e.g. Operations Overview" value="' + name + '" />' +
+            '</div>' +
+            '<div class="form-group">' +
+              '<label class="form-label">Visibility</label>' +
+              '<select class="form-control" id="dash-visibility">' + visOpts + '</select>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="step-card">' +
+          '<div class="step-header open active" onclick="toggleStep(this)">' +
+            '<div class="step-num">P</div>' +
+            '<span class="step-title">Default period</span>' +
+            '<span class="step-chevron">▼</span>' +
+          '</div>' +
+          '<div class="step-body open">' +
+            '<div class="period-row">' +
+              '<div class="form-group">' +
+                '<label class="form-label">Granularity</label>' +
+                '<select class="form-control" id="dash-edit-gran" onchange="onDashEditorGranChange()">' + granOptions + '</select>' +
+              '</div>' +
+              '<div class="form-group">' +
+                '<label class="form-label">Periods</label>' +
+                '<input class="form-control" id="dash-edit-count" type="number" min="1" max="24" value="' + count + '" onchange="scheduleDashPreview()" />' +
+              '</div>' +
+            '</div>' +
+            '<label class="form-check">' +
+              '<input type="checkbox" id="dash-edit-rolling12"' + rolling12 + rolling12Disabled + ' onchange="scheduleDashPreview()" />' +
+              '<span>Rolling 12-month trend</span>' +
+            '</label>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="step-card">' +
+          '<div class="step-header open active" onclick="toggleStep(this)">' +
+            '<div class="step-num">W</div>' +
+            '<span class="step-title">Widgets</span>' +
+            '<span class="step-chevron">▼</span>' +
+          '</div>' +
+          '<div class="step-body open">' +
+            '<div id="dash-widgets">' + widgetsHtml + '</div>' +
+            '<button class="add-filter-btn" onclick="addDashWidgetRow()">＋ Add widget</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="save-bar">' +
+          '<div class="save-bar-actions">' +
+            '<button class="btn btn-ghost" onclick="setLibraryTab(\'dashboards\')">Cancel</button>' +
+            '<button class="btn btn-primary" onclick="saveDashboard()">Save dashboard</button>' +
+          '</div>' +
+        '</div>' +
+
+      '</div>' +
+
+      '<div class="preview-panel" id="dash-preview-panel">' +
+        '<div class="preview-panel-header">' +
+          '<h3>Preview</h3>' +
+          '<div class="preview-status" id="dash-preview-status"></div>' +
+        '</div>' +
+        '<div id="dash-preview-content">' +
+          '<p class="preview-empty">Add widgets and configure the period to see a preview.</p>' +
+        '</div>' +
+      '</div>' +
+
+    '</div>';
+
+  // Attach change listeners to existing widget rows and trigger a first preview if editing.
+  if (existingWidgets.length > 0) {
+    scheduleDashPreview();
+  }
+}
+
+// Store allReports on the window so widget rows can access them when added dynamically.
+// We serialize them into the DOM via a hidden element to keep it clean.
+function _getAllReportsFromDom() {
+  var el = document.getElementById('dash-all-reports-json');
+  if (!el) return [];
+  try { return JSON.parse(el.textContent); } catch (e) { return []; }
+}
+
+function buildWidgetRowHtml(allReports, widget, idx) {
+  widget = widget || {};
+  var selectedReportId = widget.report_id || (allReports[0] && allReports[0].id) || '';
+  var selectedSpan = widget.span || 2;
+  var selectedViz = widget.viz || '';
+
+  var reportOpts = allReports.map(function (r) {
+    var sel = r.id === selectedReportId ? ' selected' : '';
+    return '<option value="' + r.id + '"' + sel + '>' + escapeHtml(r.name) + '</option>';
+  }).join('');
+
+  var spanOpts = [1, 2, 3, 4].map(function (s) {
+    var sel = s === selectedSpan ? ' selected' : '';
+    return '<option value="' + s + '"' + sel + '>' + s + ' col' + (s === 1 ? '' : 's') + '</option>';
+  }).join('');
+
+  var vizLabels = { '': 'Auto', bar: 'Bar', compare_table: 'Compare', trend: 'Trend', kpi: 'KPI', table: 'Table' };
+  var vizOpts = Object.keys(vizLabels).map(function (v) {
+    var sel = v === selectedViz ? ' selected' : '';
+    return '<option value="' + v + '"' + sel + '>' + vizLabels[v] + '</option>';
+  }).join('');
+
+  return (
+    '<div class="dash-widget-row" data-widget-idx="' + idx + '">' +
+      '<select class="form-control" data-role="w-report" onchange="scheduleDashPreview()">' + reportOpts + '</select>' +
+      '<select class="form-control w-span-sel" data-role="w-span" onchange="scheduleDashPreview()">' + spanOpts + '</select>' +
+      '<select class="form-control" data-role="w-viz" onchange="scheduleDashPreview()">' + vizOpts + '</select>' +
+      '<button class="btn-icon" title="Move up" onclick="moveDashWidget(this,-1)">↑</button>' +
+      '<button class="btn-icon" title="Move down" onclick="moveDashWidget(this,1)">↓</button>' +
+      '<button class="btn-icon" title="Remove" onclick="removeDashWidget(this)">✕</button>' +
+    '</div>'
+  );
+}
+
+function addDashWidgetRow() {
+  // Gather the current reports from existing select options (first w-report select as reference)
+  var existing = document.querySelector('#dash-widgets [data-role="w-report"]');
+  if (!existing) return;
+  var allReports = Array.prototype.map.call(existing.options, function (o) {
+    return { id: Number(o.value), name: o.text };
+  });
+  var container = document.getElementById('dash-widgets');
+  var idx = container.querySelectorAll('.dash-widget-row').length;
+  var div = document.createElement('div');
+  div.innerHTML = buildWidgetRowHtml(allReports, {}, idx);
+  container.appendChild(div.firstChild);
+  scheduleDashPreview();
+}
+
+function removeDashWidget(btn) {
+  var row = btn.closest('.dash-widget-row');
+  if (row) row.parentNode.removeChild(row);
+  scheduleDashPreview();
+}
+
+function moveDashWidget(btn, dir) {
+  var row = btn.closest('.dash-widget-row');
+  if (!row) return;
+  var container = row.parentNode;
+  var rows = Array.prototype.slice.call(container.querySelectorAll('.dash-widget-row'));
+  var idx = rows.indexOf(row);
+  var targetIdx = idx + dir;
+  if (targetIdx < 0 || targetIdx >= rows.length) return;
+  var target = rows[targetIdx];
+  if (dir === -1) {
+    container.insertBefore(row, target);
+  } else {
+    container.insertBefore(target, row);
+  }
+  scheduleDashPreview();
+}
+
+function onDashEditorGranChange() {
+  var gran = document.getElementById('dash-edit-gran');
+  var chk = document.getElementById('dash-edit-rolling12');
+  if (gran && chk) {
+    chk.disabled = gran.value !== 'month';
+    if (gran.value !== 'month') chk.checked = false;
+  }
+  scheduleDashPreview();
+}
+
+function scheduleDashPreview() {
+  clearTimeout(_dashPreviewTimer);
+  _dashPreviewTimer = setTimeout(runDashPreview, 400);
+}
+
+function collectDashboard() {
+  var nameInp = document.getElementById('dash-name');
+  var visInp = document.getElementById('dash-visibility');
+  var granInp = document.getElementById('dash-edit-gran');
+  var countInp = document.getElementById('dash-edit-count');
+  var rolling12Chk = document.getElementById('dash-edit-rolling12');
+
+  var name = nameInp ? nameInp.value.trim() : '';
+  var visibility = visInp ? visInp.value : 'private';
+  var granularity = granInp ? granInp.value : 'month';
+  var count = countInp ? Math.max(1, parseInt(countInp.value, 10) || 3) : 3;
+  var rolling12 = rolling12Chk ? rolling12Chk.checked : false;
+
+  var widgetRows = document.querySelectorAll('#dash-widgets .dash-widget-row');
+  var widgets = [];
+  widgetRows.forEach(function (row) {
+    var reportSel = row.querySelector('[data-role="w-report"]');
+    var spanSel = row.querySelector('[data-role="w-span"]');
+    var vizSel = row.querySelector('[data-role="w-viz"]');
+    if (!reportSel) return;
+    widgets.push({
+      report_id: Number(reportSel.value),
+      span: Number(spanSel ? spanSel.value : 2),
+      viz: (vizSel && vizSel.value) ? vizSel.value : null,
+    });
+  });
+
+  return {
+    name: name,
+    visibility: visibility,
+    layout: { widgets: widgets },
+    default_period: {
+      granularity: granularity,
+      count: count,
+      include_rolling_12: rolling12,
+    },
+  };
+}
+
+function runDashPreview() {
+  var body = collectDashboard();
+  var previewEl = document.getElementById('dash-preview-content');
+  var statusEl = document.getElementById('dash-preview-status');
+  if (!previewEl) return;
+
+  var widgets = body.layout.widgets;
+  if (widgets.length === 0) {
+    previewEl.innerHTML = '<p class="preview-empty">Add widgets to see a preview.</p>';
+    return;
+  }
+
+  var period = body.default_period;
+
+  // Render a mini grid of tile placeholders then load each.
+  var tilesHtml = widgets.map(function (w, idx) {
+    return (
+      '<div class="dash-tile" style="grid-column:span ' + (w.span || 2) + '"' +
+        ' data-report-id="' + Number(w.report_id) + '"' +
+        ' data-viz="' + escapeHtml(w.viz || '') + '"' +
+        ' data-tile-idx="prev-' + idx + '">' +
+        '<div class="dash-tile-header" id="dash-tile-name-prev-' + idx + '">Loading…</div>' +
+        '<div class="dash-tile-body" id="dash-tile-body-prev-' + idx + '"><p class="preview-empty"><span class="spinner"></span></p></div>' +
+      '</div>'
+    );
+  }).join('');
+
+  previewEl.innerHTML = '<div class="dash-grid">' + tilesHtml + '</div>';
+
+  widgets.forEach(function (w, idx) {
+    var tile = previewEl.querySelector('[data-tile-idx="prev-' + idx + '"]');
+    if (tile) loadDashTile(tile, period);
+  });
+}
+
+function saveDashboard() {
+  var body = collectDashboard();
+  if (!body.name) {
+    var nameInp = document.getElementById('dash-name');
+    if (nameInp) nameInp.focus();
+    return;
+  }
+
+  var saveBtn = document.querySelector('.save-bar .btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+
+  var promise = _dashEditContext
+    ? api('/dashboards/' + _dashEditContext.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({}, body, { version: _dashEditContext.version })),
+      })
+    : api('/dashboards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+  promise.then(function (res) {
+    if (res.ok) {
+      setLibraryTab('dashboards');
+    } else {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save dashboard'; }
+      var msg = (res.body && res.body.error) || ('Save failed (HTTP ' + res.status + ')');
+      alert(msg);
+    }
+  }).catch(function (err) {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save dashboard'; }
+    alert('Save failed: ' + err.message);
+  });
 }
 
 /* ===== Top Bar Actions Helper ===== */

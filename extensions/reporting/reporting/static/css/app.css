@@ -465,3 +465,123 @@ select.filter-multi {
   min-height: 96px; padding: 4px;
 }
 select.filter-multi option { padding: 3px 6px; }
+
+/* ===== Library Tab Switch ===== */
+.lib-tabs {
+  display: inline-flex;
+  background: var(--base03);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+  margin-bottom: 20px;
+}
+.lib-tab {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 6px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.lib-tab.active {
+  background: var(--primary);
+  color: var(--base01);
+}
+.lib-tab:hover:not(.active) {
+  color: var(--text);
+  background: rgba(255,255,255,.05);
+}
+
+/* ===== Dashboard Grid ===== */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .dash-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .dash-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== Dashboard Tile ===== */
+.dash-tile {
+  background: var(--base02);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  overflow: hidden;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dash-tile-header {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-tile-body {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ===== Dashboard Period Controls ===== */
+.dash-period-controls {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.dash-period-controls .form-group {
+  min-width: 100px;
+}
+
+/* ===== Dashboard Widget Row (editor) ===== */
+.dash-widget-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: nowrap;
+}
+.dash-widget-row .form-control {
+  min-width: 0;
+  flex: 1;
+}
+.dash-widget-row .w-span-sel {
+  flex: 0 0 90px;
+}
+
+/* ===== Dashboard card meta ===== */
+.dash-widget-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ===== Dashboard editor layout ===== */
+.editor-layout {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .editor-layout { grid-template-columns: 1fr; }
+}
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
