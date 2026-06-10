@@ -4,12 +4,15 @@ from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+from canvas_sdk.v1.data import Claim
+
 from candid.api.payload_builder import (
     MAX_DIAGNOSES_PER_ENCOUNTER,
     MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE,
     OVERFLOW_CHARGE_CENTS,
     OVERFLOW_CPT_CODE,
     _add_service_lines,
+    _add_supervising_provider,
     _clamp_service_line_pointers,
     _format_diagnosis_chunk,
     _make_overflow_service_line,
@@ -508,3 +511,102 @@ def test_build_split_payloads_returns_single_payload_for_few_diagnoses() -> None
     payload, errors = splits[0]
     assert errors == []
     assert len(payload["diagnoses"]) == 5
+
+
+# ---------------------------------------------------------------------------
+# _add_supervising_provider
+# ---------------------------------------------------------------------------
+
+
+def _supervising(
+    npi: str = "9998887776",
+    first_name: str = "Maria",
+    last_name: str = "House",
+    taxonomy: str = "207Q00000X",
+) -> MagicMock:
+    s = MagicMock()
+    s.npi = npi
+    s.first_name = first_name
+    s.last_name = last_name
+    s.taxonomy = taxonomy
+    return s
+
+
+def test_supervising_included_when_not_incident_to() -> None:
+    """A non-incident-to claim with a snapshot yields the Candid supervising block."""
+    claim = MagicMock()
+    claim.incident_to = False
+    claim.supervising_provider = _supervising()
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_supervising_provider(claim, payload, errors)
+
+    assert errors == []
+    assert payload["supervising_provider"] == {
+        "npi": "9998887776",
+        "first_name": "Maria",
+        "last_name": "House",
+        "taxonomy_code": "207Q00000X",
+    }
+
+
+def test_supervising_omitted_when_incident_to() -> None:
+    """Incident-to claims omit supervising — it rides the rendering provider."""
+    claim = MagicMock()
+    claim.incident_to = True
+    claim.supervising_provider = _supervising()
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_supervising_provider(claim, payload, errors)
+
+    assert "supervising_provider" not in payload
+    assert errors == []
+
+
+def test_supervising_omitted_without_snapshot() -> None:
+    """No snapshot → no supervising block and no error."""
+
+    class _NoSupervisingClaim:
+        incident_to = False
+
+        @property
+        def supervising_provider(self) -> object:
+            raise Claim.supervising_provider.RelatedObjectDoesNotExist
+
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_supervising_provider(_NoSupervisingClaim(), payload, errors)
+
+    assert "supervising_provider" not in payload
+    assert errors == []
+
+
+def test_supervising_errors_when_npi_missing() -> None:
+    """A supervising snapshot without an NPI surfaces an error and is omitted."""
+    claim = MagicMock()
+    claim.incident_to = False
+    claim.supervising_provider = _supervising(npi="0")
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_supervising_provider(claim, payload, errors)
+
+    assert "supervising_provider" not in payload
+    assert errors == ["Supervising provider: NPI is required, but was missing"]
+
+
+def test_build_claim_payload_includes_supervising_leaves_billing_and_rendering() -> None:
+    """End-to-end: supervising is included while billing and rendering are unchanged."""
+    claim = _full_claim_for_payload()
+    claim.incident_to = False
+    claim.supervising_provider = _supervising()
+
+    payload, errors = build_claim_payload(claim)
+
+    assert errors == []
+    assert payload["supervising_provider"]["npi"] == "9998887776"
+    assert payload["billing_provider"]["npi"] == "1234567890"
+    assert payload["rendering_provider"]["npi"] == "0987654321"
