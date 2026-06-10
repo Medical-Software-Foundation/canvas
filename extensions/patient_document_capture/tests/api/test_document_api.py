@@ -71,6 +71,36 @@ def _body(response):
     return json.loads(response[0].content)
 
 
+# ---- companion UI endpoint (GET /documents/ui) ----
+
+def test_companion_ui_serves_modal_html_with_patient(doc_api) -> None:
+    doc_api.request.query_params = {"patient_id": "patient-789"}
+    with patch(
+        "patient_document_capture.api.document_api.render_to_string"
+    ) as mock_render:
+        mock_render.return_value = "<html>modal</html>"
+        resp = doc_api.companion_ui()
+        assert resp[0].status_code == HTTPStatus.OK
+        template, context = mock_render.call_args[0]
+        assert template == "templates/upload_modal.html"
+        assert context["patient_id"] == "patient-789"
+        assert context["api_base"] == "/plugin-io/api/patient_document_capture"
+        assert "cache_bust" in context
+        assert context["show_close"] is False  # companion hides our X (has own chrome)
+
+
+def test_companion_ui_without_patient_id(doc_api) -> None:
+    doc_api.request.query_params = {}
+    with patch(
+        "patient_document_capture.api.document_api.render_to_string"
+    ) as mock_render:
+        mock_render.return_value = "<html></html>"
+        resp = doc_api.companion_ui()
+        assert resp[0].status_code == HTTPStatus.OK
+        _, context = mock_render.call_args[0]
+        assert context["patient_id"] == ""
+
+
 # ---- validation (no DB needed) ----
 
 def test_missing_patient_id(doc_api) -> None:

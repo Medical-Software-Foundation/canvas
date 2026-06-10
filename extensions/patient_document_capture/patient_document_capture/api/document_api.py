@@ -6,14 +6,15 @@ creates the DocumentReference via the Canvas FHIR client — no server-side PDF
 libraries are required (they are not available in the plugin sandbox).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import Any
 
 from canvas_sdk.caching.plugins import get_cache
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.simple_api import JSONResponse, Response
+from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.patient import Patient
 
 from logger import log
@@ -27,9 +28,13 @@ from patient_document_capture.utils.constants import (
     MAX_PDF_BYTES,
     MAX_TITLE_LENGTH,
     PDF_CONTENT_TYPE,
+    PLUGIN_NAME,
     SECRET_FHIR_CLIENT_ID,
     SECRET_FHIR_CLIENT_SECRET,
 )
+
+# Cache bust for the served modal HTML; regenerated on each deploy/restart.
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
 
 def _error(message: str, status: HTTPStatus) -> list:
@@ -56,6 +61,36 @@ class DocumentAPI(StaffSessionAuthMixin, SimpleAPI):
     """Receives a combined PDF + metadata and creates a DocumentReference."""
 
     PREFIX = "/documents"
+
+    @api.get("/ui")
+    def companion_ui(self) -> list[Response | Effect]:
+        """Serve the capture/upload modal HTML for URL-iframe surfaces.
+
+        The in-chart app drawer renders the modal via inline ``content=`` (see
+        ``document_app.PatientDocumentCaptureApp``). The Provider Companion modal
+        instead renders a URL iframe, so its Application points here; this returns
+        the same ``upload_modal.html`` with the patient pre-associated from the
+        ``patient_id`` query param.
+        """
+        patient_id = (self.request.query_params.get("patient_id") or "").strip()
+        html = render_to_string(
+            "templates/upload_modal.html",
+            {
+                "patient_id": patient_id,
+                "api_base": f"/plugin-io/api/{PLUGIN_NAME}",
+                "cache_bust": _CACHE_BUST,
+                # The Provider Companion supplies its own close/back chrome, so
+                # hide our in-modal X on this surface.
+                "show_close": False,
+            },
+        )
+        return [
+            HTMLResponse(
+                html,
+                status_code=HTTPStatus.OK,
+                headers={"Cache-Control": "no-store"},
+            )
+        ]
 
     @api.post("/submit")
     def submit_document(self) -> list[Response | Effect]:

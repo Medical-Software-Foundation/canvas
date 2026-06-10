@@ -28,6 +28,8 @@ class PatientDocumentCaptureApp(Application):
                 "patient_id": patient_id,
                 "api_base": api_base,
                 "cache_bust": _CACHE_BUST,
+                # The chart modal is dismissed via our own close (X).
+                "show_close": True,
             },
         )
 
@@ -36,3 +38,28 @@ class PatientDocumentCaptureApp(Application):
             target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
             title="Add Document",
         ).apply()
+
+
+class PatientDocumentCaptureCompanionApp(PatientDocumentCaptureApp):
+    """Provider Companion entry point for the same capture/upload workflow.
+
+    Registered in the manifest with the ``provider_companion_patient_specific``
+    scope so it appears as a tab on the patient's page in the Provider Companion.
+    It drives the exact same UI (``upload_modal.html``) and backend (``DocumentAPI``)
+    as the in-chart app, pre-associated with the current patient.
+
+    The one implementation difference: the Provider Companion modal renders a **URL
+    iframe**, not inline HTML, so this entry point points at the plugin's own
+    ``GET /documents/ui`` endpoint (which renders the same template server-side)
+    instead of passing ``content=``. The in-chart app drawer is unchanged.
+    """
+
+    def on_open(self) -> Effect:
+        """Launch the same modal in the companion via a served URL iframe."""
+        patient_id = self.context.get("patient", {}).get("id", "")
+        return LaunchModalEffect(
+            url=f"/plugin-io/api/{PLUGIN_NAME}/documents/ui?patient_id={patient_id}",
+            target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
+            title="Add Document",
+        ).apply()
+

@@ -195,6 +195,11 @@
   .hidden { display:none !important; }
   .ico { display:block; } .i12{width:12px;height:12px}.i14{width:14px;height:14px}.i16{width:16px;height:16px}.i18{width:18px;height:18px}.i20{width:20px;height:20px}.i22{width:22px;height:22px}.i30{width:30px;height:30px}
 </style>
+{% if not show_close %}
+<!-- Provider Companion surface: hide our in-modal close (X); the companion provides
+     its own back/close chrome. The chart app-drawer modal keeps the X. -->
+<style>.hdr-close { display:none !important; }</style>
+{% endif %}
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js?v={{ cache_bust }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js?v={{ cache_bust }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js?v={{ cache_bust }}"></script>

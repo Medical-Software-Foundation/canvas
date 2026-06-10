@@ -6,7 +6,9 @@ associated automatically from chart context.
 
 ## Features
 
-- Launches from the **app drawer** on the patient chart (`patient_specific` scope).
+- Two entry points, **same workflow and UI**:
+  - **App drawer** on the patient chart (`patient_specific` scope).
+  - **Provider Companion**, as a tab on the patient's page (`provider_companion_patient_specific` scope).
 - **Camera capture** (multi-page, with crop/rotate) or **file upload**
   (PDF / JPG / PNG / HEIC), via a portrait modal with a 3:4 viewfinder tuned for
   documents on desktop and iPad. Uploaded images are normalized (EXIF orientation
@@ -24,8 +26,11 @@ associated automatically from chart context.
 
 ## How it works
 
-1. The `PatientDocumentCaptureApp` Application renders the capture modal, injecting the
-   current `patient_id`.
+1. The current `patient_id` comes from the Application's chart context. In the **chart app
+   drawer**, `PatientDocumentCaptureApp` renders `upload_modal.html` inline and launches it as a
+   modal (`content=`). In the **Provider Companion** (which renders a URL iframe, not inline
+   HTML), `PatientDocumentCaptureCompanionApp` launches `GET /documents/ui?patient_id=…`, which
+   serves the same template — so both surfaces drive identical UI.
 2. The modal collects pages (camera frames as JPEG, or uploaded PDF/JPG/PNG), assembles
    them into one PDF with `pdf-lib`, and POSTs it as `multipart/form-data` to
    `/plugin-io/api/patient_document_capture/documents/submit`.
@@ -45,21 +50,28 @@ saved to the document's `description` (and `content.attachment.title`).
 
 ## Components
 
-- `applications/document_app.py` — `PatientDocumentCaptureApp` (app drawer entry).
-- `api/document_api.py` — `DocumentAPI` SimpleAPI endpoint (`POST /documents/submit`).
+- `applications/document_app.py` — `PatientDocumentCaptureApp` (patient-chart app-drawer entry,
+  inline modal) and `PatientDocumentCaptureCompanionApp` (Provider Companion patient-tab entry,
+  served-URL modal). The companion subclasses the former; both share one template and backend.
+- `api/document_api.py` — `DocumentAPI` SimpleAPI endpoint (`GET /documents/ui` serves the modal
+  for the companion; `POST /documents/submit` saves the document).
 - `services/document_fhir.py` — builds the payload and creates the `DocumentReference`.
 - `utils/constants.py` — document type → LOINC/category mapping, limits, secret keys.
 - `templates/upload_modal.html` — self-contained capture/upload modal UI.
 
 ## Secrets
 
-| Secret | Purpose |
-|--------|---------|
+Declared in `CANVAS_MANIFEST.json` as **sensitive variables** (write-only — masked in
+the Admin UI and shown as `[set] (sensitive)` in `canvas config list`):
+
+| Variable | Purpose |
+|----------|---------|
 | `CANVAS_FHIR_CLIENT_ID` | OAuth client id for the Canvas FHIR API (write `DocumentReference`). |
 | `CANVAS_FHIR_CLIENT_SECRET` | Corresponding OAuth client secret. |
 
 Create a Canvas API application with permission to write `DocumentReference` resources
-and set these as plugin secrets.
+and set these values on the plugin's configuration page after install. Read at runtime via
+`self.secrets[...]`.
 
 ## Limits
 
