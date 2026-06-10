@@ -86,7 +86,7 @@ def test_create_report_returns_id():
             "definition": {"dataset_key": "appointments", "measure_key": "no_show_rate"}}
     h = _handler(body)
     with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
-         patch("reporting.routes.reporting_api.report_service.create") as mock_create:
+         patch("reporting.routes.reporting_api.svc_create") as mock_create:
         mock_create.return_value = MagicMock(dbid=42)
         responses = h.create_report()
     assert responses[0].data["id"] == 42
@@ -98,7 +98,7 @@ def test_list_reports_returns_summaries():
     row = MagicMock(dbid=1, category="Operations", visibility="shared", owner_id=5)
     row.name = "X"
     with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
-         patch("reporting.routes.reporting_api.report_service.list_visible", return_value=[row]):
+         patch("reporting.routes.reporting_api.svc_list_visible", return_value=[row]):
         responses = h.list_reports()
     assert responses[0].data["reports"][0]["id"] == 1
     assert "definition" not in responses[0].data["reports"][0]
@@ -109,7 +109,7 @@ def test_get_report_404_when_missing():
     h = _handler()
     h.request.path_params = {"report_id": "99"}
     with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
-         patch("reporting.routes.reporting_api.report_service.get_visible", return_value=None):
+         patch("reporting.routes.reporting_api.svc_get_visible", return_value=None):
         responses = h.get_report()
     assert responses[0].status_code == 404
 
@@ -119,6 +119,6 @@ def test_delete_report_conflict_returns_404():
     h = _handler()
     h.request.path_params = {"report_id": "9"}
     with patch("reporting.routes.reporting_api._current_staff_dbid", return_value=5), \
-         patch("reporting.routes.reporting_api.report_service.delete", return_value=False):
+         patch("reporting.routes.reporting_api.svc_delete", return_value=False):
         responses = h.delete_report()
     assert responses[0].status_code == 404

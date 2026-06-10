@@ -15,7 +15,15 @@ from reporting.datasets import get_dataset, list_datasets
 from reporting.query.engine import ReportQuery, run_report
 from reporting.query.filters import FilterClause
 from reporting.query.periods import PeriodSpec
-from reporting.services import reports as report_service
+from reporting.services.reports import (
+    create as svc_create,
+    delete as svc_delete,
+    get_visible as svc_get_visible,
+    list_visible as svc_list_visible,
+    serialize_detail,
+    serialize_summary,
+    update as svc_update,
+)
 
 _API_BASE = "/plugin-io/api/reporting/app"
 
@@ -93,7 +101,9 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
                 "key": d.key,
                 "label": d.label,
                 "fields": [{"key": f.key, "label": f.label, "type": f.type,
-                            "operators": list(f.operators)} for f in d.fields.values()],
+                            "operators": list(f.operators),
+                            "choices": [{"value": v, "label": lbl} for v, lbl in f.choices]}
+                           for f in d.fields.values()],
                 "dimensions": [{"key": dim.key, "label": dim.label} for dim in d.dimensions.values()],
                 "measures": [{"key": m.key, "label": m.label} for m in d.measures.values()],
             }
@@ -114,15 +124,15 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/reports")
     def list_reports(self) -> list[Response | Effect]:
         staff_dbid = _current_staff_dbid(self)
-        rows = report_service.list_visible(staff_dbid)
-        return [JSONResponse({"reports": [report_service.serialize_summary(r) for r in rows]})]
+        rows = svc_list_visible(staff_dbid)
+        return [JSONResponse({"reports": [serialize_summary(r) for r in rows]})]
 
     @api.post("/reports")
     def create_report(self) -> list[Response | Effect]:
         body = self.request.json() or {}
         staff_dbid = _current_staff_dbid(self)
         try:
-            row = report_service.create(
+            row = svc_create(
                 staff_dbid=staff_dbid,
                 name=body["name"],
                 category=body.get("category", ""),
@@ -138,10 +148,10 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
     def get_report(self) -> list[Response | Effect]:
         staff_dbid = _current_staff_dbid(self)
         report_id = int(self.request.path_params["report_id"])
-        row = report_service.get_visible(report_id, staff_dbid)
+        row = svc_get_visible(report_id, staff_dbid)
         if row is None:
             return [JSONResponse({"error": "not found"}, status_code=HTTPStatus.NOT_FOUND)]
-        return [JSONResponse(report_service.serialize_detail(row))]
+        return [JSONResponse(serialize_detail(row))]
 
     @api.patch("/reports/<report_id>")
     def update_report(self) -> list[Response | Effect]:
@@ -149,7 +159,7 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
         staff_dbid = _current_staff_dbid(self)
         report_id = int(self.request.path_params["report_id"])
         fields = {k: body[k] for k in ("name", "category", "visibility", "definition") if k in body}
-        ok = report_service.update(
+        ok = svc_update(
             report_id=report_id, staff_dbid=staff_dbid,
             expected_version=int(body.get("version", 0)), fields=fields,
         )
@@ -162,7 +172,7 @@ class ReportingAPI(StaffSessionAuthMixin, SimpleAPI):
     def delete_report(self) -> list[Response | Effect]:
         staff_dbid = _current_staff_dbid(self)
         report_id = int(self.request.path_params["report_id"])
-        ok = report_service.delete(report_id, staff_dbid)
+        ok = svc_delete(report_id, staff_dbid)
         if not ok:
             return [JSONResponse({"error": "not found"}, status_code=HTTPStatus.NOT_FOUND)]
         return [JSONResponse({"ok": True})]

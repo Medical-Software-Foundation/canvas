@@ -23,6 +23,16 @@ DATASET = Dataset(
             filterable=True,
             operators=("is", "is_one_of"),
             groupable=True,
+            choices=(
+                (AppointmentProgressStatus.UNCONFIRMED, "Unconfirmed"),
+                (AppointmentProgressStatus.ATTEMPTED, "Attempted"),
+                (AppointmentProgressStatus.CONFIRMED, "Confirmed"),
+                (AppointmentProgressStatus.ARRIVED, "Arrived"),
+                (AppointmentProgressStatus.ROOMED, "Roomed"),
+                (AppointmentProgressStatus.EXITED, "Checked out"),
+                (AppointmentProgressStatus.NOSHOWED, "No-show"),
+                (AppointmentProgressStatus.CANCELLED, "Cancelled"),
+            ),
         ),
         "provider": Field(
             key="provider",

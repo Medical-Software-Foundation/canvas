@@ -19,7 +19,15 @@ function escapeHtml(s) {
 function api(path, options) {
   var base = window.API_BASE;
   return fetch(base + path, options).then(function (r) {
-    return r.json().then(function (body) {
+    // Read as text first so an empty or non-JSON body (e.g. a 500 with no payload)
+    // never throws "Unexpected end of JSON input".
+    return r.text().then(function (text) {
+      var body = {};
+      if (text) {
+        try { body = JSON.parse(text); } catch (e) { body = { error: text }; }
+      } else if (!r.ok) {
+        body = { error: 'Server error (HTTP ' + r.status + ')' };
+      }
       return { status: r.status, ok: r.ok, body: body };
     });
   });
@@ -341,6 +349,50 @@ function buildFiltersHtml(dataset, filters) {
   }).join('');
 }
 
+function fieldByKey(dataset, key) {
+  return (dataset && dataset.fields || []).find(function (f) { return f.key === key; });
+}
+
+function currentDataset() {
+  var sel = document.getElementById('sel-dataset');
+  if (!sel) return null;
+  return (_datasets || []).find(function (d) { return d.key === sel.value; }) || null;
+}
+
+function hasChoices(field) {
+  return !!(field && field.choices && field.choices.length);
+}
+
+// Operator control: categorical fields are always "is any of" (multi-select);
+// other fields show their declared operators.
+function buildOpControl(field, existing) {
+  existing = existing || {};
+  if (hasChoices(field)) {
+    return '<span class="filter-op-fixed">is any of</span>' +
+           '<input type="hidden" data-role="filter-op" value="is_one_of" />';
+  }
+  var opOptions = (field ? field.operators || [] : []).map(function (op) {
+    var sel = op === existing.operator ? ' selected' : '';
+    return '<option value="' + escapeHtml(op) + '"' + sel + '>' + escapeHtml(op.replace(/_/g, ' ')) + '</option>';
+  }).join('');
+  return '<select class="form-control" data-role="filter-op" onchange="schedulePreview()">' + opOptions + '</select>';
+}
+
+// Value control: categorical fields get a multi-select of their choices; others a text box.
+function buildValueControl(field, existing) {
+  existing = existing || {};
+  var vals = existing.values || [];
+  if (hasChoices(field)) {
+    var opts = field.choices.map(function (c) {
+      var sel = vals.indexOf(c.value) !== -1 ? ' selected' : '';
+      return '<option value="' + escapeHtml(c.value) + '"' + sel + '>' + escapeHtml(c.label) + '</option>';
+    }).join('');
+    return '<select class="form-control filter-multi" data-role="filter-val" multiple size="5" onchange="schedulePreview()">' + opts + '</select>';
+  }
+  var valStr = vals.join(', ');
+  return '<input class="form-control" data-role="filter-val" type="text" placeholder="value" value="' + escapeHtml(valStr) + '" onchange="schedulePreview()" />';
+}
+
 function buildFilterRowHtml(dataset, existing) {
   existing = existing || {};
   var fieldOptions = (dataset.fields || []).map(function (f) {
@@ -348,26 +400,17 @@ function buildFilterRowHtml(dataset, existing) {
     return '<option value="' + escapeHtml(f.key) + '"' + sel + '>' + escapeHtml(f.label) + '</option>';
   }).join('');
 
-  // Find operators for selected field
-  var selectedField = existing.field
-    ? (dataset.fields || []).find(function (f) { return f.key === existing.field; })
-    : null;
-  var operators = selectedField ? (selectedField.operators || []) : [];
-  var opOptions = operators.map(function (op) {
-    var sel = op === existing.operator ? ' selected' : '';
-    var label = op.replace(/_/g, ' ');
-    return '<option value="' + escapeHtml(op) + '"' + sel + '>' + escapeHtml(label) + '</option>';
-  }).join('');
-
-  var valStr = existing.values ? existing.values.join(', ') : '';
+  var selectedField = existing.field ? fieldByKey(dataset, existing.field) : null;
 
   return (
     '<div class="filter-row">' +
       '<select class="form-control" data-role="filter-field" onchange="onFilterFieldChange(this)">' +
         fieldOptions +
       '</select>' +
-      '<select class="form-control" data-role="filter-op">' + opOptions + '</select>' +
-      '<input class="form-control" data-role="filter-val" type="text" placeholder="value" value="' + escapeHtml(valStr) + '" onchange="schedulePreview()" />' +
+      '<span class="filter-controls" data-role="filter-controls">' +
+        buildOpControl(selectedField, existing) +
+        buildValueControl(selectedField, existing) +
+      '</span>' +
       '<button class="btn-icon" onclick="removeFilterRow(this)" title="Remove filter">✕</button>' +
     '</div>'
   );
@@ -394,17 +437,13 @@ function onDatasetChange() {
 function onFilterFieldChange(selectEl) {
   var row = selectEl.closest('.filter-row');
   if (!row) return;
-  var dsKey = document.getElementById('sel-dataset').value;
-  var dataset = (_datasets || []).find(function (d) { return d.key === dsKey; });
-  if (!dataset) return;
-  var fieldKey = selectEl.value;
-  var field = (dataset.fields || []).find(function (f) { return f.key === fieldKey; });
-  var operators = field ? (field.operators || []) : [];
-  var opSel = row.querySelector('[data-role="filter-op"]');
-  if (opSel) {
-    opSel.innerHTML = operators.map(function (op) {
-      return '<option value="' + escapeHtml(op) + '">' + escapeHtml(op.replace(/_/g, ' ')) + '</option>';
-    }).join('');
+  var dataset = currentDataset();
+  var field = dataset ? fieldByKey(dataset, selectEl.value) : null;
+  // Rebuild operator + value controls to match the newly-selected field
+  // (text input vs. multi-select for categorical fields).
+  var controls = row.querySelector('[data-role="filter-controls"]');
+  if (controls) {
+    controls.innerHTML = buildOpControl(field, {}) + buildValueControl(field, {});
   }
   schedulePreview();
 }
@@ -428,9 +467,7 @@ function addFilterRow() {
   div.innerHTML = buildFilterRowHtml(dataset, null);
   var row = div.firstChild;
   rows.appendChild(row);
-  // Wire up input change for live preview
-  var valInput = row.querySelector('[data-role="filter-val"]');
-  if (valInput) valInput.addEventListener('input', schedulePreview);
+  // Sync the op + value controls to the (defaulted) first field selection.
   var fieldSel = row.querySelector('[data-role="filter-field"]');
   if (fieldSel) onFilterFieldChange(fieldSel);
 }
@@ -481,12 +518,17 @@ function collectDefinition() {
     var opEl = row.querySelector('[data-role="filter-op"]');
     var valEl = row.querySelector('[data-role="filter-val"]');
     if (!fieldEl || !opEl || !valEl) return;
-    var rawVal = valEl.value.trim();
-    if (!rawVal) return;
     var operator = opEl.value;
-    var values = operator === 'is_one_of'
-      ? rawVal.split(',').map(function (v) { return v.trim(); }).filter(Boolean)
-      : [rawVal];
+    var values;
+    if (valEl.tagName === 'SELECT' && valEl.multiple) {
+      values = Array.prototype.map.call(valEl.selectedOptions, function (o) { return o.value; });
+    } else {
+      var rawVal = valEl.value.trim();
+      values = operator === 'is_one_of'
+        ? rawVal.split(',').map(function (v) { return v.trim(); }).filter(Boolean)
+        : (rawVal ? [rawVal] : []);
+    }
+    if (!values.length) return;  // skip a filter with no value(s) chosen
     filters.push({ field: fieldEl.value, operator: operator, values: values });
   });
 

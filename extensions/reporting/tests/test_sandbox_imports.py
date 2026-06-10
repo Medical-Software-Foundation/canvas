@@ -69,3 +69,34 @@ def test_no_self_package_imports():
     assert not offenders, (
         "Self-package imports found (use full submodule paths instead): " f"{offenders}"
     )
+
+
+def test_no_submodule_object_imports():
+    """Importing a submodule OBJECT and accessing attributes on it fails in-sandbox.
+
+    `from reporting.services import reports` then `reports.create(...)` raises
+    AttributeError("...not in ALLOWED_MODULES") — the sandbox guards attribute access
+    on plugin module objects. Import the names directly instead
+    (`from reporting.services.reports import create`).
+    """
+    import re
+
+    pat = re.compile(r"^\s*from\s+(reporting\S*)\s+import\s+(.+)$")
+    offenders = []
+    for path in _py_files():
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            mobj = pat.match(line)
+            if not mobj:
+                continue
+            modpath, names = mobj.group(1), mobj.group(2)
+            rel = modpath.split(".")[1:]  # drop leading 'reporting'
+            pkg_dir = _PKG.joinpath(*rel) if rel else _PKG
+            if not pkg_dir.is_dir():
+                continue  # modpath is a module file -> imported names are symbols
+            for raw in names.replace("(", "").replace(")", "").split(","):
+                name = raw.strip().split(" as ")[0].strip()
+                if name and (pkg_dir / f"{name}.py").exists():
+                    offenders.append(
+                        f"{path}:{i}: imports submodule object '{name}' from '{modpath}'"
+                    )
+    assert not offenders, ("Import names directly, not submodule objects: " f"{offenders}")

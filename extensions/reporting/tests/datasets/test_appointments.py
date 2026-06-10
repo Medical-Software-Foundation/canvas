@@ -38,6 +38,15 @@ def test_status_field_filterable_with_is_one_of():
     assert f.orm_path == "status"
 
 
+def test_status_field_exposes_choices():
+    ds = get_dataset("appointments")
+    f = ds.fields["status"]
+    values = [v for v, _label in f.choices]
+    assert "noshowed" in values and "cancelled" in values
+    # choices are (value, label) pairs
+    assert all(len(c) == 2 for c in f.choices)
+
+
 def test_get_unknown_dataset_raises():
     import pytest
 

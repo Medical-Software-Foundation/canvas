@@ -21,6 +21,9 @@ class Field:
     filterable: bool = False
     operators: tuple[str, ...] = ()
     groupable: bool = False
+    # For category fields: the allowed (value, label) options the UI offers as a
+    # multi-select. Empty -> the UI falls back to a free-text value input.
+    choices: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
