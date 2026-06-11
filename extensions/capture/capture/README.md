@@ -9,6 +9,13 @@ three things to add — all auto-associated with the current patient:
 3. **Profile picture** — capture/upload a single image and set it as the patient's avatar
    (`Patient.photo`).
 
+## Demo & user guide
+
+📹 **Walkthrough video:** https://www.loom.com/share/a3fb326483464d84992c587b2a849c5e
+
+A visual, step-by-step user guide — **`Capture-User-Guide.pdf`** (included alongside this
+plugin) — covers all three flows in both the patient chart and the Provider Companion.
+
 ## Features
 
 - Two entry points, **same workflow and UI**:
