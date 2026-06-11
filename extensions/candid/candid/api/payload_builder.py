@@ -360,6 +360,11 @@ def _add_patient(claim: Claim, payload: dict, errors: list[str]) -> None:
     payload["patient"] = patient_payload
 
 
+def _is_valid_npi(npi: str) -> bool:
+    """An NPI Candid will accept: exactly 10 digits. Candid rejects anything else."""
+    return npi.isdigit() and len(npi) == 10
+
+
 def _add_billing_provider(claim: Claim, payload: dict, errors: list[str]) -> None:
     provider = claim.provider
     if not provider:
@@ -380,6 +385,10 @@ def _add_billing_provider(claim: Claim, payload: dict, errors: list[str]) -> Non
         errors.append(
             f"The following items were missing for the billing provider: {', '.join(missing)}"
         )
+        return
+
+    if not _is_valid_npi(provider.billing_provider_npi):
+        errors.append("Billing provider: NPI must be exactly 10 digits")
         return
 
     billing_provider: dict[str, Any] = {
@@ -413,6 +422,10 @@ def _add_rendering_provider(claim: Claim, payload: dict, errors: list[str]) -> N
     has_name = bool(provider.provider_first_name and provider.provider_last_name)
     if not (has_npi or has_name):
         errors.append("Rendering provider: NPI OR first+last name is required")
+        return
+
+    if has_npi and not _is_valid_npi(provider.provider_npi):
+        errors.append("Rendering provider: NPI must be exactly 10 digits")
         return
 
     rendering: dict[str, Any] = {}
@@ -467,8 +480,7 @@ def _add_supervising_provider(claim: Claim, payload: dict, errors: list[str]) ->
         errors.append("Supervising provider: NPI is required, but was missing")
         return
 
-    # Candid rejects an NPI that isn't exactly 10 digits.
-    if not (supervising.npi.isdigit() and len(supervising.npi) == 10):
+    if not _is_valid_npi(supervising.npi):
         errors.append("Supervising provider: NPI must be exactly 10 digits")
         return
 

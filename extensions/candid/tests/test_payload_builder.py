@@ -12,6 +12,8 @@ from candid.api.payload_builder import (
     MAX_DIAGNOSIS_POINTERS_PER_SERVICE_LINE,
     OVERFLOW_CHARGE_CENTS,
     OVERFLOW_CPT_CODE,
+    _add_billing_provider,
+    _add_rendering_provider,
     _add_service_lines,
     _add_supervising_provider,
     _clamp_service_line_pointers,
@@ -612,6 +614,56 @@ def test_supervising_errors_when_npi_not_ten_digits(bad_npi: str) -> None:
 
     assert "supervising_provider" not in payload
     assert errors == ["Supervising provider: NPI must be exactly 10 digits"]
+
+
+# ---------------------------------------------------------------------------
+# _add_billing_provider / _add_rendering_provider — NPI 10-digit validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad_npi", ["123456789", "12345678901", "12345678X0"])
+def test_billing_provider_errors_when_npi_not_ten_digits(bad_npi: str) -> None:
+    """A billing NPI that isn't exactly 10 digits is rejected (Candid would reject it)."""
+    claim = MagicMock()
+    claim.provider = _full_provider()
+    claim.provider.billing_provider_npi = bad_npi
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_billing_provider(claim, payload, errors)
+
+    assert "billing_provider" not in payload
+    assert errors == ["Billing provider: NPI must be exactly 10 digits"]
+
+
+@pytest.mark.parametrize("bad_npi", ["123456789", "12345678901", "12345678X0"])
+def test_rendering_provider_errors_when_npi_not_ten_digits(bad_npi: str) -> None:
+    """A rendering NPI that's present but not 10 digits is rejected."""
+    claim = MagicMock()
+    claim.provider = _full_provider()
+    claim.provider.provider_npi = bad_npi
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_rendering_provider(claim, payload, errors)
+
+    assert "rendering_provider" not in payload
+    assert errors == ["Rendering provider: NPI must be exactly 10 digits"]
+
+
+def test_rendering_provider_allows_name_only_without_npi() -> None:
+    """No NPI is fine for rendering when first+last name are present — no 10-digit check."""
+    claim = MagicMock()
+    claim.provider = _full_provider()
+    claim.provider.provider_npi = ""
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_rendering_provider(claim, payload, errors)
+
+    assert errors == []
+    assert "npi" not in payload["rendering_provider"]
+    assert payload["rendering_provider"]["first_name"] == "Alice"
 
 
 def test_build_claim_payload_includes_supervising_leaves_billing_and_rendering() -> None:
