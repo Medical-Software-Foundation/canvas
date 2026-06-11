@@ -1,7 +1,7 @@
 """Tests for the PatientDocumentCaptureApp Application."""
 
 import json
-from unittest.mock import PropertyMock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import pytest
 from canvas_sdk.effects import EffectType
@@ -18,15 +18,17 @@ def app():
     return PatientDocumentCaptureApp.__new__(PatientDocumentCaptureApp)
 
 
-def _patch_context(value):
+def _patch_event(value):
+    # on_open reads self.event.context; patch event so .context returns our dict.
+    # Companion inherits event from the base class, so this covers both.
     return patch.object(
-        PatientDocumentCaptureApp, "context", new_callable=PropertyMock,
-        return_value=value,
+        PatientDocumentCaptureApp, "event", new_callable=PropertyMock,
+        return_value=Mock(context=value), create=True,
     )
 
 
 def test_on_open_returns_launch_modal_effect(app) -> None:
-    with _patch_context({"patient": {"id": "patient-123"}}), patch(
+    with _patch_event({"patient": {"id": "patient-123"}}), patch(
         "capture.applications.document_app.render_to_string"
     ) as mock_render:
         mock_render.return_value = "<html></html>"
@@ -35,7 +37,7 @@ def test_on_open_returns_launch_modal_effect(app) -> None:
 
 
 def test_on_open_injects_patient_id_and_api_base(app) -> None:
-    with _patch_context({"patient": {"id": "patient-123"}}), patch(
+    with _patch_event({"patient": {"id": "patient-123"}}), patch(
         "capture.applications.document_app.render_to_string"
     ) as mock_render:
         mock_render.return_value = "<html></html>"
@@ -50,7 +52,7 @@ def test_on_open_injects_patient_id_and_api_base(app) -> None:
 
 
 def test_on_open_handles_missing_patient(app) -> None:
-    with _patch_context({}), patch(
+    with _patch_event({}), patch(
         "capture.applications.document_app.render_to_string"
     ) as mock_render:
         mock_render.return_value = "<html></html>"
@@ -75,10 +77,7 @@ def test_companion_is_distinct_application(companion) -> None:
 
 def test_companion_on_open_launches_served_url_with_patient(companion) -> None:
     """Companion launches the served /documents/ui iframe (URL, not inline content)."""
-    with patch.object(
-        PatientDocumentCaptureCompanionApp, "context", new_callable=PropertyMock,
-        return_value={"patient": {"id": "patient-456"}},
-    ):
+    with _patch_event({"patient": {"id": "patient-456"}}):
         effect = companion.on_open()
         assert effect.type == EffectType.LAUNCH_MODAL
         data = json.loads(effect.payload)["data"]
@@ -90,10 +89,7 @@ def test_companion_on_open_launches_served_url_with_patient(companion) -> None:
 
 
 def test_companion_on_open_handles_missing_patient(companion) -> None:
-    with patch.object(
-        PatientDocumentCaptureCompanionApp, "context", new_callable=PropertyMock,
-        return_value={},
-    ):
+    with _patch_event({}):
         effect = companion.on_open()
         data = json.loads(effect.payload)["data"]
         assert "patient_id=&v=" in data["url"]

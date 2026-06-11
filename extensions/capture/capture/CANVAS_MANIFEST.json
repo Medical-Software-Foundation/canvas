@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.85.0",
-    "plugin_version": "0.13.4",
+    "plugin_version": "0.13.5",
     "name": "capture",
     "description": "Add to a patient's chart from the chart app drawer or the Provider Companion: capture/upload a multi-page document, attach an exam photo to one of your open notes, or update the patient's profile picture.",
     "url_permissions": [

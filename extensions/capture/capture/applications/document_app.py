@@ -19,7 +19,7 @@ class PatientDocumentCaptureApp(Application):
 
     def on_open(self) -> Effect:
         """Render the capture modal when the app icon is clicked in the chart."""
-        patient_id = self.context.get("patient", {}).get("id", "")
+        patient_id = self.event.context.get("patient", {}).get("id", "")
         api_base = f"/plugin-io/api/{PLUGIN_NAME}"
 
         html_content = render_to_string(
@@ -56,7 +56,7 @@ class PatientDocumentCaptureCompanionApp(PatientDocumentCaptureApp):
 
     def on_open(self) -> Effect:
         """Launch the same modal in the companion via a served URL iframe."""
-        patient_id = self.context.get("patient", {}).get("id", "")
+        patient_id = self.event.context.get("patient", {}).get("id", "")
         return LaunchModalEffect(
             url=f"/plugin-io/api/{PLUGIN_NAME}/documents/ui?patient_id={patient_id}&v={_CACHE_BUST}",
             target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
