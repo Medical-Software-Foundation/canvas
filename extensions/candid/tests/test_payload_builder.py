@@ -4,6 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+import pytest
 from canvas_sdk.v1.data import Claim
 
 from candid.api.payload_builder import (
@@ -596,6 +597,21 @@ def test_supervising_errors_when_npi_missing() -> None:
 
     assert "supervising_provider" not in payload
     assert errors == ["Supervising provider: NPI is required, but was missing"]
+
+
+@pytest.mark.parametrize("bad_npi", ["123456789", "12345678901", "99988877X6"])
+def test_supervising_errors_when_npi_not_ten_digits(bad_npi: str) -> None:
+    """An NPI that isn't exactly 10 digits is rejected (Candid would reject it too)."""
+    claim = MagicMock()
+    claim.incident_to = False
+    claim.supervising_provider = _supervising(npi=bad_npi)
+    payload: dict = {}
+    errors: list[str] = []
+
+    _add_supervising_provider(claim, payload, errors)
+
+    assert "supervising_provider" not in payload
+    assert errors == ["Supervising provider: NPI must be exactly 10 digits"]
 
 
 def test_build_claim_payload_includes_supervising_leaves_billing_and_rendering() -> None:

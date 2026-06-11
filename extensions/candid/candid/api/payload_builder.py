@@ -467,6 +467,11 @@ def _add_supervising_provider(claim: Claim, payload: dict, errors: list[str]) ->
         errors.append("Supervising provider: NPI is required, but was missing")
         return
 
+    # Candid rejects an NPI that isn't exactly 10 digits.
+    if not (supervising.npi.isdigit() and len(supervising.npi) == 10):
+        errors.append("Supervising provider: NPI must be exactly 10 digits")
+        return
+
     supervising_provider: dict[str, Any] = {"npi": supervising.npi}
     if supervising.first_name:
         supervising_provider["first_name"] = supervising.first_name
