@@ -340,7 +340,14 @@ def test_finalize_emits_per_diagnosis_blocks(
     assert responses[0].status_code == HTTPStatus.OK
     body = json.loads(responses[0].content.decode())
     assert body["effects"]["diagnose_count"] == 2
-    assert body["effects"]["assess_count"] == 2
+    # New diagnoses (no existing_condition_id) do NOT emit Assess.
+    # AssessCommand requires a condition_id that doesn't exist yet for
+    # a brand-new dx; emitting without one produces an orphaned
+    # "Assess Condition:" row on the chart with an empty condition
+    # slot. Status + narrative for new dx are dropped at the emitter
+    # layer; the 50_diagnoses.js form hides those fields on new-dx
+    # cards so providers can't enter them.
+    assert body["effects"]["assess_count"] == 0
     assert body["effects"]["plan_count"] == 2
     assert mock_dx.call_count == 2
     # First diagnosis: today_assessment populated
@@ -351,7 +358,7 @@ def test_finalize_emits_per_diagnosis_blocks(
     dx1_kwargs = mock_dx.call_args_list[1].kwargs
     assert dx1_kwargs["icd10_code"] == "M25.561"
     assert "today_assessment" not in dx1_kwargs
-    assert mock_assess.call_count == 2
+    mock_assess.assert_not_called()
     assert mock_plan.call_count == 2
 
 
@@ -419,6 +426,10 @@ def test_finalize_diagnose_skips_entries_missing_code(
 def test_finalize_assess_status_string_maps_to_enum(
     mock_rfv, mock_hpi, mock_ros, mock_pe, mock_dx, mock_assess, mock_plan,
 ):
+    # The string-to-enum mapping is only exercised when the diagnosis
+    # entry has an existing_condition_id (new-dx entries skip Assess
+    # because AssessCommand requires a condition_id the new dx hasn't
+    # created yet — see _emit_diagnosis_block).
     mock_dx.return_value.originate.return_value = "DX_EFFECT"
     mock_assess.return_value.originate.return_value = "ASSESS_EFFECT"
     payload = {
@@ -428,6 +439,7 @@ def test_finalize_assess_status_string_maps_to_enum(
             "diagnoses": [
                 {
                     "code": "K21.9", "display": "GERD",
+                    "existing_condition_id": "22222222-2222-2222-2222-222222222222",
                     "assessment": {"status": "improved", "narrative": "doing well"},
                 },
             ],
@@ -1482,12 +1494,16 @@ def test_finalize_lets_unexpected_exceptions_propagate(mock_rfv, mock_dx):
 @patch("exam_chart_app.api.emitters.DiagnoseCommand")
 @patch("exam_chart_app.api.exam_api.ReasonForVisitCommand")
 def test_finalize_400_when_assess_status_unknown(mock_rfv, mock_dx, mock_assess):
+    # Validation only fires when Assess is emitted. New-dx entries skip
+    # Assess (AssessCommand needs an existing condition_id), so the
+    # validation path is exercised via an existing-condition payload.
     mock_dx.return_value.originate.return_value = "DX"
     payload = {
         "note_uuid": "11111111-1111-1111-1111-111111111111",
         "rfv": {"comment": "x"},
         "ap": {"diagnoses": [{
             "code": "K21.9",
+            "existing_condition_id": "22222222-2222-2222-2222-222222222222",
             "assessment": {"status": "made-up-status", "narrative": "x"},
         }], "orders": []},
     }

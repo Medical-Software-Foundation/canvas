@@ -263,15 +263,20 @@ def _emit_diagnosis_block(
     assessment: dict[str, Any] = raw_assessment if isinstance(raw_assessment, dict) else {}
     status_raw = str(assessment.get("status") or "").strip().lower()
     assess_narrative = str(assessment.get("narrative") or "").strip()
-    # Existing-condition entries always emit Assess (with condition_id),
-    # even with empty status/narrative — the chart needs the Assess row
-    # to surface the existing condition as touched on this visit. New
-    # diagnoses skip Assess when both fields are empty (provider may
-    # not have intended one).
-    if existing_condition_id or status_raw or assess_narrative:
+    # Emit Assess only for existing conditions. AssessCommand requires
+    # a ``condition_id`` (UUID of an existing Condition row); the SDK
+    # has no ``icd10_code`` alternative to link to a Condition that's
+    # about to be created in the same note by DiagnoseCommand. Emitting
+    # Assess for a new dx produces an orphaned "Assess Condition:" row
+    # with an empty condition slot on the chart (observed 2026-06-12).
+    # For new diagnoses, the Status + Narrative form fields are
+    # therefore dropped — the form hides those fields on new-dx cards
+    # (see 50_diagnoses.js renderDxList) so providers don't enter data
+    # that won't reach the chart. Today's Assessment + Background go
+    # into the DiagnoseCommand instead, which DOES support both.
+    if existing_condition_id:
         ass_kwargs: dict[str, Any] = {"note_uuid": note_uuid}
-        if existing_condition_id:
-            ass_kwargs["condition_id"] = existing_condition_id
+        ass_kwargs["condition_id"] = existing_condition_id
         if status_raw:
             status_enum = _ASSESS_STATUS_MAP.get(status_raw)
             if status_enum is None:

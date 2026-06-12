@@ -35,6 +35,11 @@
       // New-diagnosis cards show Today's Assessment + Background (those
       // fields exist only on DiagnoseCommand). Existing-condition cards
       // skip them — Assess + Plan only.
+      // New-diagnosis cards: Today's Assessment + Background fields ride
+      // on the DiagnoseCommand (the SDK supports both). Existing-condition
+      // cards omit them — the existing Condition row already has its own
+      // background, and the visit-level "what happened today" belongs on
+      // the AssessCommand's narrative field instead.
       var newDxFields = isExisting ? "" : (
         '<div class="exam-dx-sublabel">Today\'s Assessment</div>' +
         '<textarea class="exam-textarea exam-dx-subfield" data-dx-field="today_assessment" data-dx-idx="' + idx + '" rows="2"' +
@@ -44,6 +49,45 @@
         '<textarea class="exam-textarea exam-dx-subfield" data-dx-field="background" data-dx-idx="' + idx + '" rows="2"' +
         ' placeholder="Optional clinical background for this diagnosis.">' + escapeHtml(d.background || "") + '</textarea>'
       );
+
+      // Assess-specific fields (Status + Today's Assessment narrative) are
+      // shown ONLY on existing-condition cards. AssessCommand requires a
+      // condition_id and has no icd10_code alternative — emitting it for a
+      // new dx produces an orphaned "Assess Condition:" row on the chart
+      // (verified 2026-06-12 on corgi). Hiding the fields on new-dx cards
+      // prevents providers from entering data that won't reach the chart.
+      //
+      // Label conventions match the chart's command UI for cross-surface
+      // consistency:
+      //   AssessCommand.Status.STABLE        → "Unchanged" (chart label)
+      //   AssessCommand.Status.IMPROVED      → "Improved"
+      //   AssessCommand.Status.DETERIORATED  → "Worsened"
+      //   AssessCommand.narrative            → "Today's Assessment" (chart label)
+      // The underlying values sent to the backend stay as the SDK enum
+      // names ("improved" / "stable" / "deteriorated") so the existing
+      // _ASSESS_STATUS_MAP in emitters.py continues to work unchanged.
+      var assessFields = !isExisting ? "" : (
+        '<div class="exam-dx-sublabel">Status</div>' +
+        '<div class="exam-dx-subfield">' +
+          '<select class="exam-dx-status" data-dx-field="assessment.status" data-dx-idx="' + idx + '">' +
+            [
+              {value: '', label: '— None —'},
+              {value: 'improved', label: 'Improved'},
+              {value: 'stable', label: 'Unchanged'},
+              {value: 'deteriorated', label: 'Worsened'},
+            ].map(function (opt) {
+              var selected = (d.assessment && d.assessment.status === opt.value) ? ' selected' : '';
+              return '<option value="' + escapeHtml(opt.value) + '"' + selected + '>' + escapeHtml(opt.label) + '</option>';
+            }).join("") +
+          '</select>' +
+        '</div>' +
+
+        '<div class="exam-dx-sublabel">Today\'s Assessment</div>' +
+        '<textarea class="exam-textarea exam-dx-subfield" data-dx-field="assessment.narrative" data-dx-idx="' + idx + '" rows="2"' +
+        ' placeholder="What you assessed today about this condition.">' +
+        escapeHtml((d.assessment && d.assessment.narrative) || "") + '</textarea>'
+      );
+
       var cardClass = isExisting ? "exam-dx-card exam-dx-card--existing" : "exam-dx-card";
       return (
         '<div class="' + cardClass + '" data-index="' + idx + '">' +
@@ -56,22 +100,7 @@
           '<div class="exam-dx-body">' +
             '<div class="exam-dx-subgrid">' +
               newDxFields +
-
-              '<div class="exam-dx-sublabel">Assessment status</div>' +
-              '<div class="exam-dx-subfield">' +
-                '<select class="exam-dx-status" data-dx-field="assessment.status" data-dx-idx="' + idx + '">' +
-                  ['', 'improved', 'stable', 'deteriorated'].map(function (s) {
-                    var selected = (d.assessment && d.assessment.status === s) ? ' selected' : '';
-                    var label = s ? (s[0].toUpperCase() + s.slice(1)) : '— None —';
-                    return '<option value="' + escapeHtml(s) + '"' + selected + '>' + escapeHtml(label) + '</option>';
-                  }).join("") +
-                '</select>' +
-              '</div>' +
-
-              '<div class="exam-dx-sublabel">Assessment narrative</div>' +
-              '<textarea class="exam-textarea exam-dx-subfield" data-dx-field="assessment.narrative" data-dx-idx="' + idx + '" rows="2"' +
-              ' placeholder="Optional Assessment narrative for this diagnosis.">' +
-              escapeHtml((d.assessment && d.assessment.narrative) || "") + '</textarea>' +
+              assessFields +
 
               '<div class="exam-dx-sublabel">Plan narrative</div>' +
               '<textarea class="exam-textarea exam-dx-subfield" data-dx-field="plan.narrative" data-dx-idx="' + idx + '" rows="2"' +
