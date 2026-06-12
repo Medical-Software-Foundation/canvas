@@ -1138,7 +1138,13 @@ def test_save_state_400_when_note_uuid_invalid():
 
 
 @patch("exam_chart_app.api.exam_api.set_draft")
-def test_save_state_413_when_draft_too_large(mock_set):
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_413_when_draft_too_large(mock_get, mock_set):
+    # get_draft is consulted by the finalized-note guard before set_draft
+    # runs; mock to not-yet-finalized so this test exercises the
+    # DraftTooLargeError → 413 path rather than getting blocked by the
+    # 409 guard.
+    mock_get.return_value = ({}, False)
     from exam_chart_app.data.draft_state import DraftTooLargeError
     mock_set.side_effect = DraftTooLargeError("1500000 bytes exceeds cap 1000000")
     payload = {
