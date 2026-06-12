@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Clipboard body -->
+  <rect x="20" y="14" width="60" height="76" rx="8" fill="#0f6cbf"/>
+  <rect x="26" y="22" width="48" height="62" rx="5" fill="#ffffff"/>
+  <!-- Clip at top -->
+  <rect x="40" y="8" width="20" height="14" rx="4" fill="#0a4e8a"/>
+  <!-- Checklist rows -->
+  <rect x="40" y="34" width="26" height="5" rx="2.5" fill="#9fc4e6"/>
+  <rect x="40" y="50" width="26" height="5" rx="2.5" fill="#9fc4e6"/>
+  <rect x="40" y="66" width="20" height="5" rx="2.5" fill="#f4b73f"/>
+  <!-- Checked box (done) -->
+  <rect x="32" y="31" width="5" height="5" rx="1" fill="#0f6cbf"/>
+  <!-- Pending box (open) -->
+  <rect x="32.5" y="47.5" width="4" height="4" rx="0.8" fill="none" stroke="#9fc4e6" stroke-width="1.6"/>
+  <!-- Flagged/abnormal box (amber) -->
+  <rect x="32.5" y="63.5" width="4" height="4" rx="0.8" fill="#f4b73f"/>
+  <!-- Large checkmark badge -->
+  <circle cx="68" cy="70" r="16" fill="#2e9e5b"/>
+  <path d="M60 70 l6 6 l11 -13" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
