@@ -43,7 +43,19 @@ class SummaryEntry(TypedDict):
 
 _COLLECTED_SUM = Sum(
     "postings__newlineitempayments__amount",
-    filter=Q(postings__entered_in_error__isnull=True),
+    # Filter retractions at BOTH levels: the parent posting can be valid while
+    # an individual payment row is retracted (bounced check, misposted ERA
+    # line). Mirrors the canonical financial SQL pattern and the SDK's own
+    # ``claim_line_item.py`` which uses the identical path.
+    #
+    # NOTE: an earlier attempt (commit ``bd9913e``) caused 500s on real data
+    # and was reverted in ``eb3d6f3``. Re-applying intentionally to capture
+    # the server-side traceback this round — the prior pass never caught the
+    # actual exception class because the log tail kept timing out.
+    filter=Q(
+        postings__entered_in_error__isnull=True,
+        postings__newlineitempayments__entered_in_error__isnull=True,
+    ),
 )
 
 
