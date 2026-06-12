@@ -1,0 +1,29 @@
+{
+    "sdk_version": "0.151.0",
+    "plugin_version": "0.0.4",
+    "name": "visit_ice_breaker",
+    "description": "Displays a fun, age-appropriate ice breaker question in visit notes to help clinicians start conversations with patients.",
+    "custom_data": {
+        "namespace": "metriport__visit_ice_breaker",
+        "access": "read_write"
+    },
+    "components": {
+        "handlers": [
+            {
+                "class": "visit_ice_breaker.handlers.ice_breaker_handler:IceBreakerHandler",
+                "description": "Originates an ice breaker instruct command when a new office visit note is created."
+            }
+        ],
+        "commands": [],
+        "applications": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [{"name": "namespace_read_write_access_key", "sensitive": true}],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
