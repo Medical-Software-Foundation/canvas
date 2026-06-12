@@ -51,11 +51,12 @@ _COLLECTED_SUM = Sum(
     # ``BulkPatientPosting.total_posted_amount`` and ``BasePosting.paid_amount``
     # which filter at the posting level only.
     #
-    # An earlier attempt (commit ``bd9913e``) added a second filter on
-    # ``postings__newlineitempayments__entered_in_error__isnull`` and 500s
-    # with a Django FieldError because the field is not declared on the
-    # model. The SDK's ``AbstractLineItemQuerySet.active()`` method
-    # references the same nonexistent field and is also unusable. See
+    # An earlier attempt (commit ``bd9913e``) added a second filter that
+    # joined ``postings`` -> ``newlineitempayments`` and tried to filter on
+    # ``entered_in_error`` at that level; it 500s with a Django FieldError
+    # because the field is not declared on the model. The SDK's
+    # ``AbstractLineItemQuerySet.active()`` method references the same
+    # nonexistent field and is also unusable. See
     # ``memory/canvas-sdk-newlineitempayment-no-entered-in-error.md``.
     filter=Q(postings__entered_in_error__isnull=True),
 )

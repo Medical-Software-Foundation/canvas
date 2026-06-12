@@ -1,5 +1,6 @@
 """Tests for billing_dashboard.data.payer — per-payer Payer tab builder."""
 
+import inspect
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -84,3 +85,23 @@ class TestPayerAggregation:
         _set_payer_rows(mock_claim, [])
         result = payer.build_payer(now=fixed_now)
         assert result == {"payers": {"source": "real", "data": []}}
+
+
+class TestCollectedFilterShape:
+    """Regression tests for the inline ``Sum(... filter=Q(...))`` in ``build_payer``.
+
+    The ``payer.py`` Sum aggregate is not a module-level constant the way
+    ``data/overview.py:_COLLECTED_SUM`` is, so the assertion here is
+    source-level rather than attribute-level. Same intent: prevent the
+    forbidden ``postings__newlineitempayments__entered_in_error`` lookup
+    from re-appearing. See memory/canvas-sdk-newlineitempayment-no-entered-in-error.md.
+    """
+
+    def test_source_does_not_contain_forbidden_lookup(self) -> None:
+        src = inspect.getsource(payer)
+        assert "postings__newlineitempayments__entered_in_error" not in src, (
+            "data/payer.py contains the forbidden lookup. The field does not "
+            "exist on NewLineItemPayment in the Canvas SDK; the resulting "
+            "Django FieldError 500s both the Overview and Payer tabs. See "
+            "memory/canvas-sdk-newlineitempayment-no-entered-in-error.md."
+        )

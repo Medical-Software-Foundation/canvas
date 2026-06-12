@@ -1,10 +1,12 @@
 """Tests for billing_dashboard.data.overview — real-data Overview tab builder."""
 
+import inspect
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import arrow
 import pytest
+from django.db.models import Q
 
 from billing_dashboard.data import overview
 
@@ -356,3 +358,99 @@ class TestBuildOverview:
         assert isinstance(result["insights"]["data"], list)
         mock_appts.assert_called_once()
         mock_projected.assert_called_once_with(fixed_now, precomputed_appt_count=10)
+
+
+class TestCollectedSumFilterShape:
+    """Regression tests that lock in the canonical posting-level retraction filter.
+
+    Background: an earlier commit (``bd9913e``) added a second filter clause
+    on ``postings__newlineitempayments__entered_in_error`` to catch payment-
+    level retractions under non-voided postings. That filter 500s with a
+    Django FieldError at query construction because the field is not declared
+    on ``AbstractLineItemTransaction`` (the parent of ``NewLineItemPayment``).
+    Per Canvas engineering, a payment is voided by voiding its parent
+    posting — there is no per-payment retraction concept in the SDK data
+    model. The posting-level filter is the canonical pattern, mirroring
+    ``BulkPatientPosting.total_posted_amount`` and ``BasePosting.paid_amount``.
+
+    Full writeup: memory/canvas-sdk-newlineitempayment-no-entered-in-error.md.
+    """
+
+    def test_filter_is_single_clause_posting_level(self) -> None:
+        """``_COLLECTED_SUM.filter`` must be exactly ``Q(postings__entered_in_error__isnull=True)``.
+
+        If this assertion fails because a second clause has been added, read
+        the SDK memory FIRST — the second clause cannot be expressed against
+        ``NewLineItemPayment`` because the field isn't on the model.
+        """
+        filter_q = overview._COLLECTED_SUM.filter
+        assert filter_q == Q(postings__entered_in_error__isnull=True)
+        assert filter_q.children == [("postings__entered_in_error__isnull", True)]
+
+    def test_filter_does_not_traverse_newlineitempayments(self) -> None:
+        """No filter clause may reference the ``newlineitempayments`` reverse-relation path.
+
+        Django raises ``FieldError: Unsupported lookup 'entered_in_error' for
+        ManyToOneRel or join on the field not permitted`` at query
+        construction the moment such a clause appears, even before any rows
+        are touched. This regression catches the re-introduction before
+        deploy-time fallout.
+        """
+        filter_q = overview._COLLECTED_SUM.filter
+        forbidden_substring = "newlineitempayments__entered_in_error"
+        for lookup, _value in filter_q.children:
+            assert forbidden_substring not in lookup, (
+                f"_COLLECTED_SUM.filter contains {lookup!r}, which references a field "
+                "that does not exist on NewLineItemPayment. See memory/"
+                "canvas-sdk-newlineitempayment-no-entered-in-error.md."
+            )
+
+    def test_source_does_not_contain_forbidden_lookup(self) -> None:
+        """Defense-in-depth: the literal forbidden substring must not appear anywhere in ``data/overview.py``.
+
+        Catches a future Sum that inlines the bad filter outside of the
+        module-level ``_COLLECTED_SUM`` constant, or a code comment that
+        suggests doing so. Comments that *document the failure mode* are
+        allowed because they reference the lookup path on different lines —
+        but they don't form the contiguous filter expression
+        ``postings__newlineitempayments__entered_in_error``.
+        """
+        src = inspect.getsource(overview)
+        assert "postings__newlineitempayments__entered_in_error" not in src, (
+            "data/overview.py contains the forbidden lookup. See memory/"
+            "canvas-sdk-newlineitempayment-no-entered-in-error.md."
+        )
+
+
+class TestNewLineItemPaymentSDKInvariant:
+    """Invariant: the SDK does NOT expose ``entered_in_error`` on the line-item-transaction hierarchy.
+
+    The day this test starts failing is the day the canonical pattern can be
+    augmented with a payment-level filter to also catch payment-row
+    retractions under non-voided postings. Until then, the assertion is the
+    enforcing source of truth: the plugin's filter shape is constrained by
+    the SDK, not by reviewer preference.
+    """
+
+    def test_newlineitempayment_has_no_entered_in_error_field(self) -> None:
+        from canvas_sdk.v1.data import NewLineItemPayment
+        field_names = {f.name for f in NewLineItemPayment._meta.get_fields()}
+        assert "entered_in_error" not in field_names, (
+            "SDK now exposes `entered_in_error` on NewLineItemPayment! "
+            "The posting-level-only filter in `_COLLECTED_SUM` and "
+            "`payer.build_payer` can be augmented with a payment-level "
+            "clause to catch retracted payment rows under non-voided "
+            "postings. Update both modules and refresh memory/"
+            "canvas-sdk-newlineitempayment-no-entered-in-error.md."
+        )
+
+    def test_posting_does_have_entered_in_error_field(self) -> None:
+        """Positive companion: confirms the posting-level field IS available, justifying the canonical filter."""
+        from canvas_sdk.v1.data.posting import BasePosting
+        field_names = {f.name for f in BasePosting._meta.get_fields()}
+        assert "entered_in_error" in field_names, (
+            "BasePosting no longer exposes entered_in_error! The canonical "
+            "retraction filter `postings__entered_in_error__isnull=True` "
+            "will fail. Plugin needs an alternative retraction-detection "
+            "path."
+        )
