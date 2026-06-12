@@ -35,9 +35,20 @@ from logger import log
 # class names are stable public API and the alternatives (broad-except
 # with no filter, or building a private exception-class registry) are
 # worse. Verified against canvas_sdk 0.142.0 on 2026-05-21.
+#
+# Set membership: every subclass of ``django.db.DatabaseError`` plus its
+# sibling ``InterfaceError``. ``InternalError`` ("cursor not valid,
+# transaction out of sync", per PEP 249) and ``ProgrammingError`` are
+# both ``DatabaseError`` subclasses and were caught by the prior
+# ``except (DatabaseError, OperationalError):`` (which collapses to
+# ``except DatabaseError:`` since ``OperationalError`` is itself a
+# subclass). Keeping them here preserves that prior catch surface so
+# that all transient DB-class errors land in the same best-effort
+# branch.
 _DB_EXCEPTION_NAMES = frozenset({
     "DatabaseError", "OperationalError", "IntegrityError",
     "InterfaceError", "DataError", "NotSupportedError",
+    "InternalError", "ProgrammingError",
 })
 
 from exam_chart_app.api.emitters import (
