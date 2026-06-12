@@ -22,7 +22,7 @@ rather than 500-ing. Used pervasively across ``exam_api`` and
 """
 from __future__ import annotations
 
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable
 
 from logger import log
 
@@ -32,10 +32,8 @@ DB_EXCEPTION_NAMES = frozenset({
     "InternalError", "ProgrammingError",
 })
 
-T = TypeVar("T")
 
-
-def swallow_db_read(operation: str, fn: Callable[[], T], default: Any) -> T:
+def swallow_db_read(operation: str, fn: Callable[[], Any], default: Any) -> Any:
     """Run ``fn()``; on DB-class transient, log + return ``default``.
 
     Programming bugs (``AttributeError``, ``KeyError``, ``TypeError``,
@@ -48,10 +46,13 @@ def swallow_db_read(operation: str, fn: Callable[[], T], default: Any) -> T:
     ``"/exam/state get_draft"``) used in the log message; choose names
     that identify both the route and the helper being called.
 
-    ``default`` is typed ``Any`` so callers can pass empty literals
-    (``[]``, ``({}, False)``, ``None``) without mypy narrowing the
-    ``T`` TypeVar from the default's type — the return type stays
-    pinned to whatever ``fn`` returns, which is what callers want.
+    Type-level note: ``fn`` and the return are typed ``Any`` rather than
+    a TypeVar because the Canvas plugin sandbox blocks
+    ``from typing import TypeVar`` at module load (verified 2026-06-12,
+    same per-name allowlist family as the ``django.db`` /
+    ``requests.exceptions`` traps). Callers re-type via tuple-unpack or
+    explicit annotation at the call site, which is good enough for the
+    use cases here.
     """
     try:
         return fn()
@@ -61,4 +62,4 @@ def swallow_db_read(operation: str, fn: Callable[[], T], default: Any) -> T:
         log.exception(
             f"[exam_chart_app] {operation} failed (DB transient swallowed)"
         )
-        return default  # type: ignore[no-any-return]
+        return default
