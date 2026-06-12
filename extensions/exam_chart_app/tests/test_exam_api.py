@@ -11,6 +11,8 @@ import json
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from exam_chart_app.api import exam_api
 from exam_chart_app.api.exam_api import ExamChartingAPI
 
@@ -340,7 +342,14 @@ def test_finalize_emits_per_diagnosis_blocks(
     assert responses[0].status_code == HTTPStatus.OK
     body = json.loads(responses[0].content.decode())
     assert body["effects"]["diagnose_count"] == 2
-    assert body["effects"]["assess_count"] == 2
+    # New diagnoses (no existing_condition_id) do NOT emit Assess.
+    # AssessCommand requires a condition_id that doesn't exist yet for
+    # a brand-new dx; emitting without one produces an orphaned
+    # "Assess Condition:" row on the chart with an empty condition
+    # slot. Status + narrative for new dx are dropped at the emitter
+    # layer; the 50_diagnoses.js form hides those fields on new-dx
+    # cards so providers can't enter them.
+    assert body["effects"]["assess_count"] == 0
     assert body["effects"]["plan_count"] == 2
     assert mock_dx.call_count == 2
     # First diagnosis: today_assessment populated
@@ -351,7 +360,7 @@ def test_finalize_emits_per_diagnosis_blocks(
     dx1_kwargs = mock_dx.call_args_list[1].kwargs
     assert dx1_kwargs["icd10_code"] == "M25.561"
     assert "today_assessment" not in dx1_kwargs
-    assert mock_assess.call_count == 2
+    mock_assess.assert_not_called()
     assert mock_plan.call_count == 2
 
 
@@ -419,6 +428,10 @@ def test_finalize_diagnose_skips_entries_missing_code(
 def test_finalize_assess_status_string_maps_to_enum(
     mock_rfv, mock_hpi, mock_ros, mock_pe, mock_dx, mock_assess, mock_plan,
 ):
+    # The string-to-enum mapping is only exercised when the diagnosis
+    # entry has an existing_condition_id (new-dx entries skip Assess
+    # because AssessCommand requires a condition_id the new dx hasn't
+    # created yet — see _emit_diagnosis_block).
     mock_dx.return_value.originate.return_value = "DX_EFFECT"
     mock_assess.return_value.originate.return_value = "ASSESS_EFFECT"
     payload = {
@@ -428,6 +441,7 @@ def test_finalize_assess_status_string_maps_to_enum(
             "diagnoses": [
                 {
                     "code": "K21.9", "display": "GERD",
+                    "existing_condition_id": "22222222-2222-2222-2222-222222222222",
                     "assessment": {"status": "improved", "narrative": "doing well"},
                 },
             ],
@@ -769,6 +783,38 @@ def test_get_state_returns_empty_for_no_saved_state(mock_get, mock_was):
 
 @patch("exam_chart_app.api.exam_api.was_ever_finalized")
 @patch("exam_chart_app.api.exam_api.get_draft")
+def test_get_state_swallows_db_error_and_returns_defaults(mock_get, mock_was):
+    """Representative test for the swallow_db_read pattern across the
+    read routes. A transient DB-class error from either ORM helper
+    should be swallowed (logged for Sentry), and the route returns
+    safe defaults so the frontend can render. Same pattern applies to
+    every route that calls swallow_db_read; this one test locks in
+    the contract."""
+    from django.db import OperationalError
+    mock_get.side_effect = OperationalError("connection lost")
+    mock_was.side_effect = OperationalError("connection lost")
+    api_obj = _make_api(query={"note_uuid": "11111111-1111-1111-1111-111111111111"})
+    responses = api_obj.get_state()
+    assert responses[0].status_code == HTTPStatus.OK
+    body = json.loads(responses[0].content.decode())
+    assert body == {"state": {}, "finalized": False, "has_chart_commands": False}
+
+
+@patch("exam_chart_app.api.exam_api.was_ever_finalized")
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_get_state_propagates_programming_bug(mock_get, mock_was):
+    """Locks the invariant: non-DB-class exceptions (AttributeError,
+    KeyError, TypeError) must propagate as 500 + Sentry. Same shape
+    as the existing finalize-propagation test."""
+    mock_get.side_effect = AttributeError("AttributeHub attr renamed")
+    mock_was.return_value = False
+    api_obj = _make_api(query={"note_uuid": "11111111-1111-1111-1111-111111111111"})
+    with pytest.raises(AttributeError):
+        api_obj.get_state()
+
+
+@patch("exam_chart_app.api.exam_api.was_ever_finalized")
+@patch("exam_chart_app.api.exam_api.get_draft")
 def test_get_state_returns_saved_state_with_finalized_flag(mock_get, mock_was):
     mock_get.return_value = ({"rfv": {"comment": "x"}}, True)
     mock_was.return_value = True
@@ -820,7 +866,13 @@ def test_get_state_400_when_note_uuid_invalid():
 
 
 @patch("exam_chart_app.api.exam_api.set_draft")
-def test_save_state_persists_blob(mock_set):
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_persists_blob(mock_get, mock_set):
+    # get_draft is consulted by the finalized-note guard (see
+    # test_save_state_409_when_note_already_finalized); mock it to the
+    # not-yet-finalized state so this success-path test stays
+    # isolated from AttributeHub query semantics.
+    mock_get.return_value = ({}, False)
     payload = {
         "note_uuid": "11111111-1111-1111-1111-111111111111",
         "state": {"rfv": {"comment": "Annual visit"}},
@@ -842,6 +894,67 @@ def test_save_state_400_when_state_not_object(mock_set):
     }
     responses = _make_api(json_body=payload).save_state()
     assert responses[0].status_code == HTTPStatus.BAD_REQUEST
+    mock_set.assert_not_called()
+
+
+@patch("exam_chart_app.api.exam_api.set_draft")
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_swallows_get_draft_db_error_and_proceeds(mock_get, mock_set):
+    """A transient DB error from the get_draft finalized-check should be
+    swallowed (logged for Sentry via log.exception) and treated as
+    'not finalized' — control falls through to set_draft. Mirrors the
+    finalize() narrow-catch pattern."""
+    from django.db import OperationalError
+    mock_get.side_effect = OperationalError("connection lost")
+    payload = {
+        "note_uuid": "11111111-1111-1111-1111-111111111111",
+        "state": {"rfv": {"comment": "Annual visit"}},
+    }
+    responses = _make_api(json_body=payload).save_state()
+    # The DB read failure didn't 500; control reached set_draft.
+    assert responses[0].status_code == HTTPStatus.OK
+    mock_set.assert_called_once_with(
+        "11111111-1111-1111-1111-111111111111",
+        {"rfv": {"comment": "Annual visit"}},
+    )
+
+
+@patch("exam_chart_app.api.exam_api.set_draft")
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_propagates_get_draft_programming_bug(mock_get, mock_set):
+    """Locks the narrow-catch invariant: non-DB-class exceptions from
+    get_draft (AttributeError on a renamed AttributeHub attr, TypeError
+    from a wrong return shape, etc.) must propagate as 500 + Sentry —
+    not be silently swallowed alongside DB transients."""
+    mock_get.side_effect = AttributeError("AttributeHub.something renamed")
+    payload = {
+        "note_uuid": "11111111-1111-1111-1111-111111111111",
+        "state": {"rfv": {"comment": "Annual visit"}},
+    }
+    with pytest.raises(AttributeError):
+        _make_api(json_body=payload).save_state()
+    mock_set.assert_not_called()
+
+
+@patch("exam_chart_app.api.exam_api.set_draft")
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_409_when_note_already_finalized(mock_get, mock_set):
+    """Backend defense-in-depth: a stale tab (or any direct client call)
+    that POSTs to /exam/state/save after the note has been finalized
+    must get a 409 — silently overwriting the draft would mislead the
+    provider into thinking edits are reaching the chart when they
+    aren't. The frontend's _lockFormForFinalized prevents this from
+    happening through the form, but the backend guard catches the
+    bypass case."""
+    mock_get.return_value = ({"rfv": {"comment": "x"}}, True)  # finalized=True
+    payload = {
+        "note_uuid": "11111111-1111-1111-1111-111111111111",
+        "state": {"rfv": {"comment": "post-finalize edit attempt"}},
+    }
+    responses = _make_api(json_body=payload).save_state()
+    assert responses[0].status_code == HTTPStatus.CONFLICT
+    body = json.loads(responses[0].content.decode())
+    assert "finalized" in body["errors"][0]["message"].lower()
     mock_set.assert_not_called()
 
 
@@ -1110,7 +1223,13 @@ def test_save_state_400_when_note_uuid_invalid():
 
 
 @patch("exam_chart_app.api.exam_api.set_draft")
-def test_save_state_413_when_draft_too_large(mock_set):
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_413_when_draft_too_large(mock_get, mock_set):
+    # get_draft is consulted by the finalized-note guard before set_draft
+    # runs; mock to not-yet-finalized so this test exercises the
+    # DraftTooLargeError → 413 path rather than getting blocked by the
+    # 409 guard.
+    mock_get.return_value = ({}, False)
     from exam_chart_app.data.draft_state import DraftTooLargeError
     mock_set.side_effect = DraftTooLargeError("1500000 bytes exceeds cap 1000000")
     payload = {
@@ -1360,7 +1479,6 @@ def test_finalize_lets_unexpected_exceptions_propagate(mock_rfv, mock_dx):
     `(ValueError, TypeError)` so that genuine programming bugs surface
     in Sentry instead of being masked as a generic 500. KeyError,
     AttributeError, RuntimeError, etc. should propagate."""
-    import pytest
     mock_dx.return_value.originate.side_effect = RuntimeError("not a validation failure")
     payload = {
         "note_uuid": "11111111-1111-1111-1111-111111111111",
@@ -1375,12 +1493,16 @@ def test_finalize_lets_unexpected_exceptions_propagate(mock_rfv, mock_dx):
 @patch("exam_chart_app.api.emitters.DiagnoseCommand")
 @patch("exam_chart_app.api.exam_api.ReasonForVisitCommand")
 def test_finalize_400_when_assess_status_unknown(mock_rfv, mock_dx, mock_assess):
+    # Validation only fires when Assess is emitted. New-dx entries skip
+    # Assess (AssessCommand needs an existing condition_id), so the
+    # validation path is exercised via an existing-condition payload.
     mock_dx.return_value.originate.return_value = "DX"
     payload = {
         "note_uuid": "11111111-1111-1111-1111-111111111111",
         "rfv": {"comment": "x"},
         "ap": {"diagnoses": [{
             "code": "K21.9",
+            "existing_condition_id": "22222222-2222-2222-2222-222222222222",
             "assessment": {"status": "made-up-status", "narrative": "x"},
         }], "orders": []},
     }
@@ -1440,7 +1562,6 @@ def test_finalize_propagates_mark_finalized_programming_bug(mock_rfv, mock_mark)
     """Locks the narrowed-catch invariant: AttributeError / KeyError /
     TypeError from a renamed AttributeHub method or sandbox attribute
     block must NOT be swallowed. Those need to reach Sentry as 500s."""
-    import pytest
     mock_rfv.return_value.originate.return_value = "RFV"
     mock_mark.side_effect = AttributeError("AttributeHub.set_attribute renamed")
     payload = {

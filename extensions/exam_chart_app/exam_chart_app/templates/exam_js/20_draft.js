@@ -19,6 +19,13 @@
   }
 
   function _showSaveErrorBanner(message) {
+    // Suppress the save-error banner when the note is already
+    // finalized. A 409 response on a finalized note is expected
+    // behavior (in-flight saves race the finalize transition) — the
+    // provider already sees the "Already finalized" banner; showing
+    // a second alarming red banner on top of it would be redundant
+    // and confusing.
+    if (_finalized) return;
     var banner = $("save-error-banner");
     if (!banner) return;
     banner.textContent = message;
@@ -32,8 +39,20 @@
     banner.textContent = "";
   }
 
+  function _cancelPendingSave() {
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
+  }
+
   function _scheduleSaveDraft() {
-    if (_hydrating || !CONFIG.note_uuid) return;
+    // Skip if hydrating, no note context, or the form is already in
+    // finalized state. The finalized gate prevents a debounced save
+    // (queued from typing before finalize) from racing the finalize
+    // transition and surfacing a confusing 409-save-error alongside
+    // the legitimate "Already finalized" banner.
+    if (_hydrating || _finalized || !CONFIG.note_uuid) return;
     if (_saveTimer) clearTimeout(_saveTimer);
     _saveTimer = setTimeout(function () {
       _saveTimer = null;
@@ -114,6 +133,33 @@
   function _applyFinalizedUI(scrollBannerIntoView) {
     _showBanner("finalized", scrollBannerIntoView);
     updateFinalizeButton();
+    _lockFormForFinalized();
+  }
+
+  function _lockFormForFinalized() {
+    // After Finalize, the chart's commands are the source of truth.
+    // The form must stop accepting edits so the provider isn't misled
+    // into thinking they're amending the finalized exam (which they
+    // can't — those edits would only land in the plugin's draft state
+    // and never reach the chart).
+    //
+    // Disable every interactive control inside .exam-container and add
+    // a class for visual feedback. The banner stays clickable; the
+    // Finalize button is already disabled by updateFinalizeButton.
+    var container = document.querySelector(".exam-container");
+    if (!container) return;
+    container.classList.add("exam-container--finalized");
+    var selectors = "input, textarea, select, button";
+    Array.prototype.forEach.call(
+      container.querySelectorAll(selectors),
+      function (el) {
+        // Skip the banner's own controls if any (defensive — the
+        // finalized banner has no inputs today, but future banner
+        // content should remain interactive).
+        if (el.closest("#finalized-banner")) return;
+        el.disabled = true;
+      }
+    );
   }
 
   function _rehydrateQuestionnaireSection(section, savedSection) {
@@ -186,6 +232,13 @@
         // Dx + Orders cards re-render from state.
         try { renderDxList(); } catch (e) { /* not yet defined */ }
         try { renderOrdersList(); } catch (e) { /* same */ }
+        // Re-lock dynamic cards that just got rendered. _applyFinalizedUI
+        // ran above against the static DOM only; the Dx + Order cards
+        // (Goal, Plan, Follow Up, Lab, Imaging, Rx, Refer) didn't exist
+        // when it ran, so their inputs need their `disabled` attribute
+        // set now. The CSS pointer-events: none on the container is a
+        // safety net but doesn't block keyboard focus / tab-to.
+        if (_finalized) _lockFormForFinalized();
         // HPI + RFV-comment textareas.
         var hpiInput = $("hpi-narrative");
         if (hpiInput && state.hpi && state.hpi.narrative) {
@@ -205,7 +258,10 @@
         return Promise.all([
           _rehydrateQuestionnaireSection("ros", saved.ros),
           _rehydrateQuestionnaireSection("pe", saved.pe),
-        ]);
+        ]).then(function () {
+          // Re-lock again after ROS/PE pills + textareas just rendered.
+          if (_finalized) _lockFormForFinalized();
+        });
       })
       .catch(function (err) {
         console.warn("[ExamChartingApp] hydrate failed:", err);

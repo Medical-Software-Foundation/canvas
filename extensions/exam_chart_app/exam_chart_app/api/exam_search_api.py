@@ -19,6 +19,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.utils.http import ontologies_http
+from exam_chart_app.data.db_safety import swallow_db_read
 from exam_chart_app.data.imaging_codes import get_imaging_codes
 from canvas_sdk.v1.data import (
     LabPartner,
@@ -58,13 +59,17 @@ class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
         if not query:
             return [JSONResponse({"results": []}, status_code=HTTPStatus.OK)]
 
-        rows = (
-            ReasonForVisitSettingCoding.objects
-            .filter(Q(display__icontains=query) | Q(code__iexact=query))
-            .distinct()
-            .order_by("display")
-        )[:limit]
-
+        rows = swallow_db_read(
+            f"/exam/search/rfv-codings ReasonForVisitSettingCoding.filter(q={query!r})",
+            lambda: list(
+                ReasonForVisitSettingCoding.objects
+                .filter(Q(display__icontains=query) | Q(code__iexact=query))
+                .distinct()
+                .order_by("display")
+                [:limit]
+            ),
+            default=[],
+        )
         results = [
             {"code": r.code or "", "system": r.system or "", "display": r.display or ""}
             for r in rows
@@ -78,11 +83,13 @@ class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
         qs_filter: dict[str, Any] = {"active": True}
         if query:
             qs_filter["name__icontains"] = query
-        rows = (
-            LabPartner.objects
-            .filter(**qs_filter)
-            .order_by("name")
-        )[:limit]
+        rows = swallow_db_read(
+            f"/exam/search/lab-partners LabPartner.filter(q={query!r})",
+            lambda: list(
+                LabPartner.objects.filter(**qs_filter).order_by("name")[:limit]
+            ),
+            default=[],
+        )
         return [JSONResponse({
             "results": [{"id": str(r.id), "name": r.name or ""} for r in rows]
         }, status_code=HTTPStatus.OK)]
@@ -97,11 +104,13 @@ class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
         qs_filter: dict[str, Any] = {"lab_partner__id": partner_id}
         if query:
             qs_filter["order_name__icontains"] = query
-        rows = (
-            LabPartnerTest.objects
-            .filter(**qs_filter)
-            .order_by("order_name")
-        )[:limit]
+        rows = swallow_db_read(
+            f"/exam/search/lab-tests LabPartnerTest.filter(partner_id={partner_id!r}, q={query!r})",
+            lambda: list(
+                LabPartnerTest.objects.filter(**qs_filter).order_by("order_name")[:limit]
+            ),
+            default=[],
+        )
         return [JSONResponse({
             "results": [
                 {"order_code": r.order_code or "", "order_name": r.order_name or ""}
@@ -213,14 +222,22 @@ class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
         """
         query = (self.request.query_params.get("q") or "").strip()
         limit = _parse_limit(self.request.query_params.get("limit") or "")
-        qs = ServiceProvider.objects.all()
-        if query:
-            qs = qs.filter(
-                Q(first_name__icontains=query)
-                | Q(last_name__icontains=query)
-                | Q(practice_name__icontains=query)
-            )
-        rows = qs.order_by("last_name", "first_name")[:limit]
+
+        def _fetch_service_providers() -> list:
+            qs = ServiceProvider.objects.all()
+            if query:
+                qs = qs.filter(
+                    Q(first_name__icontains=query)
+                    | Q(last_name__icontains=query)
+                    | Q(practice_name__icontains=query)
+                )
+            return list(qs.order_by("last_name", "first_name")[:limit])
+
+        rows = swallow_db_read(
+            f"/exam/search/service-providers ServiceProvider.filter(q={query!r})",
+            _fetch_service_providers,
+            default=[],
+        )
         return [JSONResponse({
             "results": [
                 {
@@ -247,16 +264,24 @@ class ExamSearchAPI(StaffSessionAuthMixin, SimpleAPI):
         """
         query = (self.request.query_params.get("q") or "").strip()
         limit = _parse_limit(self.request.query_params.get("limit") or "")
-        qs = (
-            Staff.objects
-            .filter(active=True, roles__role_type="PROVIDER")
-            .distinct()
-        )
-        if query:
-            qs = qs.filter(
-                Q(first_name__icontains=query) | Q(last_name__icontains=query)
+
+        def _fetch_staff() -> list:
+            qs = (
+                Staff.objects
+                .filter(active=True, roles__role_type="PROVIDER")
+                .distinct()
             )
-        rows = qs.order_by("last_name", "first_name")[:limit]
+            if query:
+                qs = qs.filter(
+                    Q(first_name__icontains=query) | Q(last_name__icontains=query)
+                )
+            return list(qs.order_by("last_name", "first_name")[:limit])
+
+        rows = swallow_db_read(
+            f"/exam/search/staff Staff.filter(q={query!r})",
+            _fetch_staff,
+            default=[],
+        )
         return [JSONResponse({
             "results": [
                 {

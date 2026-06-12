@@ -16,6 +16,48 @@ body {
   padding: 16px;
 }
 
+/* Read-only state applied after finalize. Inputs are individually
+   `disabled` via JS (see _lockFormForFinalized in 20_draft.js) AND
+   the container blocks pointer events as a safety net: dynamic cards
+   (diagnoses, orders, questionnaire pills/text) get rendered AFTER
+   _lockFormForFinalized runs during hydrate, so they may not have
+   `disabled` applied. `pointer-events: none` on the container blocks
+   clicks on those late-arriving elements regardless.
+
+   No container-level opacity: a faded container kills contrast on
+   styled pill states (selected ROS toggles, picked diagnosis-code
+   chips) that already use light-text-on-light-background palettes
+   — the dim made them unreadable. The disabled-input grey-out +
+   cursor: not-allowed + the banner above carry enough lock-state
+   signal without sacrificing pill legibility. */
+.exam-container--finalized {
+  pointer-events: none;
+}
+/* Banner stays clickable — future banner controls (close button,
+   "go to chart commands" link, etc.) need to work in finalized state. */
+.exam-container--finalized #finalized-banner {
+  pointer-events: auto;
+}
+/* Grey-out the standard text inputs only. The pill-shaped <button>
+   elements (.exam-q-option / .exam-order-dx-pill) carry their own
+   is-selected coloring (red/orange/green fills for picked state) —
+   if we apply a generic disabled grey, the white-ish selected text
+   ends up unreadable against near-white background. Exclude pills
+   and let their own styling stand. */
+.exam-container--finalized input:disabled,
+.exam-container--finalized textarea:disabled,
+.exam-container--finalized select:disabled,
+.exam-container--finalized button:disabled:not(.exam-q-option):not(.exam-order-dx-pill) {
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+/* Pills keep their is-selected colors but still show the
+   "not-clickable" cursor on hover so the read-only state is obvious. */
+.exam-container--finalized .exam-q-option:disabled,
+.exam-container--finalized .exam-order-dx-pill:disabled {
+  cursor: not-allowed;
+}
+
 .exam-header {
   display: flex;
   align-items: center;

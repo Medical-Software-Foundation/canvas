@@ -11,6 +11,7 @@ Auth: StaffSessionAuthMixin — staff session only, no API-key fallback.
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import Any
 
 from canvas_sdk.commands import (
     HistoryOfPresentIllnessCommand,
@@ -23,7 +24,6 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
-from django.db import DatabaseError, OperationalError
 from logger import log
 
 from exam_chart_app.api.emitters import (
@@ -39,6 +39,7 @@ from exam_chart_app.data.draft_state import (
     set_draft,
     was_ever_finalized,
 )
+from exam_chart_app.data.db_safety import DB_EXCEPTION_NAMES, swallow_db_read
 from exam_chart_app.data.narratives import set_narrative
 from exam_chart_app.data.questionnaires import (
     find_questionnaires,
@@ -134,11 +135,18 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                 for r in rows
             ]
 
+        ros_rows = swallow_db_read(
+            "/exam/questionnaires/list find_questionnaires(ros)",
+            lambda: find_questionnaires("ros", ros_secret),
+            default=[],
+        )
+        pe_rows = swallow_db_read(
+            "/exam/questionnaires/list find_questionnaires(pe)",
+            lambda: find_questionnaires("pe", pe_secret),
+            default=[],
+        )
         return [JSONResponse(
-            {
-                "ros": _serialize(find_questionnaires("ros", ros_secret)),
-                "pe": _serialize(find_questionnaires("pe", pe_secret)),
-            },
+            {"ros": _serialize(ros_rows), "pe": _serialize(pe_rows)},
             status_code=HTTPStatus.OK,
         )]
 
@@ -151,7 +159,11 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                 {"error": "id query param required"},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
-        detail = get_questionnaire_detail(q_id)
+        detail = swallow_db_read(
+            f"/exam/questionnaires/detail get_questionnaire_detail({q_id!r})",
+            lambda: get_questionnaire_detail(q_id),
+            default=None,
+        )
         if detail is None:
             return [JSONResponse(
                 {"error": "questionnaire not found"},
@@ -175,12 +187,19 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         result: dict[str, str] = {"id": user_id, "type": user_type,
                                   "first_name": "", "last_name": ""}
         if user_id and user_type == "Staff":
-            try:
-                staff = Staff.objects.get(id=user_id)
-                result["first_name"] = staff.first_name or ""
-                result["last_name"] = staff.last_name or ""
-            except Staff.DoesNotExist:
-                pass
+            def _fetch_staff() -> Any:
+                try:
+                    return Staff.objects.get(id=user_id)
+                except Staff.DoesNotExist:
+                    return None
+            staff = swallow_db_read(
+                f"/exam/me Staff.get({user_id!r})",
+                _fetch_staff,
+                default=None,
+            )
+            if staff is not None:
+                result["first_name"] = getattr(staff, "first_name", "") or ""
+                result["last_name"] = getattr(staff, "last_name", "") or ""
         return [JSONResponse(result, status_code=HTTPStatus.OK)]
 
     @api.get("/exam/patient-conditions")
@@ -217,14 +236,18 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         # to the typed query before display) and keeps per-request memory
         # predictable.
         PATIENT_CONDITIONS_LIMIT = 200
-        conditions = (
-            Condition.objects
-            .filter(
-                patient__id=patient_id,
-                entered_in_error__isnull=True,
-            )
-            .prefetch_related("codings")
-            [:PATIENT_CONDITIONS_LIMIT]
+        conditions = swallow_db_read(
+            f"/exam/patient-conditions Condition.filter(patient_id={patient_id!r})",
+            lambda: list(
+                Condition.objects
+                .filter(
+                    patient__id=patient_id,
+                    entered_in_error__isnull=True,
+                )
+                .prefetch_related("codings")
+                [:PATIENT_CONDITIONS_LIMIT]
+            ),
+            default=[],
         )
 
         results: list[dict[str, str]] = []
@@ -308,8 +331,16 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                              "message": "Missing or invalid note_uuid"}]},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
-        state, finalized = get_draft(note_uuid)
-        has_chart_commands = was_ever_finalized(note_uuid)
+        state, finalized = swallow_db_read(
+            f"/exam/state get_draft(note={note_uuid})",
+            lambda: get_draft(note_uuid),
+            default=({}, False),
+        )
+        has_chart_commands = swallow_db_read(
+            f"/exam/state was_ever_finalized(note={note_uuid})",
+            lambda: was_ever_finalized(note_uuid),
+            default=False,
+        )
         return [JSONResponse(
             {
                 "state": state,
@@ -356,6 +387,41 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
             return [JSONResponse(
                 {"errors": [{"section": "state", "field": "", "message": "state must be an object"}]},
                 status_code=HTTPStatus.BAD_REQUEST,
+            )]
+        # Defense-in-depth: reject saves on already-finalized notes.
+        # The frontend's _lockFormForFinalized should prevent the debounced
+        # save from firing once the form is locked, but a stale tab that
+        # missed the finalize signal (or a direct client call bypassing
+        # the form's disabled state) would otherwise silently write into
+        # the draft after the chart's commands are already finalized.
+        # Returning 409 lets the frontend surface "already finalized" via
+        # the existing save-error banner pattern.
+        #
+        # get_draft hits the live AttributeHub ORM. A DB-class transient
+        # would otherwise surface as an opaque 500 — wrap via
+        # swallow_db_read so it logs (paging Sentry) and degrades to
+        # "not finalized", proceeding to set_draft. If the transient is
+        # real, set_draft will likely also fail and return its own
+        # error — but at least we get a clean breadcrumb from the read
+        # attempt. Programming bugs (AttributeError / KeyError /
+        # TypeError) propagate.
+        _, already_finalized = swallow_db_read(
+            f"/exam/state/save get_draft(note={note_uuid})",
+            lambda: get_draft(note_uuid),
+            default=({}, False),
+        )
+        if already_finalized:
+            log.info(
+                f"[ExamChartingAPI] /exam/state/save rejected for finalized "
+                f"note={note_uuid}"
+            )
+            return [JSONResponse(
+                {"errors": [{
+                    "section": "state",
+                    "field": "",
+                    "message": "This note has been finalized — edits go through the chart's command UI.",
+                }]},
+                status_code=HTTPStatus.CONFLICT,
             )]
         try:
             set_draft(note_uuid, state)
@@ -408,21 +474,33 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         rfv_coding = rfv.get("coding")
         rfv_comment = str(rfv.get("comment") or "").strip()
 
-        # Build the RFV comment: prefer typed free-text; fall back to the
-        # picked NLM display + code. We always emit as a free-text comment
+        # Build the RFV comment. We always emit as a free-text comment
         # (structured=False) because ReasonForVisitCommand validates the
         # coding against the ReasonForVisitSettingCoding table, which
         # doesn't contain NLM ICD-10 codes on most instances. The picked
         # display is the human-readable label the provider chose, so
         # preserving it as text loses no clinical content.
-        rfv_text = rfv_comment
-        if not rfv_text and isinstance(rfv_coding, dict):
+        #
+        # When both the picked coding AND a free-text comment are present,
+        # combine them ("Display (Code) — free-text") so neither signal is
+        # silently dropped. Provider intent when they fill both is usually
+        # "use this code, plus this extra context," not "throw out the code."
+        # When only one is present, use it directly.
+        coding_text = ""
+        if isinstance(rfv_coding, dict):
             display = str(rfv_coding.get("display") or "").strip()
             code = str(rfv_coding.get("code") or "").strip()
             if display and code:
-                rfv_text = f"{display} ({code})"
+                coding_text = f"{display} ({code})"
             else:
-                rfv_text = display or code
+                coding_text = display or code
+
+        if coding_text and rfv_comment:
+            rfv_text = f"{coding_text} — {rfv_comment}"
+        elif coding_text:
+            rfv_text = coding_text
+        else:
+            rfv_text = rfv_comment
 
         if not rfv_text:
             return [JSONResponse(
@@ -550,13 +628,9 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                     f"[ExamChartingAPI] narrative stashed for "
                     f"command_uuid={cmd_uuid} len={len(narrative)}"
                 )
-            except (DatabaseError, OperationalError):
-                # Narrow to DB-class errors: AttributeHub is internal
-                # data access, and AttributeError/KeyError/TypeError from
-                # programming bugs (renamed SDK methods, sandbox attribute
-                # blocks) must reach Sentry rather than be swallowed.
-                # log.exception so on-call gets paged for the genuine DB
-                # blips this swallow is intended to cover.
+            except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see DB_EXCEPTION_NAMES rationale at module top
+                if exc.__class__.__name__ not in DB_EXCEPTION_NAMES:
+                    raise  # programming bug (AttributeError, KeyError, TypeError) → 500 + Sentry
                 log.exception(
                     f"[ExamChartingAPI] set_narrative failed for "
                     f"command_uuid={cmd_uuid}"
@@ -577,15 +651,16 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             mark_finalized(note_uuid)
             mark_ever_finalized(note_uuid)
-        except (DatabaseError, OperationalError):
-            # Narrow to DB-class errors so programming bugs reach Sentry.
-            # log.exception pages on-call: a swallowed transient here
-            # leaves finalized=False, the frontend re-enables the
-            # Finalize button on reopen, and a re-click would duplicate
-            # every per-section emit. The narrow catch + page is the
-            # immediate compliance fix; closing the duplicate-emit gap
-            # fully requires frontend-side dedup or backend pre-gate
-            # state read.
+        except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see DB_EXCEPTION_NAMES rationale at module top
+            if exc.__class__.__name__ not in DB_EXCEPTION_NAMES:
+                raise  # programming bug → 500 + Sentry
+            # A swallowed transient here leaves finalized=False, the
+            # frontend re-enables the Finalize button on reopen, and a
+            # re-click would duplicate every per-section emit. The
+            # narrow catch + log.exception page is the immediate
+            # compliance fix; closing the duplicate-emit gap fully
+            # requires frontend-side dedup or backend pre-gate state
+            # read.
             log.exception(
                 f"[ExamChartingAPI] mark_finalized failed for note={note_uuid}"
             )
