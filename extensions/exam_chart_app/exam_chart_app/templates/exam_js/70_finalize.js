@@ -6,6 +6,15 @@
     msg.textContent = "Finalizing…";
     msg.className = "exam-finalize-status exam-finalize-status--committing";
 
+    // Cancel any debounced save still pending from recent keystrokes.
+    // Otherwise the save POST races finalize's state transition and
+    // the backend 409-guard rejects it post-finalize, surfacing a
+    // red save-error banner alongside the legitimate yellow finalized
+    // banner. _scheduleSaveDraft also gates on `_finalized` once the
+    // transition completes, but cancelling here closes the race
+    // window between click + 200-response.
+    _cancelPendingSave();
+
     var payload = {
       note_uuid: CONFIG.note_uuid,
       rfv: state.rfv,

@@ -474,21 +474,33 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         rfv_coding = rfv.get("coding")
         rfv_comment = str(rfv.get("comment") or "").strip()
 
-        # Build the RFV comment: prefer typed free-text; fall back to the
-        # picked NLM display + code. We always emit as a free-text comment
+        # Build the RFV comment. We always emit as a free-text comment
         # (structured=False) because ReasonForVisitCommand validates the
         # coding against the ReasonForVisitSettingCoding table, which
         # doesn't contain NLM ICD-10 codes on most instances. The picked
         # display is the human-readable label the provider chose, so
         # preserving it as text loses no clinical content.
-        rfv_text = rfv_comment
-        if not rfv_text and isinstance(rfv_coding, dict):
+        #
+        # When both the picked coding AND a free-text comment are present,
+        # combine them ("Display (Code) — free-text") so neither signal is
+        # silently dropped. Provider intent when they fill both is usually
+        # "use this code, plus this extra context," not "throw out the code."
+        # When only one is present, use it directly.
+        coding_text = ""
+        if isinstance(rfv_coding, dict):
             display = str(rfv_coding.get("display") or "").strip()
             code = str(rfv_coding.get("code") or "").strip()
             if display and code:
-                rfv_text = f"{display} ({code})"
+                coding_text = f"{display} ({code})"
             else:
-                rfv_text = display or code
+                coding_text = display or code
+
+        if coding_text and rfv_comment:
+            rfv_text = f"{coding_text} — {rfv_comment}"
+        elif coding_text:
+            rfv_text = coding_text
+        else:
+            rfv_text = rfv_comment
 
         if not rfv_text:
             return [JSONResponse(

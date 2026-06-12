@@ -19,6 +19,13 @@
   }
 
   function _showSaveErrorBanner(message) {
+    // Suppress the save-error banner when the note is already
+    // finalized. A 409 response on a finalized note is expected
+    // behavior (in-flight saves race the finalize transition) — the
+    // provider already sees the "Already finalized" banner; showing
+    // a second alarming red banner on top of it would be redundant
+    // and confusing.
+    if (_finalized) return;
     var banner = $("save-error-banner");
     if (!banner) return;
     banner.textContent = message;
@@ -32,8 +39,20 @@
     banner.textContent = "";
   }
 
+  function _cancelPendingSave() {
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
+  }
+
   function _scheduleSaveDraft() {
-    if (_hydrating || !CONFIG.note_uuid) return;
+    // Skip if hydrating, no note context, or the form is already in
+    // finalized state. The finalized gate prevents a debounced save
+    // (queued from typing before finalize) from racing the finalize
+    // transition and surfacing a confusing 409-save-error alongside
+    // the legitimate "Already finalized" banner.
+    if (_hydrating || _finalized || !CONFIG.note_uuid) return;
     if (_saveTimer) clearTimeout(_saveTimer);
     _saveTimer = setTimeout(function () {
       _saveTimer = null;
