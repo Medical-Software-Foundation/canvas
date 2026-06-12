@@ -114,6 +114,33 @@
   function _applyFinalizedUI(scrollBannerIntoView) {
     _showBanner("finalized", scrollBannerIntoView);
     updateFinalizeButton();
+    _lockFormForFinalized();
+  }
+
+  function _lockFormForFinalized() {
+    // After Finalize, the chart's commands are the source of truth.
+    // The form must stop accepting edits so the provider isn't misled
+    // into thinking they're amending the finalized exam (which they
+    // can't — those edits would only land in the plugin's draft state
+    // and never reach the chart).
+    //
+    // Disable every interactive control inside .exam-container and add
+    // a class for visual feedback. The banner stays clickable; the
+    // Finalize button is already disabled by updateFinalizeButton.
+    var container = document.querySelector(".exam-container");
+    if (!container) return;
+    container.classList.add("exam-container--finalized");
+    var selectors = "input, textarea, select, button";
+    Array.prototype.forEach.call(
+      container.querySelectorAll(selectors),
+      function (el) {
+        // Skip the banner's own controls if any (defensive — the
+        // finalized banner has no inputs today, but future banner
+        // content should remain interactive).
+        if (el.closest("#finalized-banner")) return;
+        el.disabled = true;
+      }
+    );
   }
 
   function _rehydrateQuestionnaireSection(section, savedSection) {

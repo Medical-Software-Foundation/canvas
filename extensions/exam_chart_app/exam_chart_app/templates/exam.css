@@ -16,6 +16,21 @@ body {
   padding: 16px;
 }
 
+/* Read-only state applied after finalize. Inputs are individually
+   `disabled` via JS (see _lockFormForFinalized in 20_draft.js); this
+   class adds a global visual cue so the provider can tell at a glance
+   that the form is no longer accepting edits. */
+.exam-container--finalized {
+  opacity: 0.75;
+}
+.exam-container--finalized input:disabled,
+.exam-container--finalized textarea:disabled,
+.exam-container--finalized select:disabled,
+.exam-container--finalized button:disabled {
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+
 .exam-header {
   display: flex;
   align-items: center;
