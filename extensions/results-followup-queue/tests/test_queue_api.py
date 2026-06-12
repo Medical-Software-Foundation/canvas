@@ -18,6 +18,7 @@ from canvas_sdk.test_utils.factories import (
     LabReportFactory,
     LabReviewFactory,
     LabTestFactory,
+    LabValueCodingFactory,
     LabValueFactory,
     PatientFactory,
     StaffFactory,
@@ -29,6 +30,8 @@ from results_followup_queue.handlers.queue_api import (
     _days_pending,
     _is_abnormal,
     _lab_result_name,
+    _lab_value_name,
+    _lab_values,
     _patient_name,
     _sort_key,
 )
@@ -333,6 +336,46 @@ def test_get_data_imaging_never_abnormal() -> None:
 
 
 @pytest.mark.django_db
+def test_get_data_imaging_has_no_values() -> None:
+    """Imaging rows expose an empty values list (no discrete results)."""
+    staff = StaffFactory.create()
+    _make_imaging_for(staff)
+
+    rows = _data(_make_handler(str(staff.id)))
+    assert rows[0]["values"] == []
+
+
+@pytest.mark.django_db
+def test_get_data_lab_row_includes_result_values() -> None:
+    """A lab row carries its discrete result values, named from the coding."""
+    staff = StaffFactory.create()
+    report = LabReportFactory.create()
+    order = LabOrderFactory.create(ordering_provider=staff)
+    LabTestFactory.create(report=report, order=order, ontology_test_name="CBC")
+    value = LabValueFactory.create(
+        report=report,
+        value="12.3",
+        units="10^3/uL",
+        abnormal_flag="H",
+        reference_range="4.0-11.0",
+    )
+    LabValueCodingFactory.create(value=value, name="WBC")
+
+    rows = _data(_make_handler(str(staff.id)))
+    assert len(rows) == 1
+    values = rows[0]["values"]
+    assert values == [
+        {
+            "name": "WBC",
+            "value": "12.3",
+            "units": "10^3/uL",
+            "abnormal_flag": "H",
+            "reference_range": "4.0-11.0",
+        }
+    ]
+
+
+@pytest.mark.django_db
 def test_get_data_deduplicates_multi_test_lab_report() -> None:
     """A report with several matching tests appears once, not once per test."""
     staff = StaffFactory.create()
@@ -376,6 +419,62 @@ def test_is_abnormal_false_when_all_blank() -> None:
         MagicMock(abnormal_flag="  "),
     ]
     assert _is_abnormal(report) is False
+
+
+def _mock_value(
+    value: str,
+    *,
+    units: str = "",
+    abnormal_flag: str = "",
+    reference_range: str = "",
+    coding_name: str | None = None,
+    test_name: str | None = None,
+) -> MagicMock:
+    """Build a mock LabValue with optional coding/test for name resolution."""
+    v = MagicMock()
+    v.value = value
+    v.units = units
+    v.abnormal_flag = abnormal_flag
+    v.reference_range = reference_range
+    v.codings.all.return_value = (
+        [MagicMock(name=coding_name)] if coding_name is not None else []
+    )
+    if coding_name is not None:
+        v.codings.all.return_value[0].name = coding_name
+    if test_name is not None:
+        v.test = MagicMock(ontology_test_name=test_name)
+    else:
+        v.test = None
+    return v
+
+
+def test_lab_values_skips_empty_results() -> None:
+    """Values with no result text are dropped."""
+    report = MagicMock()
+    report.values.all.return_value = [
+        _mock_value("", coding_name="WBC"),
+        _mock_value("  ", coding_name="RBC"),
+        _mock_value("5.1", units="g/dL", coding_name="Hgb"),
+    ]
+    rows = _lab_values(report)
+    assert rows == [
+        {
+            "name": "Hgb",
+            "value": "5.1",
+            "units": "g/dL",
+            "abnormal_flag": "",
+            "reference_range": "",
+        }
+    ]
+
+
+def test_lab_value_name_prefers_coding_then_test_then_generic() -> None:
+    assert _lab_value_name(_mock_value("1", coding_name="Glucose")) == "Glucose"
+    assert (
+        _lab_value_name(_mock_value("1", coding_name="  ", test_name="Sodium"))
+        == "Sodium"
+    )
+    assert _lab_value_name(_mock_value("1")) == "Result"
 
 
 def test_lab_result_name_joins_distinct_sorted_tests() -> None:

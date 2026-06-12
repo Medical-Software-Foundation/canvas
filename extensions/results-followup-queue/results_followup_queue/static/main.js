@@ -45,6 +45,34 @@
   }
 
   /**
+   * Build the inline list of result values for a lab row.
+   */
+  function buildValues(values) {
+    if (!values || values.length === 0) return "";
+    var items = values
+      .map(function (v) {
+        var cls = v.abnormal_flag ? "rfq-value rfq-value-abnormal" : "rfq-value";
+        var unit = v.units ? " " + esc(v.units) : "";
+        var flag = v.abnormal_flag
+          ? " <span class='rfq-flag'>" + esc(v.abnormal_flag) + "</span>"
+          : "";
+        var ref = v.reference_range
+          ? " <span class='rfq-ref'>(ref " + esc(v.reference_range) + ")</span>"
+          : "";
+        return (
+          "<li class='" + cls + "'>" +
+            "<span class='rfq-value-name'>" + esc(v.name) + "</span>" +
+            "<span class='rfq-value-num'>" + esc(v.value) + unit + "</span>" +
+            flag +
+            ref +
+          "</li>"
+        );
+      })
+      .join("");
+    return "<ul class='rfq-values'>" + items + "</ul>";
+  }
+
+  /**
    * Build HTML for a single result row.
    */
   function buildRow(row) {
@@ -73,6 +101,7 @@
           "</div>" +
           "<p class='rfq-name'>" + esc(row.name) + "</p>" +
           "<p class='rfq-date'>" + esc(formatDate(row.result_date)) + "</p>" +
+          buildValues(row.values) +
         "</div>" +
         "<div class='rfq-row-side'>" +
           "<span class='" + agingClass(days) + "'>" + esc(daysLabel) + "</span>" +

@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.166.0",
-    "plugin_version": "0.0.2",
+    "plugin_version": "0.0.3",
     "name": "results_followup_queue",
     "description": "Global companion app that lists the lab and imaging results awaiting the logged-in provider's review. Flags abnormal labs, shows how long each result has been pending (with aging highlights), and links to the patient chart to close the diagnostic loop.",
     "components": {
@@ -22,6 +22,7 @@
                     "read": [
                         "LabReport",
                         "LabValue",
+                        "LabValueCoding",
                         "LabOrder",
                         "LabTest",
                         "ImagingReport",

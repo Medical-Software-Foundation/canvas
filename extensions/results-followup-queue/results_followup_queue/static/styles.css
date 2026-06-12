@@ -102,6 +102,65 @@ body {
   margin-top: 1px;
 }
 
+/* ── Inline result values ────────────────────────────────────────────────── */
+
+.rfq-values {
+  list-style: none;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rfq-value {
+  font-size: 12px;
+  color: #3c4b5e;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.rfq-value-name {
+  font-weight: 600;
+  color: #1a2433;
+}
+
+.rfq-value-name::after {
+  content: ":";
+}
+
+.rfq-value-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.rfq-value-abnormal {
+  color: #c0392b;
+}
+
+.rfq-value-abnormal .rfq-value-name,
+.rfq-value-abnormal .rfq-value-num {
+  color: #c0392b;
+}
+
+.rfq-flag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: #c0392b;
+  border-radius: 3px;
+  padding: 0 5px;
+}
+
+.rfq-ref {
+  font-size: 11px;
+  color: #6b7a8d;
+}
+
 /* ── Side column (aging + badges) ────────────────────────────────────────── */
 
 .rfq-row-side {

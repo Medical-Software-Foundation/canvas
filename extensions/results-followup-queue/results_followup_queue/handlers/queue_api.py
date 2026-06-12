@@ -18,7 +18,7 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.common import DocumentReviewMode
 from canvas_sdk.v1.data.imaging import ImagingReport
-from canvas_sdk.v1.data.lab import LabReport
+from canvas_sdk.v1.data.lab import LabReport, LabValue
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -102,7 +102,7 @@ class QueueAPI(StaffSessionAuthMixin, SimpleAPI):
             )
             .exclude(review_mode=DocumentReviewMode.REVIEW_NOT_REQUIRED)
             .select_related("patient")
-            .prefetch_related("values", "tests")
+            .prefetch_related("values", "values__codings", "values__test", "tests")
             # A report joins to many tests, so the provider filter can duplicate
             # rows. Plain .distinct() collapses them. NOT .distinct("field") —
             # Postgres-only DISTINCT ON breaks the SQLite test harness.
@@ -142,13 +142,15 @@ def _lab_row(report: LabReport, today: date) -> dict[str, Any]:
         "days_pending": _days_pending(result_date, today),
         "abnormal": _is_abnormal(report),
         "requires_signature": bool(report.requires_signature),
+        "values": _lab_values(report),
     }
 
 
 def _imaging_row(report: ImagingReport, today: date) -> dict[str, Any]:
     """Assemble a result-row dict for a single imaging report.
 
-    Imaging has no structured abnormal flag, so ``abnormal`` is always False.
+    Imaging has no structured abnormal flag or discrete values, so ``abnormal``
+    is always False and ``values`` is always empty.
     """
     result_date = report.result_date
     return {
@@ -160,6 +162,7 @@ def _imaging_row(report: ImagingReport, today: date) -> dict[str, Any]:
         "days_pending": _days_pending(result_date, today),
         "abnormal": False,
         "requires_signature": bool(report.requires_signature),
+        "values": [],
     }
 
 
@@ -203,6 +206,45 @@ def _lab_result_name(report: LabReport) -> str:
 def _is_abnormal(report: LabReport) -> bool:
     """Return True if any of the report's lab values carries an abnormal flag."""
     return any((value.abnormal_flag or "").strip() for value in report.values.all())
+
+
+def _lab_values(report: LabReport) -> list[dict[str, Any]]:
+    """Return the report's individual result values for inline display.
+
+    Each entry is ``{name, value, units, abnormal_flag, reference_range}``.
+    Values with no result text are skipped. Iterates the prefetched values
+    (and their codings/test) so this adds no extra queries per report.
+    """
+    rows: list[dict[str, Any]] = []
+    for value in report.values.all():
+        text = (value.value or "").strip()
+        if not text:
+            continue
+        rows.append(
+            {
+                "name": _lab_value_name(value),
+                "value": text,
+                "units": (value.units or "").strip(),
+                "abnormal_flag": (value.abnormal_flag or "").strip(),
+                "reference_range": (value.reference_range or "").strip(),
+            }
+        )
+    return rows
+
+
+def _lab_value_name(value: LabValue) -> str:
+    """Return the analyte name for a lab value.
+
+    Prefers the value's coding name, then the associated test's ontology name,
+    falling back to a generic label.
+    """
+    codings = list(value.codings.all())
+    if codings and (coding_name := str(codings[0].name).strip()):
+        return coding_name
+    test = value.test
+    if test and (test_name := str(test.ontology_test_name).strip()):
+        return test_name
+    return "Result"
 
 
 def _days_pending(result_date: date | None, today: date) -> int:

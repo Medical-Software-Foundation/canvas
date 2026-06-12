@@ -19,6 +19,9 @@ Each row shows:
 - **Patient name** — links to the patient chart (`/companion/patient/<key>`).
 - **Type badge** — `Lab` or `Imaging`.
 - **Result name** — the lab test name(s) or imaging study name.
+- **Result values** — for labs, the discrete result values (name, value, units,
+  reference range) are listed inline, with abnormal values highlighted in red.
+  (Imaging has no discrete values, so none are shown.)
 - **Result date** and **days pending**, with an aging highlight
   (≥ 7 days amber, ≥ 14 days red).
 - **Abnormal badge** — for labs, when any lab value carries an abnormal flag.
