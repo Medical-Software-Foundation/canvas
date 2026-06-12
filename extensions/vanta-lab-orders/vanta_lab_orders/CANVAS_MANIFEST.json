@@ -1,0 +1,30 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.21",
+    "name": "vanta_lab_orders",
+    "description": "Send signed Vanta Diagnostics lab orders from Canvas to LKCareEvolve (ELLKAY) via Orders JSON v2.2. Pattern reusable for other ELLKAY-fronted labs.",
+    "components": {
+        "handlers": [
+            {
+                "class": "vanta_lab_orders.protocols.send_order:SendVantaOrder",
+                "description": "On LAB_ORDER_COMMAND__POST_COMMIT, build ELLKAY Orders JSON v2.2 payload for the Vanta Diagnostics lab partner and POST it to LKCareEvolve."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "LKCAREEVOLVE_BASE_URL",
+        "LKCAREEVOLVE_API_KEY",
+        "VANTA_LAB_PARTNER_NAME",
+        "LOCATION_TO_ACCOUNT_MAP_JSON",
+        "SENDING_FACILITY_NAME"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
