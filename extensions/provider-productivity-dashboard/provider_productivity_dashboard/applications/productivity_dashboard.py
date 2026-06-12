@@ -15,7 +15,7 @@ from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import Note, NoteStates, NoteTypeCategories, CurrentNoteStateEvent, NoteStateChangeEvent
 from canvas_sdk.v1.data.billing import BillingLineItem, BillingLineItemStatus
-from canvas_sdk.v1.data.charge_description_master import ChargeDescriptionMaster, CDMCodeSystem
+from canvas_sdk.v1.data.charge_description_master import ChargeDescriptionMaster
 from canvas_sdk.v1.data.imaging import ImagingOrder
 from canvas_sdk.v1.data.lab import LabOrder
 from canvas_sdk.v1.data.medication import Medication
@@ -174,7 +174,7 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
         for cpt_code, name, short_name in (
             ChargeDescriptionMaster.objects.filter(
                 cpt_code__in=cpt_list,
-                code_system=CDMCodeSystem.CPT,
+                code_system="CPT",  # CDMCodeSystem.CPT value; the enum is not importable in plugins
             )
             .order_by("cpt_code", "-effective_date")
             .values_list("cpt_code", "name", "short_name")
