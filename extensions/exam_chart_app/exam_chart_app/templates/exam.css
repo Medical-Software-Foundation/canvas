@@ -38,12 +38,24 @@ body {
 .exam-container--finalized #finalized-banner {
   pointer-events: auto;
 }
+/* Grey-out the standard text inputs only. The pill-shaped <button>
+   elements (.exam-q-option / .exam-order-dx-pill) carry their own
+   is-selected coloring (red/orange/green fills for picked state) —
+   if we apply a generic disabled grey, the white-ish selected text
+   ends up unreadable against near-white background. Exclude pills
+   and let their own styling stand. */
 .exam-container--finalized input:disabled,
 .exam-container--finalized textarea:disabled,
 .exam-container--finalized select:disabled,
-.exam-container--finalized button:disabled {
+.exam-container--finalized button:disabled:not(.exam-q-option):not(.exam-order-dx-pill) {
   cursor: not-allowed;
   background-color: #f5f5f5;
+}
+/* Pills keep their is-selected colors but still show the
+   "not-clickable" cursor on hover so the read-only state is obvious. */
+.exam-container--finalized .exam-q-option:disabled,
+.exam-container--finalized .exam-order-dx-pill:disabled {
+  cursor: not-allowed;
 }
 
 .exam-header {
