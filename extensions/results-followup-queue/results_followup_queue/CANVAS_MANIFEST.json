@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.166.0",
-    "plugin_version": "0.0.7",
+    "plugin_version": "0.0.8",
     "name": "results_followup_queue",
     "description": "Global companion app that lists the lab and imaging results awaiting the logged-in provider's review. Flags abnormal labs, shows how long each result has been pending (with aging highlights), and links to the patient chart to close the diagnostic loop.",
     "components": {

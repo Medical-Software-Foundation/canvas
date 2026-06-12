@@ -138,7 +138,7 @@ class QueueAPI(StaffSessionAuthMixin, SimpleAPI):
                 junked=False,
             )
             .exclude(review_mode=DocumentReviewMode.REVIEW_NOT_REQUIRED)
-            .select_related("patient", "order")
+            .select_related("patient")
         )
 
         rows = [_lab_row(report, today) for report in lab_reports]
