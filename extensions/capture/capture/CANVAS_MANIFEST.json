@@ -1,0 +1,50 @@
+{
+    "sdk_version": "0.85.0",
+    "plugin_version": "0.13.5",
+    "name": "capture",
+    "description": "Add to a patient's chart from the chart app drawer or the Provider Companion: capture/upload a multi-page document, attach an exam photo to one of your open notes, or update the patient's profile picture.",
+    "url_permissions": [
+        {
+            "url": "https://cdn.jsdelivr.net",
+            "permissions": []
+        }
+    ],
+    "components": {
+        "applications": [
+            {
+                "class": "capture.applications.document_app:PatientDocumentCaptureApp",
+                "name": "Capture",
+                "description": "Add a document, exam photo, or profile picture to the patient's chart",
+                "scope": "patient_specific",
+                "icon": "assets/capture-icon.png"
+            },
+            {
+                "class": "capture.applications.document_app:PatientDocumentCaptureCompanionApp",
+                "name": "Capture",
+                "description": "Add a document, exam photo, or profile picture to the patient's chart",
+                "scope": "provider_companion_patient_specific",
+                "icon": "assets/capture-icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "capture.api.document_api:DocumentAPI",
+                "description": "SimpleAPI endpoint that builds a PDF from captured/uploaded pages and creates a DocumentReference via the Canvas FHIR API"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": []
+    },
+    "variables": [
+        {"name": "CANVAS_FHIR_CLIENT_ID", "sensitive": true},
+        {"name": "CANVAS_FHIR_CLIENT_SECRET", "sensitive": true}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
