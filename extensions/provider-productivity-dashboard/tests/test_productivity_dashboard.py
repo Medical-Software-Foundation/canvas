@@ -315,14 +315,54 @@ class TestGetMetrics:
                 "provider_productivity_dashboard.applications.productivity_dashboard.ProtocolCurrent"
             ) as mock_protocol, patch(
                 "provider_productivity_dashboard.applications.productivity_dashboard.NoteStateChangeEvent"
-            ) as mock_nsce:
+            ) as mock_nsce, patch(
+                "provider_productivity_dashboard.applications.productivity_dashboard.ChargeDescriptionMaster"
+            ) as mock_cdm:
                 # Default: no sign events (avg_time_to_close = "—")
                 nsce_qs = MagicMock()
                 mock_nsce.objects.filter.return_value = nsce_qs
                 nsce_qs.select_related.return_value = nsce_qs
                 nsce_qs.order_by.return_value = []
+                # Default: empty CDM, so descriptions fall back to the charge text.
+                mock_cdm.objects.filter.return_value.order_by.return_value.values_list.return_value = []
                 yield mock_note, mock_billing, mock_state, mock_protocol, mock_nsce
         return _cm()
+
+    def test_cpt_description_prefers_charge_master(self):
+        """Canonical description comes from ChargeDescriptionMaster, not the charge text."""
+        api = _make_api()
+        with self._patch_all() as (mock_note, mock_billing, mock_state, mock_protocol, mock_nsce):
+            self._setup_mocks(mock_note, mock_billing, mock_state,
+                visible_ids=[1], patients_count=1,
+                cpt_rows=[{"cpt": "99213", "description": "charge free text", "count": 1}],
+                mock_protocol=mock_protocol)
+            with patch(
+                "provider_productivity_dashboard.applications.productivity_dashboard.ChargeDescriptionMaster"
+            ) as mock_cdm:
+                mock_cdm.objects.filter.return_value.order_by.return_value.values_list.return_value = [
+                    ("99213", "Office/outpatient visit, established patient", "Office visit est"),
+                ]
+                results = api.get_metrics()
+
+        import json
+        body = json.loads(results[0].content)
+        assert body["cpt_codes"][0]["cpt"] == "99213"
+        assert body["cpt_codes"][0]["description"] == "Office/outpatient visit, established patient"
+
+    def test_cpt_description_falls_back_to_charge_text(self):
+        """When the code is not in the charge master, fall back to the charge description."""
+        api = _make_api()
+        with self._patch_all() as (mock_note, mock_billing, mock_state, mock_protocol, mock_nsce):
+            self._setup_mocks(mock_note, mock_billing, mock_state,
+                visible_ids=[1], patients_count=1,
+                cpt_rows=[{"cpt": "00000", "description": "charge fallback text", "count": 1}],
+                mock_protocol=mock_protocol)
+            # _patch_all leaves ChargeDescriptionMaster empty by default.
+            results = api.get_metrics()
+
+        import json
+        body = json.loads(results[0].content)
+        assert body["cpt_codes"][0]["description"] == "charge fallback text"
 
     def test_returns_json_response(self):
         api = _make_api()

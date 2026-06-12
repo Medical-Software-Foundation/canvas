@@ -15,6 +15,7 @@ from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import Note, NoteStates, NoteTypeCategories, CurrentNoteStateEvent, NoteStateChangeEvent
 from canvas_sdk.v1.data.billing import BillingLineItem, BillingLineItemStatus
+from canvas_sdk.v1.data.charge_description_master import ChargeDescriptionMaster, CDMCodeSystem
 from canvas_sdk.v1.data.imaging import ImagingOrder
 from canvas_sdk.v1.data.lab import LabOrder
 from canvas_sdk.v1.data.medication import Medication
@@ -153,24 +154,44 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
             .count()
         )
 
-        # CPT codes — via BillingLineItem linked to visible notes
-        billing_items = (
+        # CPT codes — via BillingLineItem linked to visible notes. Group by code and
+        # keep the charge's own description (Max so a real value wins over a blank)
+        # only as a fallback.
+        billing_items = list(
             BillingLineItem.objects.filter(
                 note__dbid__in=visible_note_ids,
                 status=BillingLineItemStatus.ACTIVE,
             )
             .values("cpt")
-            # Max() so a real description wins over an empty string for codes whose
-            # line items carry mixed (some blank) descriptions; Min would surface "".
             .annotate(count=Count("id"), description=Max("description"))
             .order_by("-count", "cpt")
         )
 
+        # Canonical CPT descriptions come from the Charge Description Master, not the
+        # charge's free-text line-item description (which is only sometimes filled in).
+        cpt_list = [item["cpt"] for item in billing_items]
+        cdm_name_by_cpt: dict[str, str] = {}
+        for cpt_code, name, short_name in (
+            ChargeDescriptionMaster.objects.filter(
+                cpt_code__in=cpt_list,
+                code_system=CDMCodeSystem.CPT,
+            )
+            .order_by("cpt_code", "-effective_date")
+            .values_list("cpt_code", "name", "short_name")
+        ):
+            # First row per code wins = most recent effective_date (descending order).
+            if cpt_code not in cdm_name_by_cpt:
+                cdm_name_by_cpt[cpt_code] = (name or short_name or "").strip()
+
         cpt_codes = [
-            {"cpt": item["cpt"], "description": item["description"], "count": item["count"]}
+            {
+                "cpt": item["cpt"],
+                "description": cdm_name_by_cpt.get(item["cpt"]) or (item["description"] or ""),
+                "count": item["count"],
+            }
             for item in billing_items
         ]
-        cpt_total = sum(item["count"] for item in cpt_codes)
+        cpt_total = sum(item["count"] for item in billing_items)
 
         # Care gaps — scoped to patients seen in the period. The same scoping is
         # applied for a single provider and for "All Providers", so both the open
