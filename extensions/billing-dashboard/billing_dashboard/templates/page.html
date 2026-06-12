@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing Dashboard</title>
+    <link rel="stylesheet" href="styles.css?v=__VERSION__">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" defer></script>
+    <script type="text/javascript" src="main.js?v=__VERSION__" defer></script>
+</head>
+<body>
+    <header class="page-header">
+        <h1>Billing Dashboard</h1>
+    </header>
+    <nav class="tabs" aria-label="Dashboard tabs">
+        <button class="tab-button active" data-tab="overview" aria-selected="true">Financial Overview</button>
+        <button class="tab-button" data-tab="payer" aria-selected="false">Payer Analysis</button>
+        <button class="tab-button" data-tab="trends" aria-selected="false">Reimbursement Trends</button>
+    </nav>
+    <main class="content">
+
+        <!-- Tab 1: Financial Overview -->
+        <section id="panel-overview" class="tab-panel active">
+            <div class="cards-grid">
+                <div class="metric-card">
+                    <div class="metric-card-header"><span class="metric-label">Last Month Collected</span></div>
+                    <div class="metric-value" id="val-last-month">...</div>
+                    <div class="metric-trend neutral" id="trend-last-month"></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-card-header"><span class="metric-label">This Month Collected</span></div>
+                    <div class="metric-value" id="val-this-month">...</div>
+                    <div class="metric-trend neutral" id="trend-this-month"></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-card-header"><span class="metric-label">Next Month Projected</span></div>
+                    <div class="metric-value" id="val-next-month">...</div>
+                    <div class="metric-trend neutral" id="trend-next-month"></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-card-header"><span class="metric-label">Claim Acceptance Rate</span></div>
+                    <div class="metric-value" id="val-acceptance">...</div>
+                    <div class="metric-trend neutral" id="trend-acceptance"></div>
+                </div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-card">
+                    <div class="chart-card-title" id="daily-chart-title">Daily Volume &amp; Revenue (trailing month)</div>
+                    <div class="chart-container"><canvas id="daily-chart" aria-label="Daily volume and revenue chart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-card-title" id="monthly-chart-title">Monthly Revenue Trend (trailing 12 months)</div>
+                    <div class="chart-container"><canvas id="monthly-chart" aria-label="Monthly revenue trend chart"></canvas></div>
+                </div>
+            </div>
+            <div class="section-title">Actionable Insights</div>
+            <div class="insights-list" id="insights-list">
+                <div style="color:#9ca3af;text-align:center;padding:24px 0;">Loading insights...</div>
+            </div>
+            <div id="overview-status" style="color:#9ca3af;text-align:center;padding:12px 0;font-size:12px;"></div>
+        </section>
+
+        <!-- Tab 2: Payer Analysis -->
+        <section id="panel-payer" class="tab-panel">
+            <div class="payer-layout">
+                <div class="table-card">
+                    <div class="table-card-title" id="payer-table-title">Payer Performance (trailing 90 days)</div>
+                    <table id="payer-table" aria-label="Payer performance table">
+                        <thead>
+                            <tr>
+                                <th>Payer</th>
+                                <th>Collected</th>
+                                <th>Acceptance Rate</th>
+                                <th>vs CMS Benchmark</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payer-table-body">
+                            <tr><td colspan="4" style="text-align:center;padding:24px;color:#9ca3af">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="payer-chart-card">
+                    <div class="chart-card-title">Payer Mix by Revenue</div>
+                    <div class="payer-chart-container">
+                        <canvas id="payer-chart" aria-label="Payer revenue mix chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 3: Reimbursement Trends -->
+        <section id="panel-trends" class="tab-panel">
+            <div class="table-card">
+                <div class="table-card-title" id="cpt-table-title">Top CPT Codes by Volume (trailing 90 days)</div>
+                <table id="cpt-table" aria-label="CPT reimbursement table">
+                    <thead>
+                        <tr>
+                            <th>CPT Code</th>
+                            <th>Description</th>
+                            <th>Your Avg Charge <span class="col-tooltip" title="Average charged amount from BillingLineItem — not the posted/collected amount">&#9432;</span></th>
+                            <th>CMS Rate</th>
+                            <th>Delta</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cpt-table-body">
+                        <tr><td colspan="5" style="text-align:center;padding:24px;color:#9ca3af">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-title">Average Reimbursement per Visit (trailing 12 months) — vs CMS Benchmark</div>
+                <div class="chart-container" style="height:280px;">
+                    <canvas id="trends-chart" aria-label="Reimbursement over time chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+</body>
+</html>

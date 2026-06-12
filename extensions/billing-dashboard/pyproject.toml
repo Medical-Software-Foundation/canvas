@@ -1,0 +1,45 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "billing-dashboard"
+version = "0.0.0"
+description = "Billing Dashboard — full-page financial analytics application for practice managers and billing staff. Shows financial overview, payer analysis, and reimbursement trends with CMS benchmark comparisons."
+authors = [
+    { name = "Nora Greer", email = "nora.greer@canvasmedical.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+    "httpx>=0.27.0",
+    "arrow>=1.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["billing_dashboard"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

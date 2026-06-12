@@ -1,0 +1,107 @@
+"""Tests for billing_dashboard.data.payer — per-payer Payer tab builder."""
+
+import inspect
+from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
+import arrow
+import pytest
+
+from billing_dashboard.data import payer
+
+
+@pytest.fixture
+def fixed_now() -> arrow.Arrow:
+    return arrow.get(2026, 4, 15, 14, 30, 0)
+
+
+def _set_payer_rows(mock_claim: MagicMock, rows: list[dict]) -> None:
+    """Helper to wire up the Claim.objects.filter().exclude().exclude().values().annotate() chain.
+
+    Two ``.exclude()`` calls: first to drop trashed claims (queue=10), second
+    to drop blank payer-name rows. The values+annotate aggregation runs on
+    the result of the second exclude.
+    """
+    mock_claim.objects.filter.return_value.exclude.return_value.exclude.return_value.values.return_value.annotate.return_value = rows
+
+
+class TestPayerAggregation:
+    @patch("billing_dashboard.data.payer.Claim")
+    def test_returns_per_payer_rows_sorted_by_collected(
+        self, mock_claim: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        _set_payer_rows(mock_claim, [
+            {"current_coverage__payer_name": "Aetna",  "collected": Decimal("300"), "total_claims": 10, "rejected_claims": 2},
+            {"current_coverage__payer_name": "CIGNA",  "collected": Decimal("500"), "total_claims": 20, "rejected_claims": 0},
+        ])
+        result = payer.build_payer(now=fixed_now)
+        assert result["payers"]["source"] == "real"
+        data = result["payers"]["data"]
+        assert data[0]["name"] == "CIGNA"  # higher collected first
+        assert data[0]["collected"] == 500.0
+        assert data[0]["acceptance_rate"] == 100.0
+        assert data[1]["name"] == "Aetna"
+        assert data[1]["acceptance_rate"] == 80.0  # (10-2)/10 * 100
+
+    @patch("billing_dashboard.data.payer.Claim")
+    def test_cms_delta_is_null_in_v1(
+        self, mock_claim: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        _set_payer_rows(mock_claim, [
+            {"current_coverage__payer_name": "Aetna", "collected": Decimal("100"), "total_claims": 1, "rejected_claims": 0},
+        ])
+        row = payer.build_payer(now=fixed_now)["payers"]["data"][0]
+        assert row["cms_delta"] is None
+
+    @patch("billing_dashboard.data.payer.Claim")
+    def test_handles_zero_collected_with_real_claims(
+        self, mock_claim: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """Real claims with no postings yet — collected is 0, source still real."""
+        _set_payer_rows(mock_claim, [
+            {"current_coverage__payer_name": "Aetna", "collected": None, "total_claims": 5, "rejected_claims": 1},
+        ])
+        row = payer.build_payer(now=fixed_now)["payers"]["data"][0]
+        assert row["collected"] == 0.0
+        assert row["acceptance_rate"] == 80.0
+
+    @patch("billing_dashboard.data.payer.Claim")
+    def test_blank_payer_name_skipped(
+        self, mock_claim: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """A row with empty payer_name is dropped; result is an empty real list."""
+        _set_payer_rows(mock_claim, [
+            {"current_coverage__payer_name": "", "collected": Decimal("999"), "total_claims": 3, "rejected_claims": 0},
+        ])
+        result = payer.build_payer(now=fixed_now)
+        assert result == {"payers": {"source": "real", "data": []}}
+
+    @patch("billing_dashboard.data.payer.Claim")
+    def test_empty_queryset_returns_real_empty_list(
+        self, mock_claim: MagicMock, fixed_now: arrow.Arrow
+    ) -> None:
+        """No payer activity → empty real list. JS renders 'No payer data
+        available.' and the doughnut chart's empty-state message."""
+        _set_payer_rows(mock_claim, [])
+        result = payer.build_payer(now=fixed_now)
+        assert result == {"payers": {"source": "real", "data": []}}
+
+
+class TestCollectedFilterShape:
+    """Regression tests for the inline ``Sum(... filter=Q(...))`` in ``build_payer``.
+
+    The ``payer.py`` Sum aggregate is not a module-level constant the way
+    ``data/overview.py:_COLLECTED_SUM`` is, so the assertion here is
+    source-level rather than attribute-level. Same intent: prevent the
+    forbidden ``postings__newlineitempayments__entered_in_error`` lookup
+    from re-appearing. See memory/canvas-sdk-newlineitempayment-no-entered-in-error.md.
+    """
+
+    def test_source_does_not_contain_forbidden_lookup(self) -> None:
+        src = inspect.getsource(payer)
+        assert "postings__newlineitempayments__entered_in_error" not in src, (
+            "data/payer.py contains the forbidden lookup. The field does not "
+            "exist on NewLineItemPayment in the Canvas SDK; the resulting "
+            "Django FieldError 500s both the Overview and Payer tabs. See "
+            "memory/canvas-sdk-newlineitempayment-no-entered-in-error.md."
+        )

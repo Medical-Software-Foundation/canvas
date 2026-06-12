@@ -1,0 +1,41 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.7.1",
+    "name": "billing_dashboard",
+    "description": "Billing Dashboard — full-page financial analytics application for practice managers and billing staff. Shows financial overview, payer analysis, and reimbursement trends with CMS benchmark comparisons.",
+    "components": {
+        "protocols": [
+            {
+                "class": "billing_dashboard.handlers.billing_api:BillingDashboardAPI",
+                "description": "SimpleAPI serving the billing dashboard HTML, CSS, JS, and JSON metrics endpoints (staff-only)"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "applications": [
+            {
+                "class": "billing_dashboard.applications.billing_app:BillingDashboard",
+                "name": "Billing Dashboard",
+                "description": "Full-page financial analytics dashboard showing revenue metrics, payer performance, and reimbursement trends",
+                "icon": "assets/billing-dashboard-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 100
+            }
+        ],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md",
+    "url_permissions": [
+        {
+            "url": "https://cdn.jsdelivr.net/",
+            "permissions": ["SCRIPTS"]
+        }
+    ]
+}
