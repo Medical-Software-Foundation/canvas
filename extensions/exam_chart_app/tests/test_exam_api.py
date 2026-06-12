@@ -769,6 +769,39 @@ def test_get_state_returns_empty_for_no_saved_state(mock_get, mock_was):
 
 @patch("exam_chart_app.api.exam_api.was_ever_finalized")
 @patch("exam_chart_app.api.exam_api.get_draft")
+def test_get_state_swallows_db_error_and_returns_defaults(mock_get, mock_was):
+    """Representative test for the swallow_db_read pattern across the
+    read routes. A transient DB-class error from either ORM helper
+    should be swallowed (logged for Sentry), and the route returns
+    safe defaults so the frontend can render. Same pattern applies to
+    every route that calls swallow_db_read; this one test locks in
+    the contract."""
+    from django.db import OperationalError
+    mock_get.side_effect = OperationalError("connection lost")
+    mock_was.side_effect = OperationalError("connection lost")
+    api_obj = _make_api(query={"note_uuid": "11111111-1111-1111-1111-111111111111"})
+    responses = api_obj.get_state()
+    assert responses[0].status_code == HTTPStatus.OK
+    body = json.loads(responses[0].content.decode())
+    assert body == {"state": {}, "finalized": False, "has_chart_commands": False}
+
+
+@patch("exam_chart_app.api.exam_api.was_ever_finalized")
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_get_state_propagates_programming_bug(mock_get, mock_was):
+    """Locks the invariant: non-DB-class exceptions (AttributeError,
+    KeyError, TypeError) must propagate as 500 + Sentry. Same shape
+    as the existing finalize-propagation test."""
+    import pytest
+    mock_get.side_effect = AttributeError("AttributeHub attr renamed")
+    mock_was.return_value = False
+    api_obj = _make_api(query={"note_uuid": "11111111-1111-1111-1111-111111111111"})
+    with pytest.raises(AttributeError):
+        api_obj.get_state()
+
+
+@patch("exam_chart_app.api.exam_api.was_ever_finalized")
+@patch("exam_chart_app.api.exam_api.get_draft")
 def test_get_state_returns_saved_state_with_finalized_flag(mock_get, mock_was):
     mock_get.return_value = ({"rfv": {"comment": "x"}}, True)
     mock_was.return_value = True

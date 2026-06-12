@@ -11,6 +11,7 @@ Auth: StaffSessionAuthMixin — staff session only, no API-key fallback.
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import Any
 
 from canvas_sdk.commands import (
     HistoryOfPresentIllnessCommand,
@@ -25,32 +26,6 @@ from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from logger import log
 
-# Class-name filter for DB-class exceptions raised by the AttributeHub
-# ORM layer. ``from django.db import DatabaseError, OperationalError``
-# would be the natural pattern, but the Canvas plugin sandbox rejects
-# that import at module load with ``ImportError: 'django.db' is not an
-# allowed import``. ``django.db.models`` is on the allowlist (the SDK
-# uses it for Q objects), but the exception classes themselves are not.
-# String-name matching is a fragile workaround, but Django's exception
-# class names are stable public API and the alternatives (broad-except
-# with no filter, or building a private exception-class registry) are
-# worse. Verified against canvas_sdk 0.142.0 on 2026-05-21.
-#
-# Set membership: every subclass of ``django.db.DatabaseError`` plus its
-# sibling ``InterfaceError``. ``InternalError`` ("cursor not valid,
-# transaction out of sync", per PEP 249) and ``ProgrammingError`` are
-# both ``DatabaseError`` subclasses and were caught by the prior
-# ``except (DatabaseError, OperationalError):`` (which collapses to
-# ``except DatabaseError:`` since ``OperationalError`` is itself a
-# subclass). Keeping them here preserves that prior catch surface so
-# that all transient DB-class errors land in the same best-effort
-# branch.
-_DB_EXCEPTION_NAMES = frozenset({
-    "DatabaseError", "OperationalError", "IntegrityError",
-    "InterfaceError", "DataError", "NotSupportedError",
-    "InternalError", "ProgrammingError",
-})
-
 from exam_chart_app.api.emitters import (
     _ORDER_EMITTERS,
     _emit_diagnosis_block,
@@ -64,6 +39,7 @@ from exam_chart_app.data.draft_state import (
     set_draft,
     was_ever_finalized,
 )
+from exam_chart_app.data.db_safety import DB_EXCEPTION_NAMES, swallow_db_read
 from exam_chart_app.data.narratives import set_narrative
 from exam_chart_app.data.questionnaires import (
     find_questionnaires,
@@ -159,11 +135,18 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                 for r in rows
             ]
 
+        ros_rows = swallow_db_read(
+            "/exam/questionnaires/list find_questionnaires(ros)",
+            lambda: find_questionnaires("ros", ros_secret),
+            default=[],
+        )
+        pe_rows = swallow_db_read(
+            "/exam/questionnaires/list find_questionnaires(pe)",
+            lambda: find_questionnaires("pe", pe_secret),
+            default=[],
+        )
         return [JSONResponse(
-            {
-                "ros": _serialize(find_questionnaires("ros", ros_secret)),
-                "pe": _serialize(find_questionnaires("pe", pe_secret)),
-            },
+            {"ros": _serialize(ros_rows), "pe": _serialize(pe_rows)},
             status_code=HTTPStatus.OK,
         )]
 
@@ -176,7 +159,11 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                 {"error": "id query param required"},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
-        detail = get_questionnaire_detail(q_id)
+        detail = swallow_db_read(
+            f"/exam/questionnaires/detail get_questionnaire_detail({q_id!r})",
+            lambda: get_questionnaire_detail(q_id),
+            default=None,
+        )
         if detail is None:
             return [JSONResponse(
                 {"error": "questionnaire not found"},
@@ -200,12 +187,19 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         result: dict[str, str] = {"id": user_id, "type": user_type,
                                   "first_name": "", "last_name": ""}
         if user_id and user_type == "Staff":
-            try:
-                staff = Staff.objects.get(id=user_id)
-                result["first_name"] = staff.first_name or ""
-                result["last_name"] = staff.last_name or ""
-            except Staff.DoesNotExist:
-                pass
+            def _fetch_staff() -> Any:
+                try:
+                    return Staff.objects.get(id=user_id)
+                except Staff.DoesNotExist:
+                    return None
+            staff = swallow_db_read(
+                f"/exam/me Staff.get({user_id!r})",
+                _fetch_staff,
+                default=None,
+            )
+            if staff is not None:
+                result["first_name"] = getattr(staff, "first_name", "") or ""
+                result["last_name"] = getattr(staff, "last_name", "") or ""
         return [JSONResponse(result, status_code=HTTPStatus.OK)]
 
     @api.get("/exam/patient-conditions")
@@ -242,14 +236,18 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         # to the typed query before display) and keeps per-request memory
         # predictable.
         PATIENT_CONDITIONS_LIMIT = 200
-        conditions = (
-            Condition.objects
-            .filter(
-                patient__id=patient_id,
-                entered_in_error__isnull=True,
-            )
-            .prefetch_related("codings")
-            [:PATIENT_CONDITIONS_LIMIT]
+        conditions = swallow_db_read(
+            f"/exam/patient-conditions Condition.filter(patient_id={patient_id!r})",
+            lambda: list(
+                Condition.objects
+                .filter(
+                    patient__id=patient_id,
+                    entered_in_error__isnull=True,
+                )
+                .prefetch_related("codings")
+                [:PATIENT_CONDITIONS_LIMIT]
+            ),
+            default=[],
         )
 
         results: list[dict[str, str]] = []
@@ -333,8 +331,16 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                              "message": "Missing or invalid note_uuid"}]},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
-        state, finalized = get_draft(note_uuid)
-        has_chart_commands = was_ever_finalized(note_uuid)
+        state, finalized = swallow_db_read(
+            f"/exam/state get_draft(note={note_uuid})",
+            lambda: get_draft(note_uuid),
+            default=({}, False),
+        )
+        has_chart_commands = swallow_db_read(
+            f"/exam/state was_ever_finalized(note={note_uuid})",
+            lambda: was_ever_finalized(note_uuid),
+            default=False,
+        )
         return [JSONResponse(
             {
                 "state": state,
@@ -392,26 +398,18 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         # the existing save-error banner pattern.
         #
         # get_draft hits the live AttributeHub ORM. A DB-class transient
-        # here would otherwise propagate to SimpleAPI's outer catch and
-        # surface as a generic 500 — inconsistent with finalize()'s
-        # narrow-catch + log.exception pattern that this PR introduced.
-        # Apply the same shape: swallow DB-class exceptions (logged so
-        # Sentry pages), assume "not finalized" to proceed, and let
-        # programming bugs (AttributeError / KeyError / TypeError)
-        # propagate. set_draft on the next line operates against the
-        # same AttributeHub, so if the transient is real, the write
-        # will likely also fail and return its own error — but at
-        # least we get a clean breadcrumb from the read attempt.
-        already_finalized = False
-        try:
-            _, already_finalized = get_draft(note_uuid)
-        except Exception as exc:  # noqa: BLE001 — narrowed via _DB_EXCEPTION_NAMES; rationale at module top
-            if exc.__class__.__name__ not in _DB_EXCEPTION_NAMES:
-                raise  # programming bug → 500 + Sentry
-            log.exception(
-                f"[ExamChartingAPI] /exam/state/save get_draft failed for "
-                f"note={note_uuid} — proceeding as not-finalized"
-            )
+        # would otherwise surface as an opaque 500 — wrap via
+        # swallow_db_read so it logs (paging Sentry) and degrades to
+        # "not finalized", proceeding to set_draft. If the transient is
+        # real, set_draft will likely also fail and return its own
+        # error — but at least we get a clean breadcrumb from the read
+        # attempt. Programming bugs (AttributeError / KeyError /
+        # TypeError) propagate.
+        _, already_finalized = swallow_db_read(
+            f"/exam/state/save get_draft(note={note_uuid})",
+            lambda: get_draft(note_uuid),
+            default=({}, False),
+        )
         if already_finalized:
             log.info(
                 f"[ExamChartingAPI] /exam/state/save rejected for finalized "
@@ -618,8 +616,8 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                     f"[ExamChartingAPI] narrative stashed for "
                     f"command_uuid={cmd_uuid} len={len(narrative)}"
                 )
-            except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see _DB_EXCEPTION_NAMES rationale at module top
-                if exc.__class__.__name__ not in _DB_EXCEPTION_NAMES:
+            except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see DB_EXCEPTION_NAMES rationale at module top
+                if exc.__class__.__name__ not in DB_EXCEPTION_NAMES:
                     raise  # programming bug (AttributeError, KeyError, TypeError) → 500 + Sentry
                 log.exception(
                     f"[ExamChartingAPI] set_narrative failed for "
@@ -641,8 +639,8 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         try:
             mark_finalized(note_uuid)
             mark_ever_finalized(note_uuid)
-        except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see _DB_EXCEPTION_NAMES rationale at module top
-            if exc.__class__.__name__ not in _DB_EXCEPTION_NAMES:
+        except Exception as exc:  # noqa: BLE001 — narrowed via class-name filter below; see DB_EXCEPTION_NAMES rationale at module top
+            if exc.__class__.__name__ not in DB_EXCEPTION_NAMES:
                 raise  # programming bug → 500 + Sentry
             # A swallowed transient here leaves finalized=False, the
             # frontend re-enables the Finalize button on reopen, and a
