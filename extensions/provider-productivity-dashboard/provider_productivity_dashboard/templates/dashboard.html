@@ -229,6 +229,18 @@
             text-decoration: underline;
         }
 
+        .cpt-no-desc {
+            color: #9ca3af;
+            font-weight: 600;
+            cursor: help;
+        }
+
+        .cpt-legend {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
         .cpt-count {
             font-weight: 600;
             color: #333;
@@ -694,7 +706,7 @@
             const cptRows = (data.cpt_codes || []).map(item => `
                 <tr>
                     <td class="cpt-code" onclick="toggleCptDetail('${escapeHtml(item.cpt)}')" title="Click to see patients">${escapeHtml(item.cpt)}</td>
-                    <td style="white-space:normal">${escapeHtml(item.description || '')}</td>
+                    <td style="white-space:normal">${item.description ? escapeHtml(item.description) : '<span class="cpt-no-desc" title="No description found in the charge master or CPT catalog">*</span>'}</td>
                     <td class="cpt-count">${item.count}</td>
                 </tr>
                 <tr class="cpt-detail-row" id="cpt-detail-${escapeHtml(item.cpt)}" style="display:none">
@@ -708,6 +720,11 @@
 
             const cptTableBody = cptRows ||
                 '<tr><td colspan="3" class="empty-state">No CPT codes captured for this period.</td></tr>';
+
+            const cptHasMissingDesc = (data.cpt_codes || []).some(item => !item.description);
+            const cptLegend = cptHasMissingDesc
+                ? '<div class="cpt-legend">* Description not found in the charge master or CPT catalog.</div>'
+                : '';
 
             content.innerHTML = `
                 <div class="cards-row">
@@ -821,6 +838,7 @@
                             </thead>
                             <tbody>${cptTableBody}</tbody>
                         </table>
+                        ${cptLegend}
                     </div>
                 </div>
 
