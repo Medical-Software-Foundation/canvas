@@ -11,6 +11,8 @@ import json
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from exam_chart_app.api import exam_api
 from exam_chart_app.api.exam_api import ExamChartingAPI
 
@@ -804,7 +806,6 @@ def test_get_state_propagates_programming_bug(mock_get, mock_was):
     """Locks the invariant: non-DB-class exceptions (AttributeError,
     KeyError, TypeError) must propagate as 500 + Sentry. Same shape
     as the existing finalize-propagation test."""
-    import pytest
     mock_get.side_effect = AttributeError("AttributeHub attr renamed")
     mock_was.return_value = False
     api_obj = _make_api(query={"note_uuid": "11111111-1111-1111-1111-111111111111"})
@@ -925,7 +926,6 @@ def test_save_state_propagates_get_draft_programming_bug(mock_get, mock_set):
     get_draft (AttributeError on a renamed AttributeHub attr, TypeError
     from a wrong return shape, etc.) must propagate as 500 + Sentry —
     not be silently swallowed alongside DB transients."""
-    import pytest
     mock_get.side_effect = AttributeError("AttributeHub.something renamed")
     payload = {
         "note_uuid": "11111111-1111-1111-1111-111111111111",
@@ -1479,7 +1479,6 @@ def test_finalize_lets_unexpected_exceptions_propagate(mock_rfv, mock_dx):
     `(ValueError, TypeError)` so that genuine programming bugs surface
     in Sentry instead of being masked as a generic 500. KeyError,
     AttributeError, RuntimeError, etc. should propagate."""
-    import pytest
     mock_dx.return_value.originate.side_effect = RuntimeError("not a validation failure")
     payload = {
         "note_uuid": "11111111-1111-1111-1111-111111111111",
@@ -1563,7 +1562,6 @@ def test_finalize_propagates_mark_finalized_programming_bug(mock_rfv, mock_mark)
     """Locks the narrowed-catch invariant: AttributeError / KeyError /
     TypeError from a renamed AttributeHub method or sandbox attribute
     block must NOT be swallowed. Those need to reach Sentry as 500s."""
-    import pytest
     mock_rfv.return_value.originate.return_value = "RFV"
     mock_mark.side_effect = AttributeError("AttributeHub.set_attribute renamed")
     payload = {

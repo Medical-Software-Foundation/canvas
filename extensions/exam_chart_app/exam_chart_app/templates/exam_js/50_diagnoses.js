@@ -32,14 +32,11 @@
       var headerChip = isExisting
         ? '<span class="exam-dx-chip exam-dx-chip--existing">Existing condition</span>'
         : '<span class="exam-dx-chip exam-dx-chip--new">New diagnosis</span>';
-      // New-diagnosis cards show Today's Assessment + Background (those
-      // fields exist only on DiagnoseCommand). Existing-condition cards
-      // skip them — Assess + Plan only.
-      // New-diagnosis cards: Today's Assessment + Background fields ride
-      // on the DiagnoseCommand (the SDK supports both). Existing-condition
-      // cards omit them — the existing Condition row already has its own
-      // background, and the visit-level "what happened today" belongs on
-      // the AssessCommand's narrative field instead.
+      // New-diagnosis cards: Today's Assessment + Background ride on the
+      // DiagnoseCommand (the SDK supports both). Existing-condition
+      // cards omit them — the existing Condition row already has its
+      // own background, and the visit-level "what happened today"
+      // belongs on the AssessCommand's narrative field instead.
       var newDxFields = isExisting ? "" : (
         '<div class="exam-dx-sublabel">Today\'s Assessment</div>' +
         '<textarea class="exam-textarea exam-dx-subfield" data-dx-field="today_assessment" data-dx-idx="' + idx + '" rows="2"' +
