@@ -1620,3 +1620,32 @@ class TestFetchCptDescription:
             resp.json.return_value = None
             mock_onto.get_json.return_value = resp
             assert _fetch_cpt_description("3074F") == ""
+
+
+# ---------------------------------------------------------------------------
+# Query efficiency — visible-note filtering uses a SQL subquery, not an IN-list
+# ---------------------------------------------------------------------------
+
+class TestQueryEfficiency:
+    @pytest.mark.django_db
+    def test_visible_note_ids_is_lazy_subquery(self):
+        """_get_visible_note_ids returns a lazy queryset that compiles to a SQL
+        subquery when used in `__in`, so the plugin does not pull note IDs into
+        Python and re-embed them as a large IN clause."""
+        from django.db.models.query import QuerySet
+        from canvas_sdk.v1.data.note import Note
+
+        api = _make_api()
+        start = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+        end = datetime.datetime(2026, 12, 31, tzinfo=datetime.timezone.utc)
+
+        visible = api._get_visible_note_ids("all", start, end)
+
+        # It must be a lazy queryset, not a materialized list...
+        assert isinstance(visible, QuerySet)
+        assert visible._result_cache is None, "queryset was evaluated in Python"
+
+        # ...and using it in `__in` must compile to a nested SELECT (subquery),
+        # not `IN (1, 2, 3, ...)`.
+        sql = str(Note.objects.filter(dbid__in=visible).query).lower()
+        assert "in (select" in sql, f"expected a subquery, got: {sql}"

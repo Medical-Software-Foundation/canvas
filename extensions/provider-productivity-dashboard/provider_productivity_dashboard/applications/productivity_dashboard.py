@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
@@ -84,12 +85,14 @@ def _ontologies_cpt_descriptions(codes: list[str]) -> dict[str, str]:
     The ontologies catalog is the canonical AMA CPT source and includes Category II
     (NNNNF) codes that a charge master typically does not carry.
     """
-    out: dict[str, str] = {}
-    for code in codes:
-        if code not in _CPT_DESCRIPTION_CACHE:
-            _CPT_DESCRIPTION_CACHE[code] = _fetch_cpt_description(code)
-        out[code] = _CPT_DESCRIPTION_CACHE[code]
-    return out
+    uncached = [code for code in codes if code not in _CPT_DESCRIPTION_CACHE]
+    if uncached:
+        # Independent network lookups — fetch them concurrently so a cold cache
+        # over many codes costs ~one round-trip instead of one per code.
+        with ThreadPoolExecutor(max_workers=min(8, len(uncached))) as executor:
+            for code, description in zip(uncached, executor.map(_fetch_cpt_description, uncached)):
+                _CPT_DESCRIPTION_CACHE[code] = description
+    return {code: _CPT_DESCRIPTION_CACHE[code] for code in codes}
 
 
 def _get_date_range(period: str) -> tuple:
@@ -153,8 +156,17 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
             return str(requested)
         return str(logged_in)
 
-    def _get_visible_note_ids(self, staff_id: str, start: datetime, end: datetime) -> list[int]:
-        """Return visible note IDs, optionally filtered to a single provider."""
+    def _get_visible_note_ids(self, staff_id: str, start: datetime, end: datetime):
+        """Return a *lazy* queryset of visible note IDs, optionally filtered to one
+        provider.
+
+        Returning the queryset (rather than a materialized list) lets callers use it
+        as a SQL subquery in `... __in=visible_note_ids`, so the database joins
+        directly instead of the plugin pulling potentially thousands of IDs into
+        Python and re-embedding them as a giant IN clause. Do NOT evaluate it in
+        Python (no `list()`, `len()`, `bool()`, or iteration) or that benefit is
+        lost.
+        """
         filters = {
             "state__in": VISIBLE_STATES,
             "note__datetime_of_service__gte": start,
@@ -162,7 +174,7 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
         }
         if staff_id != "all":
             filters["note__provider__id"] = staff_id
-        return list(
+        return (
             CurrentNoteStateEvent.objects.filter(**filters)
             .exclude(note__note_type_version__category__in=EXCLUDED_CATEGORIES)
             .values_list("note_id", flat=True)
@@ -255,7 +267,8 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
         # applied for a single provider and for "All Providers", so both the open
         # and closed counts track the selected time window rather than silently
         # falling back to a practice-wide, period-independent total.
-        patient_ids = list(
+        # Lazy queryset → used as a subquery in patient__id__in below.
+        patient_ids = (
             base_notes.exclude(patient__isnull=True)
             .values_list("patient__id", flat=True)
             .distinct()
@@ -281,32 +294,34 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
             state__in=OPEN_STATES,
         ).count()
 
-        # Average time to close — for signed notes, find the first signing event
+        # Average time to close — for signed notes, find the first signing event.
+        # Runs unconditionally (no `if visible_note_ids:` truthiness check, which
+        # would evaluate the queryset in Python and defeat the subquery): an empty
+        # visible set simply yields no sign events and no durations.
         avg_time_to_close = "—"
-        if visible_note_ids:
-            sign_events = (
-                NoteStateChangeEvent.objects.filter(
-                    note_id__in=visible_note_ids,
-                    state__in=SIGNED_STATES,
-                )
-                .select_related("note")
-                .order_by("note_id", "created")
+        sign_events = (
+            NoteStateChangeEvent.objects.filter(
+                note_id__in=visible_note_ids,
+                state__in=SIGNED_STATES,
             )
-            # Build map of note_id -> first sign event created time
-            first_sign = {}
-            for evt in sign_events:
-                if evt.note_id not in first_sign:
-                    first_sign[evt.note_id] = evt.created
-            # Compute durations
-            durations = []
-            for note in base_notes:
-                if note.dbid in first_sign and note.created:
-                    delta = first_sign[note.dbid] - note.created
-                    if delta.total_seconds() >= 0:
-                        durations.append(delta)
-            if durations:
-                avg_seconds = sum(d.total_seconds() for d in durations) / len(durations)
-                avg_time_to_close = _format_duration(timedelta(seconds=avg_seconds))
+            .select_related("note")
+            .order_by("note_id", "created")
+        )
+        # Build map of note_id -> first sign event created time
+        first_sign: dict[int, Any] = {}
+        for evt in sign_events:
+            if evt.note_id not in first_sign:
+                first_sign[evt.note_id] = evt.created
+        # Compute durations
+        durations = []
+        for note in base_notes:
+            if note.dbid in first_sign and note.created:
+                delta = first_sign[note.dbid] - note.created
+                if delta.total_seconds() >= 0:
+                    durations.append(delta)
+        if durations:
+            avg_seconds = sum(d.total_seconds() for d in durations) / len(durations)
+            avg_time_to_close = _format_duration(timedelta(seconds=avg_seconds))
 
         return [JSONResponse({
             "period": period,
@@ -427,8 +442,8 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
 
         visible_note_ids = self._get_visible_note_ids(staff_id, start, end)
 
-        # Filter to only open (unsigned) notes
-        open_note_ids = list(
+        # Filter to only open (unsigned) notes (lazy queryset → subquery below).
+        open_note_ids = (
             CurrentNoteStateEvent.objects.filter(
                 note_id__in=visible_note_ids,
                 state__in=OPEN_STATES,
@@ -487,7 +502,8 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
         # "All Providers" mode, so this detail list matches the care-gaps-closed
         # count on the summary card.
         visible_note_ids = self._get_visible_note_ids(staff_id, start, end)
-        patient_ids = list(
+        # Lazy queryset → used as a subquery in patient__id__in below.
+        patient_ids = (
             Note.objects.filter(dbid__in=visible_note_ids)
             .exclude(patient__isnull=True)
             .values_list("patient__id", flat=True)
@@ -643,9 +659,9 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
 
         med_filters = {"start_date__gte": start, "start_date__lte": end}
         if staff_id != "all":
-            # Scope to patients seen by this provider
+            # Scope to patients seen by this provider (lazy queryset → subquery).
             visible_note_ids = self._get_visible_note_ids(staff_id, start, end)
-            patient_ids = list(
+            patient_ids = (
                 Note.objects.filter(dbid__in=visible_note_ids)
                 .values_list("patient__id", flat=True)
                 .distinct()
