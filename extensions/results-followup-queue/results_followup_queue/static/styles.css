@@ -1,0 +1,187 @@
+/* Results Follow-Up Queue – mobile-first, list style */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1a2433;
+  background: #f4f6f9;
+  min-height: 100vh;
+}
+
+/* ── Pinned header ───────────────────────────────────────────────────────── */
+
+.rfq-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
+  border-bottom: 1px solid #e3e8ef;
+  padding: 12px 16px 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.rfq-header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f6cbf;
+  letter-spacing: 0.01em;
+}
+
+.rfq-subtitle {
+  font-size: 12px;
+  color: #6b7a8d;
+  margin-top: 1px;
+}
+
+/* ── Row list ────────────────────────────────────────────────────────────── */
+
+.rfq-rows {
+  padding: 12px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Individual result row ───────────────────────────────────────────────── */
+
+.rfq-row {
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.rfq-row-abnormal {
+  border-left: 3px solid #c0392b;
+}
+
+.rfq-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.rfq-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.rfq-patient {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f6cbf;
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.rfq-patient:hover {
+  text-decoration: underline;
+}
+
+.rfq-name {
+  font-size: 13px;
+  color: #1a2433;
+  word-break: break-word;
+}
+
+.rfq-date {
+  font-size: 12px;
+  color: #6b7a8d;
+  margin-top: 1px;
+}
+
+/* ── Side column (aging + badges) ────────────────────────────────────────── */
+
+.rfq-row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.rfq-aging {
+  font-size: 12px;
+  font-weight: 700;
+  color: #3c4b5e;
+  background: #eef2f6;
+  border-radius: 10px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.rfq-aging-amber {
+  color: #8a5a00;
+  background: #fdecc8;
+}
+
+.rfq-aging-red {
+  color: #ffffff;
+  background: #c0392b;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+
+.rfq-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.rfq-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 3px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.rfq-badge-lab {
+  color: #0f6cbf;
+  background: #e1effb;
+}
+
+.rfq-badge-imaging {
+  color: #6b3fa0;
+  background: #efe6fa;
+}
+
+.rfq-badge-abnormal {
+  color: #ffffff;
+  background: #c0392b;
+}
+
+.rfq-badge-signature {
+  color: #8a5a00;
+  background: #fdecc8;
+}
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+
+.rfq-loading,
+.rfq-empty,
+.rfq-error {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7a8d;
+}
+
+.rfq-error {
+  color: #c0392b;
+}

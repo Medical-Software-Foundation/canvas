@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Results Follow-Up Queue</title>
+  <link rel="stylesheet" href="/plugin-io/api/results_followup_queue/app/styles.css?v={{ cache_bust }}" />
+</head>
+<body>
+  <header class="rfq-header">
+    <h1>Results Follow-Up Queue</h1>
+    <p class="rfq-subtitle">Lab &amp; imaging results awaiting your review</p>
+  </header>
+
+  <main id="rfq-rows" class="rfq-rows" aria-live="polite">
+    <div class="rfq-loading" role="status">Loading&hellip;</div>
+  </main>
+
+  <script src="/plugin-io/api/results_followup_queue/app/main.js?v={{ cache_bust }}"></script>
+</body>
+</html>

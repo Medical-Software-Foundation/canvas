@@ -2,12 +2,35 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "results_followup_queue",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Global companion app that lists the lab and imaging results awaiting the logged-in provider's review. Flags abnormal labs, shows how long each result has been pending (with aging highlights), and links to the patient chart to close the diagnostic loop.",
     "components": {
+        "applications": [
+            {
+                "class": "results_followup_queue.applications.queue_app:ResultsQueueApp",
+                "name": "Results Follow-Up Queue",
+                "description": "Lab and imaging results awaiting your review, abnormal-first and oldest-first.",
+                "scope": "provider_companion_global",
+                "icon": "assets/results-followup-queue-icon.png"
+            }
+        ],
         "handlers": [
             {
-                "class": "results_followup_queue.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "results_followup_queue.handlers.queue_api:QueueAPI",
+                "description": "Serves the results follow-up queue modal UI and data.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "LabReport",
+                        "LabValue",
+                        "LabOrder",
+                        "LabTest",
+                        "ImagingReport",
+                        "ImagingOrder",
+                        "Patient",
+                        "Staff"
+                    ],
+                    "write": []
+                }
             }
         ],
         "commands": [],
