@@ -27,6 +27,7 @@ from provider_productivity_dashboard.applications.productivity_dashboard import 
     VISIBLE_STATES,
     ProductivityDashboardApi,
     ProductivityDashboardApplication,
+    _fetch_cpt_description,
     _format_duration,
     _get_date_range,
     _is_dme_referral,
@@ -1594,3 +1595,28 @@ class TestIntegration:
         ids = list(qs.values_list("id", flat=True))
         assert message_type.id in ids
         assert letter_type.id in ids
+
+
+# ---------------------------------------------------------------------------
+# _fetch_cpt_description (ontologies lookup) error handling
+# ---------------------------------------------------------------------------
+
+class TestFetchCptDescription:
+    def test_returns_empty_on_network_error(self):
+        """An unreachable ontologies service degrades to a blank description."""
+        with patch(
+            "provider_productivity_dashboard.applications.productivity_dashboard.ontologies_http"
+        ) as mock_onto:
+            mock_onto.get_json.side_effect = OSError("connection refused")
+            assert _fetch_cpt_description("3074F") == ""
+
+    def test_returns_empty_on_non_200(self):
+        """A non-200 ontologies response yields a blank description."""
+        with patch(
+            "provider_productivity_dashboard.applications.productivity_dashboard.ontologies_http"
+        ) as mock_onto:
+            resp = MagicMock()
+            resp.status_code = HTTPStatus.INTERNAL_SERVER_ERROR
+            resp.json.return_value = None
+            mock_onto.get_json.return_value = resp
+            assert _fetch_cpt_description("3074F") == ""
