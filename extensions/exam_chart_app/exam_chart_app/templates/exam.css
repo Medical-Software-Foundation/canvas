@@ -17,11 +17,20 @@ body {
 }
 
 /* Read-only state applied after finalize. Inputs are individually
-   `disabled` via JS (see _lockFormForFinalized in 20_draft.js); this
-   class adds a global visual cue so the provider can tell at a glance
-   that the form is no longer accepting edits. */
+   `disabled` via JS (see _lockFormForFinalized in 20_draft.js) AND
+   the container blocks pointer events as a safety net: dynamic cards
+   (diagnoses, orders, questionnaire pills/text) get rendered AFTER
+   _lockFormForFinalized runs during hydrate, so they may not have
+   `disabled` applied. `pointer-events: none` on the container blocks
+   clicks on those late-arriving elements regardless. */
 .exam-container--finalized {
   opacity: 0.75;
+  pointer-events: none;
+}
+/* Banner stays clickable — future banner controls (close button,
+   "go to chart commands" link, etc.) need to work in finalized state. */
+.exam-container--finalized #finalized-banner {
+  pointer-events: auto;
 }
 .exam-container--finalized input:disabled,
 .exam-container--finalized textarea:disabled,

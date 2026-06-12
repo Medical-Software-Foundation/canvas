@@ -213,6 +213,13 @@
         // Dx + Orders cards re-render from state.
         try { renderDxList(); } catch (e) { /* not yet defined */ }
         try { renderOrdersList(); } catch (e) { /* same */ }
+        // Re-lock dynamic cards that just got rendered. _applyFinalizedUI
+        // ran above against the static DOM only; the Dx + Order cards
+        // (Goal, Plan, Follow Up, Lab, Imaging, Rx, Refer) didn't exist
+        // when it ran, so their inputs need their `disabled` attribute
+        // set now. The CSS pointer-events: none on the container is a
+        // safety net but doesn't block keyboard focus / tab-to.
+        if (_finalized) _lockFormForFinalized();
         // HPI + RFV-comment textareas.
         var hpiInput = $("hpi-narrative");
         if (hpiInput && state.hpi && state.hpi.narrative) {
@@ -232,7 +239,10 @@
         return Promise.all([
           _rehydrateQuestionnaireSection("ros", saved.ros),
           _rehydrateQuestionnaireSection("pe", saved.pe),
-        ]);
+        ]).then(function () {
+          // Re-lock again after ROS/PE pills + textareas just rendered.
+          if (_finalized) _lockFormForFinalized();
+        });
       })
       .catch(function (err) {
         console.warn("[ExamChartingApp] hydrate failed:", err);
