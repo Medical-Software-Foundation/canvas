@@ -845,6 +845,28 @@ def test_save_state_400_when_state_not_object(mock_set):
     mock_set.assert_not_called()
 
 
+@patch("exam_chart_app.api.exam_api.set_draft")
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_409_when_note_already_finalized(mock_get, mock_set):
+    """Backend defense-in-depth: a stale tab (or any direct client call)
+    that POSTs to /exam/state/save after the note has been finalized
+    must get a 409 — silently overwriting the draft would mislead the
+    provider into thinking edits are reaching the chart when they
+    aren't. The frontend's _lockFormForFinalized prevents this from
+    happening through the form, but the backend guard catches the
+    bypass case."""
+    mock_get.return_value = ({"rfv": {"comment": "x"}}, True)  # finalized=True
+    payload = {
+        "note_uuid": "11111111-1111-1111-1111-111111111111",
+        "state": {"rfv": {"comment": "post-finalize edit attempt"}},
+    }
+    responses = _make_api(json_body=payload).save_state()
+    assert responses[0].status_code == HTTPStatus.CONFLICT
+    body = json.loads(responses[0].content.decode())
+    assert "finalized" in body["errors"][0]["message"].lower()
+    mock_set.assert_not_called()
+
+
 @patch("exam_chart_app.api.exam_api.mark_ever_finalized")
 @patch("exam_chart_app.api.exam_api.mark_finalized")
 @patch("exam_chart_app.api.exam_api.HistoryOfPresentIllnessCommand")

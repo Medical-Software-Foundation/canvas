@@ -382,6 +382,28 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
                 {"errors": [{"section": "state", "field": "", "message": "state must be an object"}]},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
+        # Defense-in-depth: reject saves on already-finalized notes.
+        # The frontend's _lockFormForFinalized should prevent the debounced
+        # save from firing once the form is locked, but a stale tab that
+        # missed the finalize signal (or a direct client call bypassing
+        # the form's disabled state) would otherwise silently write into
+        # the draft after the chart's commands are already finalized.
+        # Returning 409 lets the frontend surface "already finalized" via
+        # the existing save-error banner pattern.
+        _, already_finalized = get_draft(note_uuid)
+        if already_finalized:
+            log.info(
+                f"[ExamChartingAPI] /exam/state/save rejected for finalized "
+                f"note={note_uuid}"
+            )
+            return [JSONResponse(
+                {"errors": [{
+                    "section": "state",
+                    "field": "",
+                    "message": "This note has been finalized — edits go through the chart's command UI.",
+                }]},
+                status_code=HTTPStatus.CONFLICT,
+            )]
         try:
             set_draft(note_uuid, state)
         except DraftTooLargeError as exc:
