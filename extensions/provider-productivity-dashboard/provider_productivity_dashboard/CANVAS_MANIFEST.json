@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.117.0",
-    "plugin_version": "0.3.10",
+    "plugin_version": "0.3.11",
     "name": "provider_productivity_dashboard",
     "description": "A panel management dashboard showing practice-wide and provider-specific metrics: patients seen, CPT codes, note status, unsigned notes, care gaps, orders (labs, imaging, referrals, DME), medications prescribed, and average time to close notes.",
     "url_permissions": [],
