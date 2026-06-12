@@ -51,10 +51,10 @@
     if (!values || values.length === 0) return "";
     var items = values
       .map(function (v) {
-        var cls = v.abnormal_flag ? "rfq-value rfq-value-abnormal" : "rfq-value";
+        var cls = v.abnormal ? "rfq-value rfq-value-abnormal" : "rfq-value";
         var unit = v.units ? " " + esc(v.units) : "";
-        var flag = v.abnormal_flag
-          ? " <span class='rfq-flag'>" + esc(v.abnormal_flag) + "</span>"
+        var flag = v.flag
+          ? " <span class='rfq-flag'>" + esc(v.flag) + "</span>"
           : "";
         var ref = v.reference_range
           ? " <span class='rfq-ref'>(ref " + esc(v.reference_range) + ")</span>"

@@ -22,6 +22,28 @@ from canvas_sdk.v1.data.lab import LabReport, LabValue
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
+# `LabValue.abnormal_flag` is a free-text CharField whose contents vary by
+# instance/feed: it may hold an HL7-style code ("H", "L", "HH"), a word
+# ("high"), or a boolean-style string ("True"/"False"). The rest of the Canvas
+# ecosystem (lab-result-api, chart-command-search) treats it as a boolean
+# indicator, so we normalize it here. These normalized values mean NOT abnormal;
+# anything else is treated as abnormal. (Note: the string "False" is truthy in
+# Python, so a naive truthiness check would mis-flag normal values.)
+_NORMAL_FLAGS = {"", "false", "0", "n", "no", "normal", "none", "null", "-"}
+
+# Friendly labels for recognized abnormal-flag codes; everything else that is
+# abnormal falls back to "Abnormal".
+_ABNORMAL_FLAG_LABELS = {
+    "h": "High",
+    "high": "High",
+    "l": "Low",
+    "low": "Low",
+    "hh": "Critical High",
+    "ll": "Critical Low",
+    "a": "Abnormal",
+    "aa": "Critical",
+}
+
 
 class QueueAPI(StaffSessionAuthMixin, SimpleAPI):
     """Serves the results follow-up queue modal UI and data.
@@ -203,17 +225,35 @@ def _lab_result_name(report: LabReport) -> str:
     return (report.custom_document_name or "").strip() or "Lab result"
 
 
+def _is_abnormal_flag(raw: str | None) -> bool:
+    """Return True if an ``abnormal_flag`` value indicates an abnormal result.
+
+    Treats the flag as a boolean indicator (see :data:`_NORMAL_FLAGS`) rather
+    than rendering its raw contents, which differ across instances.
+    """
+    return str(raw or "").strip().lower() not in _NORMAL_FLAGS
+
+
+def _abnormal_flag_label(raw: str | None) -> str:
+    """Return a clinician-friendly label for an abnormal flag, or "" if normal."""
+    if not _is_abnormal_flag(raw):
+        return ""
+    norm = str(raw).strip()
+    return _ABNORMAL_FLAG_LABELS.get(norm.lower(), "Abnormal")
+
+
 def _is_abnormal(report: LabReport) -> bool:
     """Return True if any of the report's lab values carries an abnormal flag."""
-    return any((value.abnormal_flag or "").strip() for value in report.values.all())
+    return any(_is_abnormal_flag(value.abnormal_flag) for value in report.values.all())
 
 
 def _lab_values(report: LabReport) -> list[dict[str, Any]]:
     """Return the report's individual result values for inline display.
 
-    Each entry is ``{name, value, units, abnormal_flag, reference_range}``.
-    Values with no result text are skipped. Iterates the prefetched values
-    (and their codings/test) so this adds no extra queries per report.
+    Each entry is ``{name, value, units, abnormal, flag, reference_range}`` where
+    ``abnormal`` is a bool and ``flag`` is a friendly label ("High"/"Low"/…) or
+    "" when normal. Values with no result text are skipped. Iterates the
+    prefetched values (and their codings/test) so this adds no extra queries.
     """
     rows: list[dict[str, Any]] = []
     for value in report.values.all():
@@ -225,7 +265,8 @@ def _lab_values(report: LabReport) -> list[dict[str, Any]]:
                 "name": _lab_value_name(value),
                 "value": text,
                 "units": (value.units or "").strip(),
-                "abnormal_flag": (value.abnormal_flag or "").strip(),
+                "abnormal": _is_abnormal_flag(value.abnormal_flag),
+                "flag": _abnormal_flag_label(value.abnormal_flag),
                 "reference_range": (value.reference_range or "").strip(),
             }
         )

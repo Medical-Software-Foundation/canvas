@@ -27,8 +27,10 @@ from canvas_sdk.v1.data.common import DocumentReviewMode
 
 from results_followup_queue.handlers.queue_api import (
     QueueAPI,
+    _abnormal_flag_label,
     _days_pending,
     _is_abnormal,
+    _is_abnormal_flag,
     _lab_result_name,
     _lab_value_name,
     _lab_values,
@@ -369,10 +371,36 @@ def test_get_data_lab_row_includes_result_values() -> None:
             "name": "WBC",
             "value": "12.3",
             "units": "10^3/uL",
-            "abnormal_flag": "H",
+            "abnormal": True,
+            "flag": "High",
             "reference_range": "4.0-11.0",
         }
     ]
+
+
+@pytest.mark.django_db
+def test_get_data_boolean_style_flag_is_not_rendered_raw() -> None:
+    """A 'True'/'False' style abnormal_flag becomes a friendly label, not raw text.
+
+    Mirrors the training-data quirk where abnormal_flag holds 'True'/'False'.
+    """
+    staff = StaffFactory.create()
+    report = LabReportFactory.create()
+    order = LabOrderFactory.create(ordering_provider=staff)
+    LabTestFactory.create(report=report, order=order, ontology_test_name="Panel")
+    LabValueFactory.create(report=report, value="9", abnormal_flag="True")
+    LabValueFactory.create(report=report, value="5", abnormal_flag="False")
+
+    rows = _data(_make_handler(str(staff.id)))
+    values = {v["value"]: v for v in rows[0]["values"]}
+    # "True" → abnormal with a friendly label (never the literal "True").
+    assert values["9"]["abnormal"] is True
+    assert values["9"]["flag"] == "Abnormal"
+    # "False" is a truthy *string* but must be treated as normal.
+    assert values["5"]["abnormal"] is False
+    assert values["5"]["flag"] == ""
+    # The report as a whole is abnormal (the "9" value), but not because of "False".
+    assert rows[0]["abnormal"] is True
 
 
 @pytest.mark.django_db
@@ -421,6 +449,56 @@ def test_is_abnormal_false_when_all_blank() -> None:
     assert _is_abnormal(report) is False
 
 
+def test_is_abnormal_false_for_false_string_flag() -> None:
+    """A 'False'/'N' flag must not count as abnormal despite being a truthy str."""
+    report = MagicMock()
+    report.values.all.return_value = [
+        MagicMock(abnormal_flag="False"),
+        MagicMock(abnormal_flag="N"),
+    ]
+    assert _is_abnormal(report) is False
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("", False),
+        ("  ", False),
+        (None, False),
+        ("False", False),
+        ("false", False),
+        ("0", False),
+        ("N", False),
+        ("normal", False),
+        ("-", False),
+        ("True", True),
+        ("H", True),
+        ("L", True),
+        ("high", True),
+    ],
+)
+def test_is_abnormal_flag(raw: str | None, expected: bool) -> None:
+    assert _is_abnormal_flag(raw) is expected
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("", ""),
+        ("False", ""),
+        ("H", "High"),
+        ("high", "High"),
+        ("L", "Low"),
+        ("HH", "Critical High"),
+        ("LL", "Critical Low"),
+        ("True", "Abnormal"),
+        ("weird-code", "Abnormal"),
+    ],
+)
+def test_abnormal_flag_label(raw: str, expected: str) -> None:
+    assert _abnormal_flag_label(raw) == expected
+
+
 def _mock_value(
     value: str,
     *,
@@ -462,7 +540,8 @@ def test_lab_values_skips_empty_results() -> None:
             "name": "Hgb",
             "value": "5.1",
             "units": "g/dL",
-            "abnormal_flag": "",
+            "abnormal": False,
+            "flag": "",
             "reference_range": "",
         }
     ]
