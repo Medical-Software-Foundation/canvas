@@ -22,9 +22,15 @@ body {
    (diagnoses, orders, questionnaire pills/text) get rendered AFTER
    _lockFormForFinalized runs during hydrate, so they may not have
    `disabled` applied. `pointer-events: none` on the container blocks
-   clicks on those late-arriving elements regardless. */
+   clicks on those late-arriving elements regardless.
+
+   No container-level opacity: a faded container kills contrast on
+   styled pill states (selected ROS toggles, picked diagnosis-code
+   chips) that already use light-text-on-light-background palettes
+   — the dim made them unreadable. The disabled-input grey-out +
+   cursor: not-allowed + the banner above carry enough lock-state
+   signal without sacrificing pill legibility. */
 .exam-container--finalized {
-  opacity: 0.75;
   pointer-events: none;
 }
 /* Banner stays clickable — future banner controls (close button,
