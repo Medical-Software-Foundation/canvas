@@ -109,7 +109,7 @@ class QueueAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        today = datetime.now(timezone.utc).date()
+        today = _today()
 
         # Two bulk queries total — one for labs, one for imaging. No per-result
         # queries; abnormal detection and date math happen in Python over the
@@ -154,7 +154,12 @@ class QueueAPI(StaffSessionAuthMixin, SimpleAPI):
 
 def _lab_row(report: LabReport, today: date) -> dict[str, Any]:
     """Assemble a result-row dict for a single lab report."""
-    result_date = report.date_performed.date() if report.date_performed else None
+    # date_performed (specimen-performed time) is often null on ingested
+    # reports; fall back to the report's original/assigned dates so the row
+    # still shows a meaningful "result date" and aging.
+    result_date = _first_date(
+        report.date_performed, report.original_date, report.assigned_date
+    )
     return {
         "patient_key": _patient_key(report),
         "patient_name": _patient_name(report),
@@ -174,7 +179,9 @@ def _imaging_row(report: ImagingReport, today: date) -> dict[str, Any]:
     Imaging has no structured abnormal flag or discrete values, so ``abnormal``
     is always False and ``values`` is always empty.
     """
-    result_date = report.result_date
+    result_date = _first_date(
+        report.result_date, report.original_date, report.assigned_date
+    )
     return {
         "patient_key": _patient_key(report),
         "patient_name": _patient_name(report),
@@ -286,6 +293,32 @@ def _lab_value_name(value: LabValue) -> str:
     if test and (test_name := str(test.ontology_test_name).strip()):
         return test_name
     return "Result"
+
+
+def _today() -> date:
+    """Return the current UTC date (indirection so tests can pin the clock)."""
+    return datetime.now(timezone.utc).date()
+
+
+def _coerce_date(value: date | datetime | None) -> date | None:
+    """Normalize a date/datetime (or None) to a plain date.
+
+    ``datetime`` is a subclass of ``date``, so check it first.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
+def _first_date(*candidates: date | datetime | None) -> date | None:
+    """Return the first candidate that resolves to a real date, else None."""
+    for candidate in candidates:
+        resolved = _coerce_date(candidate)
+        if resolved is not None:
+            return resolved
+    return None
 
 
 def _days_pending(result_date: date | None, today: date) -> int:

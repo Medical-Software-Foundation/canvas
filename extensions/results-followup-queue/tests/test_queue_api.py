@@ -28,14 +28,19 @@ from canvas_sdk.v1.data.common import DocumentReviewMode
 from results_followup_queue.handlers.queue_api import (
     QueueAPI,
     _abnormal_flag_label,
+    _coerce_date,
     _days_pending,
+    _first_date,
+    _imaging_row,
     _is_abnormal,
     _is_abnormal_flag,
     _lab_result_name,
+    _lab_row,
     _lab_value_name,
     _lab_values,
     _patient_name,
     _sort_key,
+    _today,
 )
 
 MODULE = "results_followup_queue.handlers.queue_api"
@@ -118,10 +123,7 @@ def _make_imaging_for(
 
 def _data(handler: QueueAPI) -> list[dict[str, Any]]:
     """Call get_data() (with the clock pinned to TODAY) and return the rows."""
-    with patch(f"{MODULE}.datetime") as mock_dt:
-        mock_dt.now.return_value = datetime.datetime(
-            TODAY.year, TODAY.month, TODAY.day, 12, 0, tzinfo=datetime.timezone.utc
-        )
+    with patch(f"{MODULE}._today", return_value=TODAY):
         result = handler.get_data()
     assert result[0].status_code == HTTPStatus.OK
     rows: list[dict[str, Any]] = json.loads(result[0].content)["results"]
@@ -419,6 +421,69 @@ def test_get_data_deduplicates_multi_test_lab_report() -> None:
 
 
 # ── Helper unit tests ──────────────────────────────────────────────────────
+
+
+def test_today_returns_a_date() -> None:
+    assert isinstance(_today(), datetime.date)
+
+
+def test_coerce_date_from_datetime() -> None:
+    assert _coerce_date(datetime.datetime(2026, 6, 5, 8, 30)) == datetime.date(
+        2026, 6, 5
+    )
+
+
+def test_coerce_date_from_date() -> None:
+    assert _coerce_date(datetime.date(2026, 6, 5)) == datetime.date(2026, 6, 5)
+
+
+def test_coerce_date_none() -> None:
+    assert _coerce_date(None) is None
+
+
+def test_first_date_skips_none_returns_first_available() -> None:
+    assert _first_date(
+        None,
+        datetime.datetime(2026, 6, 5, 8, 0),
+        datetime.date(2026, 1, 1),
+    ) == datetime.date(2026, 6, 5)
+
+
+def test_first_date_all_none_returns_none() -> None:
+    assert _first_date(None, None) is None
+
+
+def test_lab_row_falls_back_to_original_date_when_date_performed_null() -> None:
+    """When date_performed is null, the row's result date uses original_date."""
+    report = MagicMock()
+    report.patient = MagicMock(id="pat-1", first_name="A", last_name="B")
+    report.date_performed = None
+    report.original_date = datetime.datetime(2026, 6, 1, 9, 0)
+    report.assigned_date = None
+    report.requires_signature = False
+    report.values.all.return_value = []
+    report.tests.all.return_value = []
+    report.custom_document_name = ""
+
+    row = _lab_row(report, TODAY)
+    assert row["result_date"] == "2026-06-01"
+    assert row["days_pending"] == 11
+
+
+def test_imaging_row_falls_back_to_original_date_when_result_date_null() -> None:
+    """When result_date is null, the imaging row uses original_date."""
+    report = MagicMock()
+    report.patient = MagicMock(id="pat-2", first_name="C", last_name="D")
+    report.result_date = None
+    report.original_date = datetime.date(2026, 6, 3)
+    report.assigned_date = None
+    report.requires_signature = True
+    report.name = "MRI Brain"
+
+    row = _imaging_row(report, TODAY)
+    assert row["result_date"] == "2026-06-03"
+    assert row["days_pending"] == 9
+    assert row["values"] == []
 
 
 def test_days_pending_counts_whole_days() -> None:
