@@ -28,11 +28,23 @@ No secrets or settings are required. All authenticated staff users can access th
 
 ## Screenshots or screen recordings
 
-> _Screenshot pending._ Add an image of the dashboard (summary cards + an expanded detail section) under `provider_productivity_dashboard/assets/` and embed it here, e.g.:
->
-> ```markdown
-> ![Dashboard overview](provider_productivity_dashboard/assets/screenshot-overview.png)
-> ```
+_Screenshots use synthetic demo-instance data; no real patient information._
+
+**Summary view** — six metric cards and the collapsible detail sections, filtered by provider and time period:
+
+![Dashboard overview](screenshots/overview.png)
+
+**Detail sections** — Patients Seen, Unsigned Notes (with time-open), CPT Codes with descriptions, and Orders:
+
+![Detail sections](screenshots/detail-sections.png)
+
+**Orders and Medications** — orders filtered by type (labs shown) and medications prescribed in the period:
+
+![Orders, labs, and medications](screenshots/orders-labs-medications.png)
+
+**Care Gaps Closed** — protocols satisfied within the selected period, with the patient and resolution date:
+
+![Care gaps closed](screenshots/care-gaps-closed.png)
 
 ## Features
 
