@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
+from urllib.parse import quote
 
 import arrow
 from django.db.models import Count, Max
@@ -13,6 +14,7 @@ from canvas_sdk.effects.simple_api import Response, JSONResponse
 from canvas_sdk.handlers.application import Application
 from canvas_sdk.handlers.simple_api import StaffSessionAuthMixin, SimpleAPI, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.utils.http import ontologies_http
 from canvas_sdk.v1.data.note import Note, NoteStates, NoteTypeCategories, CurrentNoteStateEvent, NoteStateChangeEvent
 from canvas_sdk.v1.data.billing import BillingLineItem, BillingLineItemStatus
 from canvas_sdk.v1.data.charge_description_master import ChargeDescriptionMaster
@@ -41,6 +43,53 @@ DME_KEYWORDS = [
     "wheelchair", "cpap", "nebulizer", "walker", "oxygen", "prosthetic",
     "orthotic", "crutch", "splint", "catheter",
 ]
+
+# Process-level cache of CPT code -> description resolved from the ontologies
+# service, so repeated dashboard loads don't re-fetch the same codes.
+_CPT_DESCRIPTION_CACHE: dict[str, str] = {}
+
+
+def _fetch_cpt_description(code: str) -> str:
+    """Resolve one CPT code's description from the Canvas ontologies service.
+
+    Returns "" if the service is unreachable or has no match — the dashboard
+    degrades to a blank description rather than failing.
+    """
+    try:
+        response = ontologies_http.get_json(f"/cpt/?name_or_code={quote(code)}")
+    except OSError:
+        # requests' RequestException (timeout/connection error) subclasses OSError;
+        # catching the builtin avoids importing requests in the plugin sandbox.
+        return ""
+    if response.status_code != HTTPStatus.OK:
+        return ""
+    payload = response.json() or {}
+    rows = payload.get("results") if isinstance(payload, dict) else payload
+    rows = rows or []
+    match = next((r for r in rows if str(r.get("cpt_code")) == code), rows[0] if rows else None)
+    if not match:
+        return ""
+    return (
+        match.get("long_name")
+        or match.get("medium_name")
+        or match.get("name")
+        or match.get("short_name")
+        or ""
+    ).strip()
+
+
+def _ontologies_cpt_descriptions(codes: list[str]) -> dict[str, str]:
+    """Map CPT codes to ontologies-service descriptions, using the process cache.
+
+    The ontologies catalog is the canonical AMA CPT source and includes Category II
+    (NNNNF) codes that a charge master typically does not carry.
+    """
+    out: dict[str, str] = {}
+    for code in codes:
+        if code not in _CPT_DESCRIPTION_CACHE:
+            _CPT_DESCRIPTION_CACHE[code] = _fetch_cpt_description(code)
+        out[code] = _CPT_DESCRIPTION_CACHE[code]
+    return out
 
 
 def _get_date_range(period: str) -> tuple:
@@ -183,10 +232,19 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
             if cpt_code not in cdm_name_by_cpt:
                 cdm_name_by_cpt[cpt_code] = (name or short_name or "").strip()
 
+        # For codes the charge master doesn't carry (e.g. Category II quality codes),
+        # fall back to the canonical ontologies CPT catalog, then to the charge text.
+        missing_codes = [item["cpt"] for item in billing_items if not cdm_name_by_cpt.get(item["cpt"])]
+        onto_name_by_cpt = _ontologies_cpt_descriptions(missing_codes) if missing_codes else {}
+
         cpt_codes = [
             {
                 "cpt": item["cpt"],
-                "description": cdm_name_by_cpt.get(item["cpt"]) or (item["description"] or ""),
+                "description": (
+                    cdm_name_by_cpt.get(item["cpt"])
+                    or onto_name_by_cpt.get(item["cpt"])
+                    or (item["description"] or "")
+                ),
                 "count": item["count"],
             }
             for item in billing_items

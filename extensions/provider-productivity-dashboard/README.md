@@ -83,7 +83,7 @@ All endpoints accept `period` (day/week/month/quarter/year) and `provider_id` qu
 ### Metrics Logic
 
 - **Patients Seen** — distinct patients with encounters in the period (excludes MESSAGE and LETTER note types)
-- **CPT Codes** — active billing line items on qualifying notes, grouped by code. Descriptions are resolved from the **Charge Description Master** (`cpt_code → name`), falling back to the charge line item's own description text when a code is not in the charge master. Note: this is the organization's charge master, not the full AMA CPT ontology (the canonical ontology lives in a separate service that is not accessible from a plugin), so a code absent from the charge master may show no description.
+- **CPT Codes** — active billing line items on qualifying notes, grouped by code. Descriptions are resolved in order: the **Charge Description Master** (`cpt_code → name`, fast), then the **ontologies CPT catalog** via the SDK's `ontologies_http` client (the canonical AMA source, which also covers Category II `NNNNF` quality codes), then the charge line item's own free-text description. Ontologies lookups are cached per process and degrade gracefully (blank description) if the service is unreachable.
 - **Notes Status** — signed (LOCKED/RELOCKED/SGN) vs. open (NEW/PUSHED/CONVERTED/UNLOCKED/RESTORED/UNDELETED); deleted notes excluded
 - **Unsigned Notes** — notes in open states, sorted longest-open first
 - **Care Gaps Open** — `ProtocolCurrent` with `STATUS_DUE`

@@ -58,6 +58,12 @@ def _mock_visible_note_ids(mock_state_cls: MagicMock, note_ids: list[int], state
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _clear_cpt_cache() -> None:
+    """Reset the module-level ontologies CPT-description cache between tests."""
+    from provider_productivity_dashboard.applications import productivity_dashboard as _pd
+    _pd._CPT_DESCRIPTION_CACHE.clear()
+
+
 def _make_request(period: str = "day", staff_id: str = "staff-001", cpt: str = "") -> MagicMock:
     """Build a mock request object."""
     request = MagicMock()
@@ -317,7 +323,9 @@ class TestGetMetrics:
                 "provider_productivity_dashboard.applications.productivity_dashboard.NoteStateChangeEvent"
             ) as mock_nsce, patch(
                 "provider_productivity_dashboard.applications.productivity_dashboard.ChargeDescriptionMaster"
-            ) as mock_cdm:
+            ) as mock_cdm, patch(
+                "provider_productivity_dashboard.applications.productivity_dashboard.ontologies_http"
+            ) as mock_onto:
                 # Default: no sign events (avg_time_to_close = "—")
                 nsce_qs = MagicMock()
                 mock_nsce.objects.filter.return_value = nsce_qs
@@ -325,6 +333,12 @@ class TestGetMetrics:
                 nsce_qs.order_by.return_value = []
                 # Default: empty CDM, so descriptions fall back to the charge text.
                 mock_cdm.objects.filter.return_value.order_by.return_value.values_list.return_value = []
+                # Default: empty ontologies result, so we don't make real HTTP calls.
+                onto_resp = MagicMock()
+                onto_resp.status_code = HTTPStatus.OK
+                onto_resp.json.return_value = {"results": []}
+                mock_onto.get_json.return_value = onto_resp
+                _clear_cpt_cache()
                 yield mock_note, mock_billing, mock_state, mock_protocol, mock_nsce
         return _cm()
 
@@ -363,6 +377,34 @@ class TestGetMetrics:
         import json
         body = json.loads(results[0].content)
         assert body["cpt_codes"][0]["description"] == "charge fallback text"
+
+    def test_cpt_description_from_ontologies_when_not_in_charge_master(self):
+        """Category II / niche codes absent from CDM resolve from the ontologies catalog."""
+        api = _make_api()
+        with self._patch_all() as (mock_note, mock_billing, mock_state, mock_protocol, mock_nsce):
+            self._setup_mocks(mock_note, mock_billing, mock_state,
+                visible_ids=[1], patients_count=1,
+                cpt_rows=[{"cpt": "3074F", "description": "", "count": 1}],
+                mock_protocol=mock_protocol)
+            with patch(
+                "provider_productivity_dashboard.applications.productivity_dashboard.ontologies_http"
+            ) as mock_onto:
+                onto_resp = MagicMock()
+                onto_resp.status_code = HTTPStatus.OK
+                onto_resp.json.return_value = {
+                    "results": [
+                        {"cpt_code": "3074F", "long_name": "Most recent systolic blood pressure less than 130 mm Hg",
+                         "medium_name": "Systolic BP < 130"},
+                    ]
+                }
+                mock_onto.get_json.return_value = onto_resp
+                _clear_cpt_cache()
+                results = api.get_metrics()
+
+        import json
+        body = json.loads(results[0].content)
+        assert body["cpt_codes"][0]["cpt"] == "3074F"
+        assert body["cpt_codes"][0]["description"] == "Most recent systolic blood pressure less than 130 mm Hg"
 
     def test_returns_json_response(self):
         api = _make_api()
