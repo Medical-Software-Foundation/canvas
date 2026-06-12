@@ -23,6 +23,16 @@ nothing. Saved values repaint on reopen because the field is editable.
 Downstream consumers (reports, workflow plugins, integrations) can read the
 value from patient metadata under the `cash_pay_patient` key.
 
+## Screenshots
+
+The field appears in the **Patient demographics** section of the Profile tab:
+
+![Cash Pay Patient shown on the patient profile](docs/profile-view.png)
+
+When editing, it renders as a Yes / No single-select dropdown:
+
+![Cash Pay Patient edit dropdown with Yes and No options](docs/edit-field.png)
+
 ## How it works
 
 A single `BaseHandler` subclass, `PatientMetadataFields`, subscribes to
