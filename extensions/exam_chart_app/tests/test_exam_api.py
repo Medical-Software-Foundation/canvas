@@ -820,7 +820,13 @@ def test_get_state_400_when_note_uuid_invalid():
 
 
 @patch("exam_chart_app.api.exam_api.set_draft")
-def test_save_state_persists_blob(mock_set):
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_persists_blob(mock_get, mock_set):
+    # get_draft is consulted by the finalized-note guard (see
+    # test_save_state_409_when_note_already_finalized); mock it to the
+    # not-yet-finalized state so this success-path test stays
+    # isolated from AttributeHub query semantics.
+    mock_get.return_value = ({}, False)
     payload = {
         "note_uuid": "11111111-1111-1111-1111-111111111111",
         "state": {"rfv": {"comment": "Annual visit"}},
