@@ -72,13 +72,15 @@ class TestDashboardEndpoint:
         assert f"main.js?v={ASSET_VERSION}" in body
 
     @patch("billing_dashboard.handlers.billing_api.render_to_string")
-    def test_missing_template_returns_500(self, mock_render: MagicMock) -> None:
-        mock_render.return_value = None
+    def test_missing_template_propagates_filenotfound(self, mock_render: MagicMock) -> None:
+        """render_to_string raises FileNotFoundError on missing templates;
+        the handler must let it propagate to the SDK exception handler
+        (and thus Sentry) rather than mask it as a swallowed 500."""
+        mock_render.side_effect = FileNotFoundError("Template templates/page.html not found.")
         handler = BillingDashboardAPI(event=_make_event("/dashboard"))
 
-        result = handler.dashboard()
-
-        assert result[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        with pytest.raises(FileNotFoundError):
+            handler.dashboard()
 
 
 class TestStylesEndpoint:
@@ -99,11 +101,14 @@ class TestStylesEndpoint:
         mock_render.assert_called_once_with("static/css/styles.css")
 
     @patch("billing_dashboard.handlers.billing_api.render_to_string")
-    def test_missing_css_returns_500(self, mock_render: MagicMock) -> None:
-        mock_render.return_value = None
+    def test_missing_css_propagates_filenotfound(self, mock_render: MagicMock) -> None:
+        """Same reasoning as the dashboard test — a missing static asset is a
+        packaging defect that must reach Sentry, not a runtime 500 to mask."""
+        mock_render.side_effect = FileNotFoundError("Template static/css/styles.css not found.")
         handler = BillingDashboardAPI(event=_make_event("/styles.css"))
-        result = handler.styles_css()
-        assert result[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+
+        with pytest.raises(FileNotFoundError):
+            handler.styles_css()
 
 
 class TestMainJsEndpoint:
@@ -124,11 +129,14 @@ class TestMainJsEndpoint:
         mock_render.assert_called_once_with("static/js/main.js")
 
     @patch("billing_dashboard.handlers.billing_api.render_to_string")
-    def test_missing_js_returns_500(self, mock_render: MagicMock) -> None:
-        mock_render.return_value = None
+    def test_missing_js_propagates_filenotfound(self, mock_render: MagicMock) -> None:
+        """Same reasoning as the dashboard test — a missing static asset is a
+        packaging defect that must reach Sentry, not a runtime 500 to mask."""
+        mock_render.side_effect = FileNotFoundError("Template static/js/main.js not found.")
         handler = BillingDashboardAPI(event=_make_event("/main.js"))
-        result = handler.main_js()
-        assert result[0].status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+
+        with pytest.raises(FileNotFoundError):
+            handler.main_js()
 
 
 # ---------------------------------------------------------------------------

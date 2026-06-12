@@ -28,27 +28,21 @@ class BillingDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/dashboard")
     def dashboard(self) -> list[Response | Effect]:
         log.info("[BillingDashboardAPI] Serving dashboard page")
-        html = render_to_string("templates/page.html")
-        if not html:
-            log.error("[BillingDashboardAPI] templates/page.html missing or empty")
-            return [HTMLResponse("", status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
-        html = html.replace("__VERSION__", ASSET_VERSION)
+        # render_to_string raises FileNotFoundError if the template is absent.
+        # Let it propagate to the SDK exception handler (→ Sentry, → 500) per
+        # the global "errors must reach Sentry" rule. A missing static asset
+        # is a packaging defect, not a runtime condition to mask.
+        html = render_to_string("templates/page.html").replace("__VERSION__", ASSET_VERSION)
         return [HTMLResponse(html, status_code=HTTPStatus.OK)]
 
     @api.get("/styles.css")
     def styles_css(self) -> list[Response | Effect]:
         css = render_to_string("static/css/styles.css")
-        if not css:
-            log.error("[BillingDashboardAPI] static/css/styles.css missing or empty")
-            return [Response(b"", status_code=HTTPStatus.INTERNAL_SERVER_ERROR, content_type="text/css")]
         return [Response(css.encode(), status_code=HTTPStatus.OK, content_type="text/css")]
 
     @api.get("/main.js")
     def main_js(self) -> list[Response | Effect]:
         js = render_to_string("static/js/main.js")
-        if not js:
-            log.error("[BillingDashboardAPI] static/js/main.js missing or empty")
-            return [Response(b"", status_code=HTTPStatus.INTERNAL_SERVER_ERROR, content_type="text/javascript")]
         return [Response(js.encode(), status_code=HTTPStatus.OK, content_type="text/javascript")]
 
     @api.get("/api/metrics")
