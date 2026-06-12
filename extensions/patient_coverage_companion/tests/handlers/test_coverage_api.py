@@ -1,0 +1,472 @@
+"""Tests for the CoverageAPI SimpleAPI handler."""
+
+import json
+from datetime import date
+from http import HTTPStatus
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+from canvas_generated.messages.effects_pb2 import EffectType
+
+from patient_coverage_companion.handlers import coverage_api
+from patient_coverage_companion.handlers.coverage_api import (
+    CoverageAPI,
+    _build_effect_fields,
+    _parse_date,
+)
+
+STAFF_UUID = "00000000-0000-0000-0000-000000000001"
+PATIENT_UUID = "00000000-0000-0000-0000-0000000000aa"
+
+
+def _make_api(
+    query_params: dict | None = None,
+    body: dict | None = None,
+    form_data: dict | None = None,
+    upload_failures: list | None = None,
+    path_params: dict | None = None,
+    headers: dict | None = None,
+) -> CoverageAPI:
+    """Build a CoverageAPI instance with a stubbed request — no auth flow,
+    matches the pattern used by the reference companion plugin tests."""
+    api = CoverageAPI.__new__(CoverageAPI)
+    api.request = SimpleNamespace(
+        headers=headers or {"canvas-logged-in-user-id": STAFF_UUID},
+        query_params=query_params or {},
+        path_params=path_params or {},
+        json=lambda: body,
+        # form_data() in production returns a MultiDict[str, FormPart] where
+        # iteration yields keys and form[key] yields the part. A plain dict
+        # satisfies both behaviors in the test.
+        form_data=lambda: form_data or {},
+        upload_failures=lambda: upload_failures or [],
+    )
+    return api
+
+
+# ---------- helpers ----------
+
+
+class TestParseDate:
+    def test_blank_returns_none(self) -> None:
+        assert _parse_date("") is None
+        assert _parse_date(None) is None
+
+    def test_valid_iso(self) -> None:
+        assert _parse_date("2026-05-19") == date(2026, 5, 19)
+
+    def test_passthrough_date(self) -> None:
+        d = date(2026, 1, 2)
+        assert _parse_date(d) == d
+
+    def test_bad_format_raises(self) -> None:
+        with pytest.raises(ValueError):
+            _parse_date("not-a-date")
+
+
+class TestBuildEffectFields:
+    def test_drops_empty_values(self) -> None:
+        """Blank / null values are dropped so updates don't clobber unset fields."""
+        out, err = _build_effect_fields(
+            {"plan": "", "group": None, "id_number": "MEM-1"}
+        )
+        assert err is None
+        assert out == {"id_number": "MEM-1"}
+
+    def test_parses_rank_as_int(self) -> None:
+        out, err = _build_effect_fields({"coverage_rank": "2"})
+        assert err is None
+        assert out["coverage_rank"] == 2
+
+    def test_rejects_non_int_rank(self) -> None:
+        _, err = _build_effect_fields({"coverage_rank": "high"})
+        assert err is not None
+
+    def test_rejects_unknown_stack(self) -> None:
+        _, err = _build_effect_fields({"stack": "MAYBE"})
+        assert err is not None
+
+    def test_parses_dates(self) -> None:
+        out, err = _build_effect_fields(
+            {"coverage_start_date": "2026-01-01", "coverage_end_date": "2026-12-31"}
+        )
+        assert err is None
+        assert out["coverage_start_date"] == date(2026, 1, 1)
+        assert out["coverage_end_date"] == date(2026, 12, 31)
+
+    def test_keeps_image_upload_keys(self) -> None:
+        out, err = _build_effect_fields(
+            {
+                "card_image_front_upload_key": "plugin-uploads/x/y-front.jpg",
+                "card_image_back_upload_key": "plugin-uploads/x/y-back.jpg",
+            }
+        )
+        assert err is None
+        assert out["card_image_front_upload_key"] == "plugin-uploads/x/y-front.jpg"
+        assert out["card_image_back_upload_key"] == "plugin-uploads/x/y-back.jpg"
+
+
+# ---------- data + payer endpoints ----------
+
+
+class TestData:
+    def test_missing_patient_id_returns_400(self) -> None:
+        api = _make_api(query_params={})
+        (response,) = api.data()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_unknown_patient_returns_404(self) -> None:
+        api = _make_api(query_params={"patient_id": PATIENT_UUID})
+        with patch.object(coverage_api, "Patient") as patient_cls:
+            patient_cls.DoesNotExist = Exception
+            patient_cls.objects.get.side_effect = patient_cls.DoesNotExist
+            (response,) = api.data()
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+class TestPayersSearch:
+    def test_short_query_returns_empty(self) -> None:
+        api = _make_api(query_params={"q": "a"})
+        (response,) = api.payers_search()
+        body = json.loads(response.content)
+        assert body == {"results": []}
+
+
+# ---------- coverage CRUD endpoints ----------
+
+
+@pytest.fixture(autouse=True)
+def _no_rank_conflict():
+    """By default, pretend the patient has no existing coverages so the
+    handler's rank-uniqueness check passes. Tests that exercise the
+    conflict path can re-patch this themselves."""
+    with patch.object(coverage_api, "_has_rank_conflict", return_value=False) as p:
+        yield p
+
+
+class TestCreateCoverage:
+    def test_missing_patient_id_returns_400(self) -> None:
+        api = _make_api(body={"issuer_id": "x"})
+        (response,) = api.create_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_blank_body_returns_field_errors(self) -> None:
+        """A blank create payload returns 400 with per-field error messages
+        for each missing required field — not a generic 'Save failed'."""
+        api = _make_api(body={"patient_id": PATIENT_UUID})
+        (response,) = api.create_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert "field_errors" in body
+        for required in ("issuer_id", "id_number", "coverage_rank", "plan_type"):
+            assert required in body["field_errors"], (
+                f"expected {required!r} in field_errors, got {body['field_errors']!r}"
+            )
+
+    def test_create_emits_create_effect(self) -> None:
+        """A valid create body produces a CREATE_COVERAGE effect plus a 202
+        JSON acknowledgement."""
+        api = _make_api(
+            body={
+                "patient_id": PATIENT_UUID,
+                "issuer_id": "issuer-uuid",
+                "coverage_rank": 1,
+                "plan_type": "commercial",
+                "id_number": "MEM-1",
+                "patient_relationship_to_subscriber": "18",
+            }
+        )
+        with patch.object(coverage_api, "CoverageEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.create.return_value = MagicMock(
+                type=EffectType.CREATE_COVERAGE, payload=""
+            )
+            results = api.create_coverage()
+        assert len(results) == 2
+        eff_cls.assert_called_once()
+        kwargs = eff_cls.call_args.kwargs
+        assert kwargs["patient_id"] == PATIENT_UUID
+        assert kwargs["coverage_rank"] == 1
+        assert kwargs["id_number"] == "MEM-1"
+        # Response is the 202
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+    def test_rank_conflict_returns_400(self, _no_rank_conflict) -> None:
+        """An existing same-rank coverage produces an inline field error,
+        not a 202 'submitted' that silently fails async."""
+        _no_rank_conflict.return_value = True
+        api = _make_api(
+            body={
+                "patient_id": PATIENT_UUID,
+                "issuer_id": "issuer-uuid",
+                "coverage_rank": 1,
+                "plan_type": "commercial",
+                "id_number": "MEM-1",
+                "patient_relationship_to_subscriber": "18",
+            }
+        )
+        (response,) = api.create_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert "coverage_rank" in body["field_errors"]
+
+    def test_sdk_validation_error_returns_400(self) -> None:
+        """If the SDK effect raises ValidationError during .create(), the
+        handler translates it into a structured 400 instead of letting it
+        bubble up as a 500."""
+        from pydantic_core import InitErrorDetails, PydanticCustomError, ValidationError
+
+        api = _make_api(
+            body={
+                "patient_id": PATIENT_UUID,
+                "issuer_id": "issuer-uuid",
+                "coverage_rank": 1,
+                "plan_type": "commercial",
+                "id_number": "MEM-1",
+                "patient_relationship_to_subscriber": "18",
+            }
+        )
+        details = [
+            InitErrorDetails(
+                {"type": PydanticCustomError("value", "bad"), "loc": ("issuer_id",), "input": "x"}
+            )
+        ]
+        with patch.object(coverage_api, "CoverageEffect") as eff_cls:
+            eff_cls.return_value.create.side_effect = ValidationError.from_exception_data(
+                "Coverage", details
+            )
+            (response,) = api.create_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert body["field_errors"].get("issuer_id")
+
+
+class TestUpdateCoverage:
+    def test_update_with_image_only(self) -> None:
+        api = _make_api(
+            body={"card_image_back_upload_key": "plugin-uploads/x/y-back.jpg"},
+            path_params={"coverage_id": "cov-1"},
+        )
+        with patch.object(coverage_api, "CoverageEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.update.return_value = MagicMock(
+                type=EffectType.UPDATE_COVERAGE, payload=""
+            )
+            results = api.update_coverage()
+        assert len(results) == 2
+        eff_cls.assert_called_once()
+        kwargs = eff_cls.call_args.kwargs
+        assert kwargs["coverage_id"] == "cov-1"
+        assert kwargs["card_image_back_upload_key"] == "plugin-uploads/x/y-back.jpg"
+        # No clobbering: plan / id_number / etc. not in kwargs
+        assert "plan" not in kwargs
+        assert "id_number" not in kwargs
+
+
+class TestRemoveCoverage:
+    def test_remove_emits_remove_effect(self) -> None:
+        api = _make_api(path_params={"coverage_id": "cov-1"})
+        with patch.object(coverage_api, "CoverageEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.remove.return_value = MagicMock(type=EffectType.REMOVE_COVERAGE)
+            results = api.remove_coverage()
+        assert eff_cls.call_args.kwargs["coverage_id"] == "cov-1"
+        instance.remove.assert_called_once()
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+
+class TestExpireCoverage:
+    def test_missing_end_date_returns_400(self) -> None:
+        api = _make_api(body={}, path_params={"coverage_id": "cov-1"})
+        (response,) = api.expire_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_bad_date_returns_400(self) -> None:
+        api = _make_api(
+            body={"coverage_end_date": "not-a-date"},
+            path_params={"coverage_id": "cov-1"},
+        )
+        (response,) = api.expire_coverage()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_expire_emits_effect(self) -> None:
+        api = _make_api(
+            body={"coverage_end_date": "2026-12-31"},
+            path_params={"coverage_id": "cov-1"},
+        )
+        with patch.object(coverage_api, "CoverageEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.expire.return_value = MagicMock(type=EffectType.EXPIRE_COVERAGE)
+            results = api.expire_coverage()
+        instance.expire.assert_called_once_with(coverage_end_date=date(2026, 12, 31))
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+
+class TestRemovePhoto:
+    def test_invalid_side_returns_400(self) -> None:
+        api = _make_api(path_params={"coverage_id": "cov-1", "side": "middle"})
+        (response,) = api.remove_photo()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_front_side_emits_effect(self) -> None:
+        api = _make_api(path_params={"coverage_id": "cov-1", "side": "front"})
+        with patch.object(coverage_api, "CoverageEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.remove_photo.return_value = MagicMock(
+                type=EffectType.REMOVE_COVERAGE_PHOTO
+            )
+            results = api.remove_photo()
+        instance.remove_photo.assert_called_once_with("FRONT")
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+
+class TestReorder:
+    def test_missing_inputs_returns_400(self) -> None:
+        api = _make_api(body={"ordering": []})
+        (response,) = api.reorder()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_reorder_emits_effect(self) -> None:
+        api = _make_api(
+            body={
+                "patient_id": PATIENT_UUID,
+                "ordering": [
+                    {"coverage_id": "a", "coverage_rank": 1, "stack": "IN_USE"},
+                    {"coverage_id": "b", "coverage_rank": 2, "stack": "IN_USE"},
+                ],
+            }
+        )
+        with patch.object(coverage_api, "CoverageReorder") as cls:
+            instance = cls.return_value
+            instance.apply.return_value = MagicMock(type=EffectType.REORDER_COVERAGE)
+            results = api.reorder()
+        cls.assert_called_once()
+        kwargs = cls.call_args.kwargs
+        assert kwargs["patient_id"] == PATIENT_UUID
+        assert len(kwargs["ordering"]) == 2
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+
+class TestUploadCards:
+    def test_missing_files_returns_400(self) -> None:
+        api = _make_api(form_data={})
+        (response,) = api.upload_cards()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_returns_keys_for_coverage_parts(self) -> None:
+        """Legacy coverage flow uses 'front'/'back' field names."""
+        front_part = SimpleNamespace(name="front", key="plugin-uploads/x/front.jpg")
+        back_part = SimpleNamespace(name="back", key="plugin-uploads/x/back.jpg")
+        api = _make_api(form_data={"front": front_part, "back": back_part})
+        (response,) = api.upload_cards()
+        body = json.loads(response.content)
+        assert body["keys"] == {
+            "front": "plugin-uploads/x/front.jpg",
+            "back": "plugin-uploads/x/back.jpg",
+        }
+        assert body["front_key"] == "plugin-uploads/x/front.jpg"
+        assert body["back_key"] == "plugin-uploads/x/back.jpg"
+
+    def test_returns_keys_for_arbitrary_field_name(self) -> None:
+        """ID card flow sends a single 'image' part; endpoint accepts any name."""
+        image_part = SimpleNamespace(
+            name="image", key="plugin-uploads/x/license.jpg"
+        )
+        api = _make_api(form_data={"image": image_part})
+        (response,) = api.upload_cards()
+        body = json.loads(response.content)
+        assert body["keys"] == {"image": "plugin-uploads/x/license.jpg"}
+        assert body["front_key"] is None
+        assert body["back_key"] is None
+
+
+class TestIdCardEndpoints:
+    def test_data_missing_patient_id_returns_400(self) -> None:
+        api = _make_api(query_params={})
+        (response,) = api.id_cards_data()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_data_unknown_patient_returns_404(self) -> None:
+        api = _make_api(query_params={"patient_id": PATIENT_UUID})
+        with patch.object(coverage_api, "Patient") as patient_cls:
+            patient_cls.DoesNotExist = Exception
+            patient_cls.objects.get.side_effect = patient_cls.DoesNotExist
+            (response,) = api.id_cards_data()
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+    def test_create_id_card_missing_image_returns_400(self) -> None:
+        api = _make_api(body={"patient_id": PATIENT_UUID, "title": "Driver license"})
+        (response,) = api.create_id_card()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        body = json.loads(response.content)
+        assert body["field_errors"].get("image")
+
+    def test_create_id_card_missing_patient_returns_400(self) -> None:
+        api = _make_api(
+            body={"image_upload_key": "plugin-uploads/x/license.jpg"}
+        )
+        (response,) = api.create_id_card()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_create_id_card_emits_effect(self) -> None:
+        api = _make_api(
+            body={
+                "patient_id": PATIENT_UUID,
+                "image_upload_key": "plugin-uploads/x/license.jpg",
+                "title": "Driver license",
+                "active": True,
+            }
+        )
+        with patch.object(coverage_api, "PatientIdentificationCardEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.create.return_value = MagicMock(
+                type=EffectType.CREATE_PATIENT_IDENTIFICATION_CARD
+            )
+            results = api.create_id_card()
+        eff_cls.assert_called_once()
+        kwargs = eff_cls.call_args.kwargs
+        assert kwargs["patient_id"] == PATIENT_UUID
+        assert kwargs["image_upload_key"] == "plugin-uploads/x/license.jpg"
+        assert kwargs["title"] == "Driver license"
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+    def test_update_id_card_bad_id_returns_400(self) -> None:
+        api = _make_api(body={"title": "x"}, path_params={"card_id": "not-a-number"})
+        (response,) = api.update_id_card()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_update_id_card_with_new_image(self) -> None:
+        api = _make_api(
+            body={"image_upload_key": "plugin-uploads/x/renewed.jpg", "title": "Renewed"},
+            path_params={"card_id": "42"},
+        )
+        with patch.object(coverage_api, "PatientIdentificationCardEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.update.return_value = MagicMock(
+                type=EffectType.UPDATE_PATIENT_IDENTIFICATION_CARD
+            )
+            results = api.update_id_card()
+        kwargs = eff_cls.call_args.kwargs
+        assert kwargs["card_id"] == 42
+        assert kwargs["image_upload_key"] == "plugin-uploads/x/renewed.jpg"
+        assert kwargs["title"] == "Renewed"
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+    def test_delete_id_card_emits_effect(self) -> None:
+        api = _make_api(path_params={"card_id": "42"})
+        with patch.object(coverage_api, "PatientIdentificationCardEffect") as eff_cls:
+            instance = eff_cls.return_value
+            instance.delete.return_value = MagicMock(
+                type=EffectType.DELETE_PATIENT_IDENTIFICATION_CARD
+            )
+            results = api.delete_id_card()
+        kwargs = eff_cls.call_args.kwargs
+        assert kwargs["card_id"] == 42
+        instance.delete.assert_called_once()
+        assert results[-1].status_code == HTTPStatus.ACCEPTED
+
+    def test_delete_id_card_bad_id_returns_400(self) -> None:
+        api = _make_api(path_params={"card_id": "not-a-number"})
+        (response,) = api.delete_id_card()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
