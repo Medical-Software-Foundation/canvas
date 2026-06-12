@@ -853,6 +853,46 @@ def test_save_state_400_when_state_not_object(mock_set):
 
 @patch("exam_chart_app.api.exam_api.set_draft")
 @patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_swallows_get_draft_db_error_and_proceeds(mock_get, mock_set):
+    """A transient DB error from the get_draft finalized-check should be
+    swallowed (logged for Sentry via log.exception) and treated as
+    'not finalized' — control falls through to set_draft. Mirrors the
+    finalize() narrow-catch pattern."""
+    from django.db import OperationalError
+    mock_get.side_effect = OperationalError("connection lost")
+    payload = {
+        "note_uuid": "11111111-1111-1111-1111-111111111111",
+        "state": {"rfv": {"comment": "Annual visit"}},
+    }
+    responses = _make_api(json_body=payload).save_state()
+    # The DB read failure didn't 500; control reached set_draft.
+    assert responses[0].status_code == HTTPStatus.OK
+    mock_set.assert_called_once_with(
+        "11111111-1111-1111-1111-111111111111",
+        {"rfv": {"comment": "Annual visit"}},
+    )
+
+
+@patch("exam_chart_app.api.exam_api.set_draft")
+@patch("exam_chart_app.api.exam_api.get_draft")
+def test_save_state_propagates_get_draft_programming_bug(mock_get, mock_set):
+    """Locks the narrow-catch invariant: non-DB-class exceptions from
+    get_draft (AttributeError on a renamed AttributeHub attr, TypeError
+    from a wrong return shape, etc.) must propagate as 500 + Sentry —
+    not be silently swallowed alongside DB transients."""
+    import pytest
+    mock_get.side_effect = AttributeError("AttributeHub.something renamed")
+    payload = {
+        "note_uuid": "11111111-1111-1111-1111-111111111111",
+        "state": {"rfv": {"comment": "Annual visit"}},
+    }
+    with pytest.raises(AttributeError):
+        _make_api(json_body=payload).save_state()
+    mock_set.assert_not_called()
+
+
+@patch("exam_chart_app.api.exam_api.set_draft")
+@patch("exam_chart_app.api.exam_api.get_draft")
 def test_save_state_409_when_note_already_finalized(mock_get, mock_set):
     """Backend defense-in-depth: a stale tab (or any direct client call)
     that POSTs to /exam/state/save after the note has been finalized

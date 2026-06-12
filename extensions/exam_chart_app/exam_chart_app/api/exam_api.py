@@ -390,7 +390,28 @@ class ExamChartingAPI(StaffSessionAuthMixin, SimpleAPI):
         # the draft after the chart's commands are already finalized.
         # Returning 409 lets the frontend surface "already finalized" via
         # the existing save-error banner pattern.
-        _, already_finalized = get_draft(note_uuid)
+        #
+        # get_draft hits the live AttributeHub ORM. A DB-class transient
+        # here would otherwise propagate to SimpleAPI's outer catch and
+        # surface as a generic 500 — inconsistent with finalize()'s
+        # narrow-catch + log.exception pattern that this PR introduced.
+        # Apply the same shape: swallow DB-class exceptions (logged so
+        # Sentry pages), assume "not finalized" to proceed, and let
+        # programming bugs (AttributeError / KeyError / TypeError)
+        # propagate. set_draft on the next line operates against the
+        # same AttributeHub, so if the transient is real, the write
+        # will likely also fail and return its own error — but at
+        # least we get a clean breadcrumb from the read attempt.
+        already_finalized = False
+        try:
+            _, already_finalized = get_draft(note_uuid)
+        except Exception as exc:  # noqa: BLE001 — narrowed via _DB_EXCEPTION_NAMES; rationale at module top
+            if exc.__class__.__name__ not in _DB_EXCEPTION_NAMES:
+                raise  # programming bug → 500 + Sentry
+            log.exception(
+                f"[ExamChartingAPI] /exam/state/save get_draft failed for "
+                f"note={note_uuid} — proceeding as not-finalized"
+            )
         if already_finalized:
             log.info(
                 f"[ExamChartingAPI] /exam/state/save rejected for finalized "
