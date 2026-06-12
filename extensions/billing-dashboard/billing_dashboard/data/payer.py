@@ -43,13 +43,10 @@ def build_payer(now: arrow.Arrow | None = None) -> dict[str, Any]:
         .annotate(
             collected=Sum(
                 "postings__newlineitempayments__amount",
-                # See note in data/overview.py:_COLLECTED_SUM — both levels of
-                # entered_in_error must be filtered or voided payment rows
-                # leak into the per-payer collected total.
-                filter=Q(
-                    postings__entered_in_error__isnull=True,
-                    postings__newlineitempayments__entered_in_error__isnull=True,
-                ),
+                # See note in data/overview.py:_COLLECTED_SUM. Posting-level
+                # filter is the canonical SDK pattern; payments inherit their
+                # voided status from their parent posting.
+                filter=Q(postings__entered_in_error__isnull=True),
             ),
             total_claims=Count("id", distinct=True),
             rejected_claims=Count(

@@ -43,19 +43,21 @@ class SummaryEntry(TypedDict):
 
 _COLLECTED_SUM = Sum(
     "postings__newlineitempayments__amount",
-    # Filter retractions at BOTH levels: the parent posting can be valid while
-    # an individual payment row is retracted (bounced check, misposted ERA
-    # line). Mirrors the canonical financial SQL pattern and the SDK's own
-    # ``claim_line_item.py`` which uses the identical path.
+    # Exclude voided postings. Per the Canvas SDK data model, a payment is
+    # voided by voiding its parent posting — NewLineItemPayment (and its
+    # siblings) extend AbstractLineItemTransaction → TimestampedModel, which
+    # does not carry ``entered_in_error``. The retraction signal lives one
+    # level up on BasePosting. Mirrors the SDK's own aggregation in
+    # ``BulkPatientPosting.total_posted_amount`` and ``BasePosting.paid_amount``
+    # which filter at the posting level only.
     #
-    # NOTE: an earlier attempt (commit ``bd9913e``) caused 500s on real data
-    # and was reverted in ``eb3d6f3``. Re-applying intentionally to capture
-    # the server-side traceback this round — the prior pass never caught the
-    # actual exception class because the log tail kept timing out.
-    filter=Q(
-        postings__entered_in_error__isnull=True,
-        postings__newlineitempayments__entered_in_error__isnull=True,
-    ),
+    # An earlier attempt (commit ``bd9913e``) added a second filter on
+    # ``postings__newlineitempayments__entered_in_error__isnull`` and 500s
+    # with a Django FieldError because the field is not declared on the
+    # model. The SDK's ``AbstractLineItemQuerySet.active()`` method
+    # references the same nonexistent field and is also unusable. See
+    # ``memory/canvas-sdk-newlineitempayment-no-entered-in-error.md``.
+    filter=Q(postings__entered_in_error__isnull=True),
 )
 
 
