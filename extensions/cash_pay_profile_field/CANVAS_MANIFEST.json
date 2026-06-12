@@ -1,0 +1,23 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "cash_pay_profile_field",
+    "description": "Adds an optional 'Cash Pay Patient?' Yes/No single-select field to the patient profile, stored as patient metadata under the key 'cash_pay_patient'.",
+    "components": {
+        "protocols": [
+            {
+                "class": "cash_pay_profile_field.protocols.patient_metadata_fields:PatientMetadataFields",
+                "description": "Configures the 'Cash Pay Patient?' single-select field on the patient profile."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

@@ -1,0 +1,34 @@
+[project]
+name = "cash-pay-profile-field"
+version = "0.0.1"
+description = "Adds an optional 'Cash Pay Patient?' field to the patient profile."
+requires-python = ">=3.11"
+dependencies = [
+    "canvas",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+# This extension folder *is* the `cash_pay_profile_field` package, so its
+# parent (extensions/) must be importable for `from cash_pay_profile_field...`.
+addopts = "-v"
+pythonpath = [".."]
+
+[tool.coverage.run]
+source = ["cash_pay_profile_field"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
