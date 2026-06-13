@@ -1391,7 +1391,11 @@ class TestGetOrders:
         mock_lab.ordering_provider = provider
         mock_lab.date_ordered = datetime.datetime(2026, 4, 10, 10, 0)
         mock_lab.comment = "Routine labs"
-        mock_lab.tests.values_list.return_value = ["CBC", "BMP"]
+        # Tests are read from the prefetch cache via .all(); each carries an
+        # ontology_test_name attribute.
+        cbc, bmp = MagicMock(), MagicMock()
+        cbc.ontology_test_name, bmp.ontology_test_name = "CBC", "BMP"
+        mock_lab.tests.all.return_value = [cbc, bmp]
 
         with patch(f"{self.MODULE}.LabOrder") as lab_cls, \
              patch(f"{self.MODULE}.ImagingOrder") as img_cls, \
@@ -1494,7 +1498,9 @@ class TestGetOrders:
         mock_lab.patient = patient
         mock_lab.ordering_provider = provider
         mock_lab.date_ordered = datetime.datetime(2026, 4, 10, 10, 0)
-        mock_lab.tests.values_list.return_value = ["CBC"]
+        cbc = MagicMock()
+        cbc.ontology_test_name = "CBC"
+        mock_lab.tests.all.return_value = [cbc]
 
         with patch(f"{self.MODULE}.LabOrder") as lab_cls, \
              patch(f"{self.MODULE}.ImagingOrder") as img_cls, \

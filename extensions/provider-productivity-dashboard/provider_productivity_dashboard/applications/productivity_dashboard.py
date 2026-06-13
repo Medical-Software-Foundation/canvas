@@ -580,7 +580,9 @@ class ProductivityDashboardApi(StaffSessionAuthMixin, SimpleAPI):
             for lab in labs:
                 if not lab.patient:
                     continue
-                test_names = list(lab.tests.values_list("ontology_test_name", flat=True))
+                # Read from the prefetch_related("tests") cache (.all()), not
+                # .values_list() — the latter issues a fresh query per lab (N+1).
+                test_names = [t.ontology_test_name for t in lab.tests.all() if t.ontology_test_name]
                 rows.append({
                     "patient_name": _patient_name(lab.patient) or "Unknown",
                     "chart_link": f"/patient/{lab.patient.id}",
