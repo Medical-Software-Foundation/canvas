@@ -1,0 +1,85 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "candid",
+    "description": "Submits claims to Candid's API, pulls adjudication data, posts payments/adjustments back to Canvas, and reports patient payments.",
+    "url_permissions": [],
+    "components": {
+        "handlers": [
+            {
+                "class": "candid.handlers.on_queue_moved:OnClaimQueueMoved",
+                "description": "On CLAIM_QUEUE_MOVED: schedule claim submission (QueuedForSubmission) or adjudication sync (Patient Balance)."
+            },
+            {
+                "class": "candid.handlers.on_patient_payment:OnPatientPaymentProcessed",
+                "description": "On PATIENT_PAYMENT_PROCESSED: report the patient payment to Candid's API with claim allocations."
+            },
+            {
+                "class": "candid.api.submit:CandidSubmitAPI",
+                "description": "SimpleAPI endpoint that submits a claim to Candid after the grace period has elapsed."
+            },
+            {
+                "class": "candid.api.sync:CandidSyncAPI",
+                "description": "Triggers full adjudication sync for a single claim."
+            },
+            {
+                "class": "candid.api.sync:CandidSyncPatientPaymentsAPI",
+                "description": "Triggers patient payment sync for a single claim (async from queue move)."
+            },
+            {
+                "class": "candid.api.report_payment:CandidReportPaymentAPI",
+                "description": "Reports a patient payment to Candid's API (async from payment event)."
+            },
+            {
+                "class": "candid.api.claim_detail:CandidClaimDetailAPI",
+                "description": "Serves Candid timeline data and triggers manual syncs for the claim timeline application."
+            },
+            {
+                "class": "candid.api.dashboard:CandidDashboardAPI",
+                "description": "Serves aggregated Candid claim data for the dashboard application."
+            },
+            {
+                "class": "candid.cron.nightly_sync:NightlyCandidSync",
+                "description": "Nightly cron (2 AM) that syncs adjudication data for all claims in FiledAwaitingResponse, AdjudicatedOpenBalance, and PatientBalance."
+            },
+            {
+                "class": "candid.api.websocket:CandidTimelineWebSocket",
+                "description": "WebSocket for real-time claim timeline updates."
+            },
+            {
+                "class": "candid.api.app:CandidAppAssets",
+                "description": "Serves HTML/CSS/JS for the Candid dashboard and claim-timeline applications."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": [
+            {
+                "class": "candid.applications.claim_timeline:CandidClaimTimeline",
+                "name": "Candid Activity",
+                "description": "Shows Candid submission, adjudication, and payment activity for the current claim.",
+                "icon": "assets/candid-icon.png",
+                "scope": "global"
+            },
+            {
+                "class": "candid.applications.candid_dashboard:CandidDashboard",
+                "name": "Candid Dashboard",
+                "description": "Lists all claims submitted to Candid with their current status.",
+                "icon": "assets/candid-icon.png",
+                "scope": "provider_menu_item"
+            }
+        ]
+    },
+    "variables": [
+        {"name": "CANDID_CLIENT_ID", "sensitive": true},
+        {"name": "CANDID_CLIENT_SECRET", "sensitive": true},
+        {"name": "CANDID_BASE_URL", "sensitive": false}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
