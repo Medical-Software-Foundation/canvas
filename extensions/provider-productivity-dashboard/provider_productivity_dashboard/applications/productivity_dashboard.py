@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any
@@ -85,14 +84,15 @@ def _ontologies_cpt_descriptions(codes: list[str]) -> dict[str, str]:
     The ontologies catalog is the canonical AMA CPT source and includes Category II
     (NNNNF) codes that a charge master typically does not carry.
     """
-    uncached = [code for code in codes if code not in _CPT_DESCRIPTION_CACHE]
-    if uncached:
-        # Independent network lookups — fetch them concurrently so a cold cache
-        # over many codes costs ~one round-trip instead of one per code.
-        with ThreadPoolExecutor(max_workers=min(8, len(uncached))) as executor:
-            for code, description in zip(uncached, executor.map(_fetch_cpt_description, uncached)):
-                _CPT_DESCRIPTION_CACHE[code] = description
-    return {code: _CPT_DESCRIPTION_CACHE[code] for code in codes}
+    # Looked up sequentially (the plugin sandbox blocks concurrent.futures, so no
+    # plugin-side threading). The per-process cache and gaps-only lookup keep this
+    # bounded — only cache-miss codes hit the service, and only once per process.
+    out: dict[str, str] = {}
+    for code in codes:
+        if code not in _CPT_DESCRIPTION_CACHE:
+            _CPT_DESCRIPTION_CACHE[code] = _fetch_cpt_description(code)
+        out[code] = _CPT_DESCRIPTION_CACHE[code]
+    return out
 
 
 def _get_date_range(period: str) -> tuple:
