@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from canvas_sdk.effects.calendar import CalendarType
+from canvas_sdk.effects.calendar import CalendarType, EventRecurrence
 
 from provider_availability.engine.models import (
     AdminBlock,
@@ -28,9 +28,11 @@ from provider_availability.engine.event_sync import (
     _compute_recurring_segments,
     _next_weekday,
     _weekday_occurrences,
+    _build_hold_block_events,
     _build_rule_events,
     _get_calendar_id,
     build_block_event_effects,
+    build_hold_block_refresh_effects,
     build_delete_block_effects,
     build_delete_effects,
     build_delete_recurring_block_effects,
@@ -38,7 +40,6 @@ from provider_availability.engine.event_sync import (
     build_recurring_block_sync_effects,
     build_sync_effects,
     delete_all_lead_time_events,
-    delete_all_plugin_events,
     sync_provider_availability,
 )
 
@@ -648,6 +649,7 @@ class TestGetCalendarId:
                     provider=PROVIDER_ID,
                     type=CalendarType.Clinic,
                     location=LOCATION_ID,
+                    description=str(PROVIDER_ID),
                 ),
                 call().create(),
             ]
@@ -672,6 +674,7 @@ class TestGetCalendarId:
                     provider=PROVIDER_ID,
                     type=CalendarType.Clinic,
                     location=None,
+                    description=str(PROVIDER_ID),
                 ),
                 call().create(),
             ]
@@ -1353,124 +1356,9 @@ class TestBuildDeleteBlockEffects:
         assert mock_event_objects.filter.call_count >= 2
 
 
-# ── delete_all_plugin_events ──────────────────────────────────────────
-
-
-class TestDeleteAllPluginEvents:
-    def test_deletes_from_clinic_and_admin_calendars(self):
-        mock_clinic_cal = MagicMock()
-        mock_clinic_cal.id = "clinic-cal-1"
-        mock_admin_cal = MagicMock()
-        mock_admin_cal.id = "admin-cal-1"
-
-        mock_evt1 = MagicMock()
-        mock_evt1.id = "evt-1"
-        mock_evt2 = MagicMock()
-        mock_evt2.id = "evt-2"
-
-        with patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
-             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            # First call for Clinic, second for Admin (title__in), third for Admin (hold blocks)
-            mock_cal_objects.filter.side_effect = [
-                [mock_clinic_cal],
-                [mock_admin_cal],
-            ]
-            mock_event_objects.filter.side_effect = [
-                [mock_evt1],
-                [mock_evt2],
-                [],  # hold block cleanup prefix 1
-                [],  # hold block cleanup prefix 2
-                [],  # hold block cleanup prefix 3
-                [],  # hold block cleanup prefix 4 (legacy Same-Day Hold)
-                [],  # hold block cleanup prefix 5 (legacy Next-Day Hold)
-            ]
-
-            result = delete_all_plugin_events()
-
-        assert len(result) == 2
-        # Verify calendar filter calls
-        assert mock_cal_objects.mock_calls == [
-            call.filter(title__contains=": Clinic"),
-            call.filter(title__contains=": Admin"),
-        ]
-
-    def test_no_calendars_returns_empty(self):
-        with patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects:
-            mock_cal_objects.filter.return_value = []
-
-            result = delete_all_plugin_events()
-
-        assert result == []
-
-    def test_no_events_returns_empty(self):
-        mock_cal = MagicMock()
-        mock_cal.id = "cal-1"
-
-        with patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
-             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_cal_objects.filter.return_value = [mock_cal]
-            mock_event_objects.filter.return_value = []
-
-            result = delete_all_plugin_events()
-
-        assert result == []
-
-    def test_filters_by_calendar_only_not_title(self):
-        # Plugin's Clinic + Admin calendars are owned exclusively by us, so the
-        # cleanup deletes EVERY non-cancelled event on them — not just events
-        # whose title matches a fixed list. This is required because block
-        # events use the user-supplied reason as their title (e.g. "holiday").
-        mock_cal = MagicMock()
-        mock_cal.id = "cal-1"
-
-        with patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
-             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_cal_objects.filter.side_effect = [[mock_cal], []]
-            mock_event_objects.filter.return_value = []
-
-            delete_all_plugin_events()
-
-        event_filter_call = mock_event_objects.filter.call_args_list[0]
-        assert "title__in" not in event_filter_call.kwargs
-        assert event_filter_call.kwargs["calendar__id"] == "cal-1"
-        assert event_filter_call.kwargs["is_cancelled"] is False
-
-    def test_multiple_calendars_in_each_type(self):
-        """Multiple Clinic and Admin calendars with events."""
-        mock_clinic1 = MagicMock()
-        mock_clinic1.id = "clinic-1"
-        mock_clinic2 = MagicMock()
-        mock_clinic2.id = "clinic-2"
-        mock_admin1 = MagicMock()
-        mock_admin1.id = "admin-1"
-
-        mock_evt1 = MagicMock()
-        mock_evt1.id = "evt-1"
-        mock_evt2 = MagicMock()
-        mock_evt2.id = "evt-2"
-        mock_evt3 = MagicMock()
-        mock_evt3.id = "evt-3"
-
-        with patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
-             patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_cal_objects.filter.side_effect = [
-                [mock_clinic1, mock_clinic2],
-                [mock_admin1],
-            ]
-            mock_event_objects.filter.side_effect = [
-                [mock_evt1],      # clinic-1 title__in
-                [mock_evt2],      # clinic-2 title__in
-                [mock_evt3],      # admin-1 title__in
-                [],               # admin-1 hold block cleanup prefix 1
-                [],               # admin-1 hold block cleanup prefix 2
-                [],               # admin-1 hold block cleanup prefix 3
-                [],               # admin-1 hold block cleanup prefix 4 (legacy Same-Day Hold)
-                [],               # admin-1 hold block cleanup prefix 5 (legacy Next-Day Hold)
-            ]
-
-            result = delete_all_plugin_events()
-
-        assert len(result) == 3
+# NOTE: delete_all_plugin_events() was removed (it destroyed non-plugin events
+# on shared calendars). Reconciliation is now per-entity; see
+# tests/protocols/test_staff_lifecycle.py for the non-destructive install path.
 
 
 # ── delete_all_lead_time_events ───────────────────────────────────────
@@ -2691,3 +2579,511 @@ class TestComputeRecurringSegments:
             (date(2026, 3, 5), date(2026, 3, 12)),
             (date(2026, 4, 2), date(2026, 4, 30)),
         ]
+
+
+# ── _build_rule_events: daily recurrence path ─────────────────────────
+
+
+class TestBuildRuleEventsDaily:
+    """Cover the daily-recurrence branch of _build_rule_events."""
+
+    def test_daily_no_time_windows_returns_empty(self):
+        rule = ProviderAvailabilityRule(
+            id="rule-daily",
+            provider_id=PROVIDER_ID,
+            recurrence_frequency="daily",
+            time_windows=[],
+        )
+        assert _build_rule_events(rule) == []
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}._get_calendar_id")
+    def test_daily_creates_one_recurring_event_per_window(
+        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc
+    ):
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_cal.return_value = ("cal-1", [])
+        rule = ProviderAvailabilityRule(
+            id="rule-daily",
+            provider_id=PROVIDER_ID,
+            location_ids=[LOCATION_ID],
+            recurrence_frequency="daily",
+            time_windows=[
+                TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0)),
+                TimeWindow(start=dt.time(13, 0), end=dt.time(17, 0)),
+            ],
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_rule_events(rule)
+
+        # 2 windows x 1 location = 2 daily recurring events
+        assert len(result) == 2
+        kwargs = [c.kwargs for c in mock_ee.call_args_list]
+        assert all(k["recurrence_frequency"] == EventRecurrence.Daily for k in kwargs)
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}._get_calendar_id")
+    def test_daily_anchor_advances_off_interval(
+        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc
+    ):
+        """effective_start in the past, not on an interval boundary → anchor advances."""
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_cal.return_value = ("cal-1", [])
+        rule = ProviderAvailabilityRule(
+            id="rule-daily",
+            provider_id=PROVIDER_ID,
+            location_ids=[LOCATION_ID],
+            recurrence_frequency="daily",
+            recurrence_interval=7,
+            effective_start=date(2026, 2, 1),  # 29 days before today; 29 % 7 == 1
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_rule_events(rule)
+
+        assert len(result) == 1
+        # anchor = 2026-03-02 + (7 - 1) days = 2026-03-08
+        assert mock_ee.call_args_list[0].kwargs["starts_at"].date() == date(2026, 3, 8)
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}._get_calendar_id")
+    def test_daily_anchor_on_interval_boundary(
+        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc
+    ):
+        """effective_start in the past, exactly on an interval boundary → anchor = today."""
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_cal.return_value = ("cal-1", [])
+        rule = ProviderAvailabilityRule(
+            id="rule-daily",
+            provider_id=PROVIDER_ID,
+            location_ids=[LOCATION_ID],
+            recurrence_frequency="daily",
+            recurrence_interval=7,
+            effective_start=date(2026, 2, 23),  # 7 days before today; 7 % 7 == 0
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_rule_events(rule)
+
+        assert len(result) == 1
+        assert mock_ee.call_args_list[0].kwargs["starts_at"].date() == date(2026, 3, 2)
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}._get_calendar_id")
+    def test_daily_anchor_beyond_range_end_produces_no_events(
+        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc
+    ):
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_cal.return_value = ("cal-1", [])
+        rule = ProviderAvailabilityRule(
+            id="rule-daily",
+            provider_id=PROVIDER_ID,
+            location_ids=[LOCATION_ID],
+            recurrence_frequency="daily",
+            effective_start=date(2026, 4, 1),  # future
+            effective_end=date(2026, 3, 15),   # before anchor
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+        )
+        with patch(f"{MODULE}.date") as mock_date:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_rule_events(rule)
+        assert result == []
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}._get_calendar_id")
+    def test_daily_emits_oneoff_for_open_override_and_skips_closed(
+        self, mock_get_cal, mock_tz, mock_localize, mock_to_utc
+    ):
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_cal.return_value = ("cal-1", [])
+        rule = ProviderAvailabilityRule(
+            id="rule-daily",
+            provider_id=PROVIDER_ID,
+            location_ids=[LOCATION_ID],
+            recurrence_frequency="daily",
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+            date_overrides=[
+                DateOverride(
+                    date=date(2026, 3, 10),
+                    is_closed=False,
+                    time_windows=[TimeWindow(start=dt.time(14, 0), end=dt.time(15, 0))],
+                ),
+                DateOverride(date=date(2026, 3, 11), is_closed=True, time_windows=[]),
+                DateOverride(date=date(2026, 3, 12), is_closed=False, time_windows=[]),
+            ],
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_rule_events(rule)
+
+        # 1 daily recurring event + 1 one-off for the open override (closed + empty skipped)
+        assert len(result) == 2
+        kwargs = [c.kwargs for c in mock_ee.call_args_list]
+        oneoffs = [k for k in kwargs if "recurrence_frequency" not in k]
+        assert len(oneoffs) == 1
+        assert oneoffs[0]["starts_at"].date() == date(2026, 3, 10)
+
+
+# ── build_recurring_block_sync_effects: daily + segment splitting ─────
+
+
+class TestBuildRecurringBlockSyncDaily:
+    @pytest.fixture(autouse=True)
+    def _mock_override_map(self):
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[]):
+            yield
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    @patch(f"{MODULE}.build_delete_recurring_block_effects")
+    def test_daily_recurring_block_creates_daily_events(
+        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+    ):
+        mock_delete.return_value = []
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("admin-cal-1", [])
+        block = RecurringBlock(
+            id="rb-daily",
+            provider_id=PROVIDER_ID,
+            reason="Daily lunch",
+            recurrence_frequency="daily",
+            time_windows=[TimeWindow(start=dt.time(12, 0), end=dt.time(13, 0))],
+            is_active=True,
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = build_recurring_block_sync_effects(block)
+
+        assert len(result) == 1
+        init_kwargs = mock_ee.call_args_list[0].kwargs
+        assert init_kwargs["recurrence_frequency"] == EventRecurrence.Daily
+        assert init_kwargs["title"] == "Daily lunch"
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    @patch(f"{MODULE}.build_delete_recurring_block_effects")
+    def test_daily_recurring_anchor_beyond_range_skips(
+        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+    ):
+        mock_delete.return_value = []
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("admin-cal-1", [])
+        block = RecurringBlock(
+            id="rb-daily",
+            provider_id=PROVIDER_ID,
+            reason="Future block",
+            recurrence_frequency="daily",
+            effective_start=date(2026, 4, 1),
+            effective_end=date(2026, 3, 15),
+            time_windows=[TimeWindow(start=dt.time(12, 0), end=dt.time(13, 0))],
+            is_active=True,
+        )
+        with patch(f"{MODULE}.date") as mock_date:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = build_recurring_block_sync_effects(block)
+        assert result == []
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    @patch(f"{MODULE}.build_delete_recurring_block_effects")
+    def test_weekly_recurring_block_splits_around_override(
+        self, mock_delete, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+    ):
+        """An override on the block's weekday that narrows availability splits the recurring event."""
+        mock_delete.return_value = []
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("admin-cal-1", [])
+        block = RecurringBlock(
+            id="rb-weekly",
+            provider_id=PROVIDER_ID,
+            reason="Friday lunch",
+            weekly_schedule={
+                "friday": [TimeWindow(start=dt.time(12, 0), end=dt.time(13, 0))],
+            },
+            is_active=True,
+        )
+        override_rule = ProviderAvailabilityRule(
+            id="rule-ovr",
+            provider_id=PROVIDER_ID,
+            weekly_schedule={},
+            date_overrides=[
+                DateOverride(
+                    date=date(2026, 3, 20),  # a Friday
+                    is_closed=False,
+                    time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(11, 0))],
+                ),
+            ],
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.get_rules_for_provider", return_value=[override_rule]), \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = build_recurring_block_sync_effects(block)
+
+        # The single recurring event is split into segments around the override Friday
+        assert len(result) >= 2
+        kwargs = [c.kwargs for c in mock_ee.call_args_list]
+        assert all(k["recurrence_frequency"] == EventRecurrence.Weekly for k in kwargs)
+
+
+# ── _build_hold_block_events ──────────────────────────────────────────
+
+
+class TestBuildHoldBlockEvents:
+    @pytest.fixture(autouse=True)
+    def _mock_override_map(self):
+        with patch(f"{MODULE}.get_rules_for_provider", return_value=[]):
+            yield
+
+    def test_hold_type_none_returns_empty(self, sample_recurring_block):
+        sample_recurring_block.hold_type = "none"
+        assert _build_hold_block_events(sample_recurring_block) == []
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    def test_same_day_hold_blocks_future_in_pattern_dates(
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+    ):
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("admin-cal-1", [])
+        block = RecurringBlock(
+            id="rb-hold",
+            provider_id=PROVIDER_ID,
+            reason="Hold",
+            weekly_schedule={
+                "friday": [TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+            },
+            hold_type="same_day",
+            is_active=True,
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)  # Monday
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_hold_block_events(block)
+
+        # Fridays within the 30-day rolling window: 3/6, 3/13, 3/20, 3/27 = 4 events
+        assert len(result) == 4
+        kwargs = [c.kwargs for c in mock_ee.call_args_list]
+        assert all(k["title"] == "Same Day Hold: Hold" for k in kwargs)
+        assert all("recurrence_frequency" not in k for k in kwargs)
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    def test_next_day_hold_uses_next_day_label(
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+    ):
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("admin-cal-1", [])
+        block = RecurringBlock(
+            id="rb-hold",
+            provider_id=PROVIDER_ID,
+            reason="",
+            recurrence_frequency="daily",
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+            hold_type="next_day",
+            is_active=True,
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_hold_block_events(block)
+
+        # daily hold: every day from today+2 .. today+30 = 29 events
+        assert len(result) == 29
+        kwargs = [c.kwargs for c in mock_ee.call_args_list]
+        assert all(k["title"] == "Next Day Hold" for k in kwargs)
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    def test_hold_no_admin_calendar_skips_location(
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+    ):
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("", [])
+        block = RecurringBlock(
+            id="rb-hold",
+            provider_id=PROVIDER_ID,
+            recurrence_frequency="daily",
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+            hold_type="same_day",
+            is_active=True,
+        )
+        with patch(f"{MODULE}.date") as mock_date:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_hold_block_events(block)
+        assert result == []
+
+    @patch(f"{MODULE}.to_utc", side_effect=lambda x: x)
+    @patch(f"{MODULE}.localize_naive", side_effect=lambda x, tz: x.replace(tzinfo=UTC))
+    @patch(f"{MODULE}.provider_tz")
+    @patch(f"{MODULE}.get_admin_calendar_id")
+    def test_hold_suppressed_on_override_outside_window(
+        self, mock_get_admin_cal, mock_tz, mock_localize, mock_to_utc,
+    ):
+        mock_tz.return_value = ZoneInfo("US/Eastern")
+        mock_get_admin_cal.return_value = ("admin-cal-1", [])
+        block = RecurringBlock(
+            id="rb-hold",
+            provider_id=PROVIDER_ID,
+            reason="Hold",
+            recurrence_frequency="daily",
+            time_windows=[TimeWindow(start=dt.time(9, 0), end=dt.time(12, 0))],
+            hold_type="same_day",
+            is_active=True,
+        )
+        override_rule = ProviderAvailabilityRule(
+            id="rule-ovr",
+            provider_id=PROVIDER_ID,
+            weekly_schedule={},
+            date_overrides=[
+                DateOverride(
+                    date=date(2026, 3, 6),
+                    is_closed=False,
+                    time_windows=[TimeWindow(start=dt.time(14, 0), end=dt.time(15, 0))],
+                ),
+            ],
+        )
+        with patch(f"{MODULE}.date") as mock_date, \
+             patch(f"{MODULE}.get_rules_for_provider", return_value=[override_rule]), \
+             patch(f"{MODULE}.EventEffect") as mock_ee:
+            mock_date.today.return_value = date(2026, 3, 2)
+            mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+            result = _build_hold_block_events(block)
+
+        # same_day hold blocks 3/3..4/1 = 30 days, minus the suppressed 3/6 = 29
+        assert len(result) == 29
+        starts = {c.kwargs["starts_at"].date() for c in mock_ee.call_args_list}
+        assert date(2026, 3, 6) not in starts
+
+
+# ── build_hold_block_refresh_effects ──────────────────────────────────
+
+
+class TestBuildHoldBlockRefreshEffects:
+    @patch(f"{MODULE}._build_hold_block_events")
+    @patch(f"{MODULE}.get_admin_calendars")
+    def test_deletes_existing_then_recreates(
+        self, mock_get_cals, mock_build_hold, sample_recurring_block
+    ):
+        cal = MagicMock()
+        cal.id = "admin-cal-1"
+        mock_get_cals.return_value = [cal]
+
+        evt = MagicMock()
+        evt.id = "evt-1"
+        with patch(f"{MODULE}.EventModel") as mock_event_model:
+            mock_event_model.objects.filter.side_effect = (
+                [[evt]] + [[] for _ in range(10)]
+            )
+            recreate = MagicMock()
+            mock_build_hold.return_value = [recreate]
+
+            result = build_hold_block_refresh_effects(sample_recurring_block)
+
+        # 1 delete effect + 1 recreate effect
+        assert len(result) == 2
+        assert result[-1] is recreate
+        assert mock_build_hold.mock_calls == [call(sample_recurring_block)]
+
+    @patch(f"{MODULE}._build_hold_block_events", return_value=[])
+    @patch(f"{MODULE}.get_admin_calendars", return_value=[])
+    def test_no_calendars_only_recreates(
+        self, mock_get_cals, mock_build_hold, sample_recurring_block
+    ):
+        result = build_hold_block_refresh_effects(sample_recurring_block)
+        assert result == []
+        assert mock_build_hold.mock_calls == [call(sample_recurring_block)]
+
+
+# ── build_delete_recurring_block_effects: hold cleanup branches ───────
+
+
+class TestBuildDeleteRecurringBlockHoldCleanup:
+    @patch(f"{MODULE}.EventModel")
+    @patch(f"{MODULE}.get_admin_calendars")
+    @patch(f"{MODULE}.get_event_ids")
+    def test_stored_ids_path_also_cleans_hold_events(
+        self, mock_get_ids, mock_get_cals, mock_event_model, sample_recurring_block
+    ):
+        sample_recurring_block.hold_type = "same_day"
+        mock_get_ids.return_value = ["stored-1", "stored-2"]
+        cal = MagicMock()
+        cal.id = "admin-cal-1"
+        mock_get_cals.return_value = [cal]
+        hold_evt = MagicMock()
+        hold_evt.id = "hold-1"
+        mock_event_model.objects.filter.side_effect = (
+            [[hold_evt]] + [[] for _ in range(10)]
+        )
+
+        result = build_delete_recurring_block_effects(
+            sample_recurring_block.provider_id, sample_recurring_block
+        )
+        # 2 stored-id deletes + 1 hold-event delete
+        assert len(result) == 3
+
+    @patch(f"{MODULE}.EventModel")
+    @patch(f"{MODULE}.get_admin_calendars")
+    @patch(f"{MODULE}.get_event_ids")
+    def test_title_fallback_path_also_cleans_hold_events(
+        self, mock_get_ids, mock_get_cals, mock_event_model, sample_recurring_block
+    ):
+        sample_recurring_block.hold_type = "next_day"
+        mock_get_ids.return_value = []  # force title-fallback path
+        cal = MagicMock()
+        cal.id = "admin-cal-1"
+        mock_get_cals.return_value = [cal]
+        title_evt = MagicMock()
+        title_evt.id = "title-1"
+        hold_evt = MagicMock()
+        hold_evt.id = "hold-1"
+        mock_event_model.objects.filter.side_effect = (
+            [[title_evt], [hold_evt]] + [[] for _ in range(10)]
+        )
+
+        result = build_delete_recurring_block_effects(
+            sample_recurring_block.provider_id, sample_recurring_block
+        )
+        # 1 title-match delete + 1 hold-event delete
+        assert len(result) == 2

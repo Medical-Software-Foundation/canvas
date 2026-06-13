@@ -451,6 +451,9 @@ def _get_calendar_id(
         provider=provider_id,
         type=CalendarType.Clinic,
         location=location_id if location_id else None,
+        # Store the staff UUID in description so the calendar can be resolved
+        # back to its provider even after a rename (title is name-based).
+        description=str(provider_id),
     ).create()
 
     return new_id, [cal_effect]
@@ -562,41 +565,6 @@ def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None
 
 
 # ── Lead-time block sync ──────────────────────────────────────────────
-
-
-def delete_all_plugin_events() -> list[Effect]:
-    """Delete ALL non-cancelled events on the plugin's Clinic + Admin calendars.
-
-    Used during plugin install to ensure a clean slate before re-syncing.
-    These calendars are created and managed exclusively by this plugin
-    (`CalendarType.Clinic` and `CalendarType.Administrative`), so every event
-    on them is ours. We don't filter by title because block events use the
-    user-supplied reason as their title (e.g. "holiday") — title filtering
-    would leak duplicates on every redeploy as those custom-named events
-    accumulate.
-    """
-    effects: list[Effect] = []
-
-    # Clean Clinic calendars (Available events)
-    for cal in CalendarModel.objects.filter(title__contains=": Clinic"):
-        for evt in EventModel.objects.filter(
-            calendar__id=cal.id,
-            is_cancelled=False,
-        ):
-            effects.append(EventEffect(event_id=str(evt.id)).delete())
-
-    # Clean Administrative calendars (blocks of any title, lead time, recurring blocks, holds)
-    for cal in CalendarModel.objects.filter(title__contains=": Admin"):
-        for evt in EventModel.objects.filter(
-            calendar__id=cal.id,
-            is_cancelled=False,
-        ):
-            effects.append(EventEffect(event_id=str(evt.id)).delete())
-
-    if effects:
-        log.info("delete_all_plugin_events: deleting %d stale events across all calendars", len(effects))
-    return effects
-
 
 def delete_all_lead_time_events() -> list[Effect]:
     """Delete ALL 'Lead Time' events across ALL Administrative calendars.

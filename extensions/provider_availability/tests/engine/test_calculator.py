@@ -585,6 +585,65 @@ class TestGetAvailableSlotsForProvider:
             # 10-11 blocked by schedule event → 2 slots
             assert len(slots) == 2
 
+    def test_schedule_event_query_excludes_plugin_available_windows(self):
+        """The Event query must exclude (calendar=Clinic, title=Available)
+        so the plugin's own openness canvas is not treated as a blocker,
+        while still surfacing foreign events on the Clinic calendar."""
+        from provider_availability.engine.event_sync import AVAILABILITY_TITLE
+
+        rule = _make_rule()
+
+        with patch(f"{CALC_MODULE}.Appointment.objects") as mock_appt, \
+             patch(f"{CALC_MODULE}.get_provider_display", return_value={"name": "Dr. Jane Doe"}), \
+             patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
+             patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
+             patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]), \
+             patch(f"{CALC_MODULE}.to_provider_naive", side_effect=lambda x, _pid: x):
+            mock_appt.filter.return_value.values_list.return_value = []
+            mock_evt.filter.return_value.exclude.return_value = []
+
+            calculate_available_slots(
+                rule, date(2026, 3, 9), date(2026, 3, 9),
+                now=datetime(2026, 3, 1, 0, 0),
+            )
+
+            # Verify the exclude call now narrows to (Clinic AND Available),
+            # not the whole Clinic calendar.
+            exclude_kwargs = mock_evt.filter.return_value.exclude.call_args.kwargs
+            assert exclude_kwargs.get("title") == AVAILABILITY_TITLE
+            assert exclude_kwargs.get(
+                "calendar__title__startswith"
+            ) == "Dr. Jane Doe: Clinic"
+
+    def test_foreign_event_on_clinic_calendar_blocks_slot(self):
+        """A non-plugin event on a Clinic calendar (e.g. manual 'Lunch')
+        must block overlapping slots — the calculator no longer ignores
+        all Clinic-calendar events, only the plugin's own Available windows."""
+        rule = _make_rule()
+
+        # Simulate a foreign event on the Clinic calendar (title != "Available").
+        # This event survives the new narrowed .exclude() and reaches the caller.
+        foreign_event = MagicMock()
+        foreign_event.starts_at = datetime(2026, 3, 9, 10, 0)
+        foreign_event.ends_at = datetime(2026, 3, 9, 11, 0)
+
+        with patch(f"{CALC_MODULE}.Appointment.objects") as mock_appt, \
+             patch(f"{CALC_MODULE}.get_provider_display", return_value={"name": "Dr. Jane Doe"}), \
+             patch(f"{CALC_MODULE}.Event.objects") as mock_evt, \
+             patch(f"{CALC_MODULE}.get_blocks_for_provider", return_value=[]), \
+             patch(f"{CALC_MODULE}.get_recurring_blocks_for_provider", return_value=[]), \
+             patch(f"{CALC_MODULE}.to_provider_naive", side_effect=lambda x, _pid: x):
+            mock_appt.filter.return_value.values_list.return_value = []
+            mock_evt.filter.return_value.exclude.return_value = [foreign_event]
+
+            slots = calculate_available_slots(
+                rule, date(2026, 3, 9), date(2026, 3, 9),
+                now=datetime(2026, 3, 1, 0, 0),
+            )
+            # 10-11 blocked by the foreign Clinic event → 2 of 3 slots remain (9, 11).
+            assert len(slots) == 2
+            assert all(not (s.start.hour == 10) for s in slots)
+
     def test_slots_sorted_by_start(self):
         """Results from multiple rules should be sorted by start time."""
         rule_am = _make_rule(
