@@ -1,0 +1,915 @@
+/* EHI Export workspace — vanilla JS client.
+ *
+ * Responsibilities:
+ *   - Browse/search/sort the patient list (server-paginated).
+ *   - Track a selection set across pages (and "select all matching").
+ *   - Kick off per-patient EHI exports (fire-and-forget): start each $export,
+ *     tagged with one batch id, then watch status. A background cron prepares
+ *     each completed patient's JSON in S3.
+ *   - Download per patient via a short-lived presigned S3 URL (prepared on
+ *     demand if the cron hasn't gotten to it yet). No in-browser ZIP — the
+ *     plugin sandbox can't build archives, and this keeps browser memory flat.
+ */
+
+(function () {
+  "use strict";
+
+  const API = "{{ api_prefix }}/app";
+
+  // Tuning knobs.
+  const PAGE_LIMIT = 50;
+  const REFRESH_MS = 12000;      // auto-refresh the list/runs while on the main view
+
+  // ── state ──────────────────────────────────────────────────────────────
+  const state = {
+    offset: 0,
+    total: 0,
+    pagePatients: [],            // patients on the current page
+    selected: new Map(),         // id -> {id, first_name, last_name, name, dob}
+    searchTerm: "",
+    includeInactive: false,
+    exportFilter: "",            // "" | completed | failed | in_progress | none
+    cancelRequested: false,
+    configured: true,            // FHIR creds present (pre-flight)
+    s3Configured: true,          // S3 creds present (pre-flight)
+    sort: "last_name",           // last_name | first_name | dob | id
+    dir: "asc",                  // asc | desc
+    currentBatchId: "",
+    // run view
+    runBatchId: "",
+    runStatus: "",
+    runSearch: "",
+    runOffset: 0,
+    // all-runs view
+    allRunsSearch: "",
+    allRunsOffset: 0,
+    allRunsSort: "started",      // started | started_by
+    allRunsDir: "desc",          // asc | desc
+  };
+
+  // ── element refs ─────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    search: $("search"),
+    exportFilter: $("export-filter"),
+    activeFilter: $("active-filter"),
+    searchBtn: $("search-btn"),
+    resetBtn: $("reset-btn"),
+    selectAllPage: $("select-all-page"),
+    clearSelection: $("clear-selection"),
+    selectionSummary: $("selection-summary"),
+    statusBanner: $("status-banner"),
+    patientRows: $("patient-rows"),
+    emptyState: $("empty-state"),
+    prevPage: $("prev-page"),
+    nextPage: $("next-page"),
+    pageInfo: $("page-info"),
+    exportBtn: $("export-btn"),
+    exportAllBtn: $("export-all-btn"),
+    exportHint: $("export-hint"),
+    refreshRuns: $("refresh-runs"),
+    runsEmpty: $("runs-empty"),
+    runsTable: $("runs-table"),
+    runsRows: $("runs-rows"),
+    runsMore: $("runs-more"),
+    showAllRuns: $("show-all-runs"),
+    allRunsView: $("all-runs-view"),
+    allRunsBack: $("all-runs-back"),
+    allRunsRefresh: $("all-runs-refresh"),
+    allRunsRows: $("all-runs-rows"),
+    allRunsEmpty: $("all-runs-empty"),
+    allRunsSearch: $("all-runs-search"),
+    allRunsPrev: $("all-runs-prev"),
+    allRunsNext: $("all-runs-next"),
+    allRunsPageInfo: $("all-runs-page-info"),
+    mainView: $("main-view"),
+    runView: $("run-view"),
+    runBack: $("run-back"),
+    runTitle: $("run-title"),
+    runRefresh: $("run-refresh"),
+    runSummary: $("run-summary"),
+    runSync: $("run-sync"),
+    runStatus: $("run-status"),
+    runSearch: $("run-search"),
+    runRows: $("run-rows"),
+    runEmpty: $("run-empty"),
+    runPrev: $("run-prev"),
+    runNext: $("run-next"),
+    runPageInfo: $("run-page-info"),
+  };
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  function showBanner(message, isError) {
+    els.statusBanner.textContent = message;
+    els.statusBanner.classList.remove("status-banner--hidden");
+    els.statusBanner.classList.toggle("status-banner--error", !!isError);
+  }
+  function hideBanner() {
+    els.statusBanner.classList.add("status-banner--hidden");
+  }
+
+  function buildQuery(params) {
+    const usp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") usp.set(k, v);
+    });
+    return usp.toString();
+  }
+
+  async function getJSON(url) {
+    const resp = await fetch(url, { headers: { Accept: "application/json" } });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || ("HTTP " + resp.status));
+    return data;
+  }
+
+  async function postJSON(url, body) {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || ("HTTP " + resp.status));
+    return data;
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function escapeHtml(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function cssEscape(s) {
+    return String(s).replace(/["\\]/g, "\\$&");
+  }
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+  function formatDateTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+  }
+  function formatDateTimeTz(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+    });
+  }
+
+  // Shared cell builders so the run table matches the main patient table.
+  function patientIdCell(id) {
+    const td = document.createElement("td");
+    td.className = "patient-table__id";
+    const a = document.createElement("a");
+    a.className = "id-link";
+    a.href = `/patient/${encodeURIComponent(id)}`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = id;
+    a.title = "Open patient chart in a new tab";
+    td.appendChild(a);
+    return td;
+  }
+
+  function activeCell(active) {
+    const td = document.createElement("td");
+    td.className = "status-check";
+    const icon = document.createElement("span");
+    icon.className = active ? "status-icon status-icon--active" : "status-icon status-icon--inactive";
+    icon.textContent = active ? "✓" : "✗";
+    icon.title = active ? "Active" : "Inactive";
+    icon.setAttribute("aria-label", active ? "Active" : "Inactive");
+    td.appendChild(icon);
+    return td;
+  }
+
+  // ── patient list ──────────────────────────────────────────────────────────
+
+  async function loadPage() {
+    hideBanner();
+    const query = buildQuery({
+      search: state.searchTerm,
+      include_inactive: state.includeInactive ? "true" : "",
+      export: state.exportFilter,
+      offset: state.offset,
+      limit: PAGE_LIMIT,
+      sort: state.sort,
+      dir: state.dir,
+    });
+    let data;
+    try {
+      data = await getJSON(API + "/patients?" + query);
+    } catch (err) {
+      showBanner("Failed to load patients: " + err.message, true);
+      return;
+    }
+    state.pagePatients = data.patients || [];
+    state.total = data.total || 0;
+    renderRows();
+    renderPager(data.has_more);
+    syncSelectionUI();
+    loadJobStatuses();
+  }
+
+  async function loadJobStatuses() {
+    const ids = state.pagePatients.map((p) => p.id);
+    if (ids.length === 0) return;
+    let jobs = {};
+    try {
+      const data = await getJSON(API + "/jobs?" + buildQuery({ patient_ids: ids.join(",") }));
+      jobs = data.jobs || {};
+    } catch (err) {
+      return; // non-fatal
+    }
+    state.pagePatients.forEach((p) => renderPatientJob(p, jobs[p.id]));
+  }
+
+  // Locate a patient's two cells (status + export action) in the current page.
+  function jobCells(patientId) {
+    const sel = `[data-pid="${cssEscape(patientId)}"]`;
+    return {
+      status: els.patientRows.querySelector(`td.last-export${sel}`),
+      action: els.patientRows.querySelector(`td.export-action${sel}`),
+    };
+  }
+
+  function renderPatientJob(patient, job) {
+    const c = jobCells(patient.id);
+    if (c.status) renderJobStatusCell(c.status, patient, job);
+    if (c.action) renderExportCell(c.action, patient, job);
+  }
+
+  // "Last export" column: status pill + datetime (with timezone) + Download.
+  function renderJobStatusCell(cell, patient, job) {
+    cell.innerHTML = "";
+    if (!job) {
+      cell.textContent = "—";
+      return;
+    }
+    const when = document.createElement("span");
+    when.className = "job-date";
+    when.textContent = formatDateTimeTz(job.updated_at);
+
+    if (job.status === "complete") {
+      cell.append(statusPill("done", "Complete"), when, makeDownloadLink(patient, job.job_id));
+    } else if (job.status === "queued") {
+      cell.append(statusPill("pending", "Queued"), when);
+    } else if (job.status === "in-progress") {
+      cell.append(statusPill("running", "In progress"), when);
+    } else {
+      const pill = statusPill("error", "Failed");
+      if (job.last_error) pill.title = job.last_error;
+      cell.append(pill, when);
+    }
+  }
+
+  function statusPill(kind, text) {
+    const span = document.createElement("span");
+    span.className = `pill pill--${kind}`;
+    span.textContent = text;
+    return span;
+  }
+
+  // "Export" column: a one-click export action, always present.
+  function renderExportCell(cell, patient, job) {
+    cell.innerHTML = "";
+    cell.appendChild(makeExportButton(patient));
+  }
+
+  function makeExportButton(patient) {
+    const btn = document.createElement("button");
+    btn.className = "btn btn--sm";
+    btn.textContent = "Export";
+    btn.addEventListener("click", () => exportOne(patient));
+    return btn;
+  }
+
+  // One-click export of a single patient: queue it (the cron starts it, throttled).
+  async function exportOne(patient) {
+    if (!state.configured) {
+      showBanner("Configure FHIR credentials before exporting.", true);
+      return;
+    }
+    renderPatientJob(patient, { status: "queued", updated_at: new Date().toISOString() });
+    try {
+      await postJSON(API + "/export/enqueue", { patient_ids: [patient.id] });
+    } catch (err) {
+      renderPatientJob(patient, {
+        status: "error", last_error: err.message, updated_at: new Date().toISOString(),
+      });
+      return;
+    }
+    loadRuns();
+  }
+
+  // ── selection / sort / pager ────────────────────────────────────────────
+
+  function renderRows() {
+    els.patientRows.innerHTML = "";
+    const empty = state.pagePatients.length === 0;
+    els.emptyState.classList.toggle("empty-state--hidden", !empty);
+
+    state.pagePatients.forEach((p) => {
+      const tr = document.createElement("tr");
+
+      const checkTd = document.createElement("td");
+      checkTd.className = "patient-table__check";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = state.selected.has(p.id);
+      cb.addEventListener("change", () => {
+        if (cb.checked) state.selected.set(p.id, p);
+        else state.selected.delete(p.id);
+        syncSelectionUI();
+      });
+      checkTd.appendChild(cb);
+
+      const lastTd = document.createElement("td");
+      lastTd.textContent = p.last_name || "—";
+      const firstTd = document.createElement("td");
+      firstTd.textContent = p.first_name || "—";
+      const dobTd = document.createElement("td");
+      dobTd.textContent = p.dob || "—";
+      const statusTd = activeCell(p.active);
+      const idTd = patientIdCell(p.id);
+
+      const jobTd = document.createElement("td");
+      jobTd.className = "last-export";
+      jobTd.dataset.pid = p.id;
+      jobTd.textContent = "…";
+
+      const exportTd = document.createElement("td");
+      exportTd.className = "export-action";
+      exportTd.dataset.pid = p.id;
+
+      tr.append(checkTd, lastTd, firstTd, dobTd, statusTd, idTd, jobTd, exportTd);
+      els.patientRows.appendChild(tr);
+    });
+    syncSelectAllPageCheckbox();
+    updateSortIndicators();
+  }
+
+  function updateSortIndicators() {
+    document.querySelectorAll("th[data-sort]").forEach((th) => {
+      const ind = th.querySelector(".sort-ind");
+      if (!ind) return;
+      ind.textContent = th.dataset.sort === state.sort ? (state.dir === "asc" ? "▲" : "▼") : "";
+    });
+  }
+
+  function updateAllRunsSortIndicators() {
+    document.querySelectorAll("th[data-runsort]").forEach((th) => {
+      const ind = th.querySelector(".sort-ind");
+      if (!ind) return;
+      ind.textContent =
+        th.dataset.runsort === state.allRunsSort ? (state.allRunsDir === "asc" ? "▲" : "▼") : "";
+    });
+  }
+
+  function applyAllRunsSort(field) {
+    if (state.allRunsSort === field) {
+      state.allRunsDir = state.allRunsDir === "asc" ? "desc" : "asc";
+    } else {
+      state.allRunsSort = field;
+      state.allRunsDir = "asc";
+    }
+    state.allRunsOffset = 0;
+    loadAllRuns();
+  }
+
+  function applySort(field) {
+    if (state.sort === field) {
+      state.dir = state.dir === "asc" ? "desc" : "asc";
+    } else {
+      state.sort = field;
+      state.dir = "asc";
+    }
+    state.offset = 0;
+    loadPage();
+  }
+
+  function renderPager(hasMore) {
+    const from = state.total === 0 ? 0 : state.offset + 1;
+    const to = Math.min(state.offset + PAGE_LIMIT, state.total);
+    els.pageInfo.textContent = `${from}–${to} of ${state.total}`;
+    els.prevPage.disabled = state.offset === 0;
+    els.nextPage.disabled = !hasMore;
+  }
+
+  function syncSelectAllPageCheckbox() {
+    const ids = state.pagePatients.map((p) => p.id);
+    const allSelected = ids.length > 0 && ids.every((id) => state.selected.has(id));
+    els.selectAllPage.checked = allSelected;
+  }
+
+  function syncSelectionUI() {
+    const n = state.selected.size;
+    els.selectionSummary.textContent = `${n} selected`;
+    els.exportBtn.textContent = `Export selected (${n})`;
+    els.exportBtn.disabled = n === 0 || !state.configured;
+    els.exportAllBtn.textContent = `Export all matching (${state.total})`;
+    els.exportAllBtn.disabled = state.total === 0 || !state.configured;
+    if (!state.configured) {
+      els.exportHint.textContent = "Configure FHIR credentials before exporting.";
+    } else if (!state.s3Configured) {
+      els.exportHint.textContent =
+        "Note: S3 isn't configured — exports will run but won't be downloadable until S3 is set up.";
+    } else {
+      els.exportHint.textContent =
+        "Exports queue and run in the background — track them under Export runs.";
+    }
+    syncSelectAllPageCheckbox();
+  }
+
+  // ── pre-flight ──────────────────────────────────────────────────────────
+
+  async function checkConfig() {
+    try {
+      const cfg = await getJSON(API + "/config");
+      state.configured = !!cfg.configured;
+      state.s3Configured = !!cfg.s3_configured;
+    } catch (err) {
+      state.configured = true;
+      state.s3Configured = true;
+    }
+    if (!state.configured) {
+      showBanner(
+        "EHI export credentials are not configured. Set CANVAS_FHIR_CLIENT_ID and " +
+        "CANVAS_FHIR_CLIENT_SECRET on the plugin configuration page before exporting.",
+        true
+      );
+    } else if (!state.s3Configured) {
+      showBanner(
+        "S3 storage is not configured. Set S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION and " +
+        "S3_BUCKET so prepared exports can be stored and downloaded.",
+        true
+      );
+    }
+    syncSelectionUI();
+  }
+
+  // ── download (presigned S3) ────────────────────────────────────────────
+
+  // A "Download" button that asks the server for a presigned URL (preparing the
+  // file on demand if needed) and opens it. The JSON is one patient's bundle,
+  // streamed straight from S3 — never assembled in the browser.
+  function makeDownloadLink(patient, jobId) {
+    const btn = document.createElement("button");
+    btn.className = "btn btn--link";
+    btn.textContent = "Download";
+    btn.title = "Download this patient's export (prepared in S3, no new $export)";
+    btn.addEventListener("click", () => downloadViaPresigned(patient, jobId, btn));
+    return btn;
+  }
+
+  async function downloadViaPresigned(patient, jobId, btn) {
+    const prev = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Preparing…";
+    try {
+      const data = await getJSON(API + "/download?" + buildQuery({ job_id: jobId }));
+      if (!data.url) throw new Error("no download URL returned");
+      window.open(data.url, "_blank", "noopener");
+    } catch (err) {
+      showBanner(`Download failed for ${patient.name || patient.id}: ${err.message}`, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+    }
+  }
+
+  // ── export orchestration (fire-and-forget) ──────────────────────────────
+
+  // Queue the selected patients (server starts them, throttled). Fire-and-forget.
+  async function startExport() {
+    if (state.selected.size === 0) return;
+    const ids = Array.from(state.selected.keys());
+    await enqueueExport({ patient_ids: ids }, ids.length);
+  }
+
+  // Queue every patient matching the current filters — server-side, no cap.
+  async function exportAllMatching() {
+    const n = state.total;
+    if (!n) return;
+    if (!confirm(`Queue an export for all ${n} matching patient${n === 1 ? "" : "s"}?`)) return;
+    await enqueueExport(
+      {
+        all_matching: true,
+        search: state.searchTerm,
+        include_inactive: state.includeInactive,
+        export: state.exportFilter,
+      },
+      n
+    );
+  }
+
+  // POST an enqueue request and report it. Returns the new batch id (or null).
+  async function enqueueExport(body, expected) {
+    if (!state.configured) {
+      showBanner("Configure FHIR credentials before exporting.", true);
+      return null;
+    }
+    let data;
+    try {
+      data = await postJSON(API + "/export/enqueue", body);
+    } catch (err) {
+      showBanner("Failed to queue export: " + err.message, true);
+      return null;
+    }
+    showBanner(
+      `Queued ${data.queued} export${data.queued === 1 ? "" : "s"}. They run in the background — ` +
+      "track progress and download under Export runs. You can leave this page.",
+      false
+    );
+    state.selected.clear();
+    renderRows();
+    syncSelectionUI();
+    loadRuns();
+    loadJobStatuses();
+    return data.batch_id;
+  }
+
+  // ── export runs (batches) ──────────────────────────────────────────────
+
+  const RUNS_PANEL_LIMIT = 5;    // newest runs shown on the main page
+  const ALL_RUNS_PAGE = 50;      // runs per page on the "all runs" page
+  let allRunsSearchTimer = null;
+
+  // Main-page panel: show the latest few runs + a "Show all" button.
+  async function loadRuns() {
+    let batches = [];
+    try {
+      const data = await getJSON(API + "/batches?" + buildQuery({ limit: RUNS_PANEL_LIMIT }));
+      batches = data.batches || [];
+    } catch (err) {
+      return;
+    }
+    const empty = batches.length === 0;
+    els.runsEmpty.style.display = empty ? "" : "none";
+    els.runsTable.style.display = empty ? "none" : "";
+    els.runsMore.style.display = empty ? "none" : "";
+    renderRunsRows(els.runsRows, batches);
+  }
+
+  // Full "all runs" page — searchable + paginated.
+  async function loadAllRuns() {
+    let data;
+    try {
+      data = await getJSON(API + "/batches?" + buildQuery({
+        limit: ALL_RUNS_PAGE,
+        offset: state.allRunsOffset,
+        search: state.allRunsSearch,
+        sort: state.allRunsSort,
+        dir: state.allRunsDir,
+      }));
+    } catch (err) {
+      showBanner("Failed to load runs: " + err.message, true);
+      return;
+    }
+    const batches = data.batches || [];
+    els.allRunsEmpty.classList.toggle("empty-state--hidden", batches.length !== 0);
+    renderRunsRows(els.allRunsRows, batches);
+    updateAllRunsSortIndicators();
+
+    const from = data.total === 0 ? 0 : data.offset + 1;
+    const to = Math.min(data.offset + data.limit, data.total);
+    els.allRunsPageInfo.textContent = `${from}–${to} of ${data.total}`;
+    els.allRunsPrev.disabled = data.offset === 0;
+    els.allRunsNext.disabled = !data.has_more;
+  }
+
+  function renderRunsRows(tbody, batches) {
+    tbody.innerHTML = "";
+    batches.forEach((b) => {
+      const tr = document.createElement("tr");
+
+      const whenTd = document.createElement("td");
+      whenTd.textContent = formatDateTime(b.created_at);
+
+      const byTd = document.createElement("td");
+      byTd.textContent = b.started_by || "—";
+
+      const progTd = document.createElement("td");
+      const done = b.complete || 0;
+      progTd.append(document.createTextNode(`${done} / ${b.total || 0} complete`));
+      if (b.queued) {
+        progTd.append(document.createTextNode(` · ${b.queued} queued`));
+      }
+      if (b.in_progress) {
+        progTd.append(document.createTextNode(` · ${b.in_progress} in progress`));
+      }
+      if (b.failed) {
+        const f = document.createElement("span");
+        f.className = "runs-failed";
+        f.textContent = ` · ${b.failed} failed`;
+        progTd.append(f);
+      }
+
+      const actionTd = document.createElement("td");
+      actionTd.className = "runs-table__action";
+      const open = document.createElement("button");
+      open.className = "btn btn--sm";
+      open.textContent = "Open";
+      open.addEventListener("click", () => openRunView(b.batch_id, b.created_at, b.started_by));
+      actionTd.appendChild(open);
+
+      tr.append(whenTd, byTd, progTd, actionTd);
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ── view switching (main / single run / all runs) ───────────────────────────
+
+  const RUN_LIMIT = 100;
+  let runSearchTimer = null;
+
+  function setView(view) {
+    els.mainView.hidden = view !== "main";
+    els.runView.hidden = view !== "run";
+    els.allRunsView.hidden = view !== "all-runs";
+    hideBanner();
+    window.scrollTo(0, 0);
+  }
+
+  function showRunView() {
+    setView("run");
+  }
+
+  function showMainView() {
+    setView("main");
+    loadRuns();
+    loadJobStatuses();
+  }
+
+  function openAllRuns() {
+    state.allRunsSearch = "";
+    state.allRunsOffset = 0;
+    els.allRunsSearch.value = "";
+    setView("all-runs");
+    loadAllRuns();
+  }
+
+  function openRunView(batchId, createdAt, startedBy) {
+    state.runBatchId = batchId;
+    state.runStatus = "";
+    state.runSearch = "";
+    state.runOffset = 0;
+    els.runStatus.value = "";
+    els.runSearch.value = "";
+    const when = formatDateTime(createdAt);
+    let title = when ? `Export run — ${when}` : "Export run";
+    if (startedBy) title += ` · started by ${startedBy}`;
+    els.runTitle.textContent = title;
+    showRunView();
+    loadRunPage();
+  }
+
+  // Re-run only the failed patients of a run as a brand-new queued run, then jump to it.
+  async function rerunFailed(batchId) {
+    let data;
+    try {
+      data = await getJSON(API + "/batch?" + buildQuery({
+        batch_id: batchId, status: "error", limit: 500,
+      }));
+    } catch (err) {
+      showBanner("Couldn't load failed patients: " + err.message, true);
+      return;
+    }
+    const ids = (data.jobs || []).map((j) => j.patient_id);
+    if (ids.length === 0) {
+      showBanner("No failed patients to re-run.", true);
+      return;
+    }
+    const newBatch = await enqueueExport({ patient_ids: ids }, ids.length);
+    if (newBatch) openRunView(newBatch, new Date().toISOString(), "");
+  }
+
+  async function loadRunPage() {
+    hideBanner();
+    const query = buildQuery({
+      batch_id: state.runBatchId,
+      status: state.runStatus,
+      search: state.runSearch,
+      offset: state.runOffset,
+      limit: RUN_LIMIT,
+    });
+    let data;
+    try {
+      data = await getJSON(API + "/batch?" + query);
+    } catch (err) {
+      showBanner("Failed to load run: " + err.message, true);
+      return;
+    }
+    renderRunPage(data);
+  }
+
+  function renderRunPage(data) {
+    const c = data.counts || {};
+
+    // Whole-run status summary (unfiltered).
+    els.runSummary.innerHTML = "";
+    const total = c.total || 0;
+    const parts = [`${total} patient${total === 1 ? "" : "s"}`];
+    if (c.complete) parts.push(`${c.complete} complete`);
+    if (c.queued) parts.push(`${c.queued} queued`);
+    if (c.in_progress) parts.push(`${c.in_progress} in progress`);
+    els.runSummary.append(document.createTextNode(parts.join(" · ")));
+    if (c.error) {
+      const f = document.createElement("span");
+      f.className = "runs-failed";
+      f.textContent = ` · ${c.error} failed`;
+      els.runSummary.append(f);
+
+      // Offer to re-run just the failed patients as a fresh run.
+      const rerun = document.createElement("button");
+      rerun.className = "btn btn--sm runs-rerun";
+      rerun.textContent = `Re-run failed (${c.error})`;
+      rerun.addEventListener("click", () => rerunFailed(state.runBatchId));
+      els.runSummary.append(rerun);
+    }
+
+    if (data.s3_bucket && data.s3_prefix) {
+      els.runSync.style.display = "";
+      els.runSync.textContent = `Grab the whole run: aws s3 sync s3://${data.s3_bucket}/${data.s3_prefix} .`;
+    } else {
+      els.runSync.style.display = "none";
+    }
+
+    const jobs = data.jobs || [];
+    els.runRows.innerHTML = "";
+    els.runEmpty.classList.toggle("empty-state--hidden", jobs.length !== 0);
+    jobs.forEach((j) => els.runRows.appendChild(runRow(j)));
+
+    const from = data.total === 0 ? 0 : data.offset + 1;
+    const to = Math.min(data.offset + data.limit, data.total);
+    els.runPageInfo.textContent = `${from}–${to} of ${data.total}`;
+    els.runPrev.disabled = data.offset === 0;
+    els.runNext.disabled = !data.has_more;
+  }
+
+  // A run-view row: matches the main table columns + an Export status column.
+  function runRow(j) {
+    const tr = document.createElement("tr");
+    const lastTd = document.createElement("td");
+    lastTd.textContent = j.last_name || "—";
+    const firstTd = document.createElement("td");
+    firstTd.textContent = j.first_name || "—";
+    const dobTd = document.createElement("td");
+    dobTd.textContent = j.dob || "—";
+    const statusTd = activeCell(j.patient_active);
+    const idTd = patientIdCell(j.patient_id);
+
+    const exportTd = document.createElement("td");
+    if (j.status === "complete") {
+      exportTd.innerHTML = '<span class="pill pill--done">Complete</span> ';
+      exportTd.appendChild(makeDownloadLink({ id: j.patient_id, name: j.patient_name }, j.job_id));
+    } else if (j.status === "error") {
+      exportTd.innerHTML = '<span class="pill pill--error">Failed</span>';
+      if (j.last_error) {
+        const err = document.createElement("div");
+        err.className = "row-error";
+        err.textContent = j.last_error;
+        exportTd.appendChild(err);
+      }
+    } else if (j.status === "queued") {
+      exportTd.innerHTML = '<span class="pill pill--pending">Queued</span>';
+    } else {
+      exportTd.innerHTML = '<span class="pill pill--running">In progress</span>';
+    }
+
+    tr.append(lastTd, firstTd, dobTd, statusTd, idTd, exportTd);
+    return tr;
+  }
+
+  // ── event wiring ──────────────────────────────────────────────────────────
+
+  function runSearch() {
+    state.searchTerm = els.search.value.trim();
+    state.includeInactive = els.activeFilter.value === "all";
+    state.exportFilter = els.exportFilter.value;
+    state.offset = 0;
+    loadPage();
+  }
+
+  function resetFilters() {
+    els.search.value = "";
+    els.exportFilter.value = "";
+    els.activeFilter.value = "active";
+    runSearch();
+  }
+
+  els.searchBtn.addEventListener("click", runSearch);
+  els.resetBtn.addEventListener("click", resetFilters);
+  // Filters only take effect on Apply (or Enter in the search box) — changing a
+  // dropdown stages the value but does not re-query until applied.
+  els.search.addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); });
+
+  els.prevPage.addEventListener("click", () => {
+    state.offset = Math.max(0, state.offset - PAGE_LIMIT);
+    loadPage();
+  });
+  els.nextPage.addEventListener("click", () => {
+    state.offset += PAGE_LIMIT;
+    loadPage();
+  });
+
+  els.selectAllPage.addEventListener("change", () => {
+    state.pagePatients.forEach((p) => {
+      if (els.selectAllPage.checked) state.selected.set(p.id, p);
+      else state.selected.delete(p.id);
+    });
+    renderRows();
+    syncSelectionUI();
+  });
+  els.clearSelection.addEventListener("click", () => {
+    state.selected.clear();
+    renderRows();
+    syncSelectionUI();
+  });
+
+  els.exportBtn.addEventListener("click", startExport);
+  els.exportAllBtn.addEventListener("click", exportAllMatching);
+  els.refreshRuns.addEventListener("click", loadRuns);
+  els.showAllRuns.addEventListener("click", openAllRuns);
+  els.allRunsBack.addEventListener("click", showMainView);
+  els.allRunsRefresh.addEventListener("click", loadAllRuns);
+  els.allRunsSearch.addEventListener("input", () => {
+    clearTimeout(allRunsSearchTimer);
+    allRunsSearchTimer = setTimeout(() => {
+      state.allRunsSearch = els.allRunsSearch.value.trim();
+      state.allRunsOffset = 0;
+      loadAllRuns();
+    }, 300);
+  });
+  els.allRunsPrev.addEventListener("click", () => {
+    state.allRunsOffset = Math.max(0, state.allRunsOffset - ALL_RUNS_PAGE);
+    loadAllRuns();
+  });
+  els.allRunsNext.addEventListener("click", () => {
+    state.allRunsOffset += ALL_RUNS_PAGE;
+    loadAllRuns();
+  });
+
+  // Run view
+  els.runBack.addEventListener("click", showMainView);
+  els.runRefresh.addEventListener("click", loadRunPage);
+  els.runStatus.addEventListener("change", () => {
+    state.runStatus = els.runStatus.value;
+    state.runOffset = 0;
+    loadRunPage();
+  });
+  els.runSearch.addEventListener("input", () => {
+    clearTimeout(runSearchTimer);
+    runSearchTimer = setTimeout(() => {
+      state.runSearch = els.runSearch.value.trim();
+      state.runOffset = 0;
+      loadRunPage();
+    }, 300);
+  });
+  els.runPrev.addEventListener("click", () => {
+    state.runOffset = Math.max(0, state.runOffset - RUN_LIMIT);
+    loadRunPage();
+  });
+  els.runNext.addEventListener("click", () => {
+    state.runOffset += RUN_LIMIT;
+    loadRunPage();
+  });
+
+  document.querySelectorAll("th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => applySort(th.dataset.sort));
+  });
+  document.querySelectorAll("th[data-runsort]").forEach((th) => {
+    th.addEventListener("click", () => applyAllRunsSort(th.dataset.runsort));
+  });
+
+  // Auto-refresh statuses while on the main view, so queued → in-progress →
+  // complete transitions (driven by the cron) appear without manual refresh.
+  setInterval(() => {
+    if (!els.mainView.hidden && !document.hidden) {
+      loadJobStatuses();
+      loadRuns();
+    } else if (!els.allRunsView.hidden && !document.hidden) {
+      loadAllRuns();
+    }
+  }, REFRESH_MS);
+
+  // ── init ──────────────────────────────────────────────────────────────────
+  syncSelectionUI();
+  checkConfig();
+  loadPage();
+  loadRuns();
+})();
