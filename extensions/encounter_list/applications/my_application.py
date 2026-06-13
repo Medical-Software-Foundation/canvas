@@ -1,7 +1,8 @@
 from http import HTTPStatus
 
 import arrow
-from django.db.models import Count, Q, F, Case, When, Value
+from django.db.models import Count, Q, F, Case, When, Value, Subquery, OuterRef, IntegerField
+from django.db.models.functions import Coalesce
 
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.launch_modal import LaunchModalEffect
@@ -236,31 +237,45 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         return sort_mapping.get(sort_by, ["created"])
 
     def _sort_and_paginate_delegated_orders(self, note_queryset, sort_direction, page, page_size, has_delegated_orders):
-        """Sort and paginate for delegated orders using Python calculation."""
-        # Get all notes without pagination to calculate delegated orders
-        all_notes = list(note_queryset)
-        
-        # Calculate delegated orders count for each note
-        notes_with_delegated_count = []
-        for note in all_notes:
-            delegated_commands = self._calculate_delegated_orders_count(note)
-            if not has_delegated_orders and delegated_commands > 0:
-                continue
-            if has_delegated_orders and delegated_commands == 0:
-                continue
-            notes_with_delegated_count.append((note, delegated_commands))
-        
-        # Sort by delegated orders count
-        notes_with_delegated_count.sort(
-            key=lambda x: x[1], 
-            reverse=(sort_direction == "desc")
+        """Sort and paginate for delegated orders using database-level annotation.
+
+        Uses ImagingOrder and Referral FKs to Note to compute an approximate
+        delegated count at the DB level for sorting/filtering/pagination.
+        The exact count (which checks open tasks via the JSON task_ids field)
+        is computed only for the paginated page in the render loop.
+        """
+        delegated_imaging_count = (
+            ImagingOrder.objects.filter(note=OuterRef("pk"), delegated=True)
+            .values("note")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
         )
-        
-        # Extract the sorted notes
-        sorted_notes = [note for note, _ in notes_with_delegated_count]
-        
-        # Apply pagination
-        return self._apply_pagination(sorted_notes, page, page_size)
+        forwarded_referral_count = (
+            Referral.objects.filter(note=OuterRef("pk"), forwarded=True)
+            .values("note")
+            .annotate(cnt=Count("id"))
+            .values("cnt")
+        )
+        note_queryset = note_queryset.annotate(
+            delegated_orders_count=(
+                Coalesce(Subquery(delegated_imaging_count, output_field=IntegerField()), 0)
+                + Coalesce(Subquery(forwarded_referral_count, output_field=IntegerField()), 0)
+            )
+        )
+
+        if has_delegated_orders:
+            note_queryset = note_queryset.filter(delegated_orders_count__gt=0)
+
+        order = "-delegated_orders_count" if sort_direction == "desc" else "delegated_orders_count"
+        note_queryset = note_queryset.order_by(order)
+
+        total_count = note_queryset.count()
+        total_pages = max((total_count + page_size - 1) // page_size, 1)
+        page = max(1, min(page, total_pages))
+        offset = (page - 1) * page_size
+        paginated_notes = list(note_queryset[offset : offset + page_size])
+
+        return paginated_notes, total_count, total_pages
 
     def _apply_patient_search(self, note_queryset, patient_search: str):
         """Apply patient name search across first, last, and nickname fields."""
@@ -312,13 +327,10 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         return note_queryset
 
     def _sort_and_paginate_database(self, note_queryset, sort_by, sort_direction, page, page_size):
-        """Sort and paginate using database sorting."""
-        # Apply database sorting
+        """Sort and paginate using database sorting with OFFSET/LIMIT."""
         sort_fields = self._get_sort_fields(sort_by)
-        
-        # Handle billable field specially to treat None as False
+
         if sort_by == "billable":
-            # Use Case/When to treat None as False for sorting
             billable_sort = Case(
                 When(note_type_version__is_billable__isnull=True, then=Value(False)),
                 default='note_type_version__is_billable'
@@ -328,19 +340,18 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
             else:
                 sort_fields = [billable_sort.asc(), "created"]
         else:
-            # Handle other fields normally
             if sort_direction == "desc":
                 sort_fields = [f"-{field}" for field in sort_fields]
-        
+
         note_queryset = note_queryset.order_by(*sort_fields)
-        
-        # Get total count
+
         total_count = note_queryset.count()
-        
-        # Apply pagination using the helper method
-        paginated_notes, _, _ = self._apply_pagination(list(note_queryset), page, page_size)
-        
-        return paginated_notes, total_count, (total_count + page_size - 1) // page_size
+        total_pages = max((total_count + page_size - 1) // page_size, 1)
+        page = max(1, min(page, total_pages))
+        offset = (page - 1) * page_size
+        paginated_notes = list(note_queryset[offset : offset + page_size])
+
+        return paginated_notes, total_count, total_pages
 
     def _get_billable_status(self, note):
         """Safely get the billable status of a note, handling cases where note_type_version doesn't exist."""
@@ -372,19 +383,3 @@ class EncounterListApi(StaffSessionAuthMixin, SimpleAPI):
         
         return delegated_commands
 
-    def _apply_pagination(self, items, page, page_size):
-        """Apply pagination to a list of items."""
-        total_count = len(items)
-        total_pages = (total_count + page_size - 1) // page_size
-        
-        # Validate page number
-        if page < 1:
-            page = 1
-        elif page > total_pages and total_pages > 0:
-            page = total_pages
-        
-        # Calculate offset and apply slicing
-        offset = (page - 1) * page_size
-        paginated_items = items[offset:offset + page_size]
-        
-        return paginated_items, total_count, total_pages
