@@ -1,15 +1,15 @@
 {
     "sdk_version": "0.117.0",
-    "plugin_version": "0.3.13",
+    "plugin_version": "0.3.14",
     "name": "provider_productivity_dashboard",
-    "description": "A panel management dashboard showing practice-wide and provider-specific metrics: patients seen, CPT codes, note status, unsigned notes, care gaps, orders (labs, imaging, referrals, DME), medications prescribed, and average time to close notes.",
+    "description": "A provider productivity dashboard showing practice-wide and provider-specific metrics: patients seen, CPT codes, note status, unsigned notes, care gaps, orders (labs, imaging, referrals, DME), medications prescribed, and average time to close notes.",
     "url_permissions": [],
     "components": {
         "applications": [
             {
                 "class": "provider_productivity_dashboard.applications.productivity_dashboard:ProductivityDashboardApplication",
                 "name": "Provider Productivity",
-                "description": "Panel management dashboard: productivity metrics, care gaps, orders, medications, and more.",
+                "description": "Provider productivity dashboard: productivity metrics, care gaps, orders, medications, and more.",
                 "scope": "provider_menu_item",
                 "icon": "assets/logo.png",
                 "menu_position": "top",
@@ -19,7 +19,7 @@
         "protocols": [
             {
                 "class": "provider_productivity_dashboard.applications.productivity_dashboard:ProductivityDashboardApi",
-                "description": "API endpoints for panel management dashboard metrics, orders, medications, and care gaps.",
+                "description": "API endpoints for provider productivity dashboard metrics, orders, medications, and care gaps.",
                 "data_access": {
                     "event": "",
                     "read": [],

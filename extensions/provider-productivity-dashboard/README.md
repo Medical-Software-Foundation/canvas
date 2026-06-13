@@ -1,9 +1,9 @@
-Panel Management Dashboard
-==========================
+Provider Productivity Dashboard
+===============================
 
 ## What it does
 
-The Panel Management Dashboard gives clinical staff a single, at-a-glance view of practice-wide and provider-specific activity inside Canvas. From the left navigation panel, any user can see how many patients were seen, which CPT codes were captured, how many notes are signed versus still open (and how long the open ones have been waiting), which care gaps are open or recently closed, what orders and medications were placed, and the average time it takes to close a note — all filterable by provider and by time period.
+The Provider Productivity Dashboard gives clinical staff a single, at-a-glance view of practice-wide and provider-specific activity inside Canvas. From the left navigation panel, any user can see how many patients were seen, which CPT codes were captured, how many notes are signed versus still open (and how long the open ones have been waiting), which care gaps are open or recently closed, what orders and medications were placed, and the average time it takes to close a note — all filterable by provider and by time period.
 
 ## Problem it solves
 

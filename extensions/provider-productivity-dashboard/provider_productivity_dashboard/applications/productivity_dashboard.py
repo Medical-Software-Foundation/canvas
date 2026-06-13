@@ -135,13 +135,13 @@ def _format_duration(delta: "timedelta") -> str:
 
 
 class ProductivityDashboardApplication(Application):
-    """Launches the Panel Management Dashboard modal."""
+    """Launches the Provider Productivity Dashboard modal."""
 
     def on_open(self) -> Effect:
         return LaunchModalEffect(
             content=render_to_string("templates/dashboard.html"),
             target=LaunchModalEffect.TargetType.PAGE,
-            title="Panel Management Dashboard",
+            title="Provider Productivity Dashboard",
         ).apply()
 
 
