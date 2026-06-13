@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background -->
+  <rect width="100" height="100" rx="18" fill="#1a73e8"/>
+
+  <!-- Chart/dashboard grid lines (subtle) -->
+  <line x1="20" y1="72" x2="80" y2="72" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+  <line x1="20" y1="58" x2="80" y2="58" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+  <line x1="20" y1="44" x2="80" y2="44" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- Bar chart bars -->
+  <rect x="22" y="52" width="13" height="20" rx="3" fill="rgba(255,255,255,0.5)"/>
+  <rect x="40" y="38" width="13" height="34" rx="3" fill="rgba(255,255,255,0.75)"/>
+  <rect x="58" y="28" width="13" height="44" rx="3" fill="#fff"/>
+
+  <!-- Upward trend line -->
+  <polyline points="28,56 46,42 64,32" fill="none" stroke="#4fc3f7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Trend dots -->
+  <circle cx="28" cy="56" r="3.5" fill="#4fc3f7"/>
+  <circle cx="46" cy="42" r="3.5" fill="#4fc3f7"/>
+  <circle cx="64" cy="32" r="3.5" fill="#fff"/>
+
+  <!-- Small medical cross top-left -->
+  <rect x="18" y="16" width="12" height="4" rx="2" fill="rgba(255,255,255,0.9)"/>
+  <rect x="22" y="12" width="4" height="12" rx="2" fill="rgba(255,255,255,0.9)"/>
+</svg>
