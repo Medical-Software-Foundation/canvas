@@ -10,6 +10,16 @@ Sticky notes on the patient chart, right where your team already works. Adds an 
 
 Both notes auto-save as you type and show edit history for the last 10 versions.
 
+![Sticky Note modal on the patient chart, showing the shared and private note areas](docs/sticky-note.jpg)
+
+## Problem it solves
+
+Important non-clinical context about a patient - "always calls from her daughter's number", "prefers afternoon visits" - usually lives in one person's head or a private note nobody else can see. The manual workaround is a paper sticky on a monitor or repeated messages to the team. This plugin keeps a shared note and a private note on the patient chart itself, auto-saved and attributed, so the whole team sees the same context in the place they already work.
+
+## Who it's for
+
+Front-desk, care coordination, and clinical staff who need quick, shared context on a patient without cluttering the clinical chart. The shared note is visible to the whole team; the private note is scoped to the individual staff member.
+
 ## Installation
 
 ```

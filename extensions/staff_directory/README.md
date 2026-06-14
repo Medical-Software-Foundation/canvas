@@ -6,6 +6,14 @@ A Canvas plugin that stores and displays detailed professional information for e
 
 ![Staff Directory](docs/screenshot.png)
 
+## Problem it solves
+
+Provider credentials - degrees, training, NUCC specialties, and board-certification expiration dates - are usually scattered across HR files, spreadsheets, and people's memories, with no easy way to see who is certified in what or whose certification is about to lapse. The manual workaround is chasing down documents at credentialing or renewal time. This plugin keeps a structured, searchable profile for every staff member in Canvas, with an "expiring certifications only" filter for renewal oversight.
+
+## Who it's for
+
+Practice administrators, credentialing and HR staff, and anyone who needs a quick reference for a colleague's specialties or training. Editing is limited to admin roles; all other staff get a read-only view.
+
 ## Features
 
 - Two-pane layout: searchable staff list on the left, detailed profile on the right.

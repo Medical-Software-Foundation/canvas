@@ -2,6 +2,24 @@
 
 A Canvas plugin for Medicare Annual Wellness Visit health risk assessments. Adds an ActionButton to the note header that launches an interactive questionnaire modal.
 
+![Health Risk Assessment summary rendered in the note](assets/hra-summary.jpg)
+
+## Problem it solves
+
+Medicare Annual Wellness Visits require a documented health risk assessment, but capturing 18 questions with conditional follow-ups by hand is slow and easy to get wrong. The usual workaround is re-keying a paper HRA into the note or skipping structured capture entirely, which puts AWV billing and the resulting care plan at risk. This plugin puts the full assessment one click from the note header and writes a structured, color-coded summary back to the chart.
+
+## Who it's for
+
+Primary care providers and care teams conducting Medicare Annual Wellness Visits, plus the medical assistants and intake staff who complete the assessment with the patient.
+
+## Installation
+
+```
+canvas install health_risk_assessment
+```
+
+The assessment works out of the box. Optionally set the `OUTPUT_MODE` secret (see Configuration) to control what gets written to the note.
+
 ## Features
 
 - 18-question HRA with conditional follow-up logic
