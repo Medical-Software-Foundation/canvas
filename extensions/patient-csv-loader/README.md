@@ -6,6 +6,14 @@ Bulk-load patient demographic data into Canvas from a CSV file. The plugin provi
 
 ![Validation preview showing 30 valid rows ready for import](patient_csv_loader/assets/validation-preview.jpg)
 
+## Problem it solves
+
+Onboarding or migrating patients one at a time through the Canvas UI does not scale - a practice switching EMRs or running a registration drive can have hundreds of demographic records sitting in a spreadsheet. The manual workaround is re-keying each patient by hand, which is slow and error-prone. This plugin validates a whole CSV up front, shows exactly which rows will fail and why, and creates every valid patient in one confirmed pass.
+
+## Who it's for
+
+Front-desk and practice operations staff handling new-patient onboarding, data migration from a prior EMR, or bulk registration. No clinical role required - any staff member with app access can run it.
+
 ## Installation
 
 ```bash

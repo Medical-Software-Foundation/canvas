@@ -5,6 +5,9 @@ chronic_care_management_activity_tracker
 
 The Chronic Care Management (CCM) Activity Tracker plugin automates tracking, documentation, and billing for chronic care management services. This plugin provides a comprehensive workflow for managing CCM activities including session tracking, patient banner alerts, and automated monthly billing.
 
+## Problem it solves
+
+Chronic Care Management billing requires documenting at least 20 minutes of clinical staff time per patient per month and attaching the right CPT codes - work that is easy to under-capture and tedious to total by hand. The manual workaround is staff tracking minutes in a spreadsheet and someone reconciling time against CPT 99490/99439 at month end. This plugin times each CCM activity in the chart, shows the running monthly total on the patient banner, and generates the monthly summary note with the correct billing lines automatically.
 
 ## Installation
 
