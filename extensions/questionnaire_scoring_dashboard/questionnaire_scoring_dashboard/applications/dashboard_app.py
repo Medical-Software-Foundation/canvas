@@ -11,7 +11,7 @@ class ScoringDashboardApp(Application):
     """Patient-scoped application launching the scoring dashboard."""
 
     def on_open(self) -> Effect | list[Effect]:
-        patient_id = self.context.get("patient", {}).get("id", "")
+        patient_id = self.event.context.get("patient", {}).get("id", "")
         return LaunchModalEffect(
             url=f"/plugin-io/api/questionnaire_scoring_dashboard/?patient={patient_id}",
             target=LaunchModalEffect.TargetType.PAGE,

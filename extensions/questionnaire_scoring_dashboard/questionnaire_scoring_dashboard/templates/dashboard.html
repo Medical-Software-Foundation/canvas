@@ -106,14 +106,15 @@
     function fmtChange(v) { return v === null ? '-' : (v > 0 ? '+' : '') + v; }
     function fmtNum(v) { return v === null ? '-' : v; }
     function cssId(name) { return name.replace(/[^a-z0-9]/gi, '_'); }
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
     function panelHTML(name, d) {
       const m = d.metrics, max = d.max_score;
       const denom = max ? '<small>/' + max + '</small>' : '';
       return `<div class="panel">
-        <div class="top"><div><div class="iname">${name}</div>
+        <div class="top"><div><div class="iname">${esc(name)}</div>
           <div class="sub">${max ? 'Range 0-' + max : ''}</div></div>
-          <button class="ins" data-insert="${name}">Insert into note</button></div>
+          <button class="ins" data-insert="${esc(name)}">Insert into note</button></div>
         <div class="mrow">
           <div class="m"><div class="v">${fmtNum(m.latest)}${denom}</div><div class="k">Latest score</div></div>
           <div class="m"><div class="v">${fmtChange(m.change)}</div><div class="k">Change since last</div></div>
@@ -208,7 +209,7 @@
       document.getElementById('pickerTitle').textContent = title;
       const rows = await fetch('notes?patient=' + encodeURIComponent(PATIENT_QS)).then(r => r.json());
       const sel = document.getElementById('noteSelect');
-      sel.innerHTML = rows.map(r => `<option value="${r.id}" ${r.default ? 'selected' : ''}>${r.label}${r.default ? ' - default' : ''}</option>`).join('');
+      sel.innerHTML = rows.map(r => `<option value="${esc(r.id)}" ${r.default ? 'selected' : ''}>${esc(r.label)}${r.default ? ' - default' : ''}</option>`).join('');
       document.getElementById('picker').style.display = 'flex';
     }
     document.getElementById('panels').addEventListener('click', async e => {

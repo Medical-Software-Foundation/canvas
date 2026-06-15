@@ -26,3 +26,11 @@ def test_choose_notes_missing_title_uses_fallback():
 
 def test_choose_notes_empty():
     assert choose_notes([]) == []
+
+
+def test_choose_notes_empty_dos_does_not_crash():
+    # A note with a NULL date-of-service arrives as dos="" - the label must
+    # fall back to the title instead of crashing arrow.get("").
+    out = choose_notes([{"id": "x", "dos": "", "title": "Undated visit"}])
+    assert out[0]["label"] == "Undated visit"
+    assert out[0]["default"] is True

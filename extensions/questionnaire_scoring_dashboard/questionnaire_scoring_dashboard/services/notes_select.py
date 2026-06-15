@@ -11,9 +11,11 @@ import arrow
 
 
 def _label(row: dict) -> str:
-    when = arrow.get(row["dos"]).format("M/D/YYYY")
     title = row.get("title") or "Note"
-    return f"{when} - {title}"
+    dos = row.get("dos")
+    if not dos:
+        return title
+    return f'{arrow.get(dos).format("M/D/YYYY")} - {title}'
 
 
 def choose_notes(rows: list[dict]) -> list[dict]:
