@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Questionnaire Scoring Trends</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="pagehead"><h1>Questionnaire Scoring Trends</h1></div>
+    <p class="note" id="empty" style="display:none">No scored questionnaires found for this patient.</p>
+
+    <div class="controls">
+      <div>
+        <div class="ctl-label">Questionnaires</div>
+        <div class="dropdown" id="instDropdown">
+          <button type="button" class="dd-trigger" id="instTrigger">
+            <span id="instLabel">Select questionnaires</span>
+            <span class="dd-caret">&#9662;</span>
+          </button>
+          <div class="dd-panel" id="instPanel" style="display:none"></div>
+        </div>
+      </div>
+      <div>
+        <div class="ctl-label">Date range</div>
+        <select class="dd-select" id="rangeSelect">
+          <option value="3">Last 3 months</option>
+          <option value="6">Last 6 months</option>
+          <option value="12" selected>Last 1 year</option>
+          <option value="0">All time</option>
+        </select>
+      </div>
+      <div>
+        <div class="ctl-label">View</div>
+        <div class="viewtog" id="viewtog">
+          <span class="vbtn" data-view="compare">Compare</span>
+          <span class="vbtn on" data-view="individual">Individual</span>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <button id="clearBtn" class="btn ghost">Clear filters</button>
+    </div>
+
+    <div id="panels" class="grid"></div>
+    <div id="compareWrap" class="panel" style="display:none">
+      <div class="top"><div class="iname">Comparison</div>
+        <button class="ins" id="compareInsert">Insert into note</button></div>
+      <div class="cbox" style="height:360px"><canvas id="compareChart"></canvas></div>
+    </div>
+
+    <div id="picker" class="picker-backdrop" style="display:none">
+      <div class="picker">
+        <h3 id="pickerTitle">Insert into a note</h3>
+        <label class="ctl-label">Target note (unlocked only)</label>
+        <select id="noteSelect"></select>
+        <div class="hint">Defaults to the most recent unlocked note. The top item may be a future-dated scheduled visit.</div>
+        <div class="picker-actions">
+          <button class="btn ghost" id="pickCancel">Cancel</button>
+          <button class="btn primary" id="pickConfirm">Insert</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ALL_INSTRUMENTS = {{ instruments_json|safe }};
+    const PATIENT_QS = new URLSearchParams(window.location.search).get('patient') || '';
+    const state = { selected: new Set(ALL_INSTRUMENTS.slice(0, 4)), months: 12, view: 'individual' };
+    let charts = {};
+
+    function rangeBounds() {
+      if (!state.months) return { start: '', end: '' };
+      const end = new Date();
+      const start = new Date(); start.setMonth(start.getMonth() - state.months);
+      const fmt = d => d.toISOString().slice(0, 10);
+      return { start: fmt(start), end: fmt(end) };
+    }
+
+    function renderInst() {
+      const panel = document.getElementById('instPanel'); panel.innerHTML = '';
+      const head = document.createElement('div');
+      head.className = 'dd-head';
+      const all = document.createElement('button'); all.type = 'button'; all.className = 'dd-link'; all.textContent = 'Select all';
+      all.onclick = () => { state.selected = new Set(ALL_INSTRUMENTS); refresh(); };
+      const none = document.createElement('button'); none.type = 'button'; none.className = 'dd-link'; none.textContent = 'Clear all';
+      none.onclick = () => { state.selected = new Set(); refresh(); };
+      head.append(all, none);
+      panel.appendChild(head);
+      ALL_INSTRUMENTS.forEach(name => {
+        const row = document.createElement('label');
+        row.className = 'dd-opt';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.checked = state.selected.has(name);
+        cb.onchange = () => { cb.checked ? state.selected.add(name) : state.selected.delete(name); refresh(); };
+        const span = document.createElement('span'); span.textContent = name;
+        row.append(cb, span);
+        panel.appendChild(row);
+      });
+      const n = state.selected.size;
+      document.getElementById('instLabel').textContent =
+        n === 0 ? 'Select questionnaires' : n + ' selected';
+    }
+
+    function fmtChange(v) { return v === null ? '-' : (v > 0 ? '+' : '') + v; }
+    function fmtNum(v) { return v === null ? '-' : v; }
+    function cssId(name) { return name.replace(/[^a-z0-9]/gi, '_'); }
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+    function panelHTML(name, d) {
+      const m = d.metrics, max = d.max_score;
+      const denom = max ? '<small>/' + max + '</small>' : '';
+      return `<div class="panel">
+        <div class="top"><div><div class="iname">${esc(name)}</div>
+          <div class="sub">${max ? 'Range 0-' + max : ''}</div></div>
+          <button class="ins" data-insert="${esc(name)}">Insert into note</button></div>
+        <div class="mrow">
+          <div class="m"><div class="v">${fmtNum(m.latest)}${denom}</div><div class="k">Latest score</div></div>
+          <div class="m"><div class="v">${fmtChange(m.change)}</div><div class="k">Change since last</div></div>
+          <div class="m"><div class="v">${fmtNum(m.days_since)}<small>d</small></div><div class="k">Days since last</div></div>
+          <div class="m"><div class="v">${m.total}</div><div class="k">Total assessments</div></div>
+        </div>
+        <div class="cbox"><canvas id="chart-${cssId(name)}"></canvas></div>
+      </div>`;
+    }
+
+    function drawLine(canvasId, points, max) {
+      const ctx = document.getElementById(canvasId);
+      if (charts[canvasId]) charts[canvasId].destroy();
+      charts[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: { labels: points.map(p => p.date), datasets: [{ data: points.map(p => p.value),
+          borderColor: '#2c3e50', backgroundColor: '#2c3e50', borderWidth: 2.5, tension: .3, pointRadius: 4, fill: false, spanGaps: true }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+          scales: { y: { min: 0, max: max || undefined, ticks: { maxTicksLimit: 5 } }, x: { grid: { display: false } } } }
+      });
+    }
+
+    async function refresh() {
+      renderInst();
+      const { start, end } = rangeBounds();
+      const qs = new URLSearchParams({ patient: PATIENT_QS, start, end });
+      const data = await fetch('data?' + qs.toString()).then(r => r.json());
+      document.getElementById('empty').style.display = ALL_INSTRUMENTS.length ? 'none' : 'block';
+      const names = [...state.selected].filter(n => data[n]);
+      Object.values(charts).forEach(c => c.destroy()); charts = {};
+
+      const panels = document.getElementById('panels');
+      const compareWrap = document.getElementById('compareWrap');
+      if (!names.length && ALL_INSTRUMENTS.length) {
+        compareWrap.style.display = 'none'; panels.style.display = 'block';
+        panels.innerHTML = '<p class="note">Select one or more questionnaires above.</p>';
+        return;
+      }
+      if (state.view === 'individual') {
+        compareWrap.style.display = 'none'; panels.style.display = 'grid';
+        panels.innerHTML = names.map(n => panelHTML(n, data[n])).join('');
+        names.forEach(n => drawLine('chart-' + cssId(n), data[n].series, data[n].max_score));
+      } else {
+        panels.style.display = 'none'; compareWrap.style.display = 'block';
+        const palette = ['#2c3e50', '#1f8a8a', '#5c6b79', '#9b6a9e', '#b07d4b', '#7a8450'];
+        const labels = [...new Set(names.flatMap(n => data[n].series.map(p => p.date)))].sort();
+        const ctx = document.getElementById('compareChart');
+        if (charts.cmp) charts.cmp.destroy();
+        charts.cmp = new Chart(ctx, { type: 'line',
+          data: { labels, datasets: names.map((n, i) => ({ label: n,
+            data: labels.map(d => { const pt = data[n].series.find(p => p.date === d); return pt ? pt.value : null; }),
+            borderColor: palette[i % palette.length], borderWidth: 2.5, tension: .3, pointRadius: 4, fill: false, spanGaps: true })) },
+          options: { maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { min: 0 } } } });
+      }
+    }
+
+    const instDropdown = document.getElementById('instDropdown');
+    document.getElementById('instTrigger').onclick = e => {
+      e.stopPropagation();
+      const panel = document.getElementById('instPanel');
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? 'block' : 'none';
+      instDropdown.classList.toggle('dd-open', open);
+    };
+    document.addEventListener('click', e => {
+      if (!instDropdown.contains(e.target)) {
+        document.getElementById('instPanel').style.display = 'none';
+        instDropdown.classList.remove('dd-open');
+      }
+    });
+
+    document.getElementById('rangeSelect').onchange = e => {
+      state.months = +e.target.value; refresh();
+    };
+    document.getElementById('viewtog').onclick = e => {
+      if (!e.target.dataset.view) return;
+      [...document.querySelectorAll('#viewtog .vbtn')].forEach(b => b.classList.remove('on'));
+      e.target.classList.add('on'); state.view = e.target.dataset.view; refresh();
+    };
+    document.getElementById('clearBtn').onclick = () => {
+      state.selected = new Set();
+      state.months = 12;
+      state.view = 'individual';
+      document.getElementById('rangeSelect').value = '12';
+      document.querySelectorAll('#viewtog .vbtn').forEach(b => b.classList.toggle('on', b.dataset.view === 'individual'));
+      refresh();
+    };
+
+    let pendingInstrument = null;
+    let pendingCompare = false;
+    async function openPicker(title) {
+      document.getElementById('pickerTitle').textContent = title;
+      const rows = await fetch('notes?patient=' + encodeURIComponent(PATIENT_QS)).then(r => r.json());
+      const sel = document.getElementById('noteSelect');
+      sel.innerHTML = rows.map(r => `<option value="${esc(r.id)}" ${r.default ? 'selected' : ''}>${esc(r.label)}${r.default ? ' - default' : ''}</option>`).join('');
+      document.getElementById('picker').style.display = 'flex';
+    }
+    document.getElementById('panels').addEventListener('click', async e => {
+      const name = e.target.dataset.insert;
+      if (!name) return;
+      pendingInstrument = name; pendingCompare = false;
+      await openPicker('Insert ' + name + ' trend into a note');
+    });
+    document.getElementById('compareInsert').onclick = async () => {
+      pendingCompare = true;
+      await openPicker('Insert comparison into a note');
+    };
+    document.getElementById('pickCancel').onclick = () => document.getElementById('picker').style.display = 'none';
+    document.getElementById('pickConfirm').onclick = async () => {
+      const { start, end } = rangeBounds();
+      const note_uuid = document.getElementById('noteSelect').value;
+      if (pendingCompare) {
+        const instruments = [...state.selected];
+        await fetch('insert-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient: PATIENT_QS, instruments, start, end, note_uuid }) });
+      } else {
+        await fetch('insert', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient: PATIENT_QS, instrument: pendingInstrument, start, end, note_uuid }) });
+      }
+      document.getElementById('picker').style.display = 'none';
+    };
+
+    refresh();
+  </script>
+</body>
+</html>

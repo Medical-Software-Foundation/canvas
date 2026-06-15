@@ -1,0 +1,44 @@
+{
+    "sdk_version": "0.157.0",
+    "plugin_version": "0.2.0",
+    "name": "questionnaire_scoring_dashboard",
+    "description": "Patient-scoped dashboard of scored-questionnaire trends with per-graph insert into notes.",
+    "components": {
+        "protocols": [
+            {
+                "class": "questionnaire_scoring_dashboard.api.routes:ScoringDashboardAPI",
+                "description": "Serves the scoring dashboard UI and score data.",
+                "data_access": {"event": "", "read": [], "write": []}
+            }
+        ],
+        "commands": [
+            {
+                "name": "ScoringTrend",
+                "label": "Scoring Trend",
+                "schema_key": "scoringTrend",
+                "section": "assessment"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": [
+            {
+                "class": "questionnaire_scoring_dashboard.applications.dashboard_app:ScoringDashboardApp",
+                "name": "Scoring Trends",
+                "description": "Dashboard of scored-questionnaire trends over time.",
+                "icon": "assets/icon.png",
+                "scope": "full_chart"
+            }
+        ]
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md",
+    "url_permissions": [
+        {"url": "https://cdn.jsdelivr.net/", "permissions": ["SCRIPTS"]}
+    ]
+}

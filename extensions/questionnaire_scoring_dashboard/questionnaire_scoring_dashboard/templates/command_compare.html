@@ -1,0 +1,19 @@
+<div style="font-family:Inter,-apple-system,sans-serif;padding:14px 4px;color:#1f2933;">
+  <div style="font-size:14px;font-weight:600;">Questionnaire Comparison</div>
+  <div style="font-size:11px;color:#8a97a3;margin-bottom:12px;">{{ date_range }} &bull; {{ count }} instruments &bull; inserted {{ inserted_on }}</div>
+  {{ svg|safe }}
+  <table style="border-collapse:collapse;margin-top:12px;font-size:12px;">
+    <tr>
+      <th style="text-align:left;border-bottom:1px solid #e3e8ed;padding:3px 16px 3px 0;">Instrument</th>
+      <th style="text-align:left;border-bottom:1px solid #e3e8ed;padding:3px 16px 3px 0;">Latest</th>
+      <th style="text-align:left;border-bottom:1px solid #e3e8ed;padding:3px 16px 3px 0;">Change</th>
+      <th style="text-align:left;border-bottom:1px solid #e3e8ed;padding:3px 0;">n</th>
+    </tr>
+    {% for r in rows %}<tr>
+      <td style="padding:4px 16px 4px 0;"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:{{ r.color }};margin-right:7px;"></span>{{ r.name }}</td>
+      <td style="padding:4px 16px 4px 0;">{{ r.latest }}{% if r.max_score %}<span style="color:#5c6b79;">/{{ r.max_score }}</span>{% endif %}</td>
+      <td style="padding:4px 16px 4px 0;">{{ r.change }}</td>
+      <td style="padding:4px 0;">{{ r.total }}</td>
+    </tr>{% endfor %}
+  </table>
+</div>
