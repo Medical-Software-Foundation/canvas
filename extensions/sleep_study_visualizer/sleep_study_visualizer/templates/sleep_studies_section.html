@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap&v={{ cache_bust }}" rel="stylesheet">
+<style>
+  :root {
+    --bg-surface: #FFFFFF;
+    --bg-page: #F4F6F9;
+    --border-subtle: #E8ECF0;
+    --text-primary: #1A2332;
+    --text-secondary: #5A6A7E;
+    --text-muted: #8A97A6;
+    --accent-teal: #1A7F8E;
+    --severity-normal: #27AE60;
+    --severity-mild: #D4A017;
+    --severity-moderate: #D35400;
+    --severity-severe: #C0392B;
+    --severity-inactive: rgba(0,0,0,0.06);
+    --font-mono: 'DM Mono', 'Courier New', monospace;
+    --font-sans: 'DM Sans', system-ui, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    /* No overflow rule: setting overflow-x:hidden forces overflow-y to compute
+       to auto (CSS spec), which makes the body its own scroll container. The
+       host iframe auto-sizes to content, so we let content flow naturally -
+       matching shipped reference custom sections (e.g. hospitalization-tracker). */
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--text-primary);
+    background: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Establish a size container so the layout adapts to the PANEL width
+     (which varies independently of the viewport), not the screen width. */
+  body { container-type: inline-size; }
+  /* Fluid padding: tighter in a narrow panel, roomier when docked wide. */
+  .container { padding: clamp(8px, 3cqi, 14px) clamp(8px, 3.5cqi, 14px) 10px; }
+
+  /* Empty state */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px; padding: 28px 16px;
+    color: var(--text-muted); text-align: center;
+  }
+  .empty-state svg { opacity: 0.35; }
+  .empty-title { font-weight: 600; font-size: 14px; color: var(--text-secondary); }
+  .empty-sub { font-size: 12.5px; line-height: 1.5; max-width: 240px; }
+
+  /* Header */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-muted);
+  }
+  .study-select {
+    font-family: var(--font-sans); font-size: 12.5px; color: var(--accent-teal);
+    border: 1px solid var(--border-subtle); border-radius: 5px;
+    padding: 3px 20px 3px 7px; background: var(--bg-surface); cursor: pointer;
+    outline: none; appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%231A7F8E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 6px center;
+    transition: border-color 0.15s;
+  }
+  .study-select:hover { border-color: var(--accent-teal); }
+
+  /* Study panels */
+  .study-panel { display: none; }
+  .study-panel.active { display: block; }
+
+  /* Diagnosis row */
+  .diagnosis-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 8px; margin-bottom: 7px;
+  }
+  .diagnosis-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13.5px; font-weight: 600; line-height: 1.3; flex: 1; min-width: 0;
+  }
+  .severity-dot {
+    flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%;
+  }
+  .severity-dot.normal   { background: var(--severity-normal); }
+  .severity-dot.mild     { background: var(--severity-mild); }
+  .severity-dot.moderate { background: var(--severity-moderate); }
+  .severity-dot.severe   { background: var(--severity-severe); }
+  .severity-dot.unknown  { background: var(--text-muted); }
+  .study-meta {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted);
+    white-space: nowrap; flex-shrink: 0;
+  }
+
+  /* Single severity bar (client-asserted classification for the study) */
+  .severity-section { margin-bottom: 9px; }
+  .severity-row-header {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; margin-bottom: 5px;
+  }
+  .severity-index-name {
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .severity-value-label {
+    font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  }
+  .bar-track {
+    display: flex; height: 9px; border-radius: 4px; overflow: hidden; gap: 1px;
+  }
+  .bar-segment { height: 100%; border-radius: 1px; }
+  .bar-segment.inactive { background: var(--severity-inactive) !important; }
+  .bar-segment.seg-normal   { background: var(--severity-normal);   width: 25%; }
+  .bar-segment.seg-mild     { background: var(--severity-mild);     width: 25%; }
+  .bar-segment.seg-moderate { background: var(--severity-moderate); width: 25%; }
+  .bar-segment.seg-severe   { background: var(--severity-severe);   width: 25%; }
+  .bar-labels { display: flex; justify-content: space-between; margin-top: 3px; }
+  .bar-label { font-size: 10.5px; color: var(--text-muted); flex: 1; text-align: center; }
+
+  /* Stat tiles. Default to 2-up so AHI/RDI/ODI/Epworth never overflow a narrow
+     panel; expand to a single 4-up row once the panel is wide enough. */
+  .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin-bottom: 8px; }
+  @container (min-width: 300px) {
+    .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  .stat-tile {
+    background: var(--bg-page); border: 1px solid var(--border-subtle);
+    border-radius: 6px; padding: 5px 4px 4px; text-align: center; transition: border-color 0.15s;
+    min-width: 0;
+  }
+  .stat-tile:hover { border-color: var(--accent-teal); }
+  .stat-value { font-family: var(--font-mono); font-size: clamp(12px, 4cqi, 15px); font-weight: 500; color: var(--text-primary); line-height: 1.1; white-space: nowrap; }
+  .stat-label { margin-top: 2px; font-size: 9px; font-weight: 500; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-muted); }
+
+  /* Footer trend button */
+  .footer-row {
+    display: flex; justify-content: flex-end; padding-top: 6px;
+    border-top: 1px solid var(--border-subtle);
+  }
+  .trend-button {
+    font-family: var(--font-sans); font-size: 12.5px; font-weight: 500;
+    color: var(--accent-teal); background: transparent;
+    border: 1px solid var(--accent-teal); border-radius: 5px;
+    padding: 6px 12px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .trend-button:hover { background: var(--accent-teal); color: var(--bg-surface); }
+  .trend-button:disabled {
+    color: var(--text-muted); border-color: var(--border-subtle);
+    cursor: not-allowed; background: transparent;
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(20, 30, 45, 0.55);
+    z-index: 9998; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg-surface); border-radius: 10px;
+    width: min(560px, 100%); max-height: 90vh; overflow: auto;
+    box-shadow: 0 20px 60px rgba(20, 30, 45, 0.25);
+    padding: 18px 20px 16px;
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
+  }
+  .modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .modal-close {
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 18px; line-height: 1; padding: 4px 6px;
+  }
+  .modal-close:hover { color: var(--text-primary); }
+  .modal-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 14px; }
+  .modal-empty {
+    padding: 36px 12px; text-align: center; color: var(--text-muted); font-size: 12px;
+  }
+
+  /* SVG chart */
+  .chart-wrap { background: var(--bg-page); border-radius: 6px; padding: 12px 8px 8px; }
+  .chart-svg { width: 100%; height: 180px; display: block; }
+  .chart-line { fill: none; stroke: var(--accent-teal); stroke-width: 1.5; }
+  .chart-point { stroke: var(--accent-teal); stroke-width: 1.5; }
+  .chart-point.sleep_study { fill: var(--accent-teal); }
+  .chart-point.epworth_questionnaire { fill: var(--bg-surface); }
+  .chart-axis-line { stroke: var(--border-subtle); stroke-width: 1; }
+  .chart-grid-line { stroke: var(--border-subtle); stroke-width: 1; stroke-dasharray: 2 3; }
+  .chart-label { font-family: var(--font-mono); font-size: 9px; fill: var(--text-muted); }
+  .legend { display: flex; gap: 14px; justify-content: center; margin-top: 8px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .legend-dot.sleep_study { background: var(--accent-teal); }
+  .legend-dot.epworth_questionnaire { background: var(--bg-surface); border: 1.5px solid var(--accent-teal); }
+
+  /* History table inside modal */
+  .history-list { margin-top: 14px; display: flex; flex-direction: column; gap: 4px; }
+  .history-row {
+    display: grid; grid-template-columns: 88px 1fr 38px; gap: 8px;
+    padding: 6px 8px; border-radius: 4px; font-size: 11.5px;
+  }
+  .history-row:nth-child(odd) { background: var(--bg-page); }
+  .history-date { font-family: var(--font-mono); color: var(--text-secondary); }
+  .history-source { color: var(--text-muted); font-size: 10.5px; }
+  .history-score { font-family: var(--font-mono); font-weight: 500; text-align: right; }
+</style>
+</head>
+<body>
+<div class="container">
+
+{% if not studies %}
+<div class="empty-state">
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M18 4C18 4 8 10 8 20C8 26.627 12.477 32 18 32C23.523 32 28 26.627 28 20C28 10 18 4 18 4Z" stroke="#1A7F8E" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M13 20C13 20 14.5 17 18 17C21.5 17 23 20 23 20" stroke="#1A7F8E" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M18 17V12" stroke="#1A7F8E" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <p class="empty-title">No sleep studies on file</p>
+  <p class="empty-sub">Studies will appear here once a Sleep Study Result questionnaire is committed for this patient.</p>
+  {% if epworth_history %}
+  <button class="trend-button" type="button" onclick="openTrendModal()" style="margin-top: 10px;">View Epworth trend ({{ epworth_history|length }})</button>
+  {% endif %}
+</div>
+
+{% else %}
+
+<div class="section-header">
+  <span class="section-label">Sleep Studies</span>
+  {% if studies|length > 1 %}
+  <select class="study-select" onchange="switchStudy(this.value)">
+    {% for study in studies %}
+    <option value="{{ study.id }}"{% if forloop.first %} selected{% endif %}>{{ study.study_date|date:"M j, Y" }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+</div>
+
+{% for study in studies %}
+<div class="study-panel{% if forloop.first %} active{% endif %}" data-study-id="{{ study.id }}">
+
+  <div class="severity-section">
+    <div class="severity-row-header">
+      <span class="diagnosis-badge">
+        <span class="severity-dot {{ study.severity_class }}"></span>
+        <span>{% if study.severity %}{{ study.severity }} OSA{% else %}Classification unrecorded{% endif %}</span>
+      </span>
+      <span class="study-meta">{{ study.study_date|date:"M j, Y" }}</span>
+    </div>
+    <div class="bar-track">
+      <div class="bar-segment seg-normal   {% if study.severity_class != 'normal'   %}inactive{% endif %}"></div>
+      <div class="bar-segment seg-mild     {% if study.severity_class != 'mild'     %}inactive{% endif %}"></div>
+      <div class="bar-segment seg-moderate {% if study.severity_class != 'moderate' %}inactive{% endif %}"></div>
+      <div class="bar-segment seg-severe   {% if study.severity_class != 'severe'   %}inactive{% endif %}"></div>
+    </div>
+    <div class="bar-labels">
+      <span class="bar-label">Normal</span>
+      <span class="bar-label">Mild</span>
+      <span class="bar-label">Moderate</span>
+      <span class="bar-label">Severe</span>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="stat-value">{{ study.ahi }}</div>
+      <div class="stat-label">AHI</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value">{{ study.rdi }}</div>
+      <div class="stat-label">RDI</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value">{{ study.odi }}</div>
+      <div class="stat-label">ODI</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-value">{{ study.epworth_score }}</div>
+      <div class="stat-label">Epworth</div>
+    </div>
+  </div>
+
+  <div class="footer-row">
+    <button class="trend-button" type="button" onclick="openTrendModal()" {% if not epworth_history %}disabled{% endif %}>
+      View Epworth trend{% if epworth_history %} ({{ epworth_history|length }}){% endif %}
+    </button>
+  </div>
+
+</div>
+{% endfor %}
+
+{% endif %}
+
+<div class="modal-backdrop" id="trend-modal" onclick="onBackdropClick(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Epworth Sleepiness Scale — over time</span>
+      <button class="modal-close" type="button" onclick="closeTrendModal()" aria-label="Close">×</button>
+    </div>
+    <p class="modal-sub">Scores 0–24. Higher = greater daytime sleepiness. Sources merged from sleep study results and standalone Epworth questionnaires.</p>
+
+    {% if epworth_history %}
+    <div class="chart-wrap" id="chart-wrap"></div>
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot sleep_study"></span>Sleep study</span>
+      <span class="legend-item"><span class="legend-dot epworth_questionnaire"></span>Epworth questionnaire</span>
+    </div>
+    <div class="history-list">
+      {% for point in epworth_history reversed %}
+      <div class="history-row">
+        <span class="history-date">{{ point.date }}</span>
+        <span class="history-source">{{ point.source }}</span>
+        <span class="history-score">{{ point.score }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="modal-empty">No Epworth scores on record for this patient yet.</div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  var EPWORTH_HISTORY = [
+    {% for point in epworth_history %}
+      {"date":"{{ point.date }}","score":{{ point.score }},"source":"{{ point.source }}"}{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  function switchStudy(studyId) {
+    document.querySelectorAll('.study-panel').forEach(function(p) {
+      p.classList.toggle('active', p.getAttribute('data-study-id') === studyId);
+    });
+  }
+  function openTrendModal() {
+    document.getElementById('trend-modal').classList.add('open');
+    renderChart();
+  }
+  function closeTrendModal() {
+    document.getElementById('trend-modal').classList.remove('open');
+  }
+  function onBackdropClick(e) {
+    if (e.target.id === 'trend-modal') closeTrendModal();
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeTrendModal();
+  });
+
+  function renderChart() {
+    var wrap = document.getElementById('chart-wrap');
+    if (!wrap || !EPWORTH_HISTORY.length) return;
+    var W = wrap.clientWidth, H = 180;
+    var padL = 30, padR = 12, padT = 10, padB = 22;
+    var maxScore = 24;
+    var n = EPWORTH_HISTORY.length;
+    function x(i) {
+      if (n === 1) return padL + (W - padL - padR) / 2;
+      return padL + (i * (W - padL - padR)) / (n - 1);
+    }
+    function y(score) {
+      return padT + (1 - score / maxScore) * (H - padT - padB);
+    }
+
+    var pathParts = EPWORTH_HISTORY.map(function(p, i) {
+      return (i === 0 ? "M" : "L") + x(i).toFixed(1) + " " + y(p.score).toFixed(1);
+    });
+
+    var svg = '<svg class="chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
+    // Gridlines at 6, 12, 18, 24
+    [6, 12, 18, 24].forEach(function(g) {
+      var gy = y(g).toFixed(1);
+      svg += '<line class="chart-grid-line" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '"></line>';
+      svg += '<text class="chart-label" x="' + (padL - 4) + '" y="' + (parseFloat(gy) + 3) + '" text-anchor="end">' + g + '</text>';
+    });
+    // Baseline
+    svg += '<line class="chart-axis-line" x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '"></line>';
+    // Line (only if >1 point)
+    if (n > 1) {
+      svg += '<path class="chart-line" d="' + pathParts.join(" ") + '"></path>';
+    }
+    // Points + date labels
+    EPWORTH_HISTORY.forEach(function(p, i) {
+      var cx = x(i).toFixed(1), cy = y(p.score).toFixed(1);
+      var cls = p.source === "Sleep study" ? "sleep_study" : "epworth_questionnaire";
+      svg += '<circle class="chart-point ' + cls + '" cx="' + cx + '" cy="' + cy + '" r="3.5"></circle>';
+      // Only label first, last, and every other for clarity
+      if (i === 0 || i === n - 1 || (n <= 6)) {
+        svg += '<text class="chart-label" x="' + cx + '" y="' + (H - padB + 12) + '" text-anchor="middle">' + p.date.slice(5) + '</text>';
+      }
+    });
+    svg += '</svg>';
+    wrap.innerHTML = svg;
+  }
+</script>
+
+</div>
+</body>
+</html>
