@@ -15,16 +15,22 @@
     <div class="controls">
       <div>
         <div class="ctl-label">Questionnaires</div>
-        <div class="chips" id="chips"></div>
+        <div class="dropdown" id="instDropdown">
+          <button type="button" class="dd-trigger" id="instTrigger">
+            <span id="instLabel">Select questionnaires</span>
+            <span class="dd-caret">&#9662;</span>
+          </button>
+          <div class="dd-panel" id="instPanel" style="display:none"></div>
+        </div>
       </div>
       <div>
         <div class="ctl-label">Date range</div>
-        <div class="ranges" id="ranges">
-          <span class="range" data-months="3">3M</span>
-          <span class="range" data-months="6">6M</span>
-          <span class="range on" data-months="12">1Y</span>
-          <span class="range" data-months="0">All</span>
-        </div>
+        <select class="dd-select" id="rangeSelect">
+          <option value="3">Last 3 months</option>
+          <option value="6">Last 6 months</option>
+          <option value="12" selected>Last 1 year</option>
+          <option value="0">All time</option>
+        </select>
       </div>
       <div>
         <div class="ctl-label">View</div>
@@ -38,7 +44,11 @@
     </div>
 
     <div id="panels" class="grid"></div>
-    <div id="compareWrap" class="panel" style="display:none"><canvas id="compareChart"></canvas></div>
+    <div id="compareWrap" class="panel" style="display:none">
+      <div class="top"><div class="iname">Comparison</div>
+        <button class="ins" id="compareInsert">Insert into note</button></div>
+      <div class="cbox" style="height:360px"><canvas id="compareChart"></canvas></div>
+    </div>
 
     <div id="picker" class="picker-backdrop" style="display:none">
       <div class="picker">
@@ -68,15 +78,29 @@
       return { start: fmt(start), end: fmt(end) };
     }
 
-    function renderChips() {
-      const el = document.getElementById('chips'); el.innerHTML = '';
+    function renderInst() {
+      const panel = document.getElementById('instPanel'); panel.innerHTML = '';
+      const head = document.createElement('div');
+      head.className = 'dd-head';
+      const all = document.createElement('button'); all.type = 'button'; all.className = 'dd-link'; all.textContent = 'Select all';
+      all.onclick = () => { state.selected = new Set(ALL_INSTRUMENTS); refresh(); };
+      const none = document.createElement('button'); none.type = 'button'; none.className = 'dd-link'; none.textContent = 'Clear all';
+      none.onclick = () => { state.selected = new Set(); refresh(); };
+      head.append(all, none);
+      panel.appendChild(head);
       ALL_INSTRUMENTS.forEach(name => {
-        const c = document.createElement('span');
-        c.className = 'chip' + (state.selected.has(name) ? ' on' : '');
-        c.textContent = name;
-        c.onclick = () => { state.selected.has(name) ? state.selected.delete(name) : state.selected.add(name); refresh(); };
-        el.appendChild(c);
+        const row = document.createElement('label');
+        row.className = 'dd-opt';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.checked = state.selected.has(name);
+        cb.onchange = () => { cb.checked ? state.selected.add(name) : state.selected.delete(name); refresh(); };
+        const span = document.createElement('span'); span.textContent = name;
+        row.append(cb, span);
+        panel.appendChild(row);
       });
+      const n = state.selected.size;
+      document.getElementById('instLabel').textContent =
+        n === 0 ? 'Select questionnaires' : n + ' selected';
     }
 
     function fmtChange(v) { return v === null ? '-' : (v > 0 ? '+' : '') + v; }
@@ -113,7 +137,7 @@
     }
 
     async function refresh() {
-      renderChips();
+      renderInst();
       const { start, end } = rangeBounds();
       const qs = new URLSearchParams({ patient: PATIENT_QS, start, end });
       const data = await fetch('data?' + qs.toString()).then(r => r.json());
@@ -134,7 +158,7 @@
         names.forEach(n => drawLine('chart-' + cssId(n), data[n].series, data[n].max_score));
       } else {
         panels.style.display = 'none'; compareWrap.style.display = 'block';
-        const palette = ['#2c3e50', '#5c6b79', '#8a97a3', '#1f2933'];
+        const palette = ['#2c3e50', '#1f8a8a', '#5c6b79', '#9b6a9e', '#b07d4b', '#7a8450'];
         const labels = [...new Set(names.flatMap(n => data[n].series.map(p => p.date)))].sort();
         const ctx = document.getElementById('compareChart');
         if (charts.cmp) charts.cmp.destroy();
@@ -146,10 +170,23 @@
       }
     }
 
-    document.getElementById('ranges').onclick = e => {
-      if (!e.target.dataset.months) return;
-      [...document.querySelectorAll('#ranges .range')].forEach(r => r.classList.remove('on'));
-      e.target.classList.add('on'); state.months = +e.target.dataset.months; refresh();
+    const instDropdown = document.getElementById('instDropdown');
+    document.getElementById('instTrigger').onclick = e => {
+      e.stopPropagation();
+      const panel = document.getElementById('instPanel');
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? 'block' : 'none';
+      instDropdown.classList.toggle('dd-open', open);
+    };
+    document.addEventListener('click', e => {
+      if (!instDropdown.contains(e.target)) {
+        document.getElementById('instPanel').style.display = 'none';
+        instDropdown.classList.remove('dd-open');
+      }
+    });
+
+    document.getElementById('rangeSelect').onchange = e => {
+      state.months = +e.target.value; refresh();
     };
     document.getElementById('viewtog').onclick = e => {
       if (!e.target.dataset.view) return;
@@ -160,28 +197,42 @@
       state.selected = new Set();
       state.months = 12;
       state.view = 'individual';
-      document.querySelectorAll('#ranges .range').forEach(r => r.classList.toggle('on', r.dataset.months === '12'));
+      document.getElementById('rangeSelect').value = '12';
       document.querySelectorAll('#viewtog .vbtn').forEach(b => b.classList.toggle('on', b.dataset.view === 'individual'));
       refresh();
     };
 
     let pendingInstrument = null;
-    document.getElementById('panels').addEventListener('click', async e => {
-      const name = e.target.dataset.insert;
-      if (!name) return;
-      pendingInstrument = name;
-      document.getElementById('pickerTitle').textContent = 'Insert ' + name + ' trend into a note';
+    let pendingCompare = false;
+    async function openPicker(title) {
+      document.getElementById('pickerTitle').textContent = title;
       const rows = await fetch('notes?patient=' + encodeURIComponent(PATIENT_QS)).then(r => r.json());
       const sel = document.getElementById('noteSelect');
       sel.innerHTML = rows.map(r => `<option value="${r.id}" ${r.default ? 'selected' : ''}>${r.label}${r.default ? ' - default' : ''}</option>`).join('');
       document.getElementById('picker').style.display = 'flex';
+    }
+    document.getElementById('panels').addEventListener('click', async e => {
+      const name = e.target.dataset.insert;
+      if (!name) return;
+      pendingInstrument = name; pendingCompare = false;
+      await openPicker('Insert ' + name + ' trend into a note');
     });
+    document.getElementById('compareInsert').onclick = async () => {
+      pendingCompare = true;
+      await openPicker('Insert comparison into a note');
+    };
     document.getElementById('pickCancel').onclick = () => document.getElementById('picker').style.display = 'none';
     document.getElementById('pickConfirm').onclick = async () => {
       const { start, end } = rangeBounds();
       const note_uuid = document.getElementById('noteSelect').value;
-      await fetch('insert', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patient: PATIENT_QS, instrument: pendingInstrument, start, end, note_uuid }) });
+      if (pendingCompare) {
+        const instruments = [...state.selected];
+        await fetch('insert-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient: PATIENT_QS, instruments, start, end, note_uuid }) });
+      } else {
+        await fetch('insert', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient: PATIENT_QS, instrument: pendingInstrument, start, end, note_uuid }) });
+      }
       document.getElementById('picker').style.display = 'none';
     };
 

@@ -1,0 +1,18 @@
+<div style="font-family:Arial,sans-serif;font-size:11px;color:#000;">
+  <h3 style="margin:0 0 4px;">Questionnaire Comparison</h3>
+  <div style="margin-bottom:6px;">{{ date_range }} &bull; {{ count }} instruments</div>
+  <table style="border-collapse:collapse;">
+    <tr>
+      <th style="text-align:left;border-bottom:1px solid #999;padding:2px 14px 2px 0;">Instrument</th>
+      <th style="text-align:left;border-bottom:1px solid #999;padding:2px 14px 2px 0;">Latest</th>
+      <th style="text-align:left;border-bottom:1px solid #999;padding:2px 14px 2px 0;">Change</th>
+      <th style="text-align:left;border-bottom:1px solid #999;padding:2px 0;">n</th>
+    </tr>
+    {% for r in rows %}<tr>
+      <td style="padding:2px 14px 2px 0;">{{ r.name }}</td>
+      <td style="padding:2px 14px 2px 0;">{{ r.latest }}{% if r.max_score %}/{{ r.max_score }}{% endif %}</td>
+      <td style="padding:2px 14px 2px 0;">{{ r.change }}</td>
+      <td style="padding:2px 0;">{{ r.total }}</td>
+    </tr>{% endfor %}
+  </table>
+</div>

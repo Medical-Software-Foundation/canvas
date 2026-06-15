@@ -22,7 +22,11 @@ from questionnaire_scoring_dashboard.services.metrics import (
 )
 from questionnaire_scoring_dashboard.services.notes_select import choose_notes
 from questionnaire_scoring_dashboard.services.scoring import build_series
-from questionnaire_scoring_dashboard.services.svg_chart import render_line_svg
+from questionnaire_scoring_dashboard.services.svg_chart import (
+    PALETTE,
+    render_line_svg,
+    render_multi_line_svg,
+)
 
 
 def _format_change(change: float | None) -> str:
@@ -139,6 +143,73 @@ class ScoringDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
         command = ScoringTrendCommand(
             content=render_to_string("templates/command.html", context=ctx),
             print_content=render_to_string("templates/command_print.html", context=ctx),
+        )
+        command.command_uuid = str(uuid.uuid4())
+        command.note_uuid = note_uuid
+        return [command.originate(), JSONResponse({"ok": True}, status_code=HTTPStatus.OK)]
+
+    @api.post("/insert-compare")
+    def insert_compare(self) -> list[Response | Effect]:
+        body = self.request.json()
+        note_uuid = (body.get("note_uuid") or "").strip()
+        instruments = body.get("instruments") or []
+        patient_id = body.get("patient") or ""
+        if not note_uuid or not instruments:
+            return [
+                JSONResponse(
+                    {"error": "note_uuid and instruments required"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        # Patient-scoping: the note must be an open note belonging to this patient.
+        valid_note_ids = {n["id"] for n in fetch_open_note_rows(patient_id)}
+        if note_uuid not in valid_note_ids:
+            return [
+                JSONResponse(
+                    {"error": "note does not belong to patient"},
+                    status_code=HTTPStatus.FORBIDDEN,
+                )
+            ]
+
+        start = body.get("start") or None
+        end = body.get("end") or None
+        series = build_series(fetch_survey_rows(patient_id))
+        today = date.today()
+        rows: list[dict] = []
+        svg_series: list[tuple[str, list[dict]]] = []
+        for instrument in instruments:
+            points = filter_by_range(series.get(instrument, []), start, end)
+            if not points:
+                continue
+            metrics = compute_metrics(points, as_of=today)
+            color = PALETTE[len(rows) % len(PALETTE)]
+            rows.append(
+                {
+                    "name": instrument,
+                    "color": color,
+                    "latest": "-" if metrics["latest"] is None else metrics["latest"],
+                    "change": _format_change(metrics["change"]),
+                    "total": metrics["total"],
+                    "max_score": _max_for(instrument),
+                }
+            )
+            svg_series.append((color, points))
+
+        all_dates = sorted({p["date"] for _, pts in svg_series for p in pts})
+        date_range = f"{all_dates[0]} - {all_dates[-1]}" if all_dates else "No data"
+        ctx = {
+            "count": len(rows),
+            "date_range": date_range,
+            "inserted_on": today.isoformat(),
+            "rows": rows,
+            "svg": render_multi_line_svg(svg_series),
+        }
+        command = ScoringTrendCommand(
+            content=render_to_string("templates/command_compare.html", context=ctx),
+            print_content=render_to_string(
+                "templates/command_compare_print.html", context=ctx
+            ),
         )
         command.command_uuid = str(uuid.uuid4())
         command.note_uuid = note_uuid
