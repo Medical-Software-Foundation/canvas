@@ -62,6 +62,28 @@ These are repo-specific 🔴 Important rules. Each has been a real bug in past r
 - **Handler `compute()` / `effect()` handle missing or malformed event payload fields without raising.** Partial data is the norm in production.
 - **In `Medical-Software-Foundation/canvas` (reference plugins): no customer-specific identifiers.** Customer names, brand names, internal IDs, hardcoded note templates, customer-only URLs. Reference plugins must be generic. (In `canvas/gtm-extensions`, customer-specific content is fine — do not flag.)
 
+- **Public README meets the open-source publishing checklist (reference plugins only).** Check the plugin's rendered `README.md` against the "Open-source README publishing checklist" section below. Report any missing item as a normal review finding and name its source so the author knows where the requirement comes from: the open-source plugin publishing checklist.
+
+## Open-source README publishing checklist (Medical-Software-Foundation/canvas)
+
+Every reference plugin's `README.md` feeds the public plugin website, so an incomplete README ships a broken-looking listing. This checklist is reproduced in full here so it can be applied during review without any external document. When a plugin's README is missing one of these, surface it in the review and attribute it to this checklist by name.
+
+The information must be present, judged by content rather than an exact heading match (a close synonym or an intro paragraph counts):
+
+- **What it does** - one plain-language paragraph, no jargon.
+- **Problem it solves** - the pain point and the manual workaround it replaces. A feature list alone does not satisfy this.
+- **Who it's for** - the roles or specialties who use it. A generic "users" or "staff" does not satisfy this.
+- **How to install** - the `canvas install <name>` command, plus any required configuration steps. A secrets section alone does not satisfy this.
+- **Configuration options** - the secrets, settings, or thresholds a user can change. If there is genuinely nothing to configure, an explicit "No configuration required" satisfies this.
+- **Screenshot or screen recording** - at least one image embedded in the README (`![...](...)` or `<img>`) that shows the plugin in action. Strict: a logo or icon does not count, and a link to a video (Loom, YouTube) or a downloadable PDF does not count. There must be at least one embedded still, because website visitors do not click into videos.
+
+Also confirm `CANVAS_MANIFEST.json` carries a clear `name` (display name, no internal shorthand) and a `description` (1-2 sentences: what it does and who it's for). Both surface on the website.
+
+How to report these:
+
+- Include the missing items in the review and name the source explicitly: the open-source plugin publishing checklist (reproduced above). For each, name the concrete fix (for example: "add a Problem it solves paragraph naming the manual workaround"; "embed a screenshot of the app in the README - the Loom link does not satisfy the requirement").
+- The PHI, secrets, license, and customer-identifier items from the broader publishing checklist are already covered by the rules above. Do not duplicate them here.
+
 ## Summary shape
 
 Open the review summary with one line of the form: `N important, M nits` (e.g. `0 important, 2 nits`). When N is 0, the next sentence should be: "No blocking issues — safe to merge once nits are addressed (optional)." so the author knows the PR is not gated on the review.
