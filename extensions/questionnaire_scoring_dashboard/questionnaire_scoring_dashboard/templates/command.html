@@ -1,0 +1,11 @@
+<div style="font-family:Inter,-apple-system,sans-serif;padding:14px 4px;color:#1f2933;">
+  <div style="font-size:14px;font-weight:600;">{{ title }}</div>
+  <div style="font-size:11px;color:#8a97a3;margin-bottom:12px;">{{ date_range }} &bull; {{ total }} assessments &bull; inserted {{ inserted_on }}</div>
+  <div style="display:flex;gap:26px;margin-bottom:12px;">
+    <div><div style="font-size:17px;font-weight:700;">{{ latest }}{% if max_score %}<span style="font-size:11px;color:#5c6b79;">/{{ max_score }}</span>{% endif %}</div><div style="font-size:10px;color:#8a97a3;">Latest score</div></div>
+    <div><div style="font-size:17px;font-weight:700;">{{ change }}</div><div style="font-size:10px;color:#8a97a3;">Change since last</div></div>
+    <div><div style="font-size:17px;font-weight:700;">{{ days_since }}d</div><div style="font-size:10px;color:#8a97a3;">Days since last</div></div>
+    <div><div style="font-size:17px;font-weight:700;">{{ total }}</div><div style="font-size:10px;color:#8a97a3;">Total</div></div>
+  </div>
+  {{ svg|safe }}
+</div>

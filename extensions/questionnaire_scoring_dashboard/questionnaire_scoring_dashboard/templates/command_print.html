@@ -1,0 +1,9 @@
+<div style="font-family:Arial,sans-serif;font-size:11px;color:#000;">
+  <h3 style="margin:0 0 4px;">{{ title }}</h3>
+  <div style="margin-bottom:6px;">{{ date_range }} &bull; {{ total }} assessments</div>
+  <table style="border-collapse:collapse;">
+    <tr><th style="text-align:left;border-bottom:1px solid #999;padding:2px 10px 2px 0;">Date</th>
+        <th style="text-align:left;border-bottom:1px solid #999;padding:2px 0;">Score</th></tr>
+    {% for p in rows %}<tr><td style="padding:2px 10px 2px 0;">{{ p.date }}</td><td style="padding:2px 0;">{{ p.value }}</td></tr>{% endfor %}
+  </table>
+</div>
