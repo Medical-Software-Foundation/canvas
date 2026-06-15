@@ -7,3 +7,13 @@ A prescription drug monitoring program (PDMP or PMP) is an electronic database t
 This extension will launch the [Nebraska PDMP](https://secure.cynchealth.org/) in a new window from the Apps menu in the User Action Panel.
 
 Visit [here](https://dhhs.ne.gov/Pages/PDMP-Enhancements.aspx) for more information about the Nebraska PDMP.
+
+## How to install
+
+```bash
+canvas install ne_pdmp
+```
+
+## Configuration options
+
+No configuration required.

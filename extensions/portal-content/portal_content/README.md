@@ -2,6 +2,18 @@
 
 Unified patient portal plugin that consolidates educational materials, imaging reports, lab reports, and visit notes into a single configurable plugin.
 
+## Problem it solves
+
+Patients often have to look in several places to find their education handouts, imaging results, lab results, and visit summaries, and a practice typically wires up each of those portal surfaces separately. This plugin brings all four into one portal area with consistent access rules, so patients get a single place to read their own records and the practice configures which content types are turned on from one plugin.
+
+## How to install
+
+```
+canvas install portal_content
+```
+
+This plugin requires the `CLIENT_ID` and `CLIENT_SECRET` secrets for FHIR API access before it will function. See Configuration for the full secret list.
+
 ## Features
 
 - **Educational Materials**: View educational materials shared by providers

@@ -2,6 +2,28 @@
 
 Validates commands before commit to ensure data completeness and quality.
 
+## What it does
+
+This plugin checks certain Canvas commands at commit time and blocks the commit if required data is missing. It will not let a questionnaire be committed while any question is still unanswered, and it will not let a prescription, refill, or prescription adjustment be committed without a days-supply value greater than zero. When a check fails, the staff member sees a clear message explaining what to fix.
+
+## Problem it solves
+
+Incomplete questionnaires and prescriptions with a missing days supply slip through and cause downstream rework: pharmacies reject scripts, reporting gaps appear, and someone has to chase the chart back open to fix it after the fact. This plugin catches the gap at the moment of commit instead of relying on staff to remember every required field or on a later manual audit.
+
+## Who it's for
+
+Prescribers and clinical staff who commit prescriptions, refills, and prescription adjustments, plus anyone who administers questionnaires during a visit. Practice administrators who want consistent, complete documentation also benefit.
+
+## How to install
+
+```
+canvas install command_validation
+```
+
+## Configuration options
+
+No configuration required.
+
 ## Handlers
 
 ### RequireAllQuestionsAnsweredHandler

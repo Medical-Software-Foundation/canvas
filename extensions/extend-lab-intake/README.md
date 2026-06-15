@@ -2,6 +2,22 @@
 
 Automated lab report intake plugin using Extend AI for document classification and extraction.
 
+## Problem it solves
+
+Lab reports often arrive as faxed or scanned PDFs that staff must read, match to the right patient, transcribe into structured results, and file as a report. This plugin accepts the PDF, classifies and extracts the values automatically, matches the patient from the extracted demographics, and creates a FHIR DiagnosticReport, replacing the manual read-and-retype step.
+
+## Who it's for
+
+Front-desk and intake staff, medical assistants, and care coordinators who process incoming lab documents and file results to the correct patient chart.
+
+## How to install
+
+```
+canvas install extend_lab_intake
+```
+
+This plugin requires several secrets to function (Extend AI, Anthropic, AWS, Canvas FHIR, and the inbound token). See Required Secrets below.
+
 ## Overview
 
 This plugin receives lab report PDFs via HTTP POST, classifies and extracts structured data using Extend AI,

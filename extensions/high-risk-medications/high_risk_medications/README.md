@@ -2,6 +2,18 @@
 
 A comprehensive Canvas Medical plugin that helps clinicians identify and monitor high-risk medications through real-time alerts, search annotations, and patient dashboards.
 
+## Problem it solves
+
+High-risk medications such as warfarin, insulin, digoxin, and methotrexate require close monitoring, but a clinician prescribing or refilling them has no built-in cue that the drug carries extra risk. Catching these cases otherwise depends on the prescriber remembering each agent and manually checking the active medication list. This plugin flags high-risk drugs at the point of search, posts a patient banner, and keeps a live list so the risk is visible without anyone tracking it by hand.
+
+## How to install
+
+```
+canvas install high_risk_medications
+```
+
+The `HIGH_RISK_PATTERNS` secret must be set in plugin settings.
+
 ## Overview
 
 This plugin provides multiple integrated features to improve medication safety:

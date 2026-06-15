@@ -2,6 +2,10 @@
 
 A patient-scope provider companion app that renders a compact, read-only clinical summary of the open patient — social determinants, conditions, medications, allergies, vitals, immunizations, and surgical history — and keeps itself fresh over a WebSocket when the chart changes server-side.
 
+## Problem it solves
+
+Getting a quick read on a patient means clicking through separate chart sections for conditions, medications, allergies, vitals, immunizations, and history, then re-checking them whenever something is committed mid-visit. This plugin replaces that clicking with one read-only summary that pulls all of those sections together and refreshes the affected section in place as the chart changes, so the provider does not have to reload or hunt for what moved.
+
 ## What providers see
 
 ![Patient clinical summary in the provider companion](screenshots/companion-pt-summary.png)

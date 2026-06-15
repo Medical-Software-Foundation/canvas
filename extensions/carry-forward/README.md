@@ -2,6 +2,16 @@
 
 A Canvas plugin that enables efficient clinical documentation by automatically carrying forward commands from previous encounters into new notes.
 
+## How to install
+
+```
+canvas install carry_forward
+```
+
+## Configuration options
+
+No configuration required.
+
 ## Overview
 
 The Carry Forward plugin adds action buttons to the note header that allow clinicians to quickly populate new notes with relevant information from previous encounters. This reduces documentation time and ensures continuity of care by intelligently carrying forward diagnoses, medications, orders, and other clinical data.

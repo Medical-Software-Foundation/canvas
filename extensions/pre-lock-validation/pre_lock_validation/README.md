@@ -2,6 +2,28 @@
 
 Validates pre-lock conditions before allowing a note to be locked. This plugin uses the `NOTE_STATE_CHANGE_EVENT_PRE_CREATE` event to intercept note state transitions and enforce business rules.
 
+## What it does
+
+When a user tries to lock a note, this plugin checks the note before the lock goes through. It blocks the lock and shows an error if the note has no committed vitals, or if any commands are still staged (not yet committed). The user has to fix what the message points to before they can lock.
+
+## Problem it solves
+
+Notes get locked with vitals missing or with half-finished commands left in a staged state, and the gaps are only caught later during chart review or coding. Catching those gaps after the fact means reopening the note and chasing down the clinician. This plugin stops the lock at the point of the mistake so the note cannot close with those gaps in it.
+
+## Who it's for
+
+Clinicians and prescribers who lock encounter notes, and the practices that need vitals recorded and all commands committed on every locked note.
+
+## How to install
+
+```
+canvas install pre_lock_validation
+```
+
+## Configuration options
+
+No configuration required.
+
 ## Event Reference
 
 This plugin responds to `NOTE_STATE_CHANGE_EVENT_PRE_CREATE`, which fires before a note state change is created. Returning an `EventValidationError` effect blocks the state change and displays the error to the user.

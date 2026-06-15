@@ -1,5 +1,15 @@
 # New York PMP
 
+## How to install
+
+```
+canvas install ny_pmp
+```
+
+## Configuration options
+
+No configuration required.
+
 ## Description
 
 A prescription drug monitoring program (PDMP or PMP) is an electronic database that tracks controlled substance prescriptions. Information from PDMPs can help clinicians identify patients who may be at risk for overdose and provide potentially lifesaving information and interventions. 

@@ -6,6 +6,10 @@ It lives right in Canvas as an **"Assistant"** panel — in a patient chart, pra
 
 <img src="docs/img/chat-patient-chart.png" alt="Assistant panel open in a patient chart: 'Chatting about: Reagan Demo', with answers about active conditions and medications" width="480">
 
+## Problem it solves
+
+Answering a simple clinical question - what meds is this patient on, when was the last A1C, who am I seeing tomorrow - usually means clicking through several chart screens, and prepping for a day of visits means doing that patient by patient. This plugin lets a clinician ask in plain English and gets an answer pulled straight from the chart, including a one-paragraph prep digest per scheduled patient, without leaving Canvas. Write actions stay gated behind explicit approval so it speeds up lookups without taking unsupervised action.
+
 ## What it can do
 
 Ask the kinds of questions you'd otherwise click through several screens to answer:

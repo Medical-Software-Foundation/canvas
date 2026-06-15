@@ -2,6 +2,18 @@
 
 Subscribe Canvas to a provider's personal calendar (Google Calendar, Outlook, Apple iCloud) via the calendar's secret iCal/ICS URL. Every 15 minutes, the plugin fetches each connected feed and writes the busy times as "Busy" events on the provider's Canvas Admin calendar.
 
+## Problem it solves
+
+Providers who keep personal or external commitments in Google Calendar, Outlook, or Apple iCloud end up double-booked when those times are not reflected in Canvas. Without this plugin, someone has to copy each outside commitment into Canvas by hand and keep the two calendars in sync as plans change. This plugin pulls the busy times in automatically every 15 minutes so the Canvas schedule blocks the right slots, while keeping the personal event details private.
+
+## How to install
+
+```
+canvas install external_calendar_busy_blocks
+```
+
+This plugin declares secrets that must be set before it will function. See the Configuration options below.
+
 ## How it works
 
 Each provider opens the **Calendar Busy Blocks** application from the Canvas global menu, pastes their personal calendar's secret iCal URL, and clicks Save. A scheduled task runs every 15 minutes:

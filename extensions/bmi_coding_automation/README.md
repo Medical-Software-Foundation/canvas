@@ -8,6 +8,22 @@ For any patient 20 years or older, the BMI Coding Automation extension will auto
 
 If patient has an existing Z68 code, the extension will update existing diagnosis code, making it easy to track progress over time.
 
+## Problem it solves
+
+BMI Z68 codes are easy to forget and tedious to look up by hand, so they often go unrecorded even when the height and weight are already in the chart. This plugin replaces the manual step of calculating BMI and matching it to the correct Z68 code, recording the diagnosis from the vitals already entered.
+
+## Who it's for
+
+Prescribers and clinical staff who document vitals and want BMI Z68 codes recorded consistently for patients 20 and older, and the billing and coding staff who rely on those codes.
+
+## How to install
+
+```
+canvas install bmi_coding_automation
+```
+
+The SDK commands for vitals, updateDiagnosis, and diagnose must be enabled on the instance.
+
 ### Important Note!
 
 The SDK Command needs to be turned for vitals, updateDiagnosis, and diagnose

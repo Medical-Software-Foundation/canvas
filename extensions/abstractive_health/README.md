@@ -1,6 +1,10 @@
 # Abstractive Health Plugin
 The Abstractive Health Extension enables your organization to gain deep patient intelligence for your clinicians. You are able to access a patient's complete medical record from the national health information exchanges, see automated AI summaries from those documents, and get quick answers to any clinical questions on the patient chart with streamlined research.
 
+## Problem it solves
+
+A patient's history is often scattered across outside providers and health information exchanges, leaving clinicians to chase records, read long documents, and piece the picture together by hand before a visit. This plugin pulls the patient's records from national exchanges into the chart, generates AI summaries of those documents, and answers clinical questions about them, replacing manual record retrieval and chart review.
+
 ## About Abstractive
 An Abstractive account is required to access the platform. The application flow will prompt you to create one to register for a free trial, after which plans start at $99/month.
 

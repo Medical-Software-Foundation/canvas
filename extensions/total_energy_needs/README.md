@@ -6,6 +6,18 @@ Knowing a patient's caloric needs can be especially important for providers in t
 
 This extension includes the Activity Factor for Energy Needs Questionnaire and displays a patient's TDEE as a banner in the patient chart. The TDEE is based on the Mifflin-St Jeor equation which factors in a patients sex, age, height, weight, and current activity level. The banner calculation will update whenever a new activity level questionnaire, height, or weight is recorded.
 
+## How to install
+
+```
+canvas install total_energy_needs
+```
+
+The `CURRENT_ACTIVITY_LEVEL_QUESTION_CODE` secret must be set in plugin settings.
+
+## Configuration options
+
+- `CURRENT_ACTIVITY_LEVEL_QUESTION_CODE`: the question code identifying the activity-level response in the Activity Factor for Energy Needs questionnaire. The plugin reads this code to pull the patient's current activity level, which sets the multiplier applied to the BMR when computing TDEE.
+
 ## Important Note!
 
 The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it gets updated if you add, remove, or rename protocols.

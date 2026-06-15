@@ -2,6 +2,14 @@
 
 A Canvas plugin for managing and visualizing patient observations with table and graph views.
 
+## Problem it solves
+
+Observations recorded over time are hard to read as a flat list in the chart, and there is no built-in way to load them from an outside source or trend a single measure visually. Staff end up scrolling through entries or rebuilding trends by hand in a spreadsheet. This plugin gives a filterable table and a graph view inside the patient chart, lets observations be created and queried through an API, and can drop a summary command into a note so the reading is documented where it belongs.
+
+## Who it's for
+
+Clinicians and care coordinators who review patient measurements such as vital signs or lab-style observations and want to see them grouped or trended at a glance. Developers integrating an external device or data source that needs to write observations into Canvas also use the API.
+
 ## Video
 
 Here is a video demonstrating this plugin in action: https://www.loom.com/share/a475c3cba69149f2b60851b6f9ec1da8

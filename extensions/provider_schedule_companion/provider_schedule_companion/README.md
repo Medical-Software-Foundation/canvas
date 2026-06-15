@@ -2,6 +2,10 @@
 
 A mobile-friendly "at-a-glance" schedule that lives on the provider companion main page. Opens the logged-in provider's own upcoming visits in a modal with day, week, and month views.
 
+## Problem it solves
+
+A provider checking their own day from a phone otherwise has to open the full scheduling view and pick themselves out of everyone else's appointments. This plugin puts the logged-in provider's own visits, and only theirs, one tap away in the companion launcher with day, week, and month views.
+
 ## What providers see
 
 ![My Schedule in the provider companion](screenshots/my-schedule.png)

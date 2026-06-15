@@ -1,5 +1,13 @@
 # Encounter List Plugin
 
+## Problem it solves
+
+Finding every open encounter that still needs attention usually means clicking through individual charts and schedules to spot notes that are unsigned, have uncommitted commands, or are stuck in a claim queue. This plugin gathers all in-progress encounters into one filterable worklist, so staff can see what is outstanding across providers and locations without opening each chart.
+
+## Configuration options
+
+No configuration required.
+
 ## Overview
 
 The Encounter List plugin provides a comprehensive worklist view of open encounters. It displays all encounters that are currently in progress (NEW or UNLOCKED state), allowing healthcare providers to efficiently monitor and manage their active patient encounters with advanced filtering and navigation capabilities.

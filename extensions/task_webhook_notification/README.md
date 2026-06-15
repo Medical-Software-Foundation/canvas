@@ -14,6 +14,18 @@ The payload includes the following:
 
 Customize the event trigger and payload to fit your needs.
 
+## Who it's for
+
+Engineering and operations teams who integrate Canvas with an external system - a ticketing tool, a notification service, or a custom workflow app - and need it to react the moment a task is created or updated rather than polling for changes.
+
+## How to install
+
+```
+canvas install task_webhook_notification
+```
+
+Set the required secrets before use (see Configuration).
+
 ### Important Note!
 
 There are two plugin secrets to set:

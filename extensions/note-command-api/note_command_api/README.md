@@ -8,6 +8,14 @@ SimpleAPI endpoints for creating, retrieving, and managing Canvas notes. This pl
 - A GET endpoint that retrieves note data with enhanced command attributes
 - A POST endpoint that changes note states
 
+## Problem it solves
+
+External systems that need to create notes, read note contents with full command detail, or move a note through its states (lock, sign, push charges, check in, and so on) otherwise have no direct path into Canvas notes and rely on manual work inside the UI. This plugin exposes those operations as authenticated HTTP endpoints so another system can drive note creation, retrieval, and state changes programmatically.
+
+## Who it's for
+
+Developers and integration teams building external systems or automations that need to create Canvas notes, pull note and command data, or change note states without a person working in the chart.
+
 ## Features
 
 - **Create notes** with flexible identifier options (lookup by ID or name)

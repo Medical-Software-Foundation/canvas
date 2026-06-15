@@ -15,6 +15,22 @@ The Scheduling Admin app exposes a visit-type configuration matrix
 concurrent-slot capacity) persisted under the `scheduling_with_rooms`
 Custom Data namespace.
 
+## Problem it solves
+
+Booking a visit that needs a room means coordinating two calendars at once: the provider's and the room's. Done by hand, staff book the patient, then separately block the room, and have to remember to free the room if the appointment is cancelled, which is easy to miss and leads to double-booked or phantom-held rooms. This plugin books the provider and the room together and deletes the linked room event automatically when the patient appointment is cancelled.
+
+## Who it's for
+
+Front-desk and scheduling staff at clinics where visits consume a shared physical resource, such as procedure rooms, infusion chairs, or imaging suites. It fits practices that need provider and room availability reconciled in a single booking step, including pediatric, specialty, and multi-room primary care groups.
+
+## How to install
+
+```
+canvas install scheduling_with_rooms
+```
+
+The `FHIR_BASE_URL`, `FHIR_CLIENT_ID`, `FHIR_CLIENT_SECRET`, `SCHEDULABLE_STAFF_ROLES`, and `SCHEDULE_DURATIONS` secrets must be set in plugin settings.
+
 ## Components
 
 | Component                                            | Purpose                                                                |

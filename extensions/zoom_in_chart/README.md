@@ -4,6 +4,14 @@
 
 This plugin adds an action button to a note when an appointment is a telehealth visit that is set up with a Zoom meeting. The action button will launch the Zoom telehealth visit directly in the right hand pane of the browswer in the patient's chart (rather than opening in the Zoom desktop app). This plugin uses the [Zoom Meeting SDK for web](https://developers.zoom.us/docs/meeting-sdk/web/) to integrate the meeting directly into the browser.
 
+## Problem it solves
+
+Starting a telehealth visit normally means leaving the chart, switching to the Zoom desktop app, and finding the right meeting, which breaks the provider's flow and pulls focus away from the patient's record. This plugin replaces that app switch with a button on the note that opens the Zoom visit in the chart's side pane, keeping the visit and the chart on one screen.
+
+## Who it's for
+
+Prescribers and clinical staff who run telehealth appointments in Canvas and want to join the Zoom visit without leaving the patient's chart.
+
 ### Setup
 
 The Zoom SDK requires that an application is registered in able to use the features in a browser. The Zoom account used must either hold the `Owner` or `Admin` role in order to create an application. For our purposes here, we are setting up a Zoom application in Development mode.

@@ -8,6 +8,10 @@ Orders are removed from the dashboard when a result has been linked. **There is 
 
 ![Order Tracking Plugin](assets/order-tracking.png)
 
+## Problem it solves
+
+Lab orders, imaging orders, and referrals can sit open for days waiting on results, and there is no single place to see everything still outstanding. Staff fall back on memory, spreadsheets, or clicking through individual charts to find what needs follow-up, and orders slip through. This plugin gathers all open orders across the three types into one filterable worklist, removing each order automatically once a result is linked, so follow-up does not depend on manual tracking.
+
 ## Features
 
 - **Multi-Order Type Support**: Tracks lab orders, imaging orders, and referrals

@@ -2,6 +2,14 @@
 
 Canvas plugin that installs two validated psychiatry screening questionnaires commonly used in behavioral health and psychiatric settings.
 
+## Problem it solves
+
+Standing up validated screening instruments like ACE and PCL-5 by hand means rebuilding each question, response option, LOINC code, and scoring rule in the questionnaire editor. This plugin ships both instruments preconfigured so they are available in charting right after install, with no manual setup.
+
+## Configuration options
+
+No configuration required.
+
 ## Included Questionnaires
 
 ### ACE (Adverse Childhood Experiences)

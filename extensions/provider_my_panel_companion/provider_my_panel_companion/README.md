@@ -2,6 +2,10 @@
 
 A mobile-friendly patient panel that lives on the provider companion main page. Shows the logged-in provider every patient whose active care team includes them, with last visit, next visit, and a running count of open tasks.
 
+## Problem it solves
+
+A provider working from a phone has no quick way to see just their own patients along with when each was last seen, when they are due back, and how many tasks are still open. Answering that today means running separate searches and counting tasks by hand. This plugin assembles that panel view in one screen on the provider companion, pulled from active care-team membership, so providers stop stitching the picture together across multiple screens.
+
 ## What providers see
 
 ![My Panel in the provider companion](screenshots/my-panel.png)

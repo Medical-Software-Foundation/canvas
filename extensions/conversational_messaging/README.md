@@ -1,6 +1,10 @@
 Conversational Messaging
 ========================
 
+## Who it's for
+
+Providers, nurses, and front-desk staff who exchange secure messages with patients and want to read and reply to a full thread from inside the patient chart.
+
 ## Description
 
 This plugin adds a "Conversational Messaging" application to Canvas that opens in the right chart pane for the current patient. The experience consolidates inbound and outbound messages so staff can read and respond without leaving the chart.

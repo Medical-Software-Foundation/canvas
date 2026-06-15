@@ -2,6 +2,10 @@
 
 A patient-vitals trend visualizer. Opens a modal with time-series line charts of the values collected in the Vital Signs command. Accessible from two surfaces: an action button in the chart summary, and a patient-scope companion launcher.
 
+## Problem it solves
+
+A patient's vitals accumulate one panel at a time, and the chart shows them as a list of dated readings. Spotting whether weight, blood pressure, or oxygen saturation is trending up or down means reading down the column and comparing numbers by eye, or exporting them to plot elsewhere. This plugin charts each vital as a time series in a single modal, so the trend across visits is visible without manual tallying.
+
 ## What providers see
 
 ### Open Visualizer (action button)
