@@ -20,6 +20,10 @@ This useful and flexible extension is great starting point for organizations tha
 - Default a Brief ROS instead of blank
 - Default a Brief Physical exam instead of blank
 
+## Configuration options
+
+No configuration required.
+
 ## Installation
 
 `canvas install note_template_button`

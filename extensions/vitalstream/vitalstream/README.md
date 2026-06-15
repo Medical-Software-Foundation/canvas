@@ -3,6 +3,22 @@ VitalStream by Caretaker Medical
 
 This plugin provides an integration for the VitalStream device by Caretaker Medical, enabling real-time vital signs monitoring within Canvas Medical.
 
+## Problem it solves
+
+Continuous vitals from a monitoring device normally live outside the chart, so staff read them off the device and retype periodic values into the note by hand. That is slow and error-prone during a treatment session. This plugin streams the device readings straight into the chart and, on save, computes windowed averages at chosen time marks and records them as Observations, so the readings reach the patient record without manual transcription.
+
+## Who it's for
+
+Clinical staff who run device-monitored treatment sessions - for example nurses and providers administering Spravato (esketamine) or other treatments that require timed blood pressure and vitals checks, where readings must land in the chart.
+
+## How to install
+
+```bash
+canvas install vitalstream
+```
+
+This plugin requires the `AUTHORIZED_SERIAL_NUMBERS` secret to function. Set it before use (see Configuration).
+
 ## Features
 
 - **Real-time Vital Signs Display**: Receives continuous vital sign measurements from VitalStream devices via WebSocket, displaying them in a live feed within the patient chart.

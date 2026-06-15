@@ -5,6 +5,12 @@ chart-collision-detector
 
 The Chart Collision Detector is a Canvas application plugin that monitors patient chart access and warns providers when multiple users are simultaneously viewing the same patient's chart. This helps prevent conflicts and confusion that can arise from concurrent chart access and editing.
 
+## How to install
+
+```
+canvas install chart_collision_detector
+```
+
 ## Features
 
 - **Real-time Collision Detection**: Automatically detects when multiple providers are viewing the same patient chart

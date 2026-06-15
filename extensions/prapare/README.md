@@ -14,6 +14,20 @@ The questionnaire also scores responses. Scores range from 0 to 22, with 0 indic
 
 Learn more by visiting the [PRAPARE website](https://prapare.org/).
 
+## Who it's for
+
+Care teams at community health centers and primary care practices who screen patients for social drivers of health - care coordinators, social workers, and clinicians who administer the PRAPARE assessment and need a score and narrative recorded in the chart.
+
+## How to install
+
+```
+canvas install prapare
+```
+
+## Configuration options
+
+No configuration required.
+
 ### Important Note!
 
 The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it gets updated if you add, remove, or rename protocols.

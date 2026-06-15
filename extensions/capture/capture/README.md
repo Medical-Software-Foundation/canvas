@@ -9,6 +9,18 @@ three things to add — all auto-associated with the current patient:
 3. **Profile picture** — capture/upload a single image and set it as the patient's avatar
    (`Patient.photo`).
 
+## Problem it solves
+
+Getting a paper form, an exam photo, or a new headshot into the right patient's chart usually means scanning to a separate device, emailing files around, or uploading through a flow that loses the link to the patient. This plugin lets staff photograph or upload right from the chart, assemble multi-page documents into one PDF in the browser, and file them as the correct FHIR record without any external storage step.
+
+## How to install
+
+```
+canvas install capture
+```
+
+Requires the Canvas FHIR API secrets to be set before it can save records (see Secrets).
+
 ## Demo & user guide
 
 📹 **Walkthrough video:** https://www.loom.com/share/a3fb326483464d84992c587b2a849c5e

@@ -4,6 +4,14 @@
 
 This AI agent automatically adds appropriate CPT and HCPCS billing codes based on blood pressure measurements recorded in Canvas. It responds to two types of events: when vitals are committed and when notes are locked.
 
+## Problem it solves
+
+CPT-II and HCPCS quality codes for blood pressure are tied to specific systolic and diastolic ranges and to whether a treatment plan was documented, so picking the right code by hand is error-prone and often skipped. This plugin replaces that manual lookup and entry, reading the recorded BP and the note documentation and adding or updating the matching billing codes.
+
+## Who it's for
+
+Prescribers managing hypertension and the billing and coding staff responsible for CPT-II and HCPCS quality reporting, especially practices tracking blood pressure control measures.
+
 ## Functionality
 
 ### Billing Codes

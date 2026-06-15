@@ -2,6 +2,10 @@
 
 A mobile-friendly messaging surface with live WebSocket updates. Ships in two surfaces: a global-scope **My Messages** thread list on the provider companion main page and a patient-scope **Messages** launcher on the patient page.
 
+## Problem it solves
+
+Providers working from a phone or tablet have no quick way to see and answer messages from the patients on their panel: the standard inbox is built for the desktop, and there is no panel-scoped thread list on the companion. This plugin puts an SMS-style messaging surface in the provider companion, with live updates, so a provider can read and reply to their panel's messages from a mobile-friendly screen instead of switching back to the full Canvas web app.
+
 ## What providers see
 
 ![Patient messaging in the provider companion](screenshots/patient-messaging.png)

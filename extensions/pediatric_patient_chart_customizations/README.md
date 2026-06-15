@@ -7,6 +7,20 @@ chart with the goal of creating a more focused workspace for clinical users.
 Use the context of the patient to surface the right choices more often and
 minimize or eliminate irrelevant options.
 
+## Who it's for
+
+Pediatricians and pediatric clinic staff who chart on patients under 18, and plugin developers who want a worked example of tailoring chart layout and search results to a patient's age.
+
+## How to install
+
+```
+canvas install pediatric_patient_chart_customizations
+```
+
+## Configuration options
+
+No configuration required.
+
 ### Components
 
 1. `protocols/pediatric_chart_layout.py` - Rearranges the patient summary

@@ -2,6 +2,10 @@
 
 A mobile-friendly task triage surface that lets the logged-in provider browse tasks with filters, read and post comments, assign tasks to themselves, and mark their own tasks complete. Ships in two surfaces: a global-scope **Task Dashboard** on the provider companion main page and a patient-scope **Tasks** launcher on the patient page.
 
+## Problem it solves
+
+Providers working from a phone or tablet have no quick way to see, comment on, and clear their tasks without going back to the full desktop task list. They end up letting tasks pile up or handling them later at a workstation. This plugin puts a touch-friendly task view in the provider companion so a provider can filter to their own open tasks, read and post comments, claim a task, and mark it complete on the spot.
+
 ## What providers see
 
 ![Task Dashboard in the provider companion](screenshots/task-dashboard.png)

@@ -3,7 +3,19 @@ provider-availability
 
 ## Description
 
-Provider availability engine with rule-based scheduling, real-time slot calculation, and an admin configuration UI. Manages open appointment slots across providers, locations, and visit types — including one-off blocks, recurring blocks with hold types, appointment buffers, and timezone-aware calendar sync.
+Provider availability engine with rule-based scheduling, real-time slot calculation, and an admin configuration UI. Manages open appointment slots across providers, locations, and visit types - including one-off blocks, recurring blocks with hold types, appointment buffers, and timezone-aware calendar sync.
+
+## Problem it solves
+
+Keeping each provider's bookable hours correct across locations, visit types, recurring time off, and appointment buffers usually means hand-editing calendars and re-checking for conflicts every time something changes. Mistakes show up as double-bookings or slots that should have been blocked. This plugin computes bookable slots from each provider's rules and existing appointments, syncs those rules to Canvas calendar events, and adds buffer time automatically when appointments are booked, rescheduled, or canceled - so scheduling staff set the rules once instead of maintaining calendars by hand.
+
+## How to install
+
+```
+canvas install provider_availability
+```
+
+Set the `simpleapi-api-key` and `allowed-staff-keys` secrets before use (see Configuration).
 
 ## Screenshots
 

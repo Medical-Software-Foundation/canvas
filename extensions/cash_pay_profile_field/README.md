@@ -23,6 +23,20 @@ nothing. Saved values repaint on reopen because the field is editable.
 Downstream consumers (reports, workflow plugins, integrations) can read the
 value from patient metadata under the `cash_pay_patient` key.
 
+## Problem it solves
+
+Practices that see both insured and self-pay patients have no built-in place on the profile to mark who pays cash, so staff track it in note text, spreadsheets, or memory. That makes it hard to pull the cash-pay population for reporting or to drive different workflows. This plugin gives that status a single structured field on the profile that other plugins and reports can read.
+
+## Who it's for
+
+Front-desk and billing staff who set a patient's payment status, and the practices running mixed insured and self-pay models that need to identify cash-pay patients for reporting or downstream automation.
+
+## How to install
+
+```
+canvas install cash_pay_profile_field
+```
+
 ## Screenshots
 
 The field appears in the **Patient demographics** section of the Profile tab:

@@ -2,6 +2,22 @@
 
 A Canvas Medical plugin that provides a SimpleAPI endpoint for programmatically adding CPT billing line items to clinical notes.
 
+## Problem it solves
+
+Adding billing line items by hand for every note is slow and error-prone, and codes can be entered after they have expired or before they take effect. This plugin lets an external system push billing codes into a note through one authenticated call, validates each CPT code against the ChargeDescriptionMaster for existence and effective/expiration dates, and links the line item to the matching diagnoses automatically. That replaces manual code entry and the separate step of pairing each charge with the right ICD-10 assessment.
+
+## Who it's for
+
+Billing and revenue-cycle teams, and developers building integrations or automation that needs to post charges into Canvas notes. Practices that generate billing codes in an upstream system and want them written back into the EMR are the main audience.
+
+## How to install
+
+```
+canvas install cpt_billing_api
+```
+
+This plugin requires the `simpleapi-api-key` secret to be set before it will function (see Setup).
+
 ## Features
 
 - **SimpleAPI Endpoint**: RESTful API for adding billing codes to notes

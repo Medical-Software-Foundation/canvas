@@ -2,6 +2,10 @@
 
 A Canvas plugin for managing provider availability calendars and viewing schedule utilization metrics.
 
+## Problem it solves
+
+Defining when each provider is open for appointments, and then judging how well that time gets used, usually means juggling separate calendar setup and pulling booking numbers by hand into a spreadsheet. This plugin keeps both in one place: staff build recurring availability and administrative-time templates, and a dashboard compares available hours against booked appointments so clinics can see unbooked capacity per provider without manual tallying.
+
 ## Applications
 
 This plugin provides two applications accessible from the provider menu:

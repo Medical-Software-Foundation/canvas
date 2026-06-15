@@ -2,6 +2,13 @@
 
 # Nabla Ambient AI Assistant
 
+## How to install
+
+```
+canvas install nabla
+```
+
+Set the required secrets before use (see Configuration).
 
 ## Description
 

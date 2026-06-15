@@ -1,6 +1,10 @@
 # provider_register_patient_companion
 
-A global companion tool for registering a new patient from the provider companion launcher. Collects the minimum fields Canvas needs to create a record — first name, last name, date of birth, sex at birth, phone — warns about likely duplicates before it commits, and drops the provider on the new patient's companion page once the record exists.
+A global companion tool for registering a new patient from the provider companion launcher. Collects the minimum fields Canvas needs to create a record - first name, last name, date of birth, sex at birth, phone - warns about likely duplicates before it commits, and drops the provider on the new patient's companion page once the record exists.
+
+## Problem it solves
+
+Registering a patient at the bedside normally means leaving the companion view, opening the full patient-creation screen, and entering more than is needed just to get started - and duplicate records pile up because no one checks for an existing match first. This plugin keeps registration inside the companion flow with only the fields Canvas requires, runs a name-plus-date-of-birth and phone-number duplicate check before it creates anything, and lands the provider on the new patient's page when done, replacing the slower context switch and the after-the-fact duplicate cleanup.
 
 ## What providers see
 
