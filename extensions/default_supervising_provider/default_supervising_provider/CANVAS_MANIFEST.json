@@ -1,0 +1,24 @@
+{
+    "sdk_version": "0.164.0",
+    "plugin_version": "0.1.0",
+    "name": "default_supervising_provider",
+    "description": "Reference plugin: on note creation, default the note's supervising provider from the rendering provider's default_supervising_provider Staff record.",
+    "components": {
+        "protocols": [
+            {
+                "class": "default_supervising_provider.handlers.default_supervising_provider:DefaultSupervisingProvider",
+                "description": "On note creation, copies the provider's default_supervising_provider onto the note's supervising_provider when one is set and the note has none."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "../README.md"
+}
