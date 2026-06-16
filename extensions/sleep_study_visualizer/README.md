@@ -37,6 +37,8 @@ The **Sleep Studies** custom chart-summary section (`SleepStudyChartSection`) re
 
 `SleepStudyChartSectionConfiguration` registers the section first in the patient chart summary layout.
 
+> **Known limitation:** the Sleep Studies section is rendered when the chart summary loads, so a newly committed Sleep Study Result won't appear until the patient chart is refreshed. This is expected behavior for Canvas custom summary sections — they are not re-rendered automatically when underlying data changes mid-session.
+
 ## Configuration
 
 This plugin uses one configuration variable, declared in `CANVAS_MANIFEST.json`:
