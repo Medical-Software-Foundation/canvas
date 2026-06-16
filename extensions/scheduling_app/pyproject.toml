@@ -1,0 +1,16 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Reference plugin for the `scheduling` application type: overrides Canvas's built-in scheduling modal with a custom appointment-booking UI built entirely from SDK building blocks."
+license = "MIT"
+name = "scheduling_app"
+readme = "scheduling_app/README.md"
+requires-python = ">=3.11"
+version = "0.0.1"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
