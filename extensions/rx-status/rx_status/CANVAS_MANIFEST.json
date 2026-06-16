@@ -1,0 +1,42 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.2",
+    "name": "rx_status",
+    "description": "Dashboard showing active prescriptions and e-prescribing statuses across all patients, with notification rules for status changes and duration thresholds.",
+    "components": {
+        "protocols": [
+            {
+                "class": "rx_status.applications.rx_api:RxApi",
+                "description": "API endpoint for paginated prescription data and notification rule CRUD"
+            },
+            {
+                "class": "rx_status.protocols.rx_notifications:RxNotificationProtocol",
+                "description": "Creates tasks on prescription status changes for immediate notification rules"
+            },
+            {
+                "class": "rx_status.protocols.rx_cron:RxNotificationCron",
+                "description": "Hourly cron to check duration-based notification rules"
+            }
+        ],
+        "applications": [
+            {
+                "class": "rx_status.applications.rx_dashboard:RxDashboard",
+                "name": "Prescription Status",
+                "description": "View active prescriptions and their e-prescribing statuses",
+                "icon": "assets/icon.png",
+                "scope": "global",
+                "show_in_panel": false
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["INSTANCE_BASE_URL"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

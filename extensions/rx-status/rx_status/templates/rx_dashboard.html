@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #1a1a1a; background: #f8f9fa; font-size: 13px;
+    }
+
+    /* Container */
+    .rx-container { max-width: 100%; padding: 16px; }
+    .rx-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 0 12px 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 16px;
+    }
+    .rx-header h1 { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+
+    /* Filters */
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .status-bar {
+        display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+        padding: 6px 10px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fff;
+    }
+    .status-bar span.label { font-size: 12px; font-weight: 600; color: #555; }
+    .status-bar label {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-size: 12px; cursor: pointer; color: #1a1a1a;
+    }
+
+    input[type="text"], input[type="date"], select {
+        padding: 8px 10px; border: 1px solid #d0d0d0; border-radius: 6px;
+        font-size: 13px; font-family: inherit; background: #fff;
+        transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, input[type="date"]:focus, select:focus {
+        border-color: #1976d2; outline: none;
+        box-shadow: 0 0 0 2px rgba(25,118,210,0.1);
+    }
+
+    button.filter-btn {
+        padding: 8px 16px; border: 1px solid #e0e0e0; border-radius: 6px;
+        font-size: 12px; font-weight: 500; font-family: inherit;
+        background: #e0e0e0; color: #333; cursor: pointer; transition: all 0.2s;
+    }
+    button.filter-btn:hover { background: #d0d0d0; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; }
+    table { min-width: 900px; width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    col.patient { width: 14%; }
+    col.med { width: 30%; }
+    col.status { width: 12%; }
+    col.type { width: 12%; }
+    col.prescriber { width: 14%; }
+    col.written { width: 10%; }
+    col.note { width: 8%; }
+    thead tr { border-bottom: 1px solid #e0e0e0; text-align: left; background: #fafafa; }
+    th { padding: 8px 10px; font-weight: 600; color: #555; font-size: 12px; }
+    td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
+    tbody tr:hover { background: #f5f5f5; }
+    td.med-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .med-name { font-weight: 500; color: #1a1a1a; overflow: hidden; text-overflow: ellipsis; }
+    .pharmacy { font-size: 11px; color: #888; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Links */
+    .patient-link { color: #1976d2; text-decoration: none; font-weight: 500; }
+    .patient-link:hover { text-decoration: underline; }
+    .note-link { color: #1976d2; text-decoration: none; cursor: pointer; font-weight: 500; }
+    .note-link:hover { text-decoration: underline; }
+
+    /* Status pill */
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; color: white; }
+    .pill-wrap { position: relative; display: inline-block; }
+    .pill-wrap:hover .tooltip { display: block; }
+    .tooltip {
+        display: none; position: absolute; left: 0; top: 100%; margin-top: 4px;
+        background: #333; color: white; padding: 6px 10px; border-radius: 6px;
+        font-size: 11px; font-weight: 400; white-space: normal; width: 240px;
+        z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    /* Footer / Pagination */
+    .footer { display: flex; justify-content: center; align-items: center; margin-top: 12px; gap: 24px; }
+    .row-count { font-size: 12px; color: #888; }
+    .pagination { display: flex; gap: 8px; align-items: center; }
+    .pagination button {
+        padding: 4px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+        font-size: 12px; font-family: inherit; font-weight: 500;
+        background: #fff; cursor: pointer; transition: all 0.2s;
+    }
+    .pagination button:hover:not(:disabled) { background: #f5f5f5; border-color: #1976d2; color: #1976d2; }
+    .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .page-info { font-size: 12px; color: #888; }
+
+    /* States */
+    .loading { text-align: center; padding: 32px; color: #888; font-style: italic; }
+    .error { text-align: center; padding: 32px; color: #d32f2f; }
+
+    /* Config button */
+    .config-btn {
+        width: 32px; height: 32px; border-radius: 50%;
+        border: 1px solid #1976d2; background: #fff; cursor: pointer;
+        font-size: 18px; line-height: 30px; text-align: center; color: #1976d2;
+        transition: all 0.2s;
+    }
+    .config-btn:hover { background: #e3f2fd; }
+
+    /* Config overlay pane */
+    .config-overlay {
+        display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 400px; z-index: 200;
+        background: #fff; border-left: 1px solid #e0e0e0; box-shadow: -4px 0 12px rgba(0,0,0,0.1);
+        overflow-y: auto; padding: 20px;
+    }
+    .config-overlay.open { display: block; }
+    .config-overlay h3 { font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 16px; }
+    .config-overlay .close-btn {
+        position: absolute; top: 12px; right: 12px; background: none; border: none;
+        font-size: 20px; cursor: pointer; color: #888; transition: color 0.2s;
+    }
+    .config-overlay .close-btn:hover { color: #d32f2f; }
+
+    /* Rule form */
+    .rule-form label {
+        display: block; font-size: 12px; font-weight: 600; color: #555;
+        margin-top: 12px; margin-bottom: 4px;
+    }
+    .rule-form select, .rule-form input[type="text"], .rule-form input[type="number"] {
+        width: 100%; padding: 8px 10px; border: 1px solid #d0d0d0; border-radius: 6px;
+        font-size: 13px; font-family: inherit; background: #fff;
+        transition: border-color 0.2s;
+    }
+    .rule-form select:focus, .rule-form input[type="text"]:focus, .rule-form input[type="number"]:focus {
+        border-color: #1976d2; outline: none;
+        box-shadow: 0 0 0 2px rgba(25,118,210,0.1);
+    }
+    .rule-form .duration-row { display: flex; gap: 8px; }
+    .rule-form .duration-row input { flex: 1; }
+    .rule-form .duration-row select { flex: 1; }
+    .rule-form button.save-rule {
+        margin-top: 16px; width: 100%; padding: 8px 16px;
+        background: #1976d2; color: #fff; border: none; border-radius: 6px;
+        font-size: 12px; font-weight: 500; font-family: inherit;
+        cursor: pointer; transition: all 0.2s;
+    }
+    .rule-form button.save-rule:hover { background: #1565c0; }
+
+    /* Rule list */
+    .rule-list { margin-top: 20px; border-top: 1px solid #e0e0e0; padding-top: 16px; }
+    .rule-card {
+        background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px;
+        padding: 12px; margin-bottom: 8px; font-size: 12px; position: relative;
+    }
+    .rule-card .rule-delete {
+        position: absolute; top: 8px; right: 8px; background: none; border: none;
+        color: #d32f2f; cursor: pointer; font-size: 14px; font-weight: 600;
+        transition: color 0.2s;
+    }
+    .rule-card .rule-delete:hover { color: #c62828; }
+    .rule-card .rule-line { margin-bottom: 4px; color: #1a1a1a; }
+    .rule-card .rule-label { font-weight: 600; color: #555; }
+</style>
+</head>
+<body>
+
+<div class="rx-container">
+
+<div class="rx-header">
+    <h1>Prescription Status</h1>
+    <button class="config-btn" id="configBtn" title="Notification Rules">+</button>
+</div>
+
+<div class="filters">
+    <div class="status-bar" id="statusCheckboxes">
+        <span class="label">Status:</span>
+        <span style="font-size:12px;color:#888;font-style:italic;">Loading...</span>
+    </div>
+    <input type="text" id="patientSearch" placeholder="Search patient..." style="width:160px;">
+    <select id="prescriberFilter">
+        <option value="">All Prescribers</option>
+    </select>
+    <select id="typeFilter">
+        <option value="">All Types</option>
+    </select>
+    <input type="date" id="dateFrom">
+    <input type="date" id="dateTo">
+    <button class="filter-btn" id="clearBtn">Clear</button>
+</div>
+
+<div class="config-overlay" id="configPane">
+    <button class="close-btn" id="configCloseBtn">&times;</button>
+    <h3>Notification Rules</h3>
+    <div class="rule-form">
+        <label>When status becomes</label>
+        <select id="ruleStatus">
+            <option value="">Select status...</option>
+            <option value="open">open</option>
+            <option value="pending">pending</option>
+            <option value="ultimately-accepted">ultimately-accepted</option>
+            <option value="error">error</option>
+            <option value="cancel-requested">cancel-requested</option>
+            <option value="canceled">canceled</option>
+            <option value="cancel-denied">cancel-denied</option>
+            <option value="received">received</option>
+            <option value="signed">signed</option>
+            <option value="inqueue">inqueue</option>
+            <option value="transmitted">transmitted</option>
+            <option value="delivered">delivered</option>
+        </select>
+
+        <label>After duration (0 = immediately)</label>
+        <div class="duration-row">
+            <input type="number" id="ruleDurationValue" min="0" value="0" placeholder="0">
+            <select id="ruleDurationUnit">
+                <option value="h">hours</option>
+                <option value="d">days</option>
+            </select>
+        </div>
+
+        <label>Task title</label>
+        <input type="text" id="ruleTaskTitle" placeholder="e.g. Follow up on pending Rx">
+
+        <label>Assign to</label>
+        <select id="ruleAssigneeType" onchange="loadAssignees()">
+            <option value="">Select type...</option>
+            <option value="staff">Staff member</option>
+            <option value="team">Team</option>
+        </select>
+        <select id="ruleAssignee" style="margin-top:4px;" disabled>
+            <option value="">Select assignee...</option>
+        </select>
+
+        <label>Task label</label>
+        <select id="ruleLabel">
+            <option value="">No label</option>
+        </select>
+
+        <button class="save-rule" id="saveRuleBtn">Add Rule</button>
+    </div>
+
+    <div class="rule-list" id="ruleList">
+        <div style="color:#888;font-size:12px;font-style:italic;">No rules configured.</div>
+    </div>
+</div>
+
+<div class="table-wrap">
+    <table>
+        <colgroup>
+            <col class="patient"><col class="med"><col class="status">
+            <col class="type"><col class="prescriber">
+            <col class="written"><col class="note">
+        </colgroup>
+        <thead>
+            <tr>
+                <th>Patient</th><th>Medication</th><th>Status</th>
+                <th>Type</th><th>Prescriber</th>
+                <th>Written</th><th>Note</th>
+            </tr>
+        </thead>
+        <tbody id="rxTableBody">
+            <tr><td colspan="7" class="loading">Loading prescriptions...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="footer">
+    <div class="row-count" id="rowCount"></div>
+    <div class="pagination">
+        <button id="prevBtn" disabled>Prev</button>
+        <span class="page-info" id="pageInfo"></span>
+        <button id="nextBtn" disabled>Next</button>
+    </div>
+</div>
+
+</div><!-- /.rx-container -->
+
+<script>
+var API_BASE = '/plugin-io/api/rx_status';
+var STATUS_COLORS = {
+    'delivered': '#4caf50', 'transmitted': '#1976d2', 'signed': '#1976d2',
+    'ultimately-accepted': '#4caf50', 'open': '#888', 'pending': '#f57c00',
+    'received': '#1976d2', 'inqueue': '#f57c00', 'error': '#d32f2f',
+    'cancel-requested': '#e65100', 'canceled': '#888', 'cancel-denied': '#d32f2f'
+};
+var HIDDEN_STATUSES = ['ultimately-accepted', 'open', 'canceled', 'delivered', 'transmitted', 'received'];
+var currentPage = 1;
+var pageSize = 50;
+var totalCount = 0;
+var totalPages = 1;
+var debounceTimer = null;
+
+function esc(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function openNote(patientId, noteId) {
+    var url = '/patient/' + patientId + '/';
+    url += String.fromCharCode(35) + 'noteId=' + noteId;
+    window.open(url, '_blank');
+}
+
+function getActiveStatuses() {
+    var result = [];
+    var cbs = document.querySelectorAll('.status-cb');
+    for (var i = 0; i < cbs.length; i++) {
+        if (cbs[i].checked) result.push(cbs[i].value);
+    }
+    return result;
+}
+
+function buildQuery() {
+    var params = ['page=' + currentPage, 'page_size=' + pageSize];
+    var statuses = getActiveStatuses();
+    if (statuses.length === 0) {
+        // No statuses checked — pass a sentinel so backend returns nothing
+        params.push('status=__none__');
+    } else {
+        params.push('status=' + encodeURIComponent(statuses.join(',')));
+    }
+    var patient = document.getElementById('patientSearch').value.trim();
+    if (patient) params.push('patient=' + encodeURIComponent(patient));
+    var prescriber = document.getElementById('prescriberFilter').value;
+    if (prescriber) params.push('prescriber=' + encodeURIComponent(prescriber));
+    var type = document.getElementById('typeFilter').value;
+    if (type) params.push('type=' + encodeURIComponent(type));
+    var dateFrom = document.getElementById('dateFrom').value;
+    if (dateFrom) params.push('date_from=' + encodeURIComponent(dateFrom));
+    var dateTo = document.getElementById('dateTo').value;
+    if (dateTo) params.push('date_to=' + encodeURIComponent(dateTo));
+    return params.join('&');
+}
+
+function renderRow(rx) {
+    var color = STATUS_COLORS[rx.status] || '#6b7280';
+    var patientCell = rx.patient_id
+        ? '<a class="patient-link" href="/patient/' + esc(rx.patient_id) + '" target="_top">' + esc(rx.patient_name) + '</a>'
+        : esc(rx.patient_name);
+
+    var statusHtml;
+    if (rx.error_message) {
+        statusHtml = '<span class="pill-wrap">'
+            + '<span class="pill" style="background:' + color + ';cursor:pointer;">' + esc(rx.status) + '</span>'
+            + '<span class="tooltip">' + esc(rx.error_message) + '</span></span>';
+    } else {
+        statusHtml = '<span class="pill" style="background:' + color + ';">' + esc(rx.status) + '</span>';
+    }
+
+    var noteHtml = '';
+    if (rx.note_dbid && rx.patient_id) {
+        noteHtml = '<a class="note-link" href="javascript:void(0)" onclick="openNote(\'' + esc(rx.patient_id) + '\',' + rx.note_dbid + ')">View</a>';
+    }
+
+    return '<tr>'
+        + '<td>' + patientCell + '</td>'
+        + '<td class="med-cell" title="' + esc(rx.med_name) + '"><div class="med-name">' + esc(rx.med_name) + '</div><div class="pharmacy">' + esc(rx.pharmacy) + '</div></td>'
+        + '<td>' + statusHtml + '</td>'
+        + '<td style="font-size:12px;">' + esc(rx.rx_type) + '</td>'
+        + '<td style="font-size:12px;">' + esc(rx.prescriber) + '</td>'
+        + '<td style="font-size:12px;color:#6b7280;">' + esc(rx.written) + '</td>'
+        + '<td style="font-size:12px;">' + noteHtml + '</td>'
+        + '</tr>';
+}
+
+function loadData() {
+    var tbody = document.getElementById('rxTableBody');
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
+
+    fetch(API_BASE + '/prescriptions?' + buildQuery())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                tbody.innerHTML = '<tr><td colspan="7" class="error">' + esc(data.error) + '</td></tr>';
+                return;
+            }
+            totalCount = data.total;
+            totalPages = data.total_pages;
+            var results = data.results;
+            if (results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="loading">No prescriptions found.</td></tr>';
+            } else {
+                var html = '';
+                for (var i = 0; i < results.length; i++) html += renderRow(results[i]);
+                tbody.innerHTML = html;
+            }
+            updatePagination();
+        })
+        .catch(function(err) {
+            tbody.innerHTML = '<tr><td colspan="7" class="error">Failed to load data.</td></tr>';
+        });
+}
+
+function updatePagination() {
+    document.getElementById('rowCount').textContent = totalCount + ' total prescriptions';
+    document.getElementById('pageInfo').textContent = 'Page ' + currentPage + ' of ' + totalPages;
+    document.getElementById('prevBtn').disabled = currentPage <= 1;
+    document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+}
+
+function onFilterChange() {
+    currentPage = 1;
+    loadData();
+}
+
+function onFilterChangeDebounced() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(onFilterChange, 300);
+}
+
+function loadFilters() {
+    Promise.all([
+        fetch(API_BASE + '/filters').then(function(r) { return r.json(); }),
+        fetch(API_BASE + '/me').then(function(r) { return r.json(); }).catch(function() { return {name: '', is_prescriber: false}; })
+    ])
+        .then(function(results) {
+            var data = results[0];
+            var me = results[1];
+
+            var container = document.getElementById('statusCheckboxes');
+            var html = '<span class="label">Status:</span>';
+            for (var i = 0; i < data.statuses.length; i++) {
+                var s = data.statuses[i];
+                var checked = HIDDEN_STATUSES.indexOf(s) === -1 ? ' checked' : '';
+                html += '<label><input type="checkbox" class="status-cb" value="' + esc(s) + '"' + checked + '>' + esc(s) + '</label>';
+            }
+            container.innerHTML = html;
+            var cbs = container.querySelectorAll('.status-cb');
+            for (var j = 0; j < cbs.length; j++) cbs[j].addEventListener('change', onFilterChange);
+
+            var prescriberSel = document.getElementById('prescriberFilter');
+            for (var k = 0; k < data.prescribers.length; k++) {
+                var opt = document.createElement('option');
+                opt.value = data.prescribers[k];
+                opt.textContent = data.prescribers[k];
+                prescriberSel.appendChild(opt);
+            }
+
+            // Pre-select the logged-in user if they are a prescriber
+            if (me.is_prescriber && me.name) {
+                prescriberSel.value = me.name;
+            }
+
+            var typeSel = document.getElementById('typeFilter');
+            for (var m = 0; m < data.types.length; m++) {
+                var topt = document.createElement('option');
+                topt.value = data.types[m];
+                topt.textContent = data.types[m];
+                typeSel.appendChild(topt);
+            }
+
+            loadData();
+        })
+        .catch(function(err) {
+            document.getElementById('rxTableBody').innerHTML = '<tr><td colspan="7" class="error">Failed to load filters.</td></tr>';
+        });
+}
+
+document.getElementById('patientSearch').addEventListener('input', onFilterChangeDebounced);
+document.getElementById('prescriberFilter').addEventListener('change', onFilterChange);
+document.getElementById('typeFilter').addEventListener('change', onFilterChange);
+document.getElementById('dateFrom').addEventListener('change', onFilterChange);
+document.getElementById('dateTo').addEventListener('change', onFilterChange);
+document.getElementById('prevBtn').addEventListener('click', function() { currentPage--; loadData(); });
+document.getElementById('nextBtn').addEventListener('click', function() { currentPage++; loadData(); });
+document.getElementById('clearBtn').addEventListener('click', function() {
+    document.getElementById('patientSearch').value = '';
+    document.getElementById('prescriberFilter').value = '';
+    document.getElementById('typeFilter').value = '';
+    document.getElementById('dateFrom').value = '';
+    document.getElementById('dateTo').value = '';
+    var cbs = document.querySelectorAll('.status-cb');
+    for (var j = 0; j < cbs.length; j++) cbs[j].checked = true;
+    onFilterChange();
+});
+
+loadFilters();
+
+// --- Notification Rules ---
+var configPane = document.getElementById('configPane');
+document.getElementById('configBtn').addEventListener('click', function() {
+    configPane.classList.toggle('open');
+    if (configPane.classList.contains('open')) {
+        loadRules();
+        loadLabels();
+    }
+});
+document.getElementById('configCloseBtn').addEventListener('click', function() {
+    configPane.classList.remove('open');
+});
+
+function loadAssignees() {
+    var type = document.getElementById('ruleAssigneeType').value;
+    var sel = document.getElementById('ruleAssignee');
+    sel.innerHTML = '<option value="">Loading...</option>';
+    sel.disabled = true;
+    if (!type) { sel.innerHTML = '<option value="">Select assignee...</option>'; return; }
+
+    var endpoint = type === 'staff' ? '/staff' : '/teams';
+    fetch(API_BASE + endpoint)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var items = type === 'staff' ? data.staff : data.teams;
+            var html = '<option value="">Select assignee...</option>';
+            for (var i = 0; i < items.length; i++) {
+                html += '<option value="' + esc(items[i].id) + '">' + esc(items[i].name) + '</option>';
+            }
+            sel.innerHTML = html;
+            sel.disabled = false;
+        });
+}
+
+function loadLabels() {
+    fetch(API_BASE + '/labels')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var sel = document.getElementById('ruleLabel');
+            var html = '<option value="">No label</option>';
+            for (var i = 0; i < data.labels.length; i++) {
+                html += '<option value="' + esc(data.labels[i].name) + '">' + esc(data.labels[i].name) + '</option>';
+            }
+            sel.innerHTML = html;
+        });
+}
+
+function loadRules() {
+    fetch(API_BASE + '/rules')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var list = document.getElementById('ruleList');
+            var rules = data.rules || [];
+            if (rules.length === 0) {
+                list.innerHTML = '<div style="color:#888;font-size:12px;font-style:italic;">No rules configured.</div>';
+                return;
+            }
+            var html = '';
+            for (var i = 0; i < rules.length; i++) {
+                var r = rules[i];
+                var duration = r.duration_value > 0 ? 'after ' + r.duration_value + (r.duration_unit === 'h' ? ' hour(s)' : ' day(s)') : 'immediately';
+                html += '<div class="rule-card">'
+                    + '<button class="rule-delete" onclick="deleteRule(\'' + esc(r.id) + '\')">&times;</button>'
+                    + '<div class="rule-line"><span class="rule-label">Status:</span> ' + esc(r.status) + ' ' + duration + '</div>'
+                    + '<div class="rule-line"><span class="rule-label">Task:</span> ' + esc(r.task_title) + '</div>'
+                    + '<div class="rule-line"><span class="rule-label">Assign to:</span> ' + esc(r.assignee_name || r.assignee_type) + '</div>'
+                    + (r.label ? '<div class="rule-line"><span class="rule-label">Label:</span> ' + esc(r.label) + '</div>' : '')
+                    + '</div>';
+            }
+            list.innerHTML = html;
+        });
+}
+
+document.getElementById('saveRuleBtn').addEventListener('click', function() {
+    var status = document.getElementById('ruleStatus').value;
+    var durationValue = parseInt(document.getElementById('ruleDurationValue').value) || 0;
+    var durationUnit = document.getElementById('ruleDurationUnit').value;
+    var taskTitle = document.getElementById('ruleTaskTitle').value.trim();
+    var assigneeType = document.getElementById('ruleAssigneeType').value;
+    var assigneeSel = document.getElementById('ruleAssignee');
+    var assigneeId = assigneeSel.value;
+    var assigneeName = assigneeSel.options[assigneeSel.selectedIndex] ? assigneeSel.options[assigneeSel.selectedIndex].text : '';
+    var label = document.getElementById('ruleLabel').value;
+
+    if (!status) { alert('Please select a status.'); return; }
+    if (!taskTitle) { alert('Please enter a task title.'); return; }
+
+    fetch(API_BASE + '/rules', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            status: status,
+            duration_value: durationValue,
+            duration_unit: durationUnit,
+            task_title: taskTitle,
+            assignee_type: assigneeType,
+            assignee_id: assigneeId,
+            assignee_name: assigneeName,
+            label: label
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { alert('Error: ' + data.error); return; }
+        // Reset form
+        document.getElementById('ruleStatus').value = '';
+        document.getElementById('ruleDurationValue').value = '0';
+        document.getElementById('ruleTaskTitle').value = '';
+        document.getElementById('ruleAssigneeType').value = '';
+        document.getElementById('ruleAssignee').innerHTML = '<option value="">Select assignee...</option>';
+        document.getElementById('ruleAssignee').disabled = true;
+        document.getElementById('ruleLabel').value = '';
+        loadRules();
+    });
+});
+
+function deleteRule(ruleId) {
+    if (!confirm('Delete this rule?')) return;
+    fetch(API_BASE + '/rules/' + ruleId, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function() { loadRules(); });
+}
+</script>
+</body>
+</html>
