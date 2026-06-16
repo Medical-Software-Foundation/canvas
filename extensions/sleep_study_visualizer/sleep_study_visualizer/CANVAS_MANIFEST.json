@@ -1,0 +1,54 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.21",
+    "name": "sleep_study_visualizer",
+    "description": "Order home sleep tests from the Diagnose command and visualize structured sleep study results plus Epworth trends on the patient chart.",
+    "components": {
+        "protocols": [
+            {
+                "class": "sleep_study_visualizer.handlers.diagnose_form:DiagnoseAdditionalFieldsHandler",
+                "description": "Appends Order home sleep study? field to every Diagnose command"
+            },
+            {
+                "class": "sleep_study_visualizer.handlers.diagnose_order:DiagnoseOrderHandler",
+                "description": "Creates a Sleep Studies team task when the provider orders an HST"
+            },
+            {
+                "class": "sleep_study_visualizer.handlers.questionnaire_ingest:SleepStudyQuestionnaireHandler",
+                "description": "Persists a SleepStudyResult when a Sleep Study Result questionnaire is committed"
+            },
+            {
+                "class": "sleep_study_visualizer.handlers.chart_section:SleepStudyChartSectionConfiguration",
+                "description": "Registers the Sleep Studies section in the patient chart summary layout"
+            },
+            {
+                "class": "sleep_study_visualizer.handlers.chart_section:SleepStudyChartSection",
+                "description": "Renders the Sleep Studies custom section in the patient chart summary"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": [
+            {
+                "template": "questionnaires/sleep_study_result.yml"
+            }
+        ]
+    },
+    "variables": [
+        {
+            "name": "SLEEP_STUDIES_TEAM_ID",
+            "sensitive": true
+        }
+    ],
+    "custom_data": {
+        "namespace": "sleep_study__results",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

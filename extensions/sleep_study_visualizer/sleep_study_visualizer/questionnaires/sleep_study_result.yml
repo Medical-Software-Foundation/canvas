@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/canvas-medical/canvas-plugins/main/schemas/questionnaire.json
+
+name: Sleep Study Result
+form_type: QUES
+code_system: INTERNAL
+code: SLEEP-STUDY-RESULT
+can_originate_in_charting: true
+prologue: Record structured results from a home sleep test or in-lab sleep study. Numeric values should be entered as plain numbers (e.g. 14.5).
+questions:
+  - content: "Study date (YYYY-MM-DD)"
+    code_system: INTERNAL
+    code: SLEEP-STUDY-DATE
+    code_description: "Date the sleep study was performed"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    responses:
+      - name: "TXT"
+        code: SLEEP-STUDY-DATE-A1
+        code_description: ''
+        value: ""
+  - content: "Apnea-Hypopnea Index (AHI)"
+    code_system: INTERNAL
+    code: SLEEP-STUDY-AHI
+    code_description: "Events per hour of sleep"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    responses:
+      - name: "TXT"
+        code: SLEEP-STUDY-AHI-A1
+        code_description: ''
+        value: ""
+  - content: "Respiratory Disturbance Index (RDI)"
+    code_system: INTERNAL
+    code: SLEEP-STUDY-RDI
+    code_description: "Events per hour of sleep"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    responses:
+      - name: "TXT"
+        code: SLEEP-STUDY-RDI-A1
+        code_description: ''
+        value: ""
+  - content: "Oxygen Desaturation Index (ODI)"
+    code_system: INTERNAL
+    code: SLEEP-STUDY-ODI
+    code_description: "Desaturation events per hour"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    responses:
+      - name: "TXT"
+        code: SLEEP-STUDY-ODI-A1
+        code_description: ''
+        value: ""
+  - content: "Sleep apnea classification"
+    code_system: INTERNAL
+    code: SLEEP-STUDY-SEVERITY
+    code_description: "Clinician-asserted severity per AASM bands"
+    responses_code_system: INTERNAL
+    responses_type: SING
+    responses:
+      - name: "Normal"
+        code: SLEEP-STUDY-SEVERITY-NORMAL
+        code_description: ''
+        value: ""
+      - name: "Mild"
+        code: SLEEP-STUDY-SEVERITY-MILD
+        code_description: ''
+        value: ""
+      - name: "Moderate"
+        code: SLEEP-STUDY-SEVERITY-MODERATE
+        code_description: ''
+        value: ""
+      - name: "Severe"
+        code: SLEEP-STUDY-SEVERITY-SEVERE
+        code_description: ''
+        value: ""
+  - content: "Epworth Sleepiness Scale score (0-24)"
+    code_system: INTERNAL
+    code: SLEEP-STUDY-EPWORTH
+    code_description: "Total ESS score captured alongside the sleep study"
+    responses_code_system: INTERNAL
+    responses_type: TXT
+    responses:
+      - name: "TXT"
+        code: SLEEP-STUDY-EPWORTH-A1
+        code_description: ''
+        value: ""
