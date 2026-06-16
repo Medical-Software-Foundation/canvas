@@ -32,9 +32,11 @@ def _sleep_study_payload(
     odi: str = "14",
     severity_option_pk: int | None = 102,
     epworth: str = "12",
-    note_uuid: str = "note-1",
 ) -> dict:
-    """Build a realistic event payload mimicking a Sleep Study Result commit."""
+    """Build a realistic ``context["fields"]`` payload for a Sleep Study Result
+    commit. Note: ``note`` lives at ``context["note"]``, not in ``fields`` — pass
+    it via ``context_extra`` when a test exercises note-based patient resolution.
+    """
     severity_options = [
         {"pk": 100, "code": "SLEEP-STUDY-SEVERITY-NORMAL", "label": "Normal"},
         {"pk": 101, "code": "SLEEP-STUDY-SEVERITY-MILD", "label": "Mild"},
@@ -64,7 +66,6 @@ def _sleep_study_payload(
         "question-4": odi,
         "question-5": severity_option_pk,
         "question-6": epworth,
-        "note": {"uuid": note_uuid},
     }
 
 
@@ -176,8 +177,7 @@ class TestHandler:
             mock_ssr.objects.create.assert_not_called()
 
     def test_skips_when_no_patient_anywhere(self):
-        payload = _sleep_study_payload(note_uuid="")
-        payload["note"] = {}
+        payload = _sleep_study_payload()
         handler = _make_handler(payload)
 
         with patch(
@@ -217,7 +217,7 @@ class TestHandler:
 
     def test_resolves_patient_via_context_patient_id(self):
         # Path 1: event.context["patient"]["id"] -> CustomPatient by external id.
-        payload = _sleep_study_payload(note_uuid="")
+        payload = _sleep_study_payload()
         handler = _make_handler(payload, context_extra={"patient": {"id": "ext-1"}})
         patient = MagicMock()
         patient.dbid = 7
@@ -236,7 +236,7 @@ class TestHandler:
 
     def test_resolves_patient_via_command_walkback(self):
         # Path 3: no context patient, no note uuid -> walk command -> Note -> patient.
-        payload = _sleep_study_payload(note_uuid="")
+        payload = _sleep_study_payload()
         handler = _make_handler(payload)
         note = MagicMock()
         note.patient_id = 7
@@ -253,6 +253,61 @@ class TestHandler:
             mock_note.filter.return_value.first.return_value = note
             mock_cp.filter.return_value.first.return_value = patient
             mock_ssr.objects.filter.return_value.first.return_value = None
+
+            assert handler.compute() == []
+            mock_ssr.objects.create.assert_called_once()
+
+    def test_resolves_patient_via_context_note(self):
+        # Path 2: note.uuid lives at context["note"], not in fields. Disable the
+        # command-walkback fallback so resolution must come from the note path.
+        payload = _sleep_study_payload()
+        event = _make_event(payload, context_extra={"note": {"uuid": "note-9"}})
+        event.target.id = None  # no command_uuid -> Path 3 is skipped
+        handler = SleepStudyQuestionnaireHandler(event)
+        note = MagicMock()
+        note.patient_id = 7
+        patient = MagicMock()
+        patient.dbid = 7
+
+        with patch(
+            "sleep_study_visualizer.handlers.questionnaire_ingest.Note.objects"
+        ) as mock_note, patch(
+            "sleep_study_visualizer.handlers.questionnaire_ingest.CustomPatient.objects"
+        ) as mock_cp, patch(
+            "sleep_study_visualizer.handlers.questionnaire_ingest.SleepStudyResult"
+        ) as mock_ssr:
+            mock_note.filter.return_value.first.return_value = note
+            mock_cp.filter.return_value.first.return_value = patient
+            mock_ssr.objects.filter.return_value.first.return_value = None
+
+            assert handler.compute() == []
+            mock_note.filter.assert_called_once_with(id="note-9")
+            mock_ssr.objects.create.assert_called_once()
+
+    def test_concurrent_insert_is_treated_as_duplicate(self):
+        # The pre-check finds no existing row, but a concurrent commit inserts
+        # first; the DB unique constraint raises IntegrityError on create. The
+        # handler must swallow it and return [] rather than raise.
+        from django.db import IntegrityError
+
+        payload = _sleep_study_payload()
+        handler = _make_handler(payload)
+        note = MagicMock()
+        note.patient_id = 7
+        patient = MagicMock()
+        patient.dbid = 7
+
+        with patch(
+            "sleep_study_visualizer.handlers.questionnaire_ingest.Note.objects"
+        ) as mock_note, patch(
+            "sleep_study_visualizer.handlers.questionnaire_ingest.CustomPatient.objects"
+        ) as mock_cp, patch(
+            "sleep_study_visualizer.handlers.questionnaire_ingest.SleepStudyResult"
+        ) as mock_ssr:
+            mock_note.filter.return_value.first.return_value = note
+            mock_cp.filter.return_value.first.return_value = patient
+            mock_ssr.objects.filter.return_value.first.return_value = None
+            mock_ssr.objects.create.side_effect = IntegrityError("duplicate key")
 
             assert handler.compute() == []
             mock_ssr.objects.create.assert_called_once()

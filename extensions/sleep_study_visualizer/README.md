@@ -43,7 +43,7 @@ This plugin uses one configuration variable, declared in `CANVAS_MANIFEST.json`:
 
 | Variable | Value |
 |----------|-------|
-| `SLEEP_STUDIES_TEAM_ID` | The FHIR Group ID of the staff team that should receive HST order tasks. Looked up by ID (stable across environments), not by name. |
+| `SLEEP_STUDIES_TEAM_ID` | The UUID of the staff team that should receive HST order tasks — the team's `Team.id`, which is also its FHIR Group resource id. Looked up by ID (stable across environments), not by name. |
 
 If `SLEEP_STUDIES_TEAM_ID` is unset, or the team is not found, the order handler **fails closed**: it logs a warning and creates no task, so no order is silently misrouted.
 

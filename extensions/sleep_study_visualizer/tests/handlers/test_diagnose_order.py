@@ -234,7 +234,6 @@ class TestDiagnoseOrderHandlerSuccess:
         task_effect = _build_order_task(
             patient=mock_patient,
             command=mock_command,
-            note_uuid="note-1",
             team_id="team-uuid-sleep",
         )
 

@@ -10,6 +10,7 @@ from django.db.models import (
     Index,
     IntegerField,
     TextField,
+    UniqueConstraint,
 )
 
 
@@ -49,4 +50,12 @@ class SleepStudyResult(CustomModel):
     class Meta:
         indexes = [
             Index(fields=["-study_date"]),
+        ]
+        constraints = [
+            # One result per patient per study date. Backs the application-level
+            # idempotency check so concurrent commits can't insert duplicates.
+            UniqueConstraint(
+                fields=["patient", "study_date"],
+                name="unique_sleep_study_per_patient_date",
+            ),
         ]

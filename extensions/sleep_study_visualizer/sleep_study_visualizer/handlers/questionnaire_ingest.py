@@ -18,6 +18,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data import Note
+from django.db import IntegrityError
 from logger import log
 
 from sleep_study_visualizer.constants import (
@@ -126,7 +127,7 @@ class SleepStudyQuestionnaireHandler(BaseHandler):
             )
             return []
 
-        patient_dbid = self._resolve_patient_dbid(fields)
+        patient_dbid = self._resolve_patient_dbid()
         if patient_dbid is None:
             log.warning(
                 "[SleepStudyQuestionnaireHandler] Could not resolve patient from "
@@ -145,8 +146,9 @@ class SleepStudyQuestionnaireHandler(BaseHandler):
             return []
 
         # Idempotency: if a SleepStudyResult already exists for this patient+date,
-        # treat as duplicate and skip. Prevents double-creates if the event ever
-        # fires twice.
+        # treat as duplicate and skip. This is the fast path; the
+        # unique_sleep_study_per_patient_date DB constraint is the real guard and
+        # closes the check-then-create race for concurrent commits (handled below).
         existing = SleepStudyResult.objects.filter(
             patient=custom_patient,
             study_date=study_date,
@@ -162,15 +164,26 @@ class SleepStudyQuestionnaireHandler(BaseHandler):
 
         severity_label = SEVERITY_OPTION_TO_LABEL.get(answers.get(Q_SEVERITY, ""), "")
 
-        SleepStudyResult.objects.create(
-            patient=custom_patient,
-            study_date=study_date,
-            ahi=_to_decimal(str(answers.get(Q_AHI, ""))),
-            rdi=_to_decimal(str(answers.get(Q_RDI, ""))),
-            odi=_to_decimal(str(answers.get(Q_ODI, ""))),
-            severity=severity_label,
-            epworth_score=_to_int(str(answers.get(Q_EPWORTH, ""))),
-        )
+        try:
+            SleepStudyResult.objects.create(
+                patient=custom_patient,
+                study_date=study_date,
+                ahi=_to_decimal(str(answers.get(Q_AHI, ""))),
+                rdi=_to_decimal(str(answers.get(Q_RDI, ""))),
+                odi=_to_decimal(str(answers.get(Q_ODI, ""))),
+                severity=severity_label,
+                epworth_score=_to_int(str(answers.get(Q_EPWORTH, ""))),
+            )
+        except IntegrityError:
+            # A concurrent commit inserted the row between the check above and
+            # this create. The unique constraint did its job — treat as duplicate.
+            log.info(
+                "[SleepStudyQuestionnaireHandler] Concurrent SleepStudyResult insert "
+                "for patient dbid %s on %s - skipping duplicate.",
+                patient_dbid,
+                study_date,
+            )
+            return []
 
         log.info(
             "[SleepStudyQuestionnaireHandler] Persisted SleepStudyResult for "
@@ -181,7 +194,7 @@ class SleepStudyQuestionnaireHandler(BaseHandler):
 
         return []
 
-    def _resolve_patient_dbid(self, fields: dict[str, Any]) -> Optional[int]:
+    def _resolve_patient_dbid(self) -> Optional[int]:
         """Resolve the patient's dbid via several event-context paths.
 
         Canvas events carry the patient/note in different shapes depending on
@@ -195,8 +208,9 @@ class SleepStudyQuestionnaireHandler(BaseHandler):
             if patient is not None:
                 return int(patient.dbid)
 
-        # Path 2: fields.note.uuid -> Note -> patient.
-        note_info = fields.get("note") or {}
+        # Path 2: context.note.uuid -> Note -> patient. The note lives at
+        # context["note"], not inside context["fields"] (see diagnose_order).
+        note_info = self.event.context.get("note") or {}
         note_uuid = note_info.get("uuid") if isinstance(note_info, dict) else None
         if note_uuid:
             note = Note.objects.filter(id=note_uuid).first()

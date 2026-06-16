@@ -11,7 +11,6 @@ from logger import log
 def _build_order_task(
     patient: Patient,
     command: Command,
-    note_uuid: str,
     team_id: str,
 ) -> AddTask:
     """Construct the HST order task.
@@ -51,7 +50,7 @@ class DiagnoseOrderHandler(BaseHandler):
 
     Fail-closed behaviour:
     - If the custom field is absent or set to 'No' → do nothing.
-    - If SLEEP_STUDIES_TEAM_NAME secret is missing or the team is not found
+    - If SLEEP_STUDIES_TEAM_ID secret is missing or the team is not found
       → log a warning and return no effects (no silent data loss).
     """
 
@@ -81,7 +80,8 @@ class DiagnoseOrderHandler(BaseHandler):
             )
             return []
 
-        # --- Resolve team by FHIR Group ID (more reliable than name lookup) ---
+        # --- Resolve team by its UUID (Team.id, which is also the team's FHIR
+        # Group resource id) rather than by name, so config is stable. ---
         try:
             team = Team.objects.get(id=team_id)
         except Team.DoesNotExist:
@@ -109,7 +109,6 @@ class DiagnoseOrderHandler(BaseHandler):
         task = _build_order_task(
             patient=patient,
             command=command,
-            note_uuid=self.event.context.get("note", {}).get("uuid", ""),
             team_id=str(team.id),
         )
         return [task.apply()]
