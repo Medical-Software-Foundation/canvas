@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recent Labs</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+           color: #1f2933; background: #f7f9fb; padding: 16px; line-height: 1.4; }
+    h1 { font-size: 18px; margin-bottom: 4px; color: #102a43; }
+    .subtitle { color: #627d98; font-size: 13px; margin-bottom: 16px; }
+    .actions { display: flex; gap: 8px; margin-bottom: 16px; }
+    .btn { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer;
+           font-size: 13px; font-weight: 600; }
+    .btn-primary { background: #2186eb; color: #fff; }
+    .btn-secondary { background: #e4e7eb; color: #1f2933; }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .lab-card { background: #fff; border: 1px solid #e1e8ed; border-radius: 8px;
+                padding: 14px; margin-bottom: 10px; }
+    .lab-header { display: flex; justify-content: space-between; align-items: center;
+                  gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #f0f3f6; }
+    .lab-name { font-weight: 700; color: #102a43; font-size: 15px; }
+    .sparkline { flex: none; display: block; }
+    .result-row { display: flex; justify-content: space-between; align-items: baseline;
+                  gap: 12px; padding: 8px 0; border-bottom: 1px solid #f0f3f6; }
+    .result-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .result-value { font-size: 17px; font-weight: 700; color: #102a43; }
+    .result-value.first { font-size: 20px; }
+    .units { font-size: 13px; font-weight: 400; color: #627d98; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+             font-size: 11px; font-weight: 700; margin-left: 8px; }
+    .badge-abnormal { background: #fbeae9; color: #cf1124; }
+    .result-meta { color: #627d98; font-size: 12px; text-align: right; white-space: nowrap; }
+    .empty { text-align: center; padding: 40px 16px; color: #627d98; }
+    #fax-status { font-size: 13px; margin-top: 10px; }
+    #fax-status.success { color: #0b7a3b; }
+    #fax-status.error { color: #cf1124; }
+    @media print {
+      .actions, #fax-status { display: none !important; }
+      body { background: #fff; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Recent Labs</h1>
+  <p class="subtitle">Up to 3 most recent results per test</p>
+
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="window.print()">Print</button>
+    {% if has_values %}
+    <button id="fax-btn" class="btn btn-primary" onclick="createFaxSummary()">Create fax summary</button>
+    {% endif %}
+  </div>
+
+  {% if has_values %}
+    {% for group in lab_groups %}
+      <div class="lab-card">
+        <div class="lab-header">
+          <span class="lab-name">{{ group.test_name }}</span>
+          {% if group.sparkline %}
+          <svg class="sparkline" viewBox="0 0 64 18" width="64" height="18" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points="{{ group.sparkline }}" fill="none" stroke="#2186eb" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+          </svg>
+          {% endif %}
+        </div>
+        {% for r in group.results %}
+          <div class="result-row">
+            <span class="result-value{% if forloop.first %} first{% endif %}">
+              {{ r.value }} <span class="units">{{ r.units }}</span>
+              {% if r.is_abnormal %}<span class="badge badge-abnormal">{{ r.abnormal_flag }}</span>{% endif %}
+            </span>
+            <span class="result-meta">
+              {% if r.reference_range %}Ref: {{ r.reference_range }} &middot; {% endif %}{{ r.date }}
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty">No lab results on file.</div>
+  {% endif %}
+
+  <div id="fax-status"></div>
+
+  <script>
+    const PATIENT_ID = "{{ patient_id }}";
+    const FAX_ENDPOINT = "/plugin-io/api/recent_labs/routes/create-fax-summary";
+
+    async function createFaxSummary() {
+      const btn = document.getElementById("fax-btn");
+      const status = document.getElementById("fax-status");
+      btn.disabled = true;
+      status.className = "";
+      status.textContent = "Creating summary note...";
+      try {
+        const res = await fetch(FAX_ENDPOINT, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patient_id: PATIENT_ID }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          status.className = "success";
+          status.textContent = data.message + " Open the note to fax it.";
+        } else {
+          status.className = "error";
+          status.textContent = data.error || "Failed to create summary note.";
+          btn.disabled = false;
+        }
+      } catch (e) {
+        status.className = "error";
+        status.textContent = "Network error: " + e.message;
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

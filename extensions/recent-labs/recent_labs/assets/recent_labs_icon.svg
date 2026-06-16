@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="20" fill="#051222"/>
+  <!-- Erlenmeyer flask outline -->
+  <path d="M42 22 L42 44 L26 78 a6 6 0 0 0 5.2 9 L68.8 87 a6 6 0 0 0 5.2 -9 L58 44 L58 22 Z"
+        fill="none" stroke="#EBF5FC" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Neck rim -->
+  <line x1="38" y1="22" x2="62" y2="22" stroke="#EBF5FC" stroke-width="4" stroke-linecap="round"/>
+  <!-- Liquid -->
+  <path d="M34.5 64 L65.5 64 L72 78 a6 6 0 0 1 -5.2 9 L31.2 87 a6 6 0 0 1 -5.2 -9 Z"
+        fill="#01A4FF"/>
+  <!-- Bubbles -->
+  <circle cx="44" cy="76" r="3" fill="#01ECFF"/>
+  <circle cx="56" cy="80" r="2.2" fill="#01ECFF"/>
+  <circle cx="50" cy="72" r="1.8" fill="#02E3FB"/>
+</svg>

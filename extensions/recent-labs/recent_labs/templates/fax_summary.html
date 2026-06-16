@@ -1,0 +1,16 @@
+<div>
+  {% if patient_name or patient_dob %}
+  <p>
+    {% if patient_name %}<strong>Patient:</strong> {{ patient_name }}{% endif %}
+    {% if patient_dob %}&nbsp;&nbsp;&nbsp;<strong>DOB:</strong> {{ patient_dob }}{% endif %}
+  </p>
+  {% endif %}
+  {% for group in groups %}
+  <p style="margin-bottom: 2px;"><strong>{{ group.test_name }}</strong></p>
+  <ul style="margin-top: 0;">
+    {% for r in group.results %}
+    <li>{{ r.date }}: {{ r.value }}{% if r.units %} {{ r.units }}{% endif %}{% if r.abnormal_label %} ({{ r.abnormal_label }}){% endif %}{% if r.reference_range %}; ref {{ r.reference_range }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</div>
