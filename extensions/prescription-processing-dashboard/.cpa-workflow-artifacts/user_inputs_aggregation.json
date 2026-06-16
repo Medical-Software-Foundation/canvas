@@ -1,0 +1,16 @@
+{
+  "inputs": [
+    {
+      "input": "I am building a plugin with the Canvas SDK, the source code for which can be found here: /Users/src/canvas-plugins",
+      "type": "free_text"
+    },
+    {
+      "input": "I need to write unit tests for the python classes I've created. What are all the classes I need to write tests for?",
+      "type": "free_text"
+    },
+    {
+      "input": "Yes",
+      "type": "free_text"
+    }
+  ]
+}

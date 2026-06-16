@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>Prescription Processing Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css">
+        <script type="text/javascript" src="main.js"></script>
+    </head>
+
+    <body>
+        <div class="container">
+            <header>
+                <h1>Prescription Processing Dashboard</h1>
+                <p class="welcome">Welcome, {{first_name}} {{last_name}}</p>
+            </header>
+            <main>
+                <section class="dashboard-content">
+                    <h2>Pending Prescriptions</h2>
+                    <div class="filters">
+                        <form method="get" action="">
+                            <label for="prescriber">Prescriber:</label>
+                            <select name="prescriber" id="prescriber" onchange="this.form.submit()">
+                                <option value="">All Prescribers</option>
+                                {% for value, name in prescribers %}
+                                <option value="{{ value }}" {% if selected_prescriber == value %}selected{% endif %}>{{ name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </div>
+                    {% if pending_prescriptions %}
+                    <table class="prescriptions-table">
+                        <thead>
+                            <tr>
+                                <th>Patient</th>
+                                <th>Medication</th>
+                                <th>Date of Service</th>
+                                <th>Prescriber</th>
+                                <th>Ordered by</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prescription in pending_prescriptions %}
+                            <tr>
+                                <td>{{ prescription.patient.first_name }} {{ prescription.patient.last_name }}</td>
+                                <td><a href="/patient/{{ prescription.patient.id }}/?noteId={{ prescription.note.dbid }}" target="_blank">{{ prescription.data.prescribe.text }}</a></td>
+                                <td>{{ prescription.note.datetime_of_service }}</td>
+                                <td>{{ prescription.data.prescriber.text }}</td>
+                                <td>{% if prescription.originator and prescription.originator.staff %}{{ prescription.originator.staff.first_name }} {{ prescription.originator.staff.last_name }}{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <p class="no-data">No pending prescriptions found.</p>
+                    {% endif %}
+                </section>
+            </main>
+        </div>
+    </body>
+</html>
