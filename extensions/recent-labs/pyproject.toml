@@ -1,0 +1,24 @@
+[project]
+name = "recent-labs"
+version = "0.1.0"
+description = "Shows a patient's recent lab results grouped by test (up to 3 most recent per test), with print and a fax-summary note action."
+authors = [
+    {name = "Amanda Peterson", email = "amanda.peterson@canvasmedical.com"}
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "canvas",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+pythonpath = ["."]

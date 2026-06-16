@@ -1,0 +1,43 @@
+{
+    "sdk_version": "0.88.0",
+    "plugin_version": "0.5.3",
+    "name": "recent_labs",
+    "description": "Shows a patient's recent lab results grouped by test (up to 3 most recent per test), with print and a fax-summary note action.",
+    "components": {
+        "protocols": [
+            {
+                "class": "recent_labs.protocols.fax_summary_api:CreateFaxSummaryAPI",
+                "description": "Creates a lab-summary note for the patient that can be faxed via the native note-fax flow."
+            }
+        ],
+        "commands": [
+            {
+                "name": "RecentLabsSummary",
+                "label": "Recent Labs",
+                "schema_key": "recentLabsSummary",
+                "section": "subjective"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "applications": [
+            {
+                "class": "recent_labs.applications.recent_labs_app:RecentLabsApp",
+                "name": "Recent Labs",
+                "description": "Displays the patient's 3 most recent lab values.",
+                "icon": "assets/recent_labs_icon.png",
+                "scope": "patient_specific"
+            }
+        ],
+        "views": []
+    },
+    "secrets": [
+        "RECENT_LABS_NOTE_TYPE_ID",
+        "RECENT_LABS_PRACTICE_LOCATION_ID"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
