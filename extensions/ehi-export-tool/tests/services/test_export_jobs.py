@@ -254,6 +254,45 @@ def test_list_batches_page_sort_by_started_by() -> None:
     grouped.order_by.assert_called_once_with("staff_last", "staff_first", "-created")
 
 
+def test_list_batches_page_applies_progress_filter() -> None:
+    base = _grouped_chain([], total=0)
+    grouped = base.values.return_value.annotate.return_value
+    # keep the chain intact after the extra .filter() the progress path adds
+    grouped.filter.return_value = grouped
+    with patch(f"{_SVC}.ExportJob") as MockJob:
+        MockJob.objects.exclude.return_value = base
+        ExportJobService.list_batches_page(progress="completed", limit=50)
+    grouped.filter.assert_called_once()
+
+
+def test_list_batches_page_ignores_progress_when_unset() -> None:
+    base = _grouped_chain([], total=0)
+    grouped = base.values.return_value.annotate.return_value
+    with patch(f"{_SVC}.ExportJob") as MockJob:
+        MockJob.objects.exclude.return_value = base
+        ExportJobService.list_batches_page(limit=50)
+    grouped.filter.assert_not_called()
+
+
+def test_batch_progress_q_builds_expected_conditions() -> None:
+    from django.db.models import Q
+
+    running = ExportJobService._batch_progress_q("running", Q)
+    assert running.connector == "OR"
+    assert ("queued__gt", 0) in running.children
+    assert ("in_progress__gt", 0) in running.children
+
+    completed = ExportJobService._batch_progress_q("completed", Q)
+    assert set(completed.children) == {("queued", 0), ("in_progress", 0), ("failed", 0)}
+
+    with_errors = ExportJobService._batch_progress_q("completed_with_errors", Q)
+    assert ("failed__gt", 0) in with_errors.children
+    assert ("queued", 0) in with_errors.children
+
+    assert ExportJobService._batch_progress_q("", Q) is None
+    assert ExportJobService._batch_progress_q("bogus", Q) is None
+
+
 # ── jobs_for_batch ────────────────────────────────────────────────────────────
 
 

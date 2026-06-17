@@ -6,11 +6,17 @@ for each in-progress job on a schedule and marks them complete (saving the file
 URLs) — so the user can close the workspace and check back later.
 
 The cadence is configurable via the ``EHI_POLL_SCHEDULE`` variable (a cron
-expression, default ``*/5 * * * *``). Because ``CronTask`` evaluates
+expression, default ``* * * * *`` — every minute). Because ``CronTask`` evaluates
 ``self.SCHEDULE`` at runtime, exposing it as a property lets the schedule change
 from the config page with no redeploy. The poller only polls status — it never
 downloads the (potentially large) NDJSON; files are fetched on demand at
 download time.
+
+Note on throughput vs. load: the cadence does NOT govern how hard we hit the
+instance — the ``EHI_MAX_IN_FLIGHT`` concurrency cap does. A fast cadence simply
+keeps the pipeline topped up to that cap (less idle time between batches) at the
+same peak concurrency, so a group export drains as fast as the cap allows
+instead of stair-stepping every 5 minutes.
 """
 
 from __future__ import annotations
@@ -24,12 +30,12 @@ from ehi_export_tool.services.preparation import PreparationResult, prepare_job
 from ehi_export_tool.services.storage import ExportStorage
 from ehi_export_tool.utils.fhir_client import EHIExportClient, EHIExportError
 
-_DEFAULT_SCHEDULE = "*/5 * * * *"
+_DEFAULT_SCHEDULE = "* * * * *"  # every minute; keeps the pipeline topped up to the cap
 # Bound the work per tick so a large backlog can't make one run hang.
 _MAX_PER_TICK = 50
 # Preparing a patient's JSON downloads ~31 NDJSON files + an S3 upload, so cap
 # how many we prepare per tick to keep each run bounded.
-_PREP_PER_TICK = 5
+_PREP_PER_TICK = 10
 # Throttle the server-side kickoff. Because $export is respond-async (the start
 # returns immediately), the meaningful limit is how many jobs are concurrently
 # *in-progress* on Canvas (= concurrent server-side file generation), not how

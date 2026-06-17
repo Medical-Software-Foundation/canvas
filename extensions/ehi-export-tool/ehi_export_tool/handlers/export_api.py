@@ -259,17 +259,21 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
         """Return export runs (batches), newest first — paginated and searchable.
 
         Query params: limit (default 25, cap 200), offset, search (matches the
-        staff who started the run, or a patient in it). The main-page panel asks
-        for the latest few; the "all runs" page paginates with search.
+        staff who started the run, or a patient in it), progress (running |
+        completed | completed_with_errors), sort, dir. The main-page panel asks
+        for the latest few; the "all runs" page paginates with search + progress.
         """
         params = self.request.query_params
         limit = _parse_int(params.get("limit"), default=25, minimum=1, maximum=200)
         offset = _parse_int(params.get("offset"), default=0, minimum=0)
         search = (params.get("search") or "").strip()
+        progress = (params.get("progress") or "").strip()
+        if progress not in ExportJobService.BATCH_PROGRESS_FILTERS:
+            progress = ""
         sort = (params.get("sort") or "started").strip()
         direction = (params.get("dir") or "desc").strip()
         batches, total = ExportJobService.list_batches_page(
-            search=search, offset=offset, limit=limit, sort=sort, dir=direction
+            search=search, progress=progress, offset=offset, limit=limit, sort=sort, dir=direction
         )
         return [
             JSONResponse(
@@ -329,43 +333,59 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/download")
     def get_download(self) -> list[Response | Effect]:
-        """Return a presigned S3 URL for one patient's prepared export JSON.
+        """Download one patient's export as a single ``.ndjson``.
 
-        Prepares the file on demand (merge + upload) if the cron hasn't yet, so a
-        click works immediately. Returns 409 if the export isn't complete, or 400
-        if S3 isn't configured.
+        No S3 needed: if S3 is configured the file is staged there and we redirect
+        to a presigned URL; otherwise the plugin builds the NDJSON on demand and
+        streams it back directly (the user never hits a raw Canvas endpoint).
+        Returns 409 if the export isn't complete yet.
         """
-        params = self.request.query_params
-        job_id = (params.get("job_id") or "").strip()
+        job_id = (self.request.query_params.get("job_id") or "").strip()
         if not job_id:
             return [_error("job_id is required", HTTPStatus.BAD_REQUEST)]
-
-        storage = ExportStorage.from_secrets(self.secrets)
-        if storage is None:
-            return [_error("S3 storage is not configured", HTTPStatus.BAD_REQUEST)]
 
         job = ExportJobService.get_with_patient(job_id)
         if job is None:
             return [_error("export job not found", HTTPStatus.NOT_FOUND)]
 
+        storage = ExportStorage.from_secrets(self.secrets)
         try:
             client = self._build_client()
-            result = prepare_job(client, storage, job)
+            if storage is not None:
+                # Stage to S3 (if not already) and redirect the browser to a
+                # short-lived presigned URL — download streams straight from S3.
+                result = prepare_job(client, storage, job)
+                if result.status == PreparationResult.PENDING:
+                    return [_error("export is still processing", HTTPStatus.CONFLICT)]
+                if result.status == PreparationResult.FAILED:
+                    return [_error("failed to store export file", HTTPStatus.BAD_GATEWAY)]
+                url = storage.presigned_url(result.s3_key)
+                if not url:
+                    return [_error("could not generate a download URL", HTTPStatus.BAD_GATEWAY)]
+                return [Response(status_code=HTTPStatus.FOUND, headers={"Location": url})]
+
+            # No S3: build the NDJSON on demand and stream it back.
+            status = client.get_status(job.job_id)
+            if status["status"] != "complete":
+                return [_error("export is still processing", HTTPStatus.CONFLICT)]
+            ndjson = client.build_patient_ndjson(status["output"])
         except EHIConfigError as exc:
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
         except EHIExportError as exc:
             log.error("ExportAPI.get_download failed for job %s: %s", job_id, exc)
             return [_error(str(exc), HTTPStatus.BAD_GATEWAY)]
 
-        if result.status == PreparationResult.PENDING:
-            return [_error("export is still processing", HTTPStatus.CONFLICT)]
-        if result.status == PreparationResult.FAILED:
-            return [_error("failed to store export file", HTTPStatus.BAD_GATEWAY)]
-
-        url = storage.presigned_url(result.s3_key)
-        if not url:
-            return [_error("could not generate a download URL", HTTPStatus.BAD_GATEWAY)]
-        return [JSONResponse({"url": url}, status_code=HTTPStatus.OK)]
+        filename = _ndjson_filename(job)
+        return [
+            Response(
+                content=ndjson.encode("utf-8"),
+                status_code=HTTPStatus.OK,
+                headers={
+                    "Content-Type": "application/x-ndjson; charset=utf-8",
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
+            )
+        ]
 
     # ── export flow ──────────────────────────────────────────────────────────
 
@@ -569,6 +589,18 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
 def _error(message: str, status_code: HTTPStatus) -> JSONResponse:
     """Build a uniform JSON error response."""
     return JSONResponse({"error": message}, status_code=status_code)
+
+
+def _ndjson_filename(job) -> str:
+    """A safe ``<Last>_<First>_<id>.ndjson`` download filename for a job's patient."""
+    import re
+
+    patient = job.patient
+    last = (getattr(patient, "last_name", "") or "").strip()
+    first = (getattr(patient, "first_name", "") or "").strip()
+    base = f"{last}_{first}_{patient.id}".strip("_")
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("_")[:120] or str(patient.id)
+    return f"{base}.ndjson"
 
 
 def _parse_int(

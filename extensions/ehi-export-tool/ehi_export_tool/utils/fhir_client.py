@@ -22,7 +22,6 @@ add just the bulk-export methods on top.  The flow per patient is::
 
 from __future__ import annotations
 
-import json
 import time
 from http import HTTPStatus
 from typing import Any
@@ -130,8 +129,8 @@ class EHIExportClient(CanvasFhir):
             "output": [],
         }
 
-    def fetch_ndjson_resources(self, output_url: str) -> list[dict[str, Any]]:
-        """Download one NDJSON output file and parse it into a list of resources.
+    def _fetch_text(self, output_url: str) -> str:
+        """Download one NDJSON output file as raw text.
 
         Retries transient 5xx responses (the data-integration download service can
         briefly return 503) with a short backoff before giving up.
@@ -142,12 +141,7 @@ class EHIExportClient(CanvasFhir):
                 f"failed to download export file {output_url}: "
                 f"{response.status_code} {response.text[:200]}"
             )
-        resources: list[dict[str, Any]] = []
-        for raw_line in response.text.splitlines():
-            line = raw_line.strip()
-            if line:
-                resources.append(json.loads(line))
-        return resources
+        return response.text
 
     def _get_with_retry(self, url: str) -> Any:
         """GET ``url`` with the auth headers, retrying transient 5xx responses.
@@ -171,43 +165,21 @@ class EHIExportClient(CanvasFhir):
                 time.sleep(_BACKOFF_SECONDS[attempt])
         return response
 
-    def build_patient_bundle(self, patient_id: str, output: list[dict[str, Any]]) -> dict[str, Any]:
-        """Merge every NDJSON output file for a patient into one grouped JSON doc.
+    def build_patient_ndjson(self, output: list[dict[str, Any]]) -> str:
+        """Concatenate a patient's bulk-export output files into one NDJSON string.
 
-        The bulkstatus ``output`` array lists one file per resource type; this
-        downloads each, then groups the resources by their ``resourceType`` into::
-
-            "entry": {
-                "Appointment": {"total": 5, "entry": [<resource>, ...]},
-                "Patient":     {"total": 1, "entry": [<resource>]},
-                ...
-            }
-
-        Resources are grouped by their own ``resourceType`` (falling back to the
-        file's declared ``type``) so the grouping is authoritative even if a file
-        contains mixed types. Types are emitted in sorted order for stable output.
+        ``$export`` produces one NDJSON file per resource type. Concatenating them
+        (one FHIR resource per line) is valid Bulk Data output and keeps a patient
+        to a single ``.ndjson`` file. No JSON parsing is needed — the raw lines are
+        already NDJSON; we just join non-empty lines.
         """
-        grouped: dict[str, list[dict[str, Any]]] = {}
+        lines: list[str] = []
         for item in output:
             file_url = item.get("url")
             if not file_url:
                 continue
-            declared_type = item.get("type") or ""
-            for resource in self.fetch_ndjson_resources(file_url):
-                resource_type = resource.get("resourceType") or declared_type or "Unknown"
-                grouped.setdefault(resource_type, []).append(resource)
-
-        entry = {
-            resource_type: {"total": len(resources), "entry": resources}
-            for resource_type, resources in sorted(grouped.items())
-        }
-        total = sum(len(resources) for resources in grouped.values())
-
-        return {
-            "resourceType": "Bundle",
-            "type": "collection",
-            "id": f"ehi-export-{patient_id}",
-            "meta": {"extension": [{"url": "patient", "valueString": patient_id}]},
-            "total": total,
-            "entry": entry,
-        }
+            for raw_line in self._fetch_text(file_url).splitlines():
+                line = raw_line.strip()
+                if line:
+                    lines.append(line)
+        return "\n".join(lines)

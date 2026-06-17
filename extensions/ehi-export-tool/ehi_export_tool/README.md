@@ -3,8 +3,9 @@
 A staff-facing Canvas application — shown in the **provider (hamburger) menu** —
 for exporting patients' complete **Electronic Health Information (EHI)** across
 the patient population. Pick patients (one, several, or *everyone matching a
-filter*), and the plugin exports each patient's full record as a single JSON
-file, prepared in the background and downloadable from S3.
+filter*), and the plugin exports each patient's full record as a single
+**NDJSON** file, prepared in the background and served by the plugin (no S3
+needed for a single patient; S3 is used only for whole-group export).
 
 It's built so that **whole-instance exports never overload Canvas**: work is
 queued and drained by a throttled background task (see
@@ -28,29 +29,24 @@ queued and drained by a throttled background task (see
 - **Track runs** — each "export" action becomes a **run**. The main page shows
   the latest 5; **Show all runs** opens a paginated, searchable, sortable list.
   Runs are attributed to the **staff member who started them**.
-- **Download** — completed patients are stored in S3 and downloaded via a
-  short-lived presigned link (per patient, or grab a whole run's folder with
-  `aws s3 sync`). Nothing is assembled in browser memory.
+- **Download** — the plugin serves each patient's `.ndjson` directly (no S3
+  required). When S3 *is* configured, downloads redirect to a short-lived
+  presigned link and a whole run can be grabbed with `aws s3 sync`. Nothing is
+  assembled in browser memory.
 - **Recover from failures** — failed patients show their error message; a run
   with failures offers **Re-run failed**, which queues just those patients as a
   new run.
 
 ### The export format
 
-Each patient is one JSON document — a FHIR `Bundle` whose entries are **grouped
-by resource type**:
+Each patient is one **NDJSON** file — the FHIR Bulk Data format that `$export`
+emits — with **one FHIR resource per line** (Canvas writes one file per resource
+type; the plugin concatenates them into a single file per patient):
 
-```json
-{
-  "resourceType": "Bundle",
-  "type": "collection",
-  "id": "ehi-export-<patient-id>",
-  "total": 37,
-  "entry": {
-    "Appointment": { "total": 5, "entry": [ /* FHIR resources */ ] },
-    "Patient":     { "total": 1, "entry": [ /* FHIR resources */ ] }
-  }
-}
+```
+{"resourceType":"Patient","id":"abc","name":[{"family":"Lovelace","given":["Ada"]}]}
+{"resourceType":"Condition","id":"c1","subject":{"reference":"Patient/abc"},"code":{"text":"Hypertension"}}
+{"resourceType":"Observation","id":"o1","subject":{"reference":"Patient/abc"},"valueQuantity":{"value":120,"unit":"mmHg"}}
 ```
 
 ---
@@ -69,11 +65,13 @@ asynchronous per patient. The plugin drives it as a server-side pipeline:
    the ~31 FHIR resource files per patient on its worker tier.
 3. **Advance** — the cron polls each in-progress job's `bulkstatus` until it
    reports complete.
-4. **Prepare** — for completed jobs, the cron downloads the NDJSON files, merges
-   them into the grouped Bundle, and uploads one JSON object to S3
-   (`<prefix>/<run-id>/<Last_First>_<patient-id>.json`).
-5. **Download** — the UI requests a presigned S3 URL per patient. If a file
-   isn't prepared yet, it's prepared on demand for that one patient.
+4. **Prepare (only when S3 is configured)** — for completed jobs, the cron
+   downloads the NDJSON files, concatenates them into one `.ndjson`, and uploads
+   it to S3 (`<prefix>/<run-id>/<Last_First>_<patient-id>.ndjson`). Without S3,
+   this step is skipped — files are built on demand at download time.
+5. **Download** — the plugin serves the `.ndjson`: it streams it directly
+   (building on demand if needed), or redirects to a presigned S3 URL when S3 is
+   configured. The user never calls a Canvas endpoint themselves.
 
 The UI auto-refreshes every ~12s so `queued → in-progress → complete` transitions
 appear without a manual reload.
@@ -118,7 +116,7 @@ single tick runs long.
 
 | Variable | Default | What it controls |
 |----------|---------|------------------|
-| `EHI_POLL_SCHEDULE` | `*/5 * * * *` | Cron cadence (5-field cron expression). Tighten for faster throughput. |
+| `EHI_POLL_SCHEDULE` | `* * * * *` | Cron cadence (5-field cron expression). Runs every minute by default so the pipeline stays topped up to the in-flight cap; loosen (e.g. `*/5 * * * *`) only if you want fewer wake-ups. Cadence does not change peak load — `EHI_MAX_IN_FLIGHT` does. |
 | `EHI_MAX_IN_FLIGHT` | `10` | Max export jobs generating on Canvas at once (the global ceiling). |
 | `EHI_START_PER_TICK` | `10` | Max new jobs started per cron tick. |
 
@@ -149,7 +147,12 @@ Create the OAuth application at
 Confidential** and **Authorization Grant Type: Client credentials**, and grant
 it permission to run the patient `$export` operation.
 
-### Required — S3 storage
+### Optional — S3 (enables whole-group export)
+
+S3 is **not required** for single-patient export — the plugin serves those
+`.ndjson` files directly. Configure S3 only to enable **group export** ("Export
+selected" / "Export all matching"), which stages each patient's file to a bucket
+so a whole run can be pulled with `aws s3 sync`.
 
 | Variable | Description |
 |----------|-------------|
@@ -158,8 +161,8 @@ it permission to run the patient `$export` operation.
 | `S3_BUCKET` | Target bucket. |
 | `S3_PREFIX` | Optional key prefix (default `ehi-exports`). |
 
-Without S3, exports still run and are tracked, but files can't be stored or
-downloaded (the UI warns up front).
+Without S3, the group-export buttons are disabled (with a note); per-patient
+**Export** on any row still works.
 
 ### Optional — throughput & testing
 
@@ -179,7 +182,8 @@ exercising the failure UI. Remove to restore normal behavior.
 - Custom data (namespace `msf__ehi_exports`) stores only **job metadata** — the
   patient reference, status, attempts, the bulkstatus file URLs, the S3 key, and
   who started it. The clinical content itself is **not** stored in custom data;
-  it lives in your S3 bucket and is fetched on demand.
+  it's fetched from Canvas on demand and either streamed to the user or (for
+  group export) staged in your S3 bucket.
 - Download links are short-lived **presigned** S3 URLs.
 
 ---
@@ -192,7 +196,7 @@ exercising the failure UI. Remove to restore normal behavior.
 | `handlers/export_api.py` | Staff-only `SimpleAPI`: workspace, patient list, enqueue, status, download, runs. |
 | `handlers/export_poller.py` | `CronTask` engine: starts queued jobs (throttled), advances, prepares to S3. |
 | `services/export_jobs.py` | `ExportJob` persistence, queue/aggregation queries, filters. |
-| `services/preparation.py` | Merge a patient's NDJSON → grouped Bundle → S3. |
+| `services/preparation.py` | Concatenate a patient's NDJSON files → one `.ndjson` → S3. |
 | `services/storage.py` | S3 wrapper (`ExportStorage`) over the SDK S3 client. |
 | `utils/fhir_client.py` | `EHIExportClient` — bulk-export operations on top of `CanvasFhir`. |
 | `models/export_job.py` | `ExportJob` CustomModel + `CustomPatient` / `CustomStaff` proxies. |

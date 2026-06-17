@@ -17,7 +17,7 @@
 
     <div id="main-view">
     <div class="intro">
-      <p class="intro__lead">Export a patient's complete electronic health information (EHI) — every FHIR resource Canvas holds for them — as one JSON file per patient.</p>
+      <p class="intro__lead">Export a patient's complete electronic health information (EHI) — every FHIR resource Canvas holds for them — as one NDJSON file per patient.</p>
       <p class="intro__body">Search or filter the patient list, then export a single patient with the <strong>Export</strong> button, or tick several and use <strong>Export selected</strong> — or <strong>Export all matching</strong> to export everyone in the current filter.</p>
       <p class="intro__note">💡 No matter how many patients you choose, exports are queued and run automatically in small batches in the background, so your Canvas instance is never overloaded. You don't need to keep this page open — come back any time to check progress and download finished files under <strong>Export runs</strong> or each patient's <strong>Last export</strong>.</p>
     </div>
@@ -118,6 +118,12 @@
       <div class="run-filters">
         <input id="all-runs-search" type="search" class="text-input run-filters__search"
                placeholder="Filter by staff, or patient name or ID…" autocomplete="off" />
+        <select id="all-runs-progress" class="text-input run-filters__progress" aria-label="Filter by progress">
+          <option value="">All progress</option>
+          <option value="running">Running</option>
+          <option value="completed">Completed</option>
+          <option value="completed_with_errors">Completed with errors</option>
+        </select>
       </div>
       <div class="table-wrap">
         <table class="runs-table">

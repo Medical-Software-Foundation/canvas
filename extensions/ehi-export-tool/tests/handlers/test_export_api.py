@@ -12,6 +12,7 @@ resolve to the real methods; only the external ``EHIExportClient`` and the
 
 import json
 from http import HTTPStatus
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -163,13 +164,6 @@ def test_get_download_requires_job_id() -> None:
     assert inst.get_download()[0].status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_get_download_requires_s3_configured() -> None:
-    inst = _api(query_params={"job_id": "j1"}, secrets=CONFIGURED_SECRETS)  # no S3
-    result = inst.get_download()
-    assert result[0].status_code == HTTPStatus.BAD_REQUEST
-    assert "S3" in _json_body(result[0])["error"]
-
-
 def test_get_download_404_when_job_missing() -> None:
     inst = _api(query_params={"job_id": "j1"}, secrets={**CONFIGURED_SECRETS, **S3_SECRETS})
     with patch(_STORAGE) as MockStorage, patch(
@@ -178,6 +172,25 @@ def test_get_download_404_when_job_missing() -> None:
         MockStorage.from_secrets.return_value = MagicMock()
         result = inst.get_download()
     assert result[0].status_code == HTTPStatus.NOT_FOUND
+
+
+def test_get_download_redirects_to_presigned_when_s3() -> None:
+    inst = _api(query_params={"job_id": "j1"}, secrets={**CONFIGURED_SECRETS, **S3_SECRETS})
+    from ehi_export_tool.services.preparation import PreparationResult
+
+    storage = MagicMock()
+    storage.presigned_url.return_value = "https://signed-url"
+    with patch(_STORAGE) as MockStorage, patch(
+        "ehi_export_tool.handlers.export_api.ExportJobService.get_with_patient",
+        return_value=MagicMock(),
+    ), patch(_CLIENT_PATH, return_value=MagicMock()), patch(
+        _PREP, return_value=PreparationResult(PreparationResult.READY, "ehi-exports/b1/x.ndjson")
+    ):
+        MockStorage.from_secrets.return_value = storage
+        result = inst.get_download()
+
+    assert result[0].status_code == HTTPStatus.FOUND  # 302 redirect
+    assert result[0].headers["Location"] == "https://signed-url"
 
 
 def test_get_download_conflict_when_pending() -> None:
@@ -195,24 +208,38 @@ def test_get_download_conflict_when_pending() -> None:
     assert result[0].status_code == HTTPStatus.CONFLICT
 
 
-def test_get_download_returns_presigned_url() -> None:
-    inst = _api(query_params={"job_id": "j1"}, secrets={**CONFIGURED_SECRETS, **S3_SECRETS})
-    from ehi_export_tool.services.preparation import PreparationResult
-
-    storage = MagicMock()
-    storage.presigned_url.return_value = "https://signed-url"
+def test_get_download_proxies_ndjson_without_s3() -> None:
+    """No S3: the plugin builds and streams the patient's NDJSON directly."""
+    inst = _api(query_params={"job_id": "j1"}, secrets=CONFIGURED_SECRETS)  # no S3
+    patient = SimpleNamespace(id="p-1", first_name="Ada", last_name="Lovelace")
+    job = SimpleNamespace(job_id="j1", patient=patient)
+    client = MagicMock()
+    client.get_status.return_value = {"status": "complete", "output": [{"url": "u"}]}
+    client.build_patient_ndjson.return_value = '{"resourceType":"Patient","id":"p-1"}'
     with patch(_STORAGE) as MockStorage, patch(
-        "ehi_export_tool.handlers.export_api.ExportJobService.get_with_patient",
-        return_value=MagicMock(),
-    ), patch(_CLIENT_PATH, return_value=MagicMock()), patch(
-        _PREP, return_value=PreparationResult(PreparationResult.READY, "ehi-exports/b1/x.json")
-    ):
-        MockStorage.from_secrets.return_value = storage
+        "ehi_export_tool.handlers.export_api.ExportJobService.get_with_patient", return_value=job
+    ), patch(_CLIENT_PATH, return_value=client):
+        MockStorage.from_secrets.return_value = None  # no S3
         result = inst.get_download()
 
-    assert result[0].status_code == HTTPStatus.OK
-    assert _json_body(result[0]) == {"url": "https://signed-url"}
-    storage.presigned_url.assert_called_once_with("ehi-exports/b1/x.json")
+    resp = result[0]
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.headers["Content-Type"].startswith("application/x-ndjson")
+    assert "Lovelace_Ada_p-1.ndjson" in resp.headers["Content-Disposition"]
+    assert resp.content == b'{"resourceType":"Patient","id":"p-1"}'
+
+
+def test_get_download_proxy_conflict_when_not_complete() -> None:
+    inst = _api(query_params={"job_id": "j1"}, secrets=CONFIGURED_SECRETS)  # no S3
+    job = SimpleNamespace(job_id="j1", patient=SimpleNamespace(id="p-1"))
+    client = MagicMock()
+    client.get_status.return_value = {"status": "in-progress", "output": []}
+    with patch(_STORAGE) as MockStorage, patch(
+        "ehi_export_tool.handlers.export_api.ExportJobService.get_with_patient", return_value=job
+    ), patch(_CLIENT_PATH, return_value=client):
+        MockStorage.from_secrets.return_value = None
+        result = inst.get_download()
+    assert result[0].status_code == HTTPStatus.CONFLICT
 
 
 # ── enqueue ───────────────────────────────────────────────────────────────────
@@ -295,11 +322,33 @@ def test_get_batches_returns_paginated() -> None:
     ) as mock_page:
         result = inst.get_batches()
 
-    mock_page.assert_called_once_with(search="ada", offset=0, limit=5, sort="started", dir="desc")
+    mock_page.assert_called_once_with(
+        search="ada", progress="", offset=0, limit=5, sort="started", dir="desc"
+    )
     body = _json_body(result[0])
     assert body["batches"] == [{"batch_id": "b1"}]
     assert body["total"] == 12
     assert body["has_more"] is True  # 0 + 5 < 12
+
+
+def test_get_batches_passes_valid_progress_filter() -> None:
+    inst = _api(query_params={"progress": "completed_with_errors"})
+    with patch(
+        "ehi_export_tool.handlers.export_api.ExportJobService.list_batches_page",
+        return_value=([], 0),
+    ) as mock_page:
+        inst.get_batches()
+    assert mock_page.call_args.kwargs["progress"] == "completed_with_errors"
+
+
+def test_get_batches_rejects_unknown_progress_filter() -> None:
+    inst = _api(query_params={"progress": "bogus"})
+    with patch(
+        "ehi_export_tool.handlers.export_api.ExportJobService.list_batches_page",
+        return_value=([], 0),
+    ) as mock_page:
+        inst.get_batches()
+    assert mock_page.call_args.kwargs["progress"] == ""
 
 
 def test_get_batch_requires_batch_id() -> None:

@@ -19,6 +19,8 @@
   // Tuning knobs.
   const PAGE_LIMIT = 50;
   const REFRESH_MS = 12000;      // auto-refresh the list/runs while on the main view
+  const POLL_INTERVAL_MS = 3000; // single-patient status poll cadence
+  const POLL_MAX_ATTEMPTS = 200; // ~10 min before giving up on a single export
 
   // ── state ──────────────────────────────────────────────────────────────
   const state = {
@@ -42,6 +44,7 @@
     runOffset: 0,
     // all-runs view
     allRunsSearch: "",
+    allRunsProgress: "",         // "" | running | completed | completed_with_errors
     allRunsOffset: 0,
     allRunsSort: "started",      // started | started_by
     allRunsDir: "desc",          // asc | desc
@@ -79,6 +82,7 @@
     allRunsRows: $("all-runs-rows"),
     allRunsEmpty: $("all-runs-empty"),
     allRunsSearch: $("all-runs-search"),
+    allRunsProgress: $("all-runs-progress"),
     allRunsPrev: $("all-runs-prev"),
     allRunsNext: $("all-runs-next"),
     allRunsPageInfo: $("all-runs-page-info"),
@@ -298,22 +302,62 @@
     return btn;
   }
 
-  // One-click export of a single patient: queue it (the cron starts it, throttled).
+  // One-click single-patient export. Starts immediately (no queue/cron wait —
+  // throttling only matters for groups) and polls to completion, live.
   async function exportOne(patient) {
     if (!state.configured) {
       showBanner("Configure FHIR credentials before exporting.", true);
       return;
     }
-    renderPatientJob(patient, { status: "queued", updated_at: new Date().toISOString() });
+    const now = () => new Date().toISOString();
+    const batchId = newBatchId();
+    renderPatientJob(patient, { status: "in-progress", updated_at: now() });
+
+    let jobId;
     try {
-      await postJSON(API + "/export/enqueue", { patient_ids: [patient.id] });
-    } catch (err) {
-      renderPatientJob(patient, {
-        status: "error", last_error: err.message, updated_at: new Date().toISOString(),
+      const resp = await postJSON(API + "/export/start", {
+        patient_id: patient.id,
+        batch_id: batchId,
       });
+      jobId = resp.job_id;
+    } catch (err) {
+      renderPatientJob(patient, { status: "error", last_error: err.message, updated_at: now() });
+      loadRuns();
       return;
     }
     loadRuns();
+
+    let attempts = 0;
+    while (attempts < POLL_MAX_ATTEMPTS) {
+      let st;
+      try {
+        st = await getJSON(API + "/export/status?" + buildQuery({ job_id: jobId }));
+      } catch (err) {
+        renderPatientJob(patient, { status: "error", last_error: err.message, updated_at: now() });
+        loadRuns();
+        return;
+      }
+      if (st.ready) {
+        renderPatientJob(patient, { status: "complete", job_id: jobId, updated_at: now() });
+        loadRuns();
+        return;
+      }
+      if (st.status === "error") {
+        renderPatientJob(patient, { status: "error", last_error: st.progress, updated_at: now() });
+        loadRuns();
+        return;
+      }
+      attempts++;
+      await sleep(POLL_INTERVAL_MS);
+    }
+    renderPatientJob(patient, {
+      status: "error", last_error: "timed out waiting for export", updated_at: now(),
+    });
+  }
+
+  function newBatchId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "batch-" + Date.now() + "-" + Math.floor(Math.random() * 1e9);
   }
 
   // ── selection / sort / pager ────────────────────────────────────────────
@@ -418,16 +462,19 @@
 
   function syncSelectionUI() {
     const n = state.selected.size;
+    // Group/bulk export requires S3 (so the whole run can be grabbed via S3);
+    // single-patient export (the per-row button) works without S3.
+    const bulkOk = state.configured && state.s3Configured;
     els.selectionSummary.textContent = `${n} selected`;
     els.exportBtn.textContent = `Export selected (${n})`;
-    els.exportBtn.disabled = n === 0 || !state.configured;
+    els.exportBtn.disabled = n === 0 || !bulkOk;
     els.exportAllBtn.textContent = `Export all matching (${state.total})`;
-    els.exportAllBtn.disabled = state.total === 0 || !state.configured;
+    els.exportAllBtn.disabled = state.total === 0 || !bulkOk;
     if (!state.configured) {
       els.exportHint.textContent = "Configure FHIR credentials before exporting.";
     } else if (!state.s3Configured) {
       els.exportHint.textContent =
-        "Note: S3 isn't configured — exports will run but won't be downloadable until S3 is set up.";
+        "Group export needs S3. Single-patient export (the Export button on a row) works without it.";
     } else {
       els.exportHint.textContent =
         "Exports queue and run in the background — track them under Export runs.";
@@ -454,9 +501,9 @@
       );
     } else if (!state.s3Configured) {
       showBanner(
-        "S3 storage is not configured. Set S3_ACCESS_KEY, S3_SECRET_KEY, S3_REGION and " +
-        "S3_BUCKET so prepared exports can be stored and downloaded.",
-        true
+        "S3 isn't configured, so group export is disabled. Single-patient export still " +
+        "works — use the Export button on any row. Configure S3 to export whole groups.",
+        false
       );
     }
     syncSelectionUI();
@@ -464,32 +511,18 @@
 
   // ── download (presigned S3) ────────────────────────────────────────────
 
-  // A "Download" button that asks the server for a presigned URL (preparing the
-  // file on demand if needed) and opens it. The JSON is one patient's bundle,
-  // streamed straight from S3 — never assembled in the browser.
+  // A "Download" link for one patient's NDJSON. The plugin serves the file
+  // (streamed directly, or redirected to S3 when configured) — the user just
+  // clicks; they never hit a Canvas endpoint themselves.
   function makeDownloadLink(patient, jobId) {
-    const btn = document.createElement("button");
-    btn.className = "btn btn--link";
-    btn.textContent = "Download";
-    btn.title = "Download this patient's export (prepared in S3, no new $export)";
-    btn.addEventListener("click", () => downloadViaPresigned(patient, jobId, btn));
-    return btn;
-  }
-
-  async function downloadViaPresigned(patient, jobId, btn) {
-    const prev = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Preparing…";
-    try {
-      const data = await getJSON(API + "/download?" + buildQuery({ job_id: jobId }));
-      if (!data.url) throw new Error("no download URL returned");
-      window.open(data.url, "_blank", "noopener");
-    } catch (err) {
-      showBanner(`Download failed for ${patient.name || patient.id}: ${err.message}`, true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = prev;
-    }
+    const a = document.createElement("a");
+    a.className = "btn btn--link";
+    a.textContent = "Download";
+    a.title = "Download this patient's export (.ndjson)";
+    a.href = API + "/download?" + buildQuery({ job_id: jobId });
+    a.target = "_blank";
+    a.rel = "noopener";
+    return a;
   }
 
   // ── export orchestration (fire-and-forget) ──────────────────────────────
@@ -573,6 +606,7 @@
         limit: ALL_RUNS_PAGE,
         offset: state.allRunsOffset,
         search: state.allRunsSearch,
+        progress: state.allRunsProgress,
         sort: state.allRunsSort,
         dir: state.allRunsDir,
       }));
@@ -657,8 +691,10 @@
 
   function openAllRuns() {
     state.allRunsSearch = "";
+    state.allRunsProgress = "";
     state.allRunsOffset = 0;
     els.allRunsSearch.value = "";
+    if (els.allRunsProgress) els.allRunsProgress.value = "";
     setView("all-runs");
     loadAllRuns();
   }
@@ -854,6 +890,11 @@
       state.allRunsOffset = 0;
       loadAllRuns();
     }, 300);
+  });
+  els.allRunsProgress.addEventListener("change", () => {
+    state.allRunsProgress = els.allRunsProgress.value;
+    state.allRunsOffset = 0;
+    loadAllRuns();
   });
   els.allRunsPrev.addEventListener("click", () => {
     state.allRunsOffset = Math.max(0, state.allRunsOffset - ALL_RUNS_PAGE);

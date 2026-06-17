@@ -54,19 +54,19 @@ class ExportStorage:
         return all(secrets.get(name) for name in _REQUIRED)
 
     def patient_key(self, batch_id: str, patient_id: str, patient_name: str = "") -> str:
-        """Build the S3 object key for a patient's export JSON."""
+        """Build the S3 object key for a patient's export NDJSON."""
         folder = _safe_segment(batch_id, fallback="unbatched")
         name = _safe_segment(f"{patient_name}_{patient_id}".strip("_"), fallback=patient_id)
-        return f"{self._prefix}/{folder}/{name}.json"
+        return f"{self._prefix}/{folder}/{name}.ndjson"
 
     def batch_prefix(self, batch_id: str) -> str:
         """The S3 key prefix for an entire run (for `aws s3 sync`)."""
         return f"{self._prefix}/{_safe_segment(batch_id, fallback='unbatched')}/"
 
-    def upload_json(self, object_key: str, json_text: str) -> bool:
-        """Upload prepared JSON text as application/json. Returns True on success."""
+    def upload_ndjson(self, object_key: str, ndjson_text: str) -> bool:
+        """Upload prepared NDJSON text as application/x-ndjson. Returns True on success."""
         response = self._client.upload_binary_to_s3(
-            object_key, json_text.encode("utf-8"), "application/json"
+            object_key, ndjson_text.encode("utf-8"), "application/x-ndjson"
         )
         ok = bool(response and getattr(response, "ok", False))
         if not ok:

@@ -39,25 +39,25 @@ def test_patient_key_sanitizes_segments() -> None:
         storage = ExportStorage.from_secrets(FULL)
     key = storage.patient_key(batch_id="b 1", patient_id="p-1", patient_name="O'Brien, Ána")
     assert key.startswith("ehi-exports/b_1/")
-    assert key.endswith(".json")
+    assert key.endswith(".ndjson")
     assert " " not in key and "'" not in key
 
 
-def test_upload_json_uses_application_json_and_reports_success() -> None:
+def test_upload_ndjson_uses_ndjson_content_type_and_reports_success() -> None:
     client = MagicMock()
     client.upload_binary_to_s3.return_value = MagicMock(ok=True)
     storage = ExportStorage(client, "ehi-exports")
-    assert storage.upload_json("k.json", '{"a": 1}') is True
+    assert storage.upload_ndjson("k.ndjson", '{"a": 1}') is True
     args = client.upload_binary_to_s3.call_args[0]
-    assert args[0] == "k.json"
-    assert args[2] == "application/json"
+    assert args[0] == "k.ndjson"
+    assert args[2] == "application/x-ndjson"
 
 
-def test_upload_json_returns_false_on_failure() -> None:
+def test_upload_ndjson_returns_false_on_failure() -> None:
     client = MagicMock()
     client.upload_binary_to_s3.return_value = None  # not ready
     storage = ExportStorage(client, "ehi-exports")
-    assert storage.upload_json("k.json", "{}") is False
+    assert storage.upload_ndjson("k.ndjson", "{}") is False
 
 
 def test_presigned_url_delegates_to_client() -> None:

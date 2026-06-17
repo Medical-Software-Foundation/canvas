@@ -42,19 +42,19 @@ def test_builds_uploads_and_marks_when_complete() -> None:
     job = _job()
     client = MagicMock()
     client.get_status.return_value = {"status": "complete", "output": [{"url": "u"}]}
-    client.build_patient_bundle.return_value = {"resourceType": "Bundle", "entry": {}}
+    client.build_patient_ndjson.return_value = '{"resourceType":"Patient"}'
     storage = MagicMock()
-    storage.patient_key.return_value = "ehi-exports/b1/Lovelace_Ada_p-1.json"
-    storage.upload_json.return_value = True
+    storage.patient_key.return_value = "ehi-exports/b1/Lovelace_Ada_p-1.ndjson"
+    storage.upload_ndjson.return_value = True
     with patch(f"{_SVC}.mark_uploaded") as mock_mark:
         result = prepare_job(client, storage, job)
 
     assert result.status == PreparationResult.READY
-    assert result.s3_key == "ehi-exports/b1/Lovelace_Ada_p-1.json"
-    client.build_patient_bundle.assert_called_once_with("p-1", [{"url": "u"}])
-    storage.upload_json.assert_called_once()
+    assert result.s3_key == "ehi-exports/b1/Lovelace_Ada_p-1.ndjson"
+    client.build_patient_ndjson.assert_called_once_with([{"url": "u"}])
+    storage.upload_ndjson.assert_called_once()
     mock_mark.assert_called_once_with(
-        "j1", "ehi-exports/b1/Lovelace_Ada_p-1.json", output=[{"url": "u"}]
+        "j1", "ehi-exports/b1/Lovelace_Ada_p-1.ndjson", output=[{"url": "u"}]
     )
 
 
@@ -62,10 +62,10 @@ def test_returns_failed_when_upload_fails() -> None:
     job = _job()
     client = MagicMock()
     client.get_status.return_value = {"status": "complete", "output": [{"url": "u"}]}
-    client.build_patient_bundle.return_value = {"resourceType": "Bundle"}
+    client.build_patient_ndjson.return_value = '{"resourceType":"Patient"}'
     storage = MagicMock()
-    storage.patient_key.return_value = "k.json"
-    storage.upload_json.return_value = False
+    storage.patient_key.return_value = "k.ndjson"
+    storage.upload_ndjson.return_value = False
     with patch(f"{_SVC}.update_status") as mock_update, patch(f"{_SVC}.mark_uploaded") as mock_mark:
         result = prepare_job(client, storage, job)
 

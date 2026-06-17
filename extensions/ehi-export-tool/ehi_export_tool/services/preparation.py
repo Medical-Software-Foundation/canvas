@@ -1,15 +1,13 @@
-"""prepare_job — ensure a completed export's JSON is stored in S3.
+"""prepare_job — ensure a completed export's NDJSON is stored in S3.
 
-Shared by the background cron (which prepares completed jobs proactively) and the
-on-demand download endpoint (which prepares a single job if the user clicks
-before the cron gets to it). Either way the heavy work — merging the patient's
-NDJSON files into one JSON — happens server-side for a single patient, never a
-big in-memory archive.
+Used by the background cron (which prepares completed jobs proactively when S3 is
+configured) and the on-demand download endpoint (which prepares a single job if
+the user clicks before the cron gets to it). Either way the work — concatenating
+the patient's NDJSON files into one .ndjson — happens server-side for a single
+patient, never a big in-memory archive.
 """
 
 from __future__ import annotations
-
-import json
 
 from logger import log
 
@@ -47,13 +45,13 @@ def prepare_job(client: EHIExportClient, storage: ExportStorage, job) -> Prepara
         ExportJobService.update_status(job.job_id, status["status"], output=status.get("output"))
         return PreparationResult(PreparationResult.PENDING)
 
-    bundle = client.build_patient_bundle(str(job.patient.id), status["output"])
+    ndjson = client.build_patient_ndjson(status["output"])
     key = storage.patient_key(
         batch_id=job.batch_id,
         patient_id=str(job.patient.id),
         patient_name=_patient_name(job.patient),
     )
-    if not storage.upload_json(key, json.dumps(bundle)):
+    if not storage.upload_ndjson(key, ndjson):
         ExportJobService.update_status(
             job.job_id, "complete", output=status["output"], error="S3 upload failed"
         )

@@ -137,51 +137,40 @@ def test_get_status_error_on_unexpected_code() -> None:
     assert "500" in status["progress"]
 
 
-# ── fetch_ndjson_resources ───────────────────────────────────────────────────
+# ── _fetch_text (with retry) ─────────────────────────────────────────────────
 
 
-def test_fetch_ndjson_parses_each_line() -> None:
+def test_fetch_text_returns_body() -> None:
     client = _make_client()
-    ndjson = (
-        '{"resourceType": "Patient", "id": "p1"}\n'
-        "\n"  # blank line should be skipped
-        '{"resourceType": "Observation", "id": "o1"}\n'
-    )
-    resp = _response(status_code=HTTPStatus.OK, text=ndjson, ok=True)
+    resp = _response(status_code=HTTPStatus.OK, text="line1\nline2", ok=True)
     with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp:
         MockHttp.return_value.get.return_value = resp
-        resources = client.fetch_ndjson_resources("https://x/file1")
-
-    assert len(resources) == 2
-    assert resources[0]["resourceType"] == "Patient"
-    assert resources[1]["id"] == "o1"
+        assert client._fetch_text("https://x/file1") == "line1\nline2"
 
 
-def test_fetch_ndjson_raises_on_error_response() -> None:
+def test_fetch_text_raises_on_error_response() -> None:
     client = _make_client()
     resp = _response(status_code=HTTPStatus.NOT_FOUND, text="missing", ok=False)
     with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp:
         MockHttp.return_value.get.return_value = resp
         with pytest.raises(EHIExportError, match="failed to download"):
-            client.fetch_ndjson_resources("https://x/file1")
+            client._fetch_text("https://x/file1")
 
 
-def test_fetch_ndjson_retries_transient_503_then_succeeds() -> None:
+def test_fetch_text_retries_transient_503_then_succeeds() -> None:
     client = _make_client()
     bad = _response(status_code=HTTPStatus.SERVICE_UNAVAILABLE, text="503", ok=False)
-    good = _response(status_code=HTTPStatus.OK, text='{"resourceType": "Patient"}', ok=True)
+    good = _response(status_code=HTTPStatus.OK, text='{"resourceType":"Patient"}', ok=True)
     with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp, patch(
         "ehi_export_tool.utils.fhir_client.time.sleep"
     ) as mock_sleep:
         MockHttp.return_value.get.side_effect = [bad, good]
-        resources = client.fetch_ndjson_resources("https://x/file1")
-
-    assert len(resources) == 1
-    assert MockHttp.return_value.get.call_count == 2  # retried once
+        client._fetch_text("https://x/file1")
+    assert MockHttp.return_value.get.call_count == 2
     mock_sleep.assert_called_once()
 
 
-def test_fetch_ndjson_gives_up_after_max_attempts() -> None:
+def test_fetch_text_gives_up_after_max_attempts() -> None:
     client = _make_client()
     bad = _response(status_code=HTTPStatus.SERVICE_UNAVAILABLE, text="503 down", ok=False)
     with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp, patch(
@@ -189,12 +178,11 @@ def test_fetch_ndjson_gives_up_after_max_attempts() -> None:
     ):
         MockHttp.return_value.get.return_value = bad
         with pytest.raises(EHIExportError, match="failed to download"):
-            client.fetch_ndjson_resources("https://x/file1")
-    # 4 attempts total (initial + 3 retries)
-    assert MockHttp.return_value.get.call_count == 4
+            client._fetch_text("https://x/file1")
+    assert MockHttp.return_value.get.call_count == 4  # initial + 3 retries
 
 
-def test_fetch_ndjson_does_not_retry_non_5xx() -> None:
+def test_fetch_text_does_not_retry_non_5xx() -> None:
     client = _make_client()
     bad = _response(status_code=HTTPStatus.FORBIDDEN, text="403", ok=False)
     with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp, patch(
@@ -202,14 +190,14 @@ def test_fetch_ndjson_does_not_retry_non_5xx() -> None:
     ):
         MockHttp.return_value.get.return_value = bad
         with pytest.raises(EHIExportError):
-            client.fetch_ndjson_resources("https://x/file1")
-    assert MockHttp.return_value.get.call_count == 1  # no retry on 403
+            client._fetch_text("https://x/file1")
+    assert MockHttp.return_value.get.call_count == 1
 
 
-# ── build_patient_bundle ─────────────────────────────────────────────────────
+# ── build_patient_ndjson ─────────────────────────────────────────────────────
 
 
-def test_build_patient_bundle_merges_all_files() -> None:
+def test_build_patient_ndjson_concatenates_all_files() -> None:
     client = _make_client()
     output = [
         {"type": "Patient", "url": "https://x/patients"},
@@ -217,10 +205,11 @@ def test_build_patient_bundle_merges_all_files() -> None:
         {"type": "Empty", "url": None},  # missing url is skipped
     ]
     files = {
-        "https://x/patients": '{"resourceType": "Patient", "id": "p1"}',
+        "https://x/patients": '{"resourceType":"Patient","id":"p1"}\n',
         "https://x/observations": (
-            '{"resourceType": "Observation", "id": "o1"}\n'
-            '{"resourceType": "Observation", "id": "o2"}'
+            '{"resourceType":"Observation","id":"o1"}\n'
+            "\n"  # blank lines dropped
+            '{"resourceType":"Observation","id":"o2"}'
         ),
     }
 
@@ -229,46 +218,17 @@ def test_build_patient_bundle_merges_all_files() -> None:
 
     with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp:
         MockHttp.return_value.get.side_effect = fake_get
-        bundle = client.build_patient_bundle("patient-1", output)
+        ndjson = client.build_patient_ndjson(output)
 
-    assert bundle["resourceType"] == "Bundle"
-    assert bundle["type"] == "collection"
-    assert bundle["total"] == 3
-    assert bundle["id"] == "ehi-export-patient-1"
-
-    # entry is now a dict keyed by resourceType: {"Type": {"total": n, "entry": [...]}}
-    entry = bundle["entry"]
-    assert set(entry.keys()) == {"Patient", "Observation"}
-    assert entry["Patient"]["total"] == 1
-    assert entry["Patient"]["entry"][0]["id"] == "p1"
-    assert entry["Observation"]["total"] == 2
-    assert [r["id"] for r in entry["Observation"]["entry"]] == ["o1", "o2"]
+    lines = ndjson.split("\n")
+    assert lines == [
+        '{"resourceType":"Patient","id":"p1"}',
+        '{"resourceType":"Observation","id":"o1"}',
+        '{"resourceType":"Observation","id":"o2"}',
+    ]
 
 
-def test_build_patient_bundle_groups_by_resource_type_over_declared() -> None:
-    """Grouping uses each resource's own resourceType, not the file's declared type."""
-    client = _make_client()
-    output = [{"type": "MixedFile", "url": "https://x/mixed"}]
-    ndjson = (
-        '{"resourceType": "Condition", "id": "c1"}\n'
-        '{"resourceType": "Condition", "id": "c2"}\n'
-        '{"id": "no-type"}\n'  # falls back to declared type "MixedFile"
-    )
-
-    def fake_get(url, headers=None):
-        return _response(status_code=HTTPStatus.OK, text=ndjson, ok=True)
-
-    with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp:
-        MockHttp.return_value.get.side_effect = fake_get
-        bundle = client.build_patient_bundle("patient-1", output)
-
-    assert bundle["entry"]["Condition"]["total"] == 2
-    assert bundle["entry"]["MixedFile"]["total"] == 1  # the typeless resource
-
-
-def test_build_patient_bundle_empty_output() -> None:
+def test_build_patient_ndjson_empty_output() -> None:
     client = _make_client()
     with patch("ehi_export_tool.utils.fhir_client.Http"):
-        bundle = client.build_patient_bundle("patient-1", [])
-    assert bundle["total"] == 0
-    assert bundle["entry"] == {}
+        assert client.build_patient_ndjson([]) == ""

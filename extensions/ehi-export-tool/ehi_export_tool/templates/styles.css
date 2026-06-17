@@ -332,6 +332,7 @@ body {
   box-shadow: 0 0 0 3px rgba(26, 111, 196, 0.12);
 }
 .run-filters__search { flex: 1 1 340px; max-width: 520px; }
+.run-filters__progress { flex: 0 0 auto; min-width: 180px; background: #fff; }
 .filter-select {
   padding: 7px 10px;
   border: 1px solid #cbd5e1;

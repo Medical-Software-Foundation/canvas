@@ -251,6 +251,7 @@ class ExportJobService:
         cls,
         *,
         search: str = "",
+        progress: str = "",
         offset: int = 0,
         limit: int = 25,
         sort: str = "started",
@@ -260,9 +261,11 @@ class ExportJobService:
 
         ``search`` matches a run by the staff member who started it OR by any
         patient it contains — name or patient key (id), case-insensitive.
-        ``sort`` is started | started_by; ``dir`` asc | desc. Returns
-        ``(rows, total)``; counts always reflect the whole run even when the
-        search matched on a single patient.
+        ``progress`` filters by the run's derived state — running | completed |
+        completed_with_errors (see ``BATCH_PROGRESS_FILTERS``). ``sort`` is
+        started | started_by; ``dir`` asc | desc. Returns ``(rows, total)``;
+        counts always reflect the whole run even when the search matched on a
+        single patient.
         """
         from django.db.models import Count, Max, Min, Q
 
@@ -293,6 +296,11 @@ class ExportJobService:
             staff_last=Max("started_by__last_name"),
         )
 
+        # Filter by the run's derived progress, evaluated on the aggregated counts.
+        progress_filter = cls._batch_progress_q(progress, Q)
+        if progress_filter is not None:
+            grouped = grouped.filter(progress_filter)
+
         prefix = "-" if (dir or "").lower() == "desc" else ""
         field = cls.BATCH_SORTS.get(sort, "created")
         if field == "staff_last":
@@ -318,6 +326,26 @@ class ExportJobService:
             for row in page
         ]
         return rows, total
+
+    # Valid run-progress filter values for the "all runs" page.
+    BATCH_PROGRESS_FILTERS = ("running", "completed", "completed_with_errors")
+
+    @staticmethod
+    def _batch_progress_q(progress: str, Q: Any) -> Any:
+        """Build a ``Q`` over the aggregated run counts for the given progress value.
+
+        ``running`` = still has queued or in-progress jobs; ``completed`` = all
+        done with no failures; ``completed_with_errors`` = all done, some failed.
+        Returns ``None`` for an empty/unknown value (no filter).
+        """
+        value = (progress or "").strip()
+        if value == "running":
+            return Q(queued__gt=0) | Q(in_progress__gt=0)
+        if value == "completed":
+            return Q(queued=0, in_progress=0, failed=0)
+        if value == "completed_with_errors":
+            return Q(queued=0, in_progress=0, failed__gt=0)
+        return None
 
     # UI export-filter value -> ExportJob.status (None sentinel = "no export").
     EXPORT_FILTERS = {
