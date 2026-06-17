@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.157.0",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.3.0",
     "name": "lab_order_favorites",
     "description": "Create and reuse lab order favorites (single test or multi-test panels) as staged lab order commands, with personal/shared visibility, tags, search, and CSV bulk upload.",
     "components": {
@@ -35,11 +35,15 @@
             },
             {
                 "class": "lab_order_favorites.protocols.favorites_api:OpenNotesAPI",
-                "description": "List a patient's open notes for the insert target picker"
+                "description": "List a patient's open encounter and chart review notes for the insert target picker"
             },
             {
                 "class": "lab_order_favorites.protocols.favorites_api:InsertFavoriteAPI",
                 "description": "Validate a favorite and insert it as a staged lab order command"
+            },
+            {
+                "class": "lab_order_favorites.protocols.favorites_api:CreateChartReviewAPI",
+                "description": "Create a chart review note and stage selected favorites when no open encounter note exists"
             }
         ],
         "applications": [

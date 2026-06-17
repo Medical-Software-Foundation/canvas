@@ -6,16 +6,18 @@ Backs both applications:
 """
 
 import json
+from datetime import datetime, timezone
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from canvas_sdk.commands import LabOrderCommand
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.note.note import Note as NoteEffect
 from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPIRoute, StaffSessionAuthMixin
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data import CurrentNoteStateEvent, Note, Patient
-from canvas_sdk.v1.data.note import NoteStates
+from canvas_sdk.v1.data.note import NoteStates, NoteTypeCategories
 from logger import log
 
 API_BASE = "/plugin-io/api/lab_order_favorites"
@@ -28,6 +30,10 @@ from lab_order_favorites.services.lab_catalog import (
     list_tests_for_partner,
     resolve_partner,
 )
+from lab_order_favorites.services.notes import (
+    chart_review_note_type_id,
+    default_practice_location_id,
+)
 from lab_order_favorites.services.providers import list_ordering_providers, resolve_provider
 
 OPEN_NOTE_STATES = [
@@ -38,6 +44,11 @@ OPEN_NOTE_STATES = [
     NoteStates.RESTORED,
     NoteStates.UNDELETED,
 ]
+
+# Lab orders can only be staged into notes where they belong: encounter (visit)
+# notes and chart review notes. Messages and letters never lock, so a state-only
+# filter would surface them even though a lab order cannot be inserted there.
+INSERT_TARGET_CATEGORIES = [NoteTypeCategories.ENCOUNTER, NoteTypeCategories.REVIEW]
 
 
 class _FavoritesHelpers:
@@ -441,50 +452,9 @@ class InsertFavoriteAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRoute
         if note_uuid not in open_note_ids:
             return [JSONResponse({"error": "Selected note is not an open note for this patient", "success": False}, status_code=400)]
 
-        service = self._service()
-        editor_keys = self._editor_keys()
-        inserted: list[dict[str, Any]] = []
-        skipped: list[dict[str, Any]] = []
-        effects: list[Effect] = []
-
-        for favorite_id in favorite_ids:
-            favorite = service.get_favorite(favorite_id, staff_id)
-            if favorite is None:
-                skipped.append({"favorite_id": favorite_id, "name": favorite_id, "reason": "not_found", "can_edit": False})
-                continue
-
-            can_edit = _can_edit(favorite["is_shared"], favorite.get("created_by_id"), staff_id, editor_keys)
-            order_codes = [t.get("order_code", "") for t in favorite["tests"] if t.get("order_code")]
-            availability = check_availability(favorite["lab_partner_id"], order_codes)
-
-            if not availability["partner_found"] or not availability["partner_active"]:
-                reason = "partner_missing" if not availability["partner_found"] else "partner_inactive"
-                skipped.append({"favorite_id": favorite_id, "name": favorite["name"], "reason": reason, "can_edit": can_edit, "owner_name": favorite.get("created_by_name")})
-                continue
-            if availability["stale"]:
-                skipped.append({"favorite_id": favorite_id, "name": favorite["name"], "reason": "stale_codes", "stale_codes": availability["stale"], "can_edit": can_edit, "owner_name": favorite.get("created_by_name")})
-                continue
-
-            # Use the favorite's default ordering provider when it still resolves
-            # to a valid provider; otherwise fall back to the inserting staff
-            # member. Either can be changed in the lab order command.
-            saved_provider = str(favorite.get("ordering_provider_key") or "")
-            ordering_provider_key = staff_id
-            if saved_provider:
-                provider, _reason = resolve_provider(saved_provider)
-                ordering_provider_key = provider["id"] if provider else staff_id
-            effects.append(
-                LabOrderCommand(
-                    note_uuid=note_uuid,
-                    lab_partner=favorite["lab_partner_id"],
-                    tests_order_codes=availability["valid"],
-                    ordering_provider_key=ordering_provider_key,
-                    diagnosis_codes=favorite.get("diagnosis_codes") or [],
-                    fasting_required=bool(favorite.get("fasting_required", False)),
-                    comment=favorite.get("comment") or "",
-                ).originate()
-            )
-            inserted.append({"favorite_id": favorite_id, "name": favorite["name"], "test_count": len(availability["valid"])})
+        inserted, skipped, effects = _stage_favorites(
+            self._service(), favorite_ids, staff_id, note_uuid, self._editor_keys()
+        )
 
         log.info(f"Inserted {len(inserted)} lab order(s), skipped {len(skipped)}, into note {note_uuid}")
         message_parts = []
@@ -506,6 +476,159 @@ class InsertFavoriteAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRoute
             ),
             *effects,
         ]
+
+
+class CreateChartReviewAPI(_FavoritesHelpers, StaffSessionAuthMixin, SimpleAPIRoute):
+    """Create a chart review note and stage the selected favorites into it.
+
+    Used by the patient app when the patient has no open encounter note to add
+    lab orders to. The note is created with the acting user as provider, the
+    current time as the service date, and the provider's default location -
+    matching the New Note button - then each favorite is staged into it in the
+    same action via a self-assigned note UUID.
+    """
+
+    PATH = "/routes/create-review"
+
+    def post(self) -> list[Response | Effect]:
+        staff_id = self._staff_id()
+        if not staff_id:
+            return [JSONResponse({"error": "Staff ID not found", "success": False}, status_code=400)]
+
+        try:
+            body = self._json_body()
+        except ValueError:
+            return [JSONResponse({"error": "Invalid JSON in request body", "success": False}, status_code=400)]
+
+        favorite_ids = _requested_favorite_ids(body)
+        patient_id = str(body.get("patient_id", "")).strip()
+        if not favorite_ids or not patient_id:
+            return [JSONResponse({"error": "favorite_ids and patient_id are required", "success": False}, status_code=400)]
+
+        # Patient.id is a UUIDField - a non-UUID value would raise ValidationError,
+        # so validate the format before touching the database.
+        try:
+            UUID(patient_id)
+        except (ValueError, AttributeError, TypeError):
+            return [JSONResponse({"error": "Patient not found", "success": False}, status_code=404)]
+        if not Patient.objects.filter(id=patient_id).exists():
+            return [JSONResponse({"error": "Patient not found", "success": False}, status_code=404)]
+
+        note_type_id = chart_review_note_type_id()
+        if not note_type_id:
+            return [JSONResponse({"error": "No chart review note type is configured on this instance", "success": False}, status_code=400)]
+
+        location_id = default_practice_location_id(staff_id)
+        if not location_id:
+            return [JSONResponse({"error": "No active practice location is configured on this instance", "success": False}, status_code=400)]
+
+        # Assign the note UUID up front so the staged lab orders can target the
+        # note being created in this same action.
+        note_uuid = str(uuid4())
+        inserted, skipped, effects = _stage_favorites(
+            self._service(), favorite_ids, staff_id, note_uuid, self._editor_keys()
+        )
+
+        if not effects:
+            # Every selected favorite was skipped - don't create an empty review.
+            return [
+                JSONResponse(
+                    {
+                        "chart_review_created": False,
+                        "message": "No valid lab orders to stage",
+                        "inserted": [],
+                        "skipped": skipped,
+                        "success": True,
+                    }
+                )
+            ]
+
+        note_effect = NoteEffect(
+            instance_id=note_uuid,
+            note_type_id=note_type_id,
+            datetime_of_service=datetime.now(timezone.utc),
+            patient_id=patient_id,
+            practice_location_id=location_id,
+            provider_id=staff_id,
+        ).create()
+
+        log.info(
+            f"Created chart review {note_uuid}, staged {len(inserted)} lab order(s), skipped {len(skipped)}"
+        )
+        return [
+            JSONResponse(
+                {
+                    "chart_review_created": True,
+                    "note_uuid": note_uuid,
+                    "message": f"Chart review created with {len(inserted)} lab order(s) staged",
+                    "inserted": inserted,
+                    "skipped": skipped,
+                    "success": True,
+                }
+            ),
+            note_effect,
+            *effects,
+        ]
+
+
+def _stage_favorites(
+    service: FavoritesService,
+    favorite_ids: list[str],
+    staff_id: str,
+    note_uuid: str,
+    editor_keys: set[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Effect]]:
+    """Validate each favorite and build a staged LabOrderCommand for the note.
+
+    Returns ``(inserted, skipped, effects)``. A favorite is skipped (no effect
+    built) when it no longer resolves, its partner is missing/inactive, or its
+    saved test codes are stale. Shared with both the open-note insert and the
+    chart review fallback so the validation rules stay identical.
+    """
+    inserted: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    effects: list[Effect] = []
+
+    for favorite_id in favorite_ids:
+        favorite = service.get_favorite(favorite_id, staff_id)
+        if favorite is None:
+            skipped.append({"favorite_id": favorite_id, "name": favorite_id, "reason": "not_found", "can_edit": False})
+            continue
+
+        can_edit = _can_edit(favorite["is_shared"], favorite.get("created_by_id"), staff_id, editor_keys)
+        order_codes = [t.get("order_code", "") for t in favorite["tests"] if t.get("order_code")]
+        availability = check_availability(favorite["lab_partner_id"], order_codes)
+
+        if not availability["partner_found"] or not availability["partner_active"]:
+            reason = "partner_missing" if not availability["partner_found"] else "partner_inactive"
+            skipped.append({"favorite_id": favorite_id, "name": favorite["name"], "reason": reason, "can_edit": can_edit, "owner_name": favorite.get("created_by_name")})
+            continue
+        if availability["stale"]:
+            skipped.append({"favorite_id": favorite_id, "name": favorite["name"], "reason": "stale_codes", "stale_codes": availability["stale"], "can_edit": can_edit, "owner_name": favorite.get("created_by_name")})
+            continue
+
+        # Use the favorite's default ordering provider when it still resolves to a
+        # valid provider; otherwise fall back to the inserting staff member.
+        # Either can be changed in the lab order command.
+        saved_provider = str(favorite.get("ordering_provider_key") or "")
+        ordering_provider_key = staff_id
+        if saved_provider:
+            provider, _reason = resolve_provider(saved_provider)
+            ordering_provider_key = provider["id"] if provider else staff_id
+        effects.append(
+            LabOrderCommand(
+                note_uuid=note_uuid,
+                lab_partner=favorite["lab_partner_id"],
+                tests_order_codes=availability["valid"],
+                ordering_provider_key=ordering_provider_key,
+                diagnosis_codes=favorite.get("diagnosis_codes") or [],
+                fasting_required=bool(favorite.get("fasting_required", False)),
+                comment=favorite.get("comment") or "",
+            ).originate()
+        )
+        inserted.append({"favorite_id": favorite_id, "name": favorite["name"], "test_count": len(availability["valid"])})
+
+    return inserted, skipped, effects
 
 
 def _resolve_provider_on_body(body: dict[str, Any]) -> JSONResponse | None:
@@ -603,7 +726,11 @@ def _open_notes_for_patient(patient_id: str):  # type: ignore[no-untyped-def]
     ).values_list("note_id", flat=True)
 
     return (
-        Note.objects.filter(dbid__in=open_note_ids, patient=patient)
+        Note.objects.filter(
+            dbid__in=open_note_ids,
+            patient=patient,
+            note_type_version__category__in=INSERT_TARGET_CATEGORIES,
+        )
         .select_related("note_type_version")
         .order_by("-modified")
     )

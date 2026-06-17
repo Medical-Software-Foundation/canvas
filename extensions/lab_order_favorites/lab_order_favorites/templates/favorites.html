@@ -54,8 +54,13 @@
   <div id="list"><div class="empty">Loading...</div></div>
 
   <div class="insert-box" id="insert-box" style="display:none">
-    <label>Insert into note</label>
-    <select id="note-select"><option value="">Loading open notes...</option></select>
+    <div id="note-picker">
+      <label>Insert into note</label>
+      <select id="note-select"><option value="">Loading open notes...</option></select>
+    </div>
+    <div id="no-note-msg" class="notice" style="display:none">
+      No open note. A chart review will be created for these lab orders.
+    </div>
     <button class="primary" id="insert-btn" disabled>Insert lab orders</button>
   </div>
 </div>
@@ -64,6 +69,7 @@
 const API = "{{ api_base }}";
 const PATIENT_ID = "{{ patient_id }}";
 let favorites = [];
+let openNotes = [];   // patient's open encounter + chart review notes
 const selectedIds = new Set();
 const fixState = {};   // favId -> { stale: [...], replace: {code: test} }
 const fixTimers = {};
@@ -138,29 +144,59 @@ function toggleSelect(id) {
 function updateInsertBar() {
   const n = selectedIds.size;
   document.getElementById("insert-box").style.display = n ? "block" : "none";
+  const hasNotes = openNotes.length > 0;
+  document.getElementById("note-picker").style.display = hasNotes ? "block" : "none";
+  document.getElementById("no-note-msg").style.display = hasNotes ? "none" : "block";
   const btn = document.getElementById("insert-btn");
-  btn.textContent = n === 1 ? "Insert lab order" : `Insert ${n} lab orders`;
-  btn.disabled = !(n && document.getElementById("note-select").value);
+  if (hasNotes) {
+    btn.textContent = n === 1 ? "Insert lab order" : `Insert ${n} lab orders`;
+    btn.disabled = !(n && document.getElementById("note-select").value);
+  } else {
+    // No open encounter note - the action creates a chart review and inserts.
+    btn.textContent = n === 1 ? "Create chart review & insert" : `Create chart review & insert ${n}`;
+    btn.disabled = !n;
+  }
 }
 
 async function loadNotes() {
   const r = await fetch(`${API}/routes/notes?patient_id=${encodeURIComponent(PATIENT_ID)}`);
   const d = await r.json();
+  openNotes = d.notes || [];
   const sel = document.getElementById("note-select");
   sel.innerHTML = "";
-  if (!d.notes || !d.notes.length) {
-    sel.innerHTML = '<option value="">No open notes - create a note first</option>';
-    return;
-  }
-  d.notes.forEach(n => {
+  openNotes.forEach(n => {
     const o = document.createElement("option");
     o.value = n.id; o.textContent = n.title + (n.modified ? " (" + n.modified.slice(0, 10) + ")" : "");
     sel.appendChild(o);
   });
+  updateInsertBar();
 }
 
 document.getElementById("note-select").onchange = updateInsertBar;
-document.getElementById("insert-btn").onclick = () => doInsert([...selectedIds]);
+document.getElementById("insert-btn").onclick = () => {
+  const ids = [...selectedIds];
+  if (openNotes.length) { doInsert(ids); } else { doCreateReview(ids); }
+};
+
+async function doCreateReview(ids) {
+  if (!ids.length) { return; }
+  const btn = document.getElementById("insert-btn");
+  btn.disabled = true; btn.textContent = "Creating chart review...";
+  const r = await fetch(`${API}/routes/create-review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ favorite_ids: ids, patient_id: PATIENT_ID })
+  });
+  const d = await r.json();
+  if (!d.success) { updateInsertBar(); msg(d.error || "Could not create chart review", "err"); return; }
+  selectedIds.clear();
+  document.getElementById("insert-box").style.display = "none";
+  // Refresh so a newly created chart review becomes a target for later orders.
+  await loadNotes();
+  renderList();
+  renderResults(d);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
 async function doInsert(ids) {
   const noteUuid = document.getElementById("note-select").value;
@@ -190,9 +226,16 @@ function renderResults(d) {
     const ok = document.createElement("div");
     ok.className = "notice ok";
     // textContent (not innerHTML) - names are inert here.
-    ok.textContent = `${d.inserted.length} lab order(s) staged in the selected note: ` +
+    const where = d.chart_review_created ? "a new chart review" : "the selected note";
+    ok.textContent = `${d.inserted.length} lab order(s) staged in ${where}: ` +
       d.inserted.map(i => i.name).join(", ");
     box.appendChild(ok);
+  } else if (d.chart_review_created === false && (d.skipped || []).length) {
+    // Asked to create a chart review but every favorite was skipped - no note made.
+    const warn = document.createElement("div");
+    warn.className = "notice err";
+    warn.textContent = "No chart review was created - none of the selected favorites could be ordered.";
+    box.appendChild(warn);
   }
   (d.skipped || []).forEach(s => box.appendChild(skipRow(s)));
 }
