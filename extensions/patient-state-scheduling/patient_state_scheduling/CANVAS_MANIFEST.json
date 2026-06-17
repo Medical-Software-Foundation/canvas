@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.112.0",
+    "plugin_version": "0.1.0",
+    "name": "patient_state_scheduling",
+    "description": "Adds a Patient's Current State dropdown to the appointment scheduling form and filters practice locations based on the selected state, using the configurable LOCATION_MAPPING secret.",
+    "components": {
+        "protocols": [
+            {
+                "class": "patient_state_scheduling.protocols.additional_fields:AdditionalFieldsHandler",
+                "description": "Adds a Patient's Current State dropdown to the appointment scheduling form"
+            },
+            {
+                "class": "patient_state_scheduling.protocols.location_filter:LocationFilterHandler",
+                "description": "Filters practice locations based on the selected patient state via the LOCATION_MAPPING secret",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["LOCATION_MAPPING"],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
