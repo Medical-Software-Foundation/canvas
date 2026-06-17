@@ -1,0 +1,33 @@
+# This pyproject.toml is only used for local development and testing.
+# The Canvas plugin has its own packaging process that doesn't use this file.
+
+[project]
+name = "patient-state-scheduling"
+version = "0.1.0"
+description = "Adds a Patient's Current State dropdown to the appointment scheduling form and filters practice locations based on the selected state, using the configurable LOCATION_MAPPING secret."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Cecilia Orta", email = "cecilia.orta@canvasmedical.com" },
+]
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+source = ["patient_state_scheduling"]
+omit = ["tests/*", "*/tests/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
