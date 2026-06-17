@@ -323,9 +323,19 @@ export function ScheduleModal() {
         >
           Cancel
         </Button>
-        <Button data-test="modal-submit-button" onClick={submit} disabled={!!validationError || mutation.isPending}>
-          {mutation.isPending ? "Saving…" : isReschedule ? "Reschedule" : "Book"}
-        </Button>
+        {/* Wrap in a span so the tooltip shows on hover even while the button is
+            disabled: a disabled button has pointer-events:none, so the hover
+            registers on the span. `title` is the specific validation reason
+            (e.g. "Enter a reason for visit."), so the provider knows what's missing. */}
+        <span title={validationError ?? undefined} className="inline-flex">
+          <Button
+            data-test="modal-submit-button"
+            onClick={submit}
+            disabled={!!validationError || mutation.isPending}
+          >
+            {mutation.isPending ? "Saving…" : isReschedule ? "Reschedule" : "Book"}
+          </Button>
+        </span>
       </footer>
     </div>
   );
