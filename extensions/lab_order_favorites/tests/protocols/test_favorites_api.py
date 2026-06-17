@@ -7,6 +7,7 @@ import pytest
 
 from lab_order_favorites.protocols import favorites_api
 from lab_order_favorites.protocols.favorites_api import (
+    CreateChartReviewAPI,
     CSVImportAPI,
     CSVTemplateAPI,
     FavoritesAPI,
@@ -921,3 +922,148 @@ def test_open_notes_helper_builds_filtered_queryset():
     assert notes.filter.call_args.kwargs["patient"] is patient
     # The open-note state filter is the safety gate (no staging into locked/signed notes).
     assert states.filter.call_args.kwargs["state__in"] == favorites_api.OPEN_NOTE_STATES
+    # Only encounter and chart review notes are insert targets - messages/letters,
+    # which never lock, are excluded by category.
+    assert (
+        notes.filter.call_args.kwargs["note_type_version__category__in"]
+        == favorites_api.INSERT_TARGET_CATEGORIES
+    )
+
+
+# --- CreateChartReviewAPI ---
+
+def test_create_review_requires_staff(make_request):
+    handler = _route(CreateChartReviewAPI, make_request(staff_id="", body={}))
+    [resp] = handler.post()
+    assert resp.status_code == 400
+
+
+def test_create_review_invalid_json(make_request, make_staff):
+    staff = make_staff()
+    request = make_request(staff_id=str(staff.id))
+    request.json = MagicMock(side_effect=ValueError("bad"))
+    request.body = b"x"
+    handler = _route(CreateChartReviewAPI, request)
+    [resp] = handler.post()
+    assert resp.status_code == 400
+
+
+def test_create_review_requires_fields(make_request, make_staff):
+    staff = make_staff()
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body={"patient_id": ""}))
+    [resp] = handler.post()
+    assert resp.status_code == 400
+
+
+def test_create_review_rejects_non_uuid_patient(make_request, make_staff):
+    staff = make_staff()
+    body = {"favorite_ids": ["x"], "patient_id": "not-a-uuid"}
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body=body))
+    [resp] = handler.post()
+    assert resp.status_code == 404
+
+
+def test_create_review_patient_not_found(make_request, make_staff):
+    staff = make_staff()
+    pid = "11111111-1111-1111-1111-111111111111"
+    body = {"favorite_ids": ["x"], "patient_id": pid}
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body=body))
+    with patch.object(favorites_api, "Patient") as P:
+        P.objects.filter.return_value.exists.return_value = False
+        [resp] = handler.post()
+    assert resp.status_code == 404
+
+
+def test_create_review_no_chart_review_type_configured(make_request, make_staff):
+    staff = make_staff()
+    pid = "11111111-1111-1111-1111-111111111111"
+    body = {"favorite_ids": ["x"], "patient_id": pid}
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body=body))
+    with patch.object(favorites_api, "Patient") as P, \
+         patch.object(favorites_api, "chart_review_note_type_id", return_value=None):
+        P.objects.filter.return_value.exists.return_value = True
+        [resp] = handler.post()
+    assert resp.status_code == 400
+    assert "chart review note type" in _body(resp)["error"]
+
+
+def test_create_review_no_active_location(make_request, make_staff):
+    staff = make_staff()
+    pid = "11111111-1111-1111-1111-111111111111"
+    body = {"favorite_ids": ["x"], "patient_id": pid}
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body=body))
+    with patch.object(favorites_api, "Patient") as P, \
+         patch.object(favorites_api, "chart_review_note_type_id", return_value="review-type-id"), \
+         patch.object(favorites_api, "default_practice_location_id", return_value=None):
+        P.objects.filter.return_value.exists.return_value = True
+        [resp] = handler.post()
+    assert resp.status_code == 400
+    assert "practice location" in _body(resp)["error"]
+
+
+def test_create_review_creates_note_and_stages_orders(make_request, make_staff, make_partner):
+    staff = make_staff()
+    partner = make_partner(tests=[("001", "Glucose"), ("002", "Lipid")])
+    fav = _make_favorite(staff, partner, ["001", "002"])
+    pid = "11111111-1111-1111-1111-111111111111"
+    body = {"favorite_ids": [fav["id"]], "patient_id": pid}
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body=body))
+
+    fake_cmd = MagicMock()
+    fake_cmd.originate.return_value = "ORDER_EFFECT"
+    fake_note = MagicMock()
+    fake_note.create.return_value = "NOTE_EFFECT"
+    with patch.object(favorites_api, "Patient") as P, \
+         patch.object(favorites_api, "chart_review_note_type_id", return_value="review-type-id"), \
+         patch.object(favorites_api, "default_practice_location_id", return_value="loc-id"), \
+         patch.object(favorites_api, "NoteEffect", return_value=fake_note) as note_cls, \
+         patch.object(favorites_api, "LabOrderCommand", return_value=fake_cmd) as cmd_cls:
+        P.objects.filter.return_value.exists.return_value = True
+        result = handler.post()
+
+    data = _body(result[0])
+    assert data["success"] is True
+    assert data["chart_review_created"] is True
+    assert len(data["inserted"]) == 1
+    assert data["skipped"] == []
+    # The note create effect comes first, then the staged lab order(s).
+    assert result[1] == "NOTE_EFFECT"
+    assert result[2] == "ORDER_EFFECT"
+
+    # The note is created with the acting user as provider, plus the resolved
+    # chart review type and default location.
+    _, nkwargs = note_cls.call_args
+    assert nkwargs["note_type_id"] == "review-type-id"
+    assert nkwargs["practice_location_id"] == "loc-id"
+    assert nkwargs["provider_id"] == str(staff.id)
+    assert nkwargs["patient_id"] == pid
+    assert nkwargs["datetime_of_service"] is not None
+    assert str(nkwargs["instance_id"]) == data["note_uuid"]
+
+    # The lab order is staged into the note being created in the same action.
+    _, ckwargs = cmd_cls.call_args
+    assert ckwargs["note_uuid"] == data["note_uuid"]
+    assert ckwargs["tests_order_codes"] == ["001", "002"]
+    assert ckwargs["ordering_provider_key"] == str(staff.id)
+
+
+def test_create_review_skips_all_does_not_create_note(make_request, make_staff):
+    staff = make_staff()
+    pid = "11111111-1111-1111-1111-111111111111"
+    # An unknown favorite id resolves to nothing, so there is nothing to stage.
+    body = {"favorite_ids": ["does-not-exist"], "patient_id": pid}
+    handler = _route(CreateChartReviewAPI, make_request(staff_id=str(staff.id), body=body))
+    with patch.object(favorites_api, "Patient") as P, \
+         patch.object(favorites_api, "chart_review_note_type_id", return_value="review-type-id"), \
+         patch.object(favorites_api, "default_practice_location_id", return_value="loc-id"), \
+         patch.object(favorites_api, "NoteEffect") as note_cls:
+        P.objects.filter.return_value.exists.return_value = True
+        result = handler.post()
+
+    # No note effect emitted, only the JSON response.
+    assert len(result) == 1
+    data = _body(result[0])
+    assert data["success"] is True
+    assert data["chart_review_created"] is False
+    assert len(data["skipped"]) == 1
+    note_cls.assert_not_called()
