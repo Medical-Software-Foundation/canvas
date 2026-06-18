@@ -391,6 +391,30 @@ def test_comment_reason_for_visit_uses_structured_coding_text() -> None:
     assert "Reason for visit: Hypertension follow-up" in body
 
 
+def test_comment_reason_for_visit_combines_coding_and_comment() -> None:
+    """Both the coding text and the free-text comment appear when present."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    note_type = NoteType.objects.create(name="Office Visit")
+    note = Note.objects.create(note_type_version=note_type, provider=provider)
+    Command.objects.create(
+        note=note,
+        schema_key="reasonForVisit",
+        state="staged",
+        data={
+            "coding": {"text": "Hypertension"},
+            "comment": "patient reports dizziness",
+        },
+        anchor_object_dbid=0,
+    )
+    appointment = _create_appointment(
+        patient, provider, start_time=_future(), note=note
+    )
+
+    body = _comment_data(_make_handler(appointment.id, {}).compute()[1])["body"]
+    assert "Reason for visit: Hypertension — patient reports dizziness" in body
+
+
 def test_comment_reason_for_visit_falls_back_to_comment_when_command_empty() -> None:
     """An RFV command with no usable text falls back to the appointment comment."""
     patient = PatientFactory.create()
@@ -422,6 +446,28 @@ def test_comment_reason_for_visit_defaults_when_unknown() -> None:
     assert "Reason for visit: Not documented" in body
     assert "Location: Not specified" in body
     assert "Note type: Not specified" in body
+
+
+# --------------------------------------------------------------------------- #
+# Task title
+# --------------------------------------------------------------------------- #
+def test_task_title_includes_provider_name() -> None:
+    """The provider's name appears in the task title."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    appointment = _create_appointment(patient, provider, start_time=_future())
+
+    title = _task_data(_make_handler(appointment.id, {}).compute()[0])["title"]
+    assert f"with {provider.full_name}" in title
+
+
+def test_task_title_omits_provider_when_absent() -> None:
+    """With no provider, the title drops the 'with …' clause cleanly."""
+    patient = PatientFactory.create()
+    appointment = _create_appointment(patient, None, start_time=_future())
+
+    title = _task_data(_make_handler(appointment.id, {}).compute()[0])["title"]
+    assert title.startswith("Reschedule cancelled appointment (originally")
 
 
 # --------------------------------------------------------------------------- #

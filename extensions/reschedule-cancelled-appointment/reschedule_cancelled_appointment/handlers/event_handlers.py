@@ -201,21 +201,31 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
 
     @staticmethod
     def _rfv_text(data: dict) -> str:
-        """Extract the reason text from a Reason For Visit command's data."""
+        """Extract the reason text from a Reason For Visit command's data.
+
+        Combines the structured coding text and the free-text comment when both
+        are present.
+        """
+        parts: list[str] = []
+
         coding = data.get("coding")
-        if isinstance(coding, dict) and coding.get("text"):
-            return str(coding["text"]).strip()
+        if isinstance(coding, dict):
+            coding_text = str(coding.get("text") or "").strip()
+            if coding_text:
+                parts.append(coding_text)
 
-        comment = data.get("comment")
+        comment = str(data.get("comment") or "").strip()
         if comment:
-            return str(comment).strip()
+            parts.append(comment)
 
-        return ""
+        return " — ".join(parts)
 
     def _task_title(self, appointment: Appointment, tz: str) -> str:
-        """Human-readable task title referencing the original appointment time."""
+        """Human-readable task title with provider and original appointment time."""
         original = self._format_local(appointment.start_time, tz)
-        return f"Reschedule cancelled appointment (originally {original})"
+        provider = appointment.provider.full_name if appointment.provider else None
+        suffix = f" with {provider}" if provider else ""
+        return f"Reschedule cancelled appointment{suffix} (originally {original})"
 
     def _timezone(self) -> str:
         """The instance timezone (IANA name) from the environment, or UTC.
