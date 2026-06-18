@@ -69,9 +69,11 @@ instance configuration (`INSTALLATION_TIME_ZONE`), not a setting.
 
 ## Screenshots
 
-<!-- TODO before publishing: add a screenshot of the generated reschedule task
-     (with its summary comment) in a patient's chart, captured from a live
-     Canvas instance. -->
+The reschedule task created in a patient's chart after a cancellation — titled
+with the provider and original appointment time, due the next day, labelled
+`Reschedule`, with a comment summarising the original appointment:
+
+![Reschedule task generated from a cancelled appointment](docs/reschedule-task.png)
 
 ## Development
 
