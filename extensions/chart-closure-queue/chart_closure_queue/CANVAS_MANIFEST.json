@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.169.1",
-    "plugin_version": "0.0.5",
+    "plugin_version": "0.0.6",
     "name": "chart_closure_queue",
     "description": "Global provider companion app that shows the logged-in clinician one aged worklist of their own open/unsigned notes that still need to be locked, oldest first, with configurable amber/red aging highlights. Read-only; each row deep-links to the patient chart.",
     "components": {
