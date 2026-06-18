@@ -1,0 +1,28 @@
+[project]
+authors = [
+  {email = "kevin.carey@canvasmedical.com", name = "Kevin Carey"}
+]
+name = "facility-recurring-scheduler"
+version = "1.6.0"
+description = "Recurring scheduling for all event types, plus facility selection and automatic naming for Other Events."
+readme = "facility_recurring_scheduler/README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+    "python-dateutil>=2.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+    "types-python-dateutil>=2.9.0.20260124",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
