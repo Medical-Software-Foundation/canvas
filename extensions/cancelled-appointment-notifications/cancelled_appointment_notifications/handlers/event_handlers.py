@@ -35,7 +35,7 @@ INSTALLATION_TIME_ZONE_ENV = "INSTALLATION_TIME_ZONE"
 DEFAULT_TIMEZONE = "UTC"
 
 
-class RescheduleCancelledAppointmentHandler(BaseHandler):
+class CancelledAppointmentNotificationHandler(BaseHandler):
     """Create a reschedule task when an appointment is cancelled.
 
     The task is routed to a scheduling team (configured by name via the
@@ -57,7 +57,7 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
             # The event implies the appointment exists; log defensively and bail
             # rather than raising on a record we can no longer read.
             log.warning(
-                "RescheduleCancelledAppointment: appointment %s not found",
+                "CancelledAppointmentNotifications: appointment %s not found",
                 appointment_id,
             )
             return []
@@ -106,7 +106,7 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
         # Appointments always have a provider in practice; this guards against
         # silently dropping the work if that ever isn't true.
         log.warning(
-            "RescheduleCancelledAppointment: appointment %s has no scheduling team "
+            "CancelledAppointmentNotifications: appointment %s has no scheduling team "
             "or provider; creating an unassigned reschedule task",
             appointment.id,
         )
@@ -121,7 +121,7 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
         team = Team.objects.filter(name__iexact=team_name).first()
         if team is None:
             log.warning(
-                "RescheduleCancelledAppointment: no team named %r found; "
+                "CancelledAppointmentNotifications: no team named %r found; "
                 "falling back to the appointment provider",
                 team_name,
             )
@@ -241,7 +241,7 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
             arrow.utcnow().to(tz_name)
         except (ValueError, KeyError):
             log.warning(
-                "RescheduleCancelledAppointment: invalid timezone %r; using %s",
+                "CancelledAppointmentNotifications: invalid timezone %r; using %s",
                 tz_name,
                 DEFAULT_TIMEZONE,
             )

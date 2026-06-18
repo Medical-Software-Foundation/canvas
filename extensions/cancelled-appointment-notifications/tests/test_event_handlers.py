@@ -1,4 +1,4 @@
-"""Tests for the reschedule-cancelled-appointment handler.
+"""Tests for the cancelled-appointment-notifications handler.
 
 Each test is wrapped in a transaction that is rolled back afterwards, so the
 factory/ORM-created rows below don't leak between tests.
@@ -26,9 +26,9 @@ from canvas_sdk.v1.data.practicelocation import PracticeLocation
 from canvas_sdk.v1.data.staff import Staff
 from canvas_sdk.v1.data.task import TaskLabel
 
-from reschedule_cancelled_appointment.handlers.event_handlers import (
+from cancelled_appointment_notifications.handlers.event_handlers import (
     RESCHEDULE_LABEL,
-    RescheduleCancelledAppointmentHandler,
+    CancelledAppointmentNotificationHandler,
 )
 
 
@@ -39,11 +39,11 @@ def _make_handler(
     target_id: object,
     secrets: dict[str, str] | None = None,
     environment: dict[str, str] | None = None,
-) -> RescheduleCancelledAppointmentHandler:
+) -> CancelledAppointmentNotificationHandler:
     """Build a handler whose event targets the given appointment id."""
     event = Mock()
     event.target.id = str(target_id)
-    return RescheduleCancelledAppointmentHandler(
+    return CancelledAppointmentNotificationHandler(
         event=event, secrets=secrets or {}, environment=environment or {}
     )
 
@@ -553,6 +553,6 @@ def test_responds_to_appointment_canceled() -> None:
     """The handler subscribes to the APPOINTMENT_CANCELED event."""
     from canvas_sdk.events import EventType
 
-    assert RescheduleCancelledAppointmentHandler.RESPONDS_TO == [
+    assert CancelledAppointmentNotificationHandler.RESPONDS_TO == [
         EventType.Name(EventType.APPOINTMENT_CANCELED)
     ]

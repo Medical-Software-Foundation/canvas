@@ -2,7 +2,7 @@
 # The Canvas plugin has its own packaging process that doesn't use this file.
 
 [project]
-name = "reschedule-cancelled-appointment"
+name = "cancelled-appointment-notifications"
 version = "0.0.0"
 license = "MIT"
 requires-python = ">=3.12"

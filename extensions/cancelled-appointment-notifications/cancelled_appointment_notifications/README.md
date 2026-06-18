@@ -1,4 +1,4 @@
-# Reschedule Cancelled Appointment
+# Cancelled Appointment Notifications
 
 ## What it does
 
@@ -51,7 +51,7 @@ entered-in-error, or its start time is missing or already in the past.
 ## How to install
 
 ```
-canvas install reschedule-cancelled-appointment
+canvas install cancelled-appointment-notifications
 ```
 
 Then (optionally) set the `SCHEDULING_TEAM_NAME` secret on the plugin's
@@ -80,7 +80,7 @@ with the provider and original appointment time, due the next day, labelled
 ```
 uv sync
 uv run pytest          # run tests
-uv run mypy reschedule_cancelled_appointment
+uv run mypy cancelled_appointment_notifications
 ```
 
 ## License
