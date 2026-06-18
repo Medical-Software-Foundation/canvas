@@ -14,6 +14,7 @@ from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.note import CurrentNoteStateEvent, NoteStates
+from canvas_sdk.v1.data.staff import Staff
 
 _CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
 
@@ -174,22 +175,40 @@ class ClosureAPI(StaffSessionAuthMixin, SimpleAPI):
 def _fetch_open_state_events(staff_uuid: str, end_dt: datetime):  # type: ignore[no-untyped-def]  # pragma: no cover
     """Return open-note CurrentNoteStateEvents for one provider, oldest first.
 
-    A single bulk query with select_related across the note's patient,
-    note-type version, and provider — constant query count, no N+1 and no
-    per-note follow-ups. The result is sliced to ``_MAX_NOTES + 1`` so the
-    database never streams an unbounded backlog and the caller can still detect
+    A single bulk query with select_related across the note's patient and
+    note-type version — constant query count, no N+1 and no per-note
+    follow-ups. The result is sliced to ``_MAX_NOTES + 1`` so the database
+    never streams an unbounded backlog and the caller can still detect
     truncation from the one extra row.
+
+    Performance:
+      - The provider id (a UUID stored on ``Staff.id``, db_column "key") is
+        resolved to the integer ``Staff.dbid`` first, so the main query filters
+        the indexed ``note.provider_id`` FK directly instead of joining to the
+        staff table on the key column.
+      - ``Note.body`` and ``Note.related_data`` are JSONFields holding the full
+        clinical document; they are deferred so the query never drags note
+        bodies across the wire for rows we only render a one-line summary of.
+      - ``note__provider`` is not selected — we filter by it but never display
+        it — keeping the joined row width down.
 
     Coverage: this thin ORM wrapper is exercised by the real-DB factory tests
     in ``test_closure_api`` (django_db); the unit tests patch it.
     """
+    provider_dbid = (
+        Staff.objects.filter(id=staff_uuid).values_list("dbid", flat=True).first()
+    )
+    if provider_dbid is None:
+        return CurrentNoteStateEvent.objects.none()
+
     return (
         CurrentNoteStateEvent.objects.filter(
             state__in=_OPEN_STATES,
-            note__provider__id=staff_uuid,
+            note__provider_id=provider_dbid,
             note__datetime_of_service__lte=end_dt,
         )
-        .select_related("note__patient", "note__note_type_version", "note__provider")
+        .select_related("note__patient", "note__note_type_version")
+        .defer("note__body", "note__related_data")
         .order_by("note__datetime_of_service")[: _MAX_NOTES + 1]
     )
 

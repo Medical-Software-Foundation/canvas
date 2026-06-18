@@ -282,6 +282,17 @@ def test_get_data_scopes_to_logged_in_provider() -> None:
 
 
 @pytest.mark.django_db
+def test_get_data_unknown_provider_id_returns_empty() -> None:
+    """A staff id that matches no Staff row resolves to no notes (not all notes)."""
+    staff = StaffFactory.create()
+    _make_note_with_state(staff, NoteStates.NEW, _dos_days_ago(1))
+
+    body = _call_data("00000000-0000-0000-0000-000000000000")
+    assert body["notes"] == []
+    assert body["truncated"] is False
+
+
+@pytest.mark.django_db
 def test_get_data_excludes_locked_and_signed_states() -> None:
     """Locked / signed / deleted notes are closed and must be excluded."""
     staff = StaffFactory.create()
