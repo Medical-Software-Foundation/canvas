@@ -561,10 +561,16 @@ class TestFormatLabReportsHtml:
         v.codings.all = MagicMock(return_value=[coding] if coding_name else [])
         return v
 
-    def _report(self, values, tests=None):
+    def _report(self, values, tests=None, remarks=None):
         report = MagicMock()
         report.values.all = MagicMock(return_value=values)
         report.tests.all = MagicMock(return_value=tests or [])
+        remark_mocks = []
+        for text in (remarks or []):
+            r = MagicMock()
+            r.comment = text
+            remark_mocks.append(r)
+        report.remarks.all = MagicMock(return_value=remark_mocks)
         return report
 
     def _extractor(self):
@@ -641,19 +647,121 @@ class TestFormatLabReportsHtml:
         values = [self._value(value="")]
         assert extractor._format_lab_reports_html([self._report(values)]) == ""
 
+    def test_report_level_comment_prepended_above_table(self):
+        # canvas-plugins#1749: LabReportRemark comments render as a `Comment:`
+        # line above the values table.
+        extractor = self._extractor()
+        values = [self._value(coding_name="Glucose")]
+        report = self._report(values, remarks=["Specimen slightly hemolyzed."])
+        html = extractor._format_lab_reports_html([report])
+        assert "<strong>Comment:</strong> Specimen slightly hemolyzed." in html
+        # Comment appears before the table.
+        assert html.index("Comment:") < html.index("<table")
 
-# --- _attach_imaging_review_reference_html (no-op until canvas-plugins#1748) ---
+    def test_multiple_remarks_are_concatenated(self):
+        extractor = self._extractor()
+        values = [self._value(coding_name="Glucose")]
+        report = self._report(values, remarks=["First remark.", "Second remark."])
+        html = extractor._format_lab_reports_html([report])
+        assert "First remark. Second remark." in html
+
+    def test_comment_renders_even_without_value_rows(self):
+        # A report with only a remark (no renderable values) still surfaces
+        # its comment rather than being dropped entirely.
+        extractor = self._extractor()
+        report = self._report([self._value(value="")], remarks=["Pending review."])
+        html = extractor._format_lab_reports_html([report])
+        assert "Reference Data:" in html
+        assert "Pending review." in html
+        assert "<table" not in html
+
+    def test_comment_is_html_escaped(self):
+        extractor = self._extractor()
+        report = self._report([self._value(coding_name="A")], remarks=["<b>x</b>"])
+        html = extractor._format_lab_reports_html([report])
+        assert "&lt;b&gt;x&lt;/b&gt;" in html
+
+    def test_blank_remarks_skipped(self):
+        # Empty/whitespace-only remark comments don't produce a Comment line.
+        extractor = self._extractor()
+        report = self._report([self._value(coding_name="A")], remarks=["", "   "])
+        html = extractor._format_lab_reports_html([report])
+        assert "Comment:" not in html
+
+
+# --- _format_imaging_reports_html (canvas-plugins#1748) ---
+
+
+class TestFormatImagingReportsHtml:
+    """Renders one or more ImagingReports' per-field codings as a single
+    ``Reference Data:`` block — one ``<display>: <value>`` line per coding."""
+
+    def _coding(self, *, display="Comment", value="No acute findings."):
+        c = MagicMock()
+        c.display = display
+        c.value = value
+        return c
+
+    def _report(self, codings):
+        report = MagicMock()
+        report.codings.all = MagicMock(return_value=codings)
+        return report
+
+    def _extractor(self):
+        return NoteDataExtractor.__new__(NoteDataExtractor)
+
+    def test_renders_field_label_and_value(self):
+        extractor = self._extractor()
+        html = extractor._format_imaging_reports_html(
+            [self._report([self._coding(display="Interpretation", value="Normal study.")])]
+        )
+        assert "Reference Data:" in html
+        assert "<strong>Interpretation:</strong> Normal study." in html
+
+    def test_skips_codings_with_empty_value(self):
+        extractor = self._extractor()
+        html = extractor._format_imaging_reports_html(
+            [self._report([self._coding(value="")])]
+        )
+        assert html == ""
+
+    def test_coding_without_display_renders_value_only(self):
+        extractor = self._extractor()
+        html = extractor._format_imaging_reports_html(
+            [self._report([self._coding(display="", value="Bare value.")])]
+        )
+        assert "Bare value." in html
+        assert "<strong>" not in html
+
+    def test_multiple_reports_share_one_heading(self):
+        extractor = self._extractor()
+        r1 = self._report([self._coding(display="Comment", value="A")])
+        r2 = self._report([self._coding(display="Comment", value="B")])
+        html = extractor._format_imaging_reports_html([r1, r2])
+        assert html.count("Reference Data:") == 1
+        assert "A" in html and "B" in html
+
+    def test_escapes_user_content(self):
+        extractor = self._extractor()
+        html = extractor._format_imaging_reports_html(
+            [self._report([self._coding(display="<x>", value="<b>10</b>")])]
+        )
+        assert "&lt;x&gt;" in html
+        assert "&lt;b&gt;10&lt;/b&gt;" in html
 
 
 class TestAttachImagingReviewReferenceHtml:
-    def test_is_a_no_op_today(self):
-        # Imaging field values (Comment, Interpretation, etc.) live on
-        # ImagingReportCoding which isn't exposed in the SDK yet. The helper
-        # must stay a no-op rather than stamping a heading-only block —
-        # otherwise the print would show a useless "Reference Data:" with
-        # nothing under it.
+    def test_empty_entries_is_a_no_op(self):
         extractor = NoteDataExtractor.__new__(NoteDataExtractor)
-        entries = [{"_command_uuid": "abc"}]
+        entries: list[dict] = []
+        extractor._attach_imaging_review_reference_html(entries)
+        assert entries == []
+
+    def test_entries_without_command_uuid_short_circuit(self):
+        # No `_command_uuid` → nothing to join against, so no DB hit and no
+        # `_reference_html` stamped.
+        extractor = NoteDataExtractor.__new__(NoteDataExtractor)
+        entries = [{"foo": "bar"}]
         extractor._attach_imaging_review_reference_html(entries)
         assert "_reference_html" not in entries[0]
 
@@ -806,3 +914,245 @@ class TestPatientTemplateStampsAreUnderscoreFree:
         result = cb._blocks_poc_lab_test("POC Lab Test", [entry])
         labels = [b.get("label") for b in result if b.get("kind") == "field"]
         assert "VALUE ROWS" not in labels
+
+
+# --- _attach_plugin_command_details (canvas-plugins#1745) ---
+
+
+class TestAttachPluginCommandDetails:
+    """Stamps the registered PluginCommand.label (when the entry has none) and
+    _plugin_section on custom-command entries, matching on schema_key or
+    command_key."""
+
+    def _extractor(self):
+        return NoteDataExtractor.__new__(NoteDataExtractor)
+
+    def _patch_plugin_command(self, rows):
+        # Patch PluginCommand.objects.filter(...).values(...) -> rows.
+        pc = patch("patient_visit_summary.services.note_data_extractor.PluginCommand")
+        mock_pc = pc.start()
+        mock_pc.objects.filter.return_value.values.return_value = rows
+        return pc
+
+    def test_stamps_label_matched_by_command_key(self):
+        extractor = self._extractor()
+        entries = [{"_schema_key": "observationSummary"}]
+        p = self._patch_plugin_command([
+            {"schema_key": "observationSummary_abc123",
+             "command_key": "observationSummary",
+             "label": "Observation Summary", "section": "objective"},
+        ])
+        try:
+            extractor._attach_plugin_command_details(entries)
+        finally:
+            p.stop()
+        assert entries[0]["label"] == "Observation Summary"
+
+    def test_stamps_label_matched_by_schema_key(self):
+        extractor = self._extractor()
+        entries = [{"_schema_key": "observationSummary_abc123"}]
+        p = self._patch_plugin_command([
+            {"schema_key": "observationSummary_abc123",
+             "command_key": "observationSummary",
+             "label": "Observation Summary", "section": "objective"},
+        ])
+        try:
+            extractor._attach_plugin_command_details(entries)
+        finally:
+            p.stop()
+        assert entries[0]["label"] == "Observation Summary"
+
+    def test_stamps_plugin_section(self):
+        extractor = self._extractor()
+        entries = [{"_schema_key": "riskAssessment"}]
+        p = self._patch_plugin_command([
+            {"schema_key": "riskAssessment", "command_key": "riskAssessment",
+             "label": "Risk Assessment", "section": "assessment"},
+        ])
+        try:
+            extractor._attach_plugin_command_details(entries)
+        finally:
+            p.stop()
+        assert entries[0]["_plugin_section"] == "assessment"
+
+    def test_stamps_section_even_when_label_present(self):
+        # Section routing applies even to entries that carry their own label.
+        extractor = self._extractor()
+        entries = [{"_schema_key": "observationSummary", "label": "Author Label"}]
+        p = self._patch_plugin_command([
+            {"schema_key": "observationSummary", "command_key": "observationSummary",
+             "label": "Registered Label", "section": "subjective"},
+        ])
+        try:
+            extractor._attach_plugin_command_details(entries)
+        finally:
+            p.stop()
+        # Instance label wins; section is still stamped.
+        assert entries[0]["label"] == "Author Label"
+        assert entries[0]["_plugin_section"] == "subjective"
+
+    def test_bare_custom_command_is_skipped(self):
+        extractor = self._extractor()
+        entries = [{"_schema_key": "customCommand"}]
+        p = self._patch_plugin_command([])
+        try:
+            extractor._attach_plugin_command_details(entries)
+        finally:
+            p.stop()
+        assert "label" not in entries[0]
+        assert "_plugin_section" not in entries[0]
+
+    def test_no_matching_row_leaves_entry_untouched(self):
+        extractor = self._extractor()
+        entries = [{"_schema_key": "unknownThing"}]
+        p = self._patch_plugin_command([])
+        try:
+            extractor._attach_plugin_command_details(entries)
+        finally:
+            p.stop()
+        assert "label" not in entries[0]
+        assert "_plugin_section" not in entries[0]
+
+
+# --- _route_custom_commands_to_sections (section-aware printing) ---
+
+
+class TestRouteCustomCommandsToSections:
+    def _extractor(self):
+        return NoteDataExtractor.__new__(NoteDataExtractor)
+
+    def test_routes_each_entry_to_its_section_bucket(self):
+        extractor = self._extractor()
+        subj = {"_schema_key": "a", "_plugin_section": "subjective"}
+        obj = {"_schema_key": "b", "_plugin_section": "objective"}
+        plan = {"_schema_key": "c", "_plugin_section": "plan"}
+        context = {"custom_commands_data": [subj, obj, plan]}
+        extractor._route_custom_commands_to_sections(context)
+        assert context["custom_commands_subjective"] == [subj]
+        assert context["custom_commands_objective"] == [obj]
+        assert context["custom_commands_plan"] == [plan]
+        # All routed → fallback bucket is now empty.
+        assert context["custom_commands_data"] == []
+
+    def test_unknown_and_internal_fall_back(self):
+        extractor = self._extractor()
+        internal = {"_schema_key": "a", "_plugin_section": "internal"}
+        none_section = {"_schema_key": "b"}
+        context = {"custom_commands_data": [internal, none_section]}
+        extractor._route_custom_commands_to_sections(context)
+        assert context["custom_commands_data"] == [internal, none_section]
+        # Section buckets exist but are empty.
+        assert context["custom_commands_assessment"] == []
+
+    def test_preserves_stamped_uuid_and_metadata(self):
+        # Routing redistributes the same dict objects, so any _command_uuid /
+        # _metadata already attached upstream survives.
+        extractor = self._extractor()
+        entry = {
+            "_schema_key": "a", "_plugin_section": "history",
+            "_command_uuid": "uuid-1", "_metadata": [{"key": "k", "value": "v"}],
+        }
+        context = {"custom_commands_data": [entry]}
+        extractor._route_custom_commands_to_sections(context)
+        routed = context["custom_commands_history"][0]
+        assert routed is entry
+        assert routed["_command_uuid"] == "uuid-1"
+        assert routed["_metadata"] == [{"key": "k", "value": "v"}]
+
+    def test_no_custom_commands_key_is_a_no_op(self):
+        extractor = self._extractor()
+        context: dict = {}
+        extractor._route_custom_commands_to_sections(context)
+        assert context == {}
+
+
+# --- _attach_chart_section_review_content (canvas-plugins#1744) ---
+
+
+class TestAttachChartSectionReviewContent:
+    def _extractor(self):
+        return NoteDataExtractor.__new__(NoteDataExtractor)
+
+    def test_splits_content_into_section_content_list(self):
+        extractor = self._extractor()
+        entries = [{"_command_uuid": "uuid1", "section": "conditions"}]
+        with patch(f"{_NDE}.Command") as mc, patch(f"{_NDE}.ChartSectionReview") as mcsr:
+            mc.objects.filter.return_value.values.return_value = [
+                {"id": "uuid1", "anchor_object_dbid": 10},
+            ]
+            mcsr.objects.filter.return_value.values.return_value = [
+                {"dbid": 10, "content": "Hypertension\nType 2 diabetes\n"},
+            ]
+            extractor._attach_chart_section_review_content(entries)
+        assert entries[0]["section_content"] == ["Hypertension", "Type 2 diabetes"]
+        # Humanized label stamped for the heading / patient template.
+        assert entries[0]["section_label"] == "Conditions"
+
+    def test_section_label_stamped_even_without_content(self):
+        # section_label is derived from the raw enum and needs no DB content,
+        # so it's present even when the anchor review can't be resolved.
+        extractor = self._extractor()
+        entries = [{"section": "family_histories"}]
+        extractor._attach_chart_section_review_content(entries)
+        assert entries[0]["section_label"] == "Family History"
+
+    def test_empty_content_leaves_entry_untouched(self):
+        extractor = self._extractor()
+        entries = [{"_command_uuid": "uuid1"}]
+        with patch(f"{_NDE}.Command") as mc, patch(f"{_NDE}.ChartSectionReview") as mcsr:
+            mc.objects.filter.return_value.values.return_value = [
+                {"id": "uuid1", "anchor_object_dbid": 10},
+            ]
+            mcsr.objects.filter.return_value.values.return_value = [
+                {"dbid": 10, "content": ""},
+            ]
+            extractor._attach_chart_section_review_content(entries)
+        assert "section_content" not in entries[0]
+
+    def test_no_command_uuid_short_circuits(self):
+        extractor = self._extractor()
+        entries = [{"section": "conditions"}]
+        extractor._attach_chart_section_review_content(entries)
+        assert "section_content" not in entries[0]
+
+
+# --- _attach_visual_exam_finding_image (canvas-plugins#1747) ---
+
+
+class TestAttachVisualExamFindingImage:
+    def _extractor(self):
+        return NoteDataExtractor.__new__(NoteDataExtractor)
+
+    def test_stamps_presigned_image_url(self):
+        extractor = self._extractor()
+        entries = [{"_command_uuid": "uuid1", "title": "Forearm"}]
+        finding = MagicMock()
+        finding.dbid = 20
+        finding.image_url = "https://s3.example.com/y.png?a=1&b=2"
+        with patch(f"{_NDE}.Command") as mc, patch(f"{_NDE}.VisualExamFinding") as mvef:
+            mc.objects.filter.return_value.values.return_value = [
+                {"id": "uuid1", "anchor_object_dbid": 20},
+            ]
+            mvef.objects.filter.return_value = [finding]
+            extractor._attach_visual_exam_finding_image(entries)
+        assert entries[0]["image_url"] == "https://s3.example.com/y.png?a=1&b=2"
+
+    def test_no_image_url_leaves_entry_untouched(self):
+        extractor = self._extractor()
+        entries = [{"_command_uuid": "uuid1"}]
+        finding = MagicMock()
+        finding.dbid = 20
+        finding.image_url = None
+        with patch(f"{_NDE}.Command") as mc, patch(f"{_NDE}.VisualExamFinding") as mvef:
+            mc.objects.filter.return_value.values.return_value = [
+                {"id": "uuid1", "anchor_object_dbid": 20},
+            ]
+            mvef.objects.filter.return_value = [finding]
+            extractor._attach_visual_exam_finding_image(entries)
+        assert "image_url" not in entries[0]
+
+    def test_no_command_uuid_short_circuits(self):
+        extractor = self._extractor()
+        entries = [{"title": "Forearm"}]
+        extractor._attach_visual_exam_finding_image(entries)
+        assert "image_url" not in entries[0]

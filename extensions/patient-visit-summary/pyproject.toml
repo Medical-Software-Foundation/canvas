@@ -3,7 +3,7 @@ authors = [
   {email = "engineering@canvasmedical.com", name = "Canvas Team"}
 ]
 dependencies = [
-  "canvas[test-utils]"
+  "canvas[test-utils]>=0.169.1"
 ]
 description = "Generate a print-ready patient visit summary from a clinical note, with a customizable print view and optional FHIR DocumentReference output."
 license = "MIT"

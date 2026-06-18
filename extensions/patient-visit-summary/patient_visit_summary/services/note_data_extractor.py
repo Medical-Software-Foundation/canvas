@@ -15,10 +15,13 @@ from django.db.models import Q
 from canvas_sdk.v1.data.appointment import Appointment
 from canvas_sdk.v1.data.assessment import Assessment
 from canvas_sdk.v1.data.billing import BillingLineItemStatus
+from canvas_sdk.v1.data.chart_section_review import ChartSectionReview
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.common import ContactPointSystem, ContactPointState
 from canvas_sdk.v1.data.imaging import ImagingReport
 from canvas_sdk.v1.data.lab import LabReport
+from canvas_sdk.v1.data.plugin_command import PluginCommand
+from canvas_sdk.v1.data.visual_exam_finding import VisualExamFinding
 from canvas_sdk.v1.data.patient import Patient
 from canvas_sdk.v1.data.note import Note, NoteStates
 from canvas_sdk.v1.data.prescription import Prescription
@@ -323,7 +326,7 @@ class NoteDataExtractor:
                 entered_in_error__isnull=True,
                 junked=False,
             )
-            .prefetch_related("values__codings", "tests")
+            .prefetch_related("values__codings", "tests", "remarks")
             .order_by("original_date")
         )
         for report in report_qs:
@@ -336,17 +339,22 @@ class NoteDataExtractor:
                 continue
             entry["_reference_html"] = self._format_lab_reports_html(reports)
 
-    def _format_lab_reports_html(self, reports: list[LabReport]) -> str:
-        """Render one or more LabReports as tables of Name / Reference / Value
-        / Units. The per-report title (test name + date) is intentionally
-        omitted — it's already in the review command's heading right above.
+    @staticmethod
+    def _concatenated_remarks(report: LabReport) -> str:
+        """Join a LabReport's report-level remarks (lab-personnel comments)
+        into a single string, mirroring home-app's ``concatenated_remarks``.
+        Each ``LabReportRemark`` carries a ``comment``; blanks are skipped."""
+        comments = [(r.comment or "").strip() for r in report.remarks.all()]
+        return " ".join(c for c in comments if c)
 
-        TODO(canvas-plugins#1749): when ``LabReportRemark`` is exposed in the
-        SDK, prepend ``<strong>Comment:</strong> <concatenated remarks>``
-        above the table — same pattern as referral / uncategorized reports.
-        See https://github.com/canvas-medical/canvas-plugins/issues/1749.
-        """
-        tables: list[str] = []
+    def _format_lab_reports_html(self, reports: list[LabReport]) -> str:
+        """Render one or more LabReports, each as an optional ``Comment:`` line
+        (the report-level remarks from lab personnel) above a Name / Reference
+        / Value / Units table. The per-report title (test name + date) is
+        intentionally omitted — it's already in the review command's heading
+        right above. The Comment line mirrors the pattern used for
+        ``referralReview`` / ``uncategorizedDocumentReview``."""
+        blocks: list[str] = []
         for report in reports:
             rows_html: list[str] = []
             for value in report.values.all():
@@ -371,34 +379,102 @@ class NoteDataExtractor:
                     f"<td>{self._esc(val_text)}</td>"
                     f"<td>{self._esc(value.units)}</td></tr>"
                 )
+            parts: list[str] = []
+            comment = self._concatenated_remarks(report)
+            if comment:
+                parts.append(
+                    f"<div class='ref-data-body'><strong>Comment:</strong> "
+                    f"{self._esc(comment)}</div>"
+                )
             if rows_html:
-                tables.append(
+                parts.append(
                     "<table class='ref-data-table'>"
                     "<thead><tr><th>Name</th><th>Reference</th>"
                     "<th>Value</th><th>Units</th></tr></thead>"
                     f"<tbody>{''.join(rows_html)}</tbody></table>"
                 )
-        if not tables:
+            if parts:
+                blocks.append("".join(parts))
+        if not blocks:
             return ""
         return (
             "<div class='ref-data-report'>"
             "<div class='ref-data-heading'>Reference Data:</div>"
-            f"{''.join(tables)}</div>"
+            f"{''.join(blocks)}</div>"
         )
 
     def _attach_imaging_review_reference_html(self, entries: list[dict]) -> None:
-        """No-op until ImagingReportCoding is exposed in the SDK.
+        """For each imagingReview entry, surface the linked ImagingReports'
+        per-field values (Comment, Interpretation, etc.) under a single
+        ``Reference Data:`` heading. Those per-field values live on
+        ``ImagingReportCoding`` (``ImagingReport.codings``). Per-report titles
+        (report name + date) are intentionally omitted — those are already in
+        the review command's heading right above."""
+        if not entries:
+            return
+        cmd_uuids = [e["_command_uuid"] for e in entries if isinstance(e, dict) and e.get("_command_uuid")]
+        if not cmd_uuids:
+            return
+        review_dbid_by_cmd: dict[str, int] = {}
+        for row in Command.objects.filter(id__in=cmd_uuids).values("id", "anchor_object_dbid"):
+            if dbid := row.get("anchor_object_dbid"):
+                review_dbid_by_cmd[str(row["id"])] = dbid
+        if not review_dbid_by_cmd:
+            return
+        # Filter retracted reports out. ``ImagingReport`` inherits from
+        # ``TimestampedModel`` (not ``AuditedModel``) in the SDK so it doesn't
+        # expose ``entered_in_error`` — ``junked`` is the equivalent retraction
+        # marker (see canvas-plugins ``imaging.py``). The Reference Data block
+        # lands in a finalized PDF attached to the chart, so retracted reports
+        # must NOT leak in (REVIEW.md / CLAUDE.md 🔴 rule).
+        reports_by_review: dict[int, list[ImagingReport]] = {}
+        for report in (
+            ImagingReport.objects
+            .filter(
+                review_id__in=review_dbid_by_cmd.values(),
+                junked=False,
+            )
+            .prefetch_related("codings")
+            .order_by("original_date")
+        ):
+            reports_by_review.setdefault(report.review_id, []).append(report)
+        for entry in entries:
+            cmd_uuid = entry.get("_command_uuid") if isinstance(entry, dict) else None
+            review_dbid = review_dbid_by_cmd.get(cmd_uuid) if cmd_uuid else None
+            reports = reports_by_review.get(review_dbid, []) if review_dbid else []
+            if not reports:
+                continue
+            if html := self._format_imaging_reports_html(reports):
+                entry["_reference_html"] = html
 
-        TODO(canvas-plugins#1748): the per-field values that make up an
-        ImagingReport body (Comment, Interpretation, etc.) live on
-        ``ImagingReportCoding``, which isn't reachable from a plugin today.
-        We have only the report's ``name`` and ``original_date`` — but those
-        are already in the review command's heading right above, so rendering
-        them again would be redundant. Surface a real "Reference Data:" block
-        once the codings ship — see
-        https://github.com/canvas-medical/canvas-plugins/issues/1748.
-        """
-        return
+    def _format_imaging_reports_html(self, reports: list[ImagingReport]) -> str:
+        """Render one or more ImagingReports' per-field codings as a single
+        ``Reference Data:`` block — one ``<field>: <value>`` line per coding
+        (e.g. ``Comment:``, ``Interpretation:``). Codings with no ``value``
+        are skipped; the report title is omitted (already in the heading)."""
+        bodies: list[str] = []
+        for report in reports:
+            for coding in report.codings.all():
+                value = (coding.value or "").strip()
+                if not value:
+                    continue
+                label = (coding.display or "").strip()
+                if label:
+                    bodies.append(
+                        f"<div class='ref-data-body'><strong>{self._esc(label)}:</strong> "
+                        f"{self._esc(value)}</div>"
+                    )
+                else:
+                    bodies.append(
+                        f"<div class='ref-data-body'>{self._esc(value)}</div>"
+                    )
+        if not bodies:
+            return ""
+        return (
+            "<div class='ref-data-report'>"
+            "<div class='ref-data-heading'>Reference Data:</div>"
+            f"{''.join(bodies)}</div>"
+        )
 
     def _attach_referral_review_reference_html(self, entries: list[dict]) -> None:
         """For each referralReview entry, surface the linked ReferralReports'
@@ -495,6 +571,183 @@ class NoteDataExtractor:
                 "<div class='ref-data-heading'>Reference Data:</div>"
                 f"{''.join(bodies)}</div>"
             )
+
+    def _attach_chart_section_review_content(self, entries: list[dict]) -> None:
+        """For each chartSectionReview entry, stamp:
+
+        - ``section_label`` — the human-readable section name (e.g.
+          ``conditions`` -> "Conditions"), so both the print block builder and
+          the patient-facing template can show "Reviewed: Conditions" without
+          re-humanizing the raw enum. Stamped for every entry.
+        - ``section_content`` — the list of reviewed items (one per line) the
+          Canvas UI prints under the heading, from ``ChartSectionReview.content``
+          (newline-separated). Stamped only when content is available.
+        """
+        if not entries:
+            return
+        # Local import avoids the command_blocks <-> note_data_extractor cycle.
+        from patient_visit_summary.services.command_blocks import _humanize_section
+
+        for entry in entries:
+            if isinstance(entry, dict) and entry.get("section"):
+                entry["section_label"] = _humanize_section(entry.get("section"))
+        cmd_uuids = [e["_command_uuid"] for e in entries if isinstance(e, dict) and e.get("_command_uuid")]
+        if not cmd_uuids:
+            return
+        review_dbid_by_cmd: dict[str, int] = {}
+        for row in Command.objects.filter(id__in=cmd_uuids).values("id", "anchor_object_dbid"):
+            if dbid := row.get("anchor_object_dbid"):
+                review_dbid_by_cmd[str(row["id"])] = dbid
+        if not review_dbid_by_cmd:
+            return
+        # ChartSectionReview is an AuditedModel — filter retracted rows so a
+        # corrected review doesn't leak stale items into the finalized PDF.
+        content_by_dbid: dict[int, str] = {}
+        for review in (
+            ChartSectionReview.objects
+            .filter(dbid__in=review_dbid_by_cmd.values(), entered_in_error__isnull=True)
+            .values("dbid", "content")
+        ):
+            content_by_dbid[review["dbid"]] = review.get("content") or ""
+        for entry in entries:
+            cmd_uuid = entry.get("_command_uuid") if isinstance(entry, dict) else None
+            review_dbid = review_dbid_by_cmd.get(cmd_uuid) if cmd_uuid else None
+            content = content_by_dbid.get(review_dbid) if review_dbid else None
+            if not content:
+                continue
+            items = [line.strip() for line in content.splitlines() if line.strip()]
+            if items:
+                entry["section_content"] = items
+
+    def _attach_visual_exam_finding_image(self, entries: list[dict]) -> None:
+        """For each visualExamFinding entry, stamp ``image_url`` — a short-lived
+        presigned S3 URL (valid ~1 hour) for the attached image, so the print
+        can render the image inline alongside the narrative. ``image_url`` is a
+        property on ``VisualExamFinding`` that returns ``None`` when no image is
+        set, in which case we leave the entry untouched."""
+        if not entries:
+            return
+        cmd_uuids = [e["_command_uuid"] for e in entries if isinstance(e, dict) and e.get("_command_uuid")]
+        if not cmd_uuids:
+            return
+        finding_dbid_by_cmd: dict[str, int] = {}
+        for row in Command.objects.filter(id__in=cmd_uuids).values("id", "anchor_object_dbid"):
+            if dbid := row.get("anchor_object_dbid"):
+                finding_dbid_by_cmd[str(row["id"])] = dbid
+        if not finding_dbid_by_cmd:
+            return
+        # ``image_url`` is a property (computes a presigned URL), so we can't
+        # pull it with ``.values()`` — fetch the model instances. Filter
+        # retracted findings out of the finalized PDF.
+        url_by_dbid: dict[int, str] = {}
+        for finding in VisualExamFinding.objects.filter(
+            dbid__in=finding_dbid_by_cmd.values(),
+            entered_in_error__isnull=True,
+        ):
+            if url := finding.image_url:
+                url_by_dbid[finding.dbid] = url
+        for entry in entries:
+            cmd_uuid = entry.get("_command_uuid") if isinstance(entry, dict) else None
+            finding_dbid = finding_dbid_by_cmd.get(cmd_uuid) if cmd_uuid else None
+            url = url_by_dbid.get(finding_dbid) if finding_dbid else None
+            if url:
+                entry["image_url"] = url
+
+    def _attach_plugin_command_details(self, entries: list[dict]) -> None:
+        """Stamp registered ``PluginCommand`` details on plugin-authored custom
+        command entries:
+
+        - ``label`` — the author's display label, used only when the entry
+          didn't carry its own ``label`` (an instance label wins). Gives the
+          heading the plugin's branding instead of a humanized ``schema_key``.
+        - ``_plugin_section`` — the chart section the author registered the
+          command under (``subjective`` / ``objective`` / ``assessment`` /
+          ``plan`` / ``procedures`` / ``history`` / ``internal``), used by
+          ``_route_custom_commands_to_sections`` to print the command under
+          the right section heading.
+
+        The committed command's ``_schema_key`` may hold either the manifest
+        ``command_key`` (camelCase, e.g. ``observationSummary``) or the
+        content-versioned ``schema_key``; we match on both. Bare
+        ``customCommand`` rows are skipped (no registered row to look up)."""
+        # Local import avoids the command_blocks <-> note_data_extractor cycle.
+        from patient_visit_summary.services.command_blocks import value_to_text
+
+        # Need a row for every entry (section routing applies even to entries
+        # that already carry their own label), so collect all real schema keys.
+        keys = {
+            entry["_schema_key"]
+            for entry in entries
+            if isinstance(entry, dict)
+            and entry.get("_schema_key")
+            and entry["_schema_key"] != "customCommand"
+        }
+        if not keys:
+            return
+        label_by_schema_key: dict[str, str] = {}
+        label_by_command_key: dict[str, str] = {}
+        section_by_schema_key: dict[str, str] = {}
+        section_by_command_key: dict[str, str] = {}
+        for pc in (
+            PluginCommand.objects
+            .filter(Q(schema_key__in=keys) | Q(command_key__in=keys))
+            .values("schema_key", "command_key", "label", "section")
+        ):
+            if label := (pc.get("label") or "").strip():
+                label_by_schema_key[pc["schema_key"]] = label
+                # First value seen for a command_key wins the fallback slot.
+                label_by_command_key.setdefault(pc["command_key"], label)
+            if section := (pc.get("section") or "").strip():
+                section_by_schema_key[pc["schema_key"]] = section
+                section_by_command_key.setdefault(pc["command_key"], section)
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            sk = entry.get("_schema_key")
+            if not sk or sk == "customCommand":
+                continue
+            # Exact content-versioned match wins; fall back to command_key.
+            if not (value_to_text(entry.get("label")) or "").strip():
+                if label := (label_by_schema_key.get(sk) or label_by_command_key.get(sk)):
+                    entry["label"] = label
+            if section := (section_by_schema_key.get(sk) or section_by_command_key.get(sk)):
+                entry["_plugin_section"] = section
+
+    # PluginCommand.section value -> the per-section context key its custom
+    # commands are bucketed into. Entries with no/unknown section (or the
+    # provider-only ``internal`` section) fall back to ``custom_commands_data``,
+    # which renders in the standalone "Custom Commands" section.
+    _PLUGIN_SECTION_BUCKETS: dict[str, str] = {
+        "subjective": "custom_commands_subjective",
+        "objective": "custom_commands_objective",
+        "assessment": "custom_commands_assessment",
+        "plan": "custom_commands_plan",
+        "procedures": "custom_commands_procedures",
+        "history": "custom_commands_history",
+    }
+
+    def _route_custom_commands_to_sections(self, context: dict[str, Any]) -> None:
+        """Split ``custom_commands_data`` into per-section buckets keyed by each
+        command's registered ``PluginCommand.section`` (stamped as
+        ``_plugin_section`` by ``_attach_plugin_command_details``).
+
+        The same entry dicts are redistributed — any ``_command_uuid`` /
+        ``_metadata`` already stamped on them is preserved — so this must run
+        *after* ``_attach_command_uuids`` / ``_attach_command_metadata``.
+        Entries with no recognized section stay in ``custom_commands_data`` and
+        render in the standalone "Custom Commands" section."""
+        entries = context.get("custom_commands_data")
+        if not isinstance(entries, list):
+            return
+        buckets: dict[str, list] = {key: [] for key in self._PLUGIN_SECTION_BUCKETS.values()}
+        fallback: list = []
+        for entry in entries:
+            section = entry.get("_plugin_section") if isinstance(entry, dict) else None
+            bucket_key = self._PLUGIN_SECTION_BUCKETS.get(section) if section else None
+            (buckets[bucket_key] if bucket_key else fallback).append(entry)
+        for key, bucket in buckets.items():
+            context[key] = bucket
+        context["custom_commands_data"] = fallback
 
     @staticmethod
     def _attach_poc_value_rows(entries: list[dict]) -> None:
@@ -1132,6 +1385,7 @@ class NoteDataExtractor:
         "consult_report_reviews": "referralReview",
         "uncategorized_document_reviews": "uncategorizedDocumentReview",
         "chart_section_review_commands_data": "chartSectionReview",
+        "reference_commands_data": "reference",
         "structured_assessment_data": "structuredAssessment",
         "plan_commands_data": "plan",
         "prescribe_commands_data": "prescribe",
@@ -1398,6 +1652,9 @@ class NoteDataExtractor:
         self._attach_referral_review_reference_html(referral_reviews)
         self._attach_uncategorized_review_reference_html(uncat_reviews)
         structured_assessments = self._format_questionnaires(questionnaire_type="structuredAssessment")
+        # Reference commands — saved diagnostic-view snapshots (e.g. lab-trend
+        # tables). First-class Review-section command, not a custom command.
+        reference_data = self._fetch_all_commands_data("reference")
         resolve_conditions = self._fetch_all_commands_data("resolveCondition")
         change_diagnoses = self._fetch_all_commands_data("updateDiagnosis")
 
@@ -1507,7 +1764,13 @@ class NoteDataExtractor:
         close_goal_data = self._fetch_all_commands_data("closeGoal")
         educational_material_data = self._fetch_all_commands_data("educationalMaterial")
         visual_exam_finding_data = self._fetch_all_commands_data("visualExamFinding")
+        # Attach the presigned image URL so the print can render the image
+        # inline alongside the narrative (matches the Canvas UI).
+        self._attach_visual_exam_finding_image(visual_exam_finding_data)
         chart_section_review_data = self._fetch_all_commands_data("chartSectionReview")
+        # Attach the reviewed-items list (ChartSectionReview.content) so the
+        # print shows the items under the heading, not just "Reviewed: X".
+        self._attach_chart_section_review_content(chart_section_review_data)
         poc_lab_test_data = self._fetch_all_commands_data("pocLabTest")
         # The patient-facing Django template can't compute dynamic dict keys
         # (`test_values|<lowercase label>`) or translate reason codes inline,
@@ -1529,6 +1792,11 @@ class NoteDataExtractor:
             if isinstance(entry, dict):
                 entry.setdefault("_schema_key", "customCommand")
         custom_commands_data.extend(self._fetch_unknown_command_data())
+        # Stamp the plugin author's registered label + section
+        # (PluginCommand) on each entry: the label gives the heading the
+        # plugin's branding, and the section drives which print section the
+        # command lands in (see _route_custom_commands_to_sections below).
+        self._attach_plugin_command_details(custom_commands_data)
 
         # Coding-gap suite — created, assessed, validated, deferred. These
         # are billing-side decision-support actions but worth surfacing on
@@ -1568,6 +1836,7 @@ class NoteDataExtractor:
             "imaging_reviews": imaging_reviews,
             "consult_report_reviews": referral_reviews,
             "uncategorized_document_reviews": uncat_reviews,
+            "reference_commands_data": reference_data,
             "structured_assessment_data": structured_assessments,
             # Plan
             "plan_commands_data": plan_data,
@@ -1644,6 +1913,11 @@ class NoteDataExtractor:
         # Tag each entry with printable metadata (only keys prefixed `print:`
         # or `display:` are surfaced; everything else stays internal).
         self._attach_command_metadata(context)
+        # Route plugin-authored custom commands into the section the author
+        # registered them under (PluginCommand.section). Done last so the
+        # uuid/metadata attach above still operate on the full
+        # `custom_commands_data` list before it's split into buckets.
+        self._route_custom_commands_to_sections(context)
         return context
 
     def get_commands_by_section(

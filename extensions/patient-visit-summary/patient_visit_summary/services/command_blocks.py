@@ -286,6 +286,22 @@ def _body(value: str) -> dict:
     return {"kind": "body", "value": value}
 
 
+def _escape_attr(value: Any) -> str:
+    """Escape a string for safe interpolation into an HTML attribute value
+    inside a ``body_html`` block (rendered with ``|safe``). Notably turns the
+    ``&`` query-param separators in a presigned S3 URL into ``&amp;`` so the
+    ``src`` attribute is valid HTML and can't break out of its quotes."""
+    if value is None:
+        return ""
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 def _heading_or_plain(prefix: str, title: str) -> dict:
     """Heading with the prefix and title, or a plain heading when title is empty."""
     return _heading(prefix, title) if title else _heading_plain(prefix)
@@ -692,6 +708,32 @@ def _blocks_review(display_name: str, data: Any) -> list[dict]:
     return out
 
 
+def _blocks_reference(display_name: str, data: Any) -> list[dict]:
+    """Reference command: a saved diagnostic-view snapshot (e.g. a lab-trend
+    table). Renders ``Reference: <name>`` followed by the pre-rendered HTML
+    table stored on the command — matching how it reads in the note. The
+    internal ``diagnostic_view_id`` is deliberately not surfaced.
+    """
+    out: list[dict] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        title = value_to_text(entry.get("name"))
+        out.append(_heading_or_plain("Reference", title))
+        html = (
+            _decode_custom_content(entry.get("print_content"))
+            or _decode_custom_content(entry.get("content"))
+        )
+        if html:
+            # `body_html` renders with |safe; reference content is
+            # platform-generated diagnostic-view HTML (a values table).
+            out.append({"kind": "body_html", "value": html})
+        out.extend(extra_blocks(entry, shown_keys={
+            "name", "diagnostic_view_id", "diagnostic_view", "content", "print_content",
+        }))
+    return out
+
+
 def _blocks_medication_statement(display_name: str, data: Any) -> list[dict]:
     out: list[dict] = []
     for entry in data:
@@ -1035,23 +1077,26 @@ def _humanize_section(value: Any) -> str:
 
 
 def _blocks_chart_section_review(display_name: str, data: Any) -> list[dict]:
-    """One row per reviewed chart section.
+    """One row per reviewed chart section, with the list of reviewed items
+    beneath the heading (e.g., every condition under "Reviewed: Conditions").
 
-    TODO(canvas-plugins#1744): heading-only today. The Canvas UI prints the
-    list of reviewed items beneath the heading (e.g., every condition under
-    "Reviewed: Conditions"). That list is pre-rendered server-side and stored
-    on ``ChartSectionReview.content``, but the anchor model isn't exposed
-    through the SDK / DB views, so a plugin can't read it. Once
-    https://github.com/canvas-medical/canvas-plugins/issues/1744 ships, swap
-    the heading-only render for the contents of that field.
+    The reviewed-items list is pre-rendered server-side and stored on
+    ``ChartSectionReview.content``; the extractor splits it into a
+    ``section_content`` list (one item per line) on each entry — see
+    ``NoteDataExtractor._attach_chart_section_review_content``. When the
+    anchor review can't be resolved (``section_content`` absent) we fall back
+    to the heading alone.
     """
     out: list[dict] = []
     for entry in data:
         if not isinstance(entry, dict):
             continue
-        section = _humanize_section(entry.get("section"))
+        section = entry.get("section_label") or _humanize_section(entry.get("section"))
         out.append(_heading("Reviewed", section or "Section"))
-        out.extend(extra_blocks(entry, shown_keys={"section"}))
+        for item in entry.get("section_content") or []:
+            if text := value_to_text(item):
+                out.append(_body(text))
+        out.extend(extra_blocks(entry, shown_keys={"section", "section_label", "section_content"}))
     return out
 
 
@@ -1265,24 +1310,36 @@ def _blocks_educational_material(display_name: str, data: Any) -> list[dict]:
 
 
 def _blocks_visual_exam_finding(display_name: str, data: Any) -> list[dict]:
-    """Visual exam finding: title + narrative. The image attachment is
-    intentionally omitted from the print — the stored value is just an
-    opaque filename and we don't embed the image itself.
+    """Visual exam finding: title + narrative + the attached image, so the
+    print matches the Canvas UI.
 
-    TODO(canvas-plugins#1747): once `VisualExamFinding` is exposed in the
-    Data Module with a short-lived S3 presigned URL for the image, render
-    the image alongside the narrative so the print matches the Canvas UI.
-    See https://github.com/canvas-medical/canvas-plugins/issues/1747.
+    The extractor resolves the image to a short-lived presigned S3 URL and
+    stamps it on the entry as ``image_url`` — see
+    ``NoteDataExtractor._attach_visual_exam_finding_image``. We render it as
+    an ``<img>`` in a ``body_html`` block; the raw ``image`` filename is never
+    surfaced (it's an opaque S3 key). When no image is attached (or the URL
+    can't be resolved) we render title + narrative only.
     """
     out: list[dict] = []
     for entry in data:
         if not isinstance(entry, dict):
             continue
-        out.append(_heading("Visual Exam Finding", entry.get("title") or ""))
+        title = entry.get("title") or ""
+        out.append(_heading("Visual Exam Finding", title))
         if narrative := (entry.get("narrative") or "").strip():
             out.append(_field("NARRATIVE", narrative))
+        if image_url := (entry.get("image_url") or "").strip():
+            out.append({
+                "kind": "body_html",
+                "value": (
+                    f'<img src="{_escape_attr(image_url)}" '
+                    f'alt="{_escape_attr(title)}" '
+                    'class="visual-exam-image" '
+                    'style="max-width:100%;max-height:320px;" />'
+                ),
+            })
         out.extend(extra_blocks(
-            entry, shown_keys={"title", "narrative", "image"},
+            entry, shown_keys={"title", "narrative", "image", "image_url"},
         ))
     return out
 
@@ -1539,18 +1596,12 @@ def _blocks_custom_command(display_name: str, data: Any) -> list[dict]:
     sometimes raw HTML — see :func:`_decode_custom_content`).
 
     Heading uses ``label`` → ``title`` → humanized ``_schema_key`` →
-    ``display_name``. The schema_key fallback matters because plugin-
-    customized commands write the plugin's chosen key (e.g.,
-    ``observationSummary``) rather than the literal ``customCommand``, and
-    we want a sensible label even when the plugin didn't bother to set a
-    ``label`` field on every command instance.
-
-    TODO(canvas-plugins#1745): the plugin author's registered ``label`` /
-    ``section`` (on ``PluginCommand``) isn't reachable from the SDK today.
-    Once https://github.com/canvas-medical/canvas-plugins/issues/1745 ships,
-    look up the matching ``PluginCommand`` row by ``_schema_key`` and prefer
-    its ``label`` over the humanized fallback so the heading reads with the
-    exact branding the plugin author chose.
+    ``display_name``. The ``label`` is either set on the command instance or
+    stamped from the registered ``PluginCommand.label`` by
+    ``NoteDataExtractor._attach_plugin_command_details`` — so the heading reads
+    with the exact branding the plugin author chose. The humanized
+    ``_schema_key`` fallback only kicks in when no ``PluginCommand`` row
+    matches (e.g. a bare ``customCommand`` with no registered label).
     """
     out: list[dict] = []
     for entry in data:
@@ -1644,6 +1695,7 @@ BLOCK_BUILDERS: dict[str, BlockBuilder] = {
     "imaging_order": _blocks_imaging_order,
     "poc_lab_test": _blocks_poc_lab_test,
     "review": _blocks_review,
+    "reference": _blocks_reference,
     "chart_section_review": _blocks_chart_section_review,
     "medication_statement": _blocks_medication_statement,
     "remove_allergy": _blocks_remove_allergy,
@@ -1683,6 +1735,7 @@ TITLE_EXTRACTORS: dict[str, TitleExtractor] = {
     "change_diagnosis": lambda e: condition_text(e.get("data", e).get("new_condition")),
     "resolve_condition": lambda e: condition_text(e.get("data", e).get("condition")),
     "review": review_title,
+    "reference": lambda e: value_to_text(e.get("name")) if isinstance(e, dict) else "",
     "chart_section_review": lambda e: _humanize_section(e.get("section")),
     "med_action": medication_title,
     "prescribe": medication_title,
@@ -1708,13 +1761,11 @@ TITLE_EXTRACTORS: dict[str, TitleExtractor] = {
     "medication_statement": lambda e: value_to_text(e.get("medication") or e.get("fdbMedId")),
     "educational_material": lambda e: value_to_text(e.get("title")),
     "visual_exam_finding": lambda e: (e.get("title") or "") if isinstance(e, dict) else "",
-    # Title-extractor for custom commands: prefer the plugin-supplied label
-    # / title, fall back to a humanized version of the schema_key (e.g.,
-    # ``observationSummary`` → "Observation Summary"). Plugin command names
-    # registered via ``customize_custom_command`` aren't exposed on the SDK,
-    # so the schema_key is the best stable identifier we have.
-    # TODO(canvas-plugins#1745): swap the humanized fallback for a lookup
-    # against PluginCommand.label once that model is exposed via the SDK.
+    # Title-extractor for custom commands: prefer the label (set on the
+    # command instance, or stamped from the registered ``PluginCommand.label``
+    # by ``_attach_plugin_command_details``), then ``title``, then a humanized
+    # version of the schema_key (e.g., ``observationSummary`` → "Observation
+    # Summary") as a last resort when no PluginCommand row matches.
     "custom_command": lambda e: (
         value_to_text(e.get("label"))
         or value_to_text(e.get("title"))
@@ -1747,6 +1798,9 @@ DEFAULT_SECTIONS: list[dict] = [
             ("history_of_present_illness_commands_data", "History of Present Illness", "hpi"),
             ("review_of_systems_data", "Review of Systems", "ros"),
             ("questionnaire_data", "Questionnaire", "questionnaire"),
+            # Plugin commands the author registered under the Subjective
+            # section (PluginCommand.section == "subjective").
+            ("custom_commands_subjective", "Custom Command", "custom_command"),
         ],
     },
     {
@@ -1756,6 +1810,7 @@ DEFAULT_SECTIONS: list[dict] = [
             ("vitals_commands_data", "Vitals", "vitals"),
             ("physical_exam_data", "Physical Exam", "exam"),
             ("visual_exam_finding_commands_data", "Visual Exam Finding", "visual_exam_finding"),
+            ("custom_commands_objective", "Custom Command", "custom_command"),
         ],
     },
     {
@@ -1775,6 +1830,7 @@ DEFAULT_SECTIONS: list[dict] = [
             ("assess_coding_gap_commands_data", "Assess Coding Gap", "assess_coding_gap"),
             ("validate_coding_gap_commands_data", "Validate Coding Gap", "validate_coding_gap"),
             ("defer_coding_gap_commands_data", "Defer Coding Gap", "defer_coding_gap"),
+            ("custom_commands_assessment", "Custom Command", "custom_command"),
         ],
     },
     {
@@ -1786,6 +1842,7 @@ DEFAULT_SECTIONS: list[dict] = [
             ("consult_report_reviews", "Consult Report Review", "review"),
             ("uncategorized_document_reviews", "Uncategorized Document Review", "review"),
             ("chart_section_review_commands_data", "Chart Section Review", "chart_section_review"),
+            ("reference_commands_data", "Reference", "reference"),
         ],
     },
     {
@@ -1815,6 +1872,7 @@ DEFAULT_SECTIONS: list[dict] = [
             ("close_goal_commands_data", "Close Goal", "close_goal"),
             ("snooze_protocol_commands_data", "Snooze Protocol", "snooze_protocol"),
             ("clipboard_commands_data", "Clipboard", "clipboard"),
+            ("custom_commands_plan", "Custom Command", "custom_command"),
         ],
     },
     {
@@ -1823,6 +1881,7 @@ DEFAULT_SECTIONS: list[dict] = [
         "items": [
             ("immunize_commands_data", "Immunize", "immunize"),
             ("perform_commands_data", "Perform", "perform"),
+            ("custom_commands_procedures", "Custom Command", "custom_command"),
         ],
     },
     {
@@ -1836,12 +1895,16 @@ DEFAULT_SECTIONS: list[dict] = [
             ("patient_family_history_commands_data", "Family History", "family_history"),
             ("medical_history_commands_data", "Past Medical History", "medical_history"),
             ("surgical_history_commands_data", "Past Surgical History", "surgical_history"),
+            ("custom_commands_history", "Custom Command", "custom_command"),
         ],
     },
     {
         "key": "custom",
         "title": "Custom Commands",
         "items": [
+            # Fallback bucket: plugin commands with no recognized
+            # PluginCommand.section (or the provider-only "internal" section),
+            # plus bare customCommand rows with no registered row to look up.
             ("custom_commands_data", "Custom Command", "custom_command"),
         ],
     },

@@ -140,7 +140,7 @@
             {% endif %}
 
             <!-- Assessment -->
-            {% if assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data %}
+            {% if assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or chart_section_review_commands_data or structured_assessment_data or poc_lab_test_commands_data %}
                 {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
@@ -322,6 +322,23 @@
                 </ul>
             {% endif %}
 
+            {% if chart_section_review_commands_data %}
+                <h3>Sections Reviewed</h3>
+                <ul>
+                {% for chart_review in chart_section_review_commands_data %}
+                    <li><span class="emphasis-text">{{ chart_review.section_label|default:"Section" }}</span>
+                        {% if chart_review.section_content %}
+                            <ul>
+                            {% for item in chart_review.section_content %}
+                                <li>{{ item }}</li>
+                            {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+
             {% if structured_assessment_data %}
                 <h3>Structured Assessments</h3>
                 {% for structured_assessment in structured_assessment_data %}
@@ -358,7 +375,7 @@
 
             <!--Plan-->
             {% if plan_commands_data or prescribe_commands_data or refill_commands_data or stop_medication_commands_data or adjust_prescription_commands_data or change_medication_commands_data or cancel_prescription_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data %}
-                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or chart_section_review_commands_data or structured_assessment_data or poc_lab_test_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
             {% endif %}
@@ -654,7 +671,7 @@
 
             <!--Procedures-->
             {% if immunize_commands_data or perform_commands_data %}
-                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data or plan_commands_data or prescribe_commands_data or refill_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or stop_medication_commands_data or cancel_prescription_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data or close_goal_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or chart_section_review_commands_data or structured_assessment_data or poc_lab_test_commands_data or plan_commands_data or prescribe_commands_data or refill_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or stop_medication_commands_data or cancel_prescription_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data or close_goal_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
             {% endif %}
@@ -685,7 +702,7 @@
 
             <!--History-->
             {% if allergy_commands_data or remove_allergy_commands_data or medication_statement_commands_data or immunization_statement_commands_data or patient_family_history_commands_data or medical_history_commands_data or surgical_history_commands_data %}
-                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or structured_assessment_data or poc_lab_test_commands_data or plan_commands_data or prescribe_commands_data or refill_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or stop_medication_commands_data or cancel_prescription_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data or close_goal_commands_data or immunize_commands_data or perform_commands_data %}
+                {% if reason_for_visit or history_of_present_illness_commands_data or review_of_systems_data or questionnaire_data or vitals_commands_data or physical_exam_data or visual_exam_finding_commands_data or assessments_commands_data or diagnose_commands_data or diagnoses_from_structured_assessments or assess_coding_gap_commands_data or resolve_condition_commands_data or change_diagnosis_commands_data or lab_reviews or imaging_reviews or consult_report_reviews or uncategorized_document_reviews or chart_section_review_commands_data or structured_assessment_data or poc_lab_test_commands_data or plan_commands_data or prescribe_commands_data or refill_commands_data or approve_refill_commands_data or deny_refill_commands_data or approve_change_commands_data or deny_change_commands_data or stop_medication_commands_data or cancel_prescription_commands_data or adjust_prescription_commands_data or change_medication_commands_data or referral_commands_data or lab_order_commands_data or imaging_order_commands_data or instruct_commands_data or educational_material_commands_data or goal_commands_data or update_goal_commands_data or close_goal_commands_data or immunize_commands_data or perform_commands_data %}
                     <hr class="section-divider">
                 {% endif %}
             {% endif %}

@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.134.0",
-    "plugin_version": "0.0.70",
+    "sdk_version": "0.169.1",
+    "plugin_version": "0.1.0",
     "name": "patient_visit_summary",
     "description": "Generate a visit summary printout or customizable print view for a patient note.",
     "components": {

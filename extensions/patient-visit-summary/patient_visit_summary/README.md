@@ -1,22 +1,13 @@
 # Patient Visit Summary
 
-## Description
+## What it does
 
-A Canvas plugin that generates a patient visit summary from a clinical note. It
-offers two surfaces:
-
-- **Patient Visit Summary** — a "Patient Visit Summary" button in the note
-  **header** opens a modal with a formatted, print-ready HTML summary of the
-  visit (with a print/save-as-PDF button).
-- **Customize & Print** — a "Customize & Print" button in both the note
-  **footer** and the note **header** opens a panel where the provider can 
-  decide which commands to include in the PDF printout,
-  toggle/reorder sections, match the note body order, add header/footer text
-  and a custom comment, choose whether to include `CommandMetadata`, preview,
-  and generate a finalized PDF that is attached to the patient's chart as a 
-  Uncategorized Clinical Document that can be pulled via
-  FHIR `DocumentReference`. Previously saved versions can be viewed or
-  deleted from the same modal.
+This plugin turns a clinical note into a clean, printable visit summary. It adds
+buttons to the note that let you open a patient-friendly summary of the visit and
+print it or save it as a PDF to hand to the patient, and open a "Customize &
+Print" panel where staff pick exactly which parts of the note to include,
+reorder them, add header and footer text, preview the result, and save a
+finalized PDF back to the patient's chart so it can be found again later.
 
 ## Problem it solves
 
@@ -77,7 +68,7 @@ Three audiences benefit:
   metadata (`CommandMetadata`) that the staff toggle surfaces in the
   print without any plugin coordination.
 
-## Screenshots
+## Screenshots or screen recordings
 
 > Screenshots use synthetic data on a development instance.
 
@@ -141,17 +132,33 @@ builds a fully-shaped template context. Key behaviors:
   note that isn't explicitly handled (e.g., `observationSummary`,
   `healthRiskAssessmentSummary`, anything registered by another plugin via
   home-app's `customize_custom_command`) is picked up by
-  `_fetch_unknown_command_data` and rendered as a custom command. The schema
-  key is humanized for the title until `PluginCommand` is exposed in the SDK
-  (see TODO follow-ups below).
+  `_fetch_unknown_command_data` and rendered as a custom command. The heading
+  prefers the plugin author's registered `PluginCommand.label` (stamped by
+  `_attach_plugin_command_details`), falling back to a humanized schema key only
+  when no registered row matches. Each command is also routed to its registered
+  `PluginCommand.section` (`subjective` / `objective` / `assessment` / `plan` /
+  `procedures` / `history`) so it prints under the right section heading;
+  commands with no recognized section (or the provider-only `internal` section)
+  fall back to a standalone "Custom Commands" section. See
+  `_route_custom_commands_to_sections` and the `custom_commands_<section>`
+  buckets in `DEFAULT_SECTIONS`.
 - **UUID stamping** — every command entry returned by `_fetch_all_commands_data`
   (and the refill-decision / unknown-command variants) carries
   `_command_uuid` so the modal can order entries by `Note.body` position.
-- **Anchor-model joins** — Refill/change decision commands carry their
-  Prescription's TOTAL QUANTITY / DIRECTIONS / PHARMACY rows (joined via
-  `command.anchor_object_dbid`). Lab/Referral/Uncategorized review commands
-  carry their report content as a pre-rendered `Reference Data:` HTML block
-  (via `_attach_*_review_reference_html`).
+- **Anchor-model joins** — several command types are enriched from their
+  anchor model (resolved via `command.anchor_object_dbid`):
+  - Refill/change decision commands carry their Prescription's TOTAL QUANTITY
+    / DIRECTIONS / PHARMACY rows.
+  - Lab/Imaging/Referral/Uncategorized review commands carry their report
+    content as a pre-rendered `Reference Data:` HTML block (via
+    `_attach_*_review_reference_html` / `_attach_imaging_review_reference_html`).
+    Lab reports also surface their report-level `Comment:` (`LabReportRemark`),
+    and imaging reports surface their per-field codings (`ImagingReportCoding`).
+  - `chartSectionReview` commands carry the reviewed-items list
+    (`ChartSectionReview.content`) as `section_content`.
+  - `visualExamFinding` commands carry a presigned image URL
+    (`VisualExamFinding.image_url`) as `image_url`, rendered inline as an
+    `<img>`.
 - **`Command.custom_html`** — the new top-level `custom_html` field (still
   being rolled out — see `https://docs.canvasmedical.com/sdk/data-command/#command`)
   is detected at import-time via `hasattr(Command, "custom_html")` and surfaced
@@ -222,13 +229,16 @@ entered.
 - Change Diagnosis (showing both the original and new condition)
 - Lab Review (with **Reference Data:** — full Name / Reference / Value / Units
   table per linked `LabReport`, including abnormal-flag suffixes)
-- Imaging Review (heading only today — full report contents blocked on
-  canvas-plugins#1748)
+- Imaging Review (with **Reference Data:** — the report's per-field codings,
+  e.g. Comment / Interpretation, from `ImagingReport.codings`)
 - Consult Review (with **Reference Data:** — report comment text)
 - Uncategorized Document Review (with **Reference Data:** — document comment text)
-- Reviewed (`chartSectionReview`) — heading only ("Reviewed: Conditions",
-  "Reviewed: Medications", etc.); full bullet list blocked on
-  canvas-plugins#1744
+- Reviewed (`chartSectionReview`) — heading ("Reviewed: Conditions",
+  "Reviewed: Medications", etc.) plus the list of reviewed items beneath it
+  (from `ChartSectionReview.content`)
+- Reference (`reference`) — a saved diagnostic-view snapshot (e.g. a lab-trend
+  table); renders `Reference: <name>` plus the stored values table, matching
+  the note. Grouped under Reviews.
 - Create Coding Gap / Assess Coding Gap / Validate Coding Gap / Defer Coding
   Gap (each with status formatted in sentence case, date, note, and the
   proposed/accepted diagnosis with ICD-10 in parens)
@@ -255,14 +265,15 @@ entered.
 - Instruct (`NARRATIVE` field labeled `COMMENT`, matching Canvas)
 - Educational Material (with language)
 - Goal, Update Goal, Close Goal (with status, progress, barriers)
-- Visual Exam Finding (title + narrative; the attached image is intentionally
-  omitted — see canvas-plugins#1747)
+- Visual Exam Finding (title + narrative + the attached image, rendered inline
+  from `VisualExamFinding.image_url`)
 - Snooze Protocol (SNOOZE UNTIL / REASON / COMMENT in that order)
 - Clipboard (body text)
 - Custom Commands (auto-discovered) — any plugin-customized command on the
   note that isn't explicitly handled. The HTML payload in `data.content` is
-  base64-decoded and rendered as the body. Schema key is humanized for the
-  title until canvas-plugins#1745 lands.
+  base64-decoded and rendered as the body. The heading uses the registered
+  `PluginCommand.label` (humanized schema key only when no row matches), and
+  the command is routed to its registered `PluginCommand.section`.
 
 **Procedures**
 - Perform (immunizations administered, with CPT and CVX codes; procedures
@@ -307,13 +318,6 @@ from `Note.state_history` events — NEW / LOCKED / SIGNED / UNLOCKED /
 RELOCKED) and practice-location info (clinic name, address, phone, fax)
 sourced from the note's `PracticeLocation`.
 
-### Commands explicitly not rendered
-
-- `adjustDiagnosis` — INACTIVE in the home-app base CommandType (zero
-  production usage); removed from the print entirely.
-- `device`, `adjustProtocol`, `reference` — skipped by design (low usage,
-  ambiguous patient value). Each is a ~5-line addition (extractor fetch +
-  `DEFAULT_SECTIONS` entry) if a customer ever needs them.
 
 ### Patient-facing curation
 
@@ -325,7 +329,7 @@ have direct patient value:
 |------------------|-------------------|
 | Subjective       | Reason for Visit, History of Present Illness, Review of Systems, Questionnaires |
 | Objective        | Vitals, Physical Examination, **Visual Exam Findings** |
-| Assessment       | Conditions Assessed, New Diagnoses (incl. Assess Coding Gap diagnoses), Resolved Conditions, Changed Conditions, Lab/Imaging/Consult/Uncategorized Document Review, Structured Assessments, **In-Visit Test Results (POC Lab Test)** |
+| Assessment       | Conditions Assessed, New Diagnoses (incl. Assess Coding Gap diagnoses), Resolved Conditions, Changed Conditions, Lab/Imaging/Consult/Uncategorized Document Review, **Sections Reviewed (chartSectionReview — reviewed items per section)**, Structured Assessments, **In-Visit Test Results (POC Lab Test)** |
 | Plan             | Plan narrative, Prescribe, Refill, **Refill Requests (Approve/Deny — directions + reason only)**, **Pharmacy Change Requests (Approve/Deny — directions + reason only)**, Stop Medication, **Cancel Prescription (medication + rationale, no internal flags)**, Adjust Prescription, Change Medication, Referrals, Lab Orders, Imaging & Diagnostic Orders, Instruct, Educational Materials, Goal/Update Goal/Close Goal |
 | Procedures       | Immunize, Perform |
 | History          | Allergy, Remove Allergy, Medication Statement, Immunization Statement, Family History, Past Medical History, Past Surgical History |
@@ -335,8 +339,6 @@ have direct patient value:
 Commands omitted from the patient-facing summary (internal
 clinical/billing workflow only — these still render in Customize & Print):
 
-- **chartSectionReview** — internal "I reviewed your conditions list"
-  tracking; not actionable for the patient
 - **clipboard** — internal note-taking; staff-only
 - **snoozeProtocol** — clinical workflow only
 - **customCommand** (auto-discovered plugin commands) — output quality
@@ -404,7 +406,7 @@ installed, three buttons appear on the note:
 > plugin so the new columns are provisioned. `list_finals` lazily backfills
 > missing UUIDs on legacy rows, so old PDFs remain reachable.
 
-## Configuration (Variables)
+## Configuration options
 
 The plugin declares three sensitive variables in `CANVAS_MANIFEST.json` (modern
 `variables` array). Set their values per-installation from the plugin's config
@@ -471,27 +473,3 @@ Authorization: YOUR_GENERATED_KEY
   their command groupings live in `DEFAULT_SECTIONS` near the bottom of the
   same file.
 
-## TODO — follow-ups gated by SDK changes
-
-Several command types render only partial content today because the
-underlying anchor models / related fields aren't exposed through the plugin
-SDK yet. The plugin code has matching `TODO(canvas-plugins#NNNN)`
-breadcrumbs at the spots that should be revisited once each issue ships.
-
-| Issue | What's blocked | Code to update when it lands |
-|---|---|---|
-| [canvas-plugins#1744](https://github.com/canvas-medical/canvas-plugins/issues/1744) — Expose `ChartSectionReview` | `chartSectionReview` commands render heading-only ("Reviewed: Conditions") instead of the actual list of items reviewed. The pre-rendered bullet list lives on `ChartSectionReview.content`, which isn't reachable from a plugin today. | `services/command_blocks.py:_blocks_chart_section_review` — replace the heading-only render with the contents of `ChartSectionReview.content`. |
-| [canvas-plugins#1745](https://github.com/canvas-medical/canvas-plugins/issues/1745) — Expose `PluginCommand` | Plugin-customized custom commands (e.g. `observationSummary`, `healthRiskAssessmentSummary`) currently fall back to a humanized schema_key for their title. The plugin author's registered `label` lives on `PluginCommand` which isn't queryable. | `services/command_blocks.py` — `_blocks_custom_command` (title fallback) + the `custom_command` entry in the title-extractor map. Swap the humanize fallback for a `PluginCommand.label` lookup. |
-| [canvas-plugins#1747](https://github.com/canvas-medical/canvas-plugins/issues/1747) — Expose `VisualExamFinding` (with S3 presigned URL for the image) | `visualExamFinding` commands render title + narrative only — the attached image is intentionally omitted because the stored value is an opaque filename and we can't fetch the bytes from a plugin. | `services/command_blocks.py:_blocks_visual_exam_finding` — once a presigned URL is exposed, render the image inline alongside the narrative (e.g. `<img src=...>`). |
-| [canvas-plugins#1748](https://github.com/canvas-medical/canvas-plugins/issues/1748) — Expose `ImagingReportCoding` | `imagingReview` reference data (per-field values like Comment, Interpretation) is **not rendered at all** today. The per-field values live on `ImagingReportCoding` which isn't in the SDK. With only the report name + date available — both already in the review's heading — there's nothing useful to surface. | `services/note_data_extractor.py:_attach_imaging_review_reference_html` — currently a no-op. Replace with a `_format_imaging_reports_html` helper that iterates each `ImagingReport.codings` and emits the same `Reference Data:` block pattern as the other review types. |
-| [canvas-plugins#1749](https://github.com/canvas-medical/canvas-plugins/issues/1749) — Expose `LabReportRemark` | `labReview` reference data renders the Name/Reference/Value/Units table but **omits the report-level comment** from the lab personnel. `LabReport.concatenated_remarks` (home-app) and the underlying `LabReportRemark` rows aren't in the SDK. | `services/note_data_extractor.py:_format_lab_reports_html` — prepend `<strong>Comment:</strong> <concatenated remarks>` above the table, mirroring the pattern used for `referralReview` / `uncategorizedDocumentReview`. |
-
-When you pick up one of these items:
-
-1. Verify the corresponding SDK issue is closed and the new model / field
-   is in a released `canvas-plugins` version that the target customer
-   instance is running.
-2. Grep for the matching `TODO(canvas-plugins#NNNN)` comment in
-   `patient_visit_summary/services/` — the breadcrumb spells out exactly
-   what to add and where.
-3. Remove the TODO comment and update this table when the work ships.
