@@ -50,6 +50,10 @@ Unset, non-numeric, or negative values fall back to the defaults. Set them on th
 
 The browser computes the local-timezone end-of-today and sends it to the server, so the date-of-service cutoff and the days-open count always track the provider's local clock — no server-side timezone configuration is needed.
 
+## Screenshot
+
+![Chart-Closure Queue modal — the provider's open notes, oldest first, with amber/red aging highlights](assets/screenshot.png)
+
 ## Architecture
 
 | Component | Class | Role |
