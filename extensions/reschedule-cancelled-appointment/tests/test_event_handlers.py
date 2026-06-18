@@ -7,6 +7,7 @@ factory/ORM-created rows below don't leak between tests.
 import json
 import uuid
 from datetime import datetime
+from typing import Any, cast
 from unittest.mock import Mock
 
 import arrow
@@ -83,14 +84,14 @@ def _add_label(appointment: Appointment, label: TaskLabel) -> None:
     AppointmentLabel.objects.create(appointment=appointment, task_label=label)
 
 
-def _task_data(effect: object) -> dict:
+def _task_data(effect: Any) -> dict:
     """Extract the task payload dict from a CREATE_TASK effect."""
-    return json.loads(effect.payload)["data"]  # type: ignore[attr-defined]
+    return cast(dict, json.loads(effect.payload)["data"])
 
 
-def _comment_data(effect: object) -> dict:
+def _comment_data(effect: Any) -> dict:
     """Extract the comment payload dict from a CREATE_TASK_COMMENT effect."""
-    return json.loads(effect.payload)["data"]  # type: ignore[attr-defined]
+    return cast(dict, json.loads(effect.payload)["data"])
 
 
 def _future() -> datetime:
@@ -413,6 +414,27 @@ def test_comment_reason_for_visit_combines_coding_and_comment() -> None:
 
     body = _comment_data(_make_handler(appointment.id, {}).compute()[1])["body"]
     assert "Reason for visit: Hypertension — patient reports dizziness" in body
+
+
+def test_comment_reason_for_visit_skips_blank_coding_text() -> None:
+    """A coding present but with blank text is skipped; the comment is used."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    note_type = NoteType.objects.create(name="Office Visit")
+    note = Note.objects.create(note_type_version=note_type, provider=provider)
+    Command.objects.create(
+        note=note,
+        schema_key="reasonForVisit",
+        state="staged",
+        data={"coding": {"text": "   "}, "comment": "Knee pain"},
+        anchor_object_dbid=0,
+    )
+    appointment = _create_appointment(
+        patient, provider, start_time=_future(), note=note
+    )
+
+    body = _comment_data(_make_handler(appointment.id, {}).compute()[1])["body"]
+    assert "Reason for visit: Knee pain" in body
 
 
 def test_comment_reason_for_visit_falls_back_to_comment_when_command_empty() -> None:

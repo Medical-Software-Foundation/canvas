@@ -14,7 +14,7 @@ The task is routed to:
 
 The task is created with:
 
-- a title referencing the original appointment date/time,
+- a title naming the provider and the original appointment date/time,
 - a link to the patient,
 - a due date of **the next day**,
 - **labels** inherited from the cancelled appointment, plus a `Reschedule`

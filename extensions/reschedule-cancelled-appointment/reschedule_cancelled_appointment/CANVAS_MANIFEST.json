@@ -14,11 +14,7 @@
                     "write": []
                 }
             }
-        ],
-        "commands": [],
-        "content": [],
-        "effects": [],
-        "views": []
+        ]
     },
     "secrets": ["SCHEDULING_TEAM_NAME"],
     "tags": {},
