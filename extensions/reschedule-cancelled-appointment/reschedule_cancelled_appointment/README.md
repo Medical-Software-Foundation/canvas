@@ -17,7 +17,15 @@ The task is created with:
 - a title referencing the original appointment date/time,
 - a link to the patient,
 - a due date of **the next day**,
-- a `Reschedule` label.
+- **labels** inherited from the cancelled appointment, plus a `Reschedule`
+  label *only if* a label of that name already exists in the instance (the
+  plugin never creates new labels), and
+- a **comment** summarising the original appointment: reason for visit,
+  provider, date/time, location, and note type.
+
+The reason for visit is read from the appointment note's committed *Reason For
+Visit* command, falling back to the appointment's comment, then
+`Not documented`.
 
 ## Behavior
 

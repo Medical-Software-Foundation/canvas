@@ -1,10 +1,14 @@
+import uuid
+
 import arrow
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.effects.task import AddTask, TaskStatus
+from canvas_sdk.effects.task import AddTask, AddTaskComment, TaskStatus
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
 from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.command import Command
+from canvas_sdk.v1.data.task import TaskLabel
 from canvas_sdk.v1.data.team import Team
 from logger import log
 
@@ -16,8 +20,12 @@ SCHEDULING_TEAM_NAME_SECRET = "SCHEDULING_TEAM_NAME"
 #: Number of days from cancellation until the reschedule task is due.
 RESCHEDULE_DUE_DAYS = 1
 
-#: Label applied to every reschedule task so they can be filtered in the UI.
+#: Label added to the reschedule task — but only when a label of this name
+#: already exists in the instance. We never create a new label.
 RESCHEDULE_LABEL = "Reschedule"
+
+#: Schema key of the Reason For Visit command in a note.
+REASON_FOR_VISIT_SCHEMA_KEY = "reasonForVisit"
 
 
 class RescheduleCancelledAppointmentHandler(BaseHandler):
@@ -25,18 +33,19 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
 
     The task is routed to a scheduling team (configured by name via the
     ``SCHEDULING_TEAM_NAME`` secret) when one is found, otherwise to the
-    appointment's provider.
+    appointment's provider. A comment summarising the original appointment
+    (reason for visit, provider, date/time, location, note type) is attached.
     """
 
     RESPONDS_TO = [EventType.Name(EventType.APPOINTMENT_CANCELED)]
 
     def compute(self) -> list[Effect]:
-        """Build a reschedule task for the cancelled appointment."""
+        """Build a reschedule task (and summary comment) for the cancellation."""
         appointment_id = self.event.target.id
         try:
-            appointment = Appointment.objects.select_related("provider", "patient").get(
-                id=appointment_id
-            )
+            appointment = Appointment.objects.select_related(
+                "provider", "patient", "location", "note_type"
+            ).get(id=appointment_id)
         except Appointment.DoesNotExist:
             # The event implies the appointment exists; log defensively and bail
             # rather than raising on a record we can no longer read.
@@ -56,18 +65,20 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
         if appointment.start_time is None or appointment.start_time <= now:
             return []
 
+        task_id = str(uuid.uuid4())
         task_kwargs: dict = {
+            "id": task_id,
             "patient_id": str(appointment.patient.id) if appointment.patient else None,
             "title": self._task_title(appointment),
             "due": arrow.utcnow().shift(days=RESCHEDULE_DUE_DAYS).datetime,
             "status": TaskStatus.OPEN,
-            "labels": [RESCHEDULE_LABEL],
+            "labels": self._labels(appointment),
         }
+        task_kwargs.update(self._resolve_assignment(appointment))
 
-        assignment = self._resolve_assignment(appointment)
-        task_kwargs.update(assignment)
+        comment = AddTaskComment(task_id=task_id, body=self._comment_body(appointment))
 
-        return [AddTask(**task_kwargs).apply()]
+        return [AddTask(**task_kwargs).apply(), comment.apply()]
 
     def _resolve_assignment(self, appointment: Appointment) -> dict:
         """Decide who the reschedule task goes to.
@@ -105,6 +116,91 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
                 team_name,
             )
         return team
+
+    @staticmethod
+    def _labels(appointment: Appointment) -> list[str]:
+        """Labels for the reschedule task.
+
+        Inherits the cancelled appointment's existing (active) labels and adds
+        the ``Reschedule`` label only when a label of that name already exists
+        in the instance — we never create a new label.
+        """
+        labels: list[str] = list(
+            appointment.labels.filter(active=True).values_list("name", flat=True)
+        )
+
+        already_present = {name.casefold() for name in labels}
+        if (
+            RESCHEDULE_LABEL.casefold() not in already_present
+            and TaskLabel.objects.filter(
+                name__iexact=RESCHEDULE_LABEL, active=True
+            ).exists()
+        ):
+            labels.append(RESCHEDULE_LABEL)
+
+        return labels
+
+    def _comment_body(self, appointment: Appointment) -> str:
+        """A summary of the original appointment for the reschedule task."""
+        provider = appointment.provider.full_name if appointment.provider else "Unknown"
+        when = arrow.get(appointment.start_time).format("MMM D, YYYY h:mm A")
+        location = (
+            appointment.location.full_name if appointment.location else "Not specified"
+        )
+        note_type = (
+            appointment.note_type.name if appointment.note_type else "Not specified"
+        )
+
+        return (
+            "Appointment cancelled — reschedule needed.\n"
+            f"Reason for visit: {self._reason_for_visit(appointment)}\n"
+            f"Provider: {provider}\n"
+            f"Date/time: {when} UTC\n"
+            f"Location: {location}\n"
+            f"Note type: {note_type}"
+        )
+
+    @classmethod
+    def _reason_for_visit(cls, appointment: Appointment) -> str:
+        """Best-effort reason for visit for the cancelled appointment.
+
+        Prefers the committed Reason For Visit command on the appointment's
+        note, then the appointment's free-text comment, then a placeholder.
+        """
+        if appointment.note_id is not None:
+            data = (
+                Command.objects.filter(
+                    note_id=appointment.note_id,
+                    schema_key=REASON_FOR_VISIT_SCHEMA_KEY,
+                    entered_in_error__isnull=True,
+                    state="committed",
+                )
+                .order_by("-dbid")
+                .values_list("data", flat=True)
+                .first()
+            )
+            text = cls._rfv_text(data) if data else ""
+            if text:
+                return text
+
+        comment = str(appointment.comment or "").strip()
+        if comment:
+            return comment
+
+        return "Not documented"
+
+    @staticmethod
+    def _rfv_text(data: dict) -> str:
+        """Extract the reason text from a Reason For Visit command's data."""
+        coding = data.get("coding")
+        if isinstance(coding, dict) and coding.get("text"):
+            return str(coding["text"]).strip()
+
+        comment = data.get("comment")
+        if comment:
+            return str(comment).strip()
+
+        return ""
 
     @staticmethod
     def _task_title(appointment: Appointment) -> str:
