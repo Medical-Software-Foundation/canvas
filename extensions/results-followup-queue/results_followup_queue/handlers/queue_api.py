@@ -1,0 +1,343 @@
+"""Results Follow-Up Queue SimpleAPI handler.
+
+Serves the HTML shell, static assets, and JSON data for the queue modal. The
+``/data`` route returns the lab and imaging results awaiting review for the
+logged-in provider (the ordering provider), flagged abnormal-first and
+oldest-pending-first.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+from http import HTTPStatus
+from typing import Any
+
+from canvas_sdk.effects import Effect
+from canvas_sdk.effects.simple_api import HTMLResponse, JSONResponse, Response
+from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
+from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data.common import DocumentReviewMode
+from canvas_sdk.v1.data.imaging import ImagingReport
+from canvas_sdk.v1.data.lab import LabReport, LabValue
+
+_CACHE_BUST = str(int(datetime.now(timezone.utc).timestamp()))
+
+# `LabValue.abnormal_flag` is a free-text CharField whose contents vary by
+# instance/feed: it may hold an HL7-style code ("H", "L", "HH"), a word
+# ("high"), or a boolean-style string ("True"/"False"). The rest of the Canvas
+# ecosystem (lab-result-api, chart-command-search) treats it as a boolean
+# indicator, so we normalize it here. These normalized values mean NOT abnormal;
+# anything else is treated as abnormal. (Note: the string "False" is truthy in
+# Python, so a naive truthiness check would mis-flag normal values.)
+_NORMAL_FLAGS = {"", "false", "0", "n", "no", "normal", "none", "null", "-"}
+
+# Friendly labels for recognized abnormal-flag codes; everything else that is
+# abnormal falls back to "Abnormal".
+_ABNORMAL_FLAG_LABELS = {
+    "h": "High",
+    "high": "High",
+    "l": "Low",
+    "low": "Low",
+    "hh": "Critical High",
+    "ll": "Critical Low",
+    "a": "Abnormal",
+    "aa": "Critical",
+}
+
+
+class QueueAPI(StaffSessionAuthMixin, SimpleAPI):
+    """Serves the results follow-up queue modal UI and data.
+
+    Routes:
+        GET /          – HTML shell (index.html)
+        GET /main.js   – JavaScript asset
+        GET /styles.css – CSS asset
+        GET /data      – JSON list of results awaiting the provider's review
+    """
+
+    PREFIX = "/app"
+
+    # ── Static asset routes ───────────────────────────────────────────────
+
+    @api.get("/")
+    def get_index(self) -> list[Response | Effect]:
+        """Serve the HTML shell for the modal."""
+        html = render_to_string(
+            "templates/index.html",
+            context={"cache_bust": _CACHE_BUST},
+        )
+        return [HTMLResponse(html or "", status_code=HTTPStatus.OK)]
+
+    @api.get("/main.js")
+    def get_js(self) -> list[Response | Effect]:
+        """Serve the JavaScript asset."""
+        return [
+            Response(
+                (render_to_string("static/main.js") or "").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="application/javascript",
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    @api.get("/styles.css")
+    def get_css(self) -> list[Response | Effect]:
+        """Serve the CSS asset."""
+        return [
+            Response(
+                (render_to_string("static/styles.css") or "").encode(),
+                status_code=HTTPStatus.OK,
+                content_type="text/css",
+                headers={"Cache-Control": "no-cache"},
+            )
+        ]
+
+    # ── Data route ────────────────────────────────────────────────────────
+
+    @api.get("/data")
+    def get_data(self) -> list[Response | Effect]:
+        """Return the results awaiting review for the logged-in provider.
+
+        Returns 400 if the staff UUID header is missing.
+        """
+        staff_uuid = self.request.headers.get("canvas-logged-in-user-id")
+        if not staff_uuid:
+            return [
+                JSONResponse(
+                    {"error": "Missing canvas-logged-in-user-id header"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+
+        today = _today()
+
+        # Two bulk queries total — one for labs, one for imaging. No per-result
+        # queries; abnormal detection and date math happen in Python over the
+        # already-prefetched rows.
+        lab_reports = (
+            LabReport.objects.filter(
+                tests__order__ordering_provider__id=staff_uuid,
+                review__isnull=True,
+                junked=False,
+                deleted=False,
+                entered_in_error__isnull=True,
+            )
+            .exclude(review_mode=DocumentReviewMode.REVIEW_NOT_REQUIRED)
+            .select_related("patient")
+            .prefetch_related("values", "values__codings", "values__test", "tests")
+            # A report joins to many tests, so the provider filter can duplicate
+            # rows. Plain .distinct() collapses them. NOT .distinct("field") —
+            # Postgres-only DISTINCT ON breaks the SQLite test harness.
+            .distinct()
+        )
+
+        imaging_reports = (
+            ImagingReport.objects.filter(
+                order__ordering_provider__id=staff_uuid,
+                review__isnull=True,
+                junked=False,
+            )
+            .exclude(review_mode=DocumentReviewMode.REVIEW_NOT_REQUIRED)
+            .select_related("patient")
+        )
+
+        rows = [_lab_row(report, today) for report in lab_reports]
+        rows += [_imaging_row(report, today) for report in imaging_reports]
+
+        rows.sort(key=_sort_key)
+
+        return [JSONResponse({"results": rows})]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────
+
+
+def _lab_row(report: LabReport, today: date) -> dict[str, Any]:
+    """Assemble a result-row dict for a single lab report."""
+    # date_performed (specimen-performed time) is often null on ingested
+    # reports; fall back to the report's original/assigned dates so the row
+    # still shows a meaningful "result date" and aging.
+    result_date = _first_date(
+        report.date_performed, report.original_date, report.assigned_date
+    )
+    return {
+        "patient_key": _patient_key(report),
+        "patient_name": _patient_name(report),
+        "type": "lab",
+        "name": _lab_result_name(report),
+        "result_date": result_date.isoformat() if result_date else None,
+        "days_pending": _days_pending(result_date, today),
+        "abnormal": _is_abnormal(report),
+        "requires_signature": bool(report.requires_signature),
+        "values": _lab_values(report),
+    }
+
+
+def _imaging_row(report: ImagingReport, today: date) -> dict[str, Any]:
+    """Assemble a result-row dict for a single imaging report.
+
+    Imaging has no structured abnormal flag or discrete values, so ``abnormal``
+    is always False and ``values`` is always empty.
+    """
+    result_date = _first_date(
+        report.result_date, report.original_date, report.assigned_date
+    )
+    return {
+        "patient_key": _patient_key(report),
+        "patient_name": _patient_name(report),
+        "type": "imaging",
+        "name": report.name or "Imaging result",
+        "result_date": result_date.isoformat() if result_date else None,
+        "days_pending": _days_pending(result_date, today),
+        "abnormal": False,
+        "requires_signature": bool(report.requires_signature),
+        "values": [],
+    }
+
+
+def _patient_key(report: LabReport | ImagingReport) -> str:
+    """Return the string patient key used for the companion chart deep-link.
+
+    This is ``patient.id`` (the UUID string Canvas uses for
+    ``/companion/patient/<key>``), NOT the integer ``dbid``.
+    """
+    patient = report.patient
+    return str(patient.id) if patient else ""
+
+
+def _patient_name(report: LabReport | ImagingReport) -> str:
+    """Return the patient's display name, or a placeholder if unavailable."""
+    patient = report.patient
+    if not patient:
+        return "Unknown Patient"
+    name = f"{patient.first_name} {patient.last_name}".strip()
+    return name or "Unknown Patient"
+
+
+def _lab_result_name(report: LabReport) -> str:
+    """Return a display name built from the report's test names.
+
+    Deduplicates and joins the prefetched tests' ontology names; falls back to
+    the custom document name, then a generic label.
+    """
+    names = sorted(
+        {
+            test.ontology_test_name.strip()
+            for test in report.tests.all()
+            if test.ontology_test_name.strip()
+        }
+    )
+    if names:
+        return ", ".join(names)
+    return (report.custom_document_name or "").strip() or "Lab result"
+
+
+def _is_abnormal_flag(raw: str | None) -> bool:
+    """Return True if an ``abnormal_flag`` value indicates an abnormal result.
+
+    Treats the flag as a boolean indicator (see :data:`_NORMAL_FLAGS`) rather
+    than rendering its raw contents, which differ across instances.
+    """
+    return str(raw or "").strip().lower() not in _NORMAL_FLAGS
+
+
+def _abnormal_flag_label(raw: str | None) -> str:
+    """Return a clinician-friendly label for an abnormal flag, or "" if normal."""
+    if not _is_abnormal_flag(raw):
+        return ""
+    norm = str(raw).strip()
+    return _ABNORMAL_FLAG_LABELS.get(norm.lower(), "Abnormal")
+
+
+def _is_abnormal(report: LabReport) -> bool:
+    """Return True if any of the report's lab values carries an abnormal flag."""
+    return any(_is_abnormal_flag(value.abnormal_flag) for value in report.values.all())
+
+
+def _lab_values(report: LabReport) -> list[dict[str, Any]]:
+    """Return the report's individual result values for inline display.
+
+    Each entry is ``{name, value, units, abnormal, flag, reference_range}`` where
+    ``abnormal`` is a bool and ``flag`` is a friendly label ("High"/"Low"/…) or
+    "" when normal. Values with no result text are skipped. Iterates the
+    prefetched values (and their codings/test) so this adds no extra queries.
+    """
+    rows: list[dict[str, Any]] = []
+    for value in report.values.all():
+        text = (value.value or "").strip()
+        if not text:
+            continue
+        rows.append(
+            {
+                "name": _lab_value_name(value),
+                "value": text,
+                "units": (value.units or "").strip(),
+                "abnormal": _is_abnormal_flag(value.abnormal_flag),
+                "flag": _abnormal_flag_label(value.abnormal_flag),
+                "reference_range": (value.reference_range or "").strip(),
+            }
+        )
+    return rows
+
+
+def _lab_value_name(value: LabValue) -> str:
+    """Return the analyte name for a lab value.
+
+    Prefers the value's coding name, then the associated test's ontology name,
+    falling back to a generic label.
+    """
+    codings = list(value.codings.all())
+    if codings and (coding_name := str(codings[0].name).strip()):
+        return coding_name
+    test = value.test
+    if test and (test_name := str(test.ontology_test_name).strip()):
+        return test_name
+    return "Result"
+
+
+def _today() -> date:
+    """Return the current UTC date (indirection so tests can pin the clock)."""
+    return datetime.now(timezone.utc).date()
+
+
+def _coerce_date(value: date | datetime | None) -> date | None:
+    """Normalize a date/datetime (or None) to a plain date.
+
+    ``datetime`` is a subclass of ``date``, so check it first.
+    """
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
+def _first_date(*candidates: date | datetime | None) -> date | None:
+    """Return the first candidate that resolves to a real date, else None."""
+    for candidate in candidates:
+        resolved = _coerce_date(candidate)
+        if resolved is not None:
+            return resolved
+    return None
+
+
+def _days_pending(result_date: date | None, today: date) -> int:
+    """Return whole days between the result date and today.
+
+    Unknown dates yield 0 (and sort last via :func:`_sort_key`). Future dates
+    are clamped to 0 rather than reported as negative.
+    """
+    if result_date is None:
+        return 0
+    return max((today - result_date).days, 0)
+
+
+def _sort_key(row: dict[str, Any]) -> tuple[int, int, int]:
+    """Sort abnormal results first, then oldest-pending first.
+
+    Rows with no result date sort last within their abnormal/normal group.
+    """
+    abnormal_rank = 0 if row["abnormal"] else 1
+    no_date_rank = 0 if row["result_date"] is not None else 1
+    # Negate so the longest wait (largest days_pending) comes first.
+    return (abnormal_rank, no_date_rank, -row["days_pending"])
