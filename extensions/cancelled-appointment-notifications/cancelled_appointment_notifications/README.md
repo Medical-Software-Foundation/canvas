@@ -54,12 +54,14 @@ entered-in-error, or its start time is missing or already in the past.
 canvas install cancelled-appointment-notifications
 ```
 
-Then (optionally) set the `SCHEDULING_TEAM_NAME` secret on the plugin's
+Then (optionally) set the `SCHEDULING_TEAM_NAME` variable on the plugin's
 configuration page: `<emr_base_url>/admin/plugin_io/plugin/<plugin_id>/change/`.
 
 ## Configuration options
 
-| Secret | Required | Description |
+Configured via plugin **variables** (declared in `CANVAS_MANIFEST.json`):
+
+| Variable | Required | Description |
 |---|---|---|
 | `SCHEDULING_TEAM_NAME` | optional | Exact name of the Team that reschedule tasks should be assigned to (matched case-insensitively, e.g. `Scheduling`). If unset/blank or no team matches, tasks are assigned to the appointment's provider. |
 

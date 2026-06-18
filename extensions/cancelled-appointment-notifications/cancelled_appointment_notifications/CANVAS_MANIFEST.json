@@ -16,7 +16,7 @@
             }
         ]
     },
-    "secrets": ["SCHEDULING_TEAM_NAME"],
+    "variables": [{"name": "SCHEDULING_TEAM_NAME", "sensitive": true}],
     "tags": {},
     "references": [],
     "license": "MIT",

@@ -13,10 +13,10 @@ from canvas_sdk.v1.data.task import TaskLabel
 from canvas_sdk.v1.data.team import Team
 from logger import log
 
-#: Secret holding the exact name of the Team that reschedule tasks should be
-#: assigned to. If unset/blank or no team matches, the task falls back to the
-#: appointment's provider.
-SCHEDULING_TEAM_NAME_SECRET = "SCHEDULING_TEAM_NAME"
+#: Plugin variable holding the exact name of the Team that reschedule tasks
+#: should be assigned to. If unset/blank or no team matches, the task falls back
+#: to the appointment's provider. (Accessed at runtime via ``self.secrets``.)
+SCHEDULING_TEAM_NAME_VARIABLE = "SCHEDULING_TEAM_NAME"
 
 #: Number of days from cancellation until the reschedule task is due.
 RESCHEDULE_DUE_DAYS = 1
@@ -114,7 +114,7 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
 
     def _scheduling_team(self) -> Team | None:
         """Look up the configured scheduling team by name, if any."""
-        team_name = (self.secrets.get(SCHEDULING_TEAM_NAME_SECRET) or "").strip()
+        team_name = (self.secrets.get(SCHEDULING_TEAM_NAME_VARIABLE) or "").strip()
         if not team_name:
             return None
 
