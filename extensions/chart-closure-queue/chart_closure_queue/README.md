@@ -59,6 +59,8 @@ The browser computes the local-timezone end-of-today and sends it to the server,
 
 All notes are fetched in a **single bulk query** against `CurrentNoteStateEvent`, with `select_related` across the note's patient, note-type version, and provider — a constant query count with no N+1. The query is scoped to the authenticated provider and never accepts a client-supplied provider id; if the staff header is missing the endpoint fails closed with a 400 and returns no data.
 
+The result is **capped at 50 notes** (the oldest, most-overdue ones, since the list is sorted oldest-first) so a large backlog can never produce an unbounded query or payload. When the cap is hit the response sets `truncated: true` and the modal shows a "Showing the 50 most overdue notes…" footer rather than silently dropping the rest.
+
 ## Refreshing data
 
 Close and reopen the modal. Each open triggers a fresh fetch against the current local day.

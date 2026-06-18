@@ -90,7 +90,13 @@
       return;
     }
 
-    container.innerHTML = notes.map(buildRow).join("");
+    var html = notes.map(buildRow).join("");
+    if (data && data.truncated) {
+      html +=
+        "<p class='ccq-truncated'>Showing the " + esc(notes.length) +
+        " most overdue notes. Lock some to see the rest.</p>";
+    }
+    container.innerHTML = html;
   }
 
   /**

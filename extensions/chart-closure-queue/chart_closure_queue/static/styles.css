@@ -157,3 +157,11 @@ body {
 .ccq-error {
   color: #c0392b;
 }
+
+.ccq-truncated {
+  padding: 12px 16px 4px;
+  text-align: center;
+  font-size: 12px;
+  font-style: italic;
+  color: #6b7a8d;
+}

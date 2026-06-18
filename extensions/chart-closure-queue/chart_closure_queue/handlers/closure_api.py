@@ -44,6 +44,13 @@ _STATE_LABELS: dict[str, str] = {
 _DEFAULT_AMBER_DAYS = 2
 _DEFAULT_RED_DAYS = 4
 
+# Cap on the number of notes returned in a single response. The list is sorted
+# oldest-first, so the cap keeps the most overdue notes — exactly the ones a
+# provider should work first — and bounds the query and payload size for a
+# provider with a large backlog. Truncation is surfaced to the client (never
+# silent) so the UI can tell the provider more notes remain.
+_MAX_NOTES = 50
+
 
 class ClosureAPI(StaffSessionAuthMixin, SimpleAPI):
     """Serves the chart-closure queue modal UI and data.
@@ -143,7 +150,11 @@ class ClosureAPI(StaffSessionAuthMixin, SimpleAPI):
             self.secrets.get("AGING_RED_DAYS"), _DEFAULT_RED_DAYS
         )
 
-        events = _fetch_open_state_events(staff_uuid, end_dt)
+        # Fetch one extra row so we can tell whether the result was capped
+        # without paying for a separate COUNT query.
+        events = list(_fetch_open_state_events(staff_uuid, end_dt))
+        truncated = len(events) > _MAX_NOTES
+        events = events[:_MAX_NOTES]
 
         ref_date = end_dt.date()
         ref_tz = end_dt.tzinfo
@@ -152,7 +163,9 @@ class ClosureAPI(StaffSessionAuthMixin, SimpleAPI):
             for event in events
         ]
 
-        return [JSONResponse({"notes": notes})]
+        return [
+            JSONResponse({"notes": notes, "truncated": truncated, "limit": _MAX_NOTES})
+        ]
 
 
 # ── Data access ─────────────────────────────────────────────────────────────
@@ -163,7 +176,9 @@ def _fetch_open_state_events(staff_uuid: str, end_dt: datetime):  # type: ignore
 
     A single bulk query with select_related across the note's patient,
     note-type version, and provider — constant query count, no N+1 and no
-    per-note follow-ups.
+    per-note follow-ups. The result is sliced to ``_MAX_NOTES + 1`` so the
+    database never streams an unbounded backlog and the caller can still detect
+    truncation from the one extra row.
 
     Coverage: this thin ORM wrapper is exercised by the real-DB factory tests
     in ``test_closure_api`` (django_db); the unit tests patch it.
@@ -175,7 +190,7 @@ def _fetch_open_state_events(staff_uuid: str, end_dt: datetime):  # type: ignore
             note__datetime_of_service__lte=end_dt,
         )
         .select_related("note__patient", "note__note_type_version", "note__provider")
-        .order_by("note__datetime_of_service")
+        .order_by("note__datetime_of_service")[: _MAX_NOTES + 1]
     )
 
 

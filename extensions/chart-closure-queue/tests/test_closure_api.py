@@ -205,7 +205,45 @@ def test_get_data_no_notes_returns_empty_list() -> None:
 
     resp = result[0]
     assert resp.status_code == HTTPStatus.OK
-    assert json.loads(resp.content)["notes"] == []
+    body = json.loads(resp.content)
+    assert body["notes"] == []
+    assert body["truncated"] is False
+
+
+def test_get_data_not_truncated_under_limit() -> None:
+    """A result at/under the cap must report truncated=False."""
+    handler = _make_handler()
+    one_row = [SimpleNamespace(note=None)]
+    with (
+        patch(f"{MODULE}._fetch_open_state_events", return_value=one_row),
+        patch(f"{MODULE}._build_row", return_value={"note_id": "n1"}),
+    ):
+        result = handler.get_data()
+
+    body = json.loads(result[0].content)
+    assert body["truncated"] is False
+    assert len(body["notes"]) == 1
+
+
+def test_get_data_truncates_to_limit_and_flags_truncation() -> None:
+    """More rows than the cap must be trimmed to the cap with truncated=True.
+
+    The fetch helper returns ``_MAX_NOTES + 1`` rows (its overflow sentinel);
+    get_data must drop the extra and set the flag.
+    """
+    handler = _make_handler()
+    rows = [SimpleNamespace(note=None) for _ in range(3)]  # _MAX_NOTES (2) + 1
+    with (
+        patch(f"{MODULE}._MAX_NOTES", 2),
+        patch(f"{MODULE}._fetch_open_state_events", return_value=rows),
+        patch(f"{MODULE}._build_row", side_effect=lambda *a, **k: {"x": 1}),
+    ):
+        result = handler.get_data()
+
+    body = json.loads(result[0].content)
+    assert body["truncated"] is True
+    assert body["limit"] == 2
+    assert len(body["notes"]) == 2
 
 
 # ── /data – real DB factory tests ────────────────────────────────────────
@@ -299,6 +337,27 @@ def test_get_data_sorted_oldest_first() -> None:
     assert titles == ["Oldest", "Middle", "Newest"]
     days = [row["days_open"] for row in body["notes"]]
     assert days == [5, 3, 1]
+
+
+@pytest.mark.django_db
+def test_get_data_caps_result_at_limit_against_real_db() -> None:
+    """The ORM-level slice must cap rows and keep the oldest, end-to-end.
+
+    Patches _MAX_NOTES low so the real query/slice path is exercised without
+    creating dozens of notes.
+    """
+    staff = StaffFactory.create()
+    _make_note_with_state(staff, NoteStates.NEW, _dos_days_ago(1), title="Newest")
+    _make_note_with_state(staff, NoteStates.NEW, _dos_days_ago(5), title="Oldest")
+    _make_note_with_state(staff, NoteStates.NEW, _dos_days_ago(3), title="Middle")
+
+    with patch(f"{MODULE}._MAX_NOTES", 2):
+        body = _call_data(str(staff.id))
+
+    assert body["truncated"] is True
+    assert body["limit"] == 2
+    # Oldest-first ordering means the two most overdue are kept.
+    assert [row["note_title"] for row in body["notes"]] == ["Oldest", "Middle"]
 
 
 @pytest.mark.django_db
