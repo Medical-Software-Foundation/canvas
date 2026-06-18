@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  note_protocol_automation — IFRAME + PREACT ENTRY DOCUMENT (global admin page)
+  ----------------------------------------------------------------------------
+  Served by ConfigAPI.serve_index from this plugin's own static URL:
+      /plugin-io/api/note_protocol_automation/static/index.html
+  and opened as a full PAGE by NoteProtocolsConfigApp
+  (LaunchModalEffect target=PAGE, scope=global).
+
+  Every URL below uses the real plugin slug `note_protocol_automation`; app.js
+  renders the rule-authoring CRUD UI.
+
+  SUPPLY CHAIN: preact@10.25.4 / htm@3.1.1 are VENDORED LOCALLY under
+  static/vendor/. The import map below resolves the bare specifiers to this
+  plugin's OWN same-origin URLs (NOT a CDN) and pins each module's sha384 (SRI).
+
+  NO PHI: this is a GLOBAL admin surface. It takes no patient parameter; it
+  operates only on note types and the plugin's own Rule custom_data table.
+
+  NO build step — browser-native ES modules.
+  ============================================================================
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Note Protocols</title>
+    <!-- tokens.css: the SYNCED vendored copy in this plugin's static dir. -->
+    <link rel="stylesheet" href="/plugin-io/api/note_protocol_automation/static/tokens.css" />
+
+    <!--
+      IMPORT MAP + SRI. Bare specifiers resolve to this plugin's own vendored,
+      same-origin modules; the `integrity` block enforces sha384 SRI on every
+      vendored module the browser fetches (entry + transitive). Hashes are
+      identical to the reference (same vendored bytes; only the slug differs).
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "preact": "/plugin-io/api/note_protocol_automation/static/vendor/preact@10.25.4.js",
+          "preact/hooks": "/plugin-io/api/note_protocol_automation/static/vendor/preact-hooks@10.25.4.js",
+          "htm": "/plugin-io/api/note_protocol_automation/static/vendor/htm@3.1.1.js"
+        },
+        "integrity": {
+          "/plugin-io/api/note_protocol_automation/static/vendor/preact@10.25.4.js": "sha384-vymtkpNaOJRhA27q0x7o2kSTUBJx5yIhdjvrXCelnuljCEn96jOjKu1NfNg0Tizy",
+          "/plugin-io/api/note_protocol_automation/static/vendor/preact-hooks@10.25.4.js": "sha384-7y1CpIeLdEGDdygYFu1yh2rkZ6n4L/J35KQssA/zXifivobO+VOtdJ2sKiX/pHnE",
+          "/plugin-io/api/note_protocol_automation/static/vendor/htm@3.1.1.js": "sha384-F+l35NfvJZjupAklbEIoWlDJdip2+SghpOGl9tuhZ7/PtCtQauF/HO4e7OznRkO1"
+        }
+      }
+    </script>
+  </head>
+  <body class="npa-root">
+    <div id="app"></div>
+
+    <script type="module">
+      import { h, render } from "preact";
+      import { App } from "/plugin-io/api/note_protocol_automation/static/app.js";
+
+      render(h(App, {}), document.getElementById("app"));
+    </script>
+  </body>
+</html>
