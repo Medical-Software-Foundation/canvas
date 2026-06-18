@@ -35,12 +35,16 @@ from reschedule_cancelled_appointment.handlers.event_handlers import (
 # Helpers
 # --------------------------------------------------------------------------- #
 def _make_handler(
-    target_id: object, secrets: dict[str, str] | None = None
+    target_id: object,
+    secrets: dict[str, str] | None = None,
+    environment: dict[str, str] | None = None,
 ) -> RescheduleCancelledAppointmentHandler:
     """Build a handler whose event targets the given appointment id."""
     event = Mock()
     event.target.id = str(target_id)
-    return RescheduleCancelledAppointmentHandler(event=event, secrets=secrets or {})
+    return RescheduleCancelledAppointmentHandler(
+        event=event, secrets=secrets or {}, environment=environment or {}
+    )
 
 
 def _create_appointment(
@@ -354,7 +358,7 @@ def test_comment_prefers_reason_for_visit_command() -> None:
     Command.objects.create(
         note=note,
         schema_key="reasonForVisit",
-        state="committed",
+        state="staged",
         data={"comment": "Annual physical"},
         anchor_object_dbid=0,
     )
@@ -375,7 +379,7 @@ def test_comment_reason_for_visit_uses_structured_coding_text() -> None:
     Command.objects.create(
         note=note,
         schema_key="reasonForVisit",
-        state="committed",
+        state="staged",
         data={"coding": {"text": "Hypertension follow-up"}},
         anchor_object_dbid=0,
     )
@@ -396,7 +400,7 @@ def test_comment_reason_for_visit_falls_back_to_comment_when_command_empty() -> 
     Command.objects.create(
         note=note,
         schema_key="reasonForVisit",
-        state="committed",
+        state="staged",
         data={"comment": ""},
         anchor_object_dbid=0,
     )
@@ -418,6 +422,60 @@ def test_comment_reason_for_visit_defaults_when_unknown() -> None:
     assert "Reason for visit: Not documented" in body
     assert "Location: Not specified" in body
     assert "Note type: Not specified" in body
+
+
+# --------------------------------------------------------------------------- #
+# Time zone (rendered from self.environment["INSTALLATION_TIME_ZONE"])
+# --------------------------------------------------------------------------- #
+def _fixed_future() -> "arrow.Arrow":
+    """A deterministic future time at 17:00 UTC (distinct from any US local hour)."""
+    return (
+        arrow.utcnow()
+        .shift(days=10)
+        .replace(hour=17, minute=0, second=0, microsecond=0)
+    )
+
+
+def test_time_uses_instance_timezone_from_environment() -> None:
+    """Appointment times render in the instance's configured timezone."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    start = _fixed_future()
+    appointment = _create_appointment(patient, provider, start_time=start.datetime)
+
+    effects = _make_handler(
+        appointment.id, environment={"INSTALLATION_TIME_ZONE": "America/New_York"}
+    ).compute()
+
+    expected = start.to("America/New_York").format("MMM D, YYYY h:mm A ZZZ")
+    assert f"Date/time: {expected}" in _comment_data(effects[1])["body"]
+    assert expected in _task_data(effects[0])["title"]
+
+
+def test_time_defaults_to_utc_without_environment() -> None:
+    """Without an instance timezone, times render in UTC."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    start = _fixed_future()
+    appointment = _create_appointment(patient, provider, start_time=start.datetime)
+
+    body = _comment_data(_make_handler(appointment.id, {}).compute()[1])["body"]
+    assert f"Date/time: {start.to('UTC').format('MMM D, YYYY h:mm A ZZZ')}" in body
+
+
+def test_invalid_instance_timezone_falls_back_to_utc() -> None:
+    """An invalid environment timezone falls back to UTC."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    start = _fixed_future()
+    appointment = _create_appointment(patient, provider, start_time=start.datetime)
+
+    body = _comment_data(
+        _make_handler(
+            appointment.id, environment={"INSTALLATION_TIME_ZONE": "Not/AZone"}
+        ).compute()[1]
+    )["body"]
+    assert f"Date/time: {start.to('UTC').format('MMM D, YYYY h:mm A ZZZ')}" in body
 
 
 # --------------------------------------------------------------------------- #

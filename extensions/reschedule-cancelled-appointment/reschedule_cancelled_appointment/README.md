@@ -23,9 +23,11 @@ The task is created with:
 - a **comment** summarising the original appointment: reason for visit,
   provider, date/time, location, and note type.
 
-The reason for visit is read from the appointment note's committed *Reason For
-Visit* command, falling back to the appointment's comment, then
-`Not documented`.
+The reason for visit is read from the appointment note's *Reason For Visit*
+command, falling back to the appointment's comment, then `Not documented`.
+
+Times are rendered in the instance's configured timezone
+(`self.environment["INSTALLATION_TIME_ZONE"]`), falling back to UTC.
 
 ## Behavior
 

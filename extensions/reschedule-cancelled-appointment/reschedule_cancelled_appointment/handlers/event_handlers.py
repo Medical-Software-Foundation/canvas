@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 import arrow
 
@@ -26,6 +27,12 @@ RESCHEDULE_LABEL = "Reschedule"
 
 #: Schema key of the Reason For Visit command in a note.
 REASON_FOR_VISIT_SCHEMA_KEY = "reasonForVisit"
+
+#: Environment key holding the instance's configured IANA timezone name
+#: (e.g. "America/Los_Angeles"), used to display appointment times. Falls back
+#: to UTC when unset or invalid.
+INSTALLATION_TIME_ZONE_ENV = "INSTALLATION_TIME_ZONE"
+DEFAULT_TIMEZONE = "UTC"
 
 
 class RescheduleCancelledAppointmentHandler(BaseHandler):
@@ -65,18 +72,21 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
         if appointment.start_time is None or appointment.start_time <= now:
             return []
 
+        tz = self._timezone()
         task_id = str(uuid.uuid4())
         task_kwargs: dict = {
             "id": task_id,
             "patient_id": str(appointment.patient.id) if appointment.patient else None,
-            "title": self._task_title(appointment),
+            "title": self._task_title(appointment, tz),
             "due": arrow.utcnow().shift(days=RESCHEDULE_DUE_DAYS).datetime,
             "status": TaskStatus.OPEN,
             "labels": self._labels(appointment),
         }
         task_kwargs.update(self._resolve_assignment(appointment))
 
-        comment = AddTaskComment(task_id=task_id, body=self._comment_body(appointment))
+        comment = AddTaskComment(
+            task_id=task_id, body=self._comment_body(appointment, tz)
+        )
 
         return [AddTask(**task_kwargs).apply(), comment.apply()]
 
@@ -140,10 +150,10 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
 
         return labels
 
-    def _comment_body(self, appointment: Appointment) -> str:
+    def _comment_body(self, appointment: Appointment, tz: str) -> str:
         """A summary of the original appointment for the reschedule task."""
         provider = appointment.provider.full_name if appointment.provider else "Unknown"
-        when = arrow.get(appointment.start_time).format("MMM D, YYYY h:mm A")
+        when = self._format_local(appointment.start_time, tz)
         location = (
             appointment.location.full_name if appointment.location else "Not specified"
         )
@@ -155,7 +165,7 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
             "Appointment cancelled — reschedule needed.\n"
             f"Reason for visit: {self._reason_for_visit(appointment)}\n"
             f"Provider: {provider}\n"
-            f"Date/time: {when} UTC\n"
+            f"Date/time: {when}\n"
             f"Location: {location}\n"
             f"Note type: {note_type}"
         )
@@ -164,7 +174,7 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
     def _reason_for_visit(cls, appointment: Appointment) -> str:
         """Best-effort reason for visit for the cancelled appointment.
 
-        Prefers the committed Reason For Visit command on the appointment's
+        Prefers the Reason For Visit command on the appointment's
         note, then the appointment's free-text comment, then a placeholder.
         """
         if appointment.note_id is not None:
@@ -173,7 +183,7 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
                     note_id=appointment.note_id,
                     schema_key=REASON_FOR_VISIT_SCHEMA_KEY,
                     entered_in_error__isnull=True,
-                    state="committed",
+                    state="staged",
                 )
                 .order_by("-dbid")
                 .values_list("data", flat=True)
@@ -202,8 +212,33 @@ class RescheduleCancelledAppointmentHandler(BaseHandler):
 
         return ""
 
-    @staticmethod
-    def _task_title(appointment: Appointment) -> str:
+    def _task_title(self, appointment: Appointment, tz: str) -> str:
         """Human-readable task title referencing the original appointment time."""
-        original = arrow.get(appointment.start_time).format("MMM D, YYYY h:mm A")
-        return f"Reschedule cancelled appointment (originally {original} UTC)"
+        original = self._format_local(appointment.start_time, tz)
+        return f"Reschedule cancelled appointment (originally {original})"
+
+    def _timezone(self) -> str:
+        """The instance timezone (IANA name) from the environment, or UTC.
+
+        Validated via arrow; an unknown/malformed name raises a subclass of
+        ``ValueError`` (``arrow.parser.ParserError``) or ``KeyError``
+        (``zoneinfo.ZoneInfoNotFoundError``), which we treat as "use UTC".
+        """
+        tz_name = (
+            self.environment.get(INSTALLATION_TIME_ZONE_ENV) or ""
+        ).strip() or DEFAULT_TIMEZONE
+        try:
+            arrow.utcnow().to(tz_name)
+        except (ValueError, KeyError):
+            log.warning(
+                "RescheduleCancelledAppointment: invalid timezone %r; using %s",
+                tz_name,
+                DEFAULT_TIMEZONE,
+            )
+            return DEFAULT_TIMEZONE
+        return tz_name
+
+    @staticmethod
+    def _format_local(dt: datetime, tz: str) -> str:
+        """Format a datetime in the given IANA timezone, with its abbreviation."""
+        return arrow.get(dt).to(tz).format("MMM D, YYYY h:mm A ZZZ")
