@@ -55,7 +55,7 @@ class RecurrenceExtender(CronTask):
                 id__in=parent_ids_with_recurrence,
                 parent_appointment_id__isnull=True,
             ).exclude(
-                status__in=["cancelled", "noshow"]
+                status__in=["cancelled", "noshowed"]
             ).select_related(
                 "note_type", "location", "provider", "patient"
             )
@@ -191,11 +191,11 @@ class RecurrenceExtender(CronTask):
     ) -> dict[str, datetime.datetime]:
         """Batch fetch latest child start times for multiple parents in a single query."""
         # Use aggregation to get max start_time grouped by parent_appointment_id
-        # Exclude cancelled/noshow children so gaps get filled properly
+        # Exclude cancelled/noshowed children so gaps get filled properly
         latest_children = AppointmentModel.objects.filter(
             parent_appointment_id__in=parent_ids
         ).exclude(
-            status__in=["cancelled", "noshow"]
+            status__in=["cancelled", "noshowed"]
         ).values("parent_appointment_id").annotate(
             latest_start=Max("start_time")
         )
