@@ -2,7 +2,7 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "reschedule_cancelled_appointment",
-    "description": "When an appointment is cancelled, creates a task to reschedule the patient (routed to a scheduling team by configured name, or the appointment's provider) with a comment summarising the original appointment.",
+    "description": "When an appointment is cancelled, creates a follow-up task for scheduling/front-desk staff to rebook the patient, routed to a scheduling team (by configured name) or the appointment's provider, with a comment summarising the original appointment.",
     "components": {
         "handlers": [
             {
@@ -19,7 +19,7 @@
     "secrets": ["SCHEDULING_TEAM_NAME"],
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }
