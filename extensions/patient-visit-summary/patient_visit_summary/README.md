@@ -74,11 +74,11 @@ Three audiences benefit:
 
 **Patient Visit Summary button (note header)**
 
-![Patient Visit Summary button in the note header](docs/screenshots/01-patient-visit-summary-button.png)
+<img src="docs/screenshots/01-patient-visit-summary-button.png" alt="Patient Visit Summary button in the note header" width="440">
 
 **Rendered visit summary**
 
-![Print-ready patient visit summary](docs/screenshots/02-visit-summary.png)
+<img src="docs/screenshots/02-visit-summary.png" alt="Print-ready patient visit summary" width="900">
 
 The print-ready summary modal, with a header logo/org block, a patient/visit
 detail table, and the SOAP-organized content below. The **Print** button sends
@@ -86,11 +86,11 @@ it to the browser print / save-as-PDF dialog.
 
 **Customize & Print button (note footer)**
 
-![Customize & Print button in the note footer](docs/screenshots/03-customize-print-button.png)
+<img src="docs/screenshots/03-customize-print-button.png" alt="Customize & Print button in the note footer or header" width="440">
 
 **Customize & Print panel**
 
-![Customize Note Print panel](docs/screenshots/04-customize-print-panel.png)
+<img src="docs/screenshots/04-customize-print-panel.png" alt="Customize Note Print panel" width="760">
 
 The customize panel: toggle and reorder sections, add optional header/footer
 text, preview, and generate the finalized PDF that is attached to the chart.
