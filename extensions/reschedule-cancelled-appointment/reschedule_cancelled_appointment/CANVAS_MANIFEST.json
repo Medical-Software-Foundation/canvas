@@ -2,12 +2,17 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "reschedule_cancelled_appointment",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "When an appointment is cancelled, creates a task to reschedule the patient, routed to a scheduling team (by configured name) or the appointment's provider.",
     "components": {
         "handlers": [
             {
-                "class": "reschedule_cancelled_appointment.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "reschedule_cancelled_appointment.handlers.event_handlers:RescheduleCancelledAppointmentHandler",
+                "description": "Listens for APPOINTMENT_CANCELED and creates a reschedule task for the patient, assigned to the scheduling team or the appointment provider.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Team", "Patient", "Staff"],
+                    "write": []
+                }
             }
         ],
         "commands": [],
@@ -15,7 +20,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": [],
+    "secrets": ["SCHEDULING_TEAM_NAME"],
     "tags": {},
     "references": [],
     "license": "",

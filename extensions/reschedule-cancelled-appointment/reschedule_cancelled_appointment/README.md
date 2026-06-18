@@ -3,18 +3,59 @@ reschedule-cancelled-appointment
 
 ## Description
 
-A description of this plugin
+When an appointment is cancelled, this plugin automatically creates a **task to
+reschedule the patient** so the follow-up never gets dropped.
 
-### CANVAS_MANIFEST
+The task is routed to:
 
-The CANVAS_MANIFEST.json is used when installing your plugin. Please ensure it gets updated if you add, remove, or rename file or class names.
+1. a **scheduling team**, if one is configured (see the `SCHEDULING_TEAM_NAME`
+   secret), otherwise
+2. the **appointment's provider**.
 
-Required CANVAS_MANIFEST.json fields:
-- sdk_version (string) - The version of the Canvas SDK
-- plugin_version (string) - The version of your plugin
-- name (string) - The name of your plugin
-- description (string) - Description of your plugin
-- components (object) - Must have at least 1 component property (handlers, commands, content, effects, views, applications, or questionnaires)
-- tags (object) - Tags for categorizing your plugin (can be empty: {})
-- license (string) - License information (can be empty: "")
-- readme (string or boolean) - Path to readme or false
+The task is created with:
+
+- a title referencing the original appointment date/time,
+- a link to the patient,
+- a due date of **the next day**,
+- a `Reschedule` label.
+
+## Behavior
+
+The handler responds to the `APPOINTMENT_CANCELED` event and does nothing
+(returns no effects) when:
+
+- the appointment record can't be found,
+- the appointment is marked entered-in-error,
+- the appointment's start time is missing or already in the past (a cancelled
+  past appointment doesn't need rescheduling).
+
+If `SCHEDULING_TEAM_NAME` is set but no team with that name exists, the task
+falls back to the appointment's provider (this is a business fallback, not a
+security decision).
+
+## Configuration
+
+| Secret | Required | Description |
+|---|---|---|
+| `SCHEDULING_TEAM_NAME` | optional | Exact name of the Team that reschedule tasks should be assigned to (matched case-insensitively, e.g. `Scheduling`). If unset/blank or no team matches, the task is assigned to the appointment's provider. |
+
+Set secrets on the plugin's configuration page:
+`<emr_base_url>/admin/plugin_io/plugin/<plugin_id>/change/`
+
+## Installation
+
+1. Install the plugin into your Canvas instance:
+   ```
+   canvas install reschedule-cancelled-appointment
+   ```
+2. (Optional) Set the `SCHEDULING_TEAM_NAME` secret to the name of your
+   scheduling team. Leave it blank to always assign reschedule tasks to the
+   appointment provider.
+
+## Development
+
+```
+uv sync
+uv run pytest          # run tests
+uv run mypy reschedule_cancelled_appointment
+```

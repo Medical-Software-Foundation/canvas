@@ -1,71 +1,113 @@
-import json
+import arrow
 
-from canvas_sdk.commands import GoalCommand
 from canvas_sdk.effects import Effect
+from canvas_sdk.effects.task import AddTask, TaskStatus
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
-from canvas_sdk.v1.data.note import Note
-from canvas_sdk.v1.data.patient import Patient
+from canvas_sdk.v1.data.appointment import Appointment
+from canvas_sdk.v1.data.team import Team
 from logger import log
 
-# Inherit from BaseHandler to properly get registered for events
-class NewOfficeVisitNoteHandler(BaseHandler):
-    """Originates goal command when a new office visit note is created."""
+#: Secret holding the exact name of the Team that reschedule tasks should be
+#: assigned to. If unset/blank or no team matches, the task falls back to the
+#: appointment's provider.
+SCHEDULING_TEAM_NAME_SECRET = "SCHEDULING_TEAM_NAME"
 
-    # Name the event type you wish to run in response to
-    RESPONDS_TO = EventType.Name(EventType.NOTE_STATE_CHANGE_EVENT_CREATED)
+#: Number of days from cancellation until the reschedule task is due.
+RESCHEDULE_DUE_DAYS = 1
+
+#: Label applied to every reschedule task so they can be filtered in the UI.
+RESCHEDULE_LABEL = "Reschedule"
+
+
+class RescheduleCancelledAppointmentHandler(BaseHandler):
+    """Create a reschedule task when an appointment is cancelled.
+
+    The task is routed to a scheduling team (configured by name via the
+    ``SCHEDULING_TEAM_NAME`` secret) when one is found, otherwise to the
+    appointment's provider.
+    """
+
+    RESPONDS_TO = [EventType.Name(EventType.APPOINTMENT_CANCELED)]
 
     def compute(self) -> list[Effect]:
-        """This method gets called when an event of the type RESPONDS_TO is fired."""
-        # This class is initialized with several pieces of information you can
-        # access.
-        #
-        # `self.event` is the event object that caused this method to be
-        # called.
-        #
-        # `self.event.target.id` is an identifier for the object that is the subject of
-        # the event. In this case, it would be the identifier of the note state.
-        #
-        # `self.event.context` is a python dictionary of additional data that was
-        # given with the event. The information given here depends on the
-        # event type.
-        #
-        # `self.secrets` is a python dictionary of the secrets you defined in
-        # your CANVAS_MANIFEST.json and set values for in the uploaded
-        # plugin's configuration page: <emr_base_url>/admin/plugin_io/plugin/<plugin_id>/change/
-        # Example: self.secrets['WEBHOOK_URL']
-
-        # You can log things and see them using the Canvas CLI's log streaming
-        # function.
-        log.info(f"[NewOfficeVisitNoteHandler] Context: {self.event.context}")
-
-        # Get the note state from context
-        note_state = self.event.context.get("state")
-
-        # Check if the note state is NEW
-        if note_state != "NEW":
+        """Build a reschedule task for the cancelled appointment."""
+        appointment_id = self.event.target.id
+        try:
+            appointment = Appointment.objects.select_related("provider", "patient").get(
+                id=appointment_id
+            )
+        except Appointment.DoesNotExist:
+            # The event implies the appointment exists; log defensively and bail
+            # rather than raising on a record we can no longer read.
+            log.warning(
+                "RescheduleCancelledAppointment: appointment %s not found",
+                appointment_id,
+            )
             return []
 
-        # Get the note ID from context and fetch the Note object
-        note_id = self.event.context.get("note_id")
-        note = Note.objects.get(id=note_id)
-
-        # Check if note type is OFFICE VISIT
-        note_type_name = note.note_type_version.name
-
-        if note_type_name != "Office visit":
+        # Skip records that were retracted (entered in error).
+        if appointment.entered_in_error_id is not None:
             return []
 
-        # Get the note UUID from context (it's already a UUID string)
-        note_uuid = note_id
+        # Skip cancellations of appointments that have already started/passed —
+        # there is nothing to reschedule.
+        now = arrow.utcnow().datetime
+        if appointment.start_time is None or appointment.start_time <= now:
+            return []
 
-        # Get the patient to create a personalized goal statement
-        patient_id = self.event.context.get("patient_id")
-        patient = Patient.objects.get(id=patient_id)
-        patient_name = patient.first_name
-        goal_statement = f"{patient_name} will build plugins with the Canvas SDK to improve their clinical workflow"
+        task_kwargs: dict = {
+            "patient_id": str(appointment.patient.id) if appointment.patient else None,
+            "title": self._task_title(appointment),
+            "due": arrow.utcnow().shift(days=RESCHEDULE_DUE_DAYS).datetime,
+            "status": TaskStatus.OPEN,
+            "labels": [RESCHEDULE_LABEL],
+        }
 
-        # Create and originate Goal command with personalized statement
-        goal_command = GoalCommand(note_uuid=note_uuid, goal_statement=goal_statement)
+        assignment = self._resolve_assignment(appointment)
+        task_kwargs.update(assignment)
 
-        return [goal_command.originate()]
+        return [AddTask(**task_kwargs).apply()]
+
+    def _resolve_assignment(self, appointment: Appointment) -> dict:
+        """Decide who the reschedule task goes to.
+
+        Returns a dict with ``team_id`` (scheduling team), ``assignee_id``
+        (appointment provider), or neither (unassigned, last resort).
+        """
+        team = self._scheduling_team()
+        if team is not None:
+            return {"team_id": str(team.id)}
+
+        if appointment.provider is not None:
+            return {"assignee_id": str(appointment.provider.id)}
+
+        # Appointments always have a provider in practice; this guards against
+        # silently dropping the work if that ever isn't true.
+        log.warning(
+            "RescheduleCancelledAppointment: appointment %s has no scheduling team "
+            "or provider; creating an unassigned reschedule task",
+            appointment.id,
+        )
+        return {}
+
+    def _scheduling_team(self) -> Team | None:
+        """Look up the configured scheduling team by name, if any."""
+        team_name = (self.secrets.get(SCHEDULING_TEAM_NAME_SECRET) or "").strip()
+        if not team_name:
+            return None
+
+        team = Team.objects.filter(name__iexact=team_name).first()
+        if team is None:
+            log.warning(
+                "RescheduleCancelledAppointment: no team named %r found; "
+                "falling back to the appointment provider",
+                team_name,
+            )
+        return team
+
+    @staticmethod
+    def _task_title(appointment: Appointment) -> str:
+        """Human-readable task title referencing the original appointment time."""
+        original = arrow.get(appointment.start_time).format("MMM D, YYYY h:mm A")
+        return f"Reschedule cancelled appointment (originally {original} UTC)"
