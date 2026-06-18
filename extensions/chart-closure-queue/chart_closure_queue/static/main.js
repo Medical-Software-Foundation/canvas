@@ -53,7 +53,12 @@
    * Build HTML for a single note row.
    */
   function buildRow(note) {
+    // Deep-link straight to the note itself, not just the patient chart, so the
+    // provider lands on the document they need to close.
     var chartUrl = "/companion/patient/" + encodeURIComponent(note.patient_id);
+    if (note.note_id) {
+      chartUrl += "/note/" + encodeURIComponent(note.note_id);
+    }
     var aging = note.aging === "red" || note.aging === "amber" ? note.aging : "normal";
 
     return (

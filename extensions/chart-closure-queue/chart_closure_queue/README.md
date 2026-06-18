@@ -6,7 +6,7 @@ A global provider companion app that gives the logged-in clinician one compact, 
 
 When a provider opens the Chart-Closure Queue from the companion launcher, a modal lists every note that is **theirs** and is still in an open (lockable) state, ordered **oldest date-of-service first** so the most overdue work is at the top. Each row shows:
 
-- **Patient name** — deep-links to the patient's companion chart (opens with `target="_top"` so it replaces the modal rather than nesting an iframe)
+- **Patient name** — deep-links straight to the note itself (`/companion/patient/<patient>/note/<note>`), opening with `target="_top"` so it replaces the modal rather than nesting an iframe
 - **Note title / type**
 - **Date of service**
 - **Days open** — calendar days between the date of service and today, in the provider's local timezone
