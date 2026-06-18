@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Clipboard body -->
+  <rect x="20" y="16" width="60" height="72" rx="8" fill="#ffffff" stroke="#0f6cbf" stroke-width="5"/>
+  <!-- Clip at the top -->
+  <rect x="38" y="8" width="24" height="16" rx="5" fill="#0f6cbf"/>
+  <!-- Document lines -->
+  <line x1="32" y1="40" x2="68" y2="40" stroke="#cbd5e1" stroke-width="5" stroke-linecap="round"/>
+  <line x1="32" y1="52" x2="60" y2="52" stroke="#cbd5e1" stroke-width="5" stroke-linecap="round"/>
+  <!-- Closure checkmark badge -->
+  <circle cx="64" cy="68" r="18" fill="#2e7d32"/>
+  <path d="M56 68 l6 6 l11 -13" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,13 +1,33 @@
 {
-    "sdk_version": "0.1.4",
-    "plugin_version": "0.0.1",
+    "sdk_version": "0.169.1",
+    "plugin_version": "0.0.2",
     "name": "chart_closure_queue",
-    "description": "Edit the description in CANVAS_MANIFEST.json",
+    "description": "Global provider companion app that shows the logged-in clinician one aged worklist of their own open/unsigned notes that still need to be locked, oldest first, with configurable amber/red aging highlights. Read-only; each row deep-links to the patient chart.",
     "components": {
+        "applications": [
+            {
+                "class": "chart_closure_queue.applications.closure_app:ChartClosureApp",
+                "name": "Chart-Closure Queue",
+                "description": "Your open/unsigned notes that still need to be locked, oldest first.",
+                "scope": "provider_companion_global",
+                "icon": "assets/chart-closure-queue-icon.png"
+            }
+        ],
         "handlers": [
             {
-                "class": "chart_closure_queue.handlers.event_handlers:NewOfficeVisitNoteHandler",
-                "description": "A handler that listens for an event and sets an inspirational goal."
+                "class": "chart_closure_queue.handlers.closure_api:ClosureAPI",
+                "description": "Serves the chart-closure queue modal UI and the provider-scoped open-notes data.",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "CurrentNoteStateEvent",
+                        "Note",
+                        "Patient",
+                        "Staff",
+                        "NoteType"
+                    ],
+                    "write": []
+                }
             }
         ],
         "commands": [],
@@ -15,10 +35,14 @@
         "effects": [],
         "views": []
     },
+    "secrets": [
+        "AGING_AMBER_DAYS",
+        "AGING_RED_DAYS"
+    ],
     "variables": [],
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }
