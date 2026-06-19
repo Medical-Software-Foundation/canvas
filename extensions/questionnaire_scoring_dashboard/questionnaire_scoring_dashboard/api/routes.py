@@ -16,10 +16,7 @@ from questionnaire_scoring_dashboard.commands.scoring_trend import ScoringTrendC
 from questionnaire_scoring_dashboard.config import resolve_instrument
 from questionnaire_scoring_dashboard.data.notes import fetch_open_note_rows
 from questionnaire_scoring_dashboard.data.observations import fetch_survey_rows
-from questionnaire_scoring_dashboard.services.metrics import (
-    compute_metrics,
-    filter_by_range,
-)
+from questionnaire_scoring_dashboard.services.metrics import compute_metrics
 from questionnaire_scoring_dashboard.services.notes_select import choose_notes
 from questionnaire_scoring_dashboard.services.scoring import build_series
 from questionnaire_scoring_dashboard.services.svg_chart import (
@@ -41,16 +38,15 @@ def _max_for(label: str) -> int | None:
     return resolve_instrument(label).max_score
 
 
-def _build_payload(patient_id: str, start: str | None, end: str | None) -> dict:
-    """Series + metrics per instrument, filtered to [start, end]."""
+def _build_payload(patient_id: str) -> dict:
+    """Series + metrics per instrument (all available history)."""
     series = build_series(fetch_survey_rows(patient_id))
     today = date.today()
     payload: dict[str, dict] = {}
     for label, points in series.items():
-        ranged = filter_by_range(points, start, end)
         payload[label] = {
-            "series": ranged,
-            "metrics": compute_metrics(ranged, as_of=today),
+            "series": points,
+            "metrics": compute_metrics(points, as_of=today),
             "max_score": _max_for(label),
         }
     return payload
@@ -73,9 +69,7 @@ class ScoringDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
     @api.get("/data")
     def data(self) -> list[Response | Effect]:
         patient_id = self.request.query_params.get("patient", "")
-        start = self.request.query_params.get("start") or None
-        end = self.request.query_params.get("end") or None
-        payload = _build_payload(patient_id, start, end)
+        payload = _build_payload(patient_id)
         return [JSONResponse(payload, status_code=HTTPStatus.OK)]
 
     @api.get("/style.css")
@@ -118,10 +112,8 @@ class ScoringDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        start = body.get("start") or None
-        end = body.get("end") or None
         series = build_series(fetch_survey_rows(patient_id))
-        points = filter_by_range(series.get(instrument, []), start, end)
+        points = series.get(instrument, [])
         metrics = compute_metrics(points, as_of=date.today())
         max_score = _max_for(instrument)
 
@@ -172,14 +164,12 @@ class ScoringDashboardAPI(StaffSessionAuthMixin, SimpleAPI):
                 )
             ]
 
-        start = body.get("start") or None
-        end = body.get("end") or None
         series = build_series(fetch_survey_rows(patient_id))
         today = date.today()
         rows: list[dict] = []
         svg_series: list[tuple[str, list[dict]]] = []
         for instrument in instruments:
-            points = filter_by_range(series.get(instrument, []), start, end)
+            points = series.get(instrument, [])
             if not points:
                 continue
             metrics = compute_metrics(points, as_of=today)
