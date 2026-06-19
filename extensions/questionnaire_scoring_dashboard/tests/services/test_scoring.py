@@ -1,13 +1,14 @@
 from questionnaire_scoring_dashboard.services.scoring import build_series
 
 
-def _row(name, value, eff=None, created="2026-01-01T00:00:00+00:00", note_id=None):
+def _row(name, value, eff=None, created="2026-01-01T00:00:00+00:00", note_id=None, code=None):
     return {
         "name": name,
         "value": value,
         "effective_datetime": eff,
         "created": created,
         "note_id": note_id,
+        "code": code,
     }
 
 
@@ -75,5 +76,46 @@ def test_build_series_dedupes_one_point_per_date():
 def test_build_series_resolves_loinc_code_named_observation():
     # If a scored observation is named by its LOINC code, it still maps to the instrument.
     rows = [_row("44249-1", "12", eff="2026-01-01T00:00:00+00:00")]
+    series = build_series(rows)
+    assert "PHQ-9" in series
+
+
+def test_build_series_merges_versioned_questionnaire_names():
+    # When a questionnaire is edited, Canvas appends "(vN)" to the name but keeps
+    # the code. Both versions must collapse onto one trend, not split into two.
+    rows = [
+        _row("PHQ-2", "5", eff="2026-01-01T00:00:00+00:00", code="55758-7"),
+        _row("PHQ-2 (v28)", "2", eff="2026-02-01T00:00:00+00:00", code="55758-7"),
+    ]
+    series = build_series(rows)
+    assert list(series.keys()) == ["PHQ-2"]
+    assert [p["value"] for p in series["PHQ-2"]] == [5.0, 2.0]
+
+
+def test_build_series_merges_versions_when_name_only_differs_by_suffix():
+    # Even with no coding, the version suffix alone is stripped so versions merge.
+    rows = [
+        _row("Custom Scale", "1", eff="2026-01-01T00:00:00+00:00"),
+        _row("Custom Scale (v3)", "2", eff="2026-02-01T00:00:00+00:00"),
+    ]
+    series = build_series(rows)
+    assert list(series.keys()) == ["Custom Scale"]
+    assert len(series["Custom Scale"]) == 2
+
+
+def test_build_series_keeps_instruments_sharing_a_generic_code_separate():
+    # Some questionnaires share a generic scoring code (e.g. "default_score").
+    # A shared code must NOT merge two distinct instruments into one trend.
+    rows = [
+        _row("Falls Risk Assessment", "80", eff="2026-01-01T00:00:00+00:00", code="default_score"),
+        _row("Insomnia Severity Index", "12", eff="2026-01-01T00:00:00+00:00", code="default_score"),
+    ]
+    series = build_series(rows)
+    assert set(series.keys()) == {"Falls Risk Assessment", "Insomnia Severity Index"}
+
+
+def test_build_series_resolves_label_by_code_when_name_unknown():
+    # Name is unrecognized but the coding maps to a known instrument's max score.
+    rows = [_row("Local depression form", "12", eff="2026-01-01T00:00:00+00:00", code="44249-1")]
     series = build_series(rows)
     assert "PHQ-9" in series

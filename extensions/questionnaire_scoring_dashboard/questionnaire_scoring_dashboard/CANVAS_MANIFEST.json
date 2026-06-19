@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.157.0",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.2.1",
     "name": "questionnaire_scoring_dashboard",
     "description": "Patient-scoped dashboard of scored-questionnaire trends with per-graph insert into notes.",
     "components": {

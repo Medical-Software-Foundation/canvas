@@ -11,23 +11,6 @@ from datetime import date
 import arrow
 
 
-def filter_by_range(
-    points: list[dict], start: str | None, end: str | None
-) -> list[dict]:
-    """Return points whose date is within [start, end] inclusive.
-
-    start/end are "YYYY-MM-DD" strings or None (unbounded).
-    """
-    result = []
-    for point in points:
-        if start is not None and point["date"] < start:
-            continue
-        if end is not None and point["date"] > end:
-            continue
-        result.append(point)
-    return result
-
-
 def compute_metrics(points: list[dict], as_of: date) -> dict:
     """Compute the four data-only metrics for a sorted point list.
 

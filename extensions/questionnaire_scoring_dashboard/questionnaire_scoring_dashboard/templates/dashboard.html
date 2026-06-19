@@ -24,15 +24,6 @@
         </div>
       </div>
       <div>
-        <div class="ctl-label">Date range</div>
-        <select class="dd-select" id="rangeSelect">
-          <option value="3">Last 3 months</option>
-          <option value="6">Last 6 months</option>
-          <option value="12" selected>Last 1 year</option>
-          <option value="0">All time</option>
-        </select>
-      </div>
-      <div>
         <div class="ctl-label">View</div>
         <div class="viewtog" id="viewtog">
           <span class="vbtn" data-view="compare">Compare</span>
@@ -67,16 +58,8 @@
   <script>
     const ALL_INSTRUMENTS = {{ instruments_json|safe }};
     const PATIENT_QS = new URLSearchParams(window.location.search).get('patient') || '';
-    const state = { selected: new Set(ALL_INSTRUMENTS.slice(0, 4)), months: 12, view: 'individual' };
+    const state = { selected: new Set(ALL_INSTRUMENTS.slice(0, 4)), view: 'individual' };
     let charts = {};
-
-    function rangeBounds() {
-      if (!state.months) return { start: '', end: '' };
-      const end = new Date();
-      const start = new Date(); start.setMonth(start.getMonth() - state.months);
-      const fmt = d => d.toISOString().slice(0, 10);
-      return { start: fmt(start), end: fmt(end) };
-    }
 
     function renderInst() {
       const panel = document.getElementById('instPanel'); panel.innerHTML = '';
@@ -139,8 +122,7 @@
 
     async function refresh() {
       renderInst();
-      const { start, end } = rangeBounds();
-      const qs = new URLSearchParams({ patient: PATIENT_QS, start, end });
+      const qs = new URLSearchParams({ patient: PATIENT_QS });
       const data = await fetch('data?' + qs.toString()).then(r => r.json());
       document.getElementById('empty').style.display = ALL_INSTRUMENTS.length ? 'none' : 'block';
       const names = [...state.selected].filter(n => data[n]);
@@ -186,9 +168,6 @@
       }
     });
 
-    document.getElementById('rangeSelect').onchange = e => {
-      state.months = +e.target.value; refresh();
-    };
     document.getElementById('viewtog').onclick = e => {
       if (!e.target.dataset.view) return;
       [...document.querySelectorAll('#viewtog .vbtn')].forEach(b => b.classList.remove('on'));
@@ -196,9 +175,7 @@
     };
     document.getElementById('clearBtn').onclick = () => {
       state.selected = new Set();
-      state.months = 12;
       state.view = 'individual';
-      document.getElementById('rangeSelect').value = '12';
       document.querySelectorAll('#viewtog .vbtn').forEach(b => b.classList.toggle('on', b.dataset.view === 'individual'));
       refresh();
     };
@@ -224,15 +201,14 @@
     };
     document.getElementById('pickCancel').onclick = () => document.getElementById('picker').style.display = 'none';
     document.getElementById('pickConfirm').onclick = async () => {
-      const { start, end } = rangeBounds();
       const note_uuid = document.getElementById('noteSelect').value;
       if (pendingCompare) {
         const instruments = [...state.selected];
         await fetch('insert-compare', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ patient: PATIENT_QS, instruments, start, end, note_uuid }) });
+          body: JSON.stringify({ patient: PATIENT_QS, instruments, note_uuid }) });
       } else {
         await fetch('insert', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ patient: PATIENT_QS, instrument: pendingInstrument, start, end, note_uuid }) });
+          body: JSON.stringify({ patient: PATIENT_QS, instrument: pendingInstrument, note_uuid }) });
       }
       document.getElementById('picker').style.display = 'none';
     };
