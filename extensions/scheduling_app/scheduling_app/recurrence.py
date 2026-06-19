@@ -46,6 +46,47 @@ def decode_recurrence(value: str) -> dict[str, Any] | None:
     return rule
 
 
+# Carries the parent's reason-for-visit alongside the recurrence rule so the
+# handler can replicate it onto each child WITHOUT racing the parent's note RFV
+# command — this identifier is written atomically with the parent appointment.
+RFV_SYSTEM = "scheduling_app:rfv"
+
+
+def encode_rfv(visit: dict[str, Any]) -> str | None:
+    """Encode a visit's reason-for-visit for the RFV external identifier, or None.
+
+    Short keys keep the value within the 255-char identifier limit: ``t`` for free
+    text, or ``c`` coding (external id) + optional ``m`` comment.
+    """
+    text = (visit.get("reason_for_visit") or "").strip()
+    coding = visit.get("reason_for_visit_coding") or None
+    comment = (visit.get("reason_for_visit_comment") or "").strip() or None
+    if coding:
+        rfv: dict[str, str] = {"c": str(coding)}
+        if comment:
+            rfv["m"] = comment[:180]
+    elif text:
+        rfv = {"t": text[:200]}
+    else:
+        return None
+    return json.dumps(rfv, separators=(",", ":"))
+
+
+def decode_rfv(value: str) -> dict[str, Any] | None:
+    """Parse a stored RFV identifier back into a visit-style dict, or None."""
+    try:
+        rfv = json.loads(value)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(rfv, dict):
+        return None
+    if rfv.get("c"):
+        return {"reason_for_visit_coding": rfv["c"], "reason_for_visit_comment": rfv.get("m")}
+    if rfv.get("t"):
+        return {"reason_for_visit": rfv["t"]}
+    return None
+
+
 def _shift(start: datetime.datetime, frequency: str, units: int) -> datetime.datetime:
     if frequency == "daily":
         return start + datetime.timedelta(days=units)

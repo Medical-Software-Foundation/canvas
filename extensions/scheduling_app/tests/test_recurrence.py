@@ -9,8 +9,11 @@ from scheduling_app.booking import build_booking_effects
 from scheduling_app.handlers.recurrence import AppointmentRecurrence
 from scheduling_app.recurrence import (
     RECURRENCE_SYSTEM,
+    RFV_SYSTEM,
     decode_recurrence,
+    decode_rfv,
     encode_recurrence,
+    encode_rfv,
     occurrence_start_times,
 )
 
@@ -93,15 +96,30 @@ def mock_db_queries() -> Generator[None]:
         yield
 
 
-def _appointment(identifier_value: str | None) -> SimpleNamespace:
-    """A stand-in parent appointment whose external_identifiers carry (or not) a rule."""
+def _appointment(identifier_value: str | None, rfv_value: str | None = None) -> SimpleNamespace:
+    """A stand-in parent appointment whose external_identifiers carry a rule (+ optional RFV).
+
+    ``external_identifiers.filter(system=...)`` is system-aware so the handler can
+    read the recurrence rule and the RFV identifier independently.
+    """
+    identifiers = {}
+    if identifier_value is not None:
+        identifiers[RECURRENCE_SYSTEM] = SimpleNamespace(
+            system=RECURRENCE_SYSTEM, value=identifier_value
+        )
+    if rfv_value is not None:
+        identifiers[RFV_SYSTEM] = SimpleNamespace(system=RFV_SYSTEM, value=rfv_value)
+
     external_identifiers = MagicMock()
-    external_identifiers.filter.return_value.exists.return_value = identifier_value is not None
-    external_identifiers.filter.return_value.first.return_value = (
-        SimpleNamespace(system=RECURRENCE_SYSTEM, value=identifier_value)
-        if identifier_value is not None
-        else None
-    )
+
+    def _filter(system: str) -> MagicMock:
+        qs = MagicMock()
+        qs.first.return_value = identifiers.get(system)
+        qs.exists.return_value = system in identifiers
+        return qs
+
+    external_identifiers.filter.side_effect = _filter
+
     return SimpleNamespace(
         id="appt-parent",
         patient=SimpleNamespace(id="pat-1"),
@@ -151,6 +169,59 @@ def test_handler_skips_invalid_rule(mock_db_queries: None) -> None:
     assert _run_handler(_appointment('{"frequency":"weekly"}')) == []
 
 
+def test_handler_replicates_coded_rfv_onto_children(mock_db_queries: None) -> None:
+    """The parent's coded RFV (from its RFV identifier) is originated on each child's note."""
+    rule = encode_recurrence({"frequency": "weekly", "interval": 1, "count": 3})
+    rfv = encode_rfv(
+        {"reason_for_visit_coding": "rfv-ext-id", "reason_for_visit_comment": "since Monday"}
+    )
+    appt = _appointment(rule, rfv_value=rfv)
+
+    # `.originate()` validates the coding exists against the DB; mock it present.
+    with patch(
+        "canvas_sdk.commands.commands.reason_for_visit.ReasonForVisitSettingCoding.objects"
+    ) as mock_coding:
+        mock_coding.filter.return_value.exists.return_value = True
+        effects = _run_handler(appt)
+
+    assert [e.type for e in effects] == [
+        EffectType.CREATE_APPOINTMENT,
+        EffectType.ORIGINATE_REASON_FOR_VISIT_COMMAND,
+        EffectType.CREATE_APPOINTMENT,
+        EffectType.ORIGINATE_REASON_FOR_VISIT_COMMAND,
+    ]
+    # Each RFV targets the child note its preceding create makes, carrying the coding.
+    create0, rfv0 = effects[0], effects[1]
+    assert json.loads(rfv0.payload)["note"] == _data(create0)["instance_id"]
+    assert _data(rfv0)["coding"] == "rfv-ext-id"
+    assert _data(rfv0)["comment"] == "since Monday"
+
+
+def test_handler_replicates_free_text_rfv_onto_children(mock_db_queries: None) -> None:
+    """A free-text parent reason (from its RFV identifier) is originated on each child's note."""
+    rule = encode_recurrence({"frequency": "weekly", "interval": 1, "count": 2})  # 1 child
+    appt = _appointment(rule, rfv_value=encode_rfv({"reason_for_visit": "Persistent cough"}))
+
+    effects = _run_handler(appt)
+
+    assert [e.type for e in effects] == [
+        EffectType.CREATE_APPOINTMENT,
+        EffectType.ORIGINATE_REASON_FOR_VISIT_COMMAND,
+    ]
+    rfv = effects[1]
+    assert json.loads(rfv.payload)["note"] == _data(effects[0])["instance_id"]
+    assert _data(rfv)["comment"] == "Persistent cough"
+
+
+def test_handler_creates_bare_children_when_parent_has_no_rfv(mock_db_queries: None) -> None:
+    """No RFV identifier on the parent → children get no RFV (just the creates)."""
+    rule = encode_recurrence({"frequency": "weekly", "interval": 1, "count": 2})
+
+    effects = _run_handler(_appointment(rule))
+
+    assert [e.type for e in effects] == [EffectType.CREATE_APPOINTMENT]
+
+
 # --- booking.py stamps the rule onto the parent ------------------------------
 
 
@@ -195,3 +266,17 @@ def test_recurring_booking_stamps_the_rule(mock_db_queries: None) -> None:
     identifiers = _data(effects[0])["external_identifiers"]
     assert identifiers[0]["system"] == RECURRENCE_SYSTEM
     assert decode_recurrence(identifiers[0]["value"]) == rule
+
+
+def test_recurring_booking_with_rfv_also_stamps_the_rfv(mock_db_queries: None) -> None:
+    """A recurring booking carries the reason for visit in a second identifier so the
+    handler can replicate it onto children without racing the parent's note command.
+    """
+    payload = _booking_payload({"frequency": "weekly", "interval": 1, "count": 3})
+    payload["visits"][0]["reason_for_visit"] = "sistema"
+
+    effects = build_booking_effects(payload)
+
+    systems = {i["system"]: i["value"] for i in _data(effects[0])["external_identifiers"]}
+    assert RECURRENCE_SYSTEM in systems
+    assert decode_rfv(systems[RFV_SYSTEM]) == {"reason_for_visit": "sistema"}

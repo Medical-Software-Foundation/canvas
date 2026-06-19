@@ -38,6 +38,7 @@ Payload shape (from the iframe UI's POST /app/book)::
 """
 
 import datetime
+import json
 from typing import Any
 from uuid import uuid4
 
@@ -46,7 +47,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.note import AppointmentIdentifier
 from canvas_sdk.effects.note.appointment import Appointment, ScheduleEvent
 from canvas_sdk.v1.data.appointment import AppointmentProgressStatus
-from scheduling_app.recurrence import RECURRENCE_SYSTEM, encode_recurrence
+from scheduling_app.recurrence import RECURRENCE_SYSTEM, RFV_SYSTEM, encode_recurrence, encode_rfv
 
 
 def _parse_start(value: str) -> datetime.datetime:
@@ -81,9 +82,15 @@ def _appointment_effect(
     # CREATE_APPOINTMENT for every non-recurring booking.
     extra: dict[str, Any] = {}
     if recurrence:
-        extra["external_identifiers"] = [
+        identifiers = [
             AppointmentIdentifier(system=RECURRENCE_SYSTEM, value=encode_recurrence(recurrence))
         ]
+        # Carry the reason for visit too, so the APPOINTMENT_CREATED handler can
+        # replicate it onto each child without racing the parent's note RFV
+        # command (which is a separate, async effect).
+        if rfv_value := encode_rfv(visit):
+            identifiers.append(AppointmentIdentifier(system=RFV_SYSTEM, value=rfv_value))
+        extra["external_identifiers"] = identifiers
     return Appointment(
         instance_id=instance_id,
         appointment_note_type_id=visit["visit_type_id"],
@@ -176,25 +183,29 @@ def _schedule_event_effect(
 def _reschedule_effect(payload: dict[str, Any]) -> list[Effect]:
     """Build a RESCHEDULE_APPOINTMENT effect (+ a reason-for-visit edit, if any).
 
-    Labels ride the effect: home-app's reschedule creates a new appointment and,
-    when the payload carries labels, builds that set onto it (otherwise it copies
-    the original's). The reason-for-visit lives on the surviving note and can be
-    edited — ``note_id`` and ``rfv_command_id`` are injected server-side by the
-    /book handler. (The appointment effect can't carry an empty label set, so
-    clearing the last remaining label isn't expressible on reschedule.)
+    Labels are injected into the payload rather than set on the effect: the SDK
+    validates reschedule labels *additively* (existing + new <= 3), wrongly
+    counting the OLD appointment's labels even though home-app replaces them on a
+    fresh new appointment — so editing labels would spuriously hit the 3-label
+    limit. Building the effect without labels skips that check; home-app reads the
+    injected ``labels`` and applies them as the new appointment's set. (An empty
+    set is omitted, so home-app copies the original's labels — unchanged.)
+    ``note_id`` and ``rfv_command_id`` are injected server-side by the /book handler.
     """
     visit = payload["visits"][0]
     provider = (visit.get("providers") or [None])[0]
-    effects: list[Effect] = [
-        Appointment(
-            instance_id=payload["appointment_id"],
-            provider_id=provider,
-            practice_location_id=visit["location_id"],
-            start_time=_parse_start(visit["start_time"]),
-            duration_minutes=int(visit["duration_minutes"]),
-            labels=_labels(visit),
-        ).reschedule()
-    ]
+    reschedule = Appointment(
+        instance_id=payload["appointment_id"],
+        provider_id=provider,
+        practice_location_id=visit["location_id"],
+        start_time=_parse_start(visit["start_time"]),
+        duration_minutes=int(visit["duration_minutes"]),
+    ).reschedule()
+    if labels := _labels(visit):
+        data = json.loads(reschedule.payload)
+        data["data"]["labels"] = sorted(labels)
+        reschedule = Effect(type=reschedule.type, payload=json.dumps(data))
+    effects: list[Effect] = [reschedule]
     if rfv := _reschedule_rfv_effect(visit, payload.get("note_id"), payload.get("rfv_command_id")):
         effects.append(rfv)
     return effects

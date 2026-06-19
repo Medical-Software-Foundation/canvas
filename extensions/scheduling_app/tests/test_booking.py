@@ -263,6 +263,27 @@ def test_reschedule_sends_labels(mock_db_queries: None) -> None:
     assert sorted(_data(effects[0])["labels"]) == ["Emergent", "Urgent"]
 
 
+def test_reschedule_with_labels_bypasses_additive_limit(mock_db_queries: None) -> None:
+    """Editing labels on reschedule must not trip the SDK's additive >3 check.
+
+    The SDK validates reschedule labels as existing(old) + new <= 3, so with 2
+    existing labels, sending 2 would wrongly error (4 > 3). The plugin builds the
+    effect WITHOUT labels (skipping that check) and injects them into the payload
+    for home-app's replacement onto the fresh appointment.
+    """
+    payload = _appointment_payload(mode="reschedule", appointment_id="appt-9")
+    payload["visits"][0]["labels"] = ["Emergent", "Urgent"]
+
+    # Simulate the old appointment already carrying 2 labels (the bug scenario):
+    # under the old code this raised; the injection approach must not.
+    with patch("canvas_sdk.v1.data.appointment.AppointmentLabel.objects") as mock_label:
+        mock_label.filter.return_value.count.return_value = 2
+        effects = build_booking_effects(payload)
+
+    assert effects[0].type == EffectType.RESCHEDULE_APPOINTMENT
+    assert sorted(_data(effects[0])["labels"]) == ["Emergent", "Urgent"]
+
+
 def test_reschedule_edits_coded_rfv(mock_db_queries: None) -> None:
     """A coded reason on reschedule edits the command as structured (coding id)."""
     coding_id = str(uuid4())
