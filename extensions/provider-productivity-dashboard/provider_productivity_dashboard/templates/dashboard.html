@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provider Productivity Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            padding: 24px;
+            color: #333;
+        }
+
+        .dashboard-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .dashboard-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        .header-filters {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .provider-select {
+            padding: 6px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            background: #fff;
+            cursor: pointer;
+            min-width: 200px;
+            transition: border-color 0.2s ease;
+        }
+
+        .provider-select:focus {
+            outline: none;
+            border-color: #1d4ed8;
+            box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+        }
+
+        .period-toggle {
+            display: flex;
+            gap: 4px;
+            background: #e8eaed;
+            border-radius: 8px;
+            padding: 4px;
+        }
+
+        .period-btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            background: transparent;
+            color: #555;
+            transition: all 0.15s ease;
+        }
+
+        .period-btn.active {
+            background: #fff;
+            color: #1a73e8;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        }
+
+        .period-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.6);
+        }
+
+        .cards-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+        }
+
+        .card-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1a1a2e;
+            line-height: 1;
+        }
+
+        .card.clickable {
+            cursor: pointer;
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .card.clickable:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .notes-card .notes-split {
+            display: flex;
+            gap: 16px;
+            align-items: baseline;
+        }
+
+        .notes-segment {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .notes-segment-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .notes-segment-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .notes-divider {
+            font-size: 24px;
+            color: #ccc;
+            font-weight: 300;
+            align-self: center;
+        }
+
+        .section-card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .section-badge {
+            font-size: 12px;
+            font-weight: 500;
+            background: #e8f0fe;
+            color: #1a73e8;
+            border-radius: 12px;
+            padding: 2px 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background-color: #fafafa;
+            padding: 10px 20px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 1px solid #f0f0f0;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        td {
+            padding: 12px 20px;
+            font-size: 14px;
+            border-bottom: 1px solid #f7f7f7;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #fafbff;
+        }
+
+        .cpt-code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-weight: 600;
+            color: #1d4ed8;
+            cursor: pointer;
+        }
+
+        .cpt-code:hover {
+            text-decoration: underline;
+        }
+
+        .cpt-no-desc {
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .cpt-count {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .patient-link {
+            color: #1d4ed8;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .patient-link:hover {
+            text-decoration: underline;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-signed {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .status-open {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        td.cpt-cell {
+            white-space: normal;
+        }
+
+        .cpt-tag {
+            display: inline-block;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            background: #e8f0fe;
+            color: #1d4ed8;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin: 2px 2px;
+        }
+
+        .cpt-detail-row {
+            background: #f8f9fa;
+        }
+
+        .cpt-detail-row td {
+            padding: 0;
+        }
+
+        .cpt-detail-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .cpt-detail-table td {
+            padding: 8px 20px;
+            font-size: 13px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .cpt-detail-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .empty-state {
+            padding: 32px 20px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .section-header.collapsible {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-header.collapsible:hover {
+            background: #fafafa;
+        }
+
+        .collapse-icon {
+            display: inline-block;
+            font-size: 12px;
+            color: #888;
+            margin-right: 8px;
+            transition: transform 0.3s ease;
+            transform: rotate(0deg);
+        }
+
+        .section-content {
+            overflow: hidden;
+            max-height: 2000px;
+            transition: max-height 0.35s ease;
+        }
+
+        .section-content.collapsed {
+            max-height: 0;
+        }
+
+        .section-header.collapsible.is-collapsed {
+            border-bottom: none;
+        }
+
+        .loading {
+            padding: 24px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .error-message {
+            padding: 16px 20px;
+            background: #fce8e6;
+            color: #d93025;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        td strong {
+            color: #d93025;
+            font-weight: 600;
+        }
+
+        .order-type-filters {
+            display: flex;
+            gap: 4px;
+            padding: 10px 20px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .order-type-btn {
+            padding: 4px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 14px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            background: #fff;
+            color: #555;
+            transition: all 0.15s ease;
+        }
+
+        .order-type-btn.active {
+            background: #1a73e8;
+            color: #fff;
+            border-color: #1a73e8;
+        }
+
+        .order-type-btn:hover:not(.active) {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="dashboard-title">Provider Productivity Dashboard</div>
+        <div class="header-filters">
+            <select id="provider-select" class="provider-select" style="display:none" onchange="setProvider(this.value)">
+            </select>
+            <div class="period-toggle">
+                <button class="period-btn active" data-period="day" onclick="setPeriod('day')">Today</button>
+                <button class="period-btn" data-period="week" onclick="setPeriod('week')">This Week</button>
+                <button class="period-btn" data-period="month" onclick="setPeriod('month')">This Month</button>
+                <button class="period-btn" data-period="quarter" onclick="setPeriod('quarter')">This Quarter</button>
+                <button class="period-btn" data-period="year" onclick="setPeriod('year')">This Year</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-container"></div>
+
+    <div id="main-content">
+        <div class="loading">Loading metrics...</div>
+    </div>
+
+    <script>
+        let currentPeriod = 'day';
+        let currentProviderId = '';
+        let collapsedSections = {};
+        let expandedCpt = null;
+        let currentOrderType = 'all';
+
+        function getPluginApiBase() {
+            return '/plugin-io/api/provider_productivity_dashboard';
+        }
+
+        function buildParams(extra = {}) {
+            const params = new URLSearchParams({ period: currentPeriod, ...extra });
+            if (currentProviderId) {
+                params.set('provider_id', currentProviderId);
+            }
+            return params.toString();
+        }
+
+        function setPeriod(period) {
+            currentPeriod = period;
+            collapsedSections = {};
+            expandedCpt = null;
+            currentOrderType = 'all';
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.period === period);
+            });
+            loadMetrics();
+        }
+
+        function setProvider(providerId) {
+            currentProviderId = providerId;
+            collapsedSections = {};
+            expandedCpt = null;
+            currentOrderType = 'all';
+            loadMetrics();
+        }
+
+        async function loadProviders() {
+            const data = await fetchJson(`${getPluginApiBase()}/api/providers`);
+            const select = document.getElementById('provider-select');
+            if (data.providers.length > 0) {
+                const providerOptions = data.providers.map(p =>
+                    `<option value="${escapeHtml(p.id)}" ${p.id === data.logged_in_staff_id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+                ).join('');
+                select.innerHTML = `<option value="all">All Providers</option>${providerOptions}`;
+                currentProviderId = select.value;
+                select.style.display = '';
+            }
+        }
+
+        async function fetchJson(url) {
+            const response = await fetch(url, { credentials: 'include' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        }
+
+        function clearError() {
+            document.getElementById('error-container').innerHTML = '';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(String(text)));
+            return div.innerHTML;
+        }
+
+        function toggleSection(sectionId) {
+            collapsedSections[sectionId] = !collapsedSections[sectionId];
+            const content = document.getElementById(`${sectionId}-content`);
+            const icon = document.getElementById(`${sectionId}-icon`);
+            const header = icon ? icon.closest('.section-header') : null;
+            if (!content) return;
+
+            if (collapsedSections[sectionId]) {
+                content.classList.add('collapsed');
+                if (icon) {
+                    icon.style.transform = 'rotate(-90deg)';
+                    icon.innerHTML = '&#9660;';
+                }
+                if (header) header.classList.add('is-collapsed');
+            } else {
+                content.classList.remove('collapsed');
+                if (icon) {
+                    icon.style.transform = 'rotate(0deg)';
+                    icon.innerHTML = '&#9660;';
+                }
+                if (header) header.classList.remove('is-collapsed');
+            }
+        }
+
+        function scrollToSection(sectionId, toggleId) {
+            const el = document.getElementById(sectionId);
+            if (!el) return;
+            if (toggleId && collapsedSections[toggleId]) {
+                toggleSection(toggleId);
+            }
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function loadPatients() {
+            const listContainer = document.getElementById('patient-list-body');
+            listContainer.innerHTML = '<tr><td colspan="4" class="loading">Loading...</td></tr>';
+
+            const data = await fetchJson(`${getPluginApiBase()}/api/patients?${buildParams()}`);
+            const notes = data.notes || [];
+
+            if (notes.length === 0) {
+                listContainer.innerHTML = '<tr><td colspan="4" class="empty-state">No patients found for this period.</td></tr>';
+                return;
+            }
+
+            listContainer.innerHTML = notes.map(n => {
+                const cptTags = (n.cpts || []).map(c => `<span class="cpt-tag">${escapeHtml(c)}</span>`).join('');
+                const statusClass = n.status === 'Signed' ? 'status-signed' : 'status-open';
+                return `
+                    <tr>
+                        <td><a class="patient-link" href="${escapeHtml(n.chart_link)}" target="_top">${escapeHtml(n.patient_name)}</a></td>
+                        <td>${escapeHtml(n.dos)}</td>
+                        <td class="cpt-cell">${cptTags || '<span style="color:#999">—</span>'}</td>
+                        <td><span class="status-badge ${statusClass}">${escapeHtml(n.status)}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function toggleCptDetail(cpt) {
+            const detailRow = document.getElementById(`cpt-detail-${cpt}`);
+            if (!detailRow) return;
+
+            if (expandedCpt === cpt) {
+                detailRow.style.display = 'none';
+                expandedCpt = null;
+                return;
+            }
+
+            if (expandedCpt) {
+                const prev = document.getElementById(`cpt-detail-${expandedCpt}`);
+                if (prev) prev.style.display = 'none';
+            }
+            expandedCpt = cpt;
+
+            const container = document.getElementById(`cpt-detail-body-${cpt}`);
+            container.innerHTML = '<tr><td colspan="2" class="loading" style="padding:12px 20px">Loading...</td></tr>';
+            detailRow.style.display = '';
+
+            const data = await fetchJson(`${getPluginApiBase()}/api/cpt-patients?${buildParams({cpt: cpt})}`);
+            const patients = data.patients || [];
+
+            if (patients.length === 0) {
+                container.innerHTML = '<tr><td colspan="2" style="padding:12px 20px;color:#999">No patients found.</td></tr>';
+                return;
+            }
+
+            container.innerHTML = patients.map(p => `
+                <tr>
+                    <td><a class="patient-link" href="${escapeHtml(p.chart_link)}" target="_top">${escapeHtml(p.patient_name)}</a></td>
+                    <td>${escapeHtml(p.dos)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadUnsignedNotes() {
+            const listContainer = document.getElementById('unsigned-notes-body');
+            const badge = document.getElementById('unsigned-notes-badge');
+            listContainer.innerHTML = '<tr><td colspan="4" class="loading">Loading...</td></tr>';
+
+            const data = await fetchJson(`${getPluginApiBase()}/api/unsigned-notes?${buildParams()}`);
+            const notes = data.notes || [];
+            badge.textContent = data.count || 0;
+
+            if (notes.length === 0) {
+                listContainer.innerHTML = '<tr><td colspan="4" class="empty-state">No unsigned notes for this period.</td></tr>';
+                return;
+            }
+
+            listContainer.innerHTML = notes.map(n => `
+                <tr>
+                    <td><a class="patient-link" href="${escapeHtml(n.chart_link)}" target="_top">${escapeHtml(n.patient_name)}</a></td>
+                    <td>${escapeHtml(n.note_date)}</td>
+                    <td>${escapeHtml(n.provider_name)}</td>
+                    <td><strong>${escapeHtml(n.time_open)}</strong></td>
+                </tr>
+            `).join('');
+        }
+
+        function setOrderType(type) {
+            currentOrderType = type;
+            document.querySelectorAll('.order-type-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.orderType === type);
+            });
+            loadOrders();
+        }
+
+        async function loadOrders() {
+            const listContainer = document.getElementById('orders-body');
+            const badge = document.getElementById('orders-badge');
+            listContainer.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
+
+            const data = await fetchJson(`${getPluginApiBase()}/api/orders?${buildParams({order_type: currentOrderType})}`);
+            const orders = data.orders || [];
+            badge.textContent = data.count || 0;
+
+            if (orders.length === 0) {
+                listContainer.innerHTML = '<tr><td colspan="5" class="empty-state">No orders found for this period.</td></tr>';
+                return;
+            }
+
+            listContainer.innerHTML = orders.map(o => {
+                const typeBg = {'Lab':'#e8f0fe','Imaging':'#fce8e6','Referral':'#e6f4ea','DME':'#fef7e0'};
+                const typeColor = {'Lab':'#1a73e8','Imaging':'#d93025','Referral':'#137333','DME':'#b06000'};
+                return `
+                    <tr>
+                        <td><a class="patient-link" href="${escapeHtml(o.chart_link)}" target="_top">${escapeHtml(o.patient_name)}</a></td>
+                        <td><span class="status-badge" style="background:${typeBg[o.order_type] || '#e8eaed'};color:${typeColor[o.order_type] || '#333'}">${escapeHtml(o.order_type)}</span></td>
+                        <td style="white-space:normal;max-width:300px">${escapeHtml(o.description)}</td>
+                        <td>${escapeHtml(o.date_ordered)}</td>
+                        <td>${escapeHtml(o.provider)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadMedications() {
+            const listContainer = document.getElementById('medications-body');
+            const badge = document.getElementById('medications-badge');
+            listContainer.innerHTML = '<tr><td colspan="3" class="loading">Loading...</td></tr>';
+
+            const data = await fetchJson(`${getPluginApiBase()}/api/medications?${buildParams()}`);
+            const meds = data.medications || [];
+            badge.textContent = data.count || 0;
+
+            if (meds.length === 0) {
+                listContainer.innerHTML = '<tr><td colspan="3" class="empty-state">No medications prescribed for this period.</td></tr>';
+                return;
+            }
+
+            listContainer.innerHTML = meds.map(m => `
+                <tr>
+                    <td><a class="patient-link" href="${escapeHtml(m.chart_link)}" target="_top">${escapeHtml(m.patient_name)}</a></td>
+                    <td>${escapeHtml(m.medication_name)}</td>
+                    <td>${escapeHtml(m.date_prescribed)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadCareGapsClosed() {
+            const listContainer = document.getElementById('care-gaps-closed-body');
+            const badge = document.getElementById('care-gaps-closed-badge');
+            listContainer.innerHTML = '<tr><td colspan="3" class="loading">Loading...</td></tr>';
+
+            const data = await fetchJson(`${getPluginApiBase()}/api/care-gaps-closed?${buildParams()}`);
+            const gaps = data.gaps || [];
+            badge.textContent = data.count || 0;
+
+            if (gaps.length === 0) {
+                listContainer.innerHTML = '<tr><td colspan="3" class="empty-state">No care gaps closed for this period.</td></tr>';
+                return;
+            }
+
+            listContainer.innerHTML = gaps.map(g => `
+                <tr>
+                    <td><a class="patient-link" href="${escapeHtml(g.chart_link)}" target="_top">${escapeHtml(g.patient_name)}</a></td>
+                    <td>${escapeHtml(g.protocol_title)}</td>
+                    <td>${escapeHtml(g.date_resolved)}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadMetrics() {
+            const content = document.getElementById('main-content');
+            content.innerHTML = '<div class="loading">Loading metrics...</div>';
+            clearError();
+            expandedCpt = null;
+
+            const data = await fetchJson(`${getPluginApiBase()}/api/metrics?${buildParams()}`);
+
+            const cptRows = (data.cpt_codes || []).map(item => `
+                <tr>
+                    <td class="cpt-code" onclick="toggleCptDetail('${escapeHtml(item.cpt)}')" title="Click to see patients">${escapeHtml(item.cpt)}</td>
+                    <td style="white-space:normal">${item.description ? escapeHtml(item.description) : '<span class="cpt-no-desc">* Description not found in the charge master or CPT catalog.</span>'}</td>
+                    <td class="cpt-count">${item.count}</td>
+                </tr>
+                <tr class="cpt-detail-row" id="cpt-detail-${escapeHtml(item.cpt)}" style="display:none">
+                    <td colspan="3">
+                        <table class="cpt-detail-table">
+                            <tbody id="cpt-detail-body-${escapeHtml(item.cpt)}"></tbody>
+                        </table>
+                    </td>
+                </tr>
+            `).join('');
+
+            const cptTableBody = cptRows ||
+                '<tr><td colspan="3" class="empty-state">No CPT codes captured for this period.</td></tr>';
+
+            content.innerHTML = `
+                <div class="cards-row">
+                    <div class="card clickable" onclick="scrollToSection('patient-list-section','patients')">
+                        <div class="card-label">Patients Seen</div>
+                        <div class="card-value">${data.patients_seen}</div>
+                    </div>
+                    <div class="card clickable" onclick="scrollToSection('cpt-section','cpt')">
+                        <div class="card-label">CPT Codes Captured</div>
+                        <div class="card-value">${data.cpt_total}</div>
+                    </div>
+                    <div class="card notes-card clickable" onclick="scrollToSection('patient-list-section','patients')">
+                        <div class="card-label">Notes Status</div>
+                        <div class="notes-split">
+                            <div class="notes-segment">
+                                <span class="notes-segment-value">${data.notes_signed}</span>
+                                <span class="notes-segment-label">Signed</span>
+                            </div>
+                            <div class="notes-divider">/</div>
+                            <div class="notes-segment">
+                                <span class="notes-segment-value">${data.notes_open}</span>
+                                <span class="notes-segment-label">Open</span>
+                            </div>
+                            <div class="notes-divider">/</div>
+                            <div class="notes-segment">
+                                <span class="notes-segment-value">${data.notes_total}</span>
+                                <span class="notes-segment-label">Total</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cards-row">
+                    <div class="card clickable" onclick="scrollToSection('unsigned-notes-section','unsigned')">
+                        <div class="card-label">Unsigned Notes</div>
+                        <div class="card-value">${data.unsigned_notes}</div>
+                    </div>
+                    <div class="card notes-card clickable" onclick="scrollToSection('care-gaps-closed-section','caregaps')">
+                        <div class="card-label">Care Gaps</div>
+                        <div class="notes-split">
+                            <div class="notes-segment">
+                                <span class="notes-segment-value">${data.care_gaps_open}</span>
+                                <span class="notes-segment-label">Open</span>
+                            </div>
+                            <div class="notes-divider">/</div>
+                            <div class="notes-segment">
+                                <span class="notes-segment-value">${data.care_gaps_closed}</span>
+                                <span class="notes-segment-label">Closed</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Avg Time to Close</div>
+                        <div class="card-value">${data.avg_time_to_close}</div>
+                    </div>
+                </div>
+
+                <div class="section-card" id="patient-list-section">
+                    <div class="section-header collapsible" onclick="toggleSection('patients')">
+                        <span><span class="collapse-icon" id="patients-icon">&#9660;</span>Patients Seen</span>
+                        <span class="section-badge">${data.patients_seen}</span>
+                    </div>
+                    <div class="section-content" id="patients-content">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>Date of Service</th>
+                                    <th>CPT Codes</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="patient-list-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-card" id="unsigned-notes-section">
+                    <div class="section-header collapsible" onclick="toggleSection('unsigned')">
+                        <span><span class="collapse-icon" id="unsigned-icon">&#9660;</span>Unsigned Notes</span>
+                        <span class="section-badge" id="unsigned-notes-badge">0</span>
+                    </div>
+                    <div class="section-content" id="unsigned-content">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>Note Date</th>
+                                    <th>Provider</th>
+                                    <th>Time Open</th>
+                                </tr>
+                            </thead>
+                            <tbody id="unsigned-notes-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-card" id="cpt-section">
+                    <div class="section-header collapsible" onclick="toggleSection('cpt')">
+                        <span><span class="collapse-icon" id="cpt-icon">&#9660;</span>CPT Codes Detail</span>
+                        <span class="section-badge">${data.cpt_total} total</span>
+                    </div>
+                    <div class="section-content" id="cpt-content">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>CPT Code</th>
+                                    <th>Description</th>
+                                    <th>Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>${cptTableBody}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-card" id="orders-section">
+                    <div class="section-header collapsible" onclick="toggleSection('orders')">
+                        <span><span class="collapse-icon" id="orders-icon">&#9660;</span>Orders</span>
+                        <span class="section-badge" id="orders-badge">0</span>
+                    </div>
+                    <div class="section-content" id="orders-content">
+                        <div class="order-type-filters">
+                            <button class="order-type-btn active" data-order-type="all" onclick="setOrderType('all')">All</button>
+                            <button class="order-type-btn" data-order-type="lab" onclick="setOrderType('lab')">Labs</button>
+                            <button class="order-type-btn" data-order-type="imaging" onclick="setOrderType('imaging')">Imaging</button>
+                            <button class="order-type-btn" data-order-type="referral" onclick="setOrderType('referral')">Referrals</button>
+                            <button class="order-type-btn" data-order-type="dme" onclick="setOrderType('dme')">DME</button>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>Date Ordered</th>
+                                    <th>Provider</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orders-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-card" id="medications-section">
+                    <div class="section-header collapsible" onclick="toggleSection('meds')">
+                        <span><span class="collapse-icon" id="meds-icon">&#9660;</span>Medications Prescribed</span>
+                        <span class="section-badge" id="medications-badge">0</span>
+                    </div>
+                    <div class="section-content" id="meds-content">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>Medication</th>
+                                    <th>Date Prescribed</th>
+                                </tr>
+                            </thead>
+                            <tbody id="medications-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-card" id="care-gaps-closed-section">
+                    <div class="section-header collapsible" onclick="toggleSection('caregaps')">
+                        <span><span class="collapse-icon" id="caregaps-icon">&#9660;</span>Care Gaps Closed</span>
+                        <span class="section-badge" id="care-gaps-closed-badge">0</span>
+                    </div>
+                    <div class="section-content" id="caregaps-content">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>Protocol</th>
+                                    <th>Date Resolved</th>
+                                </tr>
+                            </thead>
+                            <tbody id="care-gaps-closed-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            // Auto-load detail sections
+            loadPatients();
+            loadUnsignedNotes();
+            loadOrders();
+            loadMedications();
+            loadCareGapsClosed();
+        }
+
+        // Initial load — fetch providers first (for admin dropdown), then metrics
+        loadProviders().then(() => loadMetrics());
+    </script>
+</body>
+</html>
