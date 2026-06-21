@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Google Calendar Sync — Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --rm-blue: #0693e3;
+            --rm-blue-deep: #0577ba;
+            --rm-blue-wash: #e8f4fd;
+            --rm-orange: #020b14;
+            --rm-orange-deep: #0e2030;
+            --rm-orange-wash: #fef0e6;
+            --navy: #13133c;
+            --ink: #23264a;
+            --muted: #767a92;
+            --faint: #a6aabd;
+            --bg: #f4f6fb;
+            --surface: #ffffff;
+            --line: #e7eaf3;
+            --line-soft: #eef1f8;
+            --success: #1f9d57;
+            --success-wash: #e7f6ee;
+            --danger: #d6453f;
+            --danger-wash: #fdecec;
+            --shadow-sm: 0 1px 2px rgba(19, 19, 60, 0.06);
+            --shadow-md: 0 10px 30px -12px rgba(19, 19, 60, 0.22);
+            --shadow-lift: 0 14px 34px -10px rgba(6, 147, 227, 0.30);
+            --r-sm: 8px;
+            --r-md: 12px;
+            --r-lg: 18px;
+            --sans: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+        body {
+            font-family: var(--sans);
+            color: var(--ink);
+            background:
+                radial-gradient(1200px 380px at 88% -120px, rgba(6, 147, 227, 0.08), transparent 60%),
+                radial-gradient(900px 320px at -5% -60px, rgba(249, 131, 53, 0.07), transparent 55%),
+                var(--bg);
+            background-attachment: fixed;
+            margin: 0;
+            padding: 30px clamp(18px, 5vw, 56px) 64px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .wrap { max-width: 1160px; margin: 0 auto; }
+
+        /* ---------- masthead ---------- */
+        .masthead {
+            position: relative;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--r-lg);
+            padding: 26px 30px 24px;
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            margin-bottom: 22px;
+            animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .masthead::before {
+            content: "";
+            position: absolute; inset: 0 0 auto 0; height: 4px;
+            background: linear-gradient(90deg, var(--rm-blue) 0%, var(--rm-blue) 55%, var(--rm-orange) 100%);
+        }
+        /* faint calendar-grid texture, top-right */
+        .masthead::after {
+            content: "";
+            position: absolute; top: -40px; right: -30px; width: 320px; height: 200px;
+            background-image:
+                linear-gradient(var(--line-soft) 1px, transparent 1px),
+                linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+            background-size: 34px 34px;
+            -webkit-mask-image: radial-gradient(160px 120px at 80% 10%, #000, transparent 75%);
+                    mask-image: radial-gradient(160px 120px at 80% 10%, #000, transparent 75%);
+            opacity: 0.7; pointer-events: none;
+        }
+        h1 {
+            position: relative; z-index: 1;
+            font-size: 27px; font-weight: 900; letter-spacing: -0.02em; color: var(--navy);
+            margin: 0 0 6px;
+        }
+        .subtitle {
+            position: relative; z-index: 1;
+            color: var(--muted); font-size: 14px; max-width: 60ch; margin: 0;
+        }
+
+        /* ---------- control bar ---------- */
+        .controls {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+            background: var(--surface); border: 1px solid var(--line);
+            border-radius: var(--r-md); padding: 14px 16px; box-shadow: var(--shadow-sm);
+            margin-bottom: 14px;
+            animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both;
+        }
+        .controls .spacer { flex: 1 1 auto; }
+        .controls .msg-line { flex-basis: 100%; }
+
+        /* ---------- buttons ---------- */
+        button {
+            font-family: var(--sans);
+            border: 1px solid transparent; border-radius: var(--r-sm);
+            padding: 9px 16px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em;
+            cursor: pointer; transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+            display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+        }
+        button:active { transform: translateY(1px); }
+        button:focus-visible { outline: 2px solid var(--rm-blue); outline-offset: 2px; }
+        button:disabled { opacity: 0.55; cursor: progress; transform: none; box-shadow: none; }
+
+        /* primary CTA */
+        .btn-primary { background: var(--rm-orange); color: #fff; box-shadow: 0 6px 16px -8px rgba(2,11,20,0.45); }
+        .btn-primary:hover:not(:disabled) { background: var(--rm-orange-deep); transform: translateY(-1px); box-shadow: 0 12px 22px -10px rgba(2,11,20,0.5); }
+
+        /* secondary, ghost */
+        button.secondary, .btn-ghost {
+            background: var(--surface); color: var(--rm-blue-deep); border-color: var(--line);
+        }
+        button.secondary:hover:not(:disabled), .btn-ghost:hover:not(:disabled) {
+            border-color: var(--rm-blue); background: var(--rm-blue-wash); transform: translateY(-1px);
+        }
+
+        /* small row buttons */
+        .row-actions button { padding: 6px 12px; font-size: 11.5px; }
+        .save-btn { background: var(--navy); color: #fff; }
+        .save-btn:hover:not(:disabled) { background: #20204e; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+        button.danger { background: var(--surface); color: var(--danger); border-color: #f1c9c7; }
+        button.danger:hover:not(:disabled) { background: var(--danger-wash); border-color: var(--danger); transform: translateY(-1px); }
+
+        /* ---------- bulk import ---------- */
+        details {
+            background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+            padding: 4px 16px; margin-bottom: 22px; box-shadow: var(--shadow-sm);
+            animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+        }
+        summary {
+            cursor: pointer; font-size: 13px; font-weight: 700; color: var(--navy);
+            padding: 11px 2px; list-style: none; display: flex; align-items: center; gap: 9px;
+        }
+        summary::-webkit-details-marker { display: none; }
+        summary::before {
+            content: "+"; display: inline-grid; place-items: center;
+            width: 20px; height: 20px; border-radius: 6px; font-size: 15px; font-weight: 700;
+            background: var(--rm-blue-wash); color: var(--rm-blue-deep); transition: transform 0.2s ease;
+        }
+        details[open] summary::before { content: "−"; transform: rotate(0deg); }
+        .import-body { padding: 0 0 14px; }
+        .import-note { color: var(--muted); font-size: 12.5px; margin: 2px 0 10px; }
+        .import-note code, code {
+            font-family: var(--mono); font-size: 11.5px; background: var(--line-soft);
+            padding: 1px 6px; border-radius: 5px; color: var(--navy);
+        }
+        textarea {
+            width: 100%; font-family: var(--mono); font-size: 12px; line-height: 1.6;
+            border: 1px solid var(--line); border-radius: var(--r-sm); padding: 11px 13px;
+            color: var(--ink); background: #fcfdff; resize: vertical; transition: border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        textarea:focus { outline: none; border-color: var(--rm-blue); box-shadow: 0 0 0 3px var(--rm-blue-wash); }
+
+        /* ---------- table card ---------- */
+        .table-card {
+            background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+            box-shadow: var(--shadow-md); overflow: hidden;
+            animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.14s both;
+        }
+        .table-head {
+            display: flex; align-items: baseline; justify-content: space-between;
+            padding: 18px 22px 14px; border-bottom: 1px solid var(--line-soft);
+        }
+        .table-head h2 { font-size: 13px; font-weight: 800; letter-spacing: 0.02em; color: var(--navy); margin: 0; }
+        .table-head .count { font-size: 12px; color: var(--faint); font-family: var(--mono); }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            text-align: left; padding: 11px 22px; background: #fbfcfe;
+            text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.08em;
+            color: var(--faint); font-weight: 700; border-bottom: 1px solid var(--line-soft);
+            position: sticky; top: 0; z-index: 2;
+        }
+        tbody td { padding: 15px 22px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+        tbody tr { transition: background 0.14s ease; animation: fadein 0.45s ease both; }
+        tbody tr:hover { background: #fafcff; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        .provider-name { font-weight: 700; color: var(--navy); font-size: 14px; }
+
+        input[type="email"] {
+            width: 100%; min-width: 210px; font-family: var(--mono); font-size: 12.5px;
+            border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 11px;
+            color: var(--ink); background: #fcfdff; transition: border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        input[type="email"]::placeholder { color: var(--faint); }
+        input[type="email"]:focus { outline: none; border-color: var(--rm-blue); box-shadow: 0 0 0 3px var(--rm-blue-wash); }
+
+        /* ---------- toggle switch ---------- */
+        .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+        .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: relative; width: 40px; height: 23px; border-radius: 999px;
+            background: #d4d8e6; transition: background 0.22s ease; flex: none;
+        }
+        .slider::after {
+            content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px;
+            border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(19,19,60,0.3);
+            transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .switch input:checked + .slider { background: var(--rm-blue); }
+        .switch input:checked + .slider::after { transform: translateX(17px); }
+        .switch input:focus-visible + .slider { box-shadow: 0 0 0 3px var(--rm-blue-wash); }
+        .switch-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+
+        /* ---------- badges ---------- */
+        .health { display: flex; flex-wrap: wrap; gap: 6px; }
+        .badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 10px 4px 9px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap;
+            border: 1px solid transparent;
+        }
+        .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+        .badge.on { background: var(--success-wash); color: #157a43; border-color: #c5ead4; }
+        .badge.on::before { background: var(--success); box-shadow: 0 0 0 0 rgba(31,157,87,0.5); animation: pulse 2s infinite; }
+        .badge.off { background: #f1f3f9; color: var(--muted); }
+        .badge.off::before { background: var(--faint); }
+        .badge.warn { background: var(--rm-orange-wash); color: #b85f17; border-color: #f7d8be; }
+        .badge.warn::before { background: var(--rm-orange); }
+
+        /* ---------- status messages ---------- */
+        .row-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+        .status-msg { font-size: 12px; color: var(--muted); font-weight: 600; }
+        .status-msg.ok { color: var(--success); }
+        .status-msg.err { color: var(--danger); }
+        .controls .status-msg { font-family: var(--sans); }
+
+        @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(31,157,87,0.5); }
+            70% { box-shadow: 0 0 0 5px rgba(31,157,87,0); }
+            100% { box-shadow: 0 0 0 0 rgba(31,157,87,0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header class="masthead">
+            <h1>Google Calendar Sync</h1>
+            <p class="subtitle">Map each provider to their Google Workspace calendar. Enabling a provider opens a live push channel so Canvas appointments and Google events stay in sync both ways.</p>
+        </header>
+
+        <div class="controls">
+            <button id="automap-btn" class="btn-primary">Auto-map schedulable providers</button>
+            <button id="reconcile-btn" class="secondary">Reconcile now</button>
+            <span class="spacer"></span>
+            <span id="reconcile-msg" class="status-msg msg-line"></span>
+        </div>
+
+        <details>
+            <summary>Bulk import from CSV</summary>
+            <div class="import-body">
+                <p class="import-note">Paste a CSV with an <code>Email</code> column (first column). Each email is matched to a Canvas staff record by email — use this for providers Auto-map did not cover.</p>
+                <textarea id="csv-input" rows="5" placeholder="Email,FirstName,LastName&#10;provider@example.com,Jane,Doe"></textarea>
+                <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+                    <button id="import-btn" class="secondary">Import CSV</button>
+                    <span id="import-msg" class="status-msg"></span>
+                </div>
+            </div>
+        </details>
+
+        <div class="table-card">
+            <div class="table-head">
+                <h2>Providers</h2>
+                <span class="count">{{ providers|length }} total</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Provider</th>
+                        <th>Workspace calendar</th>
+                        <th>Sync</th>
+                        <th>Health</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in providers %}
+                    <tr data-staff-id="{{ p.staff_id }}" style="animation-delay: {{ forloop.counter0 }}0ms;">
+                        <td><span class="provider-name">{{ p.name }}</span></td>
+                        <td><input type="email" class="calendar-email" value="{{ p.calendar_email }}" placeholder="provider@example.com" /></td>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox" class="active-toggle" {% if p.active %}checked{% endif %} />
+                                <span class="slider"></span>
+                                <span class="switch-label">Enabled</span>
+                            </label>
+                        </td>
+                        <td>
+                            <div class="health">
+                                {% if p.active %}
+                                    {% if p.channel_expiration %}<span class="badge on">Watching</span>{% else %}<span class="badge warn">No channel</span>{% endif %}
+                                    {% if p.needs_full_resync %}<span class="badge warn">Resync pending</span>{% endif %}
+                                {% else %}
+                                    <span class="badge off">Off</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="row-actions">
+                                <button class="save-btn">Save</button>
+                                <button class="reconcile-row-btn secondary">Reconcile</button>
+                                <button class="reimport-row-btn secondary">Re-import</button>
+                                <button class="purge-row-btn danger" title="Cancel this provider's imported holds and clear their sync mappings (no rebuild)">Purge</button>
+                                <span class="status-msg"></span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function postJSON(url, payload) {
+            return fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify(payload)
+            }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); });
+        }
+
+        document.querySelectorAll(".save-btn").forEach(function (button) {
+            button.addEventListener("click", function () {
+                var row = button.closest("tr");
+                var msg = row.querySelector(".status-msg");
+                var payload = {
+                    staff_id: row.getAttribute("data-staff-id"),
+                    calendar_email: row.querySelector(".calendar-email").value.trim(),
+                    active: row.querySelector(".active-toggle").checked
+                };
+                msg.textContent = "Saving...";
+                msg.className = "status-msg";
+                postJSON("/plugin-io/api/gcal_sync/google/admin/mapping", payload).then(function (res) {
+                    if (res.ok) {
+                        var warn = res.body.warning;
+                        msg.textContent = warn ? warn : "Saved. Refreshing…";
+                        msg.className = warn ? "status-msg err" : "status-msg ok";
+                        // Reload so the health badge (Watching / Off / No channel) reflects the new
+                        // state — it's rendered server-side at page load, not updated by this POST.
+                        // A warning is shown a little longer before the refresh so it can be read.
+                        setTimeout(function () { location.reload(); }, warn ? 3000 : 1000);
+                    } else {
+                        msg.textContent = res.body.error || "Error";
+                        msg.className = "status-msg err";
+                    }
+                }).catch(function () {
+                    msg.textContent = "Network error";
+                    msg.className = "status-msg err";
+                });
+            });
+        });
+
+        function rowAction(selector, url, verb, confirmMsg) {
+            document.querySelectorAll(selector).forEach(function (button) {
+                button.addEventListener("click", function () {
+                    if (confirmMsg && !window.confirm(confirmMsg)) return;
+                    var row = button.closest("tr");
+                    var msg = row.querySelector(".status-msg");
+                    // Disable every button in this row while the action runs so it can't be
+                    // double-clicked (a re-import is expensive and not safe to fire concurrently).
+                    var rowButtons = row.querySelectorAll("button");
+                    rowButtons.forEach(function (b) { b.disabled = true; });
+                    var originalLabel = button.textContent;
+                    button.textContent = verb + "…";
+                    msg.textContent = verb + " in progress… a full calendar can take up to a minute.";
+                    msg.className = "status-msg";
+                    postJSON(url, { staff_id: row.getAttribute("data-staff-id") }).then(function (res) {
+                        if (res.ok) {
+                            var b = res.body;
+                            var parts = [];
+                            if (b.pushed !== undefined) parts.push(b.pushed + " appt");
+                            if (b.holds_created) parts.push(b.holds_created + " hold(s) imported");
+                            if (b.blocks_pushed) parts.push(b.blocks_pushed + " block(s)");
+                            if (b.purged) parts.push(b.purged + " hold(s) purged");
+                            msg.textContent = verb + " done" + (parts.length ? ": " + parts.join(", ") : ".")
+                                + " Refreshing…";
+                            msg.className = "status-msg ok";
+                            // Auto-refresh so the health badge (Watching / Resync pending) updates.
+                            setTimeout(function () { location.reload(); }, 1500);
+                        } else {
+                            msg.textContent = res.body.error || "Error";
+                            msg.className = "status-msg err";
+                            rowButtons.forEach(function (b) { b.disabled = false; });
+                            button.textContent = originalLabel;
+                        }
+                    }).catch(function () {
+                        msg.textContent = "Network error";
+                        msg.className = "status-msg err";
+                        rowButtons.forEach(function (b) { b.disabled = false; });
+                        button.textContent = originalLabel;
+                    });
+                });
+            });
+        }
+        rowAction(".reconcile-row-btn", "/plugin-io/api/gcal_sync/google/admin/reconcile-provider", "Reconcile");
+        rowAction(".reimport-row-btn", "/plugin-io/api/gcal_sync/google/admin/reimport-provider", "Re-import");
+        rowAction(".purge-row-btn", "/plugin-io/api/gcal_sync/google/admin/purge-provider", "Purge",
+            "Purge ALL imported holds for this provider? This cancels their gcal-sync holds and clears their sync mappings. It does NOT rebuild (use Re-import for that), and cannot be undone.");
+
+        document.getElementById("automap-btn").addEventListener("click", function () {
+            var msg = document.getElementById("reconcile-msg");
+            msg.textContent = "Mapping schedulable providers...";
+            msg.className = "status-msg";
+            postJSON("/plugin-io/api/gcal_sync/google/admin/auto-map", {}).then(function (res) {
+                if (res.ok) {
+                    var skipped = (res.body.skipped_no_email || []).length;
+                    msg.textContent = "Mapped " + res.body.mapped + " provider(s)"
+                        + (skipped ? "; " + skipped + " skipped (no email on profile)." : ".");
+                    msg.className = "status-msg ok";
+                    setTimeout(function () { location.reload(); }, 1200);
+                } else {
+                    msg.textContent = res.body.error || "Error";
+                    msg.className = "status-msg err";
+                }
+            }).catch(function () { msg.textContent = "Network error"; msg.className = "status-msg err"; });
+        });
+
+        document.getElementById("import-btn").addEventListener("click", function () {
+            var msg = document.getElementById("import-msg");
+            msg.textContent = "Importing...";
+            msg.className = "status-msg";
+            postJSON("/plugin-io/api/gcal_sync/google/admin/bulk-import", {
+                csv: document.getElementById("csv-input").value
+            }).then(function (res) {
+                if (res.ok) {
+                    var unmatched = res.body.unmatched || [];
+                    msg.textContent = "Matched " + res.body.matched + " provider(s)"
+                        + (unmatched.length ? "; unmatched: " + unmatched.join(", ") : ".");
+                    msg.className = unmatched.length ? "status-msg err" : "status-msg ok";
+                    if (!unmatched.length) setTimeout(function () { location.reload(); }, 1200);
+                } else {
+                    msg.textContent = res.body.error || "Error";
+                    msg.className = "status-msg err";
+                }
+            }).catch(function () { msg.textContent = "Network error"; msg.className = "status-msg err"; });
+        });
+
+        document.getElementById("reconcile-btn").addEventListener("click", function () {
+            var msg = document.getElementById("reconcile-msg");
+            msg.textContent = "Reconciling...";
+            msg.className = "status-msg";
+            postJSON("/plugin-io/api/gcal_sync/google/admin/reconcile", {}).then(function (res) {
+                if (res.ok) {
+                    msg.textContent = "Reconciled " + (res.body.pushed || 0) + " appointment(s) across " + (res.body.mappings || 0) + " calendar(s).";
+                    msg.className = "status-msg ok";
+                } else {
+                    msg.textContent = res.body.error || "Error";
+                    msg.className = "status-msg err";
+                }
+            }).catch(function () {
+                msg.textContent = "Network error";
+                msg.className = "status-msg err";
+            });
+        });
+    </script>
+</body>
+</html>
