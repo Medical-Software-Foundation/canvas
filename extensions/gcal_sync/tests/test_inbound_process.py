@@ -16,13 +16,13 @@ def _state(mocker, sync_token="", needs=True):
 
 
 def _inbound(client):
-    return InboundSync(SECRETS, allowed_changes=set(), client_factory=lambda c: client)
+    return InboundSync(SECRETS, client_factory=lambda c: client)
 
 
 def test_import_context_caches_per_calendar_and_reresolves_on_change(mocker):
     nt = mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     pl = mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
-    inbound = InboundSync(SECRETS, allowed_changes=set(), client_factory=lambda c: object())
+    inbound = InboundSync(SECRETS, client_factory=lambda c: object())
     # Repeated calls for the SAME calendar resolve only once (the per-event N+1 we removed).
     assert inbound._import_context("calA") == ("nt-1", "14", "loc-1")
     assert inbound._import_context("calA") == ("nt-1", "14", "loc-1")

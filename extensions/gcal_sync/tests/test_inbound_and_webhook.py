@@ -1,22 +1,9 @@
-"""Tests for the inbound allow-list policy and the webhook header/auth helpers."""
+"""Tests for the webhook header/auth helpers."""
 
 import inspect
 
-from gcal_sync.inbound import allowed_google_changes
 from gcal_sync.routes import webhook
 from gcal_sync.routes.webhook import _header
-
-
-def test_allow_list_defaults_to_empty():
-    # Empty / unset -> Canvas always wins (no Google->Canvas mutations permitted).
-    assert allowed_google_changes({}) == set()
-    assert allowed_google_changes({"GOOGLE_TO_CANVAS_ALLOWED_CHANGES": ""}) == set()
-    assert allowed_google_changes({"GOOGLE_TO_CANVAS_ALLOWED_CHANGES": None}) == set()
-
-
-def test_allow_list_parses_csv():
-    secrets = {"GOOGLE_TO_CANVAS_ALLOWED_CHANGES": "cancel, reschedule ,note"}
-    assert allowed_google_changes(secrets) == {"cancel", "reschedule", "note"}
 
 
 def test_header_lookup_is_case_insensitive():

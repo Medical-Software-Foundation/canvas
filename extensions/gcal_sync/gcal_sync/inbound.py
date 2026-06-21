@@ -45,12 +45,6 @@ from gcal_sync.models import AppointmentEventMapping, CalendarSyncState, Inbound
 from gcal_sync.sync_service import ClientFactory, SyncService
 
 
-def allowed_google_changes(secrets: dict) -> set[str]:
-    """Allow-list of Google→Canvas *appointment* mutations (default: empty = Canvas always wins)."""
-    raw = (secrets or {}).get("GOOGLE_TO_CANVAS_ALLOWED_CHANGES", "") or ""
-    return {item.strip() for item in raw.split(",") if item.strip()}
-
-
 class InboundSync:
     """Processes one calendar's incremental delta from Google."""
 
@@ -67,7 +61,6 @@ class InboundSync:
     def __init__(
         self,
         secrets: dict,
-        allowed_changes: set[str] | None = None,
         client_factory: ClientFactory | None = None,
     ) -> None:
         self._secrets = secrets or {}
@@ -75,7 +68,6 @@ class InboundSync:
             self._secrets.get("GOOGLE_SERVICE_ACCOUNT_JSON"), client_factory=client_factory
         )
         self._client_factory = self._sync._client_factory
-        self._allowed_changes = allowed_changes or set()
         self._ingest_private = ingest_private_events(self._secrets)
         self._ingest_all_day = ingest_all_day_events(self._secrets)
         # Cache of (calendar_id, note_type_id, provider_id, location_id). The note type and the

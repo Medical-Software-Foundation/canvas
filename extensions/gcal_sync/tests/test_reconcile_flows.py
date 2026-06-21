@@ -13,7 +13,6 @@ from gcal_sync.reconcile import (
 def test_inbound_recovery_pulls_each_calendar(mocker):
     inbound = mocker.patch("gcal_sync.reconcile.InboundSync").return_value
     inbound.process_calendar.return_value = ({}, ["E1"])
-    mocker.patch("gcal_sync.reconcile.allowed_google_changes", return_value=set())
     # No stored sync state -> c1 is a (first-time) full pull, under the cap.
     mocker.patch("gcal_sync.reconcile.CalendarSyncState").objects.filter.return_value = []
     effects = inbound_recovery({}, [SimpleNamespace(google_calendar_id="c1")])
@@ -24,7 +23,6 @@ def test_inbound_recovery_pulls_each_calendar(mocker):
 def test_inbound_recovery_caps_full_pulls_but_runs_all_deltas(mocker):
     inbound = mocker.patch("gcal_sync.reconcile.InboundSync").return_value
     inbound.process_calendar.return_value = ({}, [])
-    mocker.patch("gcal_sync.reconcile.allowed_google_changes", return_value=set())
     # Two calendars already have a live sync token (cheap deltas); three are first-time full pulls.
     synced = [
         SimpleNamespace(google_calendar_id="d1", sync_token="t", needs_full_resync=False, updated_at=None),
@@ -73,7 +71,6 @@ def test_reconcile_provider_combines_inbound_outbound_blocks(mocker):
     mocker.patch(
         "gcal_sync.reconcile.sync_all_blocks", return_value={"pushed": 2, "deleted": 1}
     )
-    mocker.patch("gcal_sync.reconcile.allowed_google_changes", return_value=set())
     stats, effects = reconcile_provider(
         {}, SimpleNamespace(canvas_staff_id="14", google_calendar_id="c1")
     )

@@ -38,7 +38,6 @@ def test_reimport_resets_then_full_pulls(mocker):
     state = SimpleNamespace(sync_token="stale-token", needs_full_resync=False, save=mocker.Mock())
     css = mocker.patch("gcal_sync.reconcile.CalendarSyncState")
     css.objects.get_or_create.return_value = (state, False)
-    mocker.patch("gcal_sync.reconcile.allowed_google_changes", return_value=set())
     inbound = mocker.patch("gcal_sync.reconcile.InboundSync")
     inbound.return_value.process_calendar.return_value = ({"holds_created": 5}, ["HOLD"])
 

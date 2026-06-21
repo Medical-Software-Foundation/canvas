@@ -124,10 +124,6 @@
             "sensitive": false
         },
         {
-            "name": "GOOGLE_TO_CANVAS_ALLOWED_CHANGES",
-            "sensitive": false
-        },
-        {
             "name": "SCHEDULE_EVENT_NOTE_TYPE_CODE",
             "sensitive": false
         },

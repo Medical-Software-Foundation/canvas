@@ -56,7 +56,6 @@ def test_receive_known_channel_processes_delta(mocker):
     wc.objects.filter.return_value.first.return_value = SimpleNamespace(google_calendar_id="c1")
     inbound = mocker.patch("gcal_sync.routes.webhook.InboundSync").return_value
     inbound.process_calendar.return_value = ({}, ["HOLD"])
-    mocker.patch("gcal_sync.routes.webhook.allowed_google_changes", return_value=set())
     resp = _wh(
         {"GOOGLE_CALENDAR_WEBHOOK_TOKEN": "t"},
         headers={"x-goog-channel-id": "c", "x-goog-resource-state": "exists"},
@@ -70,7 +69,6 @@ def test_receive_delta_failure_returns_503(mocker):
     wc.objects.filter.return_value.first.return_value = SimpleNamespace(google_calendar_id="c1")
     inbound = mocker.patch("gcal_sync.routes.webhook.InboundSync").return_value
     inbound.process_calendar.side_effect = GoogleApiError(500, "boom")
-    mocker.patch("gcal_sync.routes.webhook.allowed_google_changes", return_value=set())
     resp = _wh(
         {"GOOGLE_CALENDAR_WEBHOOK_TOKEN": "t"},
         headers={"x-goog-channel-id": "c", "x-goog-resource-state": "exists"},

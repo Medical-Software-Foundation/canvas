@@ -16,7 +16,7 @@ SECRETS = {"GOOGLE_SERVICE_ACCOUNT_JSON": '{"client_email": "svc@x.iam", "privat
 
 
 def _inbound(mocker):
-    inbound = InboundSync(SECRETS, allowed_changes=set(), client_factory=lambda cal: object())
+    inbound = InboundSync(SECRETS, client_factory=lambda cal: object())
     mocker.patch.object(inbound._sync, "push")
     mocker.patch.object(inbound._sync, "remove")
     return inbound

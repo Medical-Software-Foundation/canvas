@@ -20,7 +20,7 @@ from canvas_sdk.handlers.simple_api import Credentials, SimpleAPI, api
 from logger import log
 
 from gcal_sync.google.client import GoogleApiError
-from gcal_sync.inbound import InboundSync, allowed_google_changes
+from gcal_sync.inbound import InboundSync
 from gcal_sync.models import WatchChannel
 
 # Google's header for the per-channel verification token (looked up case-insensitively).
@@ -69,7 +69,7 @@ class GoogleWebhook(SimpleAPI):
             log.info("Webhook ping for unknown channel %s; acknowledging", channel_id)
             return [JSONResponse({"status": "ignored"}, status_code=HTTPStatus.OK)]
 
-        inbound = InboundSync(self.secrets, allowed_changes=allowed_google_changes(self.secrets))
+        inbound = InboundSync(self.secrets)
         try:
             stats, effects = inbound.process_calendar(channel.google_calendar_id)
         except (GoogleApiError, RequestException) as exc:

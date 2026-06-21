@@ -21,7 +21,7 @@ from gcal_sync.blocks import sync_all_blocks
 from gcal_sync.channels import ChannelConfigError
 from gcal_sync.google.auth import GoogleAuthError
 from gcal_sync.google.client import GoogleApiError
-from gcal_sync.inbound import InboundSync, allowed_google_changes
+from gcal_sync.inbound import InboundSync
 from gcal_sync.models import CalendarSyncState, InboundEventMapping, StaffCalendarMapping
 from gcal_sync.sync_service import SyncService
 
@@ -58,7 +58,7 @@ def inbound_recovery(
     deferred to later runs so one reconcile never floods Canvas with an entire fleet's first import.
     Cheap delta pulls are always run.
     """
-    inbound = InboundSync(secrets, allowed_changes=allowed_google_changes(secrets))
+    inbound = InboundSync(secrets)
     calendar_ids = {m.google_calendar_id for m in mappings}
     states = {
         s.google_calendar_id: s
@@ -136,7 +136,7 @@ def reconcile_provider(secrets: dict, mapping: StaffCalendarMapping) -> tuple[di
     Per-provider so the admin button never does all providers in one request (chunking for scale).
     """
     effects: list = []
-    inbound = InboundSync(secrets, allowed_changes=allowed_google_changes(secrets))
+    inbound = InboundSync(secrets)
     try:
         _stats, calendar_effects = inbound.process_calendar(mapping.google_calendar_id)
         effects.extend(calendar_effects)
@@ -189,7 +189,7 @@ def reimport_provider(secrets: dict, mapping: StaffCalendarMapping) -> tuple[dic
     state.needs_full_resync = True
     state.save()
 
-    inbound = InboundSync(secrets, allowed_changes=allowed_google_changes(secrets))
+    inbound = InboundSync(secrets)
     stats, effects = inbound.process_calendar(mapping.google_calendar_id)
     log.info("Re-import for %s: %s", mapping.google_calendar_id, stats)
     return stats, reset_effects + effects
