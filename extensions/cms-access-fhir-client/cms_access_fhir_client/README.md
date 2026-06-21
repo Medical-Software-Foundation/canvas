@@ -73,7 +73,7 @@ All values are configured as plugin secrets/variables; nothing is hardcoded. Ope
 | `ACCESS_OAUTH_AUTH_STYLE` |  | OAuth client-auth style override (`body` or `header`); blank auto-detects |
 | `ACCESS_SHOW_BANNER` |  | `true` to show the current-alignment banner in the chart |
 | `ACCESS_SHOW_PROFILE_FIELD` |  | `true` to enable the custom patient profile fields |
-| `ACCESS_MEDICARE_PART_B_PAYER_IDS` |  | Comma-separated Coverage issuer UUIDs to match as Medicare Part B (precise allowlist) |
+| `ACCESS_MEDICARE_PART_B_PAYER_IDS` |  | Comma-separated payer IDs (`Transactor.payer_id`, e.g. `00831`) to match as Medicare Part B (precise allowlist) |
 | `ACCESS_PAYER_NAME_PATTERN` |  | Case-insensitive substring matched against the Coverage issuer name (default `Medicare Part B`) |
 | `ACCESS_DEFAULT_PAYER_ID` |  | Fallback payer ID sent to CMS when the coverage carries none |
 | `ACCESS_ORG_NAME` |  | Organization name used as the report Composition custodian |
@@ -109,7 +109,7 @@ The plugin does **not** accept an MBI from the user. It reads the Medicare Benef
 
 1. `get_active_medicare_part_b_coverage(patient, secrets)` runs before any CMS operation.
 2. Two filters are supported, in order:
-   - **Allowlist** (`ACCESS_MEDICARE_PART_B_PAYER_IDS`): comma-separated issuer UUIDs matched against `coverage.issuer.id`.
+   - **Allowlist** (`ACCESS_MEDICARE_PART_B_PAYER_IDS`): comma-separated payer IDs matched against `coverage.issuer.payer_id` (e.g. `00831`).
    - **Name pattern** (`ACCESS_PAYER_NAME_PATTERN`, default `Medicare Part B`): case-insensitive substring on `coverage.issuer.name`. Matches `IL Medicare Part B` / `AK Medicare Part B` while excluding Medicare Advantage payers.
 3. Only `state=active` coverages are considered.
 4. With multiple active Part B coverages, the lowest `coverage_rank` (primary) wins.

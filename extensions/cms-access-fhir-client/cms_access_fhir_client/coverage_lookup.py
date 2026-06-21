@@ -1,8 +1,9 @@
 """Look up a patient's active Medicare Part B Coverage record.
 
 Matching rules (evaluated in order):
-1. If ``ACCESS_MEDICARE_PART_B_PAYER_IDS`` is set (comma-separated Transactor UUIDs),
-   filter ``coverage.issuer.id`` against that allowlist.
+1. If ``ACCESS_MEDICARE_PART_B_PAYER_IDS`` is set (comma-separated payer IDs),
+   filter ``coverage.issuer.payer_id`` against that allowlist. (Transactor has no
+   UUID ``id`` — its public identifier is ``payer_id``, e.g. ``"00831"``.)
 2. Otherwise, do a case-insensitive substring match of
    ``ACCESS_PAYER_NAME_PATTERN`` (default ``"Medicare Part B"``) against
    ``coverage.issuer.name``.
@@ -39,7 +40,7 @@ def get_active_medicare_part_b_coverage(patient, secrets: dict):
     )
 
     if payer_ids:
-        qs = qs.filter(issuer__id__in=payer_ids)
+        qs = qs.filter(issuer__payer_id__in=payer_ids)
     else:
         name_pattern = secrets.get("ACCESS_PAYER_NAME_PATTERN", _DEFAULT_PAYER_NAME_PATTERN)
         qs = qs.filter(issuer__name__icontains=name_pattern)

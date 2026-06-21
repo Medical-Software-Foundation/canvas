@@ -100,14 +100,19 @@ class TestGetActiveMedicarePartBCoverage:
         assert icontains_call is not None
         assert icontains_call.kwargs["issuer__name__icontains"] == "Custom Payer"
 
-    def test_payer_id_allowlist_filters_by_issuer_id(self):
-        """When ACCESS_MEDICARE_PART_B_PAYER_IDS is set, filter by issuer__id__in."""
+    def test_payer_id_allowlist_filters_by_issuer_payer_id(self):
+        """When ACCESS_MEDICARE_PART_B_PAYER_IDS is set, filter by issuer__payer_id__in.
+
+        Transactor has no UUID ``id`` field (only ``dbid`` + ``payer_id``), so the
+        allowlist must match ``payer_id`` (e.g. "00831") — filtering on ``issuer__id``
+        would raise FieldError at query time.
+        """
         patient = MagicMock()
-        payer_uuid = "uuid-abc-123"
-        cvg = _make_coverage("IL Medicare Part B", issuer_id=payer_uuid)
+        payer_id = "00831"
+        cvg = _make_coverage("IL Medicare Part B", issuer_id=payer_id)
         qs = _make_qs(cvg)
 
-        secrets = {"ACCESS_MEDICARE_PART_B_PAYER_IDS": f"{payer_uuid}, another-uuid"}
+        secrets = {"ACCESS_MEDICARE_PART_B_PAYER_IDS": f"{payer_id}, 00952"}
 
         with patch("cms_access_fhir_client.coverage_lookup.Coverage.objects") as mock_mgr:
             mock_mgr.select_related.return_value = qs
@@ -116,18 +121,18 @@ class TestGetActiveMedicarePartBCoverage:
         assert result is cvg
         filter_calls = qs.filter.call_args_list
         id_in_call = next(
-            (c for c in filter_calls if "issuer__id__in" in c.kwargs),
+            (c for c in filter_calls if "issuer__payer_id__in" in c.kwargs),
             None,
         )
         assert id_in_call is not None
-        assert payer_uuid in id_in_call.kwargs["issuer__id__in"]
-        assert "another-uuid" in id_in_call.kwargs["issuer__id__in"]
+        assert payer_id in id_in_call.kwargs["issuer__payer_id__in"]
+        assert "00952" in id_in_call.kwargs["issuer__payer_id__in"]
 
     def test_payer_id_allowlist_strips_whitespace_and_ignores_empties(self):
         patient = MagicMock()
         qs = _make_qs()
 
-        secrets = {"ACCESS_MEDICARE_PART_B_PAYER_IDS": "  uuid-1 ,  , uuid-2  "}
+        secrets = {"ACCESS_MEDICARE_PART_B_PAYER_IDS": "  00831 ,  , 00952  "}
 
         with patch("cms_access_fhir_client.coverage_lookup.Coverage.objects") as mock_mgr:
             mock_mgr.select_related.return_value = qs
@@ -135,12 +140,12 @@ class TestGetActiveMedicarePartBCoverage:
 
         filter_calls = qs.filter.call_args_list
         id_in_call = next(
-            (c for c in filter_calls if "issuer__id__in" in c.kwargs),
+            (c for c in filter_calls if "issuer__payer_id__in" in c.kwargs),
             None,
         )
         assert id_in_call is not None
-        ids = id_in_call.kwargs["issuer__id__in"]
-        assert ids == ["uuid-1", "uuid-2"]
+        ids = id_in_call.kwargs["issuer__payer_id__in"]
+        assert ids == ["00831", "00952"]
 
     def test_allowlist_takes_precedence_over_name_pattern(self):
         """When both PAYER_IDS and PAYER_NAME_PATTERN are set, allowlist wins."""
@@ -148,7 +153,7 @@ class TestGetActiveMedicarePartBCoverage:
         qs = _make_qs()
 
         secrets = {
-            "ACCESS_MEDICARE_PART_B_PAYER_IDS": "uuid-only",
+            "ACCESS_MEDICARE_PART_B_PAYER_IDS": "00831",
             "ACCESS_PAYER_NAME_PATTERN": "Should Not Be Used",
         }
 
@@ -162,7 +167,7 @@ class TestGetActiveMedicarePartBCoverage:
             None,
         )
         id_in_call = next(
-            (c for c in filter_calls if "issuer__id__in" in c.kwargs),
+            (c for c in filter_calls if "issuer__payer_id__in" in c.kwargs),
             None,
         )
         assert icontains_call is None
