@@ -1,0 +1,9 @@
+.claude
+.pytest_cache
+__pycache__
+.coverage
+*.egg-info
+.mypy_cache
+.venv
+mock-cms/
+coverage.json
