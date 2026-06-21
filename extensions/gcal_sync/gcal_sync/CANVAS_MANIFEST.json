@@ -1,0 +1,147 @@
+{
+    "sdk_version": "0.164.0",
+    "plugin_version": "0.4.4",
+    "name": "gcal_sync",
+    "description": "Two-way Google Calendar sync for Canvas: pushes appointments and admin blocks (lunch/PTO) into providers' Workspace calendars in near-real-time, and imports provider-created Google events back into Canvas as admin holds. Canvas remains the system of record. Service-account + domain-wide delegation; no PHI in event fields.",
+    "components": {
+        "protocols": [
+            {
+                "class": "gcal_sync.handlers.appointment_sync:AppointmentSyncHandler",
+                "description": "On appointment lifecycle events, pushes create/update/cancel into the provider's Google Calendar",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Appointment",
+                        "v1.Staff",
+                        "v1.NoteType",
+                        "v1.PracticeLocation"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "gcal_sync.routes.webhook:GoogleWebhook",
+                "description": "Receives Google events.watch push pings and pulls the calendar delta",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Appointment",
+                        "v1.Staff",
+                        "v1.NoteType",
+                        "v1.PracticeLocation"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "gcal_sync.routes.google_admin:GoogleCalendarAdminAPI",
+                "description": "Admin API: map staff to Workspace calendars, view sync health, trigger reconciliation",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Staff",
+                        "v1.Appointment",
+                        "v1.NoteType",
+                        "v1.PracticeLocation"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "gcal_sync.handlers.channel_renewal:ChannelRenewalCron",
+                "description": "Daily renewal of Google watch channels before they expire",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "gcal_sync.handlers.reconciliation:ReconciliationCron",
+                "description": "Daily reconciliation: inbound sync-token recovery and outbound re-push of Canvas truth",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Appointment",
+                        "v1.Staff",
+                        "v1.NoteType",
+                        "v1.PracticeLocation"
+                    ],
+                    "write": []
+                }
+            },
+            {
+                "class": "gcal_sync.handlers.block_sweep:BlockSweepCron",
+                "description": "Frequent sweep pushing provider admin blocks (Calendar events, e.g. lunch/PTO) to Google",
+                "data_access": {
+                    "event": "",
+                    "read": [
+                        "v1.Staff",
+                        "v1.Calendar"
+                    ],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "gcal_sync.applications.google_calendar_admin:GoogleCalendarAdmin",
+                "name": "Google Calendar Sync",
+                "description": "Map providers to Workspace calendars and monitor two-way sync health",
+                "scope": "global",
+                "icon": "static/calendar.png"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "gcal_sync",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md",
+    "variables": [
+        {
+            "name": "GOOGLE_SERVICE_ACCOUNT_JSON",
+            "sensitive": true
+        },
+        {
+            "name": "GOOGLE_CALENDAR_WEBHOOK_TOKEN",
+            "sensitive": true
+        },
+        {
+            "name": "GOOGLE_WEBHOOK_BASE_URL",
+            "sensitive": false
+        },
+        {
+            "name": "ADMIN_STAFF_IDS",
+            "sensitive": false
+        },
+        {
+            "name": "SCHEDULE_EVENT_NOTE_TYPE_CODE",
+            "sensitive": false
+        },
+        {
+            "name": "EXCLUDED_BLOCK_TITLES",
+            "sensitive": false
+        },
+        {
+            "name": "INGEST_PRIVATE_EVENTS",
+            "sensitive": false
+        },
+        {
+            "name": "INGEST_ALL_DAY_EVENTS",
+            "sensitive": false
+        },
+        {
+            "name": "namespace_read_write_access_key",
+            "sensitive": true
+        }
+    ]
+}
