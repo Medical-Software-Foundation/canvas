@@ -18,7 +18,7 @@ from canvas_sdk.handlers.base import BaseHandler
 from logger import log
 
 from gcal_sync.appointment_snapshot import build_snapshot, google_origin_event_id
-from gcal_sync.google.auth import GoogleAuthError
+from gcal_sync.google.auth import GoogleAuthError, parse_service_account
 from gcal_sync.google.client import GoogleApiError
 from gcal_sync.models import StaffCalendarMapping
 from gcal_sync.sync_service import SyncService
@@ -51,6 +51,11 @@ class AppointmentSyncHandler(BaseHandler):
 
     def compute(self) -> list[Effect]:
         appointment_id = self.event.target.id
+
+        # A missing or invalid service account is a configuration error, not a transient
+        # per-appointment failure: validate up front and let it raise loudly (surfaces in
+        # monitoring) instead of silently dropping every sync inside _safe (CLAUDE.md: fail closed).
+        parse_service_account(self.secrets.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
 
         if self.event.type in _DELETE_EVENTS:
             self._safe(lambda: self._handle_delete(appointment_id), appointment_id)
