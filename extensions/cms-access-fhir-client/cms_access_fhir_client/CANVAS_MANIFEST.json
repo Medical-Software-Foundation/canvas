@@ -1,0 +1,57 @@
+{
+    "sdk_version": "0.153.0",
+    "plugin_version": "0.10.19",
+    "name": "cms_access_fhir_client",
+    "description": "Canvas-side integration with the CMS ACCESS Model FHIR APIs. Adds an ACCESS button to the patient chart header that opens an inspector to run eligibility, alignment, unalignment and data reporting (tracks eCKM, CKM, MSK, BH) and shows the full HTTP request/response exchange for each CMS call for troubleshooting, plus async submission polling and banner alerts surfacing the patient's current alignment status.",
+    "components": {
+        "applications": [],
+        "protocols": [
+            {
+                "class": "cms_access_fhir_client.handlers.access_button:AccessInspectorButton",
+                "description": "ACCESS button in the patient chart header that opens the inspector modal"
+            },
+            {
+                "class": "cms_access_fhir_client.handlers.banner:AccessBannerHandler",
+                "description": "Emits AddBannerAlert when a patient chart loads (gated by ACCESS_SHOW_BANNER)"
+            },
+            {
+                "class": "cms_access_fhir_client.api.operations_api:AccessOperationsApi",
+                "description": "Serves the ACCESS inspector companion app and invokes CMS operations, returning the full request/response exchange"
+            },
+            {
+                "class": "cms_access_fhir_client.cron.submission_status_poller:SubmissionStatusPoller",
+                "description": "Polls outstanding CMS submission-status URLs with exponential backoff"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "custom_data": {
+        "namespace": "canvas_medical__cms_access",
+        "access": "read_write"
+    },
+    "secrets": [],
+    "variables": [
+        {"name": "ACCESS_BASE_URL", "sensitive": false},
+        {"name": "ACCESS_OAUTH_CLIENT_ID", "sensitive": true},
+        {"name": "ACCESS_OAUTH_CLIENT_SECRET", "sensitive": true},
+        {"name": "ACCESS_OAUTH_TOKEN_URL", "sensitive": false},
+        {"name": "ACCESS_OAUTH_SCOPE", "sensitive": false},
+        {"name": "ACCESS_OAUTH_AUTH_STYLE", "sensitive": false},
+        {"name": "ACCESS_PARTICIPANT_ID", "sensitive": false},
+        {"name": "ACCESS_ENABLED_TRACKS", "sensitive": false},
+        {"name": "ACCESS_SHOW_BANNER", "sensitive": false},
+        {"name": "ACCESS_SHOW_PROFILE_FIELD", "sensitive": false},
+        {"name": "ACCESS_MEDICARE_PART_B_PAYER_IDS", "sensitive": false},
+        {"name": "ACCESS_PAYER_NAME_PATTERN", "sensitive": false},
+        {"name": "ACCESS_DEFAULT_PAYER_ID", "sensitive": false},
+        {"name": "ACCESS_ORG_NAME", "sensitive": false}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
