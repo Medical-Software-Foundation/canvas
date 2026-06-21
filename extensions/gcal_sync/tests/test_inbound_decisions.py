@@ -165,3 +165,30 @@ def test_unmarked_event_without_id_is_ignored(mocker):
     stats = _stats()
     assert inbound._apply("cal", {"status": "confirmed"}, stats) == []
     assert stats["ignored"] == 1
+
+
+def test_update_masks_private_event_title(mocker):
+    # Editing a private Google event must NOT leak its real title into Canvas — it stays "Busy".
+    inbound = _inbound(mocker)
+    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
+    mocker.patch(
+        "gcal_sync.inbound.parse_event_window",
+        return_value=(datetime(2026, 6, 10, 15, 0, tzinfo=timezone.utc), 30),
+    )
+    se = mocker.patch("gcal_sync.inbound.ScheduleEvent").return_value
+    inbound._hold_update_effect(
+        "g-1", {"id": "g-1", "visibility": "private", "summary": "Dad - Dr. Appt"}
+    )
+    assert se.description == "Busy"
+
+
+def test_update_keeps_public_event_title(mocker):
+    inbound = _inbound(mocker)
+    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value="appt-1")
+    mocker.patch(
+        "gcal_sync.inbound.parse_event_window",
+        return_value=(datetime(2026, 6, 10, 15, 0, tzinfo=timezone.utc), 30),
+    )
+    se = mocker.patch("gcal_sync.inbound.ScheduleEvent").return_value
+    inbound._hold_update_effect("g-1", {"id": "g-1", "summary": "Standup"})
+    assert se.description == "Standup"

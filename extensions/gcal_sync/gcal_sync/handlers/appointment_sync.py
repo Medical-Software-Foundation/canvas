@@ -50,7 +50,7 @@ class AppointmentSyncHandler(BaseHandler):
     ]
 
     def compute(self) -> list[Effect]:
-        appointment_id = self.target
+        appointment_id = self.event.target.id
 
         if self.event.type in _DELETE_EVENTS:
             self._safe(lambda: self._handle_delete(appointment_id), appointment_id)

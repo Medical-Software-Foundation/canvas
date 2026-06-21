@@ -30,6 +30,7 @@ from logger import log
 from gcal_sync.appointment_snapshot import GOOGLE_ORIGIN_SYSTEM, build_snapshot
 from gcal_sync.google.client import GoogleApiError
 from gcal_sync.inbound_holds import (
+    PRIVATE_EVENT_LABEL,
     build_hold_effect,
     ingest_all_day_events,
     ingest_private_events,
@@ -276,5 +277,11 @@ class InboundSync:
         schedule_event = ScheduleEvent(instance_id=str(canvas_id))
         schedule_event.start_time = start_time
         schedule_event.duration_minutes = duration_minutes
-        schedule_event.description = (event.get("summary") or "Busy")[:255]
+        # Mask private/confidential titles on UPDATE too, not just on create — otherwise editing a
+        # private Google event would overwrite the "Busy" placeholder with its real (PHI-adjacent)
+        # title in Canvas.
+        if is_private(event):
+            schedule_event.description = PRIVATE_EVENT_LABEL
+        else:
+            schedule_event.description = (event.get("summary") or "Busy")[:255]
         return schedule_event.update()
