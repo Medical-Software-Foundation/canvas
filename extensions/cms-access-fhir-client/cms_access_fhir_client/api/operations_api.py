@@ -344,6 +344,12 @@ def _get_payer_id(coverage, secrets: dict) -> str | None:
         return payer_id
     default = secrets.get("ACCESS_DEFAULT_PAYER_ID", "")
     if default:
+        # Visible in logs: every patient whose Transactor lacks a payer_id falls back to
+        # one global default, so a wrong/stale default would be submitted silently otherwise.
+        log.warning(
+            f"[cms-access] coverage {getattr(coverage, 'dbid', '?')} issuer has no payer_id; "
+            "falling back to ACCESS_DEFAULT_PAYER_ID"
+        )
         return default
     return None
 
@@ -587,17 +593,33 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
             track=track,
             defaults={"status": ACCESSAlignment.STATUS_PENDING},
         )
-        alignment.status = ACCESSAlignment.STATUS_PENDING
         alignment.last_eligibility_check_at = _utcnow()
 
-        if status_code == 202 and content_location:
-            alignment.submission_status_url = content_location
-            alignment.submission_state = ACCESSAlignment.SUB_STATE_IN_PROGRESS
-            alignment.submission_op = ACCESSAlignment.SUB_OP_ELIGIBILITY
-            alignment.submission_started_at = _utcnow()
-            alignment.poll_attempts = 0
-            _log_submitted(patient, track, ACCESSAlignment.SUB_OP_ELIGIBILITY, content_location, debug)
+        # $check-eligibility is always async: CMS returns 202 + Content-Location (OM v0.9.11).
+        # Any other 2xx is a contract violation — surface it rather than parking the row in a
+        # stuck PENDING state that reports success but can never be polled.
+        if not (status_code == 202 and content_location):
+            alignment.status = ACCESSAlignment.STATUS_ERROR
+            alignment.status_message = f"Unexpected CMS response: HTTP {status_code} without Content-Location"
+            alignment.save()
+            return [
+                JSONResponse(
+                    {
+                        "error": f"Unexpected CMS response (HTTP {status_code}) — expected 202 with Content-Location",
+                        "status": alignment.status,
+                        "exchange": debug[0] if debug else None,
+                    },
+                    status_code=HTTPStatus.BAD_GATEWAY,
+                ),
+            ]
 
+        alignment.status = ACCESSAlignment.STATUS_PENDING
+        alignment.submission_status_url = content_location
+        alignment.submission_state = ACCESSAlignment.SUB_STATE_IN_PROGRESS
+        alignment.submission_op = ACCESSAlignment.SUB_OP_ELIGIBILITY
+        alignment.submission_started_at = _utcnow()
+        alignment.poll_attempts = 0
+        _log_submitted(patient, track, ACCESSAlignment.SUB_OP_ELIGIBILITY, content_location, debug)
         alignment.save()
 
         return [
@@ -717,16 +739,32 @@ class AccessOperationsApi(StaffSessionAuthMixin, SimpleAPI):
             track=track,
             defaults={"status": ACCESSAlignment.STATUS_PENDING},
         )
+
+        # $align is always async: CMS returns 202 + Content-Location (OM v0.9.11). Any other 2xx
+        # is a contract violation — surface it rather than parking the row in a stuck PENDING
+        # state that reports success but can never be polled.
+        if not (status_code == 202 and content_location):
+            alignment.status = ACCESSAlignment.STATUS_ERROR
+            alignment.status_message = f"Unexpected CMS response: HTTP {status_code} without Content-Location"
+            alignment.save()
+            return [
+                JSONResponse(
+                    {
+                        "error": f"Unexpected CMS response (HTTP {status_code}) — expected 202 with Content-Location",
+                        "status": alignment.status,
+                        "exchange": debug[0] if debug else None,
+                    },
+                    status_code=HTTPStatus.BAD_GATEWAY,
+                ),
+            ]
+
         alignment.status = ACCESSAlignment.STATUS_PENDING
-
-        if status_code == 202 and content_location:
-            alignment.submission_status_url = content_location
-            alignment.submission_state = ACCESSAlignment.SUB_STATE_IN_PROGRESS
-            alignment.submission_op = ACCESSAlignment.SUB_OP_ALIGN
-            alignment.submission_started_at = _utcnow()
-            alignment.poll_attempts = 0
-            _log_submitted(patient, track, ACCESSAlignment.SUB_OP_ALIGN, content_location, debug)
-
+        alignment.submission_status_url = content_location
+        alignment.submission_state = ACCESSAlignment.SUB_STATE_IN_PROGRESS
+        alignment.submission_op = ACCESSAlignment.SUB_OP_ALIGN
+        alignment.submission_started_at = _utcnow()
+        alignment.poll_attempts = 0
+        _log_submitted(patient, track, ACCESSAlignment.SUB_OP_ALIGN, content_location, debug)
         alignment.save()
         log.info(f"[cms-access] Align submitted for patient {patient_id}, track {track}")
 

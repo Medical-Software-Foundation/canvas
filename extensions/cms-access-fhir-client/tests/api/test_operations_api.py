@@ -325,6 +325,31 @@ class TestSubmitEligibility:
         assert mock_alignment.save.called
         assert mock_alignment.submission_status_url == "https://cms.test/submission-status/xyz"
 
+    def test_non_202_2xx_is_an_error_not_stuck_pending(self):
+        """$check-eligibility is always 202+Content-Location; a 2xx without one is a contract
+        violation — error out instead of parking the row in a stuck PENDING reported as success."""
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
+        mock_patient = _make_mock_patient()
+        mock_coverage = _make_mock_coverage(payer_id="payer-001")
+        mock_alignment = MagicMock()
+
+        with (
+            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
+            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
+            patch("cms_access_fhir_client.api.operations_api.check_eligibility") as mock_check,
+            patch("cms_access_fhir_client.api.operations_api.ACCESSAlignment.objects") as mock_alignment_objects,
+        ):
+            mock_patient_objects.get.return_value = mock_patient
+            mock_check.return_value = (200, None, {})  # 2xx but not the documented 202
+            mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
+
+            effects = handler.submit_eligibility()
+
+        assert effects[-1].status_code == HTTPStatus.BAD_GATEWAY
+        assert mock_alignment.status == ACCESSAlignment.STATUS_ERROR
+        assert mock_alignment.submission_state != ACCESSAlignment.SUB_STATE_IN_PROGRESS
+
     def test_returns_502_on_runtime_error(self):
         handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
         mock_patient = _make_mock_patient()
@@ -531,6 +556,31 @@ class TestSubmitAlign:
         assert len(effects) == 1  # JSONResponse only
         assert effects[-1].status_code == HTTPStatus.ACCEPTED
         assert mock_alignment.submission_status_url == "https://api.cms.gov/status/xyz"
+
+    def test_non_202_2xx_is_an_error_not_stuck_pending(self):
+        """$align is always 202+Content-Location; a bare 2xx must error, not be coerced to PENDING."""
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+        handler, _ = _make_handler(request_body={"patient_id": "p-123", "track": "eCKM"})
+        mock_patient = _make_mock_patient()
+        mock_coverage = _make_mock_coverage(payer_id="payer-001")
+        mock_alignment = MagicMock()
+
+        with (
+            patch("cms_access_fhir_client.api.operations_api.CustomPatient.objects") as mock_patient_objects,
+            patch("cms_access_fhir_client.api.operations_api.get_active_medicare_part_b_coverage", return_value=mock_coverage),
+            patch("cms_access_fhir_client.api.operations_api.build_track_conditions", return_value=[{"resourceType": "Condition"}]),
+            patch("cms_access_fhir_client.api.operations_api.align") as mock_align,
+            patch("cms_access_fhir_client.api.operations_api.ACCESSAlignment.objects") as mock_alignment_objects,
+        ):
+            mock_patient_objects.get.return_value = mock_patient
+            mock_align.return_value = (200, None, {})  # 2xx but not the documented 202
+            mock_alignment_objects.get_or_create.return_value = (mock_alignment, True)
+
+            effects = handler.submit_align()
+
+        assert effects[-1].status_code == HTTPStatus.BAD_GATEWAY
+        assert mock_alignment.status == ACCESSAlignment.STATUS_ERROR
+        assert mock_alignment.submission_state != ACCESSAlignment.SUB_STATE_IN_PROGRESS
 
 
 # ---------------------------------------------------------------------------

@@ -637,6 +637,45 @@ class TestApplyCompletedResult:
         assert alignment.status == "aligned"
         assert alignment.alignment_id == "align-xyz"
 
+    def test_eligibility_recheck_does_not_downgrade_aligned_patient(self):
+        """An eligibility re-check on a patient aligned to us returns already-aligned;
+        that must NOT overwrite status=aligned (doing so would hide the Unalign action)."""
+        from datetime import datetime
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_completed_result
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+
+        alignment = MagicMock()
+        alignment.submission_op = ACCESSAlignment.SUB_OP_ELIGIBILITY
+        alignment.status = ACCESSAlignment.STATUS_ALIGNED  # already aligned to us
+
+        _apply_completed_result(alignment, {
+            "parameter": [
+                {"name": "result", "valueCodeableConcept": {"coding": [{"code": "not-eligible-already-aligned"}]}},
+            ],
+        })
+
+        # Guard holds: status stays aligned, but the check timestamp is still refreshed.
+        assert alignment.status == ACCESSAlignment.STATUS_ALIGNED
+        assert isinstance(alignment.last_eligibility_check_at, datetime)
+
+    def test_eligibility_recheck_downgrades_when_not_aligned(self):
+        """The guard is narrow: a NOT-aligned row receiving already-aligned IS updated."""
+        from cms_access_fhir_client.cron.submission_status_poller import _apply_completed_result
+        from cms_access_fhir_client.models.access_alignment import ACCESSAlignment
+
+        alignment = MagicMock()
+        alignment.submission_op = ACCESSAlignment.SUB_OP_ELIGIBILITY
+        alignment.status = ACCESSAlignment.STATUS_ELIGIBLE  # not aligned to us
+
+        _apply_completed_result(alignment, {
+            "parameter": [
+                {"name": "result", "valueCodeableConcept": {"coding": [{"code": "not-eligible-already-aligned"}]}},
+            ],
+        })
+
+        assert alignment.status == ACCESSAlignment.STATUS_ALREADY_ALIGNED
+        assert alignment.status_message == "not-eligible-already-aligned"
+
     def test_report_data_writes_report_result_not_status(self):
         """$report-data result lands in report_result and must NOT touch the alignment
         lifecycle (status / status_message) — OM v0.9.11 p.77."""
