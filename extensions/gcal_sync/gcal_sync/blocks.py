@@ -150,8 +150,17 @@ class BlockSync:
         for mapping in CalendarEventMapping.objects.filter(google_calendar_id=calendar_id):
             if mapping.canvas_event_id in current_ids:
                 continue
-            # Block no longer exists in Canvas -> remove it from Google.
-            client.delete_event(calendar_id, mapping.google_event_id)
+            # Block no longer exists in Canvas -> remove it from Google. Catch per-mapping so a
+            # transient Google error on one block doesn't abort the rest of the sweep; keep the
+            # mapping (the Google event still exists) so the next sweep retries the deletion.
+            try:
+                client.delete_event(calendar_id, mapping.google_event_id)
+            except GoogleApiError as exc:
+                log.error(
+                    "Failed to delete Google block %s on %s: %s",
+                    mapping.google_event_id, calendar_id, exc,
+                )
+                continue
             mapping.delete()
             stats["deleted"] = stats["deleted"] + 1
 
