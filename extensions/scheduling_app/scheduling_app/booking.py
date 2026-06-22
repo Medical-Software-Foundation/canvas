@@ -55,10 +55,14 @@ def _parse_start(value: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(value)
 
 
+def _label_list(visit: dict[str, Any]) -> list[str]:
+    """Return the visit's labels as a sorted, de-duplicated list (may be empty)."""
+    return sorted({label for label in visit.get("labels", []) if label})
+
+
 def _labels(visit: dict[str, Any]) -> set[str] | None:
-    """Return the visit's labels as a set (the effect rejects an empty set)."""
-    labels = [label for label in visit.get("labels", []) if label]
-    return set(labels) or None
+    """Return the visit's labels as a set, or None when empty (the create effect rejects an empty set)."""
+    return set(_label_list(visit)) or None
 
 
 def _appointment_effect(
@@ -183,14 +187,16 @@ def _schedule_event_effect(
 def _reschedule_effect(payload: dict[str, Any]) -> list[Effect]:
     """Build a RESCHEDULE_APPOINTMENT effect (+ a reason-for-visit edit, if any).
 
-    Labels are injected into the payload rather than set on the effect: the SDK
-    validates reschedule labels *additively* (existing + new <= 3), wrongly
-    counting the OLD appointment's labels even though home-app replaces them on a
-    fresh new appointment — so editing labels would spuriously hit the 3-label
-    limit. Building the effect without labels skips that check; home-app reads the
-    injected ``labels`` and applies them as the new appointment's set. (An empty
-    set is omitted, so home-app copies the original's labels — unchanged.)
-    ``note_id`` and ``rfv_command_id`` are injected server-side by the /book handler.
+    The form's current labels are *always* sent as the authoritative set, so what
+    is in the field is what gets stored — an empty list clears all labels (home-app
+    replaces rather than copies the original's forward). Labels are injected into
+    the payload rather than set on the effect because the SDK validates reschedule
+    labels *additively* (existing + new <= 3), wrongly counting the OLD appointment's
+    labels even though home-app replaces them on a fresh new appointment — so editing
+    labels would spuriously hit the 3-label limit. Building the effect without labels
+    skips that check; home-app reads the injected ``labels`` and applies them as the
+    new appointment's set. ``note_id`` and ``rfv_command_id`` are injected
+    server-side by the /book handler.
     """
     visit = payload["visits"][0]
     provider = (visit.get("providers") or [None])[0]
@@ -201,10 +207,9 @@ def _reschedule_effect(payload: dict[str, Any]) -> list[Effect]:
         start_time=_parse_start(visit["start_time"]),
         duration_minutes=int(visit["duration_minutes"]),
     ).reschedule()
-    if labels := _labels(visit):
-        data = json.loads(reschedule.payload)
-        data["data"]["labels"] = sorted(labels)
-        reschedule = Effect(type=reschedule.type, payload=json.dumps(data))
+    data = json.loads(reschedule.payload)
+    data["data"]["labels"] = _label_list(visit)
+    reschedule = Effect(type=reschedule.type, payload=json.dumps(data))
     effects: list[Effect] = [reschedule]
     if rfv := _reschedule_rfv_effect(visit, payload.get("note_id"), payload.get("rfv_command_id")):
         effects.append(rfv)

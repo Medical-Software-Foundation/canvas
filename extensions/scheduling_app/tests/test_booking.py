@@ -284,6 +284,23 @@ def test_reschedule_with_labels_bypasses_additive_limit(mock_db_queries: None) -
     assert sorted(_data(effects[0])["labels"]) == ["Emergent", "Urgent"]
 
 
+def test_reschedule_always_sends_labels_so_empty_clears(mock_db_queries: None) -> None:
+    """Reschedule always sends the field's labels as the authoritative set.
+
+    An empty field sends ``labels: []`` (the key is always present) so home-app
+    clears them, rather than copying the original appointment's labels forward.
+    """
+    payload = _appointment_payload(mode="reschedule", appointment_id="appt-9")
+    payload["visits"][0]["labels"] = []
+
+    effects = build_booking_effects(payload)
+
+    data = _data(effects[0])
+    assert effects[0].type == EffectType.RESCHEDULE_APPOINTMENT
+    assert "labels" in data
+    assert data["labels"] == []
+
+
 def test_reschedule_edits_coded_rfv(mock_db_queries: None) -> None:
     """A coded reason on reschedule edits the command as structured (coding id)."""
     coding_id = str(uuid4())
