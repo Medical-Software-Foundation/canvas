@@ -272,9 +272,11 @@ def test_get_no_tz_param():
     ):
         mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
         mock_loc.objects.filter.return_value = []
-        mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = [MagicMock()]
+        mock_em.objects.filter.return_value.select_related.return_value.prefetch_related.return_value = [MagicMock()]
         result = h.get()
         assert len(result) == 1
+        # Cancelled events must be excluded from the manager.
+        mock_em.objects.filter.assert_called_once_with(is_cancelled=False)
 
 
 def test_get_invalid_tz_falls_back():
@@ -291,7 +293,7 @@ def test_get_invalid_tz_falls_back():
     ):
         mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
         mock_loc.objects.filter.return_value = []
-        mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+        mock_em.objects.filter.return_value.select_related.return_value.prefetch_related.return_value = []
         result = h.get()
         assert len(result) == 1
 
@@ -310,7 +312,7 @@ def test_get_with_valid_tz():
     ):
         mock_staff.objects.filter.return_value.select_related.return_value.distinct.return_value = []
         mock_loc.objects.filter.return_value = []
-        mock_em.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+        mock_em.objects.filter.return_value.select_related.return_value.prefetch_related.return_value = []
         result = h.get()
         assert len(result) == 1
 

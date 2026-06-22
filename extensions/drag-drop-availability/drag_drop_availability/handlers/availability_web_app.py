@@ -76,9 +76,11 @@ class AvailabilityWebApp(StaffSessionAuthMixin, SimpleAPI):
         # events can render their `allowed_note_types` by name even when the
         # underlying type has since been deactivated.
         all_note_types = NoteType.objects.all()
-        events = Event.objects.all().select_related("calendar").prefetch_related(
-            "allowed_note_types"
-        )
+        # Exclude cancelled events so they aren't rendered as active
+        # availability (matches the scheduler's is_cancelled filter).
+        events = Event.objects.filter(is_cancelled=False).select_related(
+            "calendar"
+        ).prefetch_related("allowed_note_types")
 
         # for event in events:
         #     log.info("Event --------------------")

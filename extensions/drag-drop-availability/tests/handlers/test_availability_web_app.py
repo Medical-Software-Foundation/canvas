@@ -84,7 +84,7 @@ def test_index_returns_html_response():
         # Two NoteType.objects calls: filter() and all().
         mock_nt.objects.filter.return_value = [note_type]
         mock_nt.objects.all.return_value = [note_type]
-        mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = [event]
+        mock_event_cls.objects.filter.return_value.select_related.return_value.prefetch_related.return_value = [event]
 
         result = h.index()
         assert len(result) == 1
@@ -135,7 +135,7 @@ def test_index_serializes_room_primary_practice_location():
         mock_loc.objects.filter.return_value = [location]
         mock_nt.objects.filter.return_value = []
         mock_nt.objects.all.return_value = []
-        mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+        mock_event_cls.objects.filter.return_value.select_related.return_value.prefetch_related.return_value = []
 
         h.index()
 
@@ -191,7 +191,7 @@ def test_index_serializes_null_primary_practice_location():
         mock_loc.objects.filter.return_value = []
         mock_nt.objects.filter.return_value = []
         mock_nt.objects.all.return_value = []
-        mock_event_cls.objects.all.return_value.select_related.return_value.prefetch_related.return_value = []
+        mock_event_cls.objects.filter.return_value.select_related.return_value.prefetch_related.return_value = []
 
         h.index()
 

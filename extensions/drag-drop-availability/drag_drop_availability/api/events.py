@@ -195,8 +195,10 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
             .distinct()
         )
         locations = list(PracticeLocation.objects.filter(active=True))
+        # Exclude cancelled events so the manager doesn't render them as
+        # active availability (matches the scheduler's is_cancelled filter).
         events = list(
-            EventModel.objects.all()
+            EventModel.objects.filter(is_cancelled=False)
             .select_related("calendar")
             .prefetch_related("allowed_note_types")
         )
