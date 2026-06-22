@@ -69,7 +69,10 @@ class CalendarAPI(StaffSessionAuthMixin, SimpleAPIRoute):
         """Create or retrieve a calendar."""
         calendar_type = CalendarType.Clinic
 
-        body = self.request.json()
+        try:
+            body = self.request.json()
+        except (json.JSONDecodeError, ValueError):
+            return [_json_response({"error": "Request body must be valid JSON"}, 400)]
         provider = body.get("provider")
         provider_name = body.get("providerName")
         location = body.get("location")

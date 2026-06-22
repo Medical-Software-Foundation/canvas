@@ -1,6 +1,7 @@
 """Tests for api/events.py."""
 
 import datetime
+import json
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -99,6 +100,11 @@ def test_parse_dt_arrow_fallback():
     # Pass a date that fromisoformat won't accept but arrow will.
     dt = _parse_dt("2026/05/07 10:00:00", ZoneInfo("UTC"))
     assert dt is not None
+
+
+def test_parse_dt_unparseable_returns_none():
+    # Neither fromisoformat nor arrow can parse this — must return None, not raise.
+    assert _parse_dt("not-a-date", ZoneInfo("UTC")) is None
 
 
 # _serialize_event ------------------------------------------------------
@@ -435,3 +441,40 @@ def test_delete():
         mock_event.return_value.delete.return_value = MagicMock(name="effect")
         result = h.delete()
         assert len(result) == 2
+
+
+# input validation ------------------------------------------------------
+
+def test_post_malformed_json_returns_400():
+    h = _handler()
+    h.request.json.side_effect = json.JSONDecodeError("bad", "", 0)
+    result = h.post()
+    assert len(result) == 1
+    assert result[0].status_code == 400
+
+
+def test_post_missing_required_fields_returns_400():
+    # No title / startTime / endTime.
+    h = _handler({"calendar": "cal-1"})
+    with patch("drag_drop_availability.api.events._calendar_tz", return_value=ZoneInfo("UTC")):
+        result = h.post()
+    assert len(result) == 1
+    assert result[0].status_code == 400
+
+
+def test_patch_missing_event_id_returns_400():
+    h = _handler({"title": "x", "startTime": "2026-05-07T09:00:00", "endTime": "2026-05-07T17:00:00"})
+    with patch(
+        "drag_drop_availability.api.events._calendar_tz_for_event",
+        return_value=ZoneInfo("UTC"),
+    ):
+        result = h.patch()
+    assert len(result) == 1
+    assert result[0].status_code == 400
+
+
+def test_delete_missing_event_id_returns_400():
+    h = _handler({})
+    result = h.delete()
+    assert len(result) == 1
+    assert result[0].status_code == 400

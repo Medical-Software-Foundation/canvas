@@ -41,16 +41,33 @@ def _calendar_tz_for_event(event_id: str) -> ZoneInfo:
     return _calendar_tz(str(ev.calendar.id))
 
 
+def _bad_request(message: str) -> Response:
+    """Return a 400 JSON response with an error message."""
+    return Response(
+        json.dumps({"error": message}).encode("utf-8"),
+        status_code=HTTPStatus.BAD_REQUEST,
+        content_type="application/json",
+    )
+
+
 def _parse_dt(value: str | None, cal_tz: ZoneInfo) -> datetime.datetime | None:
-    """Parse a datetime string. Naive values are assumed to be in cal_tz."""
+    """Parse a datetime string. Naive values are assumed to be in cal_tz.
+
+    Returns ``None`` for empty or unparseable input so callers can validate
+    and return a 400 rather than letting a parse error surface as a 500.
+    """
     if not value:
         return None
     s = str(value).replace("Z", "+00:00")
     try:
         dt = datetime.datetime.fromisoformat(s)
     except ValueError:
-        # Fall back to arrow which is more lenient.
-        dt = arrow.get(s).datetime
+        # Fall back to arrow which is more lenient. arrow raises ParserError
+        # (a ValueError subclass) on garbage input — treat that as unparseable.
+        try:
+            dt = arrow.get(s).datetime
+        except (ValueError, TypeError):
+            return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=cal_tz)
     return dt
@@ -219,17 +236,20 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
         it overrides the calendar's tz when interpreting naive HH:MM input.
         Stored values are always converted to UTC.
         """
-        body = self.request.json()
+        try:
+            body = self.request.json()
+        except (json.JSONDecodeError, ValueError):
+            return [_bad_request("Request body must be valid JSON")]
 
-        calender_id = body.get("calendar")
+        calendar_id = body.get("calendar")
         body_tz_name = (body.get("timezone") or "").strip()
         if body_tz_name:
             try:
                 cal_tz = ZoneInfo(body_tz_name)
             except Exception:
-                cal_tz = _calendar_tz(calender_id)
+                cal_tz = _calendar_tz(calendar_id)
         else:
-            cal_tz = _calendar_tz(calender_id)
+            cal_tz = _calendar_tz(calendar_id)
         title = body.get("title")
         starts_at = _parse_dt(body.get("startTime"), cal_tz)
         ends_at = _parse_dt(body.get("endTime"), cal_tz)
@@ -239,8 +259,13 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
         recurrence_ends_at = _parse_dt(body.get("recurrenceEndsAt"), cal_tz)
         allowed_note_types = body.get("allowedNoteTypes", [])
 
+        if not calendar_id or not title or starts_at is None or ends_at is None:
+            return [_bad_request(
+                "calendar, title, a valid startTime, and a valid endTime are required"
+            )]
+
         create_calendar_event = Event(
-            calendar_id=calender_id,
+            calendar_id=calendar_id,
             title=title,
             starts_at=starts_at,
             ends_at=ends_at,
@@ -261,7 +286,10 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
 
     def patch(self) -> list[Response | Effect]:
         """Update an existing calendar event."""
-        body = self.request.json()
+        try:
+            body = self.request.json()
+        except (json.JSONDecodeError, ValueError):
+            return [_bad_request("Request body must be valid JSON")]
 
         event_id = body.get("eventId")
         body_tz_name = (body.get("timezone") or "").strip()
@@ -280,6 +308,11 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
         recurrence_days = body.get("recurrenceDays")
         recurrence_ends_at = _parse_dt(body.get("recurrenceEndsAt"), cal_tz)
         allowed_note_types = body.get("allowedNoteTypes", [])
+
+        if not event_id or not title or starts_at is None or ends_at is None:
+            return [_bad_request(
+                "eventId, title, a valid startTime, and a valid endTime are required"
+            )]
 
         update_calendar_event = Event(
             event_id=event_id,
@@ -303,9 +336,14 @@ class CalendarEventsAPI(StaffSessionAuthMixin, SimpleAPIRoute):
 
     def delete(self) -> list[Response | Effect]:
         """Delete an existing calendar event."""
-        body = self.request.json()
+        try:
+            body = self.request.json()
+        except (json.JSONDecodeError, ValueError):
+            return [_bad_request("Request body must be valid JSON")]
 
         event_id = body.get("eventId")
+        if not event_id:
+            return [_bad_request("eventId is required")]
 
         delete_calendar_event = Event(event_id=event_id).delete()
 

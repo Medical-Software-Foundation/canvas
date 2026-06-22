@@ -1,5 +1,6 @@
 """Tests for api/calendar.py."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 from canvas_sdk.effects.calendar import CalendarType
@@ -29,6 +30,14 @@ def test_json_response_returns_response_with_status():
     resp = _json_response({"hi": "there"}, 200)
     # Status was applied
     assert resp.status_code == 200
+
+
+def test_post_malformed_json_returns_400():
+    h = _handler()
+    h.request.json.side_effect = json.JSONDecodeError("bad", "", 0)
+    result = h.post()
+    assert len(result) == 1
+    assert result[0].status_code == 400
 
 
 def test_post_returns_existing_calendar_via_legacy_title():
