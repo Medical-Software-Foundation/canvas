@@ -14,6 +14,8 @@ Use it when you want providers and rooms to express availability through a
 friendly UI, but you handle booking through native Canvas scheduling (or
 another tool).
 
+![Manage Availability](docs/availability-manager.png)
+
 ## What it does
 
 - A **Manage Availability** provider-menu app opens a weekly calendar manager.
