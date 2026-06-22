@@ -40,6 +40,20 @@ def test_post_malformed_json_returns_400():
     assert result[0].status_code == 400
 
 
+def test_post_missing_provider_on_create_returns_400():
+    # No existing calendar matches and no provider to create one with.
+    h = _handler({"providerName": "Bob", "type": "Clinic"})
+    with patch("drag_drop_availability.api.calendar.Calendar") as mock_cal, patch(
+        "drag_drop_availability.api.calendar.CalendarEffect"
+    ) as mock_effect:
+        _no_description_match(mock_cal)
+        mock_cal.objects.for_calendar_name.return_value.values_list.return_value.last.return_value = None
+        result = h.post()
+        assert len(result) == 1
+        assert result[0].status_code == 400
+        mock_effect.assert_not_called()
+
+
 def test_post_returns_existing_calendar_via_legacy_title():
     h = _handler({
         "provider": "prov-1",

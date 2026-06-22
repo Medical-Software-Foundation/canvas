@@ -102,6 +102,11 @@ class CalendarAPI(StaffSessionAuthMixin, SimpleAPIRoute):
         if calendar_id:
             return [_json_response({"calendarId": str(calendar_id)}, 200)]
 
+        # Creating a new calendar requires the staff id — CalendarEffect rejects
+        # a None provider, which would otherwise surface as an unhandled 500.
+        if not provider:
+            return [_json_response({"error": "provider is required to create a calendar"}, 400)]
+
         calendar_id = str(uuid4())
         description = body.get("description")
 
