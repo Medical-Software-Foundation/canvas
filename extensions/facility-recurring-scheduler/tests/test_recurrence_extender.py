@@ -671,13 +671,15 @@ class TestRecurrenceExtender:
         )
 
     @patch("facility_recurring_scheduler.handlers.recurrence_extender.AppointmentMetadata")
-    def test_batch_get_facility_names_handles_errors(self, mock_metadata) -> None:
-        """A metadata read failure degrades to an empty map (cron must not abort)."""
+    def test_batch_get_facility_names_propagates_db_errors(self, mock_metadata) -> None:
+        """A metadata read failure surfaces (fail loud) rather than silently
+        degrading every facility series to the default timezone."""
         mock_event = MagicMock()
         mock_metadata.objects.filter.side_effect = Exception("db error")
 
         extender = RecurrenceExtender(mock_event)
-        assert extender._batch_get_facility_names(["parent-1"]) == {}
+        with pytest.raises(Exception, match="db error"):
+            extender._batch_get_facility_names(["parent-1"])
 
     @patch("facility_recurring_scheduler.handlers.recurrence_extender.Facility")
     def test_batch_get_facility_states(self, mock_facility) -> None:

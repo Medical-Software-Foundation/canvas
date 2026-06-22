@@ -44,7 +44,7 @@ class RecurrenceInitialHandler(BaseHandler):
         appointment: AppointmentModel,
         count: int,
         recurrence: str,
-        patient_id: str,
+        patient_id: str | None,
         local_tz: ZoneInfo,
     ) -> Appointment:
         """Create a child appointment for regular appointments."""

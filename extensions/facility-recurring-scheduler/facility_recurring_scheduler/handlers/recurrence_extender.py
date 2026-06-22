@@ -208,39 +208,37 @@ class RecurrenceExtender(CronTask):
     def _batch_get_facility_names(self, parent_ids: list[str]) -> dict[str, str]:
         """Batch fetch the selected facility name for each parent (single query).
 
-        Best-effort: timezone resolution always falls back to the default
-        timezone, so a metadata read failure degrades gracefully rather than
-        aborting the cron.
+        A read failure here propagates rather than being swallowed: degrading to
+        an empty map would silently resolve every facility series to the default
+        timezone (and bake in wrong occurrence times), which is worse than the
+        run failing loudly and retrying. Mirrors the other batch helpers, which
+        also let DB errors surface.
         """
-        try:
-            return {
-                str(appt_id): value
-                for appt_id, value in AppointmentMetadata.objects.filter(
-                    appointment_id__in=parent_ids, key=FIELD_FACILITY_KEY
-                ).values_list("appointment_id", "value")
-                if value
-            }
-        except Exception:
-            log.warning("RecurrenceExtender: failed to batch-fetch facility names")
-            return {}
+        return {
+            str(appt_id): value
+            for appt_id, value in AppointmentMetadata.objects.filter(
+                appointment_id__in=parent_ids, key=FIELD_FACILITY_KEY
+            ).values_list("appointment_id", "value")
+            if value
+        }
 
     def _batch_get_facility_states(
         self, facility_names: Iterable[str | None]
     ) -> dict[str, str | None]:
-        """Batch fetch state codes for a set of facility names (single query)."""
+        """Batch fetch state codes for a set of facility names (single query).
+
+        Like _batch_get_facility_names, a query failure propagates rather than
+        silently degrading every facility series to the default timezone.
+        """
         names = {name for name in facility_names if name}
         if not names:
             return {}
-        try:
-            return {
-                name: state_code
-                for name, state_code in Facility.objects.filter(
-                    name__in=names, active=True
-                ).values_list("name", "state_code")
-            }
-        except Exception:
-            log.warning("RecurrenceExtender: failed to batch-fetch facility states")
-            return {}
+        return {
+            name: state_code
+            for name, state_code in Facility.objects.filter(
+                name__in=names, active=True
+            ).values_list("name", "state_code")
+        }
 
     def execute(self) -> list[Effect]:
         """Main execution method called by the cron scheduler.
