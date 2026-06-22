@@ -1,0 +1,67 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "drag_drop_availability",
+    "description": "Drag-and-drop availability manager for provider and room Clinic/Busy calendars",
+    "url_permissions": [],
+    "components": {
+        "protocols": [
+            {
+                "class": "drag_drop_availability.handlers.availability_web_app:AvailabilityWebApp",
+                "description": "Serves the availability manager UI (HTML/CSS/JS)",
+                "data_access": {
+                    "event": "",
+                    "read": ["Staff", "PracticeLocation", "NoteType", "Calendar", "Event"],
+                    "write": []
+                }
+            },
+            {
+                "class": "drag_drop_availability.api.calendar:CalendarAPI",
+                "description": "Create or retrieve provider/room Clinic and Admin calendars",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar"],
+                    "write": ["Calendar"]
+                }
+            },
+            {
+                "class": "drag_drop_availability.api.events:CalendarEventsAPI",
+                "description": "Create, update, or delete calendar events used to express availability",
+                "data_access": {
+                    "event": "",
+                    "read": ["Calendar", "Event", "Staff", "PracticeLocation", "NoteType"],
+                    "write": ["Event"]
+                }
+            }
+        ],
+        "applications": [
+            {
+                "class": "drag_drop_availability.applications.availability_manager_app:AvailabilityManagerApp",
+                "name": "Manage Availability",
+                "description": "Open the availability manager",
+                "icon": "assets/calendar-icon.png",
+                "scope": "provider_menu_item",
+                "menu_position": "top",
+                "menu_order": 110
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [
+        "SCHEDULABLE_STAFF_ROLES",
+        "BRAND_PRIMARY",
+        "BRAND_PRIMARY_HOVER",
+        "BRAND_PRIMARY_TINT_BG",
+        "BRAND_PRIMARY_TINT_TEXT",
+        "BRAND_FONT_STACK",
+        "BRAND_FONT_URL"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
