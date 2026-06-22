@@ -1,0 +1,37 @@
+{
+    "sdk_version": "0.95.0",
+    "plugin_version": "1.6.0",
+    "name": "facility_recurring_scheduler",
+    "description": "Recurring scheduling for all event types, plus facility selection and automatic naming for Other Events",
+    "components": {
+        "protocols": [
+            {
+                "class": "facility_recurring_scheduler.handlers.form_fields:OtherEventFormFields",
+                "description": "Adds Recurrence dropdown to all scheduling modals and Facility dropdown to Other Events"
+            },
+            {
+                "class": "facility_recurring_scheduler.handlers.facility_rename:FacilityRename",
+                "description": "Automatically renames Other Events to display the selected facility name"
+            },
+            {
+                "class": "facility_recurring_scheduler.handlers.recurrence_initial:RecurrenceInitialHandler",
+                "description": "Creates child events when a recurring appointment or schedule event is scheduled"
+            },
+            {
+                "class": "facility_recurring_scheduler.handlers.recurrence_extender:RecurrenceExtender",
+                "description": "CronTask that runs daily to extend all recurring event series, maintaining a 90-day horizon"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
