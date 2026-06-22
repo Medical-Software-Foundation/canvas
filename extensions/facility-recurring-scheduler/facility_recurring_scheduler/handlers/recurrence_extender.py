@@ -55,7 +55,10 @@ class RecurrenceExtender(CronTask):
                 id__in=parent_ids_with_recurrence,
                 parent_appointment_id__isnull=True,
             ).exclude(
-                status__in=["cancelled", "noshowed"]
+                # Only a cancelled parent stops a series. A no-show is a real
+                # occurrence (the patient simply didn't attend) and must not
+                # affect recurring behavior.
+                status__in=["cancelled"]
             ).select_related(
                 "note_type", "location", "provider", "patient"
             )
@@ -191,11 +194,12 @@ class RecurrenceExtender(CronTask):
     ) -> dict[str, datetime.datetime]:
         """Batch fetch latest child start times for multiple parents in a single query."""
         # Use aggregation to get max start_time grouped by parent_appointment_id
-        # Exclude cancelled/noshowed children so gaps get filled properly
+        # Exclude only cancelled children. A no-show is still a real occurrence,
+        # so it stays in the aggregation and continues to anchor the series.
         latest_children = AppointmentModel.objects.filter(
             parent_appointment_id__in=parent_ids
         ).exclude(
-            status__in=["cancelled", "noshowed"]
+            status__in=["cancelled"]
         ).values("parent_appointment_id").annotate(
             latest_start=Max("start_time")
         )

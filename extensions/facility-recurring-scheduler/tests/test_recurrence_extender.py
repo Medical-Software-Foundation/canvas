@@ -150,7 +150,7 @@ class TestRecurrenceExtender:
     ) -> None:
         """A series whose children were all cancelled must NOT be regenerated.
 
-        When every child of a recurring parent is cancelled/noshowed,
+        When every child of a recurring parent is cancelled,
         _batch_get_latest_children returns no entry for that parent. The
         extender must skip it rather than falling back to parent.start_time
         and recreating events the user deliberately cancelled.
@@ -610,7 +610,8 @@ class TestRecurrenceExtender:
 
     @patch("facility_recurring_scheduler.handlers.recurrence_extender.AppointmentModel")
     def test_batch_get_latest_children(self, mock_appointment_model) -> None:
-        """Test batch fetching of latest child start times excludes cancelled/noshowed."""
+        """Latest-child aggregation excludes only cancelled children; a no-show
+        still counts as a real occurrence and continues to anchor the series."""
         mock_event = MagicMock()
         now = datetime.datetime.now(datetime.timezone.utc)
 
@@ -639,7 +640,7 @@ class TestRecurrenceExtender:
             parent_appointment_id__in=["parent-1", "parent-2"]
         )
         mock_queryset.exclude.assert_called_once_with(
-            status__in=["cancelled", "noshowed"]
+            status__in=["cancelled"]
         )
         mock_exclude_queryset.values.assert_called_once_with("parent_appointment_id")
 
