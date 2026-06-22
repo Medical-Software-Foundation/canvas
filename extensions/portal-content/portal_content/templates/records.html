@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Records</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #2c3e50; background: #f5f5f5; padding: 20px; }
+  .container { max-width: 1100px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  .subtitle { color: #7f8c8d; margin-bottom: 20px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 2px solid #e1e8ed; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab { padding: 10px 18px; cursor: pointer; border: none; background: none; font-size: 15px; color: #7f8c8d; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .tab.active { color: #2c3e50; border-bottom-color: #3498db; font-weight: 600; }
+  .loading, .empty { text-align: center; padding: 48px 20px; color: #7f8c8d; }
+  .error { background: #fee; color: #c33; padding: 14px; border-radius: 4px; margin-bottom: 16px; display: none; }
+  .card { border: 1px solid #e1e8ed; border-radius: 8px; padding: 18px; margin-bottom: 14px; transition: border-color .15s, box-shadow .15s; }
+  .card.clickable { cursor: pointer; }
+  .card.clickable:hover { border-color: #3498db; box-shadow: 0 2px 8px rgba(52,152,219,.18); }
+  .card-title { font-size: 17px; font-weight: 600; }
+  .card-meta { color: #7f8c8d; font-size: 14px; margin-top: 4px; }
+  .card-actions { margin-top: 12px; }
+  .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; }
+  .btn-primary { background: #3498db; color: #fff; margin-right: 8px; }
+  .btn-secondary { background: #95a5a6; color: #fff; }
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000; }
+  .modal.active { display: block; }
+  .modal-content { background: #fff; max-width: 1100px; width: 95%; height: calc(100vh - 40px); margin: 20px auto; border-radius: 8px; display: flex; flex-direction: column; }
+  .modal-header { padding: 16px 24px; border-bottom: 1px solid #e1e8ed; display: flex; justify-content: space-between; align-items: center; }
+  .modal-title { font-size: 18px; }
+  .modal-body { flex: 1; overflow: auto; }
+  .modal-body iframe { width: 100%; height: 100%; border: none; }
+  .avs { padding: 24px; }
+  @media (max-width: 640px) { .container { padding: 16px; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>My Records</h1>
+  <p class="subtitle">Your visit summaries, lab and imaging reports, and letters.</p>
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="visits">Visit Notes</button>
+    <button class="tab" data-tab="labs">Lab Reports</button>
+    <button class="tab" data-tab="imaging">Imaging</button>
+    <button class="tab" data-tab="letters">Letters</button>
+  </div>
+  <div id="error" class="error"></div>
+  <div id="panel"></div>
+</div>
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Document</span>
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+<script>
+  const BASE = '/plugin-io/api/portal_content/app';
+  const EMPTY = { visits: 'No visit notes yet.', labs: 'No lab reports yet.', imaging: 'No imaging reports yet.', letters: 'No letters yet.' };
+  const panel = document.getElementById('panel');
+  const errorEl = document.getElementById('error');
+
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    const btn = e.target.closest('.tab');
+    if (!btn) return;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === btn));
+    showTab(btn.dataset.tab);
+  });
+
+  function showError(msg) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+  function clearError() { errorEl.style.display = 'none'; }
+  function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+  function fmtDate(s) { if (!s) return ''; const d = new Date(s); return isNaN(d) ? s : d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); }
+
+  async function getJSON(url) {
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const body = await res.json();
+    if (body.status !== 'success') throw new Error(body.message || 'Request failed');
+    return body.data;
+  }
+
+  function showTab(tab) {
+    clearError();
+    panel.innerHTML = '<div class="loading">Loading...</div>';
+    if (tab === 'visits') loadVisits();
+    else loadDocuments(tab);
+  }
+
+  async function loadVisits() {
+    try {
+      const data = await getJSON(BASE + '/visits');
+      const notes = data.summaries || [];
+      if (!notes.length) { panel.innerHTML = '<div class="empty">' + EMPTY.visits + '</div>'; return; }
+      panel.innerHTML = notes.map(n =>
+        '<div class="card">' +
+          '<div class="card-title">' + escapeHtml(n.visit_type || 'Visit') + '</div>' +
+          '<div class="card-meta">' + fmtDate(n.visit_date) + ' with ' + escapeHtml(n.provider_name) +
+            (n.chief_concern ? ' &middot; ' + escapeHtml(n.chief_concern) : '') + '</div>' +
+          '<div class="card-actions">' +
+            '<button class="btn btn-primary" onclick="viewSummary(\'' + encodeURIComponent(n.note_id) + '\')">View Summary</button>' +
+            '<button class="btn btn-secondary" onclick="viewNote(\'' + encodeURIComponent(n.note_id) + '\')">View Note</button>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    } catch (err) { panel.innerHTML = ''; showError(err.message); }
+  }
+
+  async function loadDocuments(component) {
+    try {
+      const data = await getJSON(BASE + '/documents?component=' + encodeURIComponent(component));
+      const reports = data.reports || [];
+      if (!reports.length) { panel.innerHTML = '<div class="empty">' + (EMPTY[component] || 'Nothing here yet.') + '</div>'; return; }
+      panel.innerHTML = reports.map(r =>
+        '<div class="card clickable" onclick="openContent(' + JSON.stringify(r.content_url).replace(/"/g, '&quot;') +
+          ',' + JSON.stringify(r.report_name).replace(/"/g, '&quot;') + ')">' +
+          '<div class="card-title">' + escapeHtml(r.report_name) + '</div>' +
+          '<div class="card-meta">' + fmtDate(r.date) + '</div>' +
+        '</div>'
+      ).join('');
+    } catch (err) { panel.innerHTML = ''; showError(err.message); }
+  }
+
+  async function viewSummary(noteId) {
+    try {
+      const data = await getJSON(BASE + '/visit-avs?note_id=' + noteId);
+      openHtml('<div class="avs">' + data.avs_html + '</div>', 'Visit Summary');
+    } catch (err) { showError(err.message); }
+  }
+
+  async function viewNote(noteId) {
+    try {
+      const data = await getJSON(BASE + '/visit-note?note_id=' + noteId);
+      openContent(data.content_url, 'Visit Note');
+    } catch (err) { showError(err.message); }
+  }
+
+  function openContent(url, title) {
+    document.getElementById('modal-title').textContent = title || 'Document';
+    document.getElementById('modal-body').innerHTML = url
+      ? '<iframe src="' + encodeURI(url) + '" title="' + escapeHtml(title) + '"></iframe>'
+      : '<div class="empty">This document is not available.</div>';
+    document.getElementById('modal').classList.add('active');
+  }
+
+  function openHtml(html, title) {
+    document.getElementById('modal-title').textContent = title || 'Summary';
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal').classList.add('active');
+  }
+
+  function closeModal() { document.getElementById('modal').classList.remove('active'); }
+  document.getElementById('modal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+
+  showTab('visits');
+</script>
+</body>
+</html>

@@ -1,1 +1,9 @@
-.claude
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+# Workflow artifacts hold live API credentials in INSTALL.md - never commit.
+.cpa-workflow-artifacts/

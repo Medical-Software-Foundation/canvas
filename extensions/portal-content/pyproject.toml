@@ -1,37 +1,31 @@
+# Local development and testing only. The Canvas plugin runner does not use this file.
+
 [project]
 name = "portal-content"
-version = "0.0.1"
-description = "Unified patient portal for educational materials, imaging reports, lab reports, and visit notes"
-readme = "README.md"
+version = "0.0.0"
+description = "Patient portal: My Records (visit summaries with After Visit Summary, lab and imaging reports, letters) and My Profile (information and insurance on file)."
+license = "MIT"
+readme = "portal_content/README.md"
+authors = [{ name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com" }]
 requires-python = ">=3.12"
-dependencies = []
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "canvas",
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-addopts = "-v"
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
 
 [tool.coverage.run]
+branch = true
 source = ["portal_content"]
-omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
-
-[tool.coverage.report]
-omit = ["tests/*", "*/tests/*"]
-exclude_lines = [
-    "pragma: no cover",
-    "if TYPE_CHECKING:",
-]
+omit = ["tests/*"]

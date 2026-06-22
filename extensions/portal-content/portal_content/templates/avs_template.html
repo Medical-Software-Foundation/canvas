@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>After Visit Summary - {{ patient_name }}</title>
+</head>
+<body>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #333;
+            padding: 20px;
+            background: #fff;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            color: #0066cc;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .patient-info {
+            background: #f5f5f5;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .patient-info .row {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 8px;
+        }
+
+        .patient-info .label {
+            font-weight: bold;
+            min-width: 150px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            background: #0066cc;
+            color: white;
+            padding: 10px 15px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-radius: 3px;
+        }
+
+        .group {
+            margin-bottom: 15px;
+        }
+
+        .group-label {
+            font-weight: bold;
+            color: #0066cc;
+            margin-bottom: 8px;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .group-entries {
+            padding-left: 20px;
+        }
+
+        .text {
+            margin: 5px 0;
+            line-height: 1.6;
+        }
+
+        .command {
+            font-weight: 600;
+            color: #000;
+        }
+
+        .checkbox {
+            position: relative;
+            padding-left: 25px;
+            margin: 8px 0;
+        }
+
+        .checkbox::before {
+            content: "\2610";
+            position: absolute;
+            left: 0;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .medication {
+            background: #f9f9f9;
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #28a745;
+            border-radius: 3px;
+        }
+
+        .medication.start {
+            border-left-color: #28a745;
+        }
+
+        .medication.adjust {
+            border-left-color: #ffc107;
+        }
+
+        .medication.stop {
+            border-left-color: #dc3545;
+        }
+
+        .medication.keep {
+            border-left-color: #17a2b8;
+        }
+
+        .medication-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .medication-description {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .vital-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .vital-label {
+            font-weight: 600;
+        }
+
+        .vital-value {
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        .appointment-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .appointment-date {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 5px;
+        }
+
+        .appointment-detail {
+            color: #856404;
+            margin: 3px 0;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ddd;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+
+            .section {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+    <div class="container">
+        <div class="header">
+            <h1>After Visit Summary</h1>
+        </div>
+
+        <!-- Patient Information -->
+        <div class="patient-info">
+            <div class="row">
+                <span class="label">Patient Name:</span>
+                <span>{{ patient_name }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Date of Birth:</span>
+                <span>{{ patient_dob }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Visit Date:</span>
+                <span>{{ appointment_date_time }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Provider:</span>
+                <span>{{ appointment_provider }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Reason for Visit:</span>
+                <span>{{ reason_for_visit }}</span>
+            </div>
+        </div>
+
+        <!-- To-Do List -->
+        {% if to_do_list.imaging_orders or to_do_list.lab_orders or to_do_list.referrals or to_do_list.instructions or to_do_list.follow_ups %}
+        <div class="section">
+            <div class="section-title">Your To-Do List</div>
+
+            {% if to_do_list.imaging_orders %}
+                {% for order in to_do_list.imaging_orders %}
+                <div class="checkbox text">Complete <span class="command">{{ order }}</span></div>
+                {% endfor %}
+            {% endif %}
+
+            {% if to_do_list.lab_orders %}
+                {% for order in to_do_list.lab_orders %}
+                <div class="checkbox text">Complete <span class="command">{{ order }}</span></div>
+                {% endfor %}
+            {% endif %}
+
+            {% if to_do_list.referrals %}
+                {% for referral in to_do_list.referrals %}
+                <div class="checkbox text">Consult with <span class="command">{{ referral }}</span></div>
+                {% endfor %}
+            {% endif %}
+
+            {% if to_do_list.instructions %}
+                {% for instruction in to_do_list.instructions %}
+                <div class="checkbox text">{{ instruction }}</div>
+                {% endfor %}
+            {% endif %}
+
+            {% if to_do_list.follow_ups %}
+                {% for followup in to_do_list.follow_ups %}
+                <div class="checkbox text">Come back for <span class="command">{{ followup.type }}</span> around <span class="command">{{ followup.appointment_date }}</span>{% if followup.reason_for_visit and followup.reason_for_visit != "Follow Up" %} to <span class="command">{{ followup.reason_for_visit }}</span>{% endif %}</div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Medications -->
+        <div class="section">
+            <div class="section-title">Your Medications</div>
+
+            {% if medications.start %}
+            <div class="group">
+                <div class="group-label">Start Taking</div>
+                <div class="group-entries">
+                    {% for med in medications.start %}
+                    <div class="medication start">
+                        <div class="medication-name">{{ med.name }}</div>
+                        {% if med.description %}
+                        <div class="medication-description">{{ med.description }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if medications.adjust %}
+            <div class="group">
+                <div class="group-label">Adjust Dosage</div>
+                <div class="group-entries">
+                    {% for med in medications.adjust %}
+                    <div class="medication adjust">
+                        <div class="medication-name">{{ med.name }}</div>
+                        {% if med.description %}
+                        <div class="medication-description">{{ med.description }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if medications.stop %}
+            <div class="group">
+                <div class="group-label">Stop Taking</div>
+                <div class="group-entries">
+                    {% for med in medications.stop %}
+                    <div class="medication stop">
+                        <div class="medication-name">{{ med.name }}</div>
+                        {% if med.description %}
+                        <div class="medication-description">{{ med.description }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="group">
+                <div class="group-label">Keep Taking</div>
+                <div class="group-entries">
+                    {% if medications.keep %}
+                    {% for med in medications.keep %}
+                    <div class="medication keep">
+                        <div class="medication-name">{{ med.name }}</div>
+                        {% if med.description %}
+                        <div class="medication-description">{{ med.description }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text">No current medications documented for this visit.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Today's Visit -->
+        {% if vitals or diagnoses or immunizations or procedures %}
+        <div class="section">
+            <div class="section-title">Today's Visit</div>
+
+            {% if vitals %}
+            <div class="group">
+                <div class="group-label">Vitals</div>
+                <div class="group-entries">
+                    {% for key, vital in vitals.items %}
+                    <div class="vital-row">
+                        <span class="vital-label">{{ vital.sign }}{% if vital.sign_unit %} ({{ vital.sign_unit }}){% endif %}:</span>
+                        <span class="vital-value">{{ vital.value }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if diagnoses %}
+            <div class="group">
+                <div class="group-label">Conditions</div>
+                <div class="group-entries">
+                    {% for diagnosis in diagnoses %}
+                    <div class="text">&bull; {{ diagnosis }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if immunizations %}
+            <div class="group">
+                <div class="group-label">Immunizations</div>
+                <div class="group-entries">
+                    {% for immunization in immunizations %}
+                    <div class="text">&bull; {{ immunization }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if procedures %}
+            <div class="group">
+                <div class="group-label">Procedures</div>
+                <div class="group-entries">
+                    {% for procedure in procedures %}
+                    <div class="text">&bull; {{ procedure }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Upcoming Appointments -->
+        {% if upcoming_appointments %}
+        <div class="section">
+            <div class="section-title">Upcoming Appointments</div>
+            {% for appt in upcoming_appointments %}
+            <div class="appointment-box">
+                <div class="appointment-date">{{ appt.appointment_date }}</div>
+                <div class="appointment-detail">Provider: {{ appt.provider }}</div>
+                <div class="appointment-detail">Type: {{ appt.type }}</div>
+                <div class="appointment-detail">For: {{ appt.reason_for_visit }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>This After Visit Summary was generated on {{ generated_at }}.</p>
+            <p>If you have any questions about your visit or these instructions, please contact your healthcare provider.</p>
+        </div>
+    </div>
+</body>
+</html>
