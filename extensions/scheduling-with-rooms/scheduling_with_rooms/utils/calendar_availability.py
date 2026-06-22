@@ -58,10 +58,18 @@ def event_occurs_on_date(event: Event, target_date: datetime.date) -> bool:
     if target_date < event.starts_at.date():
         return False
 
+    # Recurrence end date. Canvas stores this in the separate
+    # ``recurrence_ends_at`` column, NOT as an UNTIL= inside the RRULE string
+    # (the rule is often just "FREQ=DAILY"). Without honoring this column a
+    # time-bounded block — e.g. an "Out of Office" that ends June 6 — recurs
+    # forever and silently zeroes out availability for every later date.
+    if event.recurrence_ends_at and target_date > event.recurrence_ends_at.date():
+        return False
+
     rule = _parse_rrule(event.recurrence)
     freq = rule.get("FREQ", "")
 
-    # UNTIL check.
+    # UNTIL check (when the end date is embedded in the RRULE string instead).
     until_str = rule.get("UNTIL")
     if until_str:
         try:
@@ -81,14 +89,21 @@ def event_occurs_on_date(event: Event, target_date: datetime.date) -> bool:
 
     if freq == "WEEKLY":
         byday = rule.get("BYDAY", "")
-        if byday:
-            allowed_days = {
-                _DAY_MAP[d.strip()]
-                for d in byday.split(",")
-                if d.strip() in _DAY_MAP
-            }
-            if target_date.weekday() not in allowed_days:
-                return False
+        allowed_days = {
+            _DAY_MAP[d.strip()]
+            for d in byday.split(",")
+            if d.strip() in _DAY_MAP
+        }
+        # A FREQ=WEEKLY rule with no (parseable) BYDAY recurs on the same
+        # weekday as the event's start — RFC 5545 DTSTART semantics. The SDK
+        # only writes BYDAY when recurrence_days is set, so a weekly event
+        # created from just a start datetime has none. Without this fallback
+        # the rule matches every day of the week, so a Tue/Thu "Out of Office"
+        # block silently zeroed out Mon/Wed/Fri availability too.
+        if not allowed_days:
+            allowed_days = {event.starts_at.weekday()}
+        if target_date.weekday() not in allowed_days:
+            return False
 
         if interval > 1:
             weeks_diff = (target_date - event.starts_at.date()).days // 7
@@ -366,6 +381,12 @@ def get_blocking_calendar_events(
         tz = ZoneInfo("UTC")
 
     blocks: list[tuple[datetime.datetime, datetime.datetime]] = []
+    # Track the source calendar/event for each block so the log can pinpoint
+    # which admin calendar is zeroing out availability (a real admin block vs.
+    # a misclassified Clinic calendar).
+    block_sources: list[
+        tuple[datetime.datetime, datetime.datetime, str, Any, Any, str]
+    ] = []
     # See note in get_availability_windows: keyed on cal.pk, not cal.id.
     events_by_cal: dict = {}
     if admin_calendars:
@@ -373,21 +394,39 @@ def get_blocking_calendar_events(
             calendar__in=admin_calendars, is_cancelled=False
         ):
             events_by_cal.setdefault(ev.calendar_id, []).append(ev)
+    log.info(
+        "blocking_events: provider=%s (%s) matched %d admin calendar(s): %s",
+        provider_id,
+        staff_name,
+        len(admin_calendars),
+        [(str(c.id), c.title) for c in admin_calendars],
+    )
     for cal in admin_calendars:
         for event in events_by_cal.get(cal.pk, []):
             if event_occurs_on_date(event, date_obj):
                 window = _event_window_on_date(event, date_obj, tz)
                 if window:
                     blocks.append(window)
+                    block_sources.append(
+                        (window[0], window[1], cal.title, cal.id, event.id, event.recurrence or "")
+                    )
 
     blocks.sort(key=lambda w: w[0])
+    block_sources.sort(key=lambda b: b[0])
     log.info(
         "blocking_events: provider=%s (%s), date=%s, %d admin blocks: %s",
         provider_id,
         staff_name,
         target_date,
         len(blocks),
-        [(b[0].strftime("%H:%M"), b[1].strftime("%H:%M")) for b in blocks],
+        [
+            (
+                b[0].strftime("%H:%M"),
+                b[1].strftime("%H:%M"),
+                "calendar=%r calendar_id=%s event=%s rrule=%r" % (b[2], b[3], b[4], b[5]),
+            )
+            for b in block_sources
+        ],
     )
     return blocks
 

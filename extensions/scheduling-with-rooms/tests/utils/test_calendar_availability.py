@@ -70,41 +70,41 @@ def test_parse_rrule_empty_parts_skipped():
 # event_occurs_on_date ---------------------------------------------------
 
 def test_event_occurs_on_date_no_starts_at():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = None
     assert event_occurs_on_date(event, datetime.date(2026, 5, 7)) is False
 
 
 def test_event_occurs_on_date_no_recurrence_match():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 7, 9, 0)
     event.recurrence = None
     assert event_occurs_on_date(event, datetime.date(2026, 5, 7)) is True
 
 
 def test_event_occurs_on_date_no_recurrence_no_match():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 7, 9, 0)
     event.recurrence = None
     assert event_occurs_on_date(event, datetime.date(2026, 5, 8)) is False
 
 
 def test_event_occurs_on_date_target_before_start():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 7, 9, 0)
     event.recurrence = "FREQ=DAILY"
     assert event_occurs_on_date(event, datetime.date(2026, 5, 1)) is False
 
 
 def test_event_occurs_on_date_until_passed():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 1, 9, 0)
     event.recurrence = "FREQ=DAILY;UNTIL=20260505T235959"
     assert event_occurs_on_date(event, datetime.date(2026, 5, 10)) is False
 
 
 def test_event_occurs_on_date_until_invalid_continues():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 1, 9, 0)
     event.recurrence = "FREQ=DAILY;UNTIL=BAD"
     # Should still match daily.
@@ -112,14 +112,14 @@ def test_event_occurs_on_date_until_invalid_continues():
 
 
 def test_event_occurs_on_date_daily_interval_one():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 1, 9, 0)
     event.recurrence = "FREQ=DAILY"
     assert event_occurs_on_date(event, datetime.date(2026, 5, 5)) is True
 
 
 def test_event_occurs_on_date_daily_interval_three_match():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 1, 9, 0)
     event.recurrence = "FREQ=DAILY;INTERVAL=3"
     # Days 1, 4, 7, ...
@@ -128,7 +128,7 @@ def test_event_occurs_on_date_daily_interval_three_match():
 
 
 def test_event_occurs_on_date_weekly_byday_match():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     # 2026-05-04 is a Monday.
     event.starts_at = datetime.datetime(2026, 5, 4, 9, 0)
     event.recurrence = "FREQ=WEEKLY;BYDAY=MO,WE"
@@ -138,15 +138,25 @@ def test_event_occurs_on_date_weekly_byday_match():
     assert event_occurs_on_date(event, datetime.date(2026, 5, 5)) is False
 
 
-def test_event_occurs_on_date_weekly_no_byday_always_matches():
-    event = MagicMock()
+def test_event_occurs_on_date_weekly_no_byday_uses_start_weekday():
+    # A FREQ=WEEKLY rule with no BYDAY must recur only on the event's start
+    # weekday (RFC 5545 DTSTART semantics), not every day of the week. The SDK
+    # omits BYDAY when an event is created without explicit recurrence_days, so
+    # this is the common case for "Out of Office" blocks created from a start
+    # datetime — matching every day silently zeroed out other days' slots.
+    event = MagicMock(recurrence_ends_at=None)
+    # 2026-05-04 is a Monday.
     event.starts_at = datetime.datetime(2026, 5, 4, 9, 0)
     event.recurrence = "FREQ=WEEKLY"
+    # Following Monday — matches the start weekday.
     assert event_occurs_on_date(event, datetime.date(2026, 5, 11)) is True
+    # Tuesday / Wednesday — different weekday, must NOT match.
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 5)) is False
+    assert event_occurs_on_date(event, datetime.date(2026, 5, 6)) is False
 
 
 def test_event_occurs_on_date_weekly_interval_skip():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 4, 9, 0)
     event.recurrence = "FREQ=WEEKLY;INTERVAL=2"
     # 1 week later (skipped) — should not match
@@ -156,23 +166,46 @@ def test_event_occurs_on_date_weekly_interval_skip():
 
 
 def test_event_occurs_on_date_unsupported_freq():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 1, 9, 0)
     event.recurrence = "FREQ=YEARLY"
     assert event_occurs_on_date(event, datetime.date(2027, 5, 1)) is False
 
 
+def test_event_occurs_on_date_recurrence_ends_at_stops_series():
+    # Canvas stores the recurrence end in the recurrence_ends_at column, not as
+    # an UNTIL inside the RRULE. A bounded "Out of Office" (ends June 6) must
+    # NOT recur past that date — otherwise it zeroes out availability forever.
+    event = MagicMock()
+    event.starts_at = datetime.datetime(2026, 6, 1, 8, 0)
+    event.recurrence = "RRULE:FREQ=DAILY"
+    event.recurrence_ends_at = datetime.datetime(2026, 6, 6, 4, 59)
+    # Within the window — still blocks.
+    assert event_occurs_on_date(event, datetime.date(2026, 6, 3)) is True
+    # After the recurrence end — must not block.
+    assert event_occurs_on_date(event, datetime.date(2026, 6, 15)) is False
+
+
+def test_event_occurs_on_date_no_recurrence_ends_at_runs_indefinitely():
+    # When recurrence_ends_at is unset, a daily rule keeps recurring.
+    event = MagicMock()
+    event.starts_at = datetime.datetime(2026, 6, 1, 8, 0)
+    event.recurrence = "RRULE:FREQ=DAILY"
+    event.recurrence_ends_at = None
+    assert event_occurs_on_date(event, datetime.date(2026, 6, 15)) is True
+
+
 # _event_window_on_date --------------------------------------------------
 
 def test_event_window_no_dates():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = None
     event.ends_at = None
     assert _event_window_on_date(event, datetime.date(2026, 5, 7), ZoneInfo("UTC")) is None
 
 
 def test_event_window_normal_day():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 4, 14, 0, tzinfo=datetime.timezone.utc)
     event.ends_at = datetime.datetime(2026, 5, 4, 18, 0, tzinfo=datetime.timezone.utc)
     win = _event_window_on_date(event, datetime.date(2026, 5, 7), ZoneInfo("UTC"))
@@ -182,7 +215,7 @@ def test_event_window_normal_day():
 
 
 def test_event_window_spans_midnight_caps():
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     # 23:00 local Monday → 02:00 local Tuesday
     event.starts_at = datetime.datetime(2026, 5, 4, 23, 0, tzinfo=datetime.timezone.utc)
     event.ends_at = datetime.datetime(2026, 5, 5, 2, 0, tzinfo=datetime.timezone.utc)
@@ -193,7 +226,7 @@ def test_event_window_spans_midnight_caps():
 
 def test_event_window_end_before_start_returns_none():
     # Same-day event with end <= start.
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.starts_at = datetime.datetime(2026, 5, 4, 18, 0, tzinfo=datetime.timezone.utc)
     event.ends_at = datetime.datetime(2026, 5, 4, 18, 0, tzinfo=datetime.timezone.utc)
     win = _event_window_on_date(event, datetime.date(2026, 5, 7), ZoneInfo("UTC"))
@@ -219,7 +252,7 @@ def test_get_availability_windows_keys_events_by_pk_not_id():
     cal.title = "Bob: Clinic: Loc"
     cal.timezone = "UTC"
 
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.calendar_id = 99  # FK column = pk
     event.starts_at = datetime.datetime(2026, 5, 7, 9, 0, tzinfo=datetime.timezone.utc)
     event.ends_at = datetime.datetime(2026, 5, 7, 17, 0, tzinfo=datetime.timezone.utc)
@@ -405,7 +438,7 @@ def test_get_availability_windows_full_path():
     cal.title = "Bob: Clinic: Loc"
     cal.timezone = "UTC"
 
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.calendar_id = 42  # FK column stores the pk
     event.starts_at = datetime.datetime(2026, 5, 7, 9, 0, tzinfo=datetime.timezone.utc)
     event.ends_at = datetime.datetime(2026, 5, 7, 17, 0, tzinfo=datetime.timezone.utc)
@@ -535,7 +568,7 @@ def test_get_blocking_calendar_events_returns_blocks():
     cal.id = "cal-1"
     cal.title = "Bob: admin"
 
-    event = MagicMock()
+    event = MagicMock(recurrence_ends_at=None)
     event.calendar_id = 7
     event.starts_at = datetime.datetime(2026, 5, 7, 12, 0, tzinfo=datetime.timezone.utc)
     event.ends_at = datetime.datetime(2026, 5, 7, 13, 0, tzinfo=datetime.timezone.utc)
