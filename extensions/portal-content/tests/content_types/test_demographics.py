@@ -19,7 +19,7 @@ def _patient(registered=True, pharmacy=None):
     patient.user = user
     addr = MagicMock(
         line1="1 Main St", line2="Apt 2", city="Indy",
-        state_code="IN", state="Indiana", postal_code="46077",
+        state_code="IN", state="active", postal_code="46077",
     )
     patient.addresses.all.return_value = [addr]
     patient.preferred_pharmacy = pharmacy
@@ -52,10 +52,29 @@ def test_get_demographics_maps_all_sections(care_team):
     assert result["date_of_birth"] == "May 01, 1990"
     assert result["email"] == "jane@example.com"
     assert result["addresses"][0]["line1"] == "1 Main St"
-    assert result["addresses"][0]["state"] == "IN"  # state_code preferred
+    assert result["addresses"][0]["state"] == "IN"  # geographic state_code
     assert result["care_team"][0]["name"] == "Dr. Ann Lee, MD"
     assert result["care_team"][0]["role"] == "PCP"
     assert result["preferred_pharmacy"] == "CVS Main"
+
+
+@patch("portal_content.content_types.demographics.CareTeamMembership")
+def test_address_without_state_code_does_not_leak_lifecycle_status(care_team):
+    # When state_code is empty, the geographic state is simply blank - the
+    # address record's lifecycle status (active/deleted) must never surface.
+    care_team.objects.values.return_value.filter.return_value = []
+    patient = _patient()
+    patient.addresses.all.return_value = [
+        MagicMock(line1="9 Red Keep Blvd", line2="", city="Kings Landing",
+                  state_code="", state="active", postal_code="20001")
+    ]
+    p, _ = _patch_patient(patient)
+    try:
+        result = demographics.get_demographics("p")
+    finally:
+        p.stop()
+
+    assert result["addresses"][0]["state"] == ""
 
 
 @patch("portal_content.content_types.demographics.CareTeamMembership")

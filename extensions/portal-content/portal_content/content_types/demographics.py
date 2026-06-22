@@ -46,7 +46,9 @@ def _addresses(patient: Patient) -> list[dict]:
                 "line1": addr.line1,
                 "line2": addr.line2,
                 "city": addr.city,
-                "state": addr.state_code or addr.state,
+                # state_code is the geographic 2-letter code; addr.state is the
+                # record's lifecycle status (active/deleted), never a geography.
+                "state": addr.state_code,
                 "postal_code": addr.postal_code,
             }
         )

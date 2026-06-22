@@ -74,13 +74,17 @@ def test_fetch_returns_bytes_and_content_type(http_cls):
     assert ctype == "application/pdf"
 
 
+@patch("portal_content.shared.fhir_documents.log")
 @patch("portal_content.shared.fhir_documents.Http")
-def test_fetch_rejects_wrong_patient(http_cls):
+def test_fetch_rejects_wrong_patient(http_cls, mock_log):
     http = http_cls.return_value
     http.post.return_value = _token_resp()
     http.get.side_effect = [_meta(subject="Patient/someone-else")]
     with pytest.raises(fhir_documents.DocumentFetchError):
         fhir_documents.fetch_document_content("inst", "c", "s", "p1", "ref1")
+    # the denial log must not leak the document owner's identifier (PHI)
+    logged = " ".join(str(c.args) for c in mock_log.warning.call_args_list)
+    assert "someone-else" not in logged
 
 
 @patch("portal_content.shared.fhir_documents.Http")

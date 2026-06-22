@@ -128,7 +128,9 @@ def fetch_document_content(
 
     subject = resource.get("subject", {}).get("reference", "")
     if not subject.endswith(patient_id):
-        log.warning(f"Patient {patient_id} requested document {reference_id} owned by {subject!r}")
+        # Log only the denial fact - never the owner's subject reference, which
+        # is a different patient's identifier (PHI).
+        log.warning(f"Patient {patient_id} denied access to document {reference_id} they do not own")
         raise DocumentFetchError("Document not available")
 
     content = resource.get("content", [])
