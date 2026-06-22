@@ -113,7 +113,8 @@ def test_responds_to_expected_events() -> None:
         EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
         EventType.Name(EventType.BILLING_LINE_ITEM_CREATED),
         EventType.Name(EventType.INTERVIEW_CREATED),
-        EventType.Name(EventType.INSTRUCT_COMMAND__POST_COMMIT),
+        EventType.Name(EventType.INSTRUCTION_CREATED),
+        EventType.Name(EventType.INSTRUCTION_UPDATED),
     ):
         assert name in ClinicalQualityMeasure138v6.RESPONDS_TO
 
@@ -145,9 +146,9 @@ def test_health_behavioral_assessment_value_sets_carry_expected_cpt_codes() -> N
 def test_resolve_patient_id_uses_event_context_for_unsupported_events() -> None:
     """When patient_id_from_target raises, fall back to event.context['patient_id']."""
     event = MagicMock()
-    event.type = EventType.INSTRUCT_COMMAND__POST_COMMIT
+    event.type = EventType.INTERVIEW_CREATED
     event.target = MagicMock()
-    event.target.id = "command-id"
+    event.target.id = "interview-id"
     event.context = {"patient_id": "ctx-patient"}
     protocol = ClinicalQualityMeasure138v6(event=event)
 
@@ -332,6 +333,55 @@ def test_in_numerator_population_2_false_when_user_without_intervention() -> Non
         protocol.in_numerator()
         assert protocol._populations["population 2"].in_numerator is False
         assert protocol._populations["population 3"].in_numerator is False
+
+
+# ---------------------------------------------------------------------------
+# tobacco_cessation_intervention_counseling
+# ---------------------------------------------------------------------------
+
+
+def test_counseling_returns_none_when_no_positive_screening() -> None:
+    """Without a tobacco-user screening there is no counseling lookup."""
+    protocol = _make_protocol(now=arrow.get("2019-04-01"))
+    with patch.object(
+        ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=None
+    ):
+        assert protocol.tobacco_cessation_intervention_counseling is None
+
+
+def test_counseling_returns_instruction_datetime_when_found() -> None:
+    """A matching Instruction returns its note datetime_of_service as an arrow."""
+    protocol = _make_protocol(now=arrow.get("2019-04-01"))
+    adult = _fake_patient(birth_date=date(1980, 1, 1))
+    screen_date = arrow.get(datetime(2019, 2, 5, tzinfo=timezone.utc))
+    counseling_at = datetime(2019, 2, 10, tzinfo=timezone.utc)
+    instruction = MagicMock()
+    instruction.note.datetime_of_service = counseling_at
+    with (
+        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
+        patch.object(
+            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
+        ),
+        patch(f"{PROTOCOL_MODULE}.Instruction") as instruction_cls,
+    ):
+        instruction_cls.objects.for_patient.return_value.committed.return_value.find.return_value.filter.return_value.order_by.return_value.first.return_value = instruction
+        assert protocol.tobacco_cessation_intervention_counseling == arrow.get(counseling_at)
+
+
+def test_counseling_returns_none_when_no_instruction_in_window() -> None:
+    """An empty queryset yields None even after a positive screening."""
+    protocol = _make_protocol(now=arrow.get("2019-04-01"))
+    adult = _fake_patient(birth_date=date(1980, 1, 1))
+    screen_date = arrow.get(datetime(2019, 2, 5, tzinfo=timezone.utc))
+    with (
+        patch.object(ClinicalQualityMeasure138v6, "patient", new=adult),
+        patch.object(
+            ClinicalQualityMeasure138v6, "tobacco_use_screening_user", new=screen_date
+        ),
+        patch(f"{PROTOCOL_MODULE}.Instruction") as instruction_cls,
+    ):
+        instruction_cls.objects.for_patient.return_value.committed.return_value.find.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        assert protocol.tobacco_cessation_intervention_counseling is None
 
 
 # ---------------------------------------------------------------------------

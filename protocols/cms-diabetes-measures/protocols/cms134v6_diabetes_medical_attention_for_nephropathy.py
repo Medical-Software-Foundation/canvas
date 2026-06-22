@@ -9,6 +9,7 @@ measurement period:
   * a "dismissing" comorbid condition (hypertensive CKD, kidney failure,
     glomerulonephritis/nephrotic syndrome, diabetic nephropathy, proteinuria)
   * a kidney transplant condition
+  * a dialysis-education instruction
   * a urine protein lab
 
 https://ecqi.healthit.gov/sites/default/files/ecqm/measures/CMS134v6.html
@@ -22,6 +23,7 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
 from canvas_sdk.v1.data.condition import Condition
+from canvas_sdk.v1.data.instruction import Instruction
 from canvas_sdk.v1.data.lab import LabReport, LabValue
 from canvas_sdk.v1.data.medication import Medication
 from canvas_sdk.v1.data.referral import ReferralReport
@@ -32,6 +34,7 @@ from canvas_sdk.value_set.v2022.condition import (
     KidneyFailure,
     Proteinuria,
 )
+from canvas_sdk.value_set.v2022.intervention import DialysisEducation
 from canvas_sdk.value_set.v2022.laboratory_test import UrineProteinTests
 from canvas_sdk.value_set.v2022.procedure import KidneyTransplant
 from canvas_sdk.value_set.value_set import ValueSet
@@ -90,6 +93,8 @@ class ClinicalQualityMeasure134v6(DiabetesQualityMeasure):
     RESPONDS_TO = [
         EventType.Name(EventType.CONDITION_CREATED),
         EventType.Name(EventType.CONDITION_UPDATED),
+        EventType.Name(EventType.INSTRUCTION_CREATED),
+        EventType.Name(EventType.INSTRUCTION_UPDATED),
         EventType.Name(EventType.LAB_REPORT_CREATED),
         EventType.Name(EventType.LAB_REPORT_UPDATED),
         EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
@@ -137,6 +142,22 @@ class ClinicalQualityMeasure134v6(DiabetesQualityMeasure):
             if codes:
                 pairs.extend((url, code) for code in codes)
         return pairs
+
+    def _last_dialysis_education(self) -> Instruction | None:
+        """Most recent in-period dialysis-education Instruction."""
+        return (
+            Instruction.objects.for_patient(self.patient.id)
+            .committed()
+            .find(DialysisEducation)
+            .filter(
+                note__datetime_of_service__range=(
+                    self.timeframe.start.datetime,
+                    self.timeframe.end.datetime,
+                ),
+            )
+            .order_by("-note__datetime_of_service")
+            .first()
+        )
 
     def _last_urine_protein_lab(self) -> LabReport | None:
         """Most recent in-period urine protein LabReport."""
@@ -201,6 +222,14 @@ class ClinicalQualityMeasure134v6(DiabetesQualityMeasure):
         )
         if kidney_transplant:
             self.message = f"{first_name} has diabetes and had a Kidney Transplant"
+            return True
+
+        dialysis_education = self._last_dialysis_education()
+        if dialysis_education:
+            self.message = (
+                f"{first_name} has diabetes and had an ESRD Monthly Outpatient Services "
+                f"{self.display_date(arrow.get(dialysis_education.note.datetime_of_service))}"
+            )
             return True
 
         urine_protein = self._last_urine_protein_lab()

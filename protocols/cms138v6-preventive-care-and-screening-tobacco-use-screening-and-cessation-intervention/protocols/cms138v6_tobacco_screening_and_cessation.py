@@ -28,7 +28,7 @@ from canvas_sdk.events import EventType
 from canvas_sdk.protocols import ClinicalQualityMeasure
 from canvas_sdk.protocols.timeframe import Timeframe
 from canvas_sdk.v1.data.billing import BillingLineItem
-from canvas_sdk.v1.data.command import Command
+from canvas_sdk.v1.data.instruction import Instruction
 from canvas_sdk.v1.data.medication import Medication
 from canvas_sdk.v1.data.patient import Patient
 from canvas_sdk.v1.data.questionnaire import Interview
@@ -157,7 +157,8 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
         EventType.Name(EventType.MEDICATION_LIST_ITEM_CREATED),
         EventType.Name(EventType.BILLING_LINE_ITEM_CREATED),
         EventType.Name(EventType.INTERVIEW_CREATED),
-        EventType.Name(EventType.INSTRUCT_COMMAND__POST_COMMIT),
+        EventType.Name(EventType.INSTRUCTION_CREATED),
+        EventType.Name(EventType.INSTRUCTION_UPDATED),
     ]
 
     MINIMUM_AGE = 18
@@ -184,7 +185,7 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
         """Patient id for the current event.
 
         Falls back to ``event.context['patient_id']`` for event types
-        (INTERVIEW_CREATED, INSTRUCT_COMMAND__POST_COMMIT) that
+        (e.g. INTERVIEW_CREATED) that
         ``ClinicalQualityMeasure.patient_id_from_target`` does not handle.
         """
         if self._patient_id:
@@ -259,27 +260,20 @@ class ClinicalQualityMeasure138v6(ClinicalQualityMeasure):
         if not screening_at:
             return None
 
-        cessation_codes = TobaccoUseCessationCounseling.values.get("SNOMEDCT", set())
-        counseling_commands = Command.objects.filter(
-            patient_id=self.patient.dbid,
-            schema_key="instruct",
-            state="committed",
-            created__range=(
-                self.timeframe.start.datetime,
-                self.timeframe.end.datetime,
-            ),
-        ).order_by("-created")
-
-        for command in counseling_commands:
-            data = command.data or {}
-            coding = data.get("coding") or data.get("instruction") or {}
-            if isinstance(coding, dict):
-                code = coding.get("code") or coding.get("value")
-                if code and code in cessation_codes:
-                    counseling_at = arrow.get(command.created)
-                    if screening_at <= counseling_at < self.timeframe.end:
-                        return counseling_at
-        return None
+        instruction = (
+            Instruction.objects.for_patient(self.patient.id)
+            .committed()
+            .find(TobaccoUseCessationCounseling)
+            .filter(
+                note__datetime_of_service__gte=screening_at.datetime,
+                note__datetime_of_service__lt=self.timeframe.end.datetime,
+            )
+            .order_by("note__datetime_of_service")
+            .first()
+        )
+        if not instruction:
+            return None
+        return arrow.get(instruction.note.datetime_of_service)
 
     @cached_property
     def tobacco_cessation_intervention_medication(self) -> arrow.Arrow | None:

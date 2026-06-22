@@ -48,15 +48,6 @@ The legacy workflow-kit protocol has direct access to in-memory record sets
 a clean 1:1 mapping in the Canvas SDK. The following gaps were introduced
 during the port:
 
-- **`tobacco_cessation_intervention_counseling`** now scans
-  `Command.objects.filter(schema_key="instruct", state="committed")` for the
-  patient within the measurement window and inspects each command's `data`
-  JSON for a `coding.code` (or `coding.value`) that falls in the
-  `TobaccoUseCessationCounseling` SNOMED set. The legacy protocol matched on
-  an `Instruction` record set with a known structure; if a customer plugin
-  writes instruct commands with a different `data` shape, counseling will not
-  be detected. Confirm against real instruct command payloads on a target
-  customer before relying on this branch.
 - The legacy `add_prescribe_recommendation` /
   `add_instruction_recommendation` / `add_interview_recommendation`
   helpers built a `command.filter.coding` payload that constrained the
@@ -83,8 +74,8 @@ during the port:
 - `events.HEALTH_MAINTENANCE` does not exist in the SDK. The protocol
   responds to `PATIENT_CREATED`, `PATIENT_UPDATED`, `CONDITION_CREATED`,
   `MEDICATION_LIST_ITEM_CREATED`, `BILLING_LINE_ITEM_CREATED`,
-  `INTERVIEW_CREATED`, and `INSTRUCT_COMMAND__POST_COMMIT` instead, which
-  collectively cover the relevant data-change paths.
+  `INTERVIEW_CREATED`, `INSTRUCTION_CREATED`, and `INSTRUCTION_UPDATED`
+  instead, which collectively cover the relevant data-change paths.
 - The legacy `HealthBehavioralAssessmentIndividual`,
   `HealthAndBehavioralAssessmentInitial`, and
   `HealthAndBehavioralAssessmentReassessment` value sets only exist in

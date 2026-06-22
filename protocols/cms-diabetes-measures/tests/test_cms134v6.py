@@ -81,6 +81,31 @@ def test_in_numerator_returns_true_when_dialysis_referral(protocol) -> None:
     assert "Dialysis Related Service" in protocol.message
 
 
+def test_in_numerator_returns_true_when_dialysis_education(protocol) -> None:
+    """A dialysis-education Instruction in the period satisfies the numerator."""
+    instruction = SimpleNamespace(
+        note=SimpleNamespace(datetime_of_service=arrow.get("2018-07-15").datetime),
+    )
+    queryset = MagicMock()
+    queryset.exists.return_value = False
+    with (
+        patch.object(protocol, "_last_dialysis_report", return_value=None),
+        patch(
+            "protocols.cms134v6_diabetes_medical_attention_for_nephropathy.Medication.objects"
+        ) as med_objects,
+        patch(
+            "protocols.cms134v6_diabetes_medical_attention_for_nephropathy.Condition.objects"
+        ) as cond_objects,
+        patch.object(protocol, "_last_dialysis_education", return_value=instruction),
+        patch.object(protocol, "_last_urine_protein_lab", return_value=None),
+    ):
+        med_objects.for_patient.return_value.active.return_value.find.return_value.filter.return_value.filter.return_value.exists.return_value = False
+        cond_objects.for_patient.return_value.active.return_value.find.return_value.filter.return_value.exists.return_value = False
+        assert protocol.in_numerator() is True
+    assert protocol.message is not None
+    assert "ESRD Monthly Outpatient Services" in protocol.message
+
+
 def test_in_numerator_returns_true_when_urine_protein_lab(protocol) -> None:
     """A urine protein lab in the period satisfies (and sets due_in)."""
     report = SimpleNamespace(original_date=arrow.get("2018-08-10").datetime)
@@ -94,6 +119,7 @@ def test_in_numerator_returns_true_when_urine_protein_lab(protocol) -> None:
         patch(
             "protocols.cms134v6_diabetes_medical_attention_for_nephropathy.Condition.objects"
         ) as cond_objects,
+        patch.object(protocol, "_last_dialysis_education", return_value=None),
         patch.object(protocol, "_last_urine_protein_lab", return_value=report),
     ):
         med_objects.for_patient.return_value.active.return_value.find.return_value.filter.return_value.filter.return_value.exists.return_value = False
@@ -113,6 +139,7 @@ def test_in_numerator_returns_false_when_nothing_qualifies(protocol) -> None:
         patch(
             "protocols.cms134v6_diabetes_medical_attention_for_nephropathy.Condition.objects"
         ) as cond_objects,
+        patch.object(protocol, "_last_dialysis_education", return_value=None),
         patch.object(protocol, "_last_urine_protein_lab", return_value=None),
     ):
         med_objects.for_patient.return_value.active.return_value.find.return_value.filter.return_value.filter.return_value.exists.return_value = False

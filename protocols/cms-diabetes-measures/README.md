@@ -49,10 +49,12 @@ act on directly from the card.
   `InterviewQuestionResponse` row points at a `ResponseOption` whose `code` is in the
   value set. The SDK's `Interview` queryset has no `find(value_set)` shortcut, so the
   value set is flattened to its code values inline.
-- CMS134v6's "instruction" check (DialysisEducation) is dropped: the SDK has no
-  `Instruction` model. The other five numerator pathways (dialysis referral, ACE
-  inhibitor active medication, dismissing condition, kidney transplant, urine protein
-  lab) are all preserved.
+- CMS134v6's "instruction" check (DialysisEducation) reads
+  `canvas_sdk.v1.data.instruction.Instruction`, filtering on the related
+  `note.datetime_of_service` to match the legacy `noteTimestamp` semantics. All
+  six numerator pathways (dialysis referral, ACE inhibitor active medication,
+  dismissing condition, kidney transplant, dialysis-education instruction, urine
+  protein lab) are preserved.
 
 ## Tests
 
