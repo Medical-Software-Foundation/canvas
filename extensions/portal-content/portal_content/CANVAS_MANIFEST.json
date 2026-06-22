@@ -1,55 +1,49 @@
 {
-    "sdk_version": "0.65.0",
-    "plugin_version": "0.0.2",
+    "sdk_version": "0.169.1",
+    "plugin_version": "0.1.0",
     "name": "portal_content",
-    "description": "Unified patient portal for educational materials, imaging reports, lab reports, and visit notes",
+    "description": "Patient portal: My Records (visit summaries with After Visit Summary, lab and imaging reports, letters) and My Profile (information and insurance on file).",
+    "url_permissions": [],
     "components": {
-        "protocols": [
-            {
-                "class": "portal_content.api.portal_api:PortalContentAPI",
-                "description": "API handler for all patient portal content types"
-            }
-        ],
         "applications": [
             {
-                "class": "portal_content.views.education_app:EducationMaterialsApp",
-                "icon": "assets/education_icon.png",
+                "class": "portal_content.applications.records_app:RecordsApp",
+                "name": "My Records",
+                "description": "View your visit summaries, lab and imaging reports, and letters.",
                 "scope": "portal_menu_item",
-                "name": "My Learning Materials",
-                "description": "View educational materials"
+                "icon": "assets/records_icon.png",
+                "menu_order": 1
             },
             {
-                "class": "portal_content.views.imaging_app:ImagingReportsApp",
-                "icon": "assets/imaging_icon.png",
+                "class": "portal_content.applications.profile_app:ProfileApp",
+                "name": "My Profile",
+                "description": "View the personal information and insurance Canvas has on file for you.",
                 "scope": "portal_menu_item",
-                "name": "My Imaging Reports",
-                "description": "View imaging reports"
-            },
-            {
-                "class": "portal_content.views.labs_app:LabReportsApp",
-                "icon": "assets/labs_icon.png",
-                "scope": "portal_menu_item",
-                "name": "My Lab Reports",
-                "description": "View lab reports"
-            },
-            {
-                "class": "portal_content.views.visits_app:VisitNotesApp",
-                "icon": "assets/visits_icon.png",
-                "scope": "portal_menu_item",
-                "name": "My Visit Notes",
-                "description": "View visit note summaries"
+                "icon": "assets/profile_icon.png",
+                "menu_order": 2
             }
-        ]
+        ],
+        "handlers": [
+            {
+                "class": "portal_content.handlers.portal_api:PortalContentAPI",
+                "description": "Serves the portal pages, static assets, and patient-scoped data and document endpoints."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
     },
-    "secrets": [
-        "ENABLED_COMPONENTS",
-        "CLIENT_ID",
-        "CLIENT_SECRET",
-        "NOTE_TYPES"
+    "variables": [
+        {"name": "ENABLED_COMPONENTS", "sensitive": false},
+        {"name": "NOTE_TYPES", "sensitive": false},
+        {"name": "HOLD_UNREVIEWED_RESULTS", "sensitive": false},
+        {"name": "CLIENT_ID", "sensitive": true},
+        {"name": "CLIENT_SECRET", "sensitive": true}
     ],
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "diagram": false,
     "readme": "./README.md"
 }
