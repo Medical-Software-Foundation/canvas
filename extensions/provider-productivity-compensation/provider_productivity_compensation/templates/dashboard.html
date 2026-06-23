@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Provider Productivity Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            padding: 24px;
+            color: #333;
+        }
+
+        .dashboard-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding: 16px 20px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        .dashboard-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a2e;
+            letter-spacing: -0.3px;
+        }
+
+        .header-filters {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .provider-select {
+            padding: 7px 32px 7px 34px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            background:
+                url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 7.333A2.667 2.667 0 1 0 8 2a2.667 2.667 0 0 0 0 5.333ZM13.333 14v-1.333A2.667 2.667 0 0 0 10.667 10H5.333a2.667 2.667 0 0 0-2.666 2.667V14' stroke='%236b7280' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat left 12px center,
+                url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%239ca3af' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center,
+                #fff;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+            min-width: 200px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .provider-select:hover {
+            border-color: #9ca3af;
+        }
+
+        .provider-select:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.12);
+        }
+
+        /* --- Date Range Dropdown --- */
+        .dr-wrapper {
+            position: relative;
+        }
+
+        .dr-trigger {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            user-select: none;
+        }
+
+        .dr-trigger:hover {
+            border-color: #9ca3af;
+        }
+
+        .dr-trigger.open {
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.12);
+        }
+
+        .dr-trigger-icon {
+            display: flex;
+            color: #6b7280;
+        }
+
+        .dr-trigger-chevron {
+            display: flex;
+            color: #9ca3af;
+            margin-left: 4px;
+            transition: transform 0.2s ease;
+        }
+
+        .dr-trigger.open .dr-trigger-chevron {
+            transform: rotate(180deg);
+        }
+
+        .dr-popover {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+            z-index: 100;
+            display: none;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(-4px);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+        }
+
+        .dr-popover.visible {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .dr-presets {
+            width: 180px;
+            padding: 6px;
+            border-right: 1px solid #f0f0f0;
+        }
+
+        .dr-preset-item {
+            display: block;
+            width: 100%;
+            padding: 9px 14px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 500;
+            color: #4b5563;
+            cursor: pointer;
+            transition: background 0.12s, color 0.12s;
+        }
+
+        .dr-preset-item:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .dr-preset-item.active {
+            background: #eff6ff;
+            color: #1a73e8;
+            font-weight: 600;
+        }
+
+        .dr-custom-panel {
+            width: 0;
+            overflow: hidden;
+            transition: width 0.2s ease, padding 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .dr-custom-panel.expanded {
+            width: 240px;
+            padding: 20px;
+        }
+
+        .dr-custom-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #9ca3af;
+            margin-bottom: 6px;
+        }
+
+        .dr-custom-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            background: #fafafa;
+            transition: border-color 0.15s, background 0.15s;
+        }
+
+        .dr-custom-input:focus {
+            outline: none;
+            border-color: #1a73e8;
+            background: #fff;
+            box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+        }
+
+        .dr-custom-divider {
+            height: 12px;
+        }
+
+        .dr-apply-btn {
+            margin-top: 14px;
+            width: 100%;
+            padding: 9px 0;
+            border: none;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .dr-apply-btn:hover {
+            background: #2d2d4e;
+        }
+
+        .cards-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .cards-row.four-cards {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+        }
+
+        .card-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .card-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a2e;
+            line-height: 1;
+        }
+
+        .card-value.clickable {
+            cursor: pointer;
+            color: #1d4ed8;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .card-value.clickable:hover {
+            text-decoration: underline;
+        }
+
+        .notes-card .notes-split {
+            display: flex;
+            gap: 16px;
+            align-items: baseline;
+        }
+
+        .notes-segment {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .notes-segment-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .notes-segment-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .notes-divider {
+            font-size: 24px;
+            color: #ccc;
+            font-weight: 300;
+            align-self: center;
+        }
+
+        .section-card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .section-badge {
+            font-size: 12px;
+            font-weight: 500;
+            background: #e8f0fe;
+            color: #1a73e8;
+            border-radius: 12px;
+            padding: 2px 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            /* auto layout sizes columns to their content so nowrap cells
+               (date, long patient names) never overflow into neighbors */
+            table-layout: auto;
+        }
+
+        th {
+            background-color: #fafafa;
+            padding: 10px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 1px solid #f0f0f0;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 12px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid #f7f7f7;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .dos {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .dos-time {
+            color: #888;
+        }
+
+        tr:hover td {
+            background: #fafbff;
+        }
+
+        .cpt-code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-weight: 600;
+            color: #1d4ed8;
+            cursor: pointer;
+        }
+
+        .cpt-code:hover {
+            text-decoration: underline;
+        }
+
+        .cpt-count {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .patient-link {
+            color: #1d4ed8;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .patient-link:hover {
+            text-decoration: underline;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-signed {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .status-open {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        td.cpt-cell {
+            white-space: normal;
+        }
+
+        .cpt-tag {
+            display: inline-block;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            background: #e8f0fe;
+            color: #1d4ed8;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin: 2px 2px;
+        }
+
+        .cpt-detail-row {
+            background: #f8f9fa;
+        }
+
+        .cpt-detail-row td {
+            padding: 0;
+        }
+
+        .cpt-detail-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .cpt-detail-table td {
+            padding: 8px 20px;
+            font-size: 13px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .cpt-detail-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .earnings-value {
+            font-weight: 600;
+            color: #2e7d32;
+        }
+
+        .empty-state {
+            padding: 32px 20px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .section-header.collapsible {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-header.collapsible:hover {
+            background: #fafafa;
+        }
+
+        .collapse-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            background: #f3f4f6;
+            margin-right: 10px;
+            transition: background 0.15s, transform 0.2s ease;
+            flex-shrink: 0;
+            color: #6b7280;
+        }
+
+        .section-header.collapsible:hover .collapse-toggle {
+            background: #e5e7eb;
+        }
+
+        .collapse-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-content {
+            /* scroll wide tables horizontally; keep vertical clipped for the
+               collapse animation */
+            overflow-x: auto;
+            overflow-y: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .collapsible-content.collapsed {
+            max-height: 0 !important;
+        }
+
+        .loading {
+            padding: 24px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .error-message {
+            padding: 16px 20px;
+            background: #fce8e6;
+            color: #d93025;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            body { padding: 16px; }
+
+            /* Stack title above filters; let filters share a full-width row */
+            .dashboard-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            .header-filters {
+                width: 100%;
+                flex-wrap: wrap;
+                justify-content: space-between;
+            }
+            .provider-select {
+                flex: 1 1 160px;
+                min-width: 0;
+            }
+
+            /* Date-range popover stacks and stays inside the viewport */
+            .dr-popover {
+                flex-direction: column;
+                max-width: calc(100vw - 32px);
+            }
+            .dr-presets {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            .dr-custom-panel.expanded {
+                width: 100%;
+                padding: 16px 20px 20px;
+            }
+
+            /* Summary cards drop from 3/4-across to 2-across */
+            .cards-row,
+            .cards-row.four-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            body { padding: 12px; }
+            .dashboard-title { font-size: 20px; }
+
+            /* One card per row on phones */
+            .cards-row,
+            .cards-row.four-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="dashboard-title">Provider Productivity</div>
+        <div class="header-filters">
+            <select id="provider-select" class="provider-select" style="display:none" onchange="setProvider(this.value)">
+            </select>
+            <div class="dr-wrapper" id="dr-wrapper">
+                <button class="dr-trigger" id="dr-trigger" onclick="toggleDateDropdown()">
+                    <span class="dr-trigger-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.333 1.333v1.334M10.667 1.333v1.334M2 6.667h12M3.333 2.667h9.334c.736 0 1.333.597 1.333 1.333v9.333c0 .737-.597 1.334-1.333 1.334H3.333A1.333 1.333 0 0 1 2 13.333V4c0-.736.597-1.333 1.333-1.333Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    <span id="dr-trigger-label">Today</span>
+                    <span class="dr-trigger-chevron"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </button>
+                <div class="dr-popover" id="dr-popover">
+                    <div class="dr-presets">
+                        <button class="dr-preset-item active" data-period="day" onclick="selectPreset('day', 'Today')">Today</button>
+                        <button class="dr-preset-item" data-period="week" onclick="selectPreset('week', 'This Week')">This Week</button>
+                        <button class="dr-preset-item" data-period="month" onclick="selectPreset('month', 'This Month')">This Month</button>
+                        <button class="dr-preset-item" data-period="this_pay_period" onclick="selectPreset('this_pay_period', 'This Pay Period')">This Pay Period</button>
+                        <button class="dr-preset-item" data-period="last_pay_period" onclick="selectPreset('last_pay_period', 'Last Pay Period')">Last Pay Period</button>
+                        <button class="dr-preset-item" data-period="custom" onclick="selectCustomPreset()">Custom</button>
+                    </div>
+                    <div class="dr-custom-panel" id="dr-custom-panel">
+                        <div>
+                            <div class="dr-custom-label">Start date</div>
+                            <input type="date" class="dr-custom-input" id="dr-start-date">
+                        </div>
+                        <div class="dr-custom-divider"></div>
+                        <div>
+                            <div class="dr-custom-label">End date</div>
+                            <input type="date" class="dr-custom-input" id="dr-end-date">
+                        </div>
+                        <button class="dr-apply-btn" onclick="applyCustomRange()">Apply</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-container"></div>
+
+    <div id="main-content">
+        <div class="loading">Loading metrics...</div>
+    </div>
+
+    <script>
+        let currentPeriod = 'day';
+        let currentProviderId = '';
+        let patientsCollapsed = false;
+        let expandedCpt = null;
+        let showEarnings = false;
+        let billingCollapsed = false;
+        let customStartDate = '';
+        let customEndDate = '';
+        let dropdownOpen = false;
+        let requestSeq = 0;
+        const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        function getPluginApiBase() {
+            return '/plugin-io/api/provider_productivity_compensation';
+        }
+
+        function buildParams(extra = {}) {
+            const params = new URLSearchParams({ period: currentPeriod, tz: userTimezone, ...extra });
+            if (currentProviderId) {
+                params.set('provider_id', currentProviderId);
+            }
+            if (currentPeriod === 'custom' && customStartDate && customEndDate) {
+                params.set('start_date', customStartDate);
+                params.set('end_date', customEndDate);
+            }
+            return params.toString();
+        }
+
+        function toggleDateDropdown() {
+            dropdownOpen = !dropdownOpen;
+            const trigger = document.getElementById('dr-trigger');
+            const popover = document.getElementById('dr-popover');
+            if (dropdownOpen) {
+                trigger.classList.add('open');
+                popover.style.display = 'flex';
+                requestAnimationFrame(() => popover.classList.add('visible'));
+            } else {
+                closeDateDropdown();
+            }
+        }
+
+        function closeDateDropdown() {
+            dropdownOpen = false;
+            const trigger = document.getElementById('dr-trigger');
+            const popover = document.getElementById('dr-popover');
+            trigger.classList.remove('open');
+            popover.classList.remove('visible');
+            setTimeout(() => { if (!dropdownOpen) popover.style.display = 'none'; }, 180);
+        }
+
+        function selectPreset(period, label) {
+            currentPeriod = period;
+            patientsCollapsed = false;
+            expandedCpt = null;
+            document.getElementById('dr-trigger-label').textContent = label;
+            document.querySelectorAll('.dr-preset-item').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.period === period);
+            });
+            document.getElementById('dr-custom-panel').classList.remove('expanded');
+            closeDateDropdown();
+            loadMetrics();
+        }
+
+        function selectCustomPreset() {
+            document.querySelectorAll('.dr-preset-item').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.period === 'custom');
+            });
+            const panel = document.getElementById('dr-custom-panel');
+            panel.classList.add('expanded');
+            const startInput = document.getElementById('dr-start-date');
+            const endInput = document.getElementById('dr-end-date');
+            if (!startInput.value) {
+                const today = new Date();
+                const weekAgo = new Date(today);
+                weekAgo.setDate(today.getDate() - 7);
+                startInput.value = toLocalISODate(weekAgo);
+                endInput.value = toLocalISODate(today);
+            }
+        }
+
+        function applyCustomRange() {
+            const startInput = document.getElementById('dr-start-date');
+            const endInput = document.getElementById('dr-end-date');
+            if (!startInput.value || !endInput.value) return;
+            currentPeriod = 'custom';
+            customStartDate = startInput.value;
+            customEndDate = endInput.value;
+            patientsCollapsed = false;
+            expandedCpt = null;
+            const fmtStart = new Date(customStartDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const fmtEnd = new Date(customEndDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            document.getElementById('dr-trigger-label').textContent = fmtStart + ' \u2013 ' + fmtEnd;
+            closeDateDropdown();
+            loadMetrics();
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const wrapper = document.getElementById('dr-wrapper');
+            if (wrapper && !wrapper.contains(e.target) && dropdownOpen) {
+                closeDateDropdown();
+            }
+        });
+
+        function setProvider(providerId) {
+            currentProviderId = providerId;
+            patientsCollapsed = false;
+            expandedCpt = null;
+            loadMetrics();
+        }
+
+        async function loadProviders() {
+            try {
+                const data = await fetchJson(`${getPluginApiBase()}/api/providers`);
+                if (data.providers.length > 0) {
+                    const select = document.getElementById('provider-select');
+                    select.innerHTML = data.providers.map(p =>
+                        `<option value="${escapeHtml(p.id)}" ${p.id === data.logged_in_staff_id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
+                    ).join('');
+                    currentProviderId = select.value;
+                    select.style.display = '';
+                }
+            } catch (e) {
+                showError('Failed to load provider list. You can still view your own metrics.');
+            }
+        }
+
+        async function fetchJson(url) {
+            const response = await fetch(url, { credentials: 'include' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        }
+
+        function clearError() {
+            document.getElementById('error-container').innerHTML = '';
+        }
+
+        function showError(message) {
+            document.getElementById('error-container').innerHTML =
+                `<div class="error-message">${escapeHtml(message)}</div>`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(String(text)));
+            return div.innerHTML;
+        }
+
+        function formatCurrency(amount) {
+            return '$' + Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatDate(isoString) {
+            if (!isoString) return '<span style="color:#999">Unknown</span>';
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return '<span style="color:#999">Unknown</span>';
+            const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+            return `<span class="dos">${date}<span class="dos-time"> · ${time}</span></span>`;
+        }
+
+        function toLocalISODate(d) {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function toggleSection(contentId, iconId, stateKey) {
+            if (stateKey === 'patients') patientsCollapsed = !patientsCollapsed;
+            else if (stateKey === 'billing') billingCollapsed = !billingCollapsed;
+            const isCollapsed = stateKey === 'patients' ? patientsCollapsed : billingCollapsed;
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            if (!content) return;
+            content.classList.toggle('collapsed', isCollapsed);
+            icon.classList.toggle('collapsed', isCollapsed);
+        }
+
+        async function loadPatients() {
+            const listContainer = document.getElementById('patient-list-body');
+            const patientColspan = showEarnings ? '5' : '4';
+            listContainer.innerHTML = `<tr><td colspan="${patientColspan}" class="loading">Loading...</td></tr>`;
+
+            try {
+                const data = await fetchJson(`${getPluginApiBase()}/api/patients?${buildParams()}`);
+                const notes = data.notes || [];
+
+                if (notes.length === 0) {
+                    listContainer.innerHTML = `<tr><td colspan="${patientColspan}" class="empty-state">No patients found for this period.</td></tr>`;
+                    return;
+                }
+
+                listContainer.innerHTML = notes.map(n => {
+                    const cptTags = (n.cpts || []).map(c => `<span class="cpt-tag">${escapeHtml(c)}</span>`).join('');
+                    const statusClass = n.status === 'Signed' ? 'status-signed' : 'status-open';
+                    return `
+                        <tr>
+                            <td><a class="patient-link" href="${escapeHtml(n.chart_link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(n.patient_name)}</a></td>
+                            <td>${formatDate(n.dos)}</td>
+                            <td class="cpt-cell">${cptTags || '<span style="color:#999">\u2014</span>'}</td>
+                            <td><span class="status-badge ${statusClass}">${escapeHtml(n.status)}</span></td>
+                            ${showEarnings ? `<td class="earnings-value">${formatCurrency(n.amount_earned)}</td>` : ''}
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                listContainer.innerHTML = `<tr><td colspan="${patientColspan}" class="empty-state" style="color:#d93025">Failed to load encounters.</td></tr>`;
+            }
+        }
+
+        async function toggleCptDetail(cpt) {
+            const detailRow = document.getElementById(`cpt-detail-${cpt}`);
+            if (!detailRow) return;
+
+            if (expandedCpt === cpt) {
+                detailRow.style.display = 'none';
+                expandedCpt = null;
+                return;
+            }
+
+            if (expandedCpt) {
+                const prev = document.getElementById(`cpt-detail-${expandedCpt}`);
+                if (prev) prev.style.display = 'none';
+            }
+            expandedCpt = cpt;
+
+            const detailColspan = showEarnings ? '3' : '2';
+            const container = document.getElementById(`cpt-detail-body-${cpt}`);
+            container.innerHTML = `<tr><td colspan="${detailColspan}" class="loading" style="padding:12px 20px">Loading...</td></tr>`;
+            detailRow.style.display = '';
+
+            try {
+                const data = await fetchJson(`${getPluginApiBase()}/api/cpt-patients?${buildParams({cpt: cpt})}`);
+                const patients = data.patients || [];
+
+                if (patients.length === 0) {
+                    container.innerHTML = `<tr><td colspan="${detailColspan}" style="padding:12px 20px;color:#999">No patients found.</td></tr>`;
+                    return;
+                }
+
+                container.innerHTML = patients.map(p => `
+                    <tr>
+                        <td><a class="patient-link" href="${escapeHtml(p.chart_link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.patient_name)}</a></td>
+                        <td>${formatDate(p.dos)}</td>
+                        ${showEarnings ? `<td class="earnings-value">${formatCurrency(p.amount_earned)}</td>` : ''}
+                    </tr>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = `<tr><td colspan="${detailColspan}" style="padding:12px 20px;color:#d93025">Failed to load patients.</td></tr>`;
+            }
+        }
+
+        async function loadMetrics() {
+            const content = document.getElementById('main-content');
+            content.innerHTML = '<div class="loading">Loading metrics...</div>';
+            clearError();
+            expandedCpt = null;
+
+            const seq = ++requestSeq;
+
+            let data;
+            try {
+                data = await fetchJson(`${getPluginApiBase()}/api/metrics?${buildParams()}`);
+            } catch (e) {
+                if (seq === requestSeq) {
+                    content.innerHTML = '';
+                    showError('Failed to load metrics. Please try again.');
+                }
+                return;
+            }
+
+            // Stale response from a previous request — discard
+            if (seq !== requestSeq) return;
+
+            showEarnings = data.show_earnings || false;
+
+            const cptColspan = showEarnings ? '4' : '3';
+            const cptRows = (data.cpt_codes || []).map(item => `
+                <tr>
+                    <td class="cpt-code" onclick="toggleCptDetail('${escapeHtml(item.cpt)}')" title="Click to see patients">${escapeHtml(item.cpt)}</td>
+                    <td style="white-space:normal">${escapeHtml(item.description || '')}</td>
+                    <td class="cpt-count">${item.count}</td>
+                    ${showEarnings ? `<td class="earnings-value">${formatCurrency(item.amount_earned)}</td>` : ''}
+                </tr>
+                <tr class="cpt-detail-row" id="cpt-detail-${escapeHtml(item.cpt)}" style="display:none">
+                    <td colspan="${cptColspan}">
+                        <table class="cpt-detail-table">
+                            <tbody id="cpt-detail-body-${escapeHtml(item.cpt)}"></tbody>
+                        </table>
+                    </td>
+                </tr>
+            `).join('');
+
+            const cptTableBody = cptRows ||
+                `<tr><td colspan="${cptColspan}" class="empty-state">No charges captured for this period.</td></tr>`;
+
+            const patientColspan = showEarnings ? '5' : '4';
+
+            content.innerHTML = `
+                <div class="cards-row${showEarnings ? ' four-cards' : ''}">
+                    <div class="card">
+                        <div class="card-label">Encounters</div>
+                        <div class="card-value">${data.encounters}</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Charges</div>
+                        <div class="card-value">${data.cpt_total}</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Open Notes</div>
+                        <div class="card-value">${data.notes_open}</div>
+                    </div>
+                    ${showEarnings ? `
+                    <div class="card">
+                        <div class="card-label">Estimated Compensation</div>
+                        <div class="card-value earnings-value">${formatCurrency(data.amount_earned)}</div>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="section-card" id="patient-list-section">
+                    <div class="section-header collapsible" onclick="toggleSection('patient-list-content','patients-collapse-icon','patients')">
+                        <span style="display:flex;align-items:center"><span class="collapse-toggle" id="patients-collapse-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Encounters</span>
+                    </div>
+                    <div class="collapsible-content" id="patient-list-content">
+                        <table>
+                            ${showEarnings ? '<colgroup><col style="width:22%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:18%"></colgroup>'
+                                          : '<colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>'}
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>Date of Service</th>
+                                    <th>Charges</th>
+                                    <th>Note Status</th>
+                                    ${showEarnings ? '<th>Est. Compensation</th>' : ''}
+                                </tr>
+                            </thead>
+                            <tbody id="patient-list-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-header collapsible" onclick="toggleSection('billing-content','billing-collapse-icon','billing')">
+                        <span style="display:flex;align-items:center"><span class="collapse-toggle" id="billing-collapse-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Charges</span>
+                    </div>
+                    <div class="collapsible-content" id="billing-content">
+                        <table>
+                            ${showEarnings ? '<colgroup><col style="width:10%"><col><col style="width:8%"><col style="width:16%"></colgroup>'
+                                          : '<colgroup><col style="width:12%"><col><col style="width:10%"></colgroup>'}
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Description</th>
+                                    <th>Count</th>
+                                    ${showEarnings ? '<th>Est. Compensation</th>' : ''}
+                                </tr>
+                            </thead>
+                            <tbody>${cptTableBody}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            // Auto-load patient list
+            loadPatients();
+        }
+
+        // Initial load — fetch providers first (for admin dropdown), then metrics
+        loadProviders().then(() => loadMetrics());
+    </script>
+</body>
+</html>
