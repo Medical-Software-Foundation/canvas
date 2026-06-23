@@ -55,8 +55,6 @@ class RREventOrigination(BaseProtocol):
             "provider_id": intent["rr_staff_id"],
             "parent_appointment_id": str(appointment.id),
         }
-        if intent.get("description"):
-            kwargs["description"] = intent["description"]
 
         log.info(
             "rr-event: creating ScheduleEvent for appointment %s on rr_staff=%s",
