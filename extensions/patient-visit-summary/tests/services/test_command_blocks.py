@@ -722,6 +722,54 @@ class TestBlocksReview:
         assert cb._blocks_review("Review", [1]) == []
 
 
+# --- _blocks_reference ---
+
+
+class TestBlocksReference:
+    def test_heading_uses_name_and_renders_table(self):
+        data = [{
+            "name": "HgbA1cgui",
+            "diagnostic_view_id": 13,
+            "content": "<table><tr><td>Hemoglobin A1c</td></tr></table>",
+        }]
+        result = cb._blocks_reference("Reference", data)
+        # Heading reads "Reference: HgbA1cgui" — matches the note.
+        assert result[0] == {"kind": "heading", "prefix": "Reference", "value": "HgbA1cgui"}
+        # The stored HTML table renders as a body_html block.
+        html_blocks = [b for b in result if b["kind"] == "body_html"]
+        assert len(html_blocks) == 1
+        assert "Hemoglobin A1c" in html_blocks[0]["value"]
+
+    def test_diagnostic_view_id_and_name_not_leaked_as_fields(self):
+        data = [{
+            "name": "HgbA1cgui",
+            "diagnostic_view_id": 13,
+            "content": "<table></table>",
+        }]
+        result = cb._blocks_reference("Reference", data)
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "DIAGNOSTIC VIEW ID" not in labels
+        assert "NAME" not in labels
+        assert "CONTENT" not in labels
+
+    def test_prefers_print_content_over_content(self):
+        data = [{
+            "name": "X",
+            "print_content": "<p>print</p>",
+            "content": "<p>raw</p>",
+        }]
+        result = cb._blocks_reference("Reference", data)
+        html = [b["value"] for b in result if b["kind"] == "body_html"][0]
+        assert html == "<p>print</p>"
+
+    def test_no_name_falls_back_to_plain_heading(self):
+        result = cb._blocks_reference("Reference", [{"content": "<p>x</p>"}])
+        assert result[0] == {"kind": "heading_plain", "value": "Reference"}
+
+    def test_non_dict(self):
+        assert cb._blocks_reference("Reference", [None]) == []
+
+
 # --- _blocks_medication_statement ---
 
 
@@ -1268,6 +1316,61 @@ class TestEnumerateSections:
         assert result[0]["key"] == "k"
         assert result[0]["groups"][0]["entries"][0]["title"] == "Do it"
 
+    def test_plugin_command_routed_to_registered_section(self):
+        # A plugin command bucketed into custom_commands_objective (by its
+        # registered PluginCommand.section) renders under the Objective section.
+        context = {
+            "custom_commands_objective": [
+                {"label": "Observation Summary", "content": "<p>obs</p>"},
+            ],
+        }
+        result = cb.enumerate_sections(context)
+        assert len(result) == 1
+        section = result[0]
+        assert section["key"] == "objective"
+        group = section["groups"][0]
+        assert group["context_key"] == "custom_commands_objective"
+        assert group["render_type"] == "custom_command"
+        assert group["entries"][0]["title"] == "Observation Summary"
+
+    def test_unrouted_plugin_command_in_fallback_custom_section(self):
+        # Entries left in custom_commands_data render in the standalone
+        # "Custom Commands" section.
+        context = {"custom_commands_data": [{"label": "Mystery", "content": "<p>x</p>"}]}
+        result = cb.enumerate_sections(context)
+        assert len(result) == 1
+        assert result[0]["key"] == "custom"
+        assert result[0]["title"] == "Custom Commands"
+
+    def test_reference_command_in_reviews_section(self):
+        # A reference command renders under Reviews (not as a Custom Command).
+        context = {
+            "reference_commands_data": [
+                {"name": "HgbA1cgui", "diagnostic_view_id": 13,
+                 "content": "<table></table>"},
+            ],
+        }
+        result = cb.enumerate_sections(context)
+        assert len(result) == 1
+        section = result[0]
+        assert section["key"] == "reviews"
+        group = section["groups"][0]
+        assert group["context_key"] == "reference_commands_data"
+        assert group["render_type"] == "reference"
+        # Sidebar title comes from the name, matching the note.
+        assert group["entries"][0]["title"] == "HgbA1cgui"
+
+    def test_plugin_commands_split_across_sections(self):
+        # Two plugin commands registered under different sections each land in
+        # the correct section, in DEFAULT_SECTIONS order (subjective first).
+        context = {
+            "custom_commands_subjective": [{"label": "Intake", "content": "<p>a</p>"}],
+            "custom_commands_plan": [{"label": "Care Plan", "content": "<p>b</p>"}],
+        }
+        result = cb.enumerate_sections(context)
+        keys = [s["key"] for s in result]
+        assert keys == ["subjective", "plan"]
+
 
 # --- _blocks_billing / _billing_title (patient-facing billed services) ---
 
@@ -1498,9 +1601,8 @@ class TestBlocksPocLabTest:
 
 class TestBlocksVisualExamFinding:
     def test_image_filename_not_rendered(self):
-        # We intentionally drop the ATTACHED IMAGE field — the stored value is
-        # an opaque hashed filename and we can't embed the image bytes from a
-        # plugin today (TODO: canvas-plugins#1747).
+        # We never surface the raw `image` value — it's an opaque hashed S3
+        # key. Without a resolved `image_url`, only title + narrative render.
         entry = {
             "title": "Practice",
             "narrative": "random comment",
@@ -1509,8 +1611,83 @@ class TestBlocksVisualExamFinding:
         result = cb._blocks_visual_exam_finding("Visual Exam Finding", [entry])
         labels = [b.get("label") for b in result if b["kind"] == "field"]
         assert "ATTACHED IMAGE" not in labels
+        # The opaque filename never leaks into any block value.
+        assert not any(
+            "f56e6a008101444e911d97345271391b" in str(b.get("value", ""))
+            for b in result
+        )
         # narrative still renders
         assert {"kind": "field", "label": "NARRATIVE", "value": "random comment"} in result
+
+    def test_image_url_rendered_as_img(self):
+        # canvas-plugins#1747: when the extractor resolves a presigned URL it's
+        # stamped as `image_url` and rendered inline as an <img> body_html block.
+        entry = {
+            "title": "Left forearm",
+            "narrative": "Healing well",
+            "image": "opaque.png",
+            "image_url": "https://s3.example.com/img.png?sig=abc&exp=123",
+        }
+        result = cb._blocks_visual_exam_finding("Visual Exam Finding", [entry])
+        html_blocks = [b for b in result if b["kind"] == "body_html"]
+        assert len(html_blocks) == 1
+        html = html_blocks[0]["value"]
+        assert html.startswith("<img ")
+        # The `&` in the presigned URL is escaped to `&amp;` so the src
+        # attribute is valid HTML and can't break out of its quotes.
+        assert "sig=abc&amp;exp=123" in html
+        assert 'alt="Left forearm"' in html
+        # The opaque filename is never surfaced.
+        assert "opaque.png" not in html
+
+    def test_no_image_url_renders_no_img(self):
+        entry = {"title": "T", "narrative": "N"}
+        result = cb._blocks_visual_exam_finding("Visual Exam Finding", [entry])
+        assert not any(b["kind"] == "body_html" for b in result)
+
+
+# --- _blocks_chart_section_review (canvas-plugins#1744) ---
+
+
+class TestBlocksChartSectionReview:
+    def test_section_content_rendered_as_body_lines(self):
+        entry = {
+            "section": "conditions",
+            "section_content": ["Hypertension", "Type 2 diabetes"],
+        }
+        result = cb._blocks_chart_section_review("Chart Section Review", [entry])
+        # Heading names the humanized section.
+        assert result[0] == {"kind": "heading", "prefix": "Reviewed", "value": "Conditions"}
+        bodies = [b["value"] for b in result if b["kind"] == "body"]
+        assert bodies == ["Hypertension", "Type 2 diabetes"]
+
+    def test_heading_only_when_no_section_content(self):
+        # Falls back to the heading alone when the anchor review couldn't be
+        # resolved (no `section_content` stamped).
+        entry = {"section": "medications"}
+        result = cb._blocks_chart_section_review("Chart Section Review", [entry])
+        assert result[0]["value"] == "Medications"
+        assert not any(b["kind"] == "body" for b in result)
+
+    def test_section_content_not_leaked_as_field(self):
+        entry = {"section": "allergies", "section_content": ["Penicillin"]}
+        result = cb._blocks_chart_section_review("Chart Section Review", [entry])
+        labels = [b.get("label") for b in result if b["kind"] == "field"]
+        assert "SECTION CONTENT" not in labels
+
+
+# --- _escape_attr ---
+
+
+class TestEscapeAttr:
+    def test_escapes_ampersand_and_quote(self):
+        assert cb._escape_attr('a&b"c') == "a&amp;b&quot;c"
+
+    def test_escapes_angle_brackets(self):
+        assert cb._escape_attr("<x>") == "&lt;x&gt;"
+
+    def test_none_is_empty(self):
+        assert cb._escape_attr(None) == ""
 
 
 # --- _decode_custom_content (base64 vs raw HTML detection) ---

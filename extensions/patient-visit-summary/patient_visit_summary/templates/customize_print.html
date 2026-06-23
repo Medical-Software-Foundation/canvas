@@ -65,6 +65,12 @@
         #command-list-pinned .section-group-title { cursor: default; }
         #command-list-pinned .section-group-title:hover { background: transparent; color: var(--muted); }
         #command-list-pinned .section-group-title::before { content: none; }
+        /* Section-level select/deselect checkbox sitting in the title row.
+           Clicking it toggles every command in the section without collapsing
+           it (the collapse handler ignores clicks inside .section-check-wrap). */
+        .section-check-wrap { display: inline-flex; align-items: center; cursor: pointer; margin: 0; padding: 0; }
+        .section-check { cursor: pointer; margin: 0; }
+        .section-title-text { flex: 1 1 auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
         .modal-title { font-family: 'Source Serif 4', Georgia, serif; font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
         .save-status { font-size: 12px; color: var(--muted); font-feature-settings: "tnum"; min-width: 90px; text-align: right; }
@@ -308,7 +314,12 @@
     <div id="command-list">
         {% for section in sections %}
             <div class="section-group">
-                <div class="section-group-title">{{ section.title }}</div>
+                <div class="section-group-title">
+                    <label class="section-check-wrap" title="Include or exclude the whole {{ section.title }} section">
+                        <input type="checkbox" class="section-check" checked aria-label="Toggle all {{ section.title }} commands">
+                    </label>
+                    <span class="section-title-text">{{ section.title }}</span>
+                </div>
                 {% for item in section.items %}
                     <div class="parent-group" draggable="true" data-id="{{ item.id }}" data-section="{{ section.key }}">
                         <div class="cmd-row parent-row">
@@ -341,7 +352,12 @@
     {% if pinned_section %}
         <div id="command-list-pinned">
             <div class="section-group">
-                <div class="section-group-title">{{ pinned_section.title }}</div>
+                <div class="section-group-title">
+                    <label class="section-check-wrap" title="Include or exclude the whole {{ pinned_section.title }} section">
+                        <input type="checkbox" class="section-check" checked aria-label="Toggle all {{ pinned_section.title }} commands">
+                    </label>
+                    <span class="section-title-text">{{ pinned_section.title }}</span>
+                </div>
                 {% for item in pinned_section.items %}
                     <div class="parent-group" data-id="{{ item.id }}" data-section="{{ pinned_section.key }}">
                         <div class="cmd-row parent-row">
@@ -568,20 +584,53 @@ document.addEventListener('drop', function(e) {
     target.parentNode.insertBefore(draggedEl, target);
 });
 
-// ---- Selection (parent/child cascade) ----
+// ---- Selection (section/parent/child cascade) ----
 function toggleAll(checked) {
     document.querySelectorAll('.cmd-check input').forEach(function(cb) {
         cb.checked = checked;
         cb.indeterminate = false;
     });
+    document.querySelectorAll('.section-check').forEach(function(sc) {
+        sc.checked = checked;
+        sc.indeterminate = false;
+    });
 }
 
-// Parent checkbox clicks cascade to children
+// Reflect a section's checkbox state from the command checkboxes beneath it:
+// checked when all are on, unchecked when all are off, indeterminate otherwise.
+function _syncSectionCheck(sectionGroup) {
+    if (!sectionGroup) return;
+    var sectionCb = sectionGroup.querySelector('.section-check');
+    if (!sectionCb) return;
+    var boxes = sectionGroup.querySelectorAll('.parent-check, .child-check');
+    var total = 0, checked = 0;
+    boxes.forEach(function(b) { total += 1; if (b.checked) checked += 1; });
+    if (total === 0 || checked === 0) {
+        sectionCb.checked = false;
+        sectionCb.indeterminate = false;
+    } else if (checked === total) {
+        sectionCb.checked = true;
+        sectionCb.indeterminate = false;
+    } else {
+        sectionCb.checked = false;
+        sectionCb.indeterminate = true;
+    }
+}
+
+// Section / parent checkbox clicks cascade down; child clicks bubble up.
 document.addEventListener('change', function(e) {
     var cb = e.target;
     if (!(cb instanceof HTMLInputElement) || cb.type !== 'checkbox') return;
 
-    if (cb.classList.contains('parent-check')) {
+    if (cb.classList.contains('section-check')) {
+        var sectionGroup = cb.closest('.section-group');
+        if (!sectionGroup) return;
+        sectionGroup.querySelectorAll('.parent-check, .child-check').forEach(function(x) {
+            x.checked = cb.checked;
+            x.indeterminate = false;
+        });
+        cb.indeterminate = false;
+    } else if (cb.classList.contains('parent-check')) {
         var group = cb.closest('.parent-group');
         if (!group) return;
         group.querySelectorAll('.child-check').forEach(function(child) {
@@ -589,6 +638,7 @@ document.addEventListener('change', function(e) {
             child.indeterminate = false;
         });
         cb.indeterminate = false;
+        _syncSectionCheck(group.closest('.section-group'));
     } else if (cb.classList.contains('child-check')) {
         var group = cb.closest('.parent-group');
         if (!group) return;
@@ -608,6 +658,7 @@ document.addEventListener('change', function(e) {
             parent.checked = false;
             parent.indeterminate = true;
         }
+        _syncSectionCheck(group.closest('.section-group'));
     }
 });
 
@@ -1124,6 +1175,8 @@ function _applyCheckedIds(checkedIds) {
             parentCb.indeterminate = false;
         }
     });
+    // Reflect each section's select/deselect checkbox from the restored leaves.
+    document.querySelectorAll('.section-group').forEach(_syncSectionCheck);
 }
 
 function loadState() {
@@ -1226,6 +1279,9 @@ document.addEventListener('change', function(e) {
 document.addEventListener('click', function(e) {
     var title = e.target.closest('.section-group-title');
     if (!title) return;
+    // Clicking the section-level select/deselect checkbox toggles selection,
+    // not collapse.
+    if (e.target.closest('.section-check-wrap')) return;
     var group = title.closest('.section-group');
     if (!group) return;
     // Skip the pinned billing block — it's never collapsible.
