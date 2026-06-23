@@ -1,0 +1,39 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.19",
+    "name": "provider_productivity_compensation",
+    "description": "A dashboard that shows providers their daily productivity metrics (patients seen, CPT codes captured, note signing status) alongside fee-schedule-based estimated compensation.",
+    "url_permissions": [],
+    "components": {
+        "applications": [
+            {
+                "class": "provider_productivity_compensation.applications.productivity_dashboard:ProductivityDashboardApplication",
+                "name": "Productivity & Compensation",
+                "description": "View your daily productivity metrics (patients seen, CPT codes, note status) and fee-schedule-based estimated compensation.",
+                "scope": "global",
+                "icon": "assets/logo.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "provider_productivity_compensation.applications.productivity_dashboard:ProductivityDashboardApi",
+                "description": "API endpoints for productivity metrics and patient drill-down.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["COMPENSATION_SUPERUSER_IDS", "FEE_SCHEDULE_RATES", "PROVIDER_FEE_SCHEDULE_MAP"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
