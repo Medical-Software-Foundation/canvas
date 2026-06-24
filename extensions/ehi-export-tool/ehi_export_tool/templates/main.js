@@ -69,6 +69,7 @@
     pageInfo: $("page-info"),
     exportBtn: $("export-btn"),
     exportAllBtn: $("export-all-btn"),
+    zipSelectedBtn: $("zip-selected-btn"),
     exportHint: $("export-hint"),
     refreshRuns: $("refresh-runs"),
     runsEmpty: $("runs-empty"),
@@ -90,6 +91,7 @@
     runView: $("run-view"),
     runBack: $("run-back"),
     runTitle: $("run-title"),
+    runZipBtn: $("run-zip-btn"),
     runRefresh: $("run-refresh"),
     runSummary: $("run-summary"),
     runSync: $("run-sync"),
@@ -470,6 +472,10 @@
     els.exportBtn.disabled = n === 0 || !bulkOk;
     els.exportAllBtn.textContent = `Export all matching (${state.total})`;
     els.exportAllBtn.disabled = state.total === 0 || !bulkOk;
+    // Client-side ZIP needs no S3 — only that something is selected and FHIR is set up.
+    els.zipSelectedBtn.textContent = `Download .zip (${n})`;
+    els.zipSelectedBtn.disabled = n === 0 || !state.configured;
+    els.zipSelectedBtn.title = "Download the selected patients' completed exports as one .zip (built in your browser)";
     if (!state.configured) {
       els.exportHint.textContent = "Configure FHIR credentials before exporting.";
     } else if (!state.s3Configured) {
@@ -523,6 +529,248 @@
     a.target = "_blank";
     a.rel = "noopener";
     return a;
+  }
+
+  // ── client-side ZIP (no S3, no external library) ────────────────────────
+  // The plugin can't build a ZIP server-side (the RestrictedPython sandbox
+  // blocks zipfile/zlib/io). Instead the browser fetches each patient's NDJSON
+  // from /download (inline=1, so it streams same-origin even when S3 exists)
+  // and assembles a .zip locally. Good for selections / a single run; for a
+  // whole-instance dump use S3 + `aws s3 sync`.
+  const ZIP_FETCH_CONC = 5;       // parallel NDJSON downloads
+  const ZIP_CONFIRM_OVER = 300;   // ask before zipping more than this many patients
+
+  const _crcTable = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) c = _crcTable[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+
+  // DEFLATE via the native CompressionStream; fall back to "stored" (no compression).
+  async function deflateRaw(bytes) {
+    if (typeof CompressionStream === "function") {
+      try {
+        const cs = new CompressionStream("deflate-raw");
+        const stream = new Blob([bytes]).stream().pipeThrough(cs);
+        const out = new Uint8Array(await new Response(stream).arrayBuffer());
+        return { data: out, method: 8 };
+      } catch (e) { /* fall through to stored */ }
+    }
+    return { data: bytes, method: 0 };
+  }
+
+  function _dosDateTime(d) {
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    return { time: time & 0xffff, date: date & 0xffff };
+  }
+
+  // entries: [{name, bytes(Uint8Array)}] -> Blob (a valid ZIP, stored or deflated).
+  async function buildZip(entries) {
+    const enc = new TextEncoder();
+    const body = [];      // local headers + data, in order
+    const central = [];   // central directory records
+    let offset = 0;
+    const { time, date } = _dosDateTime(new Date());
+
+    for (const entry of entries) {
+      const nameBytes = enc.encode(entry.name);
+      const crc = crc32(entry.bytes);
+      const { data, method } = await deflateRaw(entry.bytes);
+      const compSize = data.length;
+      const uncompSize = entry.bytes.length;
+
+      const lfh = new DataView(new ArrayBuffer(30));
+      lfh.setUint32(0, 0x04034b50, true);
+      lfh.setUint16(4, 20, true);
+      lfh.setUint16(6, 0x0800, true);   // bit 11: UTF-8 filename
+      lfh.setUint16(8, method, true);
+      lfh.setUint16(10, time, true);
+      lfh.setUint16(12, date, true);
+      lfh.setUint32(14, crc, true);
+      lfh.setUint32(18, compSize, true);
+      lfh.setUint32(22, uncompSize, true);
+      lfh.setUint16(26, nameBytes.length, true);
+      lfh.setUint16(28, 0, true);
+      body.push(new Uint8Array(lfh.buffer), nameBytes, data);
+
+      const cdr = new DataView(new ArrayBuffer(46));
+      cdr.setUint32(0, 0x02014b50, true);
+      cdr.setUint16(4, 20, true);
+      cdr.setUint16(6, 20, true);
+      cdr.setUint16(8, 0x0800, true);
+      cdr.setUint16(10, method, true);
+      cdr.setUint16(12, time, true);
+      cdr.setUint16(14, date, true);
+      cdr.setUint32(16, crc, true);
+      cdr.setUint32(20, compSize, true);
+      cdr.setUint32(24, uncompSize, true);
+      cdr.setUint16(28, nameBytes.length, true);
+      cdr.setUint32(42, offset, true);  // offset of local header
+      central.push(new Uint8Array(cdr.buffer), nameBytes);
+
+      offset += 30 + nameBytes.length + compSize;
+    }
+
+    let cdSize = 0;
+    for (const c of central) cdSize += c.length;
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true);
+    eocd.setUint16(8, entries.length, true);
+    eocd.setUint16(10, entries.length, true);
+    eocd.setUint32(12, cdSize, true);
+    eocd.setUint32(16, offset, true);   // central directory start
+    return new Blob([...body, ...central, new Uint8Array(eocd.buffer)], { type: "application/zip" });
+  }
+
+  function zipSegment(s) {
+    return String(s || "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "x";
+  }
+  function zipEntryName(last, first, pid) {
+    return `${zipSegment(last)}_${zipSegment(first)}_${zipSegment(pid)}.ndjson`;
+  }
+
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // Fetch each item's NDJSON (bounded concurrency), then build + save the ZIP.
+  // items: [{job_id, name}]. Returns true on success.
+  async function downloadZip(items, zipName, onProgress) {
+    const results = new Array(items.length);
+    let next = 0;
+    let done = 0;
+    async function worker() {
+      while (next < items.length) {
+        const i = next++;
+        const it = items[i];
+        const resp = await fetch(
+          API + "/download?" + buildQuery({ job_id: it.job_id, inline: 1 }),
+          { headers: { Accept: "application/x-ndjson" } }
+        );
+        if (!resp.ok) throw new Error(`download failed for ${it.name} (HTTP ${resp.status})`);
+        results[i] = { name: it.name, bytes: new Uint8Array(await resp.arrayBuffer()) };
+        done++;
+        if (onProgress) onProgress(done, items.length);
+      }
+    }
+    await Promise.all(
+      Array.from({ length: Math.min(ZIP_FETCH_CONC, items.length) }, worker)
+    );
+    const blob = await buildZip(results);
+    saveBlob(blob, zipName);
+    return true;
+  }
+
+  // "Download .zip" for the current selection — zips each selected patient's
+  // latest COMPLETED export; patients without one are skipped (and reported).
+  async function zipSelected() {
+    if (state.selected.size === 0) return;
+    const patients = Array.from(state.selected.values());
+    const ids = patients.map((p) => p.id);
+    let jobs;
+    try {
+      jobs = (await getJSON(API + "/jobs?" + buildQuery({ patient_ids: ids.join(",") }))).jobs || {};
+    } catch (err) {
+      showBanner("Could not look up export status: " + err.message, true);
+      return;
+    }
+    const items = [];
+    let skipped = 0;
+    patients.forEach((p) => {
+      const job = jobs[p.id];
+      if (job && job.status === "complete" && job.job_id) {
+        items.push({ job_id: job.job_id, name: zipEntryName(p.last_name, p.first_name, p.id) });
+      } else {
+        skipped++;
+      }
+    });
+    if (items.length === 0) {
+      showBanner("None of the selected patients have a completed export to download yet.", true);
+      return;
+    }
+    if (items.length > ZIP_CONFIRM_OVER &&
+        !window.confirm(
+          `You're about to build a ZIP of ${items.length} patient files in your browser. ` +
+          `That can use a lot of memory — for very large exports use S3 instead. Continue?`
+        )) {
+      return;
+    }
+    const note = skipped > 0 ? ` (${skipped} skipped — no completed export)` : "";
+    await runZipJob(els.zipSelectedBtn, items, `ehi-export-selected-${items.length}.zip`, note);
+  }
+
+  // "Download .zip" on a run page — zips every COMPLETED patient in the run
+  // (pages through the whole run, not just the visible page).
+  async function zipRun() {
+    const batchId = state.runBatchId;
+    if (!batchId) return;
+    const items = [];
+    let offset = 0;
+    const PAGE = 200;
+    try {
+      for (;;) {
+        const data = await getJSON(API + "/batch?" + buildQuery({
+          batch_id: batchId, status: "complete", offset, limit: PAGE,
+        }));
+        (data.jobs || []).forEach((j) => {
+          if (j.job_id) {
+            items.push({ job_id: j.job_id, name: zipEntryName(j.last_name, j.first_name, j.patient_id) });
+          }
+        });
+        if (!data.has_more) break;
+        offset += PAGE;
+      }
+    } catch (err) {
+      showBanner("Could not load the run's files: " + err.message, true);
+      return;
+    }
+    if (items.length === 0) {
+      showBanner("This run has no completed patient exports to download yet.", true);
+      return;
+    }
+    if (items.length > ZIP_CONFIRM_OVER &&
+        !window.confirm(
+          `You're about to build a ZIP of ${items.length} patient files in your browser. ` +
+          `That can use a lot of memory — for very large exports use S3 instead. Continue?`
+        )) {
+      return;
+    }
+    await runZipJob(els.runZipBtn, items, `ehi-export-run-${items.length}.zip`, "");
+  }
+
+  // Shared button-state + progress wrapper for a zip job.
+  async function runZipJob(btn, items, zipName, note) {
+    const original = btn.textContent;
+    btn.disabled = true;
+    try {
+      await downloadZip(items, zipName, (done, total) => {
+        btn.textContent = `Zipping… ${done}/${total}`;
+      });
+      showBanner(`Downloaded ${items.length} patient file(s) as ${zipName}${note}.`, false);
+    } catch (err) {
+      showBanner("ZIP download failed: " + err.message, true);
+    } finally {
+      btn.textContent = original;
+      btn.disabled = false;
+      syncSelectionUI();
+    }
   }
 
   // ── export orchestration (fire-and-forget) ──────────────────────────────
@@ -756,6 +1004,12 @@
   function renderRunPage(data) {
     const c = data.counts || {};
 
+    // ZIP the whole run only when it has completed patient exports.
+    els.runZipBtn.disabled = !c.complete;
+    els.runZipBtn.title = c.complete
+      ? `Download all ${c.complete} completed patient export(s) as one .zip (built in your browser)`
+      : "No completed patient exports to download yet";
+
     // Whole-run status summary (unfiltered).
     els.runSummary.innerHTML = "";
     const total = c.total || 0;
@@ -879,6 +1133,7 @@
 
   els.exportBtn.addEventListener("click", startExport);
   els.exportAllBtn.addEventListener("click", exportAllMatching);
+  els.zipSelectedBtn.addEventListener("click", zipSelected);
   els.refreshRuns.addEventListener("click", loadRuns);
   els.showAllRuns.addEventListener("click", openAllRuns);
   els.allRunsBack.addEventListener("click", showMainView);
@@ -907,6 +1162,7 @@
 
   // Run view
   els.runBack.addEventListener("click", showMainView);
+  els.runZipBtn.addEventListener("click", zipRun);
   els.runRefresh.addEventListener("click", loadRunPage);
   els.runStatus.addEventListener("change", () => {
     state.runStatus = els.runStatus.value;

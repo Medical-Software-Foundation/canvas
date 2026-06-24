@@ -31,8 +31,14 @@ queued and drained by a throttled background task (see
   Runs are attributed to the **staff member who started them**.
 - **Download** — the plugin serves each patient's `.ndjson` directly (no S3
   required). When S3 *is* configured, downloads redirect to a short-lived
-  presigned link and a whole run can be grabbed with `aws s3 sync`. Nothing is
-  assembled in browser memory.
+  presigned link and a whole run can be grabbed with `aws s3 sync`.
+- **Download a `.zip` (no S3)** — for a multi-patient **selection** or a whole
+  **run**, "Download .zip" assembles a single ZIP of the per-patient `.ndjson`
+  files **in the browser** (the sandbox can't build a ZIP server-side). It
+  fetches each completed file from the plugin and compresses with the native
+  `CompressionStream` — no external library, no S3. Best for human-scale
+  batches (it warns past a few hundred patients); for a whole-instance dump use
+  S3 + `aws s3 sync`, which streams from S3 rather than through the browser.
 - **Recover from failures** — failed patients show their error message; a run
   with failures offers **Re-run failed**, which queues just those patients as a
   new run.

@@ -339,10 +339,15 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
         to a presigned URL; otherwise the plugin builds the NDJSON on demand and
         streams it back directly (the user never hits a raw Canvas endpoint).
         Returns 409 if the export isn't complete yet.
+
+        ``inline=1`` forces the streamed (same-origin) response even when S3 is
+        configured — the client-side ZIP builder needs the bytes via ``fetch``,
+        which can't read a cross-origin presigned-S3 redirect (no CORS headers).
         """
         job_id = (self.request.query_params.get("job_id") or "").strip()
         if not job_id:
             return [_error("job_id is required", HTTPStatus.BAD_REQUEST)]
+        inline = (self.request.query_params.get("inline") or "").strip() in ("1", "true", "yes")
 
         job = ExportJobService.get_with_patient(job_id)
         if job is None:
@@ -351,7 +356,7 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
         storage = ExportStorage.from_secrets(self.secrets)
         try:
             client = self._build_client()
-            if storage is not None:
+            if storage is not None and not inline:
                 # Stage to S3 (if not already) and redirect the browser to a
                 # short-lived presigned URL — download streams straight from S3.
                 result = prepare_job(client, storage, job)
@@ -364,7 +369,7 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
                     return [_error("could not generate a download URL", HTTPStatus.BAD_GATEWAY)]
                 return [Response(status_code=HTTPStatus.FOUND, headers={"Location": url})]
 
-            # No S3: build the NDJSON on demand and stream it back.
+            # No S3 (or inline requested): build the NDJSON on demand and stream it.
             status = client.get_status(job.job_id)
             if status["status"] != "complete":
                 return [_error("export is still processing", HTTPStatus.CONFLICT)]

@@ -193,6 +193,33 @@ def test_get_download_redirects_to_presigned_when_s3() -> None:
     assert result[0].headers["Location"] == "https://signed-url"
 
 
+def test_get_download_inline_streams_bytes_even_with_s3() -> None:
+    """inline=1 bypasses the S3 redirect and streams same-origin bytes (for the
+    client-side ZIP builder, which can't read a cross-origin presigned redirect)."""
+    inst = _api(
+        query_params={"job_id": "j1", "inline": "1"},
+        secrets={**CONFIGURED_SECRETS, **S3_SECRETS},
+    )
+    patient = SimpleNamespace(id="p-1", first_name="Ada", last_name="Lovelace")
+    job = SimpleNamespace(job_id="j1", patient=patient)
+    client = MagicMock()
+    client.get_status.return_value = {"status": "complete", "output": [{"url": "u"}]}
+    client.build_patient_ndjson.return_value = '{"resourceType":"Patient","id":"p-1"}'
+    storage = MagicMock()
+    with patch(_STORAGE) as MockStorage, patch(
+        "ehi_export_tool.handlers.export_api.ExportJobService.get_with_patient", return_value=job
+    ), patch(_CLIENT_PATH, return_value=client), patch(_PREP) as mock_prep:
+        MockStorage.from_secrets.return_value = storage  # S3 IS configured
+        result = inst.get_download()
+
+    resp = result[0]
+    assert resp.status_code == HTTPStatus.OK  # not a 302 redirect
+    assert resp.headers["Content-Type"].startswith("application/x-ndjson")
+    assert resp.content == b'{"resourceType":"Patient","id":"p-1"}'
+    mock_prep.assert_not_called()  # never staged to S3
+    storage.presigned_url.assert_not_called()
+
+
 def test_get_download_conflict_when_pending() -> None:
     inst = _api(query_params={"job_id": "j1"}, secrets={**CONFIGURED_SECRETS, **S3_SECRETS})
     from ehi_export_tool.services.preparation import PreparationResult
