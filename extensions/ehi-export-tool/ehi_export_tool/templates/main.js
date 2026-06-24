@@ -464,14 +464,15 @@
 
   function syncSelectionUI() {
     const n = state.selected.size;
-    // Group/bulk export requires S3 (so the whole run can be grabbed via S3);
-    // single-patient export (the per-row button) works without S3.
-    const bulkOk = state.configured && state.s3Configured;
+    // Group export no longer needs S3: results download per-patient or as one
+    // browser-built ZIP ("Download .zip"). S3 just adds presigned downloads and
+    // `aws s3 sync` for whole-instance scale. Only FHIR creds gate exporting.
+    const canExport = state.configured;
     els.selectionSummary.textContent = `${n} selected`;
     els.exportBtn.textContent = `Export selected (${n})`;
-    els.exportBtn.disabled = n === 0 || !bulkOk;
+    els.exportBtn.disabled = n === 0 || !canExport;
     els.exportAllBtn.textContent = `Export all matching (${state.total})`;
-    els.exportAllBtn.disabled = state.total === 0 || !bulkOk;
+    els.exportAllBtn.disabled = state.total === 0 || !canExport;
     // Client-side ZIP needs no S3 — only that something is selected and FHIR is set up.
     els.zipSelectedBtn.textContent = `Download .zip (${n})`;
     els.zipSelectedBtn.disabled = n === 0 || !state.configured;
@@ -480,7 +481,8 @@
       els.exportHint.textContent = "Configure FHIR credentials before exporting.";
     } else if (!state.s3Configured) {
       els.exportHint.textContent =
-        "Group export needs S3. Single-patient export (the Export button on a row) works without it.";
+        "Exports queue and run in the background. Download a group with “Download .zip” " +
+        "(built in your browser) — or configure S3 for presigned downloads + aws s3 sync.";
     } else {
       els.exportHint.textContent =
         "Exports queue and run in the background — track them under Export runs.";
@@ -507,8 +509,9 @@
       );
     } else if (!state.s3Configured) {
       showBanner(
-        "S3 isn't configured, so group export is disabled. Single-patient export still " +
-        "works — use the Export button on any row. Configure S3 to export whole groups.",
+        "S3 isn't configured — that's fine. Single and group exports both work; download a " +
+        "group with “Download .zip” (assembled in your browser). Configure S3 only for " +
+        "presigned downloads and whole-instance aws s3 sync.",
         false
       );
     }

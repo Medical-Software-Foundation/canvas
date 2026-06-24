@@ -4,8 +4,10 @@ A staff-facing Canvas application — shown in the **provider (hamburger) menu**
 for exporting patients' complete **Electronic Health Information (EHI)** across
 the patient population. Pick patients (one, several, or *everyone matching a
 filter*), and the plugin exports each patient's full record as a single
-**NDJSON** file, prepared in the background and served by the plugin (no S3
-needed for a single patient; S3 is used only for whole-group export).
+**NDJSON** file, prepared in the background and served by the plugin. **No S3 is
+required** — download one patient's file directly, or a group as a single ZIP
+assembled in your browser. S3 is optional and only adds presigned downloads and
+whole-instance `aws s3 sync`.
 
 It's built so that **whole-instance exports never overload Canvas**: work is
 queued and drained by a throttled background task (see
@@ -153,12 +155,14 @@ Create the OAuth application at
 Confidential** and **Authorization Grant Type: Client credentials**, and grant
 it permission to run the patient `$export` operation.
 
-### Optional — S3 (enables whole-group export)
+### Optional — S3 (presigned downloads + whole-instance sync)
 
-S3 is **not required** for single-patient export — the plugin serves those
-`.ndjson` files directly. Configure S3 only to enable **group export** ("Export
-selected" / "Export all matching"), which stages each patient's file to a bucket
-so a whole run can be pulled with `aws s3 sync`.
+S3 is **not required** for any export. Single and group exports both work
+without it: the plugin serves each patient's `.ndjson` directly, and a group can
+be downloaded as one ZIP assembled in the browser ("Download .zip"). Configure
+S3 only to (a) serve downloads via short-lived **presigned** URLs and (b) stage
+every file to a bucket so a whole run — including a whole-instance export too
+large to ZIP in the browser — can be pulled with `aws s3 sync`.
 
 | Variable | Description |
 |----------|-------------|
