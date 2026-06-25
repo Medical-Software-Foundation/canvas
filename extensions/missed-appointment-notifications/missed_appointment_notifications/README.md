@@ -1,40 +1,42 @@
-# Cancelled Appointment Notifications
+# Missed Appointment Notifications
 
 ## What it does
 
-When an appointment is cancelled, this plugin automatically creates a follow-up
-**task to reschedule the patient**, so a cancellation never quietly falls
-through the cracks. The task is routed to a scheduling team (if one is
-configured) or to the appointment's provider, and carries a short summary of the
-original appointment.
+When an appointment is cancelled or marked as a no-show, this plugin
+automatically creates a follow-up **task to reschedule the patient**, so a
+missed appointment never quietly falls through the cracks. The task is routed to
+a scheduling team (if one is configured) or to the appointment's provider, and
+carries a short summary of the original appointment.
 
 ## Problem it solves
 
-When a patient cancels, someone has to remember to call them back and rebook —
-today that depends on a staff member noticing the cancellation and following up
-manually. Cancellations get missed, patients go un-booked, and care gaps open
-up. This plugin turns every cancellation into an explicit, assigned task so the
-rebooking work is always captured and visible.
+When a patient cancels or doesn't show up, someone has to remember to call them
+back and rebook — today that depends on a staff member noticing and following up
+manually. These appointments get missed, patients go un-booked, and care gaps
+open up. This plugin turns every cancellation and no-show into an explicit,
+assigned task so the rebooking work is always captured and visible.
 
 ## Who it's for
 
 Scheduling coordinators and front-desk staff who own rebooking, and the
-providers whose cancelled visits need to be filled. It's specialty-agnostic —
+providers whose missed visits need to be filled. It's specialty-agnostic —
 any practice that schedules appointments in Canvas.
 
 ## How it works
 
-The handler responds to the `APPOINTMENT_CANCELED` event and creates:
+The handler responds to the `APPOINTMENT_CANCELED` and `APPOINTMENT_NO_SHOWED`
+events and creates:
 
-- a **task** titled with the provider and the original appointment date/time,
-  linked to the patient, due **the next day**; and
+- a **task** titled with the provider and the original appointment date/time
+  (noting whether the appointment was *cancelled* or *no-showed*), linked to the
+  patient, due **the next day**; and
 - a **comment** summarising the original appointment: reason for visit,
   provider, date/time, location, and note type.
 
 Routing: a **scheduling team** (see `SCHEDULING_TEAM_NAME`) if one matches,
 otherwise the **appointment's provider**.
 
-**Labels:** the task inherits the cancelled appointment's active labels, and adds
+**Labels:** the task inherits the original appointment's active labels, and adds
 a `Reschedule` label only if a label of that name already exists in the instance
 (it never creates new labels).
 
@@ -46,12 +48,15 @@ falling back to the appointment's comment, then `Not documented`.
 (`self.environment["INSTALLATION_TIME_ZONE"]`), falling back to UTC.
 
 The handler does nothing when the appointment can't be found, is marked
-entered-in-error, or its start time is missing or already in the past.
+entered-in-error, or its start time is missing. For **cancellations** it also
+skips appointments whose start time has already passed (there's nothing left to
+reschedule); **no-shows** are always in the past by definition, so that guard
+doesn't apply to them.
 
 ## How to install
 
 ```
-canvas install cancelled-appointment-notifications
+canvas install missed-appointment-notifications
 ```
 
 Then (optionally) set the `SCHEDULING_TEAM_NAME` variable on the plugin's
@@ -82,7 +87,7 @@ with the provider and original appointment time, due the next day, labelled
 ```
 uv sync
 uv run pytest          # run tests
-uv run mypy cancelled_appointment_notifications
+uv run mypy missed_appointment_notifications
 ```
 
 ## License

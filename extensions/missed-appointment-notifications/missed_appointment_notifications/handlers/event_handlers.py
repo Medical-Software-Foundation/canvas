@@ -35,8 +35,8 @@ INSTALLATION_TIME_ZONE_ENV = "INSTALLATION_TIME_ZONE"
 DEFAULT_TIMEZONE = "UTC"
 
 
-class CancelledAppointmentNotificationHandler(BaseHandler):
-    """Create a reschedule task when an appointment is cancelled.
+class MissedAppointmentNotificationHandler(BaseHandler):
+    """Create a reschedule task when an appointment is cancelled or no-showed.
 
     The task is routed to a scheduling team (configured by name via the
     ``SCHEDULING_TEAM_NAME`` secret) when one is found, otherwise to the
@@ -44,10 +44,16 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
     (reason for visit, provider, date/time, location, note type) is attached.
     """
 
-    RESPONDS_TO = [EventType.Name(EventType.APPOINTMENT_CANCELED)]
+    RESPONDS_TO = [
+        EventType.Name(EventType.APPOINTMENT_CANCELED),
+        EventType.Name(EventType.APPOINTMENT_NO_SHOWED),
+    ]
 
     def compute(self) -> list[Effect]:
-        """Build a reschedule task (and summary comment) for the cancellation."""
+        """Build a reschedule task (and summary comment) for the cancellation
+        or no-show."""
+        is_no_show = self.event.type == EventType.APPOINTMENT_NO_SHOWED
+
         appointment_id = self.event.target.id
         try:
             appointment = Appointment.objects.select_related(
@@ -57,7 +63,7 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
             # The event implies the appointment exists; log defensively and bail
             # rather than raising on a record we can no longer read.
             log.warning(
-                "CancelledAppointmentNotifications: appointment %s not found",
+                "MissedAppointmentNotifications: appointment %s not found",
                 appointment_id,
             )
             return []
@@ -66,10 +72,13 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
         if appointment.entered_in_error_id is not None:
             return []
 
+        if appointment.start_time is None:
+            return []
+
         # Skip cancellations of appointments that have already started/passed —
-        # there is nothing to reschedule.
-        now = arrow.utcnow().datetime
-        if appointment.start_time is None or appointment.start_time <= now:
+        # there is nothing to reschedule. No-shows are inherently in the past
+        # (the patient missed the scheduled time), so this guard doesn't apply.
+        if not is_no_show and appointment.start_time <= arrow.utcnow().datetime:
             return []
 
         tz = self._timezone()
@@ -77,7 +86,7 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
         task_kwargs: dict = {
             "id": task_id,
             "patient_id": str(appointment.patient.id) if appointment.patient else None,
-            "title": self._task_title(appointment, tz),
+            "title": self._task_title(appointment, tz, is_no_show),
             "due": arrow.utcnow().shift(days=RESCHEDULE_DUE_DAYS).datetime,
             "status": TaskStatus.OPEN,
             "labels": self._labels(appointment),
@@ -85,7 +94,7 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
         task_kwargs.update(self._resolve_assignment(appointment))
 
         comment = AddTaskComment(
-            task_id=task_id, body=self._comment_body(appointment, tz)
+            task_id=task_id, body=self._comment_body(appointment, tz, is_no_show)
         )
 
         return [AddTask(**task_kwargs).apply(), comment.apply()]
@@ -106,7 +115,7 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
         # Appointments always have a provider in practice; this guards against
         # silently dropping the work if that ever isn't true.
         log.warning(
-            "CancelledAppointmentNotifications: appointment %s has no scheduling team "
+            "MissedAppointmentNotifications: appointment %s has no scheduling team "
             "or provider; creating an unassigned reschedule task",
             appointment.id,
         )
@@ -121,7 +130,7 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
         team = Team.objects.filter(name__iexact=team_name).first()
         if team is None:
             log.warning(
-                "CancelledAppointmentNotifications: no team named %r found; "
+                "MissedAppointmentNotifications: no team named %r found; "
                 "falling back to the appointment provider",
                 team_name,
             )
@@ -150,7 +159,9 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
 
         return labels
 
-    def _comment_body(self, appointment: Appointment, tz: str) -> str:
+    def _comment_body(
+        self, appointment: Appointment, tz: str, is_no_show: bool
+    ) -> str:
         """A summary of the original appointment for the reschedule task."""
         provider = appointment.provider.full_name if appointment.provider else "Unknown"
         when = self._format_local(appointment.start_time, tz)
@@ -161,8 +172,9 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
             appointment.note_type.name if appointment.note_type else "Not specified"
         )
 
+        verb = "no-showed" if is_no_show else "cancelled"
         return (
-            "Appointment cancelled — reschedule needed.\n"
+            f"Appointment {verb} — reschedule needed.\n"
             f"Reason for visit: {self._reason_for_visit(appointment)}\n"
             f"Provider: {provider}\n"
             f"Date/time: {when}\n"
@@ -220,12 +232,13 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
 
         return " — ".join(parts)
 
-    def _task_title(self, appointment: Appointment, tz: str) -> str:
+    def _task_title(self, appointment: Appointment, tz: str, is_no_show: bool) -> str:
         """Human-readable task title with provider and original appointment time."""
         original = self._format_local(appointment.start_time, tz)
         provider = appointment.provider.full_name if appointment.provider else None
         suffix = f" with {provider}" if provider else ""
-        return f"Reschedule cancelled appointment{suffix} (originally {original})"
+        verb = "no-showed" if is_no_show else "cancelled"
+        return f"Reschedule {verb} appointment{suffix} (originally {original})"
 
     def _timezone(self) -> str:
         """The instance timezone (IANA name) from the environment, or UTC.
@@ -241,7 +254,7 @@ class CancelledAppointmentNotificationHandler(BaseHandler):
             arrow.utcnow().to(tz_name)
         except (ValueError, KeyError):
             log.warning(
-                "CancelledAppointmentNotifications: invalid timezone %r; using %s",
+                "MissedAppointmentNotifications: invalid timezone %r; using %s",
                 tz_name,
                 DEFAULT_TIMEZONE,
             )

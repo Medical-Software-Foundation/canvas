@@ -1,0 +1,25 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "missed_appointment_notifications",
+    "description": "When an appointment is cancelled or no-showed, creates a follow-up task for scheduling/front-desk staff to rebook the patient, routed to a scheduling team (by configured name) or the appointment's provider, with a comment summarising the original appointment.",
+    "components": {
+        "handlers": [
+            {
+                "class": "missed_appointment_notifications.handlers.event_handlers:MissedAppointmentNotificationHandler",
+                "description": "Listens for APPOINTMENT_CANCELED and APPOINTMENT_NO_SHOWED and creates a reschedule task (with an appointment-summary comment) for the patient, assigned to the scheduling team or the appointment provider.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Appointment", "Team", "Patient", "Staff", "Command", "TaskLabel", "NoteType", "PracticeLocation"],
+                    "write": []
+                }
+            }
+        ]
+    },
+    "variables": [{"name": "SCHEDULING_TEAM_NAME", "sensitive": true}],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
