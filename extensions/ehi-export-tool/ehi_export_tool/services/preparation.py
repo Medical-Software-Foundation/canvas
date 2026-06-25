@@ -39,6 +39,9 @@ def prepare_job(client: EHIExportClient, storage: ExportStorage, job) -> Prepara
     if job.s3_key:
         return PreparationResult(PreparationResult.READY, job.s3_key)
 
+    if (getattr(job, "format", "ehi") or "ehi") == "ccda":
+        return _prepare_ccda(client, storage, job)
+
     status = client.get_status(job.job_id)
     if status["status"] != "complete":
         # Keep the persisted status in step (also advances attempts/updated_at).
@@ -59,6 +62,28 @@ def prepare_job(client: EHIExportClient, storage: ExportStorage, job) -> Prepara
 
     ExportJobService.mark_uploaded(job.job_id, key, output=status["output"])
     log.info("prepare_job: uploaded export for patient %s to %s", job.patient.id, key)
+    return PreparationResult(PreparationResult.READY, key)
+
+
+def _prepare_ccda(client: EHIExportClient, storage: ExportStorage, job) -> PreparationResult:
+    """Fetch a patient's C-CDA XML and stage it in S3. Synchronous — no polling."""
+    xml = client.fetch_ccda(
+        patient_key=str(job.patient.id),
+        document_type=job.document_type or "continuity",
+        start_date=job.start_date or "",
+        end_date=job.end_date or "",
+    )
+    key = storage.ccda_key(
+        batch_id=job.batch_id,
+        patient_id=str(job.patient.id),
+        patient_name=_patient_name(job.patient),
+    )
+    if not storage.upload_xml(key, xml):
+        ExportJobService.update_status(job.job_id, "complete", error="S3 upload failed")
+        return PreparationResult(PreparationResult.FAILED)
+
+    ExportJobService.mark_uploaded(job.job_id, key)
+    log.info("prepare_job: uploaded C-CDA for patient %s to %s", job.patient.id, key)
     return PreparationResult(PreparationResult.READY, key)
 
 

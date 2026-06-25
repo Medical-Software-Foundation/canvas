@@ -50,8 +50,15 @@ class ExportJob(CustomModel):
         related_name="started_ehi_exports",
         null=True,
     )
+    # Which export this row is: "ehi" (FHIR $export -> NDJSON, asynchronous) or
+    # "ccda" (data-export/ccda -> a single C-CDA XML document, synchronous).
+    format = TextField(default="ehi")  # "ehi" | "ccda"
+    # CCDA only: which document to generate and an optional date window.
+    document_type = TextField(default="")  # "continuity" | "referral"
+    start_date = TextField(default="")  # optional YYYY-MM-DD
+    end_date = TextField(default="")  # optional YYYY-MM-DD
     job_id = TextField()
-    status = TextField()  # "in-progress" | "complete" | "error"
+    status = TextField()  # "queued" | "in-progress" | "complete" | "error"
     output = JSONField(default=list)  # bulkstatus output: [{"type": ..., "url": ...}, ...]
     # S3 object key of the prepared per-patient JSON, set once uploaded. Empty
     # until the cron (or an on-demand download) has merged + stored the bundle.

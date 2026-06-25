@@ -333,7 +333,7 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
 
     @api.get("/download")
     def get_download(self) -> list[Response | Effect]:
-        """Download one patient's export as a single ``.ndjson``.
+        """Download one patient's export — a ``.ndjson`` (EHI) or ``.xml`` (C-CDA).
 
         No S3 needed: if S3 is configured the file is staged there and we redirect
         to a presigned URL; otherwise the plugin builds the NDJSON on demand and
@@ -369,24 +369,34 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
                     return [_error("could not generate a download URL", HTTPStatus.BAD_GATEWAY)]
                 return [Response(status_code=HTTPStatus.FOUND, headers={"Location": url})]
 
-            # No S3 (or inline requested): build the NDJSON on demand and stream it.
-            status = client.get_status(job.job_id)
-            if status["status"] != "complete":
-                return [_error("export is still processing", HTTPStatus.CONFLICT)]
-            ndjson = client.build_patient_ndjson(status["output"])
+            # No S3 (or inline requested): build the file on demand and stream it.
+            if (getattr(job, "format", "ehi") or "ehi") == "ccda":
+                body = client.fetch_ccda(
+                    patient_key=str(job.patient.id),
+                    document_type=job.document_type or "continuity",
+                    start_date=job.start_date or "",
+                    end_date=job.end_date or "",
+                )
+                content_type = "application/xml; charset=utf-8"
+            else:
+                status = client.get_status(job.job_id)
+                if status["status"] != "complete":
+                    return [_error("export is still processing", HTTPStatus.CONFLICT)]
+                body = client.build_patient_ndjson(status["output"])
+                content_type = "application/x-ndjson; charset=utf-8"
         except EHIConfigError as exc:
             return [_error(str(exc), HTTPStatus.BAD_REQUEST)]
         except EHIExportError as exc:
             log.error("ExportAPI.get_download failed for job %s: %s", job_id, exc)
             return [_error(str(exc), HTTPStatus.BAD_GATEWAY)]
 
-        filename = _ndjson_filename(job)
+        filename = _export_filename(job)
         return [
             Response(
-                content=ndjson.encode("utf-8"),
+                content=body.encode("utf-8"),
                 status_code=HTTPStatus.OK,
                 headers={
-                    "Content-Type": "application/x-ndjson; charset=utf-8",
+                    "Content-Type": content_type,
                     "Content-Disposition": f'attachment; filename="{filename}"',
                 },
             )
@@ -402,12 +412,27 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
           {"patient_ids": [...]}                     — queue these specific patients
           {"all_matching": true, "search","export","include_inactive"} — queue the
                                                         whole filtered set, server-side
-        Returns ``{batch_id, queued}``. Fire-and-forget: no $export here, so the
-        browser can queue thousands instantly and close the tab.
+        Optional, applies to both: {"format": "ehi"|"ccda", "document_type":
+        "continuity"|"referral", "start_date","end_date"}. EHI jobs queue for the
+        throttled poller; C-CDA jobs are created complete (synchronous, fetched on
+        download). Returns ``{batch_id, queued}``.
         """
         body = self.request.json()
         staff_id = (self.request.headers.get("canvas-logged-in-user-id") or "").strip()
         batch_id = str(uuid4())
+
+        export_format = (body.get("format") or "ehi").strip().lower()
+        if export_format not in ("ehi", "ccda"):
+            return [_error("format must be 'ehi' or 'ccda'", HTTPStatus.BAD_REQUEST)]
+        document_type = (body.get("document_type") or "").strip().lower()
+        if export_format == "ccda" and document_type not in ("continuity", "referral"):
+            return [_error("document_type must be 'continuity' or 'referral'", HTTPStatus.BAD_REQUEST)]
+        opts = {
+            "format": export_format,
+            "document_type": document_type,
+            "start_date": (body.get("start_date") or "").strip(),
+            "end_date": (body.get("end_date") or "").strip(),
+        }
 
         if body.get("all_matching"):
             queryset = self._filtered_patients(
@@ -415,14 +440,17 @@ class ExportAPI(StaffSessionAuthMixin, SimpleAPI):
                 include_inactive=bool(body.get("include_inactive")),
                 export=(body.get("export") or "").strip(),
             )
-            queued = ExportJobService.enqueue_queryset(queryset, batch_id, staff_id)
+            queued = ExportJobService.enqueue_queryset(queryset, batch_id, staff_id, **opts)
         else:
             patient_ids = [pid for pid in (body.get("patient_ids") or []) if pid]
             if not patient_ids:
                 return [_error("no patients to export", HTTPStatus.BAD_REQUEST)]
-            queued = ExportJobService.enqueue_patient_ids(patient_ids, batch_id, staff_id)
+            queued = ExportJobService.enqueue_patient_ids(patient_ids, batch_id, staff_id, **opts)
 
-        log.info("ExportAPI.enqueue_export: queued %d job(s) in batch %s", queued, batch_id)
+        log.info(
+            "ExportAPI.enqueue_export: queued %d %s job(s) in batch %s",
+            queued, export_format, batch_id,
+        )
         return [JSONResponse({"batch_id": batch_id, "queued": queued}, status_code=HTTPStatus.OK)]
 
     @api.post("/export/start")
@@ -596,8 +624,11 @@ def _error(message: str, status_code: HTTPStatus) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status_code)
 
 
-def _ndjson_filename(job) -> str:
-    """A safe ``<Last>_<First>_<id>.ndjson`` download filename for a job's patient."""
+def _export_filename(job) -> str:
+    """A safe ``<Last>_<First>_<id>.<ext>`` download filename for a job's patient.
+
+    Extension follows the export format: ``.xml`` for C-CDA, ``.ndjson`` for EHI.
+    """
     import re
 
     patient = job.patient
@@ -605,7 +636,8 @@ def _ndjson_filename(job) -> str:
     first = (getattr(patient, "first_name", "") or "").strip()
     base = f"{last}_{first}_{patient.id}".strip("_")
     base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("_")[:120] or str(patient.id)
-    return f"{base}.ndjson"
+    ext = "xml" if (getattr(job, "format", "ehi") or "ehi") == "ccda" else "ndjson"
+    return f"{base}.{ext}"
 
 
 def _parse_int(

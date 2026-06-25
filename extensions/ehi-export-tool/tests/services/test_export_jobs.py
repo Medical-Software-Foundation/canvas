@@ -68,6 +68,56 @@ def test_enqueue_patient_ids_empty() -> None:
     assert ExportJobService.enqueue_patient_ids([], "b1", "s-1") == 0
 
 
+def test_enqueue_patient_ids_ehi_rows_are_queued() -> None:
+    with patch(f"{_SVC}.CustomPatient") as MockPatient, patch(
+        f"{_SVC}.CustomStaff"
+    ) as MockStaff, patch(f"{_SVC}.ExportJob") as MockJob:
+        MockPatient.objects.filter.return_value.values_list.return_value = [("p-1", 11)]
+        MockStaff.objects.filter.return_value.values_list.return_value.first.return_value = 99
+        ExportJobService.enqueue_patient_ids(["p-1"], "b1", "s-1")
+
+    kwargs = MockJob.call_args_list[0].kwargs
+    assert kwargs["status"] == "queued"
+    assert kwargs["format"] == "ehi"
+    assert kwargs["job_id"] == ""  # no handle until the poller starts it
+
+
+def test_enqueue_patient_ids_ccda_with_team_lead_is_complete() -> None:
+    with patch(f"{_SVC}.CustomPatient") as MockPatient, patch(
+        f"{_SVC}.CustomStaff"
+    ) as MockStaff, patch(f"{_SVC}.ExportJob") as MockJob, patch(
+        f"{_SVC}._dbids_with_team_lead", return_value={11}
+    ):
+        MockPatient.objects.filter.return_value.values_list.return_value = [("p-1", 11)]
+        MockStaff.objects.filter.return_value.values_list.return_value.first.return_value = 99
+        ExportJobService.enqueue_patient_ids(
+            ["p-1"], "b1", "s-1",
+            format="ccda", document_type="continuity", start_date="2025-01-01",
+        )
+
+    kwargs = MockJob.call_args_list[0].kwargs
+    assert kwargs["status"] == "complete"  # has a lead -> ready on demand
+    assert kwargs["format"] == "ccda"
+    assert kwargs["document_type"] == "continuity"
+    assert kwargs["start_date"] == "2025-01-01"
+    assert kwargs["job_id"]  # synthetic uuid download handle
+
+
+def test_enqueue_patient_ids_ccda_without_team_lead_is_error() -> None:
+    with patch(f"{_SVC}.CustomPatient") as MockPatient, patch(
+        f"{_SVC}.CustomStaff"
+    ) as MockStaff, patch(f"{_SVC}.ExportJob") as MockJob, patch(
+        f"{_SVC}._dbids_with_team_lead", return_value=set()  # no lead
+    ):
+        MockPatient.objects.filter.return_value.values_list.return_value = [("p-1", 11)]
+        MockStaff.objects.filter.return_value.values_list.return_value.first.return_value = 99
+        ExportJobService.enqueue_patient_ids(["p-1"], "b1", "s-1", format="ccda", document_type="referral")
+
+    kwargs = MockJob.call_args_list[0].kwargs
+    assert kwargs["status"] == "error"
+    assert "Team Lead" in kwargs["last_error"]
+
+
 def test_enqueue_queryset_streams_dbids() -> None:
     qs = MagicMock()
     qs.values_list.return_value.iterator.return_value = iter([1, 2, 3])
@@ -176,11 +226,15 @@ def test_serialize_shape() -> None:
     job = _job(job_id="j", status="complete", attempts=4, output=[{"url": "a"}, {"url": "b"}])
     job.batch_id = "b1"
     job.s3_key = "ehi-exports/b1/Lovelace_Ada_p-1.json"
+    job.format = "ehi"
+    job.document_type = ""
     out = ExportJobService.serialize(job)
     assert out == {
         "job_id": "j",
         "batch_id": "b1",
         "status": "complete",
+        "format": "ehi",
+        "document_type": "",
         "attempts": 4,
         "file_count": 2,
         "last_error": "",

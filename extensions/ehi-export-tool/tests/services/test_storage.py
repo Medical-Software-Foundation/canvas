@@ -43,6 +43,24 @@ def test_patient_key_sanitizes_segments() -> None:
     assert " " not in key and "'" not in key
 
 
+def test_ccda_key_uses_xml_extension() -> None:
+    with patch(_S3):
+        storage = ExportStorage.from_secrets(FULL)
+    key = storage.ccda_key(batch_id="b1", patient_id="p-1", patient_name="Lovelace, Ada")
+    assert key.startswith("ehi-exports/b1/")
+    assert key.endswith(".xml")
+
+
+def test_upload_xml_uses_xml_content_type() -> None:
+    client = MagicMock()
+    client.upload_binary_to_s3.return_value = MagicMock(ok=True)
+    storage = ExportStorage(client, "ehi-exports")
+    assert storage.upload_xml("k.xml", "<x/>") is True
+    args = client.upload_binary_to_s3.call_args[0]
+    assert args[0] == "k.xml"
+    assert args[2] == "application/xml"
+
+
 def test_upload_ndjson_uses_ndjson_content_type_and_reports_success() -> None:
     client = MagicMock()
     client.upload_binary_to_s3.return_value = MagicMock(ok=True)

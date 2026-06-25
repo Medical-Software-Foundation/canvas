@@ -1,13 +1,19 @@
-# EHI Export
+# EHI &amp; C-CDA Export
 
 A staff-facing Canvas application — shown in the **provider (hamburger) menu** —
-for exporting patients' complete **Electronic Health Information (EHI)** across
-the patient population. Pick patients (one, several, or *everyone matching a
-filter*), and the plugin exports each patient's full record as a single
-**NDJSON** file, prepared in the background and served by the plugin. **No S3 is
-required** — download one patient's file directly, or a group as a single ZIP
-assembled in your browser. S3 is optional and only adds presigned downloads and
-whole-instance `aws s3 sync`.
+for exporting patient records across the population in two formats:
+
+- **EHI** (Electronic Health Information) — every FHIR resource Canvas holds for
+  a patient, via the bulk-data `$export` flow, as one **NDJSON** file per
+  patient. Asynchronous: queued and prepared in the background.
+- **C-CDA** — a **Continuity of Care** or **Referral** document via
+  `data-export/ccda`, as **XML**. Synchronous: generated on demand and ready
+  immediately.
+
+Pick patients (one, several, or *everyone matching a filter*) and the chosen
+format. **No S3 is required** — download one patient's file directly, or a group
+as a single ZIP assembled in your browser. S3 is optional and only adds
+presigned downloads and whole-instance `aws s3 sync`.
 
 It's built so that **whole-instance exports never overload Canvas**: work is
 queued and drained by a throttled background task (see

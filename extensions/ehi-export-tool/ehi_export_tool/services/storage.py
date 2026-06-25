@@ -55,9 +55,16 @@ class ExportStorage:
 
     def patient_key(self, batch_id: str, patient_id: str, patient_name: str = "") -> str:
         """Build the S3 object key for a patient's export NDJSON."""
+        return self._object_key(batch_id, patient_id, patient_name, "ndjson")
+
+    def ccda_key(self, batch_id: str, patient_id: str, patient_name: str = "") -> str:
+        """Build the S3 object key for a patient's C-CDA XML document."""
+        return self._object_key(batch_id, patient_id, patient_name, "xml")
+
+    def _object_key(self, batch_id: str, patient_id: str, patient_name: str, ext: str) -> str:
         folder = _safe_segment(batch_id, fallback="unbatched")
         name = _safe_segment(f"{patient_name}_{patient_id}".strip("_"), fallback=patient_id)
-        return f"{self._prefix}/{folder}/{name}.ndjson"
+        return f"{self._prefix}/{folder}/{name}.{ext}"
 
     def batch_prefix(self, batch_id: str) -> str:
         """The S3 key prefix for an entire run (for `aws s3 sync`)."""
@@ -65,8 +72,15 @@ class ExportStorage:
 
     def upload_ndjson(self, object_key: str, ndjson_text: str) -> bool:
         """Upload prepared NDJSON text as application/x-ndjson. Returns True on success."""
+        return self._upload(object_key, ndjson_text, "application/x-ndjson")
+
+    def upload_xml(self, object_key: str, xml_text: str) -> bool:
+        """Upload a prepared C-CDA document as application/xml. Returns True on success."""
+        return self._upload(object_key, xml_text, "application/xml")
+
+    def _upload(self, object_key: str, text: str, content_type: str) -> bool:
         response = self._client.upload_binary_to_s3(
-            object_key, ndjson_text.encode("utf-8"), "application/x-ndjson"
+            object_key, text.encode("utf-8"), content_type
         )
         ok = bool(response and getattr(response, "ok", False))
         if not ok:

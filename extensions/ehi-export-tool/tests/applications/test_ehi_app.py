@@ -14,4 +14,4 @@ def test_on_open_launches_full_page_workspace() -> None:
     assert data["target"] == "page"
     assert data["url"].startswith("/plugin-io/api/ehi_export_tool/app/")
     assert "v=" in data["url"]  # cache-busted
-    assert data["title"] == "EHI Export"
+    assert data["title"] == "EHI & C-CDA Export"

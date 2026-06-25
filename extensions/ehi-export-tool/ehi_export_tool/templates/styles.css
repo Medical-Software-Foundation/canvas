@@ -277,6 +277,14 @@ body {
   border-top: 1px solid #e2e8f0;
 }
 .actions__hint { font-size: 0.85rem; color: #64748b; }
+.actions {
+  flex-wrap: wrap;
+}
+.actions__format { display: flex; align-items: center; gap: 6px; }
+.actions__format-label { font-size: 0.85rem; color: #475569; font-weight: 600; }
+.actions__dates { display: inline-flex; align-items: center; gap: 10px; }
+.actions__date { display: inline-flex; align-items: center; gap: 4px; font-size: 0.82rem; color: #475569; }
+.actions__date .text-input { padding: 5px 8px; }
 
 /* ── export runs panel ──────────────────────────────────────────────────── */
 

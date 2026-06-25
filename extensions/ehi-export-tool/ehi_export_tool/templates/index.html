@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EHI Export</title>
+  <title>EHI & C-CDA Export</title>
   <link rel="stylesheet" href="{{ api_prefix }}/app/styles.css?v={{ cache_bust }}" />
 </head>
 <body>
   <div id="app">
     <header class="header">
-      <h1 class="header__title">EHI Export</h1>
+      <h1 class="header__title">EHI &amp; C-CDA Export</h1>
       <p class="header__subtitle">Export complete electronic health information per patient.</p>
     </header>
 
@@ -17,8 +17,8 @@
 
     <div id="main-view">
     <div class="intro">
-      <p class="intro__lead">Export a patient's complete electronic health information (EHI) — every FHIR resource Canvas holds for them — as one NDJSON file per patient.</p>
-      <p class="intro__body">Search or filter the patient list, then export a single patient with the <strong>Export</strong> button, or tick several and use <strong>Export selected</strong> — or <strong>Export all matching</strong> to export everyone in the current filter.</p>
+      <p class="intro__lead">Export patient records in either format: full <strong>EHI</strong> (every FHIR resource Canvas holds, as one NDJSON file per patient) or a <strong>C-CDA</strong> document (Continuity of Care or Referral, as XML). Choose the format with the <strong>Format</strong> selector below.</p>
+      <p class="intro__body">Search or filter the patient list, then export a single patient with the <strong>Export</strong> button, or tick several and use <strong>Export selected</strong> — or <strong>Export all matching</strong> to export everyone in the current filter. EHI exports run in the background; C-CDA documents are generated on demand and ready immediately.</p>
       <p class="intro__note">💡 No matter how many patients you choose, exports are queued and run automatically in small batches in the background, so your Canvas instance is never overloaded. You don't need to keep this page open — come back any time to check progress and download finished files under <strong>Export runs</strong> or each patient's <strong>Last export</strong>.</p>
     </div>
     <div class="toolbar">
@@ -83,6 +83,18 @@
     </div>
 
     <footer class="actions">
+      <label class="actions__format">
+        <span class="actions__format-label">Format</span>
+        <select id="export-format" class="filter-select">
+          <option value="ehi">EHI — full record (NDJSON)</option>
+          <option value="continuity">C-CDA — Continuity of Care (XML)</option>
+          <option value="referral">C-CDA — Referral (XML)</option>
+        </select>
+      </label>
+      <span id="ccda-dates" class="actions__dates" style="display:none;">
+        <label class="actions__date">From <input id="ccda-start" type="date" class="text-input" /></label>
+        <label class="actions__date">To <input id="ccda-end" type="date" class="text-input" /></label>
+      </span>
       <button id="export-btn" class="btn btn--primary" disabled>Export selected (0)</button>
       <button id="export-all-btn" class="btn" disabled>Export all matching (0)</button>
       <button id="zip-selected-btn" class="btn" disabled>Download .zip (0)</button>

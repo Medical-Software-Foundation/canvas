@@ -24,5 +24,5 @@ class EHIExportApp(Application):
         return LaunchModalEffect(
             url=f"/plugin-io/api/ehi_export_tool/app/?v={_CACHE_BUST}",
             target=LaunchModalEffect.TargetType.PAGE,
-            title="EHI Export",
+            title="EHI & C-CDA Export",
         ).apply()

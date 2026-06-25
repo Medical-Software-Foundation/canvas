@@ -31,6 +31,9 @@
     searchTerm: "",
     includeInactive: false,
     exportFilter: "",            // "" | completed | failed | in_progress | none
+    exportFormat: "ehi",         // "ehi" | "continuity" | "referral" (CCDA doc types)
+    ccdaStart: "",               // optional CCDA start_date (YYYY-MM-DD)
+    ccdaEnd: "",                 // optional CCDA end_date (YYYY-MM-DD)
     cancelRequested: false,
     configured: true,            // FHIR creds present (pre-flight)
     s3Configured: true,          // S3 creds present (pre-flight)
@@ -70,6 +73,10 @@
     exportBtn: $("export-btn"),
     exportAllBtn: $("export-all-btn"),
     zipSelectedBtn: $("zip-selected-btn"),
+    exportFormat: $("export-format"),
+    ccdaDates: $("ccda-dates"),
+    ccdaStart: $("ccda-start"),
+    ccdaEnd: $("ccda-end"),
     exportHint: $("export-hint"),
     refreshRuns: $("refresh-runs"),
     runsEmpty: $("runs-empty"),
@@ -304,14 +311,32 @@
     return btn;
   }
 
-  // One-click single-patient export. Starts immediately (no queue/cron wait —
-  // throttling only matters for groups) and polls to completion, live.
+  // One-click single-patient export. EHI starts immediately (no queue/cron
+  // wait) and polls to completion. C-CDA is synchronous — one enqueue creates a
+  // ready-to-download row instantly, no polling.
   async function exportOne(patient) {
     if (!state.configured) {
       showBanner("Configure FHIR credentials before exporting.", true);
       return;
     }
     const now = () => new Date().toISOString();
+
+    if (isCcda()) {
+      renderPatientJob(patient, { status: "in-progress", updated_at: now() });
+      try {
+        await postJSON(API + "/export/enqueue", {
+          patient_ids: [patient.id],
+          ...currentExportOptions(),
+        });
+      } catch (err) {
+        renderPatientJob(patient, { status: "error", last_error: err.message, updated_at: now() });
+        return;
+      }
+      loadJobStatuses();
+      loadRuns();
+      return;
+    }
+
     const batchId = newBatchId();
     renderPatientJob(patient, { status: "in-progress", updated_at: now() });
 
@@ -638,8 +663,9 @@
   function zipSegment(s) {
     return String(s || "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "x";
   }
-  function zipEntryName(last, first, pid) {
-    return `${zipSegment(last)}_${zipSegment(first)}_${zipSegment(pid)}.ndjson`;
+  function zipEntryName(last, first, pid, format) {
+    const ext = format === "ccda" ? "xml" : "ndjson";
+    return `${zipSegment(last)}_${zipSegment(first)}_${zipSegment(pid)}.${ext}`;
   }
 
   function saveBlob(blob, filename) {
@@ -653,22 +679,33 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  // Fetch each item's NDJSON (bounded concurrency), then build + save the ZIP.
-  // items: [{job_id, name}]. Returns true on success.
+  // Fetch each item's file (bounded concurrency), then build + save the ZIP.
+  // items: [{job_id, name}]. A file that fails to download (e.g. a C-CDA whose
+  // patient has no Team Lead) is skipped, not fatal — we still zip the rest and
+  // return the list of failures so the caller can report them.
+  // Returns {ok, failures: [{name, error}]}.
   async function downloadZip(items, zipName, onProgress) {
     const results = new Array(items.length);
+    const failures = [];
     let next = 0;
     let done = 0;
     async function worker() {
       while (next < items.length) {
         const i = next++;
         const it = items[i];
-        const resp = await fetch(
-          API + "/download?" + buildQuery({ job_id: it.job_id, inline: 1 }),
-          { headers: { Accept: "application/x-ndjson" } }
-        );
-        if (!resp.ok) throw new Error(`download failed for ${it.name} (HTTP ${resp.status})`);
-        results[i] = { name: it.name, bytes: new Uint8Array(await resp.arrayBuffer()) };
+        try {
+          const resp = await fetch(
+            API + "/download?" + buildQuery({ job_id: it.job_id, inline: 1 }),
+            { headers: { Accept: "application/x-ndjson, application/xml" } }
+          );
+          if (!resp.ok) {
+            const detail = await resp.json().catch(() => ({}));
+            throw new Error(detail.error || `HTTP ${resp.status}`);
+          }
+          results[i] = { name: it.name, bytes: new Uint8Array(await resp.arrayBuffer()) };
+        } catch (err) {
+          failures.push({ name: it.name, error: err.message });
+        }
         done++;
         if (onProgress) onProgress(done, items.length);
       }
@@ -676,9 +713,11 @@
     await Promise.all(
       Array.from({ length: Math.min(ZIP_FETCH_CONC, items.length) }, worker)
     );
-    const blob = await buildZip(results);
-    saveBlob(blob, zipName);
-    return true;
+    const entries = results.filter(Boolean);
+    if (entries.length > 0) {
+      saveBlob(await buildZip(entries), zipName);
+    }
+    return { ok: entries.length > 0, failures };
   }
 
   // "Download .zip" for the current selection — zips each selected patient's
@@ -699,7 +738,7 @@
     patients.forEach((p) => {
       const job = jobs[p.id];
       if (job && job.status === "complete" && job.job_id) {
-        items.push({ job_id: job.job_id, name: zipEntryName(p.last_name, p.first_name, p.id) });
+        items.push({ job_id: job.job_id, name: zipEntryName(p.last_name, p.first_name, p.id, job.format) });
       } else {
         skipped++;
       }
@@ -734,7 +773,7 @@
         }));
         (data.jobs || []).forEach((j) => {
           if (j.job_id) {
-            items.push({ job_id: j.job_id, name: zipEntryName(j.last_name, j.first_name, j.patient_id) });
+            items.push({ job_id: j.job_id, name: zipEntryName(j.last_name, j.first_name, j.patient_id, j.format) });
           }
         });
         if (!data.has_more) break;
@@ -763,10 +802,22 @@
     const original = btn.textContent;
     btn.disabled = true;
     try {
-      await downloadZip(items, zipName, (done, total) => {
+      const { ok, failures } = await downloadZip(items, zipName, (done, total) => {
         btn.textContent = `Zipping… ${done}/${total}`;
       });
-      showBanner(`Downloaded ${items.length} patient file(s) as ${zipName}${note}.`, false);
+      const got = items.length - failures.length;
+      if (!ok) {
+        const why = failures.length ? ` First error: ${failures[0].error}` : "";
+        showBanner(`No files could be downloaded, so no ZIP was created.${why}`, true);
+      } else if (failures.length) {
+        showBanner(
+          `Downloaded ${got} of ${items.length} as ${zipName}${note}. ` +
+          `${failures.length} skipped (e.g. ${failures[0].name}: ${failures[0].error}).`,
+          true
+        );
+      } else {
+        showBanner(`Downloaded ${got} patient file(s) as ${zipName}${note}.`, false);
+      }
     } catch (err) {
       showBanner("ZIP download failed: " + err.message, true);
     } finally {
@@ -778,11 +829,28 @@
 
   // ── export orchestration (fire-and-forget) ──────────────────────────────
 
+  // The export format chosen in the toolbar, as request-body fields.
+  // "ehi" -> FHIR $export (NDJSON); "continuity"/"referral" -> C-CDA XML.
+  function currentExportOptions() {
+    const v = state.exportFormat;
+    if (v === "ehi") return { format: "ehi" };
+    return {
+      format: "ccda",
+      document_type: v,
+      start_date: state.ccdaStart || "",
+      end_date: state.ccdaEnd || "",
+    };
+  }
+
+  function isCcda() {
+    return state.exportFormat === "continuity" || state.exportFormat === "referral";
+  }
+
   // Queue the selected patients (server starts them, throttled). Fire-and-forget.
   async function startExport() {
     if (state.selected.size === 0) return;
     const ids = Array.from(state.selected.keys());
-    await enqueueExport({ patient_ids: ids }, ids.length);
+    await enqueueExport({ patient_ids: ids, ...currentExportOptions() }, ids.length);
   }
 
   // Queue every patient matching the current filters — server-side, no cap.
@@ -796,6 +864,7 @@
         search: state.searchTerm,
         include_inactive: state.includeInactive,
         export: state.exportFilter,
+        ...currentExportOptions(),
       },
       n
     );
@@ -1137,6 +1206,13 @@
   els.exportBtn.addEventListener("click", startExport);
   els.exportAllBtn.addEventListener("click", exportAllMatching);
   els.zipSelectedBtn.addEventListener("click", zipSelected);
+  els.exportFormat.addEventListener("change", () => {
+    state.exportFormat = els.exportFormat.value;
+    els.ccdaDates.style.display = isCcda() ? "" : "none";
+    syncSelectionUI();
+  });
+  els.ccdaStart.addEventListener("change", () => { state.ccdaStart = els.ccdaStart.value; });
+  els.ccdaEnd.addEventListener("change", () => { state.ccdaEnd = els.ccdaEnd.value; });
   els.refreshRuns.addEventListener("click", loadRuns);
   els.showAllRuns.addEventListener("click", openAllRuns);
   els.allRunsBack.addEventListener("click", showMainView);

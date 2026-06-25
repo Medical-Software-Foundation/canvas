@@ -220,6 +220,33 @@ def test_get_download_inline_streams_bytes_even_with_s3() -> None:
     storage.presigned_url.assert_not_called()
 
 
+def test_get_download_ccda_streams_xml() -> None:
+    """A C-CDA job streams the fetched XML with an .xml filename (no S3)."""
+    inst = _api(query_params={"job_id": "j1"}, secrets=CONFIGURED_SECRETS)  # no S3
+    patient = SimpleNamespace(id="p-1", first_name="Ada", last_name="Lovelace")
+    job = SimpleNamespace(
+        job_id="j1", patient=patient, format="ccda",
+        document_type="continuity", start_date="", end_date="",
+    )
+    client = MagicMock()
+    client.fetch_ccda.return_value = "<ClinicalDocument/>"
+    with patch(_STORAGE) as MockStorage, patch(
+        "ehi_export_tool.handlers.export_api.ExportJobService.get_with_patient", return_value=job
+    ), patch(_CLIENT_PATH, return_value=client):
+        MockStorage.from_secrets.return_value = None  # no S3
+        result = inst.get_download()
+
+    resp = result[0]
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.headers["Content-Type"].startswith("application/xml")
+    assert "Lovelace_Ada_p-1.xml" in resp.headers["Content-Disposition"]
+    assert resp.content == b"<ClinicalDocument/>"
+    client.fetch_ccda.assert_called_once_with(
+        patient_key="p-1", document_type="continuity", start_date="", end_date=""
+    )
+    client.get_status.assert_not_called()  # synchronous
+
+
 def test_get_download_conflict_when_pending() -> None:
     inst = _api(query_params={"job_id": "j1"}, secrets={**CONFIGURED_SECRETS, **S3_SECRETS})
     from ehi_export_tool.services.preparation import PreparationResult
@@ -305,6 +332,43 @@ def test_enqueue_all_matching() -> None:
     mock_enq.assert_called_once()
     body = _json_body(result[0])
     assert body["queued"] == 42 and body["batch_id"]
+
+
+def test_enqueue_defaults_to_ehi_format() -> None:
+    inst = _api(json_body={"patient_ids": ["p-1"]})
+    with patch(_ENQ_IDS, return_value=1) as mock_enq:
+        inst.enqueue_export()
+    assert mock_enq.call_args.kwargs["format"] == "ehi"
+
+
+def test_enqueue_ccda_passes_format_and_document_type() -> None:
+    inst = _api(
+        json_body={
+            "patient_ids": ["p-1"],
+            "format": "ccda",
+            "document_type": "continuity",
+            "start_date": "2025-01-01",
+            "end_date": "2025-11-20",
+        }
+    )
+    with patch(_ENQ_IDS, return_value=1) as mock_enq:
+        result = inst.enqueue_export()
+    kwargs = mock_enq.call_args.kwargs
+    assert kwargs["format"] == "ccda"
+    assert kwargs["document_type"] == "continuity"
+    assert kwargs["start_date"] == "2025-01-01"
+    assert kwargs["end_date"] == "2025-11-20"
+    assert result[0].status_code == HTTPStatus.OK
+
+
+def test_enqueue_rejects_unknown_format() -> None:
+    inst = _api(json_body={"patient_ids": ["p-1"], "format": "pdf"})
+    assert inst.enqueue_export()[0].status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_enqueue_ccda_requires_valid_document_type() -> None:
+    inst = _api(json_body={"patient_ids": ["p-1"], "format": "ccda", "document_type": "bogus"})
+    assert inst.enqueue_export()[0].status_code == HTTPStatus.BAD_REQUEST
 
 
 # ── start records the job ─────────────────────────────────────────────────────

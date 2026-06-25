@@ -232,3 +232,50 @@ def test_build_patient_ndjson_empty_output() -> None:
     client = _make_client()
     with patch("ehi_export_tool.utils.fhir_client.Http"):
         assert client.build_patient_ndjson([]) == ""
+
+
+# ── C-CDA export ─────────────────────────────────────────────────────────────
+
+
+def test_emr_base_url_drops_fumage_prefix() -> None:
+    client = _make_client()
+    assert client._emr_base_url == "https://local.canvasmedical.com"
+
+
+def test_fetch_ccda_hits_emr_host_with_document_and_dates() -> None:
+    client = _make_client()
+    resp = _response(status_code=HTTPStatus.OK, text="<ClinicalDocument/>", ok=True)
+    with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp:
+        MockHttp.return_value.get.return_value = resp
+        xml = client.fetch_ccda("pat-1", "continuity", start_date="2025-01-01", end_date="2025-11-20")
+
+    assert xml == "<ClinicalDocument/>"
+    called_url = MockHttp.return_value.get.call_args[0][0]
+    assert called_url.startswith("https://local.canvasmedical.com/api/data-export/ccda/pat-1?")
+    assert "document=continuity" in called_url
+    assert "start_date=2025-01-01" in called_url
+    assert "end_date=2025-11-20" in called_url
+    assert (
+        MockHttp.return_value.get.call_args.kwargs["headers"]["Authorization"]
+        == "Bearer test-token"
+    )
+
+
+def test_fetch_ccda_omits_absent_dates() -> None:
+    client = _make_client()
+    resp = _response(status_code=HTTPStatus.OK, text="<x/>", ok=True)
+    with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp:
+        MockHttp.return_value.get.return_value = resp
+        client.fetch_ccda("pat-1", "referral")
+    called_url = MockHttp.return_value.get.call_args[0][0]
+    assert "document=referral" in called_url
+    assert "start_date" not in called_url and "end_date" not in called_url
+
+
+def test_fetch_ccda_raises_on_error_response() -> None:
+    client = _make_client()
+    resp = _response(status_code=HTTPStatus.NOT_FOUND, text="no patient", ok=False)
+    with patch("ehi_export_tool.utils.fhir_client.Http") as MockHttp:
+        MockHttp.return_value.get.return_value = resp
+        with pytest.raises(EHIExportError, match="C-CDA export"):
+            client.fetch_ccda("pat-1", "continuity")

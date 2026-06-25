@@ -183,3 +183,46 @@ class EHIExportClient(CanvasFhir):
                 if line:
                     lines.append(line)
         return "\n".join(lines)
+
+    # ── C-CDA export (synchronous, XML) ──────────────────────────────────────
+
+    @property
+    def _emr_base_url(self) -> str:
+        """The main EMR API host, derived from the fumage base URL.
+
+        ``CanvasFhir`` sets ``self._base_url`` to
+        ``https://fumage-<instance>.canvasmedical.com``; the C-CDA endpoint lives
+        on the EMR host ``https://<instance>.canvasmedical.com`` (same OAuth
+        token). Dropping the ``fumage-`` prefix converts one to the other.
+        """
+        return self._base_url.replace("fumage-", "", 1)
+
+    def fetch_ccda(
+        self,
+        patient_key: str,
+        document_type: str,
+        start_date: str = "",
+        end_date: str = "",
+    ) -> str:
+        """Fetch one patient's C-CDA document as XML text.
+
+        ``GET {emr}/api/data-export/ccda/<patient_key>?document=<type>`` is
+        synchronous and returns the XML document directly. ``document_type`` is
+        ``continuity`` or ``referral``; ``start_date``/``end_date`` are optional
+        ``YYYY-MM-DD`` bounds. Retries transient 5xx like the NDJSON download.
+        """
+        from urllib.parse import urlencode
+
+        params = {"document": document_type}
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        url = f"{self._emr_base_url}/api/data-export/ccda/{patient_key}?{urlencode(params)}"
+        response = self._get_with_retry(url)
+        if not response.ok:
+            raise EHIExportError(
+                f"C-CDA export for patient {patient_key} returned "
+                f"{response.status_code}: {response.text[:200]}"
+            )
+        return response.text

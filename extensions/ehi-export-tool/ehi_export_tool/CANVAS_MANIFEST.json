@@ -2,13 +2,13 @@
     "sdk_version": "0.1.4",
     "plugin_version": "0.0.1",
     "name": "ehi_export_tool",
-    "description": "Global staff workspace for running EHI (Electronic Health Information) exports across the patient population. Search and select patients (or select all), run the per-patient FHIR $export bulk-data flow, and download one merged JSON Bundle per patient bundled into a single ZIP.",
+    "description": "Global staff workspace for exporting patient records across the population in two formats: full EHI (per-patient FHIR $export, one NDJSON file each) and C-CDA documents (Continuity of Care or Referral, XML). Search and select patients (or all matching), export per-patient or in throttled batches, and download each file or a whole selection/run as a single ZIP built in the browser (S3 optional).",
     "components": {
         "applications": [
             {
                 "class": "ehi_export_tool.applications.ehi_app:EHIExportApp",
-                "name": "EHI Export",
-                "description": "Select patients and export their complete electronic health information as a ZIP of per-patient FHIR Bundles.",
+                "name": "EHI & C-CDA Export",
+                "description": "Select patients and export their records as EHI (NDJSON) or C-CDA (XML); download per patient or as one ZIP.",
                 "scope": "provider_menu_item",
                 "menu_position": "top",
                 "menu_order": 110,
@@ -21,7 +21,7 @@
                 "description": "Staff-only API serving the export workspace, the patient list, and the start/status/bundle/batch export endpoints.",
                 "data_access": {
                     "event": "",
-                    "read": ["Patient", "Staff"],
+                    "read": ["Patient", "Staff", "CareTeamMembership"],
                     "write": []
                 }
             },

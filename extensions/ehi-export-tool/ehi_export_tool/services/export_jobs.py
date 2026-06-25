@@ -9,10 +9,95 @@ handler wraps these calls and logs rather than propagating.
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
 from logger import log
 
 from ehi_export_tool.models import CustomPatient, CustomStaff, ExportJob
+
+# Canvas can only generate a C-CDA when it can resolve a document author. Per
+# home-app's get_team_lead(): use the patient's care-team lead if set, else fall
+# back to the provider on one of the patient's notes — EXCLUDING the Canvas Bot
+# and Root system staff. If neither exists it raises 400 "Team Lead is required
+# when exporting CCDAs". We replicate that rule to pre-flight eligibility (so
+# ineligible patients surface as a clear error up front) and to power the C-CDA
+# filter. These system-staff keys are stable Canvas constants.
+BOT_STAFF_KEY = "5eede137ecfe4124b8b773040e33be14"
+ROOT_STAFF_KEY = "4150cd20de8a470aa570a852859ac87e"
+_SYSTEM_STAFF_KEYS = (BOT_STAFF_KEY, ROOT_STAFF_KEY)
+
+NO_TEAM_LEAD_ERROR = (
+    "C-CDA export needs a document author: assign a care team lead, or record a "
+    "note by a provider for this patient, then re-run."
+)
+
+
+def _ccda_extras(document_type: str, start_date: str, end_date: str) -> dict[str, str]:
+    """Per-job CCDA fields (empty for EHI jobs)."""
+    return {
+        "document_type": document_type or "",
+        "start_date": start_date or "",
+        "end_date": end_date or "",
+    }
+
+
+def _ccda_eligible_dbids(dbids: list[int]) -> set[int]:
+    """Subset of patient dbids that can produce a C-CDA (have a document author).
+
+    Eligible = has an active care-team lead OR has a note authored by a real
+    (non-Bot/Root) provider — mirroring home-app's get_team_lead fallback.
+    """
+    if not dbids:
+        return set()
+    from canvas_sdk.v1.data import CareTeamMembership, Note
+
+    leads = set(
+        CareTeamMembership.objects.filter(
+            patient_id__in=list(dbids), lead=True, status="active"
+        ).values_list("patient_id", flat=True)
+    )
+    note_providers = set(
+        Note.objects.filter(patient_id__in=list(dbids))
+        .exclude(provider__id__in=_SYSTEM_STAFF_KEYS)
+        .exclude(provider__isnull=True)
+        .values_list("patient_id", flat=True)
+    )
+    return leads | note_providers
+
+
+def _new_job(
+    dbid: int,
+    staff_dbid: int | None,
+    batch_id: str,
+    format: str,
+    is_ccda: bool,
+    lead_dbids: set[int],
+    extras: dict[str, str],
+) -> ExportJob:
+    """Build one unsaved ExportJob row for bulk_create.
+
+    EHI -> queued (poller starts it). CCDA -> complete with a synthetic download
+    handle, unless the patient has no team lead, in which case it's an error row
+    so the missing-lead reason is visible immediately.
+    """
+    if not is_ccda:
+        return ExportJob(
+            patient_id=dbid, started_by_id=staff_dbid, batch_id=batch_id,
+            job_id="", status="queued", format=format, output=[], attempts=0, **extras,
+        )
+    has_lead = dbid in lead_dbids
+    return ExportJob(
+        patient_id=dbid,
+        started_by_id=staff_dbid,
+        batch_id=batch_id,
+        job_id=str(uuid4()),
+        status="complete" if has_lead else "error",
+        last_error="" if has_lead else NO_TEAM_LEAD_ERROR,
+        format=format,
+        output=[],
+        attempts=0,
+        **extras,
+    )
 
 
 class ExportJobService:
@@ -115,12 +200,21 @@ class ExportJobService:
 
     @staticmethod
     def enqueue_patient_ids(
-        patient_ids: list[str], batch_id: str, staff_id: str = ""
+        patient_ids: list[str],
+        batch_id: str,
+        staff_id: str = "",
+        *,
+        format: str = "ehi",
+        document_type: str = "",
+        start_date: str = "",
+        end_date: str = "",
     ) -> int:
-        """Create ``queued`` jobs for an explicit set of patients. Returns the count.
+        """Create jobs for an explicit set of patients. Returns the count.
 
-        No ``$export`` is called here — the background poller starts queued jobs
-        at a controlled rate. Uses bulk_create for large selections.
+        EHI jobs are ``queued`` (the poller starts ``$export`` at a controlled
+        rate). CCDA jobs are synchronous — the document is generated on demand at
+        download time — so they're created ``complete`` with a synthetic
+        ``job_id`` (their download handle). Uses bulk_create for large selections.
         """
         if not patient_ids:
             return 0
@@ -128,51 +222,56 @@ class ExportJobService:
             CustomPatient.objects.filter(id__in=patient_ids).values_list("id", "dbid")
         )
         staff_dbid = _resolve_staff_dbid(staff_id)
+        is_ccda = format == "ccda"
+        extras = _ccda_extras(document_type, start_date, end_date)
+        dbids = [id_to_dbid[pid] for pid in patient_ids if pid in id_to_dbid]
+        lead_dbids = _dbids_with_team_lead(dbids) if is_ccda else set()
         jobs = [
-            ExportJob(
-                patient_id=id_to_dbid[pid],
-                started_by_id=staff_dbid,
-                batch_id=batch_id,
-                job_id="",
-                status="queued",
-                output=[],
-                attempts=0,
-            )
-            for pid in patient_ids
-            if pid in id_to_dbid
+            _new_job(dbid, staff_dbid, batch_id, format, is_ccda, lead_dbids, extras)
+            for dbid in dbids
         ]
         ExportJob.objects.bulk_create(jobs, batch_size=500)
         return len(jobs)
 
     @staticmethod
-    def enqueue_queryset(patient_queryset, batch_id: str, staff_id: str = "") -> int:
-        """Create ``queued`` jobs for every patient in a queryset (streamed).
+    def enqueue_queryset(
+        patient_queryset,
+        batch_id: str,
+        staff_id: str = "",
+        *,
+        format: str = "ehi",
+        document_type: str = "",
+        start_date: str = "",
+        end_date: str = "",
+    ) -> int:
+        """Create jobs for every patient in a queryset (streamed).
 
         Used by "Export all matching" so the whole filtered set is enqueued
-        server-side without the browser enumerating ids.
+        server-side without the browser enumerating ids. EHI -> queued; CCDA ->
+        complete with a synthetic job_id (see :meth:`enqueue_patient_ids`).
         """
         staff_dbid = _resolve_staff_dbid(staff_id)
+        is_ccda = format == "ccda"
+        extras = _ccda_extras(document_type, start_date, end_date)
         count = 0
-        buffer: list[ExportJob] = []
+        buffer: list[int] = []  # patient dbids; rows are built per flush
+
+        def flush(dbids: list[int]) -> int:
+            lead_dbids = _dbids_with_team_lead(dbids) if is_ccda else set()
+            rows = [
+                _new_job(dbid, staff_dbid, batch_id, format, is_ccda, lead_dbids, extras)
+                for dbid in dbids
+            ]
+            ExportJob.objects.bulk_create(rows)
+            return len(rows)
+
         for dbid in patient_queryset.values_list("dbid", flat=True).iterator(chunk_size=1000):
-            buffer.append(
-                ExportJob(
-                    patient_id=dbid,
-                    started_by_id=staff_dbid,
-                    batch_id=batch_id,
-                    job_id="",
-                    status="queued",
-                    output=[],
-                    attempts=0,
-                )
-            )
+            buffer.append(dbid)
             if len(buffer) >= 500:
-                ExportJob.objects.bulk_create(buffer)
-                count += len(buffer)
+                count += flush(buffer)
                 buffer = []
         if buffer:
-            ExportJob.objects.bulk_create(buffer)
-            count += len(buffer)
+            count += flush(buffer)
         return count
 
     @staticmethod
@@ -447,6 +546,8 @@ class ExportJobService:
             "job_id": job.job_id,
             "batch_id": job.batch_id,
             "status": job.status,
+            "format": getattr(job, "format", "ehi") or "ehi",
+            "document_type": getattr(job, "document_type", "") or "",
             "attempts": job.attempts,
             "file_count": len(job.output or []),
             "last_error": job.last_error,
