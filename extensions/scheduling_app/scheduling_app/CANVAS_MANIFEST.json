@@ -1,0 +1,50 @@
+{
+    "sdk_version": "0.167.0",
+    "plugin_version": "0.0.1",
+    "name": "scheduling_app",
+    "description": "Replaces Canvas's built-in scheduling modal with a custom appointment-booking UI built entirely from SDK building blocks. A reference implementation of the `scheduling` application type for developers who need to customize the scheduling experience.",
+    "components": {
+        "protocols": [
+            {
+                "class": "scheduling_app.applications.scheduling_app:SchedulingApp",
+                "description": "Overrides the built-in scheduling modal at every scheduling entry point.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "handlers": [
+            {
+                "class": "scheduling_app.handlers.scheduling_web_app:SchedulingWebApp",
+                "description": "Serves the scheduling application page, echoing the received context.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "scheduling_app.handlers.recurrence:AppointmentRecurrence",
+                "description": "On appointment creation, expands a recurring series: reads the recurrence rule stamped on the parent and creates the linked child appointments.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "applications": [],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}

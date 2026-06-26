@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * shadcn tokens mapped to the Canvas palette
+ * (home-app static/styles/variables.scss + themes/theme.ts):
+ *   primary  #2185D0 -> 206 73% 47%   (Canvas blue)
+ *   ring/active #1F72B3 -> 204 71% 41%
+ *   navy text #0D2C4C
+ *   accent   #E9F3FA -> 204 63% 95%   (light blue fill)
+ *   secondary #F4FAFB -> 204 63% 97%
+ *   alert    #BD0B00 -> 4 100% 37%
+ */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 210 56% 17%;
+  --card: 0 0% 100%;
+  --card-foreground: 210 56% 17%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 210 56% 17%;
+  --primary: 206 73% 47%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 204 63% 97%;
+  --secondary-foreground: 210 56% 17%;
+  --muted: 210 20% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 204 63% 95%;
+  --accent-foreground: 206 73% 30%;
+  --destructive: 4 100% 37%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 22% 88%;
+  --input: 214 22% 88%;
+  --ring: 204 71% 41%;
+  --radius: 0.5rem;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+}
