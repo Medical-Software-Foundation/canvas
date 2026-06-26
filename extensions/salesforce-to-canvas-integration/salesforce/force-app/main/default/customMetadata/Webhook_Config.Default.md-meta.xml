@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Default</label>
+    <protected>false</protected>
+    <values>
+        <field>Endpoint__c</field>
+        <value xsi:type="xsd:string">https://your-canvas.canvasmedical.com/plugin-io/api/salesforce_to_canvas_integration/webhooks/patient/sync</value>
+    </values>
+    <values>
+        <field>Fields__c</field>
+        <value xsi:type="xsd:string">FirstName,LastName,Birthdate,Email,Phone,MobilePhone,MailingStreet,MailingCity,MailingState,MailingPostalCode,MailingCountry,Gender,Preferred_Language__c,Referral_Source__c,MRN__c</value>
+    </values>
+</CustomMetadata>

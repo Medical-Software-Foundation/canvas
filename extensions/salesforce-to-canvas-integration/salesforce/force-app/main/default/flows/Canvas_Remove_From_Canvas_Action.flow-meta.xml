@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <actionCalls>
+        <name>Emit_Delete</name>
+        <label>Emit Delete</label>
+        <locationX>176</locationX>
+        <locationY>458</locationY>
+        <actionName>CanvasSyncEmitter</actionName>
+        <actionType>apex</actionType>
+        <connector>
+            <targetReference>Remove_Requested</targetReference>
+        </connector>
+        <flowTransactionModel>CurrentTransaction</flowTransactionModel>
+        <inputParameters>
+            <name>contactId</name>
+            <value>
+                <elementReference>recordId</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>intent</name>
+            <value>
+                <stringValue>delete</stringValue>
+            </value>
+        </inputParameters>
+        <nameSegment>CanvasSyncEmitter</nameSegment>
+    </actionCalls>
+    <decisions>
+        <name>Is_Linked</name>
+        <label>Is linked to a Canvas patient</label>
+        <locationX>264</locationX>
+        <locationY>242</locationY>
+        <defaultConnector>
+            <targetReference>Not_Linked</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>Not linked</defaultConnectorLabel>
+        <rules>
+            <name>Linked</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Get_Contact.Canvas_Patient_ID__c</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Confirm_Remove</targetReference>
+            </connector>
+            <label>Linked</label>
+        </rules>
+    </decisions>
+    <description>Screen action behind the Remove from Canvas button. Guards that the Contact is linked to a Canvas patient, confirms intent, then enqueues a delete through the same emitter, intent delete. This marks the Canvas patient for removal and does not change the Salesforce Contact.</description>
+    <environments>Default</environments>
+    <interviewLabel>Canvas Remove From Canvas {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Canvas Remove From Canvas</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>Flow</processType>
+    <recordLookups>
+        <name>Get_Contact</name>
+        <label>Get Contact</label>
+        <locationX>264</locationX>
+        <locationY>134</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Is_Linked</targetReference>
+        </connector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>recordId</elementReference>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>Contact</object>
+        <queriedFields>Id</queriedFields>
+        <queriedFields>Canvas_Patient_ID__c</queriedFields>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
+    <screens>
+        <name>Confirm_Remove</name>
+        <label>Remove from Canvas</label>
+        <locationX>176</locationX>
+        <locationY>350</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Emit_Delete</targetReference>
+        </connector>
+        <fields>
+            <name>Confirm_Remove_Text</name>
+            <fieldText>&lt;p&gt;Mark the linked Canvas patient for removal. This sends a delete request to the Canvas console for an operator to resolve. It does not change or delete this Salesforce Contact.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Remove_Requested</name>
+        <label>Removal requested</label>
+        <locationX>176</locationX>
+        <locationY>566</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Remove_Requested_Text</name>
+            <fieldText>&lt;p&gt;Removal requested. The Canvas Status field updates within a few seconds. The Canvas operator decides the final outcome in the console.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Not_Linked</name>
+        <label>Not linked</label>
+        <locationX>450</locationX>
+        <locationY>350</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Not_Linked_Text</name>
+            <fieldText>&lt;p&gt;This Contact is not linked to a Canvas patient, so there is nothing to remove. Use Sync to Canvas first if you meant to push it.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <start>
+        <locationX>50</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Get_Contact</targetReference>
+        </connector>
+    </start>
+    <status>Active</status>
+    <variables>
+        <name>recordId</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>true</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>
