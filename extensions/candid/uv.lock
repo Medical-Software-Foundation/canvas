@@ -87,12 +87,12 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "canvas", extras = ["test-utils"], git = "https://github.com/canvas-medical/canvas-plugins.git?rev=feat%2Fsdk-supervising-provider" }]
+requires-dist = [{ name = "canvas", extras = ["test-utils"] }]
 
 [[package]]
 name = "canvas"
-version = "0.164.0"
-source = { git = "https://github.com/canvas-medical/canvas-plugins.git?rev=feat%2Fsdk-supervising-provider#18805c545d40d13e8ceac25fb8972065a6d84e74" }
+version = "0.175.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cookiecutter" },
     { name = "cron-converter" },
@@ -126,6 +126,10 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
     { name = "websocket-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/77/ba/85a4b5ca9ec3ceb165c562611da6179102261c6beac05c29499e51bb1d3c/canvas-0.175.0.tar.gz", hash = "sha256:5cf963cab5d06a20fde8ee7292ae2b2532902da22179ea90b5130d7475b3d75d", size = 2411111, upload-time = "2026-06-26T09:27:27.904Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/ee/e385f70fb96296254243591524bc6d3c0cb9ec9d5d6f934b8617d4b66b4b/canvas-0.175.0-py3-none-any.whl", hash = "sha256:cde92cdf94d16a4ad4ccbaf20b6cc23cac80906db882f3994d378c578d7b93c9", size = 2728288, upload-time = "2026-06-26T09:27:26.034Z" },
 ]
 
 [package.optional-dependencies]

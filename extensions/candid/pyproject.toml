@@ -3,9 +3,7 @@ authors = [
   {email = "engineering@canvasmedical.com", name = "Canvas Team"}
 ]
 dependencies = [
-  # Pinned to the unreleased supervising-provider SDK branch (KOALA-5587) until it
-  # ships in a canvas release; needed for Claim.supervising_provider / incident_to.
-  "canvas[test-utils] @ git+https://github.com/canvas-medical/canvas-plugins.git@feat/sdk-supervising-provider"
+  "canvas[test-utils]"
 ]
 description = "Canvas plugin that integrates with Candid Health: submits claims, syncs adjudication and patient payment data, and reports patient payments."
 license = "MIT"
