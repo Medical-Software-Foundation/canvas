@@ -204,7 +204,7 @@
         "views": []
     },
     "custom_data": {
-        "namespace": "vicert__patient_panel",
+        "namespace": "patient__panel",
         "access": "read_write"
     },
     "secrets": [
@@ -224,6 +224,6 @@
     ],
     "tags": {},
     "references": [],
-    "license": "",
+    "license": "MIT",
     "readme": "./README.md"
 }

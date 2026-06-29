@@ -2,6 +2,66 @@
 
 Configurable patient dashboard plugin for Canvas Medical.
 
+## Info
+
+*This plugin was developed and contributed by [Vicert](https://vicert.com).*
+
+Contact: engineering@vicert.com
+
+## What it does
+
+Patient Panel adds a configurable, sortable, filterable view of a clinic's
+patient population inside Canvas. It is surfaced as a provider-menu Application
+(and a note-header button) that opens a full-page panel listing patients with
+configurable columns — demographics, care team, last/next visit, facility, open
+tasks, care gaps, insurance, observation values (e.g. A1C and BMI by LOINC), and
+custom metadata fields. Each row supports color-coded flagging, an inline
+clinical caption, and accordion detail views for tasks, gaps, conditions,
+medications, allergies, and referrals. Sorting and pagination stay fast on large
+panels via the denormalized `PatientPanelStats` table (see
+[Sort acceleration](#sort-acceleration-patientpanelstats)).
+
+## Problem it solves
+
+Canvas has no built-in configurable population/panel view, and building one ad
+hoc does not scale: ordering the full patient population by per-row correlated
+note-state subqueries times out on large panels (~37 s at 8k patients). Care
+teams are left without a single place to triage and sort their patients by visit
+recency, open work, or risk. Patient Panel provides that view without leaving the
+EMR and keeps it performant (~12 ms sorts) through an indexed stats table kept
+fresh by event handlers and a reconciliation cron.
+
+## Who it's for
+
+Care teams, care coordinators, and panel managers who need to triage and act on a
+patient population, and providers who want a fast roster from the provider menu
+or a note. Administrators configure the visible columns, flag labels, highlight
+thresholds, and custom metadata fields entirely through plugin secrets
+(`PANEL_CONFIG`, `FLAG_COLOR_LABELS`, `HIGHLIGHT_THRESHOLD_DAYS_*`,
+`METADATA_FIELDS`) — no code changes required.
+
+## Screenshots or screen recordings
+
+**Default panel view** — the patient roster with the filter bar (care team,
+insurance, facility, protocol), search, and per-column sorting.
+
+![Patient Panel default view](assets/patient-panel-default-view.png)
+
+**Configurable columns** — show, hide, and reorder columns from the column
+picker; the selection is driven by the `PANEL_CONFIG` secret.
+
+![Visible Columns picker](assets/patient-panel-visible-columns.png)
+
+**Search and sort** — filter the roster by patient name and sort by any
+sortable column (here, open tasks).
+
+![Patient search with column sort](assets/patient-panel-sorted-patient-search.png)
+
+**Detail accordions** — expand a patient row to see tasks, gaps, conditions,
+medications, allergies, and referrals inline, including task comment threads.
+
+![Patient detail accordion](assets/patient-panel-accordion-columns.png)
+
 ## Features
 
 - **Configurable columns** via `PANEL_CONFIG` JSON secret — show/hide/reorder built-in columns, add observation-based columns (by LOINC code), and custom metadata columns
@@ -186,7 +246,7 @@ dict, e.g.:
 
 ## Installation
 
-Installed with the Canvas CLI. From the plugin's container directory (`gtm-extensions/patient-panel/`):
+Installed with the Canvas CLI. From the plugin's container directory (`extensions/patient-panel/`):
 
 ```bash
 uv run canvas install patient_panel --host <instance> --secret KEY=VALUE

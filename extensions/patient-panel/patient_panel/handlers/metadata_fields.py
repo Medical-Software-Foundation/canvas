@@ -2,7 +2,7 @@
 
 Reads the `METADATA_FIELDS` secret (JSON list) and emits a
 PatientMetadataCreateFormEffect describing the additional fields to show on
-the patient-profile form. Generalizes Brigade's hardcoded handler.
+the patient-profile form.
 
 Secret shape:
     [

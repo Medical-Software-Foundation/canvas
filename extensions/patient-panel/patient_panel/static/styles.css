@@ -143,7 +143,8 @@ body {
   box-sizing: border-box;
 }
 
-.filter-dropdown .selected-value:hover {
+.filter-dropdown .selected-value:hover,
+.filter-dropdown.open .selected-value {
   border-color: var(--text-secondary);
 }
 
@@ -169,6 +170,7 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   min-width: 200px;
+  max-width: 360px;
   max-height: 300px;
   overflow-y: auto;
 }
@@ -226,6 +228,8 @@ body {
   color: var(--text-primary);
   cursor: pointer;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .filter-apply-btn {
