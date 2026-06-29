@@ -1,0 +1,38 @@
+<td colspan="11">
+    <div class="accordion-details">
+        <h4>Open tasks</h4>
+        {% if tasks %}
+        <div class="activity-list">
+            {% for task in tasks %}
+            <div class="task-item" data-task-id="{{ task.id }}">
+                <div
+                    id="task-header-{{ task.id }}"
+                    class="task-header"
+                    onclick="toggleTaskComments('{{ task.id }}')"
+                    hx-get="/plugin-io/api/patient_panel/app/tasks/{{ task.id }}/comments"
+                    hx-target="#task-comments-{{ task.id }}"
+                    hx-swap="innerHTML"
+                >
+                    <div class="task-info">
+                        <div class="activity-title">{{ task.title }}</div>
+                        <div class="activity-due">Due: {{ task.due }}</div>
+                    </div>
+                    <div class="task-actions">
+                        {% if task.comments_count %}
+                        <span class="comments-count">{{ task.comments_count }} comments</span>
+                        {% else %}
+                        <span class="comments-count">No comments</span>
+                        {% endif %}
+                        <span class="task-accordion-icon">▲</span>
+                    </div>
+                </div>
+
+                <div class="task-comments-section" id="task-comments-{{ task.id }}" style="display: none;"></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+            <p>No open tasks</p>
+        {% endif %}
+    </div>
+</td>

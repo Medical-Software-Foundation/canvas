@@ -1,0 +1,1973 @@
+:root {
+  /* Background Colors */
+  --bg-primary: #f5f6fa;
+  --bg-white: #fff;
+  --bg-table-header: #f8f9fa;
+  --bg-hover: #f1f3f4;
+  --bg-active: #1a73e8;
+  --bg-user-icon: #333;
+  --bg-avatar: #e1e5e9;
+
+  /* Font Colors */
+  --text-primary: #333;
+  --text-secondary: #666;
+  --text-placeholder: #999;
+  --text-link: #1a73e8;
+
+  /* Section Dimensions */
+  --header-height: 80px;
+  --header-padding: 12px 20px;
+  --content-padding: 0;
+  --filters-padding: 20px;
+  --table-cell-padding: 10px 12px;
+  --table-header-padding: 10px 12px;
+  /* Additional Colors */
+  --border-color: #dadce0;
+  --border-light: #e1e5e9;
+  --border-table: #f1f3f4;
+  --status-red: #ea4335;
+  --status-green: #34a853;
+  --status-yellow: #fbbc05;
+  --status-blue: #0f456f;
+  --font-size-small: 12px;
+  --font-size-regular: 14px;
+  --font-size-medium: 16px;
+  --border-radius: 4px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.main-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.content-area {
+  flex: 1;
+  background: var(--bg-white);
+  padding: var(--content-padding);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.table-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.filters {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  align-items: center;
+  background-color: var(--bg-white);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.table-scroll-container {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.filter-input {
+  flex: 1 1 150px;
+  min-width: 120px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-regular);
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-regular);
+  background: var(--bg-white);
+}
+
+/* Filter Dropdown Styles */
+.filter-dropdown {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.filter-dropdown .selected-value {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-regular);
+  background: var(--bg-white);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+  justify-content: space-between;
+  white-space: nowrap;
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.filter-dropdown .selected-value:hover {
+  border-color: var(--text-secondary);
+}
+
+.filter-dropdown .dropdown-arrow {
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+}
+
+.filter-dropdown.open .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.filter-dropdown .dropdown-options {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.filter-dropdown .dropdown-search {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 0;
+  background: var(--bg-white);
+}
+
+.filter-dropdown .dropdown-search input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-small);
+}
+
+.filter-dropdown .dropdown-search input:focus {
+  outline: none;
+  border-color: var(--status-blue);
+}
+
+.filter-dropdown .dropdown-option.hidden {
+  display: none;
+}
+
+.filter-dropdown.open .dropdown-options {
+  display: block;
+}
+
+.filter-dropdown .dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.filter-dropdown .dropdown-option:hover {
+  background: var(--bg-hover);
+}
+
+.filter-dropdown .dropdown-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.filter-dropdown .dropdown-option label {
+  font-size: var(--font-size-regular);
+  color: var(--text-primary);
+  cursor: pointer;
+  flex: 1;
+}
+
+.filter-apply-btn {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-regular);
+  background: var(--status-blue);
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.filter-apply-btn:hover {
+  background: #0a3e5f;
+}
+
+.filter-clear-btn {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-regular);
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.filter-clear-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* Patient Avatar Flag Ring Styles */
+.flag-picker-container {
+  position: relative;
+  display: inline-block;
+}
+
+.flag-picker-container .patient-avatar {
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.flag-picker-container .patient-avatar:hover {
+  transform: scale(1.08);
+}
+
+.patient-avatar.flag-red {
+  box-shadow: 0 0 0 2.5px var(--status-red);
+}
+
+.patient-avatar.flag-green {
+  box-shadow: 0 0 0 2.5px var(--status-green);
+}
+
+.patient-avatar.flag-yellow {
+  box-shadow: 0 0 0 2.5px var(--status-yellow);
+}
+
+/* Flag Picker Dropdown */
+.flag-options {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  z-index: 1000;
+  min-width: 100px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flag-options.open {
+  display: flex;
+}
+
+.flag-options.open-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.flag-options-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 2px;
+}
+
+.flag-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-small);
+  color: var(--text-primary);
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.flag-option-btn:hover {
+  background: var(--bg-hover);
+}
+
+.flag-option-btn.active {
+  background: var(--bg-hover);
+  font-weight: 600;
+}
+
+.flag-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.flag-swatch.swatch-none {
+  background: var(--bg-white);
+}
+
+.flag-swatch.swatch-green {
+  background: var(--status-green);
+  border-color: var(--status-green);
+}
+
+.flag-swatch.swatch-yellow {
+  background: var(--status-yellow);
+  border-color: var(--status-yellow);
+}
+
+.flag-swatch.swatch-red {
+  background: var(--status-red);
+  border-color: var(--status-red);
+}
+
+.patient-table {
+  /* width:100% + the default table-layout:auto fills the container by widening
+     columns to content — this already consumes the full width on wide monitors
+     (the earlier "empty space" was from a filler column / width:auto, both now
+     removed) and never clips content. The only real defect was the patient
+     column ballooning, which the .col-patient cap below fixes. */
+  width: 100%;
+  /* separate (not collapse) so `position: sticky` on thead works in WebKit/
+     Safari — border-collapse:collapse silently breaks sticky table headers
+     there (sticky cells like the first column still work, which is why only
+     the header failed to stick). Cells use border-bottom only, so with
+     border-spacing:0 this looks identical to collapse. */
+  border-collapse: separate;
+  border-spacing: 0;
+  display: table;
+}
+
+.patient-table thead {
+  display: table-header-group;
+}
+
+.patient-table tbody {
+  display: table-row-group;
+}
+
+.patient-table thead tr,
+.patient-table tbody tr {
+  display: table-row;
+}
+
+/* Patient is capped so a long/garbage name can't balloon the column (the name
+   ellipsizes within the cap); auto-layout then spreads remaining width across
+   the other columns. */
+.col-patient { min-width: 180px; max-width: 280px; }
+.col-caption { min-width: 150px; white-space: normal; }
+.col-address,
+.col-room {
+  min-width: 150px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.patient-table th {
+  background: var(--bg-table-header);
+  padding: var(--table-header-padding);
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+  font-size: var(--font-size-regular);
+  white-space: nowrap;
+  /* Pin the header row to the top of the scroll container so column
+     labels stay visible while the user scrolls through patients.
+     z-index 20: the header must sit ABOVE every other table layer — the
+     sticky patient column (10), a pinned open-accordion row (15), and the
+     accordion content (auto) — or those paint over it on scroll (the overlap
+     bug). Stays below the toolbar dropdowns (1000) which must pop over it. */
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.patient-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.patient-table th.sortable::after {
+  content: "↕";
+  margin-left: 4px;
+  opacity: 0.35;
+  font-size: 0.9em;
+}
+
+.patient-table th.sortable.sorted-asc::after,
+.patient-table th.sortable.sorted-desc::after {
+  content: "";
+  margin-left: 0;
+}
+
+.patient-table th.sortable:hover {
+  background: var(--bg-secondary);
+}
+
+.patient-table th.sortable:hover::after {
+  opacity: 0.7;
+}
+
+.patient-table td {
+  padding: var(--table-cell-padding);
+  border-bottom: 1px solid var(--border-table);
+  font-size: var(--font-size-regular);
+  vertical-align: middle;
+}
+
+.patient-table tr:hover {
+  background: var(--bg-table-header);
+}
+
+.patient-row td {
+  font-size: var(--font-size-regular);
+}
+
+.patient-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-avatar);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+  position: relative;
+  overflow: hidden;
+}
+
+.patient-avatar img {
+  height: 100%;
+  border-radius: 50%;
+  /* Hidden until JS sees the image's load event so we don't paint a
+     half-rendered/broken icon over the skeleton. */
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.patient-avatar img.loaded {
+  opacity: 1;
+}
+
+/* Shimmer skeleton — shown while the photo URL is being fetched. */
+.avatar-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.55) 50%,
+      transparent 100%
+    ),
+    var(--bg-avatar);
+  background-size: 200% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: avatar-shimmer 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes avatar-shimmer {
+  0%   { background-position: -150% 0, 0 0; }
+  100% { background-position:  150% 0, 0 0; }
+}
+
+.patient-info {
+  display: flex;
+  align-items: center;
+}
+
+/* The name/details block (2nd flex child). min-width:0 lets it shrink below
+   its content so the name can ellipsize instead of forcing the cell wider. */
+.patient-info > div:last-child {
+  min-width: 0;
+}
+
+.patient-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.patient-details {
+  color: var(--text-placeholder);
+  font-size: var(--font-size-small);
+  margin-top: 2px;
+}
+
+.patient-link {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.patient-link:hover {
+  text-decoration: underline;
+}
+
+.care-team {
+  color: var(--text-secondary);
+  font-size: var(--font-size-regular);
+}
+
+.care-team-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.care-team-role {
+  color: var(--text-placeholder);
+  font-size: var(--font-size-small);
+}
+
+/* Care Team Photo Bubbles */
+.care-team-container {
+  position: relative;
+  display: inline-flex;
+}
+
+.care-team-bubbles {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.care-team-bubble {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-white);
+  background: var(--bg-avatar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.2s ease, z-index 0.2s ease;
+}
+
+.care-team-bubble:not(:first-child) {
+  margin-left: -8px;
+}
+
+.care-team-bubble:nth-child(1) { z-index: 3; }
+.care-team-bubble:nth-child(2) { z-index: 2; }
+.care-team-bubble:nth-child(3) { z-index: 1; }
+
+.care-team-bubble:hover {
+  transform: scale(1.1);
+  z-index: 10;
+}
+
+.care-team-bubble img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.care-team-bubble img.loaded {
+  opacity: 1;
+}
+
+.care-team-bubble .initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* Initials fallback colors */
+.care-team-bubble.color-1 { background: #7dd3fc; color: #0c4a6e; }
+.care-team-bubble.color-2 { background: #a5f3fc; color: #164e63; }
+.care-team-bubble.color-3 { background: #99f6e4; color: #134e4a; }
+.care-team-bubble.color-4 { background: #bbf7d0; color: #14532d; }
+.care-team-bubble.color-5 { background: #fde68a; color: #78350f; }
+
+/* +N badge */
+.care-team-more-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-white);
+  background: var(--text-secondary);
+  color: var(--bg-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: -8px;
+  z-index: 0;
+  transition: background 0.2s ease;
+}
+
+.care-team-more-badge:hover {
+  background: var(--text-primary);
+}
+
+/* Care Team Popup */
+.care-team-popup {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 220px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.care-team-popup.open {
+  display: block;
+}
+
+.care-team-popup-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  transition: background 0.2s ease;
+}
+
+.care-team-popup-item:hover {
+  background: var(--bg-hover);
+}
+
+.care-team-popup-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-avatar);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.care-team-popup-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.care-team-popup-avatar img.loaded {
+  opacity: 1;
+}
+
+.care-team-popup-avatar .initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.care-team-popup-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.care-team-popup-name {
+  font-weight: 500;
+  font-size: var(--font-size-regular);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.care-team-popup-role {
+  font-size: var(--font-size-small);
+  color: var(--text-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Empty care team state */
+.care-team-empty {
+  color: var(--text-placeholder);
+  display: block;
+}
+
+.insurance-logo {
+  max-height: 18px;
+  max-width: 60px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+/* Facility & Insurance: left-aligned with 2-line clamp */
+.patient-table td.facility,
+.patient-table td.insurance {
+  overflow: hidden;
+}
+
+.cell-truncate {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+  max-height: calc(1.4em * 2);
+}
+
+.cell-truncate.is-truncated {
+  cursor: default;
+}
+
+/* Floating tooltip appended to body */
+.cell-tooltip {
+  position: fixed;
+  background: var(--text-primary, #333);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 6px 10px;
+  border-radius: 4px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 250px;
+  z-index: 10000;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.visit-date {
+  color: var(--text-secondary);
+  font-size: var(--font-size-regular);
+}
+
+.visit-date.overdue {
+  color: var(--status-red);
+}
+
+.visit-date.upcoming {
+  color: var(--status-green);
+}
+
+.highlight-green {
+  color: var(--status-green);
+}
+
+.highlight-yellow {
+  color: var(--status-yellow);
+}
+
+.highlight-red {
+  color: var(--status-red);
+}
+
+.status-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
+}
+
+.status-blue {
+  background: var(--status-blue);
+}
+
+.status-green {
+  background: var(--status-green);
+}
+
+.status-red {
+  background: var(--status-red);
+}
+
+.fraction {
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.fraction a {
+  color: #1a73e8;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fraction a:hover {
+  text-decoration: underline;
+  color: #0b57d0;
+}
+
+.fraction a.active {
+  font-weight: 600;
+}
+
+.icon-symbol {
+  font-size: var(--font-size-medium);
+  color: var(--text-secondary);
+}
+
+.icon-symbol.red {
+  color: var(--status-red);
+}
+
+.icon-symbol.green {
+  color: var(--status-green);
+}
+
+.icon-symbol.blue {
+  color: var(--status-blue);
+}
+
+.clinical-notes {
+  color: var(--text-placeholder);
+  font-size: var(--font-size-small);
+}
+
+.clinical-note-container {
+  position: relative;
+}
+
+.clinical-note-view {
+  display: flex;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.clinical-note-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.clinical-note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+
+.clinical-note-text {
+  color: var(--text-secondary);
+  font-size: var(--font-size-regular);
+  flex: 1;
+  word-wrap: break-word;
+  margin: 0;
+  font-family: inherit;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+  max-height: calc(1.4em * 3);
+  cursor: text;
+}
+
+.clinical-note-text.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: none;
+  white-space: pre-wrap;
+}
+
+.clinical-note-text:empty::before {
+  content: "Add clinical caption...";
+  color: var(--text-placeholder);
+}
+
+.clinical-note-toggle {
+  color: var(--text-link);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 2px;
+  display: none;
+}
+
+.clinical-note-toggle:hover {
+  text-decoration: underline;
+}
+
+.clinical-note-toggle.visible {
+  display: inline;
+}
+
+
+.clinical-note-input {
+  flex: 1;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-regular);
+  background: var(--bg-white);
+  color: var(--text-primary);
+  transition: border-color 0.2s ease;
+  resize: vertical;
+  overflow-y: auto;
+  min-height: 60px;
+  max-height: 200px;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.clinical-note-input:focus {
+  outline: none;
+  border-color: var(--status-blue);
+  box-shadow: 0 0 0 2px rgba(15, 69, 111, 0.1);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: var(--filters-padding);
+  flex-shrink: 0;
+  background: var(--bg-white);
+  border-top: 1px solid var(--border-light);
+}
+
+.pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-size-label {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
+.pagination-size-btn {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-small);
+}
+
+.pagination-size-btn:hover:not(.active) {
+  background: var(--bg-hover);
+}
+
+.pagination-size-btn.active {
+  background: var(--bg-active);
+  border-color: var(--bg-active);
+  color: white;
+  cursor: default;
+}
+
+.pagination-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-info {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.pagination-arrow {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination-arrow:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-secondary);
+}
+
+.pagination-number {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-regular);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination-number:hover:not(.active) {
+  background: var(--bg-hover);
+  border-color: var(--text-secondary);
+}
+
+.pagination-number.active {
+  background: var(--bg-active);
+  border-color: var(--bg-active);
+  color: white;
+  cursor: default;
+}
+
+/* Accordion Styles */
+.accordion-toggle {
+    width: 40px;
+    text-align: center;
+    padding: 8px;
+}
+
+.accordion-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    font-size: var(--font-size-regular);
+    transition: all 0.2s ease;
+}
+
+.accordion-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.accordion-icon {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 12px;
+}
+
+.accordion-content {
+    background: var(--bg-table-header);
+    border-top: 1px solid var(--border-light);
+}
+
+.accordion-details {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    left: 0;
+    /* Width is set by JS (sizeAccordionDetailsToViewport) to match the
+       visible width of `.table-scroll-container` so the content stays in
+       view even when the table is scrolled far to the right. */
+    /* The panel scrolls internally: the patient header (.accordion-panel-header)
+       stays pinned at the top while the content scrolls, and the table itself
+       does NOT scroll while expanded — so no sticky-table-cell tricks needed. */
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* Pinned header inside the scrolling accordion panel: patient name + close. */
+.accordion-panel-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 4px;
+    background: var(--bg-white);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.accordion-panel-patient {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Close button now lives in the flex header (not absolutely positioned). */
+.accordion-panel-header .accordion-close-btn {
+    position: static;
+}
+
+.accordion-close-btn {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-secondary);
+    z-index: 5;
+}
+
+.accordion-close-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.detail-section {
+    background: var(--bg-white);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-light);
+}
+
+.detail-section h4 {
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    font-size: var(--font-size-regular);
+    font-weight: 600;
+}
+
+.activity-item,
+.appointment-item,
+.gap-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border-table);
+}
+
+.activity-item:last-child,
+.appointment-item:last-child,
+.gap-item:last-child {
+    border-bottom: none;
+}
+
+.activity-comments {
+  display: none;
+  margin-top: 5px;
+  font-size: var(--font-size-small);
+}
+
+.activity-title,
+.activity-date,
+.appointment-date {
+    color: var(--text-secondary);
+    font-size: var(--font-size-small);
+}
+
+.gap-status {
+    font-size: var(--font-size-small);
+    padding: 2px 6px;
+    border-radius: var(--border-radius);
+    background: var(--bg-hover);
+}
+
+.contact-info p {
+    margin: 5px 0;
+    font-size: var(--font-size-small);
+}
+
+.contact-info strong {
+    color: var(--text-primary);
+}
+
+/* Task Comments Bubble Styles */
+.task-item {
+    background: var(--bg-white);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+}
+
+.task-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    cursor: pointer;
+    background: var(--bg-table-header);
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.2s ease;
+}
+
+.task-header:hover {
+    background: var(--bg-hover);
+}
+
+.task-info {
+    flex: 1;
+}
+
+.task-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.activity-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: var(--font-size-regular);
+    margin-bottom: 4px;
+}
+
+.activity-due {
+    color: var(--text-secondary);
+    font-size: var(--font-size-small);
+}
+
+.comments-count, .gaps-display {
+    color: var(--text-secondary);
+    font-size: var(--font-size-small);
+    background: var(--bg-white);
+    padding: 4px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border-light);
+}
+
+/* Highlight due gaps so the "due" state is obvious at a glance. */
+.gaps-display.status-due {
+    color: var(--status-red);
+    background: rgba(234, 67, 53, 0.08);
+    border-color: rgba(234, 67, 53, 0.35);
+}
+
+.task-accordion-icon {
+    color: var(--text-secondary);
+    font-size: 12px;
+    transition: transform 0.3s ease;
+    margin-left: 8px;
+}
+
+.task-comments-section {
+    padding: 0;
+    background: var(--bg-white);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.comments-bubble-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.comment-bubble {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.comment-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--status-blue);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: var(--font-size-small);
+    flex-shrink: 0;
+}
+
+.comment-bubble.right .comment-avatar {
+    background: var(--status-green);
+}
+
+.comment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.comment-author {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: var(--font-size-small);
+}
+
+.comment-timestamp {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.comment-bubble-content {
+    background: var(--bg-table-header);
+    padding: 12px 16px;
+    border-radius: 18px;
+    color: var(--text-primary);
+    font-size: var(--font-size-small);
+    line-height: 1.4;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.no-comments {
+    padding: 30px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Add Comment Form Styles */
+.add-comment-form {
+    padding: 15px 20px;
+    background: var(--bg-table-header);
+    border-top: 1px solid var(--border-light);
+}
+
+.comment-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.comment-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: var(--font-size-regular);
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+    background: var(--bg-white);
+    color: var(--text-primary);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.comment-input:focus {
+    outline: none;
+    border-color: var(--status-blue);
+    box-shadow: 0 0 0 2px rgba(15, 69, 111, 0.1);
+}
+
+.comment-input::placeholder {
+    color: var(--text-placeholder);
+}
+
+.comment-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.comment-cancel-btn,
+.comment-submit-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-small);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.comment-cancel-btn {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.comment-cancel-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.comment-submit-btn {
+    background: var(--status-blue);
+    color: white;
+    border: 1px solid var(--status-blue);
+}
+
+.comment-submit-btn:hover {
+    background: #0a3e5f;
+    border-color: #0a3e5f;
+}
+
+.comment-submit-btn:disabled {
+    background: var(--text-placeholder);
+    border-color: var(--text-placeholder);
+    cursor: not-allowed;
+}
+
+/* Loading state for form submission */
+.comment-input-container.htmx-request .comment-submit-btn {
+    background: var(--text-placeholder);
+    border-color: var(--text-placeholder);
+    cursor: not-allowed;
+}
+
+.comment-input-container.htmx-request .comment-submit-btn::after {
+    content: " Saving...";
+}
+
+/* Column Settings / Picker */
+.column-settings-container {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.column-settings-btn {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.column-settings-btn:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.column-picker {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 240px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.column-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.column-picker-title {
+  font-size: var(--font-size-regular);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.column-picker-reset {
+  background: none;
+  border: none;
+  color: var(--text-link);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.column-picker-reset:hover {
+  text-decoration: underline;
+}
+
+.column-picker-options {
+  overflow-y: auto;
+  max-height: 280px;
+  padding: 4px 0;
+}
+
+.column-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.column-picker-option:hover {
+  background: var(--bg-hover);
+}
+
+.column-picker-option.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.column-picker-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.column-picker-option.disabled input[type="checkbox"] {
+  cursor: default;
+}
+
+.column-picker-option label {
+  font-size: var(--font-size-regular);
+  color: var(--text-primary);
+  cursor: pointer;
+  flex: 1;
+}
+
+.column-picker-option.disabled label {
+  cursor: default;
+}
+
+.column-picker-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-light);
+}
+
+.column-picker-save {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--border-radius);
+  background: var(--status-blue);
+  color: white;
+  font-size: var(--font-size-small);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.column-picker-save:hover {
+  background: #0a3e5f;
+}
+
+.column-picker-cancel {
+  flex: 1;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.column-picker-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Sticky first column (Patient) on horizontal scroll — applies at all viewport widths */
+.patient-table th:first-child,
+.patient-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--bg-white);
+  z-index: 10;
+  padding-left: 12px;
+}
+
+.patient-table th:first-child {
+  background: var(--bg-table-header);
+  /* header corner: above the header row (20) and the sticky patient column (10) */
+  z-index: 21;
+}
+
+.patient-table tbody tr:hover td:first-child {
+  background: var(--bg-table-header);
+}
+
+/* Responsive adjustments */
+
+
+@media (max-width: 768px) {
+    .accordion-details {
+        grid-template-columns: 1fr;
+    }
+
+    .task-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .task-actions {
+        align-self: flex-end;
+    }
+
+    .comment-content-wrapper {
+        max-width: 85%;
+    }
+
+    .comments-bubble-container {
+        padding: 15px;
+    }
+
+    .add-comment-form {
+        padding: 10px 15px;
+    }
+
+    .comment-form-actions {
+        flex-direction: column;
+    }
+
+    .comment-cancel-btn,
+    .comment-submit-btn {
+        width: 100%;
+    }
+}
+
+/* iPad Landscape - compact layout — uniform 32px height */
+@media screen and (min-width: 1024px) and (max-width: 1200px) {
+    .filters {
+        gap: 6px;
+        padding: 8px 12px;
+        align-items: center;
+    }
+
+    .filter-input {
+        min-width: 100px;
+        height: 32px;
+    }
+
+    .filter-dropdown .selected-value {
+        min-width: 100px;
+        padding: 6px 10px;
+        height: 32px;
+    }
+
+    .filter-apply-btn,
+    .filter-clear-btn {
+        height: 32px;
+    }
+
+    .column-settings-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+}
+
+/* iPad and tablet responsive styles */
+@media screen and (max-width: 1024px) {
+    :root {
+        --table-cell-padding: 12px 8px;
+        --table-header-padding: 10px 8px;
+        --font-size-regular: 13px;
+        --font-size-small: 11px;
+    }
+
+    .table-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .filters {
+        gap: 6px;
+        padding: 8px 10px;
+        align-items: center;
+    }
+
+    .filter-input {
+        min-width: 100px;
+        padding: 6px 8px;
+        font-size: var(--font-size-small);
+        height: 30px;
+    }
+
+    .filter-dropdown .selected-value {
+        padding: 6px 8px;
+        font-size: var(--font-size-small);
+        min-width: 100px;
+        height: 30px;
+    }
+
+    .filter-apply-btn,
+    .filter-clear-btn {
+        padding: 6px 10px;
+        font-size: var(--font-size-small);
+        height: 30px;
+    }
+
+    .column-settings-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 14px;
+    }
+
+    /* Pagination fixed at bottom on tablet */
+    .pagination {
+        border-top: 1px solid var(--border-light);
+        box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .patient-table th,
+    .patient-table td {
+        padding: 10px 8px;
+        font-size: 12px;
+    }
+
+    .patient-table th:last-child,
+    .patient-table td:last-child {
+        padding-right: 12px;
+    }
+
+    .patient-avatar {
+        width: 32px;
+        height: 32px;
+    }
+
+    .patient-name {
+        font-size: 13px;
+    }
+
+    .patient-details {
+        font-size: 11px;
+    }
+
+    .care-team-name,
+    .care-team-role {
+        font-size: 12px;
+    }
+
+    .clinical-note-text {
+        -webkit-line-clamp: 2;
+        max-height: calc(1.4em * 2);
+    }
+}
+
+/* iPad Portrait and smaller */
+@media screen and (max-width: 834px) {
+    /* Compact filter layout — uniform 26px height */
+    .filters {
+        gap: 4px;
+        padding: 6px 8px;
+        align-items: center;
+    }
+
+    .filter-input {
+        min-width: 80px;
+        padding: 5px 6px;
+        font-size: 11px;
+        height: 26px;
+    }
+
+    .filter-dropdown .selected-value {
+        padding: 5px 6px;
+        font-size: 11px;
+        min-width: 80px;
+        gap: 4px;
+        height: 26px;
+    }
+
+    .filter-dropdown .dropdown-arrow {
+        font-size: 8px;
+    }
+
+    .filter-apply-btn,
+    .filter-clear-btn {
+        padding: 5px 8px;
+        font-size: 11px;
+        height: 26px;
+    }
+
+    .column-settings-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 12px;
+    }
+
+    .patient-table {
+        font-size: 11px;
+    }
+
+    .patient-avatar {
+        width: 28px;
+        height: 28px;
+    }
+
+    .patient-table th,
+    .patient-table td {
+        padding: 8px 6px;
+    }
+
+    .clinical-note-text {
+        -webkit-line-clamp: 1;
+        max-height: calc(1.4em * 1);
+    }
+}
+
+/* Metadata multi-tag chips */
+.metadata-tags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.metadata-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #e6efff;
+    color: #1f4ea8;
+    font-size: 0.78em;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+/* Mobile phones */
+@media screen and (max-width: 600px) {
+    .filters {
+        padding: 6px;
+        gap: 4px;
+    }
+}
+/* Inline-editable metadata cell controls.
+   Look like plain cell text until hover/focus, then reveal an input affordance.
+   Tokens only — matches the rest of the table. */
+.metadata-edit {
+  max-width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-regular);
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+/* Size the dropdown to its widest option so values aren't clipped under the
+   native caret; the column (table-layout: auto) expands to fit. */
+.metadata-edit-select {
+  width: auto;
+  min-width: 88px;
+  padding-right: 22px;
+}
+
+/* Text/date inputs fill the cell but keep enough room for a full date. */
+.metadata-edit-input {
+  width: 100%;
+  min-width: 120px;
+}
+
+.metadata-edit:hover {
+  border-color: var(--border-color);
+  background: var(--bg-white);
+}
+
+.metadata-edit:focus {
+  outline: none;
+  border-color: var(--bg-active);
+  background: var(--bg-white);
+}
+
+.metadata-edit:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
