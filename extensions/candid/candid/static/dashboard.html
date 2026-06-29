@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+<div class="page">
+
+  <div class="header">
+    <h1>Candid Claims Dashboard</h1>
+    <button class="refresh-btn" onclick="resetAndLoad()">Refresh</button>
+  </div>
+
+  <div class="filters">
+    <label><input type="checkbox" id="filter-errors" onchange="resetAndLoad()"> Errors / denials only</label>
+    <label>Sorted by
+      <select id="filter-sort" onchange="onSortChange(this.value)">
+        <option value="activity" selected>most recent activity</option>
+        <option value="submitted">submitted</option>
+        <option value="last_sync">last sync</option>
+        <option value="status">candid status</option>
+        <option value="queue">canvas queue</option>
+      </select>
+      <select id="filter-sort-dir" onchange="onSortDirChange(this.value)">
+        <option value="desc" selected>desc</option>
+        <option value="asc">asc</option>
+      </select>
+    </label>
+    <div class="filters-right">
+      <span id="pagination-bar" class="pagination-bar"></span>
+      <div id="summary" class="summary"></div>
+    </div>
+  </div>
+
+  <div id="content"><div class="loading">Loading...</div></div>
+
+</div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>
