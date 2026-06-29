@@ -1,0 +1,16 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]",
+]
+description = "Reference plugin: default a note's supervising provider from the rendering provider's Staff record on note creation."
+license = "MIT"
+name = "default_supervising_provider"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
