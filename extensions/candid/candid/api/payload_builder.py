@@ -96,6 +96,7 @@ def build_claim_payload(
         ("patient", lambda c, p, e: _add_patient(c, p, e)),
         ("billing provider", lambda c, p, e: _add_billing_provider(c, p, e)),
         ("rendering provider", lambda c, p, e: _add_rendering_provider(c, p, e)),
+        ("supervising provider", lambda c, p, e: _add_supervising_provider(c, p, e)),
         ("service facility", lambda c, p, e: _add_service_facility(c, p, e)),
         ("subscribers", lambda c, p, e: _add_subscribers(c, p, e)),
     ):
@@ -359,6 +360,11 @@ def _add_patient(claim: Claim, payload: dict, errors: list[str]) -> None:
     payload["patient"] = patient_payload
 
 
+def _is_valid_npi(npi: str) -> bool:
+    """An NPI Candid will accept: exactly 10 digits. Candid rejects anything else."""
+    return npi.isdigit() and len(npi) == 10
+
+
 def _add_billing_provider(claim: Claim, payload: dict, errors: list[str]) -> None:
     provider = claim.provider
     if not provider:
@@ -379,6 +385,10 @@ def _add_billing_provider(claim: Claim, payload: dict, errors: list[str]) -> Non
         errors.append(
             f"The following items were missing for the billing provider: {', '.join(missing)}"
         )
+        return
+
+    if not _is_valid_npi(provider.billing_provider_npi):
+        errors.append("Billing provider: NPI must be exactly 10 digits")
         return
 
     billing_provider: dict[str, Any] = {
@@ -417,6 +427,10 @@ def _add_rendering_provider(claim: Claim, payload: dict, errors: list[str]) -> N
         errors.append("Rendering provider: NPI OR first+last name is required")
         return
 
+    if has_npi and not _is_valid_npi(provider.provider_npi):
+        errors.append("Rendering provider: NPI must be exactly 10 digits")
+        return
+
     rendering: dict[str, Any] = {}
     if has_npi:
         rendering["npi"] = provider.provider_npi
@@ -444,6 +458,44 @@ def _add_rendering_provider(claim: Claim, payload: dict, errors: list[str]) -> N
             rendering["address"]["address2"] = provider.provider_addr2
 
     payload["rendering_provider"] = rendering
+
+
+def _add_supervising_provider(claim: Claim, payload: dict, errors: list[str]) -> None:
+    """Candid ``supervising_provider`` for a non-incident-to claim with a snapshot.
+
+    Omitted for incident-to claims — the supervising MD already rides the
+    rendering provider via the upstream swap (KOALA-5585), and including it here
+    too would misrepresent the claim — and when no snapshot exists. Candid's
+    /encounters/v4 has no explicit incident-to flag, so the rendering swap is the
+    only signal it needs.
+
+    See https://docs.joincandidhealth.com/api-reference/encounters/v-4/create#request.body.supervising_provider
+    """
+    if claim.incident_to:
+        return
+
+    try:
+        supervising = claim.supervising_provider
+    except Claim.supervising_provider.RelatedObjectDoesNotExist:
+        return
+
+    if not supervising.npi or supervising.npi == "0":
+        errors.append("Supervising provider: NPI is required, but was missing")
+        return
+
+    if not _is_valid_npi(supervising.npi):
+        errors.append("Supervising provider: NPI must be exactly 10 digits")
+        return
+
+    supervising_provider: dict[str, Any] = {"npi": supervising.npi}
+    if supervising.first_name:
+        supervising_provider["first_name"] = supervising.first_name
+    if supervising.last_name:
+        supervising_provider["last_name"] = supervising.last_name
+    if supervising.taxonomy:
+        supervising_provider["taxonomy_code"] = supervising.taxonomy
+
+    payload["supervising_provider"] = supervising_provider
 
 
 def _add_service_facility(claim: Claim, payload: dict, errors: list[str]) -> None:
