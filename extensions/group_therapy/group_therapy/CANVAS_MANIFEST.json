@@ -1,0 +1,58 @@
+{
+    "sdk_version": "0.154.1",
+    "plugin_version": "0.3.0",
+    "name": "group_therapy",
+    "description": "Document group therapy sessions into each attendee's existing appointment note",
+    "components": {
+        "protocols": [
+            {
+                "class": "group_therapy.api.routes:GroupTherapyAPI",
+                "description": "API endpoints for patient search and session note creation"
+            },
+            {
+                "class": "group_therapy.protocols.billing_assessment_linker:BillingAssessmentLinker",
+                "description": "Links assessments to billing line items after assess/diagnose commands are committed"
+            }
+        ],
+        "applications": [
+            {
+                "class": "group_therapy.protocols.my_protocol:GroupTherapyApplication",
+                "name": "Group Therapy",
+                "description": "Document group therapy sessions with per-patient notes",
+                "scope": "global",
+                "icon": "icon.png"
+            },
+            {
+                "class": "group_therapy.protocols.my_protocol:GroupTherapyAdminApplication",
+                "name": "Group Therapy Setup",
+                "description": "Build and edit the group therapy note templates",
+                "scope": "global",
+                "icon": "icon.png"
+            }
+        ],
+        "commands": [
+            {
+                "name": "GroupTherapyNote",
+                "label": "Group Therapy",
+                "schema_key": "groupTherapyNote",
+                "section": "assessment"
+            }
+        ],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "namespace_read_write_access_key", "sensitive": true},
+        {"name": "ADMIN_STAFF_KEYS", "sensitive": false}
+    ],
+    "custom_data": {
+        "namespace": "canvas_medical__group_therapy",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "../README.md"
+}
