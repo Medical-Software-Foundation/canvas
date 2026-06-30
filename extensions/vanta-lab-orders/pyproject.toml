@@ -1,0 +1,33 @@
+# This pyproject.toml drives local development and testing only.
+# Canvas packages and deploys the plugin from CANVAS_MANIFEST.json — it does
+# not consume this file at install time.
+
+[project]
+name = "vanta-lab-orders"
+version = "0.0.21"
+description = "Canvas Medical plugin that forwards signed Vanta Diagnostics lab orders to LKCareEvolve (ELLKAY) via the ELLKAY Orders & Results JSON v2.2 contract."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12"
+dependencies = [
+    "django>=4.2.0",
+    "canvas[test-utils]",
+]
+
+[project.urls]
+Homepage = "https://www.canvasmedical.com/"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-django>=4.7.0",
+    "pytest-mock>=3.12.0",
+]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]

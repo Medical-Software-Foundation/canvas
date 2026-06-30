@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+*.egg
+
+# Tooling caches
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Claude Code session files (kept out of OSS distribution)
+.claude/
+
+# Local-dev secret values — never commit real credentials
+vanta_lab_orders/secrets_local.py
