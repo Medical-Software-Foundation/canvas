@@ -78,6 +78,13 @@ def test_modal_injects_identity():
     assert "Aide Jane" in html
 
 
+def test_modal_escapes_staff_name_attribute():
+    # a staff name with a quote/markup must not break out of the hidden input
+    html = _build(logged_in_name='Ev"><script>alert(1)</script>')
+    assert '<script>alert(1)' not in html
+    assert "Ev&quot;&gt;&lt;script&gt;" in html
+
+
 def test_modal_has_audit_dupe_and_badge():
     html = _build()
     assert 'id="audit-banner"' in html

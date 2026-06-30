@@ -88,7 +88,7 @@ def build_admin_html() -> str:
         let config = { billing_mode: 'per_participant', templates: [] };
         let QLIST = [];
 
-        function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+        function esc(s) { return (s == null ? '' : String(s)).split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;').split('"').join('&quot;').split("'").join('&#39;'); }
 
         async function load() {
             try { config = (await (await fetch(BASE + '/admin/config')).json()).config || config; } catch (e) {}

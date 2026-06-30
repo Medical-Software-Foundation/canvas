@@ -107,6 +107,18 @@ def test_build_command_ignores_unknown_question_type(mock_q, mock_cmd, mock_ro):
     unknown_q.add_response.assert_not_called()  # falls through all type branches
 
 
+@patch(f"{_QN}.QuestionnaireCommand")
+@patch(f"{_QN}.Questionnaire")
+def test_build_command_degrades_to_none_on_unsupported_question_type(mock_q, mock_cmd):
+    # cmd.questions raises ValueError for an unsupported type -> degrade, no 500
+    from unittest.mock import PropertyMock
+    mock_q.objects.filter.return_value.first.return_value = MagicMock(id="qid-1")
+    type(mock_cmd.return_value).questions = PropertyMock(
+        side_effect=ValueError("Unsupported question type: WEIRD")
+    )
+    assert qn.build_command("QUES_0014", "n", {}) is None
+
+
 @patch(f"{_QN}.ResponseOption")
 @patch(f"{_QN}.QuestionnaireCommand")
 @patch(f"{_QN}.Questionnaire")

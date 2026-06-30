@@ -20,10 +20,14 @@ class BillingAssessmentLinker(BaseProtocol):
     ]
 
     def compute(self) -> list[Effect]:
-        command = Command.objects.get(id=self.target)
+        command = Command.objects.filter(id=self.event.target.id).first()
+        if command is None:
+            return []
         note = command.note
 
-        assessments = list(Assessment.objects.filter(note_id=note.dbid))
+        assessments = list(
+            Assessment.objects.filter(note_id=note.dbid, entered_in_error_id__isnull=True)
+        )
         if not assessments:
             log.info(f"BillingAssessmentLinker: no assessment found on note {note.id}")
             return []

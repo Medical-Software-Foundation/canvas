@@ -248,20 +248,35 @@ class GroupTherapyAPI(StaffSessionAuthMixin, SimpleAPI):
             (s.get("label", ""), s.get("value", "")) for s in participant.get("summary_sections", [])
         ]
 
-        effects = list(
-            build_documentation_effects(
-                target_note_id=target_note_id,
-                meta_pairs=meta_pairs,
-                summary_sections=summary_sections,
-                questionnaire_specs=participant.get("questionnaires", []),
-                condition_id=participant.get("condition_id", "") or None,
-                billing_mode=billing_mode,
-                cpt_code=cpt_code,
-                sign=False,
-                participant_index=body.get("participant_index", 0),
-                check_in=bool(participant.get("needs_checkin", False)),
+        # Bad client input (invalid condition_id, malformed cpt, etc.) can make an
+        # SDK command builder raise - degrade to a skip rather than 500 the submit.
+        try:
+            effects = list(
+                build_documentation_effects(
+                    target_note_id=target_note_id,
+                    meta_pairs=meta_pairs,
+                    summary_sections=summary_sections,
+                    questionnaire_specs=participant.get("questionnaires", []),
+                    condition_id=participant.get("condition_id", "") or None,
+                    billing_mode=billing_mode,
+                    cpt_code=cpt_code,
+                    sign=False,
+                    participant_index=body.get("participant_index", 0),
+                    check_in=bool(participant.get("needs_checkin", False)),
+                )
             )
-        )
+        except (AttributeError, ValueError, TypeError) as exc:
+            log.warning(f"complete_patient: documentation failed for patient={patient_id}: {exc}")
+            return [
+                JSONResponse(
+                    {
+                        "success": True,
+                        "action": "skipped",
+                        "reason": "could not build documentation",
+                        "patient_id": patient_id,
+                    }
+                )
+            ]
         effects.append(
             JSONResponse({"success": True, "action": "documented", "patient_id": patient_id})
         )

@@ -10,11 +10,26 @@ per-patient sections render per attendee. On submit each attendee posts free-tex
 """
 
 
+def _attr(value: str) -> str:
+    """Escape a value for safe embedding in a double-quoted HTML attribute.
+    (The plugin sandbox has no `html` module, so escape by hand.)"""
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
+
+
 def build_modal_html(
     logged_in_staff_id: str = "",
     logged_in_name: str = "",
 ) -> str:
     """Return the full HTML page for the config-driven group therapy modal."""
+    staff_id_attr = _attr(logged_in_staff_id)
+    staff_name_attr = _attr(logged_in_name)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -136,8 +151,8 @@ def build_modal_html(
     </style>
 </head>
 <body>
-    <input type="hidden" id="hid-staff-id" value="{logged_in_staff_id}">
-    <input type="hidden" id="hid-staff-name" value="{logged_in_name}">
+    <input type="hidden" id="hid-staff-id" value="{staff_id_attr}">
+    <input type="hidden" id="hid-staff-name" value="{staff_name_attr}">
     <div class="workspace">
         <main class="main-panel">
             <h1 class="hero-title">Group Therapy Session</h1>
@@ -196,7 +211,7 @@ def build_modal_html(
         }});
         function closeModal() {{ if (messagePort) messagePort.postMessage({{ type: 'CLOSE_MODAL' }}); }}
 
-        function esc(s) {{ const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }}
+        function esc(s) {{ return (s == null ? '' : String(s)).split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;').split('"').join('&quot;').split("'").join('&#39;'); }}
         // Safe to embed inside a single-quoted JS string within a double-quoted
         // HTML attribute (e.g. onclick): HTML-escapes & < > " and backslash-/
         // quote-escapes \\ and ' so an admin-set label cannot break out. Uses
@@ -288,14 +303,14 @@ def build_modal_html(
             let html = '';
             schema.forEach(q => {{
                 html += '<div class="q-block"><span class="q-label">'+esc(q.label)+'</span>';
-                const cb = "qAnswer('"+jsq(scopeKey)+"','"+esc(ownerId)+"','"+esc(q.name)+"'";
+                const cb = "qAnswer('"+jsq(scopeKey)+"','"+jsq(ownerId)+"','"+jsq(q.name)+"'";
                 if (q.kind === 'radio') {{
                     html += '<div class="opt-row">' + (q.options||[]).map(o =>
-                        '<div class="opt-pill'+(formLocked?' locked':'')+'" data-q="'+esc(q.name)+'" data-v="'+esc(o.value)+'" onclick="qRadio(\\''+jsq(scopeKey)+'\\',\\''+esc(ownerId)+'\\',\\''+esc(q.name)+'\\',\\''+esc(o.value)+'\\',this)">'+esc(o.label)+'</div>'
+                        '<div class="opt-pill'+(formLocked?' locked':'')+'" data-q="'+esc(q.name)+'" data-v="'+esc(o.value)+'" onclick="qRadio(\\''+jsq(scopeKey)+'\\',\\''+jsq(ownerId)+'\\',\\''+jsq(q.name)+'\\',\\''+jsq(o.value)+'\\',this)">'+esc(o.label)+'</div>'
                     ).join('') + '</div>';
                 }} else if (q.kind === 'checkbox') {{
                     html += '<div class="opt-row">' + (q.options||[]).map(o =>
-                        '<div class="opt-pill'+(formLocked?' locked':'')+'" onclick="qCheck(\\''+jsq(scopeKey)+'\\',\\''+esc(ownerId)+'\\',\\''+esc(q.name)+'\\',\\''+esc(o.value)+'\\',this)">'+esc(o.label)+'</div>'
+                        '<div class="opt-pill'+(formLocked?' locked':'')+'" onclick="qCheck(\\''+jsq(scopeKey)+'\\',\\''+jsq(ownerId)+'\\',\\''+jsq(q.name)+'\\',\\''+jsq(o.value)+'\\',this)">'+esc(o.label)+'</div>'
                     ).join('') + '</div>';
                 }} else if (q.kind === 'integer') {{
                     html += '<input type="number" class="input-editorial"'+dis+' oninput="'+cb+',this.value)">';
@@ -342,7 +357,7 @@ def build_modal_html(
             const isSel = (v) => sec.multi ? (Array.isArray(sel) && sel.indexOf(v) !== -1) : (sel === v);
             const pills = (sec.choices || []).map(c =>
                 '<div class="opt-pill' + (isSel(c) ? ' active' : '') + (formLocked ? ' locked' : '')
-                + '" onclick="optionPick(\\'' + scopeKey + '\\',\\'' + esc(ownerId) + '\\',\\'' + esc(sec.label) + '\\',\\'' + esc(c) + '\\',' + (sec.multi ? 'true' : 'false') + ',this)">' + esc(c) + '</div>'
+                + '" onclick="optionPick(\\'' + jsq(scopeKey) + '\\',\\'' + jsq(ownerId) + '\\',\\'' + jsq(sec.label) + '\\',\\'' + jsq(c) + '\\',' + (sec.multi ? 'true' : 'false') + ',this)">' + esc(c) + '</div>'
             ).join('');
             return '<div class="opt-row">' + (pills || '<span class="stub-line">No choices configured</span>') + '</div>';
         }}
@@ -367,7 +382,7 @@ def build_modal_html(
                 html += '<div class="field-block"><span class="label-editorial">'+esc(sec.label)+'</span>';
                 if (sec.type === 'questionnaire') {{ html += qControlsHtml(sec.schema, 'shared', sec.label); }}
                 else if (sec.type === 'options') {{ html += optionsHtml(sec, 'shared', sec.label); }}
-                else {{ html += '<textarea class="soap-area"'+dis+' oninput="updateShared(\\''+esc(sec.label)+'\\', this.value)">'+esc(asText(sharedForm[sec.label]))+'</textarea>'; }}
+                else {{ html += '<textarea class="soap-area"'+dis+' oninput="updateShared(\\''+jsq(sec.label)+'\\', this.value)">'+esc(asText(sharedForm[sec.label]))+'</textarea>'; }}
                 html += '</div>';
             }});
             host.innerHTML = html;
@@ -402,7 +417,7 @@ def build_modal_html(
                 return '<div class="field-mini"><span class="label-mini">'+esc(sec.label)+'</span>'+optionsHtml(sec, 'patient', a.patient_id)+'</div>';
             }}
             // free_text
-            return '<div class="field-mini"><span class="label-mini">'+esc(sec.label)+'</span><textarea class="p-note"'+dis+' placeholder="'+esc(sec.label)+'..." oninput="updateField(\\''+a.patient_id+'\\', \\''+esc(sec.label)+'\\', this.value)">'+esc(asText(a.fields[sec.label]))+'</textarea></div>';
+            return '<div class="field-mini"><span class="label-mini">'+esc(sec.label)+'</span><textarea class="p-note"'+dis+' placeholder="'+esc(sec.label)+'..." oninput="updateField(\\''+a.patient_id+'\\', \\''+jsq(sec.label)+'\\', this.value)">'+esc(asText(a.fields[sec.label]))+'</textarea></div>';
         }}
 
         function cardBody(a) {{

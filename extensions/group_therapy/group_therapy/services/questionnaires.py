@@ -101,29 +101,36 @@ def build_command(code: str, note_id: str, answers: dict):
     questionnaire = _resolve(code)
     if not questionnaire:
         return None
-    cmd = QuestionnaireCommand(questionnaire_id=str(questionnaire.id))
-    cmd.note_uuid = note_id
-    cmd.command_uuid = str(uuid4())
-    for question in cmd.questions:
-        answer = (answers or {}).get(question.name)
-        if answer is None or answer == "" or answer == []:
-            continue
-        qtype = question.type
-        if qtype == ResponseOption.TYPE_TEXT:
-            question.add_response(text=str(answer))
-        elif qtype == ResponseOption.TYPE_INTEGER:
-            try:
-                question.add_response(integer=int(answer))
-            except (TypeError, ValueError):
+    # Accessing cmd.questions raises ValueError on an unsupported question type
+    # (same as question_schema); degrade to None so one misconfigured
+    # questionnaire can't 500 the whole submit endpoint.
+    try:
+        cmd = QuestionnaireCommand(questionnaire_id=str(questionnaire.id))
+        cmd.note_uuid = note_id
+        cmd.command_uuid = str(uuid4())
+        for question in cmd.questions:
+            answer = (answers or {}).get(question.name)
+            if answer is None or answer == "" or answer == []:
                 continue
-        elif qtype == ResponseOption.TYPE_RADIO:
-            option = _find_option(question, answer)
-            if option is not None:
-                question.add_response(option=option)
-        elif qtype == ResponseOption.TYPE_CHECKBOX:
-            selected = answer if isinstance(answer, list) else [answer]
-            for value in selected:
-                option = _find_option(question, value)
+            qtype = question.type
+            if qtype == ResponseOption.TYPE_TEXT:
+                question.add_response(text=str(answer))
+            elif qtype == ResponseOption.TYPE_INTEGER:
+                try:
+                    question.add_response(integer=int(answer))
+                except (TypeError, ValueError):
+                    continue
+            elif qtype == ResponseOption.TYPE_RADIO:
+                option = _find_option(question, answer)
                 if option is not None:
-                    question.add_response(option=option, selected=True)
+                    question.add_response(option=option)
+            elif qtype == ResponseOption.TYPE_CHECKBOX:
+                selected = answer if isinstance(answer, list) else [answer]
+                for value in selected:
+                    option = _find_option(question, value)
+                    if option is not None:
+                        question.add_response(option=option, selected=True)
+    except (AttributeError, ValueError, TypeError) as exc:
+        log.warning(f"build_command failed for questionnaire {code}: {exc}")
+        return None
     return cmd

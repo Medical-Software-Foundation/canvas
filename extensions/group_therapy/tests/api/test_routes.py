@@ -241,6 +241,22 @@ def test_complete_patient_documents_into_target(mock_doc, mock_pname, mock_cfg):
 @patch("group_therapy.api.routes.load_config", return_value=_DOC)
 @patch("group_therapy.api.routes._provider_name")
 @patch("group_therapy.api.routes.build_documentation_effects")
+def test_complete_patient_skips_when_build_raises(mock_doc, mock_pname, mock_cfg):
+    # a bad condition_id/cpt making an SDK builder raise must degrade to a skip, not 500
+    mock_pname.return_value = "Dr. A"
+    mock_doc.side_effect = ValueError("bad condition_id")
+    handler = _handler(body={
+        "provider_id": "prov", "rfv_codes": ["Group_Therapy"],
+        "participant": {"id": "p1", "status": "present", "target_note_id": "note-9"},
+    })
+    result = handler.complete_patient()
+    assert result[0].data["action"] == "skipped"
+    assert result[0].data["success"] is True
+
+
+@patch("group_therapy.api.routes.load_config", return_value=_DOC)
+@patch("group_therapy.api.routes._provider_name")
+@patch("group_therapy.api.routes.build_documentation_effects")
 def test_complete_patient_screening_bills_90832(mock_doc, mock_pname, mock_cfg):
     mock_pname.return_value = "Dr. A"
     mock_doc.return_value = ["E1"]

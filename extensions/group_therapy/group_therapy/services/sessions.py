@@ -60,7 +60,9 @@ def _group_note_codes(note_dbids: list, rfv_codes: list[str]) -> dict:
     for code in rfv_codes:
         norm_to_code.setdefault(_normalize(code), code)
     matched: dict = {}
-    commands = Command.objects.filter(note_id__in=note_dbids, schema_key="reasonForVisit")
+    commands = Command.objects.filter(
+        note_id__in=note_dbids, schema_key="reasonForVisit", entered_in_error_id__isnull=True
+    )
     for command in commands:
         coding = (command.data or {}).get("coding") or {}
         for form in (coding.get("value"), coding.get("text"), coding.get("code")):
@@ -80,7 +82,9 @@ def _documented_note_dbids(note_dbids: list) -> set:
         return set()
     return set(
         Command.objects.filter(
-            note_id__in=note_dbids, schema_key__startswith="groupTherapyNote"
+            note_id__in=note_dbids,
+            schema_key__startswith="groupTherapyNote",
+            entered_in_error_id__isnull=True,
         ).values_list("note_id", flat=True)
     )
 
@@ -125,18 +129,17 @@ def find_group_sessions(session_date, rfv_codes: list[str]) -> list[dict]:
     """
     try:
         rows = _appointment_rows(session_date)
-    except (AttributeError, ValueError) as exc:
+        note_dbids = [r["note_id"] for r in rows if r.get("note_id")]
+        group_codes = _group_note_codes(note_dbids, rfv_codes)
+        group_dbids = set(group_codes)
+        note_states = _note_states_by_dbid(note_dbids)
+        documented_dbids = _documented_note_dbids(note_dbids)
+        photos = _patient_photos(
+            [r["patient__id"] for r in rows if r.get("note_id") in group_dbids and r.get("patient__id")]
+        )
+    except (AttributeError, ValueError, TypeError) as exc:
         log.warning(f"find_group_sessions failed for date={session_date}: {exc}")
         return []
-
-    note_dbids = [r["note_id"] for r in rows if r.get("note_id")]
-    group_codes = _group_note_codes(note_dbids, rfv_codes)
-    group_dbids = set(group_codes)
-    note_states = _note_states_by_dbid(note_dbids)
-    documented_dbids = _documented_note_dbids(note_dbids)
-    photos = _patient_photos(
-        [r["patient__id"] for r in rows if r.get("note_id") in group_dbids and r.get("patient__id")]
-    )
 
     grouped: dict = {}
     for row in rows:
