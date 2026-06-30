@@ -1,0 +1,65 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "icd10_coding_assistant",
+    "description": "Interactive ICD-10 coding assistant for active patient conditions missing ICD-10 codes. Surfaces missing codes as a notification badge on the patient chart, opens a centered modal to review and approve recommended codes in bulk, and validates assess commands against coding completeness.",
+    "components": {
+        "applications": [
+            {
+                "class": "icd10_coding_assistant.applications.icd10_application:ICD10CodingApplication",
+                "name": "ICD-10 Coding Assistant",
+                "description": "Patient-specific app to review and approve ICD-10 codes for conditions missing them. Badge shows the count of uncoded conditions.",
+                "scope": "patient_specific",
+                "icon": "assets/icd10-coding-icon.png"
+            }
+        ],
+        "handlers": [
+            {
+                "class": "icd10_coding_assistant.api.icd10_coding_api:ICD10CodingAPI",
+                "description": "Backend API endpoints for ICD-10 coding operations (conditions list, search, approve).",
+                "data_access": {
+                    "event": "",
+                    "read": ["Condition", "ConditionCoding", "Command", "NoteType", "PracticeLocation"],
+                    "write": ["Note", "UpdateDiagnosisCommand"]
+                }
+            },
+            {
+                "class": "icd10_coding_assistant.api.icd10_frontend:ICD10FrontendAPI",
+                "description": "Serves the HTML/JS/CSS frontend for the ICD-10 coding UI.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "icd10_coding_assistant.protocols.assess_condition_validation:AssessConditionValidation",
+                "description": "Blocks assess command commits when the condition has no ICD-10 coding.",
+                "data_access": {
+                    "event": "ASSESS_COMMAND__POST_VALIDATION",
+                    "read": ["ConditionCoding"],
+                    "write": []
+                }
+            },
+            {
+                "class": "icd10_coding_assistant.protocols.assess_condition_validation:UpdateAssessAfterChangeDiagnosis",
+                "description": "Re-points open staged assess commands after a diagnosis code change.",
+                "data_access": {
+                    "event": "UPDATE_DIAGNOSIS_COMMAND__POST_COMMIT",
+                    "read": ["ConditionCoding", "Command"],
+                    "write": ["AssessCommand"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
