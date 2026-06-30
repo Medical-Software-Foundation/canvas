@@ -133,6 +133,10 @@ class PayTheoryPaymentProcessor(CardPaymentProcessor):
             return []
 
         payor_id = self.get_or_create_payor_id(patient)
+        # payor creation can succeed while the re-fetch still returns None (PayTheory
+        # indexing lag); never pass None to get_payment_methods (payor_id is String!).
+        if not payor_id:
+            return []
 
         payment_methods = self.api.get_payment_methods(payor_id=payor_id)
 

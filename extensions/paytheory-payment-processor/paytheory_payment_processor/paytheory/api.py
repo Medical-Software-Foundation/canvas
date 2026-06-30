@@ -216,26 +216,26 @@ class PayTheoryAPI:
 
     def get_payor_id(self, patient_id: str) -> str | None:
         """Retrieve a payor_id by filtering on metadata.canvas_patient_id."""
-        query = f"""
-        query Payors($limit: Int) {{
-            payors(limit: $limit) {{
-                items {{
+        query = """
+        query Payors($limit: Int, $patient_id: String!) {
+            payors(limit: $limit) {
+                items {
                     payor_id
                     metadata(query_list: [
-                        {{
+                        {
                             key: "canvas_patient_id"
-                            value: "{patient_id}"
+                            value: $patient_id
                             operator: EQUAL
                             conjunctive_operator: NONE_NEXT
-                        }}
+                        }
                     ])
-                }}
+                }
                 total_row_count
-            }}
-        }}
+            }
+        }
         """
 
-        payload = {"query": query, "variables": {"limit": 1}}
+        payload = {"query": query, "variables": {"limit": 1, "patient_id": patient_id}}
 
         log.info(f"PayTheory API: looking up payor for patient_id={patient_id} at {self.endpoint}")
         response, data = self._post(payload)

@@ -275,6 +275,17 @@ class TestPaymentMethods:
         assert result == []
         assert processor.api.get_payor_id.mock_calls == []
 
+    def test_returns_empty_when_payor_cannot_be_resolved(self, processor, mock_patient):
+        # payor creation succeeds but the re-fetch still returns None (indexing lag):
+        # get_or_create_payor_id returns None and we must NOT call the API with it.
+        processor.api.get_payor_id.return_value = None
+        processor.api.create_payor.return_value = "new-payor"
+
+        result = processor.payment_methods(mock_patient)
+
+        assert result == []
+        assert processor.api.get_payment_methods.mock_calls == []
+
     def test_returns_mapped_methods(self, processor, mock_patient):
         processor.api.get_payor_id.return_value = "payor-123"
         processor.api.get_payment_methods.return_value = [
@@ -298,6 +309,18 @@ class TestPaymentMethods:
         assert result[0].expiration_month == 12
         assert result[0].expiration_year == 2025
         assert result[0].card_last_four_digits == "4242"
+
+    def test_handles_malformed_exp_date(self, processor, mock_patient):
+        # A non-numeric exp_date must not raise — it falls back to 0/0.
+        processor.api.get_payor_id.return_value = "payor-123"
+        processor.api.get_payment_methods.return_value = [
+            {"payment_method_id": "pm-1", "exp_date": "XX", "last_four": "4242"}
+        ]
+
+        result = processor.payment_methods(mock_patient)
+
+        assert result[0].expiration_month == 0
+        assert result[0].expiration_year == 0
 
     def test_coerces_null_fields_to_empty_strings(self, processor, mock_patient):
         # Canvas's schema is non-nullable for these fields; None would error the

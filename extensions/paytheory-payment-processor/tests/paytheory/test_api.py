@@ -180,6 +180,11 @@ class TestGetPayorId:
 
         assert result == "payor-456"
         assert mock_requests.post.call_count == 1
+        # patient_id is passed as a GraphQL variable, not interpolated into the query.
+        posted_json = mock_requests.post.call_args.kwargs["json"]
+        assert posted_json["variables"]["patient_id"] == "patient-123"
+        assert "patient-123" not in posted_json["query"]
+        assert "$patient_id: String!" in posted_json["query"]
 
     @patch("paytheory_payment_processor.paytheory.api.requests")
     def test_not_found(self, mock_requests, api):
