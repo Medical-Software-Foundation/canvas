@@ -58,7 +58,7 @@ The SDK and API URLs are derived from `paytheory_partner` + `paytheory_environme
 
 ## Testing
 
-In the **sandbox** environment, charge these dollar amounts to trigger specific outcomes:
+In the **sandbox** environment, charge these dollar amounts to trigger specific outcomes (see PayTheory's [testing reference](https://docs.paytheory.com/docs/main/testing) for the full, authoritative list):
 
 | Amount | Result |
 |---|---|
