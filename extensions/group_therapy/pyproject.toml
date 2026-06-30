@@ -1,0 +1,36 @@
+[project]
+name = "group-therapy"
+version = "0.2.1"
+description = "Document group therapy sessions into each attendee's existing appointment note"
+requires-python = ">=3.12"
+license = "MIT"
+readme = "README.md"
+authors = [{ name = "Jess Herbert", email = "jessica.herbert@canvasmedical.com" }]
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["group_therapy"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+]
