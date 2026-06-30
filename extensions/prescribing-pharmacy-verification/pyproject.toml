@@ -1,0 +1,17 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]",
+  "pytest-cov>=7.0.0",
+]
+description = "Block Prescribe, Refill, and Adjust-Prescription command commit until a pharmacy is selected."
+license = "MIT"
+name = "prescribing-pharmacy-verification"
+readme = "prescribing_pharmacy_verification/README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
