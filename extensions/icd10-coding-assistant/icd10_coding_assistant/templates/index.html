@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>ICD-10 Coding Assistant</title>
+    <link rel="stylesheet" href="/plugin-io/api/icd10_coding_assistant/ui/styles.css">
+    <script>
+        // Pass context from server to JavaScript
+        window.ICD10Context = {
+            patientId: '{{ patient_id }}',
+            host: '{{ host }}'
+        };
+    </script>
+</head>
+<body>
+    <div class='container'>
+        <h1>ICD-10 Coding Assistant</h1>
+        <p class='subtitle'>Review conditions missing ICD-10 codes and approve recommended or searched codes</p>
+        <div id='error-container'></div>
+        <div id='loading' class='loading'>Loading conditions...</div>
+        <div id='app' style='display:none;'>
+            <table id='conditions-table'>
+                <thead>
+                    <tr>
+                        <th style='width: 25%;'>Condition</th>
+                        <th style='width: 15%;'>Current Code System</th>
+                        <th style='width: 10%;'>Current Code</th>
+                        <th style='width: 20%;'>Recommended ICD-10</th>
+                        <th style='width: 20%;'>Search / Select Alternative</th>
+                        <th style='width: 10%;'>Action</th>
+                    </tr>
+                </thead>
+                <tbody id='conditions-body'>
+                </tbody>
+            </table>
+            <div class='batch-actions'>
+                <span id='status-msg' class='status-msg' style='display:none;'></span>
+                <button id='approve-all-btn' class='btn btn-success' onclick='approveAll()'>
+                    Approve All
+                </button>
+            </div>
+        </div>
+    </div>
+    <script src="/plugin-io/api/icd10_coding_assistant/ui/script.js"></script>
+</body>
+</html>
