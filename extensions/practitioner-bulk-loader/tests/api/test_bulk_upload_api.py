@@ -2347,7 +2347,7 @@ class TestParseAndValidateDirectoryFailureDegrades:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory",
-                   side_effect=RuntimeError("Staff ORM exploded")):
+                   side_effect=type("DatabaseError", (Exception,), {"__module__": "django.db.utils"})("Staff ORM exploded")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}
@@ -2369,7 +2369,7 @@ class TestParseAndValidateDirectoryFailureDegrades:
         with patch("practitioner_bulk_loader.api.bulk_upload_api.make_fhir_client") as mock_client_fn, \
              patch("practitioner_bulk_loader.api.bulk_upload_api.get_location_map") as mock_loc, \
              patch("practitioner_bulk_loader.api.bulk_upload_api._build_staff_directory",
-                   side_effect=RuntimeError("Staff ORM exploded")):
+                   side_effect=type("DatabaseError", (Exception,), {"__module__": "django.db.utils"})("Staff ORM exploded")):
 
             mock_client_fn.return_value = MagicMock()
             mock_loc.return_value = {"main clinic": "Location/loc-1"}
