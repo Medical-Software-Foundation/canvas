@@ -1286,11 +1286,13 @@ class BulkUploadAPI(StaffSessionAuthMixin, SimpleAPI):
                 f"{sum(len(v) for v in directory['by_name'].values())} total names indexed"
             )
         except Exception as exc:
-            # Can't narrow to django.db.DatabaseError — the plugin sandbox
-            # disallows importing django.db, and importing it makes the whole
-            # handler fail to register (its routes 404). Degrade gracefully on
-            # any Staff ORM failure rather than failing the whole upload.
-            #
+            # Re-raise non-database errors so genuine programming bugs still
+            # reach Sentry (repo rule); only real Staff ORM/database failures
+            # degrade gracefully below. django.db.DatabaseError can't be
+            # imported in the plugin sandbox (it unregisters the handler ->
+            # 404), so match on the exception's module name instead.
+            if "django.db" not in type(exc).__module__:
+                raise
             # Without the directory every existing practitioner would be
             # classified "new" and the admin could create duplicates of
             # every Staff record. Surface a top-level warning (row=0 — the
