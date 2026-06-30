@@ -1,0 +1,25 @@
+name: "SDOH Screening"
+form_type: "SA"
+code_system: "INTERNAL"
+code: "AWV_SDOH"
+can_originate_in_charting: true
+display_results_in_social_history_section: true
+questions:
+- content: "Screening Tool Used"
+  code_system: "INTERNAL"
+  code: "AWV_SDOH_TOOL"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Tool"
+    code: "AWV_SDOH_TOOL_RESP"
+    value: ''
+- content: "Positive Domains"
+  code_system: "INTERNAL"
+  code: "AWV_SDOH_POSITIVES"
+  responses_type: "TXT"
+  responses_code_system: "INTERNAL"
+  responses:
+  - name: "Positive Domains"
+    code: "AWV_SDOH_POSITIVES_RESP"
+    value: ''
