@@ -16,7 +16,7 @@ def active_conditions(patient_id: str) -> list[dict]:
     try:
         conditions = (
             Condition.objects.for_patient(patient_id)
-            .committed()
+            .active()
             .prefetch_related("codings")
         )
         for condition in conditions:

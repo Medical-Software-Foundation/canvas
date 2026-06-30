@@ -45,7 +45,7 @@ def test_active_conditions_returns_icd10_only(mock_condition, mock_cc):
     )
     qs = MagicMock()
     qs.prefetch_related.return_value = [cond]
-    mock_condition.objects.for_patient.return_value.committed.return_value = qs
+    mock_condition.objects.for_patient.return_value.active.return_value = qs
 
     result = active_conditions("pat1")
 
@@ -61,7 +61,7 @@ def test_active_conditions_skips_condition_without_icd10(mock_condition, mock_cc
     cond = _condition("c2", [_coding("http://snomed.info/sct", "999", "snomed only")])
     qs = MagicMock()
     qs.prefetch_related.return_value = [cond]
-    mock_condition.objects.for_patient.return_value.committed.return_value = qs
+    mock_condition.objects.for_patient.return_value.active.return_value = qs
 
     assert active_conditions("pat1") == []
 

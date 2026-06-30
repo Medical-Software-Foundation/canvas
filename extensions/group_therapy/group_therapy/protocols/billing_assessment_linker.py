@@ -23,8 +23,8 @@ class BillingAssessmentLinker(BaseProtocol):
         command = Command.objects.get(id=self.target)
         note = command.note
 
-        assessment = Assessment.objects.filter(note_id=note.dbid).first()
-        if not assessment:
+        assessments = list(Assessment.objects.filter(note_id=note.dbid))
+        if not assessments:
             log.info(f"BillingAssessmentLinker: no assessment found on note {note.id}")
             return []
 
@@ -37,13 +37,14 @@ class BillingAssessmentLinker(BaseProtocol):
             )
             return []
 
+        assessment_ids = [str(a.id) for a in assessments]
         log.info(
-            f"BillingAssessmentLinker: linking assessment {assessment.id} "
+            f"BillingAssessmentLinker: linking {len(assessment_ids)} assessment(s) "
             f"to billing line item {bli.id} on note {note.id}"
         )
         return [
             UpdateBillingLineItem(
                 billing_line_item_id=str(bli.id),
-                assessment_ids=[str(assessment.id)],
+                assessment_ids=assessment_ids,
             ).apply()
         ]
