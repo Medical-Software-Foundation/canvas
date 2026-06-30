@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Vaccine record card">
+  <!-- Record card -->
+  <rect x="14" y="20" width="60" height="60" rx="8" fill="#ffffff" stroke="#1a73e8" stroke-width="4"/>
+  <!-- Card header bar -->
+  <rect x="14" y="20" width="60" height="14" rx="8" fill="#1a73e8"/>
+  <rect x="14" y="28" width="60" height="6" fill="#1a73e8"/>
+  <!-- Checklist lines with check marks -->
+  <circle cx="26" cy="46" r="3.5" fill="#1e7e34"/>
+  <path d="M24.3 46.1l1.4 1.5 2.6-3" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="33" y="44" width="30" height="4" rx="2" fill="#cdd6e2"/>
+  <circle cx="26" cy="58" r="3.5" fill="#1e7e34"/>
+  <path d="M24.3 58.1l1.4 1.5 2.6-3" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="33" y="56" width="24" height="4" rx="2" fill="#cdd6e2"/>
+  <!-- Syringe -->
+  <g transform="rotate(45 72 64)">
+    <rect x="56" y="60" width="34" height="8" rx="2" fill="#34a853"/>
+    <rect x="52" y="58.5" width="5" height="11" rx="1.5" fill="#2c8c46"/>
+    <rect x="84" y="62" width="10" height="4" rx="1" fill="#2c8c46"/>
+    <rect x="94" y="63" width="9" height="2" rx="1" fill="#2c8c46"/>
+    <line x1="62" y1="64" x2="74" y2="64" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>
