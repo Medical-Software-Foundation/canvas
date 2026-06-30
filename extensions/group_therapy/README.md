@@ -27,7 +27,7 @@ Behavioral health providers (and the assistants or support staff documenting on 
 
 A full session documented end to end - pick the date and session, fill the shared group fields once, document each attendee, and submit:
 
-[▶ Watch the demo (1080p)](docs/group-therapy-demo.mp4)
+[▶ Watch the demo](https://www.loom.com/share/8a411b5301eb4dcb8c6067c41da64159)
 
 | | |
 |---|---|
