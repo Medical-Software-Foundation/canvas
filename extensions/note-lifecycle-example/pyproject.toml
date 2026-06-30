@@ -1,0 +1,16 @@
+[project]
+authors = [
+  {email = "engineering@canvasmedical.com", name = "Canvas Team"}
+]
+dependencies = [
+  "canvas[test-utils]"
+]
+description = "Replaces the note footer's native state buttons with plugin-owned, state-responsive action buttons that show only the transitions valid for the note's current state."
+license = "MIT"
+name = "note-lifecycle-example"
+readme = "note_lifecycle_example/README.md"
+requires-python = ">=3.11"
+version = "0.0.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]
