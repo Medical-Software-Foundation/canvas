@@ -1,0 +1,67 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "paytheory_payment_processor",
+    "description": "PayTheory credit card payment processor integration",
+    "url_permissions": [
+        {
+            "url": "https://*.sdk.paytheory.com/index.js",
+            "permissions": ["SCRIPTS"]
+        },
+        {
+            "url": "https://*.sdk.paytheorystudy.com/index.js",
+            "permissions": ["SCRIPTS"]
+        },
+        {
+            "url": "https://*.sdk.paytheorylab.com/index.js",
+            "permissions": ["SCRIPTS"]
+        },
+        {
+            "url": "https://*.tags.static.paytheory.com",
+            "permissions": []
+        },
+        {
+            "url": "https://*.tags.static.paytheorystudy.com",
+            "permissions": []
+        },
+        {
+            "url": "https://*.tags.static.paytheorylab.com",
+            "permissions": []
+        },
+        {
+            "url": "https://*.paytheory.com/pt-token-service/",
+            "permissions": []
+        },
+        {
+            "url": "https://*.paytheorystudy.com/pt-token-service/",
+            "permissions": []
+        },
+        {
+            "url": "https://*.paytheorylab.com/pt-token-service/",
+            "permissions": []
+        }
+    ],
+    "components": {
+        "protocols": [
+            {
+                "class": "paytheory_payment_processor.handlers.paytheory_payment_processor:PayTheoryPaymentProcessor",
+                "description": "Handles credit card payments, tokenization, and payment method management via PayTheory",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["paytheory_merchant_id", "paytheory_public_key", "paytheory_secret_key", "paytheory_partner", "paytheory_environment"],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

@@ -1,0 +1,205 @@
+<style>
+  #field-wrapper-card-name,
+  #field-wrapper-card-number,
+  #field-wrapper-card-exp,
+  #field-wrapper-card-cvv,
+  #field-wrapper-billing-zip {
+    width: 6em;
+    height: 2.5em;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin: 5px;
+    padding: 5px;
+  }
+  .submitButton {
+    display: flex;
+    width: 100px;
+    height: 20px;
+    visibility: hidden;
+  }
+  .custom-fields {
+    display: {% if intent == "pay" %}flex{% else %}block{% endif %};
+  }
+  .error {
+    color: #b00020;
+    margin: 8px 5px 0;
+    font-size: 0.9em;
+    min-height: 1.2em;
+  }
+</style>
+<div>
+  <div id="custom-payment-fields" class="custom-fields">
+    <div id="pay-theory-credit-card-account-name"></div>
+    <div id="pay-theory-credit-card"></div>
+    <div id="pay-theory-credit-card-zip"></div>
+  </div>
+  <div class="error"></div>
+  <button type="submit" id="submit" class="submitButton">Pay</button>
+
+
+  <script>
+    var cleanUpReady, cleanUpValid, cleanUpState, cleanUpError;
+
+    var ERROR_MESSAGES = {
+      SOCKET_ERROR: 'Your card could not be processed. Please contact your card issuer or try a different card.',
+      TRANSACTING_FIELD_ERROR: 'Please check your card details and try again.',
+      FIELD_ERROR: 'Please check your card details and try again.',
+      NOT_VALID: 'Please check your card details and try again.',
+      INVALID_PARAM: 'Please check your card details and try again.',
+      SESSION_EXPIRED: 'Your session has expired. Please refresh the page and try again.',
+      NOT_READY: 'The payment form is not ready yet. Please wait a moment and try again.',
+      NO_TOKEN: 'The payment form is not ready yet. Please wait a moment and try again.',
+      NO_FIELDS: 'The payment form is not ready yet. Please wait a moment and try again.'
+    };
+    var DEFAULT_ERROR_MESSAGE = 'We could not process your card. Please try again or use a different card.';
+
+    function formatPayTheoryError(rawError) {
+      var prefix = (rawError || '').split(':')[0].trim();
+      return ERROR_MESSAGES[prefix] || DEFAULT_ERROR_MESSAGE;
+    }
+
+    // PayTheory's errorObserver fires for many NON-fatal conditions during normal
+    // interaction: live field validation while the user types ("Invalid card exp",
+    // "Invalid card security code", "Invalid postal code"), transient connection
+    // states, and "Hosted Field not found" during mount. None of these should reach
+    // the Canvas shell as a payment error. We therefore allowlist only genuinely
+    // terminal errors — chiefly SOCKET_ERROR (an issuer decline that fires
+    // asynchronously OUTSIDE the tokenizePaymentMethod() promise and would otherwise
+    // leave the user no feedback) and an expired session. Everything else is
+    // log-only; the stateObserver paints field borders and the submit/tokenize path
+    // surfaces real charge failures.
+    var TERMINAL_ERROR_PREFIXES = {
+      SOCKET_ERROR: true,
+      SESSION_EXPIRED: true
+    };
+
+    function isTerminalError(rawError) {
+      var prefix = (rawError || '').split(':')[0].trim();
+      return !!TERMINAL_ERROR_PREFIXES[prefix];
+    }
+
+    function showError(rawError) {
+      if (rawError) {
+        console.error('PayTheory error:', rawError);
+      }
+      var message = formatPayTheoryError(rawError);
+      var errorEl = document.querySelector('.error');
+      if (errorEl) {
+        errorEl.textContent = message;
+      }
+      parentSetError(message);
+    }
+
+    function clearError() {
+      var errorEl = document.querySelector('.error');
+      if (errorEl) {
+        errorEl.textContent = '';
+      }
+    }
+
+    function setupPayTheory() {
+      cleanUpReady = paytheory.readyObserver(ready => {
+        parentFormIsReady(ready);
+      })
+
+      cleanUpError = paytheory.errorObserver(error => {
+        // Only genuinely terminal errors (issuer decline, expired session) reach the
+        // Canvas shell. Field validation, mount, and connection noise is log-only —
+        // the stateObserver paints field borders and the submit path surfaces real
+        // tokenization failures.
+        if (isTerminalError(error)) {
+          showError(error);
+        } else if (error) {
+          console.warn('PayTheory (non-fatal):', error);
+        }
+      });
+
+      cleanUpState = paytheory.stateObserver(state => {
+        if (state['billing-zip'].isDirty) {
+          document.getElementById('field-wrapper-billing-zip').style.borderColor = state['billing-zip'].errorMessages[0] ? 'red' : '#ccc';
+        }
+        if (state['card-cvv'].isDirty) {
+          document.getElementById('field-wrapper-card-cvv').style.borderColor = state['card-cvv'].errorMessages[0] ? 'red' : '#ccc';
+        }
+        if (state['card-exp'].isDirty) {
+          document.getElementById('field-wrapper-card-exp').style.borderColor = state['card-exp'].errorMessages[0] ? 'red' : '#ccc';
+        }
+        if (state['card-number'].isDirty) {
+          document.getElementById('field-wrapper-card-number').style.borderColor = state['card-number'].errorMessages[0] ? 'red' : '#ccc';
+        }
+      });
+
+      cleanUpValid = paytheory.validObserver(valid => {
+        parentSetFormIsValid(valid === 'card');
+      });
+
+      paytheory.payTheoryFields({
+        apiKey: '{{ public_api_key }}'
+      });
+
+      const submit = document.getElementById('submit');
+      submit.addEventListener('click', async (e) => {
+        e.preventDefault();
+        clearError();
+
+        const tokenizeParams = {};
+        {% if payor_id %}
+        tokenizeParams.payorId = '{{ payor_id }}';
+        {% endif %}
+        const result = await paytheory.tokenizePaymentMethod(tokenizeParams);
+
+        if (result.type === 'ERROR') {
+          showError(result.error);
+          return;
+        }
+
+        if (result.body && result.body.payment_method_id) {
+          parentSetToken(result.body.payment_method_id);
+        } else {
+          showError(result.error);
+        }
+      });
+    }
+
+    function loadSDKAndSetup() {
+      if (typeof paytheory !== 'undefined') {
+        setupPayTheory();
+        return;
+      }
+      var existing = document.querySelector('script[src="{{ sdk_url }}"]');
+      if (existing) {
+        existing.addEventListener('load', setupPayTheory);
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = '{{ sdk_url }}';
+      s.onload = setupPayTheory;
+      document.head.appendChild(s);
+    }
+
+    loadSDKAndSetup();
+
+    window.teardown = function() {
+      cleanUpReady?.();
+      cleanUpValid?.();
+      cleanUpState?.();
+      cleanUpError?.();
+    };
+
+    function parentFormIsReady(ready) {
+      window.parent.setFormIsReady(ready);
+    }
+
+    function parentSetToken(token) {
+      window.parent.setToken(token);
+    }
+
+    function parentSetError(error) {
+      window.parent.setError(error);
+    }
+
+    function parentSetFormIsValid(isValid) {
+      window.parent.setFormIsValid(isValid);
+    }
+  </script>
+</div>
