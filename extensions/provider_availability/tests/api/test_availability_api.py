@@ -45,73 +45,85 @@ def _parse(response) -> tuple[dict, int]:
     return body, response.status_code
 
 
+_STAFF_HEX = "5e4fb0011234567890abcdef01234567"  # undashed (Staff.id form)
+_STAFF_DASHED = "5e4fb001-1234-5678-90ab-cdef01234567"  # same UUID, dashed
+_OTHER_HEX = "aa11bb22cc33dd44ee55ff6677889900"
+
+
 def _make_handler(
     query_params: dict | None = None,
     path_params: dict | None = None,
     json_body: dict | None = None,
-    staff_id: str = "staff-1",
+    staff_id: str | None = _STAFF_HEX,
+    secrets: dict | None = None,
 ) -> AvailabilityAPI:
-    """Create an AvailabilityAPI handler with a mocked request."""
+    """Create an AvailabilityAPI handler with a header-based request mock."""
     handler = AvailabilityAPI(MagicMock())
     handler.request = MagicMock()
     handler.request.query_params = query_params or {}
     handler.request.path_params = path_params or {}
     handler.request.json.return_value = json_body or {}
-    handler.request.staff_id = staff_id
-    handler.secrets = {}
+    handler.request.headers = (
+        {"canvas-logged-in-user-id": staff_id} if staff_id is not None else {}
+    )
+    handler.secrets = secrets or {}
     return handler
+
+
+def _make_request(staff_id: str | None = _STAFF_HEX) -> MagicMock:
+    """Create a request mock with the header-based staff id."""
+    request = MagicMock()
+    request.headers = (
+        {"canvas-logged-in-user-id": staff_id} if staff_id is not None else {}
+    )
+    return request
 
 
 # ── _check_write_access ─────────────────────────────────────────────────
 
 
 class TestCheckWriteAccess:
-    @patch(f"{MODULE}.get_allowed_staff", return_value=[])
-    def test_empty_list_allows_all(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = "anyone"
-        result = _check_write_access(request)
-        assert result is None
-        assert mock_allowed.mock_calls == [call()]
+    def test_empty_secret_allows_any_staff(self):
+        """Unset/empty allowed-staff-keys → any logged-in staff is allowed."""
+        assert _check_write_access(_make_request(), secrets={}) is None
 
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
-    def test_allowed_staff_returns_none(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = "staff-1"
-        result = _check_write_access(request)
-        assert result is None
-        assert mock_allowed.mock_calls == [call()]
+    def test_listed_staff_undashed_allowed(self):
+        assert (
+            _check_write_access(
+                _make_request(_STAFF_HEX),
+                secrets={"allowed-staff-keys": _STAFF_HEX},
+            )
+            is None
+        )
 
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1", "staff-2"])
-    def test_denied_staff_returns_error(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = "staff-999"
-        result = _check_write_access(request)
+    def test_dashed_secret_matches_undashed_header(self):
+        """Regression for PR #339-comment: dashed UUID in secret + undashed header → allowed."""
+        assert (
+            _check_write_access(
+                _make_request(_STAFF_HEX),
+                secrets={"allowed-staff-keys": _STAFF_DASHED},
+            )
+            is None
+        )
+
+    def test_unlisted_staff_denied(self):
+        result = _check_write_access(
+            _make_request(_OTHER_HEX),
+            secrets={"allowed-staff-keys": _STAFF_HEX},
+        )
         assert result is not None
         body, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
         assert "Access denied" in body["error"]
-        assert mock_allowed.mock_calls == [call()]
 
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1"])
-    def test_missing_staff_id_denied(self, mock_allowed):
-        request = MagicMock()
-        request.staff_id = ""
-        result = _check_write_access(request)
+    def test_missing_header_denied_when_secret_set(self):
+        result = _check_write_access(
+            _make_request(staff_id=None),
+            secrets={"allowed-staff-keys": _STAFF_HEX},
+        )
         assert result is not None
         body, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
-        assert mock_allowed.mock_calls == [call()]
-
-    @patch(f"{MODULE}.get_allowed_staff", return_value=["staff-1"])
-    def test_no_staff_id_attr_denied(self, mock_allowed):
-        """Request object without staff_id attribute is denied."""
-        request = object()
-        result = _check_write_access(request)
-        assert result is not None
-        body, code = _parse(result[0])
-        assert code == HTTPStatus.FORBIDDEN
-        assert mock_allowed.mock_calls == [call()]
 
 
 # ── Enrichment helpers ───────────────────────────────────────────────────
@@ -1882,3 +1894,198 @@ class TestSetTimezone:
         _, code = _parse(result[0])
         assert code == HTTPStatus.FORBIDDEN
         assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+
+
+# ── Provider-timezone endpoints ──────────────────────────────────────────
+
+
+class TestGetProviderTimezone:
+    @patch(f"{MODULE}.get_practice_timezone", return_value="US/Eastern")
+    @patch(f"{MODULE}.get_provider_timezone", return_value=None)
+    def test_falls_back_to_practice_when_no_explicit(self, mock_get, mock_practice):
+        handler = _make_handler(query_params={"provider_id": PROVIDER_ID})
+        result = handler.get_provider_tz()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert body["timezone"] == "US/Eastern"
+        assert body["explicit"] is False
+        assert mock_get.mock_calls == [call(PROVIDER_ID)]
+
+    @patch(f"{MODULE}.get_provider_timezone", return_value="US/Pacific")
+    def test_returns_explicit_timezone(self, mock_get):
+        handler = _make_handler(query_params={"provider_id": PROVIDER_ID})
+        result = handler.get_provider_tz()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert body["timezone"] == "US/Pacific"
+        assert body["explicit"] is True
+        assert mock_get.mock_calls == [call(PROVIDER_ID)]
+
+    def test_missing_provider_id_is_bad_request(self):
+        handler = _make_handler(query_params={})
+        result = handler.get_provider_tz()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "provider_id is required" in body["error"]
+
+
+class TestGetAllProviderTimezones:
+    @patch(f"{MODULE}.get_all_provider_timezones", return_value={PROVIDER_ID: "US/Pacific"})
+    def test_returns_all(self, mock_all):
+        handler = _make_handler()
+        result = handler.get_all_provider_tzs()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert body["timezones"] == {PROVIDER_ID: "US/Pacific"}
+        assert mock_all.mock_calls == [call()]
+
+
+class TestSetProviderTimezone:
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[MagicMock()])
+    @patch(f"{MODULE}.get_all_recurring_blocks")
+    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[MagicMock()])
+    def test_success_resyncs_provider_and_blocks(
+        self, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
+    ):
+        rb_match = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, is_active=True)
+        rb_other = RecurringBlock(id="rb-2", provider_id=PROVIDER_ID_2, is_active=True)
+        mock_get_rbs.return_value = [rb_match, rb_other]
+
+        handler = _make_handler(json_body={"provider_id": PROVIDER_ID, "timezone": "US/Pacific"})
+        result = handler.set_provider_tz()
+
+        body, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert body["timezone"] == "US/Pacific"
+        assert mock_set.mock_calls == [call(PROVIDER_ID, "US/Pacific")]
+        assert mock_sync.mock_calls == [call(PROVIDER_ID)]
+        # Only the matching provider's recurring block is re-synced
+        assert mock_build_rb.mock_calls == [call(rb_match)]
+        # 1 sync effect + 1 recurring-block effect + final JSONResponse
+        assert len(result) == 3
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_missing_provider_id_is_bad_request(self, mock_access):
+        handler = _make_handler(json_body={"timezone": "US/Pacific"})
+        result = handler.set_provider_tz()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "provider_id is required" in body["error"]
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    def test_invalid_timezone_is_bad_request(self, mock_access):
+        handler = _make_handler(json_body={"provider_id": PROVIDER_ID, "timezone": "Mars/Olympus"})
+        result = handler.set_provider_tz()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Invalid timezone" in body["error"]
+
+    @patch(f"{MODULE}._check_write_access")
+    def test_write_access_denied(self, mock_access):
+        from canvas_sdk.effects.simple_api import JSONResponse
+
+        mock_access.return_value = [
+            JSONResponse({"error": "Access denied"}, status_code=HTTPStatus.FORBIDDEN)
+        ]
+        handler = _make_handler(json_body={"provider_id": PROVIDER_ID, "timezone": "US/Pacific"})
+        result = handler.set_provider_tz()
+        _, code = _parse(result[0])
+        assert code == HTTPStatus.FORBIDDEN
+        assert mock_access.mock_calls == [call(handler.request, handler.secrets)]
+
+
+class TestSetProviderTimezoneBulk:
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.get_all_recurring_blocks")
+    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[MagicMock()])
+    def test_success_sets_all(
+        self, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
+    ):
+        rb_match = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID_2, is_active=True)
+        mock_get_rbs.return_value = [rb_match]
+
+        handler = _make_handler(json_body={
+            "provider_ids": [PROVIDER_ID, PROVIDER_ID_2],
+            "timezone": "US/Pacific",
+        })
+        result = handler.set_provider_tz_bulk()
+
+        body, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert body["count"] == 2
+        assert body["timezone"] == "US/Pacific"
+        assert mock_set.mock_calls == [
+            call(PROVIDER_ID, "US/Pacific"),
+            call(PROVIDER_ID_2, "US/Pacific"),
+        ]
+        assert mock_sync.mock_calls == [call(PROVIDER_ID), call(PROVIDER_ID_2)]
+        assert mock_build_rb.mock_calls == [call(rb_match)]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_empty_provider_ids_is_bad_request(self, mock_access):
+        handler = _make_handler(json_body={"provider_ids": [], "timezone": "US/Pacific"})
+        result = handler.set_provider_tz_bulk()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "provider_ids is required" in body["error"]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    def test_invalid_timezone_is_bad_request(self, mock_access):
+        handler = _make_handler(json_body={"provider_ids": [PROVIDER_ID], "timezone": "Mars/Olympus"})
+        result = handler.set_provider_tz_bulk()
+        body, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Invalid timezone" in body["error"]
+
+    @patch(f"{MODULE}._check_write_access")
+    def test_write_access_denied(self, mock_access):
+        from canvas_sdk.effects.simple_api import JSONResponse
+
+        mock_access.return_value = [
+            JSONResponse({"error": "Access denied"}, status_code=HTTPStatus.FORBIDDEN)
+        ]
+        handler = _make_handler(json_body={"provider_ids": [PROVIDER_ID], "timezone": "US/Pacific"})
+        result = handler.set_provider_tz_bulk()
+        _, code = _parse(result[0])
+        assert code == HTTPStatus.FORBIDDEN
+
+
+# ── Static asset serving ─────────────────────────────────────────────────
+
+
+class TestServeStaticAssets:
+    @patch(f"{MODULE}.render_to_string", return_value=":root { --x: 1; }")
+    def test_tokens_css(self, mock_render):
+        handler = _make_handler()
+        result = handler.get_tokens_css()
+        resp = result[0]
+        assert resp.status_code == HTTPStatus.OK
+        assert resp.headers["Content-Type"] == "text/css"
+        assert mock_render.mock_calls == [call("static/tokens.css")]
+
+    @patch(f"{MODULE}.render_to_string", return_value="body { font: x; }")
+    def test_typography_css(self, mock_render):
+        handler = _make_handler()
+        result = handler.get_typography_css()
+        resp = result[0]
+        assert resp.status_code == HTTPStatus.OK
+        assert resp.headers["Content-Type"] == "text/css"
+        assert mock_render.mock_calls == [call("static/typography.css")]
+
+    @patch(f"{MODULE}.render_to_string", return_value="customElements.define('x', X);")
+    def test_canvas_components_js(self, mock_render):
+        handler = _make_handler()
+        result = handler.get_canvas_components()
+        resp = result[0]
+        assert resp.status_code == HTTPStatus.OK
+        assert resp.headers["Content-Type"] == "application/javascript"
+        assert mock_render.mock_calls == [call("static/canvas-components.js")]

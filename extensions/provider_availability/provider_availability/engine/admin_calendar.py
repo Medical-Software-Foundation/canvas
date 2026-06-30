@@ -55,6 +55,10 @@ def get_admin_calendar_id(
         provider=provider_id,
         type=CalendarType.Administrative,
         location=location_id if location_id else None,
+        # Store the staff UUID in description so the calendar can be resolved
+        # back to its provider even if the provider is later renamed (title is
+        # name-based). Mirrors the scheduling_with_rooms pattern.
+        description=str(provider_id),
     ).create()
     log.info(
         "get_admin_calendar_id: creating Admin calendar id=%s for provider %s location=%s",

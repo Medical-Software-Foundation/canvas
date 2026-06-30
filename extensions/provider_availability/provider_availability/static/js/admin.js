@@ -2600,66 +2600,6 @@ function applyToAll(editorId) {
   _formDirty = true;
 }
 
-/* ---------- Settings tab ---------- */
-
-const PROVISION_BASE = '/plugin-io/api/provider_availability/provision';
-
-async function loadAllowedStaff() {
-  const container = document.getElementById('allowed-staff-list');
-  try {
-    const data = await apiCall('/overview');  // reuse to check auth
-  } catch(e) { /* ignore */ }
-
-  try {
-    const resp = await fetch(PROVISION_BASE + '/allowed-staff', { credentials: 'same-origin' });
-    if (!resp.ok) { container.innerHTML = '<div class="empty-state" style="padding:16px;">Could not load allowed staff</div>'; return; }
-    const data = await resp.json();
-    const ids = data.allowed_staff || [];
-
-    if (ids.length === 0) {
-      container.innerHTML = '<div class="empty-state" style="padding:16px;">No staff restrictions. All staff have access.</div>';
-      return;
-    }
-
-    // Look up names from _providers
-    let html = '';
-    ids.forEach(id => {
-      const prov = _providers.find(p => String(p.id) === String(id));
-      const name = prov ? prov.name : 'Unknown';
-      html += '<div class="staff-item">';
-      html += '<div><span class="staff-name">' + name + '</span><span class="staff-id">' + id + '</span></div>';
-      html += '<button class="btn btn-danger btn-sm" onclick="removeStaff(\'' + id + '\')">Remove</button>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-  } catch (e) {
-    container.innerHTML = '<div class="empty-state" style="padding:16px;">Could not load allowed staff</div>';
-  }
-}
-
-async function addStaffToAllowed() {
-  const ids = msSettingsStaff.getValue();
-  if (ids.length === 0) { showMsg('Select a staff member to add', 'error'); return; }
-  for (const id of ids) {
-    await fetch(PROVISION_BASE + '/allowed-staff', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ staff_id: id }),
-    });
-  }
-  msSettingsStaff.clear();
-  showMsg('Staff added', 'success');
-  loadAllowedStaff();
-}
-
-async function removeStaff(staffId) {
-  await fetch(PROVISION_BASE + '/allowed-staff/' + staffId, {
-    method: 'DELETE', credentials: 'same-origin',
-  });
-  showMsg('Staff removed', 'success');
-  loadAllowedStaff();
-}
-
 /* ---------- Timezone ---------- */
 
 let _practiceTz = 'UTC';
@@ -3042,7 +2982,6 @@ msBlockLocation = new MultiSelect('ms-block-location', { placeholder: 'Search lo
 msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
 msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
 msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id' });
-// msSettingsStaff removed — access control now via plugin secret
 
 // Re-render accordion whenever filter MultiSelect changes
 const _origUpdateChips = msFilterProvider.updateChips.bind(msFilterProvider);
@@ -3071,7 +3010,6 @@ try {
     if (msBlockProvider) msBlockProvider.setItems(provItems);
     if (msHoldProvider) msHoldProvider.setItems(provItems);
     if (msFilterProvider) msFilterProvider.setItems(provItems);
-    // Staff access control now via plugin secret — no msSettingsStaff
 
     _locations = (P.locations && P.locations.locations) || [];
     if (msLocation) { msLocation.setItems(_locations); msLocation.setValue(_locations.map(function(l) { return String(l.id); })); }

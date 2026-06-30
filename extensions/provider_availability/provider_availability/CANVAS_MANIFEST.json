@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.107.0",
-    "plugin_version": "0.16.1",
+    "plugin_version": "0.17.0",
     "name": "provider_availability",
     "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
     "components": {

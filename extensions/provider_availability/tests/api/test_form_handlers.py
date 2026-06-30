@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from http import HTTPStatus
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -640,3 +640,93 @@ class TestTimezoneSync:
         # Should sync each unique provider once
         assert mock_sync.call_count == 2
         mock_rb_sync.assert_called_once()
+
+
+class TestFormProviderTimezone:
+    """Cover the provider-timezone form-action dispatch handlers."""
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
+    @patch(f"{MODULE}.get_all_recurring_blocks")
+    def test_set_provider_timezone_success(
+        self, mock_rbs, mock_build, mock_sync, mock_set, mock_access
+    ):
+        rb = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, is_active=True)
+        mock_rbs.return_value = [rb]
+        handler = _make_handler()
+        result = handler._do_dispatch(
+            "PUT", "provider-timezone",
+            {"provider_id": PROVIDER_ID, "timezone": "US/Pacific"},
+        )
+        msg, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert "US/Pacific" in msg["message"]
+        assert mock_set.mock_calls == [call(PROVIDER_ID, "US/Pacific")]
+        assert mock_build.mock_calls == [call(rb)]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_set_provider_timezone_missing_provider(self, mock_access):
+        handler = _make_handler()
+        result = handler._do_dispatch("PUT", "provider-timezone", {"timezone": "US/Pacific"})
+        msg, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "provider_id required" in msg["error"]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    def test_set_provider_timezone_invalid_tz(self, mock_access):
+        handler = _make_handler()
+        result = handler._do_dispatch(
+            "PUT", "provider-timezone",
+            {"provider_id": PROVIDER_ID, "timezone": "Mars/Olympus"},
+        )
+        msg, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Invalid timezone" in msg["error"]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[])
+    @patch(f"{MODULE}.get_all_recurring_blocks")
+    def test_set_provider_tz_bulk_success(
+        self, mock_rbs, mock_build, mock_sync, mock_set, mock_access
+    ):
+        rb = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, is_active=True)
+        mock_rbs.return_value = [rb]
+        handler = _make_handler()
+        result = handler._do_dispatch(
+            "PUT", "provider-timezones/bulk",
+            {"provider_ids": [PROVIDER_ID, "p2"], "timezone": "US/Pacific"},
+        )
+        msg, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        assert "2 providers" in msg["message"]
+        assert mock_set.mock_calls == [call(PROVIDER_ID, "US/Pacific"), call("p2", "US/Pacific")]
+        assert mock_build.mock_calls == [call(rb)]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_set_provider_tz_bulk_missing_ids(self, mock_access):
+        handler = _make_handler()
+        result = handler._do_dispatch(
+            "PUT", "provider-timezones/bulk", {"provider_ids": [], "timezone": "US/Pacific"},
+        )
+        msg, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "provider_ids required" in msg["error"]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    def test_set_provider_tz_bulk_invalid_tz(self, mock_access):
+        handler = _make_handler()
+        result = handler._do_dispatch(
+            "PUT", "provider-timezones/bulk",
+            {"provider_ids": [PROVIDER_ID], "timezone": "Mars/Olympus"},
+        )
+        msg, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "Invalid timezone" in msg["error"]
