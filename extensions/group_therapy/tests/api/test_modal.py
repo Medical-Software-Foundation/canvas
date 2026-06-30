@@ -28,6 +28,15 @@ def test_modal_uses_canvas_brand():
     assert "#13133D" not in html   # off-brand navy absent
 
 
+def test_modal_escapes_admin_scope_key_in_callbacks():
+    # admin-set section labels (scopeKey) flow into onclick/oninput callbacks and
+    # must be JS-string-escaped to prevent XSS
+    html = _build()
+    assert "function jsq(" in html
+    assert "jsq(scopeKey)" in html
+    assert "'\"+scopeKey+\"'" not in html  # never concatenated raw into a callback
+
+
 def test_modal_is_config_driven():
     html = _build()
     assert "/sessions?date=" in html

@@ -18,8 +18,9 @@ from logger import log
 
 # Note state codes (NoteStates values). Literals, not the enum, so comparison
 # against the raw stored code works in the runtime and under the SDK stub.
-# Already in an editable encounter state - document directly.
-_DOCUMENTABLE_STATES = {"NEW", "CVD", "ULK", "RST", "PSH"}
+# Already in an editable encounter state - document directly. Mirrors the SDK's
+# CurrentNoteStateEvent.editable() set (NEW, CVD, PSH, ULK, RST, UND).
+_DOCUMENTABLE_STATES = {"NEW", "CVD", "ULK", "RST", "PSH", "UND"}
 # A scheduled appointment note that must be checked in before documentation.
 _CHECKIN_STATES = {"BKD", "SCH"}
 

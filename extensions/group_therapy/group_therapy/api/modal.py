@@ -197,6 +197,17 @@ def build_modal_html(
         function closeModal() {{ if (messagePort) messagePort.postMessage({{ type: 'CLOSE_MODAL' }}); }}
 
         function esc(s) {{ const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }}
+        // Safe to embed inside a single-quoted JS string within a double-quoted
+        // HTML attribute (e.g. onclick): HTML-escapes & < > " and backslash-/
+        // quote-escapes \\ and ' so an admin-set label cannot break out. Uses
+        // String.fromCharCode(92) for the backslash to keep this readable.
+        function jsq(s) {{
+            const BS = String.fromCharCode(92);
+            s = (s == null) ? '' : String(s);
+            s = s.split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;').split('"').join('&quot;');
+            s = s.split(BS).join(BS + BS).split("'").join(BS + "'");
+            return s;
+        }}
         function asText(v) {{ return Array.isArray(v) ? v.join(', ') : (v == null ? '' : String(v)); }}
         function localDateStr(d) {{ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }}
         function timeLabel(iso) {{ try {{ return new Date(iso).toLocaleTimeString([], {{hour:'numeric', minute:'2-digit'}}); }} catch (e) {{ return iso; }} }}
@@ -277,14 +288,14 @@ def build_modal_html(
             let html = '';
             schema.forEach(q => {{
                 html += '<div class="q-block"><span class="q-label">'+esc(q.label)+'</span>';
-                const cb = "qAnswer('"+scopeKey+"','"+esc(ownerId)+"','"+esc(q.name)+"'";
+                const cb = "qAnswer('"+jsq(scopeKey)+"','"+esc(ownerId)+"','"+esc(q.name)+"'";
                 if (q.kind === 'radio') {{
                     html += '<div class="opt-row">' + (q.options||[]).map(o =>
-                        '<div class="opt-pill'+(formLocked?' locked':'')+'" data-q="'+esc(q.name)+'" data-v="'+esc(o.value)+'" onclick="qRadio(\\''+scopeKey+'\\',\\''+esc(ownerId)+'\\',\\''+esc(q.name)+'\\',\\''+esc(o.value)+'\\',this)">'+esc(o.label)+'</div>'
+                        '<div class="opt-pill'+(formLocked?' locked':'')+'" data-q="'+esc(q.name)+'" data-v="'+esc(o.value)+'" onclick="qRadio(\\''+jsq(scopeKey)+'\\',\\''+esc(ownerId)+'\\',\\''+esc(q.name)+'\\',\\''+esc(o.value)+'\\',this)">'+esc(o.label)+'</div>'
                     ).join('') + '</div>';
                 }} else if (q.kind === 'checkbox') {{
                     html += '<div class="opt-row">' + (q.options||[]).map(o =>
-                        '<div class="opt-pill'+(formLocked?' locked':'')+'" onclick="qCheck(\\''+scopeKey+'\\',\\''+esc(ownerId)+'\\',\\''+esc(q.name)+'\\',\\''+esc(o.value)+'\\',this)">'+esc(o.label)+'</div>'
+                        '<div class="opt-pill'+(formLocked?' locked':'')+'" onclick="qCheck(\\''+jsq(scopeKey)+'\\',\\''+esc(ownerId)+'\\',\\''+esc(q.name)+'\\',\\''+esc(o.value)+'\\',this)">'+esc(o.label)+'</div>'
                     ).join('') + '</div>';
                 }} else if (q.kind === 'integer') {{
                     html += '<input type="number" class="input-editorial"'+dis+' oninput="'+cb+',this.value)">';

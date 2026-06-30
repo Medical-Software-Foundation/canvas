@@ -111,6 +111,22 @@ def test_locked_note_is_blocked(mock_rows, mock_codes, mock_states, mock_documen
 
 
 @_patches
+def test_undeleted_note_is_documentable(mock_rows, mock_codes, mock_states, mock_documented, mock_photos):
+    # UND (undeleted) is editable per the SDK - must not be treated as blocked
+    t10 = datetime(2026, 6, 27, 10, 0)
+    mock_rows.return_value = [
+        _row("prov1", t10, "pA", "Amy", "Adams", 1, "uA"),
+        _row("prov1", t10, "pB", "Bob", "Boyd", 2, "uB"),
+    ]
+    mock_codes.return_value = {1: "Group_Therapy", 2: "Group_Therapy"}
+    mock_states.return_value = {1: "UND", 2: "CVD"}
+    mock_documented.return_value = set()
+    roster = find_group_sessions(date(2026, 6, 27), ["Group_Therapy"])[0]["roster"]
+    amy = next(r for r in roster if r["name"] == "Amy Adams")
+    assert amy["blocked"] is False and amy["needs_checkin"] is False
+
+
+@_patches
 def test_singleton_slot_excluded(mock_rows, mock_codes, mock_states, mock_documented, mock_photos):
     t10 = datetime(2026, 6, 27, 10, 0)
     mock_rows.return_value = [_row("prov1", t10, "pA", "Amy", "Adams", 1, "uA")]
