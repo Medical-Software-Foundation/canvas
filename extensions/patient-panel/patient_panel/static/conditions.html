@@ -1,0 +1,25 @@
+<td colspan="11">
+    <div class="accordion-details">
+        <h4>Active conditions</h4>
+        {% if conditions %}
+        <div class="activity-list">
+            {% for condition in conditions %}
+            <div class="task-item" data-condition-id="{{ condition.id }}">
+                <div class="task-header">
+                    <div class="task-info">
+                        <div class="activity-title">{{ condition.display }}</div>
+                        <div class="activity-due">
+                            {% if condition.code %}{{ condition.code }}{% endif %}
+                            {% if condition.code and condition.onset_date %} &middot; {% endif %}
+                            {% if condition.onset_date %}Onset: {{ condition.onset_date }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-activity">No active conditions</div>
+        {% endif %}
+    </div>
+</td>

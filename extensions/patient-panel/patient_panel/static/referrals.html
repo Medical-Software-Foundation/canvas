@@ -1,0 +1,27 @@
+<td colspan="11">
+    <div class="accordion-details">
+        <h4>Referrals</h4>
+        {% if referrals %}
+        <div class="activity-list">
+            {% for ref in referrals %}
+            <div class="task-item" data-referral-id="{{ ref.id }}">
+                <div class="task-header">
+                    <div class="task-info">
+                        <div class="activity-title">{{ ref.clinical_question }}</div>
+                        <div class="activity-due">
+                            {% if ref.provider %}{{ ref.provider }}{% endif %}
+                            {% if ref.provider and ref.priority %} &middot; {% endif %}
+                            {% if ref.priority %}{{ ref.priority }}{% endif %}
+                            {% if ref.date_referred and ref.provider or ref.priority %} &middot; {% endif %}
+                            {% if ref.date_referred %}{{ ref.date_referred }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-activity">No referrals</div>
+        {% endif %}
+    </div>
+</td>
