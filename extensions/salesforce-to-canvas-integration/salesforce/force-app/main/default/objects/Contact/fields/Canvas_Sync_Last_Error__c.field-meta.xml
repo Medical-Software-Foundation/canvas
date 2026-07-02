@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Canvas_Sync_Last_Error__c</fullName>
+    <label>Canvas Sync Last Error</label>
+    <type>LongTextArea</type>
+    <length>2000</length>
+    <visibleLines>3</visibleLines>
+    <required>false</required>
+    <inlineHelpText>The HTTP status and response body or exception message from the last failed or retrying sync attempt. Empty after a delivered attempt.</inlineHelpText>
+</CustomField>
