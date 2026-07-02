@@ -17,7 +17,11 @@ _STYLE = """
 body{margin:0;padding:0;background:transparent;
   font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   color:#1f2328;-webkit-font-smoothing:antialiased}
-.card{border:1px solid #e6e3db;border-radius:10px;padding:14px 16px;margin:8px 0;background:#fff}
+/* No outer margin on the card: a top/bottom margin here collapses out of the
+   body box and isn't counted by the parent's height measurement, which leaves a
+   few px of phantom scroll. Space stacked cards with an in-flow sibling margin. */
+.card{border:1px solid #e6e3db;border-radius:10px;padding:14px 16px;margin:0;background:#fff}
+.card+.card{margin-top:10px}
 .hdr{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   color:#5b636d;margin-bottom:12px}
 .cards{display:flex;flex-wrap:wrap;gap:10px}
