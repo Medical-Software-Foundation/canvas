@@ -57,6 +57,11 @@ class InboundSync:
     # broken (the 2040 bug was ~37k). Set high enough to comfortably import a dense provider's full
     # 6-month calendar — hundreds of recurring-meeting instances is normal and expected here.
     _MAX_HOLDS_PER_RUN = 5000
+    # The create effect is applied asynchronously, so a mapping written moments ago still has no
+    # visible Canvas hold. Within this window we treat the mapping as a create in flight and skip
+    # re-importing the event; re-issuing the create here is what generated duplicate holds under
+    # load. Past the window, a still-holdless mapping is a genuine orphan and is re-created.
+    _PENDING_CREATE_GRACE_SECONDS = 30 * 60
 
     def __init__(
         self,
@@ -216,8 +221,21 @@ class InboundSync:
             stats["holds_updated"] = stats["holds_updated"] + 1
             return [effect]
 
-        # Brand-new Google event (or an orphaned mapping whose hold never materialised) -> create a
-        # Canvas admin hold, subject to the org's import filters.
+        # Mapping exists but no live hold (the update branch above didn't fire). The create is
+        # applied asynchronously, so a recently-recorded mapping is a create still in flight —
+        # re-issuing it is what produced duplicate holds under load. Skip while pending; only fall
+        # through to re-create once the mapping predates the grace window (a genuine orphan).
+        if existing is not None:
+            created_at = getattr(existing, "created_at", None)
+            if created_at is None or (
+                (arrow.utcnow() - arrow.get(created_at)).total_seconds()
+                < self._PENDING_CREATE_GRACE_SECONDS
+            ):
+                stats["ignored"] = stats["ignored"] + 1
+                return []
+
+        # Brand-new Google event (or a genuine orphan past the grace window) -> create a Canvas
+        # admin hold, subject to the org's import filters.
         if is_all_day(event) and not self._ingest_all_day:
             stats["ignored"] = stats["ignored"] + 1
             return []
