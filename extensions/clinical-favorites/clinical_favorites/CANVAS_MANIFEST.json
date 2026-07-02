@@ -1,0 +1,91 @@
+{
+    "sdk_version": "0.135.0",
+    "plugin_version": "0.0.5",
+    "name": "clinical_favorites",
+    "description": "Unified medication and condition favorites for clinicians, curate reusable prescription and diagnosis templates on the provider menu and insert them into a chart note in one click",
+    "components": {
+        "applications": [
+            {
+                "class": "clinical_favorites.applications.clinical_favorites_app:ClinicalFavoritesApp",
+                "name": "Clinical Favorites",
+                "description": "Manage medication and condition favorites",
+                "scope": "provider_menu_item",
+                "icon": "assets/clinical-favorites-icon.png",
+                "menu_position": "top",
+                "menu_order": 500
+            },
+            {
+                "class": "clinical_favorites.applications.clinical_favorites_chart_app:ClinicalFavoritesChartApp",
+                "name": "Insert Favorites",
+                "description": "Insert medication and condition favorites into a note from the patient chart",
+                "scope": "patient_specific",
+                "icon": "assets/clinical-favorites-icon.png"
+            }
+        ],
+        "protocols": [
+            {
+                "class": "clinical_favorites.protocols.search_api:MedicationSearchAPI",
+                "description": "FDB medication search with hydrated clinical quantities"
+            },
+            {
+                "class": "clinical_favorites.protocols.search_api:ConditionSearchAPI",
+                "description": "ICD-10 condition search"
+            },
+            {
+                "class": "clinical_favorites.protocols.search_api:PharmacySearchAPI",
+                "description": "Pharmacy search by name"
+            },
+            {
+                "class": "clinical_favorites.protocols.favorites_api:FavoritesAPI",
+                "description": "CRUD for clinical favorites (medications and conditions)"
+            },
+            {
+                "class": "clinical_favorites.protocols.hide_default_api:HideDefaultAPI",
+                "description": "Per user hide and unhide of seeded defaults"
+            },
+            {
+                "class": "clinical_favorites.protocols.open_notes_api:OpenNotesAPI",
+                "description": "List the patient's open notes so the UI can render a picker",
+                "data_access": {"event": "", "read": ["v1.Patient", "v1.Note"], "write": []}
+            },
+            {
+                "class": "clinical_favorites.protocols.insert_api:InsertFavoritesAPI",
+                "description": "Insert selected favorites into a specific open note"
+            },
+            {
+                "class": "clinical_favorites.protocols.bulk_import_api:BulkImportAPI",
+                "description": "Bulk import a list of clinical favorites in one round trip"
+            },
+            {
+                "class": "clinical_favorites.protocols.static_api:PluginUICSSAPI",
+                "description": "Serves the canvas-plugin-ui design system CSS"
+            },
+            {
+                "class": "clinical_favorites.protocols.static_api:PluginUIJSAPI",
+                "description": "Serves the canvas-plugin-ui design system JS"
+            },
+            {
+                "class": "clinical_favorites.protocols.static_api:FavoritesCSSAPI",
+                "description": "Serves the shared clinical-favorites page styles"
+            },
+            {
+                "class": "clinical_favorites.protocols.static_api:FavoritesJSAPI",
+                "description": "Serves the shared clinical-favorites surface logic"
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": ["BULK_IMPORT_MAX_ROWS"],
+    "custom_data": {
+        "namespace": "canvas_medical__clinical_favorites",
+        "access": "read_write"
+    },
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}
