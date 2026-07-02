@@ -118,11 +118,17 @@ def test_render_benefits_renders_summary_cards() -> None:
     assert "No step therapy" in html
 
 
-def test_render_benefits_on_formulary_status_is_green() -> None:
-    for status in ("On-Formulary/Non-Preferred", "Preferred Level 1"):
-        html = render_benefits("Drug", [_coverage(formulary_status=status)])
-        assert 'class="status good"' in html
-        assert status in html
+def test_render_benefits_preferred_status_is_green() -> None:
+    html = render_benefits("Drug", [_coverage(formulary_status="Preferred Level 1")])
+    assert 'class="status good"' in html
+    assert "Preferred Level 1" in html
+
+
+def test_render_benefits_non_preferred_status_stays_neutral() -> None:
+    html = render_benefits("Drug", [_coverage(formulary_status="On-Formulary/Non-Preferred")])
+    assert 'class="status good"' not in html
+    assert 'class="status "' in html
+    assert "On-Formulary/Non-Preferred" in html
 
 
 def test_render_benefits_not_covered_status_is_red() -> None:

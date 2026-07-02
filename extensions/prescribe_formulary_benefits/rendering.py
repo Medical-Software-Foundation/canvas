@@ -152,17 +152,22 @@ _STATUS_NEGATIVE = (
     "not on formulary",
     "excluded",
 )
-_STATUS_POSITIVE = ("formulary", "preferred", "covered")
 
 
 def _status_class(coverage: Any) -> str:
-    """Classify a formulary status: 'good' (on formulary), 'bad' (not covered/rejected), '' (unknown)."""
+    """Classify a formulary status pill.
+
+    'bad' (red)     — rejected, not covered, or non-formulary.
+    'good' (green)  — preferred (on-formulary/preferred).
+    ''   (yellow)   — everything else, incl. on-formulary/non-preferred and unknown.
+    """
     if coverage.rejected:
         return "bad"
     status = (coverage.formulary_status or "").lower()
     if any(term in status for term in _STATUS_NEGATIVE):
         return "bad"
-    if any(term in status for term in _STATUS_POSITIVE):
+    # Green only for preferred; a non-preferred plan stays neutral/yellow.
+    if "preferred" in status and "non-preferred" not in status and "non preferred" not in status:
         return "good"
     return ""
 
