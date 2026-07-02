@@ -4,7 +4,7 @@ Models and effect-builders are mocked so no DB or network is needed. We assert w
 what effects come back.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -128,10 +128,12 @@ def test_unmarked_known_event_updates_hold(mocker):
 
 
 def test_unmarked_orphaned_mapping_recreates_hold(mocker):
-    # Mapping row exists but no live Canvas hold (a prior run was interrupted/capped before the
-    # create effect applied). The event must be RE-CREATED, not silently skipped as an update (#4).
+    # Mapping row exists but no live Canvas hold AND it predates the pending-create grace window (a
+    # prior run was interrupted/capped before the create applied). RE-CREATE it, don't skip (#4).
     iem = mocker.patch("gcal_sync.inbound.InboundEventMapping")
-    iem.objects.filter.return_value.first.return_value = SimpleNamespace(google_event_id="g-1")
+    iem.objects.filter.return_value.first.return_value = SimpleNamespace(
+        google_event_id="g-1", created_at=datetime.now(timezone.utc) - timedelta(hours=1)
+    )
     mocker.patch("gcal_sync.inbound.schedule_event_note_type_id", return_value="nt-1")
     mocker.patch("gcal_sync.inbound.provider_and_location", return_value=("14", "loc-1"))
     mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
@@ -144,6 +146,26 @@ def test_unmarked_orphaned_mapping_recreates_hold(mocker):
     assert stats["holds_created"] == 1
     update_spy.assert_not_called()
     iem.objects.update_or_create.assert_called_once()
+
+
+def test_unmarked_pending_create_is_not_duplicated(mocker):
+    # Mapping was written moments ago but the async create hasn't applied yet (no live hold). A
+    # re-delivered webhook must NOT re-issue the create — re-creating in-flight holds is what
+    # produced the duplicate-hold storm under load.
+    iem = mocker.patch("gcal_sync.inbound.InboundEventMapping")
+    iem.objects.filter.return_value.first.return_value = SimpleNamespace(
+        google_event_id="g-1", created_at=datetime.now(timezone.utc)
+    )
+    build = mocker.patch("gcal_sync.inbound.build_hold_effect", return_value="HOLD_EFFECT")
+    inbound = _inbound(mocker)
+    mocker.patch.object(inbound, "_canvas_id_for_google_event", return_value=None)  # not applied yet
+    stats = _stats()
+    effects = inbound._apply("cal", {"id": "g-1", "status": "confirmed", "summary": "Hold"}, stats)
+    assert effects == []
+    assert stats["holds_created"] == 0
+    assert stats["ignored"] == 1
+    build.assert_not_called()
+    iem.objects.update_or_create.assert_not_called()
 
 
 def test_unmarked_cancelled_known_event_removes_hold(mocker):
