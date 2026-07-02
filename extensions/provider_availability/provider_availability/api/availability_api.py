@@ -18,6 +18,7 @@ from provider_availability.engine.calculator import (
     calculate_available_slots,
     get_available_slots_for_provider,
 )
+from provider_availability.engine.csv_import import generate_template_csv
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
     build_delete_block_effects,
@@ -1517,6 +1518,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             "visit_types": {"visit_types": visit_types, "count": len(visit_types)},
             "timezone": {"timezone": tz, "available": COMMON_TIMEZONES},
             "overview": {"providers": sorted_overview},
+            "csv_template": generate_template_csv(),
         }
 
     @api.post("/form-action")

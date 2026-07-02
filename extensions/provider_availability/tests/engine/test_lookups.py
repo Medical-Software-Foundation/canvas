@@ -5,11 +5,34 @@ from unittest.mock import MagicMock, call, patch
 from provider_availability.engine.lookups import (
     get_active_locations,
     get_active_providers,
+    get_active_staff_ids,
     get_scheduleable_visit_types,
 )
 
 
 LOOKUPS_MODULE = "provider_availability.engine.lookups"
+
+
+class TestGetActiveStaffIds:
+    def test_returns_all_active_staff_ids(self):
+        s1 = MagicMock()
+        s1.id = "staff-1"
+        s2 = MagicMock()
+        s2.id = "staff-2"
+
+        with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
+            mock_objects.filter.return_value = [s1, s2]
+
+            result = get_active_staff_ids()
+
+            assert mock_objects.mock_calls == [call.filter(active=True)]
+            assert result == {"staff-1", "staff-2"}
+
+    def test_empty(self):
+        with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
+            mock_objects.filter.return_value = []
+
+            assert get_active_staff_ids() == set()
 
 
 class TestGetActiveProviders:

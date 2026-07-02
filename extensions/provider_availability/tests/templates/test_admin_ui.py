@@ -27,3 +27,9 @@ class TestRenderAdminPage:
         data = {"key": "value/with/slashes"}
         html = render_admin_page(data)
         assert "value/with/slashes" in html
+
+    def test_includes_bulk_import_tab_and_panel(self):
+        html = render_admin_page(None)
+        assert "panel-bulk-import" in html
+        assert "Bulk Import" in html
+        assert 'onclick="bulkUploadValidate()"' in html

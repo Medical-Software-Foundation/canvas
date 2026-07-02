@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.107.0",
-    "plugin_version": "0.16.1",
+    "plugin_version": "0.17.2",
     "name": "provider_availability",
     "description": "Provider availability engine with rule-based scheduling, real-time slot calculation, and admin configuration UI",
     "components": {
@@ -12,6 +12,10 @@
             {
                 "class": "provider_availability.api.provision_api:ProvisionAPI",
                 "description": "API key-authenticated endpoint for provisioning provider calendars"
+            },
+            {
+                "class": "provider_availability.api.csv_import_api:CSVImportAPI",
+                "description": "Staff-session API for bulk availability import from a CSV file"
             },
             {
                 "class": "provider_availability.cron.cache_refresh:CacheRefreshTask",

@@ -35,6 +35,7 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
     <canvas-tab for="panel-availability" active><canvas-tab-label>Availability</canvas-tab-label></canvas-tab>
     <canvas-tab for="panel-editor"><canvas-tab-label>Add / Edit</canvas-tab-label></canvas-tab>
     <canvas-tab for="panel-settings"><canvas-tab-label>Settings</canvas-tab-label></canvas-tab>
+    <canvas-tab for="panel-bulk-import"><canvas-tab-label>Bulk Import</canvas-tab-label></canvas-tab>
 
   <!-- Availability Panel -->
   <canvas-tab-panel id="panel-availability">
@@ -528,6 +529,69 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
         </div>
 
+
+      </div>
+    </div>
+  </canvas-tab-panel>
+
+  <!-- Bulk Import Panel -->
+  <canvas-tab-panel id="panel-bulk-import">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-header-left">
+          <div class="panel-title">Bulk Import</div>
+          <div class="panel-subtitle">Upload a CSV to load availability, blocks, and holds for many staff at once.</div>
+        </div>
+      </div>
+      <div class="panel-body">
+
+        <!-- Step 1: upload -->
+        <div id="bulk-step-upload">
+          <div class="section-label">CSV File</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+            One row per time window; rows for the same staff key and settings merge into one rule.
+            Staff are keyed by <strong>staff_key</strong> (Canvas Staff UUID).
+            <a href="#" onclick="bulkDownloadTemplate();return false;">Download template</a>
+          </p>
+          <input type="file" id="bulk-file" accept=".csv" onchange="bulkFileSelect(event)">
+          <div id="bulk-upload-error" class="alert alert-error" style="display:none;margin-top:12px;"></div>
+          <div style="margin-top:16px;">
+            <button type="button" id="bulk-validate-btn" class="btn" disabled onclick="bulkUploadValidate()"
+              style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Upload &amp; Validate</button>
+          </div>
+        </div>
+
+        <!-- Step 2: preview -->
+        <div id="bulk-step-preview" style="display:none;">
+          <div id="bulk-summary" style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px;"></div>
+          <div id="bulk-error-section" style="display:none;">
+            <div class="section-label">Rows with errors</div>
+            <div style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead><tr>
+                  <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);">Row</th>
+                  <th style="text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);">Errors</th>
+                </tr></thead>
+                <tbody id="bulk-error-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:16px;">Only valid records will be loaded. Rows with errors are skipped.</p>
+          <div style="display:flex;gap:12px;margin-top:16px;">
+            <button type="button" class="btn" onclick="bulkReset()"
+              style="background:var(--surface-2,#e8e8e8);color:var(--text);padding:10px 20px;border:none;border-radius:6px;font-size:14px;cursor:pointer;">Back</button>
+            <button type="button" id="bulk-commit-btn" class="btn" onclick="bulkConfirmCommit()"
+              style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Confirm &amp; Load</button>
+          </div>
+        </div>
+
+        <!-- Step 3: results -->
+        <div id="bulk-step-results" style="display:none;">
+          <div class="section-label">Import complete</div>
+          <div id="bulk-results-msg" style="font-size:14px;margin:8px 0 16px;"></div>
+          <button type="button" class="btn" onclick="bulkReset()"
+            style="background:var(--cyan);color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;">Upload another file</button>
+        </div>
 
       </div>
     </div>
