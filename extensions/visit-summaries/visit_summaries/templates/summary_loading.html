@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato:400,700,400italic,700italic&subset=latin">
+<style>
+  {{ shared_css|safe }}
+
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-huge);
+    color: var(--color-text-muted);
+  }
+  .loading-container .spinner { margin-bottom: var(--space-medium); }
+  .loading-text {
+    margin: 0;
+    font-size: var(--font-size-label);
+  }
+  .dots {
+    display: inline-block;
+    width: 1.5em;
+    text-align: left;
+  }
+
+  .print-area {
+    display: none;
+    position: sticky;
+    bottom: 0;
+    background: var(--color-surface);
+    padding: var(--space-small) var(--space-medium);
+    margin-left: calc(-1 * var(--space-medium));
+    margin-right: calc(-1 * var(--space-medium));
+    margin-bottom: calc(-1 * var(--space-medium));
+    border-top: var(--border-width) solid var(--color-border);
+    text-align: right;
+    z-index: 10;
+  }
+
+
+</style>
+</head>
+<body class="pane-body">
+  <div class="page-header{% if sticky_header %} sticky{% endif %}{% if hide_header_until_loaded %} hidden{% endif %}" id="page-header">
+    <div>
+      {% if page_title %}
+      <p class="page-title">{{ page_title }}</p>
+      {% endif %}
+      {% if page_subtitle %}
+      <p class="page-subtitle">{{ page_subtitle }}</p>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-tiny">
+      <span class="ai-badge" id="ai-badge">AI Generated</span>
+      <span class="ai-badge hidden" id="editing-badge" style="background:var(--callout-caution-bg);color:var(--callout-caution-text);">Editing</span>
+    </div>
+  </div>
+
+  <div id="summary-content">
+    <div class="loading-container" id="loading-indicator">
+      <div class="spinner" role="status" aria-label="Loading"></div>
+      <p class="loading-text">{{ loading_message|default:"Summarizing" }}<span class="dots" id="dots">.</span></p>
+    </div>
+  </div>
+
+  {% if show_print_button %}
+  <div class="print-area" id="print-area" style="display:none;">
+    <div class="flex-between">
+      <button class="btn btn-default" id="regenerate-btn">Regenerate</button>
+      <div class="flex items-center gap-tiny" style="margin-left:auto;">
+        <button class="btn btn-default" id="edit-btn">Edit</button>
+        <button class="btn btn-default hidden" id="discard-btn">Discard</button>
+        <button class="btn btn-secondary hidden" id="accept-btn">Accept</button>
+        <button class="btn btn-secondary" id="print-btn" onclick="window.print()">Print Summary</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <script>
+    (function() {
+      var generateUrl = "{{ generate_url|safe }}";
+      var container = document.getElementById("summary-content");
+      var loadingMessage = "{{ loading_message|default:'Summarizing' }}";
+      var dotsTimer = null;
+      var lastHtml = "";
+      var hasBeenEdited = false;
+      var LIST_SECTIONS = ["medications", "next-steps", "when-to-seek-care"];
+
+      var spinnerHtml =
+        '<div class="loading-container" id="loading-indicator">' +
+          '<div class="spinner" role="status" aria-label="Loading"></div>' +
+          '<p class="loading-text">' + loadingMessage + '<span class="dots" id="dots">.</span></p>' +
+        '</div>';
+
+      function startDots() {
+        var dots = document.getElementById("dots");
+        if (!dots) return null;
+        var step = 0;
+        var frames = [".", "..", "..."];
+        return setInterval(function() {
+          step = (step + 1) % frames.length;
+          dots.textContent = frames[step];
+        }, 500);
+      }
+
+      function escHtml(s) {
+        return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      }
+
+      function textToHtml(val) {
+        return escHtml(val).replace(/\n/g, "<br>");
+      }
+
+      function htmlToText(el) {
+        var clone = el.cloneNode(true);
+        clone.querySelectorAll("br").forEach(function(br) {
+          br.replaceWith("\n");
+        });
+        return clone.textContent;
+      }
+
+      function autoSize(ta) {
+        ta.style.height = "0";
+        ta.style.height = ta.scrollHeight + "px";
+      }
+
+      function makeTextarea(text) {
+        var ta = document.createElement("textarea");
+        ta.className = "avs-edit-textarea";
+        ta.value = text;
+        ta.addEventListener("input", function() { autoSize(ta); });
+        return ta;
+      }
+
+      function makeRemoveBtn() {
+        var btn = document.createElement("button");
+        btn.className = "item-remove";
+        btn.setAttribute("aria-label", "Remove");
+        btn.innerHTML =
+          '<svg width="12" height="12" viewBox="0 0 12 12" fill="none">' +
+          '<path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+          '</svg>';
+        return btn;
+      }
+
+      function addRowToList(ul) {
+        var li = document.createElement("li");
+        li.className = "avs-added-row";
+        var ta = makeTextarea("");
+        var rmBtn = makeRemoveBtn();
+        rmBtn.style.display = "inline-flex";
+        rmBtn.addEventListener("click", function() {
+          li.remove();
+          if (window.__vsSendHeight) window.__vsSendHeight();
+        });
+        li.appendChild(ta);
+        li.appendChild(rmBtn);
+        ul.appendChild(li);
+        setTimeout(function() { autoSize(ta); ta.focus(); }, 0);
+        if (window.__vsSendHeight) window.__vsSendHeight();
+      }
+
+      function wireRemoveButtons() {
+        container.querySelectorAll(".item-remove").forEach(function(btn) {
+          btn.addEventListener("click", function() {
+            var li = btn.closest("li");
+            if (li) { li.remove(); }
+            if (window.__vsSendHeight) window.__vsSendHeight();
+          });
+        });
+        container.querySelectorAll(".section-remove").forEach(function(btn) {
+          btn.addEventListener("click", function() {
+            var section = btn.closest(".avs-removable");
+            if (section) { section.remove(); }
+            if (window.__vsSendHeight) window.__vsSendHeight();
+          });
+        });
+      }
+
+      function enterEditMode() {
+        container.classList.add("editing");
+
+        /* Replace paragraph text with textareas */
+        container.querySelectorAll(".avs-section > p, .banner > p").forEach(function(p) {
+          if (p.closest(".avs-section-header")) return;
+          if (p.style.flex) return;
+          var ta = makeTextarea(htmlToText(p));
+          p._avsOrigTag = "p";
+          p._avsTextarea = ta;
+          p.innerHTML = "";
+          p.appendChild(ta);
+          setTimeout(function() { autoSize(ta); }, 0);
+        });
+
+        /* Replace list item text with textareas */
+        container.querySelectorAll(".avs-section li, .banner li").forEach(function(li) {
+          if (li.classList.contains("avs-added-row")) return;
+          var textSpan = li.querySelector(".avs-item-text");
+          var target = textSpan || li;
+          if (target.querySelector(".avs-edit-textarea")) return;
+          var text = textSpan ? htmlToText(textSpan) : li.childNodes[0] ? li.childNodes[0].textContent : "";
+          var ta = makeTextarea(text.trim());
+          if (textSpan) {
+            textSpan._avsOrigText = textSpan.innerHTML;
+            textSpan.innerHTML = "";
+            textSpan.appendChild(ta);
+          } else {
+            li._avsOrigText = text;
+            var firstText = li.childNodes[0];
+            if (firstText && firstText.nodeType === 3) {
+              firstText.textContent = "";
+            }
+            li.insertBefore(ta, li.firstChild);
+          }
+          setTimeout(function() { autoSize(ta); }, 0);
+        });
+
+        /* Add "Add row" buttons to list sections */
+        LIST_SECTIONS.forEach(function(sectionName) {
+          var section = container.querySelector('[data-section="' + sectionName + '"]');
+          if (!section) return;
+          var ul = section.querySelector("ul");
+          if (!ul) return;
+          if (section.querySelector(".avs-add-row")) return;
+          var addBtn = document.createElement("button");
+          addBtn.className = "avs-add-row";
+          addBtn.textContent = "+ Add row";
+          addBtn.addEventListener("click", function() { addRowToList(ul); });
+          ul.parentNode.insertBefore(addBtn, ul.nextSibling);
+        });
+
+        /* Swap buttons and header badges */
+        var editBtn = document.getElementById("edit-btn");
+        var discardBtn = document.getElementById("discard-btn");
+        var acceptBtn = document.getElementById("accept-btn");
+        var printBtn = document.getElementById("print-btn");
+        var regenBtn = document.getElementById("regenerate-btn");
+        var editingBadge = document.getElementById("editing-badge");
+        if (editBtn) editBtn.classList.add("hidden");
+        if (printBtn) printBtn.classList.add("hidden");
+        if (discardBtn) discardBtn.classList.remove("hidden");
+        if (acceptBtn) acceptBtn.classList.remove("hidden");
+        if (regenBtn) regenBtn.classList.add("hidden");
+        if (editingBadge) editingBadge.classList.remove("hidden");
+
+        if (window.__vsSendHeight) setTimeout(window.__vsSendHeight, 0);
+      }
+
+      function acceptEdits() {
+        /* Write textarea values back into paragraph elements */
+        container.querySelectorAll(".avs-section > p, .banner > p").forEach(function(p) {
+          var ta = p.querySelector(".avs-edit-textarea");
+          if (!ta) return;
+          p.innerHTML = textToHtml(ta.value);
+        });
+
+        /* Write textarea values back into list items */
+        container.querySelectorAll(".avs-section li, .banner li").forEach(function(li) {
+          if (li.classList.contains("avs-added-row")) return;
+          var textSpan = li.querySelector(".avs-item-text");
+          var target = textSpan || li;
+          var ta = target.querySelector(".avs-edit-textarea");
+          if (!ta) return;
+          if (textSpan) {
+            textSpan.innerHTML = textToHtml(ta.value);
+          } else {
+            var firstChild = li.firstChild;
+            if (firstChild && firstChild.tagName === "TEXTAREA") {
+              var span = document.createElement("span");
+              span.innerHTML = textToHtml(ta.value);
+              li.replaceChild(span, firstChild);
+            }
+          }
+        });
+
+        /* Convert added rows to proper list items, strip empty ones */
+        container.querySelectorAll(".avs-added-row").forEach(function(li) {
+          var ta = li.querySelector(".avs-edit-textarea");
+          var text = ta ? ta.value.trim() : "";
+          if (!text) {
+            li.remove();
+            return;
+          }
+          li.className = "";
+          li.innerHTML = '<span class="avs-item-text">' + textToHtml(text) + '</span>';
+        });
+
+        /* Remove add-row buttons */
+        container.querySelectorAll(".avs-add-row").forEach(function(btn) { btn.remove(); });
+
+        /* Exit editing state */
+        container.classList.remove("editing");
+
+        /* Update lastHtml so next Discard restores to this accepted state */
+        lastHtml = container.innerHTML;
+        hasBeenEdited = true;
+        var aiBadge = document.getElementById("ai-badge");
+        if (aiBadge) aiBadge.textContent = "AI Assisted";
+
+        swapButtonsToNormal();
+        wireRemoveButtons();
+        if (window.__vsSendHeight) window.__vsSendHeight();
+      }
+
+      function swapButtonsToNormal() {
+        var editBtn = document.getElementById("edit-btn");
+        var discardBtn = document.getElementById("discard-btn");
+        var acceptBtn = document.getElementById("accept-btn");
+        var printBtn = document.getElementById("print-btn");
+        var regenBtn = document.getElementById("regenerate-btn");
+        var editingBadge = document.getElementById("editing-badge");
+        if (editBtn) editBtn.classList.remove("hidden");
+        if (printBtn) printBtn.classList.remove("hidden");
+        if (discardBtn) discardBtn.classList.add("hidden");
+        if (acceptBtn) acceptBtn.classList.add("hidden");
+        if (regenBtn) regenBtn.classList.remove("hidden");
+        if (editingBadge) editingBadge.classList.add("hidden");
+      }
+
+      function loadSummary() {
+        var header = document.getElementById("page-header");
+        if (header) { header.classList.add("hidden"); }
+        var printArea = document.getElementById("print-area");
+        if (printArea) { printArea.style.display = "none"; }
+
+        container.innerHTML = spinnerHtml;
+        if (dotsTimer) { clearInterval(dotsTimer); }
+        dotsTimer = startDots();
+
+        fetch(generateUrl, {credentials: "include"})
+          .then(function(resp) {
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            return resp.json();
+          })
+          .then(function(data) {
+            clearInterval(dotsTimer);
+            lastHtml = data.html || "";
+            hasBeenEdited = false;
+            var aiBadge = document.getElementById("ai-badge");
+            if (aiBadge) aiBadge.textContent = "AI Generated";
+            container.innerHTML = lastHtml;
+            if (window.__vsSendHeight) {
+              setTimeout(window.__vsSendHeight, 0);
+              setTimeout(window.__vsSendHeight, 100);
+              setTimeout(window.__vsSendHeight, 300);
+            }
+            if (data.avs_subtitle) {
+              var title = document.querySelector(".page-title");
+              if (title) {
+                var existing = title.querySelector(".page-title-detail");
+                if (existing) { existing.remove(); }
+                var detail = document.createElement("span");
+                detail.className = "page-title-detail";
+                detail.textContent = " " + data.avs_subtitle;
+                title.appendChild(detail);
+              }
+            } else {
+              var subtitleText = data.date_range || data.note_date || "";
+              if (subtitleText) {
+                var subtitle = document.querySelector(".page-subtitle");
+                if (!subtitle) {
+                  var headerDiv = document.querySelector(".page-header > div");
+                  if (headerDiv) {
+                    subtitle = document.createElement("p");
+                    subtitle.className = "page-subtitle";
+                    headerDiv.appendChild(subtitle);
+                  }
+                }
+                if (subtitle) {
+                  subtitle.textContent = subtitleText;
+                }
+              }
+            }
+            if (header) { header.classList.remove("hidden"); }
+            if (printArea) { printArea.style.display = "block"; }
+            swapButtonsToNormal();
+            wireRemoveButtons();
+          })
+          .catch(function() {
+            clearInterval(dotsTimer);
+            var loading = document.getElementById("loading-indicator");
+            if (loading) {
+              loading.querySelector(".spinner").style.display = "none";
+              loading.querySelector(".loading-text").innerHTML =
+                "<span class='text-danger'>Unable to load summary. Please close this panel and try again.</span>";
+            }
+          });
+      }
+
+      var regenBtn = document.getElementById("regenerate-btn");
+      if (regenBtn) {
+        regenBtn.addEventListener("click", function() { loadSummary(); });
+      }
+
+      var editBtn = document.getElementById("edit-btn");
+      if (editBtn) {
+        editBtn.addEventListener("click", function() { enterEditMode(); });
+      }
+
+      var discardBtn = document.getElementById("discard-btn");
+      if (discardBtn) {
+        discardBtn.addEventListener("click", function() {
+          container.innerHTML = lastHtml;
+          container.classList.remove("editing");
+          swapButtonsToNormal();
+          wireRemoveButtons();
+          var aiBadge = document.getElementById("ai-badge");
+          if (aiBadge) aiBadge.textContent = hasBeenEdited ? "AI Assisted" : "AI Generated";
+          if (window.__vsSendHeight) window.__vsSendHeight();
+        });
+      }
+
+      var acceptBtn = document.getElementById("accept-btn");
+      if (acceptBtn) {
+        acceptBtn.addEventListener("click", function() { acceptEdits(); });
+      }
+
+      loadSummary();
+    })();
+  </script>
+
+  <script>
+    (function() {
+      var port = null;
+      function sendHeight() {
+        if (!port) return;
+        var h = document.documentElement.scrollHeight;
+        port.postMessage({ type: "RESIZE", height: h });
+      }
+      window.__vsSendHeight = sendHeight;
+      window.addEventListener("message", function(e) {
+        if (e.data && e.data.type === "INIT_CHANNEL" && e.ports && e.ports[0]) {
+          port = e.ports[0];
+          sendHeight();
+        }
+      });
+      window.addEventListener("load", function() { setTimeout(sendHeight, 100); });
+      new MutationObserver(function() {
+        sendHeight();
+        setTimeout(sendHeight, 50);
+        setTimeout(sendHeight, 200);
+      }).observe(document.body, { childList: true, subtree: true });
+    })();
+  </script>
+</body>
+</html>
