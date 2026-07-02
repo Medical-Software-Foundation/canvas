@@ -1,0 +1,38 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.1.0",
+    "name": "panel_and_summary_layouts",
+    "description": "Example plugin that customizes the global and patient side-panel sections and reorders the patient chart summary sections via the Canvas SDK's layout effects.",
+    "components": {
+        "handlers": [
+            {
+                "class": "panel_and_summary_layouts.handlers.event_handlers:PanelLayout",
+                "description": "Configures the global and patient side-panel section lists and ordering.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            },
+            {
+                "class": "panel_and_summary_layouts.handlers.event_handlers:PatientSummaryLayout",
+                "description": "Reorders the patient chart summary sections.",
+                "data_access": {
+                    "event": "",
+                    "read": [],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
