@@ -619,8 +619,8 @@ window.addEventListener('beforeunload', function(e) {
   }
 });
 
-var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2 };
-var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings' };
+var _tabIndexMap = { 'availability': 0, 'editor': 1, 'settings': 2, 'bulk-import': 3 };
+var _tabPanelMap = { 'panel-availability': 'availability', 'panel-editor': 'editor', 'panel-settings': 'settings', 'panel-bulk-import': 'bulk-import' };
 
 function _isEditorVisible() {
   var edPanel = document.getElementById('panel-editor');
@@ -650,6 +650,8 @@ function showTab(name) {
       if (!_skipDirtyCheck) resetForm();
     } else if (name === 'settings') {
       renderSettingsPanel();
+    } else if (name === 'bulk-import') {
+      bulkReset();
     } else {
       if (!_skipDirtyCheck) loadOverview();
     }
@@ -679,6 +681,160 @@ function dismissMsg() {
   const elBot = document.getElementById('status-msg-bottom');
   if (elTop) elTop.innerHTML = '';
   if (elBot) elBot.innerHTML = '';
+}
+
+/* ---------- Bulk CSV Import ---------- */
+const CSV_BASE = '/plugin-io/api/provider_availability/csv';
+var _bulkFile = null;
+var _bulkRecords = null;
+
+function bulkFileSelect(event) {
+  _bulkFile = (event.target.files && event.target.files[0]) || null;
+  var btn = document.getElementById('bulk-validate-btn');
+  if (btn) btn.disabled = !_bulkFile;
+  var err = document.getElementById('bulk-upload-error');
+  if (err) err.style.display = 'none';
+}
+
+function bulkShowStep(step) {
+  ['upload', 'preview', 'results'].forEach(function(s) {
+    var el = document.getElementById('bulk-step-' + s);
+    if (el) el.style.display = (s === step) ? 'block' : 'none';
+  });
+}
+
+function bulkReset() {
+  _bulkFile = null;
+  _bulkRecords = null;
+  var input = document.getElementById('bulk-file');
+  if (input) input.value = '';
+  var btn = document.getElementById('bulk-validate-btn');
+  if (btn) btn.disabled = true;
+  var err = document.getElementById('bulk-upload-error');
+  if (err) err.style.display = 'none';
+  bulkShowStep('upload');
+}
+
+function bulkDownloadTemplate() {
+  var csv = (window.__PRELOADED__ && window.__PRELOADED__.csv_template) || '';
+  if (!csv) { showMsg('Template unavailable', 'error'); return; }
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'availability_template.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function bulkShowError(msg) {
+  var el = document.getElementById('bulk-upload-error');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+async function bulkUploadValidate() {
+  if (!_bulkFile) return;
+  var btn = document.getElementById('bulk-validate-btn');
+  if (btn) btn.disabled = true;
+  try {
+    var fd = new FormData();
+    fd.append('file', _bulkFile);
+    var resp = await fetch(CSV_BASE + '/validate', { method: 'POST', body: fd, credentials: 'same-origin' });
+    if (!resp.ok) {
+      var e = await resp.json().catch(function() { return { error: 'Upload failed' }; });
+      bulkShowError(e.error || 'Upload failed');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    var result = await resp.json();
+    _bulkRecords = result.records || [];
+    bulkRenderPreview(result);
+    bulkShowStep('preview');
+  } catch (err) {
+    bulkShowError('Upload failed: ' + err.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
+function _bulkStat(num, label, color) {
+  return '<div style="text-align:center;"><div style="font-size:26px;font-weight:700;color:' + color +
+    ';">' + num + '</div><div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;">' +
+    label + '</div></div>';
+}
+
+function bulkRenderPreview(result) {
+  var summary = document.getElementById('bulk-summary');
+  if (summary) {
+    summary.innerHTML =
+      _bulkStat(result.total_rows, 'Rows', 'var(--text)') +
+      _bulkStat(result.record_count, 'Records', '#2e7d32') +
+      _bulkStat(result.rule_count, 'Rules', 'var(--text)') +
+      _bulkStat(result.block_count, 'Blocks', 'var(--text)') +
+      _bulkStat(result.rblock_count, 'Recurring', 'var(--text)') +
+      _bulkStat(result.error_count, 'Errors', '#c62828');
+  }
+  var errSec = document.getElementById('bulk-error-section');
+  var body = document.getElementById('bulk-error-body');
+  if (body) body.innerHTML = '';
+  if (body && result.errors && result.errors.length > 0) {
+    if (errSec) errSec.style.display = 'block';
+    result.errors.forEach(function(row) {
+      var tr = document.createElement('tr');
+      var td1 = document.createElement('td');
+      td1.style.padding = '8px 12px';
+      td1.style.borderBottom = '1px solid var(--border)';
+      td1.textContent = row.row_number;
+      var td2 = document.createElement('td');
+      td2.style.padding = '8px 12px';
+      td2.style.borderBottom = '1px solid var(--border)';
+      td2.style.color = '#c62828';
+      td2.textContent = (row.errors || []).join('; ');
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      body.appendChild(tr);
+    });
+  } else if (errSec) {
+    errSec.style.display = 'none';
+  }
+  var commitBtn = document.getElementById('bulk-commit-btn');
+  if (commitBtn) commitBtn.disabled = result.record_count === 0;
+}
+
+async function bulkConfirmCommit() {
+  if (!_bulkRecords || _bulkRecords.length === 0) return;
+  var btn = document.getElementById('bulk-commit-btn');
+  if (btn) btn.disabled = true;
+  try {
+    var resp = await fetch(CSV_BASE + '/commit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: _bulkRecords }),
+      credentials: 'same-origin',
+    });
+    if (!resp.ok) {
+      var e = await resp.json().catch(function() { return { error: 'Load failed' }; });
+      showMsg(e.error || 'Load failed', 'error');
+      if (btn) btn.disabled = false;
+      return;
+    }
+    var result = await resp.json();
+    var rules = result.created_rules || 0;
+    var blocks = result.created_blocks || 0;
+    var rblocks = result.created_recurring_blocks || 0;
+    var total = rules + blocks + rblocks;
+    var msg = document.getElementById('bulk-results-msg');
+    if (msg) {
+      msg.textContent = total + ' record(s) loaded: ' + rules + ' rule(s), ' + blocks +
+        ' block(s), ' + rblocks + ' recurring block(s). Calendar events are syncing.';
+    }
+    bulkShowStep('results');
+    showMsg('Imported ' + total + ' record(s)', 'success');
+  } catch (err) {
+    showMsg('Load failed: ' + err.message, 'error');
+    if (btn) btn.disabled = false;
+  }
 }
 
 
@@ -3125,6 +3281,8 @@ if (_mainTabsEl) {
       if (!_skipDirtyCheck) resetForm();
     } else if (name === 'settings') {
       renderSettingsPanel();
+    } else if (name === 'bulk-import') {
+      bulkReset();
     } else {
       if (!_skipDirtyCheck) loadOverview();
     }
@@ -3138,7 +3296,7 @@ if (_mainTabsEl) {
 
 // Restore active tab from URL hash
 var _initHash = location.hash.replace('#', '');
-if (_initHash === 'settings' || _initHash === 'editor') {
+if (_initHash === 'settings' || _initHash === 'editor' || _initHash === 'bulk-import') {
   showTab(_initHash);
 }
 

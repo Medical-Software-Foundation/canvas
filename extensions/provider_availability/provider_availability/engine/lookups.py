@@ -27,6 +27,17 @@ def get_active_providers() -> list[dict[str, Any]]:
     return results
 
 
+def get_active_staff_ids() -> set[str]:
+    """Return the set of all active staff UUIDs (not just providers).
+
+    Availability can be scheduled for any active staff record, so the CSV
+    importer keys on the staff UUID rather than NPI (which only providers have).
+    """
+    ids = {str(s.id) for s in Staff.objects.filter(active=True)}
+    log.info("get_active_staff_ids: found %d active staff", len(ids))
+    return ids
+
+
 def get_active_locations() -> list[dict[str, Any]]:
     """Return all active practice locations for the location dropdown."""
     results: list[dict[str, Any]] = []
