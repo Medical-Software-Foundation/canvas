@@ -26,8 +26,10 @@ body{margin:0;padding:0;background:transparent;
   color:#8a8f98;margin-bottom:6px}
 .status{display:inline-flex;align-items:center;gap:6px;background:#f4ead2;color:#5a4a1e;
   border-radius:14px;padding:4px 10px;font-weight:500}
+.status.good{background:#e2f1e6;color:#15703a}
 .status.bad{background:#fbe4e2;color:#a31515}
 .dot{width:9px;height:9px;border-radius:50%;background:#c79a3a;flex:none}
+.status.good .dot{background:#2da44e}
 .status.bad .dot{background:#cf3b2f}
 .copay{display:inline-flex;align-items:center;gap:5px;background:#e7f2ea;color:#15703a;
   border-radius:14px;padding:4px 10px;font-weight:600}
@@ -142,6 +144,29 @@ def render_rejected(medication_description: str, reasons: list[str]) -> str:
 # --- benefits detail -------------------------------------------------------
 
 
+_STATUS_NEGATIVE = (
+    "not covered",
+    "no coverage",
+    "non-formulary",
+    "non formulary",
+    "not on formulary",
+    "excluded",
+)
+_STATUS_POSITIVE = ("formulary", "preferred", "covered")
+
+
+def _status_class(coverage: Any) -> str:
+    """Classify a formulary status: 'good' (on formulary), 'bad' (not covered/rejected), '' (unknown)."""
+    if coverage.rejected:
+        return "bad"
+    status = (coverage.formulary_status or "").lower()
+    if any(term in status for term in _STATUS_NEGATIVE):
+        return "bad"
+    if any(term in status for term in _STATUS_POSITIVE):
+        return "good"
+    return ""
+
+
 def _restriction_chips(coverage: Any) -> str:
     chips = []
     if coverage.prior_authorization_required:
@@ -199,7 +224,7 @@ def _alternatives_block(coverage: Any) -> str:
         return ""
     rows = "".join(_alternative_row(a) for a in alternatives)
     return (
-        '<details class="alts" open>'
+        '<details class="alts">'
         f'<summary>{_ALT_ICON} Formulary alternatives <span class="count">'
         f"({len(alternatives)})</span>{_CHEV}</summary>"
         "<table><thead><tr><th>Drug</th><th>Type</th><th>Tier</th><th>Rx class</th></tr></thead>"
@@ -211,13 +236,13 @@ def _coverage_card(coverage: Any) -> str:
     pbm = coverage.pbm_name or "Plan"
     header = f"Formulary &amp; Benefits &mdash; {_esc(pbm)}"
 
-    if coverage.rejected:
-        status = (
-            '<span class="status bad">'
-            f'{_DOT}{_esc(coverage.reject_reason or "Rejected by plan")}</span>'
-        )
-    else:
-        status = f'<span class="status">{_DOT}{_esc(coverage.formulary_status or "Unknown")}</span>'
+    status_cls = _status_class(coverage)
+    status_label = (
+        coverage.reject_reason or "Rejected by plan"
+        if coverage.rejected
+        else (coverage.formulary_status or "Unknown")
+    )
+    status = f'<span class="status {status_cls}">{_DOT}{_esc(status_label)}</span>'
 
     copay = _copay_text(coverage.copays)
     copay_html = (

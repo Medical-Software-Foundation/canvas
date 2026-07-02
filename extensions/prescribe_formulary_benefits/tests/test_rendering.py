@@ -118,6 +118,31 @@ def test_render_benefits_renders_summary_cards() -> None:
     assert "No step therapy" in html
 
 
+def test_render_benefits_on_formulary_status_is_green() -> None:
+    for status in ("On-Formulary/Non-Preferred", "Preferred Level 1"):
+        html = render_benefits("Drug", [_coverage(formulary_status=status)])
+        assert 'class="status good"' in html
+        assert status in html
+
+
+def test_render_benefits_not_covered_status_is_red() -> None:
+    html = render_benefits("Drug", [_coverage(formulary_status="Not Covered")])
+    assert 'class="status bad"' in html
+
+
+def test_render_benefits_unknown_status_is_neutral() -> None:
+    html = render_benefits("Drug", [_coverage(formulary_status=None)])
+    # Neutral (cream) status has no good/bad modifier.
+    assert 'class="status "' in html
+    assert "Unknown" in html
+
+
+def test_render_benefits_alternatives_collapsed_by_default() -> None:
+    html = render_benefits("Drug", [_coverage(alternatives=[_alt()])])
+    assert '<details class="alts">' in html
+    assert 'class="alts" open' not in html
+
+
 def test_render_benefits_shows_restriction_warnings() -> None:
     coverage = _coverage(
         prior_authorization_required=True,
