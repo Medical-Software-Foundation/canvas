@@ -4,6 +4,7 @@
 [project]
 name = "clinical-favorites"
 version = "0.0.0"
+license = "MIT"
 requires-python = ">=3.12"
 authors = [
   {email = "engineering@vicert.com", name = "Vicert Team"}

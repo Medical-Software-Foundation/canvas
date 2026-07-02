@@ -52,7 +52,9 @@ The plugin calls Canvas internal services only, the ontologies service for FDB m
 
 ## Screenshots
 
-_A screenshot of the management page and the chart insert pane will be added here._
+The Clinical Favorites management page on the provider menu, showing the medication catalog grouped by section with visibility, code, sig, quantity, and refill columns.
+
+![Clinical Favorites management page](assets/clinical-favorites-screenshot.png)
 
 ## Limits and known caveats
 
