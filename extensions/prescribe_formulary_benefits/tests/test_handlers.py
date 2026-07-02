@@ -55,9 +55,9 @@ def _stored_stages(fake_cache) -> list[str]:
 # --- PrescribeBenefitsTrigger ---------------------------------------------
 
 
-def _trigger_event() -> Mock:
+def _trigger_event(event_type=EventType.PRESCRIBE_COMMAND__POST_UPDATE) -> Mock:
     event = Mock()
-    event.type = EventType.PRESCRIBE_COMMAND__POST_UPDATE
+    event.type = event_type
     event.target.id = "cmd-1"
     event.context = {
         "fields": {
@@ -67,6 +67,39 @@ def _trigger_event() -> Mock:
         "note": {"uuid": "note-1"},
     }
     return event
+
+
+def test_trigger_responds_to_originate_and_update_for_all_commands() -> None:
+    for event in (
+        EventType.PRESCRIBE_COMMAND__POST_ORIGINATE,
+        EventType.PRESCRIBE_COMMAND__POST_UPDATE,
+        EventType.REFILL_COMMAND__POST_ORIGINATE,
+        EventType.REFILL_COMMAND__POST_UPDATE,
+        EventType.ADJUST_PRESCRIPTION_COMMAND__POST_ORIGINATE,
+        EventType.ADJUST_PRESCRIPTION_COMMAND__POST_UPDATE,
+    ):
+        assert EventType.Name(event) in PrescribeBenefitsTrigger.RESPONDS_TO
+
+
+@patch(f"{_MODULE}.get_cache")
+@patch(f"{_MODULE}.Command")
+def test_trigger_fires_on_originate_with_preselected_medication(
+    mock_command, mock_get_cache, fake_cache
+) -> None:
+    """A command that originates with the medication already set still starts the workflow."""
+    command = Mock()
+    command.patient.id = "pat-1"
+    command.note.provider.id = "stf-1"
+    mock_command.objects.select_related.return_value.get.return_value = command
+    mock_get_cache.return_value = fake_cache
+
+    event = _trigger_event(EventType.REFILL_COMMAND__POST_ORIGINATE)
+    effects = PrescribeBenefitsTrigger(event=event).compute()
+
+    assert [e.type for e in effects] == [
+        EffectType.SET_COMMAND_CUSTOM_HTML,
+        EffectType.SEND_SURESCRIPTS_ELIGIBILITY_REQUEST,
+    ]
 
 
 @patch(f"{_MODULE}.get_cache")

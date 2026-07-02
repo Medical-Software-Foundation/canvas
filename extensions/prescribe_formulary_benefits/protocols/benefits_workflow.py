@@ -47,17 +47,22 @@ from prescribe_formulary_benefits.workflow import (
 
 
 class PrescribeBenefitsTrigger(BaseProtocol):
-    """Starts the workflow when a medication is selected in a prescribe-family command.
+    """Starts the workflow when a medication is present in a prescribe-family command.
 
-    Subscribes to the POST_UPDATE event for Prescribe, Refill, and Adjust
-    Prescription. POST_UPDATE fires on every field change, so we de-duplicate on
-    the chosen medication's NDC and only fire one eligibility request per
-    (command, medication).
+    Subscribes to both POST_ORIGINATE and POST_UPDATE for Prescribe, Refill, and
+    Adjust Prescription. POST_ORIGINATE covers commands that appear with a
+    medication already set (refill/adjust of an existing prescription, a favorite,
+    or re-prescribe); POST_UPDATE covers the medication being chosen interactively.
+    Both fire on every change/origination, so we de-duplicate on the chosen
+    medication's NDC and only fire one eligibility request per (command, medication).
     """
 
     RESPONDS_TO = [
+        EventType.Name(EventType.PRESCRIBE_COMMAND__POST_ORIGINATE),
         EventType.Name(EventType.PRESCRIBE_COMMAND__POST_UPDATE),
+        EventType.Name(EventType.REFILL_COMMAND__POST_ORIGINATE),
         EventType.Name(EventType.REFILL_COMMAND__POST_UPDATE),
+        EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_ORIGINATE),
         EventType.Name(EventType.ADJUST_PRESCRIPTION_COMMAND__POST_UPDATE),
     ]
 
