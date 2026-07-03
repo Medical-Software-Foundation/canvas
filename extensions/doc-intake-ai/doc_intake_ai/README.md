@@ -51,9 +51,9 @@ A fresh install has all capabilities disabled and only the fax channel enabled. 
 
 ## Screenshots
 
-The Data Integration form after the plugin has processed a faxed lab report. Patient, document type, and reviewer are matched at the top, and the lab template fields below are prefilled from the extracted values, each with an AI confidence badge.
+The Data Integration form after the plugin has processed a lab report, shown next to the source document. Patient, document type, and reviewer are matched at the top, and the lab template fields below are prefilled from the extracted values, each with an AI confidence badge.
 
-![Data Integration form prefilled by the plugin](assets/doc-intake-ai-prefilled-form.jpg)
+![Data Integration form prefilled by the plugin](assets/doc-intake-ai-prefilled-form.png)
 
 ## How it works
 
