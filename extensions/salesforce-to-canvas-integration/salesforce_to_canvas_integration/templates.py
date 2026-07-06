@@ -15,7 +15,7 @@ from html import escape
 # exactly the mix that broke the dashboard silently, the page referenced
 # component features the cached bundle did not have. A test pins this constant
 # to the manifest plugin_version so the two can never drift.
-ASSET_VERSION = "0.0.103"
+ASSET_VERSION = "0.0.104"
 
 _TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -572,7 +572,7 @@ _TEMPLATE = """<!DOCTYPE html>
           <div class="audit-field">
             <label class="audit-label required" for="audit-sex">Sex at birth</label>
             <canvas-dropdown id="audit-sex" name="sex_at_birth" placeholder="Select">
-              <canvas-option value="">Select</canvas-option>
+              <canvas-option value="__unset__">Select</canvas-option>
               <canvas-option value="female">Female</canvas-option>
               <canvas-option value="male">Male</canvas-option>
               <canvas-option value="other">Other</canvas-option>
@@ -1830,6 +1830,14 @@ _TEMPLATE = """<!DOCTYPE html>
         return blocks.join("");
       };
 
+      // Sentinel value for an unset sex at birth. The dropdown cannot represent
+      // an empty selection, since an empty value attribute falls back to the
+      // option label, so an empty prefill would be a no op and let a stale
+      // choice carry over. This matchable value is reset on every open and
+      // normalized back to empty on submit. Keep it in sync with the placeholder
+      // option value in the audit form markup.
+      const SEX_UNSET = "__unset__";
+
       const AUDIT_INPUT_IDS = {
         first_name: "audit-first-name",
         last_name: "audit-last-name",
@@ -2061,7 +2069,8 @@ _TEMPLATE = """<!DOCTYPE html>
           }
         }
 
-        if (!readAuditInput("audit-sex").trim()) flag("audit-sex", "Required");
+        const sexVal = readAuditInput("audit-sex").trim();
+        if (!sexVal || sexVal === SEX_UNSET) flag("audit-sex", "Required");
 
         const phone = readAuditInput("audit-phone").trim();
         if (phone) {
@@ -2265,7 +2274,7 @@ _TEMPLATE = """<!DOCTYPE html>
         writeAuditInput(AUDIT_INPUT_IDS.first_name, mapped.first_name || row.first_name || "");
         writeAuditInput(AUDIT_INPUT_IDS.last_name, mapped.last_name || row.last_name || "");
         writeAuditInput(AUDIT_INPUT_IDS.date_of_birth, mapped.date_of_birth || "");
-        writeAuditInput(AUDIT_INPUT_IDS.sex_at_birth, mapped.sex_at_birth || "");
+        writeAuditInput(AUDIT_INPUT_IDS.sex_at_birth, mapped.sex_at_birth || SEX_UNSET);
         writeAuditInput(AUDIT_INPUT_IDS.email, mapped.email || row.email || "");
         writeAuditInput(AUDIT_INPUT_IDS.phone, mapped.phone || row.phone || "");
         writeAuditInput(AUDIT_INPUT_IDS.telecom_mobile, telecom.mobile || "");
@@ -2297,7 +2306,7 @@ _TEMPLATE = """<!DOCTYPE html>
         writeAuditInput(AUDIT_INPUT_IDS.first_name, mapped.first_name || row.first_name || "");
         writeAuditInput(AUDIT_INPUT_IDS.last_name, mapped.last_name || row.last_name || "");
         writeAuditInput(AUDIT_INPUT_IDS.date_of_birth, mapped.date_of_birth || "");
-        writeAuditInput(AUDIT_INPUT_IDS.sex_at_birth, mapped.sex_at_birth || "");
+        writeAuditInput(AUDIT_INPUT_IDS.sex_at_birth, mapped.sex_at_birth || SEX_UNSET);
         writeAuditInput(AUDIT_INPUT_IDS.email, mapped.email || row.email || "");
         writeAuditInput(AUDIT_INPUT_IDS.phone, mapped.phone || row.phone || "");
         writeAuditInput(AUDIT_INPUT_IDS.telecom_mobile, telecom.mobile || "");
@@ -2487,6 +2496,7 @@ _TEMPLATE = """<!DOCTYPE html>
         Object.keys(AUDIT_INPUT_IDS).forEach((key) => {
           body[key] = readAuditInput(AUDIT_INPUT_IDS[key]);
         });
+        if (body.sex_at_birth === SEX_UNSET) body.sex_at_birth = "";
         if ((auditMode === "create" || auditMode === "promote") && (!body.last_name || !body.last_name.trim())) {
           showAuditError("Last name is required.");
           return;

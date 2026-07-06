@@ -148,6 +148,25 @@ def test_sex_column_is_renamed_to_sex_at_birth() -> None:
     assert ">Sex</canvas-table-cell>" not in html
 
 
+def test_audit_sex_placeholder_option_is_matchable() -> None:
+    """The Sex at birth placeholder carries a matchable sentinel value.
+
+    An empty value attribute falls back to the option label in the dropdown
+    component, so an empty prefill cannot reset the control and a stale
+    selection carries into the next record. A non empty sentinel keeps the
+    placeholder selectable, so an absent sex opens on Select and the required
+    guard blocks create until a deliberate choice.
+    """
+    html = render_admin_page(plugin_name=PLUGIN)
+
+    start = html.index('<canvas-dropdown id="audit-sex"')
+    end = html.index("</canvas-dropdown>", start)
+    dropdown = html[start:end]
+
+    assert '<canvas-option value="__unset__">Select</canvas-option>' in dropdown
+    assert '<canvas-option value="">Select</canvas-option>' not in dropdown
+
+
 def test_collapsing_columns_use_the_fit_class() -> None:
     """The col-fit token exists and is applied to content width columns.
 

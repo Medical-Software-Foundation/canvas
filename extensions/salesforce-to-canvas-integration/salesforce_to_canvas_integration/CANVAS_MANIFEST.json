@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.0.103",
+    "plugin_version": "0.0.104",
     "name": "salesforce_to_canvas_integration",
     "description": "Reference one-way patient sync from Salesforce to Canvas. When a Salesforce record is flagged for sync, a configurable filter either applies the change automatically or holds it for a human, creating or updating the linked Canvas patient.",
     "components": {
