@@ -1,4 +1,4 @@
-"""Tests for the cancelled-appointment-notifications handler.
+"""Tests for the missed-appointment-notifications handler.
 
 Each test is wrapped in a transaction that is rolled back afterwards, so the
 factory/ORM-created rows below don't leak between tests.
@@ -13,6 +13,7 @@ from unittest.mock import Mock
 import arrow
 
 from canvas_sdk.effects.effect import EffectType
+from canvas_sdk.events import EventType
 from canvas_sdk.test_utils.factories import PatientFactory, StaffFactory, TeamFactory
 from canvas_sdk.v1.data.appointment import (
     Appointment,
@@ -26,9 +27,9 @@ from canvas_sdk.v1.data.practicelocation import PracticeLocation
 from canvas_sdk.v1.data.staff import Staff
 from canvas_sdk.v1.data.task import TaskLabel
 
-from cancelled_appointment_notifications.handlers.event_handlers import (
+from missed_appointment_notifications.handlers.event_handlers import (
     RESCHEDULE_LABEL,
-    CancelledAppointmentNotificationHandler,
+    MissedAppointmentNotificationHandler,
 )
 
 
@@ -39,11 +40,17 @@ def _make_handler(
     target_id: object,
     secrets: dict[str, str] | None = None,
     environment: dict[str, str] | None = None,
-) -> CancelledAppointmentNotificationHandler:
-    """Build a handler whose event targets the given appointment id."""
+    event_type: int = EventType.APPOINTMENT_CANCELED,
+) -> MissedAppointmentNotificationHandler:
+    """Build a handler whose event targets the given appointment id.
+
+    Defaults to the cancellation event; pass ``EventType.APPOINTMENT_NO_SHOWED``
+    to exercise the no-show path.
+    """
     event = Mock()
+    event.type = event_type
     event.target.id = str(target_id)
-    return CancelledAppointmentNotificationHandler(
+    return MissedAppointmentNotificationHandler(
         event=event, secrets=secrets or {}, environment=environment or {}
     )
 
@@ -243,6 +250,86 @@ def test_skips_entered_in_error_appointment() -> None:
 def test_returns_empty_when_appointment_not_found() -> None:
     """A target id with no matching appointment yields no effects (no crash)."""
     assert _make_handler(uuid.uuid4(), {}).compute() == []
+
+
+# --------------------------------------------------------------------------- #
+# No-show appointments
+# --------------------------------------------------------------------------- #
+def test_no_show_on_past_appointment_creates_task() -> None:
+    """A no-show fires after the appointment time, so the past-time guard that
+    applies to cancellations must NOT skip it."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    appointment = _create_appointment(
+        patient,
+        provider,
+        start_time=arrow.utcnow().shift(hours=-2).datetime,
+        status=AppointmentProgressStatus.NOSHOWED.value,
+    )
+
+    effects = _make_handler(
+        appointment.id, event_type=EventType.APPOINTMENT_NO_SHOWED
+    ).compute()
+
+    assert len(effects) == 2
+    task, comment = effects
+    assert task.type == EffectType.CREATE_TASK
+    assert comment.type == EffectType.CREATE_TASK_COMMENT
+    assert _comment_data(comment)["task"]["id"] == _task_data(task)["id"]
+
+
+def test_no_show_task_title_and_comment_say_no_showed() -> None:
+    """No-show wording appears in both the task title and the comment body."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    appointment = _create_appointment(
+        patient,
+        provider,
+        start_time=arrow.utcnow().shift(hours=-2).datetime,
+        status=AppointmentProgressStatus.NOSHOWED.value,
+    )
+
+    effects = _make_handler(
+        appointment.id, event_type=EventType.APPOINTMENT_NO_SHOWED
+    ).compute()
+
+    assert "Reschedule no-showed appointment" in _task_data(effects[0])["title"]
+    assert _comment_data(effects[1])["body"].startswith(
+        "Appointment no-showed — reschedule needed."
+    )
+
+
+def test_no_show_still_skips_entered_in_error_appointment() -> None:
+    """An entered-in-error appointment creates no task, even on a no-show."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    appointment = _create_appointment(
+        patient,
+        provider,
+        start_time=arrow.utcnow().shift(hours=-2).datetime,
+        status=AppointmentProgressStatus.NOSHOWED.value,
+        entered_in_error=provider.user,
+    )
+    assert (
+        _make_handler(
+            appointment.id, event_type=EventType.APPOINTMENT_NO_SHOWED
+        ).compute()
+        == []
+    )
+
+
+def test_cancellation_wording_says_cancelled() -> None:
+    """The cancellation path keeps its 'cancelled' wording (regression guard)."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    appointment = _create_appointment(patient, provider, start_time=_future())
+
+    effects = _make_handler(appointment.id, {}).compute()
+
+    assert "Reschedule cancelled appointment" in _task_data(effects[0])["title"]
+    assert _comment_data(effects[1])["body"].startswith(
+        "Appointment cancelled — reschedule needed."
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -549,10 +636,9 @@ def test_invalid_instance_timezone_falls_back_to_utc() -> None:
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
-def test_responds_to_appointment_canceled() -> None:
-    """The handler subscribes to the APPOINTMENT_CANCELED event."""
-    from canvas_sdk.events import EventType
-
-    assert CancelledAppointmentNotificationHandler.RESPONDS_TO == [
-        EventType.Name(EventType.APPOINTMENT_CANCELED)
+def test_responds_to_appointment_canceled_and_no_showed() -> None:
+    """The handler subscribes to the cancellation and no-show events."""
+    assert MissedAppointmentNotificationHandler.RESPONDS_TO == [
+        EventType.Name(EventType.APPOINTMENT_CANCELED),
+        EventType.Name(EventType.APPOINTMENT_NO_SHOWED),
     ]
