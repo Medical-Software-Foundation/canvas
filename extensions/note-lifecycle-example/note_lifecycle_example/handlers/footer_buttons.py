@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from canvas_sdk.effects import Effect
-from canvas_sdk.handlers.action_button import NoteStateActionButton
+from canvas_sdk.handlers.action_button import (
+    LockNoteActionButton,
+    NoteStateActionButton,
+    SignNoteActionButton,
+)
 from canvas_sdk.v1.data.command import Command
 from canvas_sdk.v1.data.note import Note, NoteStates, NoteTypeCategories
 
@@ -24,24 +28,23 @@ def _note_type_info(note_id: int | str | None) -> tuple[str, bool] | None:
     return info
 
 
-class LockNoteButton(NoteStateActionButton):
-    """Lock the current note."""
+class LockNoteButton(LockNoteActionButton):
+    """Lock the current note (shown only for note types that don't require a signature)."""
 
-    STATE_ACTION = NoteStates.LOCKED
     BUTTON_TEXT_COLOR = _WHITE
     BUTTON_BACKGROUND_COLOR = _GREEN
 
 
-class SignNoteButton(NoteStateActionButton):
+class SignNoteButton(SignNoteActionButton):
     """Sign the current note.
 
-    Hidden while the note still has staged (uncommitted) commands — a note can't be
+    Also hidden while the note still has staged (uncommitted) commands — a note can't be
     signed until its commands are committed. ``ReloadFooterOnCommandCommit`` reloads the
     footer on each command commit, so the button reappears once the last command is
-    committed.
+    committed. (The lock-first, sig-required and already-signed rules come from
+    ``SignNoteActionButton``.)
     """
 
-    STATE_ACTION = NoteStates.SIGNED
     BUTTON_TEXT_COLOR = _WHITE
     BUTTON_BACKGROUND_COLOR = _GREEN
 

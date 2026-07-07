@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -18,7 +18,11 @@ from note_lifecycle_example.handlers.footer_buttons import (
     UnlockNoteButton,
 )
 
-from canvas_sdk.handlers.action_button import ActionButton, NoteStateActionButton
+from canvas_sdk.handlers.action_button import (
+    ActionButton,
+    NoteStateActionButton,
+    SignNoteActionButton,
+)
 from canvas_sdk.test_utils.factories import NoteFactory
 from canvas_sdk.v1.data.note import NoteStates, NoteTypeCategories
 
@@ -73,6 +77,7 @@ def test_buttons_have_titles_and_unique_keys() -> None:
 @patch.object(
     NoteStateActionButton,
     "_note_context",
+    new_callable=PropertyMock,
     return_value=(NoteStates.NEW, False, NoteTypeCategories.INPATIENT),
 )
 def test_discharge_only_for_inpatient_note_types(_mock_state: MagicMock) -> None:
@@ -95,6 +100,7 @@ def test_discharge_only_for_inpatient_note_types(_mock_state: MagicMock) -> None
 @patch.object(
     NoteStateActionButton,
     "_note_context",
+    new_callable=PropertyMock,
     return_value=(NoteStates.NEW, False, NoteTypeCategories.INPATIENT),
 )
 def test_discharge_hidden_without_a_note(_mock_state: MagicMock) -> None:
@@ -115,6 +121,7 @@ def test_colored_buttons_use_the_green_palette() -> None:
 @patch.object(
     NoteStateActionButton,
     "_note_context",
+    new_callable=PropertyMock,
     return_value=(NoteStates.LOCKED, False, NoteTypeCategories.ENCOUNTER),
 )
 def test_unlock_title_overridden_for_signature_required(_mock_state: MagicMock) -> None:
@@ -143,7 +150,7 @@ def test_sign_hidden_while_note_has_uncommitted_commands() -> None:
     staged-command check.
     """
     with (
-        patch.object(NoteStateActionButton, "visible", return_value=True),
+        patch.object(SignNoteActionButton, "visible", return_value=True),
         patch.object(footer_buttons.Command, "objects") as objects,
     ):
         staged = objects.filter.return_value.exclude.return_value
@@ -161,7 +168,7 @@ def test_sign_hidden_while_note_has_uncommitted_commands() -> None:
 def test_sign_hidden_when_transition_disallowed_without_checking_commands() -> None:
     """When the base transition isn't allowed, Sign stays hidden and never queries commands."""
     with (
-        patch.object(NoteStateActionButton, "visible", return_value=False),
+        patch.object(SignNoteActionButton, "visible", return_value=False),
         patch.object(footer_buttons.Command, "objects") as objects,
     ):
         assert _button(SignNoteButton).visible() is False
