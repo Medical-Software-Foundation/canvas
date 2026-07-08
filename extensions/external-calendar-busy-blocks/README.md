@@ -16,7 +16,7 @@ This plugin declares secrets that must be set before it will function. See the C
 
 ## How it works
 
-Each provider opens the **Calendar Busy Blocks** application from the Canvas global menu, pastes their personal calendar's secret iCal URL, and clicks Save. A scheduled task runs every 15 minutes:
+Each provider opens the **Calendar Busy Blocks** application from the Canvas global menu, pastes their personal calendar's secret iCal URL, and clicks Save. Connecting a feed automatically finds or creates that provider's Canvas Admin calendar — no manual calendar setup is required (the 15-minute sync also creates it if it is ever missing). A scheduled task runs every 15 minutes:
 
 1. Fetches each provider's ICS feed (sending `If-None-Match` / `If-Modified-Since` so unchanged feeds return `304 Not Modified` and skip work).
 2. Parses the feed, filters to confirmed busy events, expands recurring events within a 90-day window, and converts everything to UTC.

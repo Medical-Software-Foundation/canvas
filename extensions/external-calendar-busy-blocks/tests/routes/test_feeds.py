@@ -69,6 +69,8 @@ def test_post_creates_feed_when_valid() -> None:
     with (
         patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("cal-1", [])),
     ):
         from external_calendar_busy_blocks.http.fetcher import FetchOk
         mock_fetch.return_value = FetchOk(
@@ -97,6 +99,8 @@ def test_post_ignores_staff_id_in_body() -> None:
     with (
         patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("cal-1", [])),
     ):
         from external_calendar_busy_blocks.http.fetcher import FetchOk
         mock_fetch.return_value = FetchOk(b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", None, None)
@@ -190,6 +194,8 @@ def test_post_accepts_allowlisted_hosts(url) -> None:
     with (
         patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("cal-1", [])),
     ):
         from external_calendar_busy_blocks.http.fetcher import FetchOk
         mock_fetch.return_value = FetchOk(
@@ -225,3 +231,55 @@ def test_post_rejects_whitespace_injection(url) -> None:
         responses = api.create_feed()
     assert responses[0].status_code == 400
     mock_fetch.assert_not_called()
+
+
+def test_connect_provisions_calendar_when_missing() -> None:
+    cal_effect = MagicMock()
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("cal-new", [cal_effect])) as mock_get_cal,
+    ):
+        from external_calendar_busy_blocks.http.fetcher import FetchOk
+        mock_fetch.return_value = FetchOk(
+            body=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", etag=None, last_modified=None
+        )
+        MockFeed.objects.filter.return_value.first.return_value = None
+        api = _api_with_request(
+            "POST",
+            b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics"}',
+            logged_in_staff="00000000-0000-0000-0000-000000000001",
+        )
+        responses = api.create_feed()
+
+    # Provisioned with the canonicalized session staff id.
+    assert mock_get_cal.call_args.args[0] == "00000000000000000000000000000001"
+    # The Calendar create effect is returned before the JSONResponse.
+    assert responses[0] is cal_effect
+    assert responses[-1].status_code == 200
+
+
+def test_connect_no_calendar_effect_when_exists() -> None:
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("cal-1", [])),
+    ):
+        from external_calendar_busy_blocks.http.fetcher import FetchOk
+        mock_fetch.return_value = FetchOk(
+            body=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", etag=None, last_modified=None
+        )
+        MockFeed.objects.filter.return_value.first.return_value = None
+        api = _api_with_request(
+            "POST",
+            b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics"}',
+            logged_in_staff="00000000-0000-0000-0000-000000000001",
+        )
+        responses = api.create_feed()
+
+    # Only the JSONResponse — no effects emitted.
+    effects_emitted = [r for r in responses if hasattr(r, "type")]
+    assert effects_emitted == []
+    assert responses[0].status_code == 200

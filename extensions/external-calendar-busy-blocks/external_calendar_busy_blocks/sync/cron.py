@@ -7,9 +7,8 @@ from logger import log
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Event
 from canvas_sdk.handlers.cron_task import CronTask
-from canvas_sdk.v1.data.staff import Staff
 
-from external_calendar_busy_blocks.calendars.admin_lookup import find_admin_calendar_id
+from external_calendar_busy_blocks.calendars.admin_lookup import get_admin_calendar_id
 from external_calendar_busy_blocks.data.models import (
     ImportedEvent,
     StaffCalendarFeed,
@@ -67,17 +66,14 @@ class SyncCron(CronTask):
         now: datetime,
         lookahead_days: int,
     ) -> list[Effect]:
-        try:
-            staff = Staff.objects.get(id=feed.staff_id)
-        except Staff.DoesNotExist:
-            log.warning("Skipping feed %s: staff %s not found", feed.dbid, feed.staff_id)
-            feed.last_error = f"staff {feed.staff_id} not found"
-            feed.save()
-            return []
-
-        calendar_id = find_admin_calendar_id(staff)
-        if calendar_id is None:
-            feed.last_error = "no Admin calendar for this provider"
+        calendar_id, cal_effects = get_admin_calendar_id(feed.staff_id)
+        if not calendar_id:
+            log.warning(
+                "Skipping feed %s: could not resolve or provision Admin calendar for staff %s",
+                feed.dbid,
+                feed.staff_id,
+            )
+            feed.last_error = "unable to provision Admin calendar for this provider"
             feed.save()
             return []
 
@@ -93,7 +89,7 @@ class SyncCron(CronTask):
             feed.last_sync_at = now
             feed.last_error = None
             feed.save()
-            return []
+            return cal_effects
         if isinstance(result, (Unauthorized, NotFound)):
             feed.is_active = False
             feed.last_error = result.__class__.__name__
@@ -126,7 +122,7 @@ class SyncCron(CronTask):
         if not parsed and existing:
             feed.last_error = "feed parsed but empty; deletions skipped"
             feed.save()
-            return []
+            return cal_effects
 
         effects = self._diff_and_emit(feed, calendar_id, parsed, existing, now)
 
@@ -135,7 +131,7 @@ class SyncCron(CronTask):
         feed.last_modified = result.last_modified
         feed.last_error = None
         feed.save()
-        return effects
+        return [*cal_effects, *effects]
 
     def _diff_and_emit(
         self,
