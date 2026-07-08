@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +12,22 @@ _CREATE = EffectType.CALENDAR__EVENT__CREATE
 _UPDATE = EffectType.CALENDAR__EVENT__UPDATE
 _DELETE = EffectType.CALENDAR__EVENT__DELETE
 _CALENDAR_TYPES = {_CREATE, _UPDATE, _DELETE}
+_CAL_CREATE = EffectType.CALENDAR__CREATE
+
+
+def _future_dt(days: int, hour: int) -> datetime:
+    """A UTC datetime `days` ahead at `hour`:00, inside the 90-day look-ahead.
+
+    SyncCron.execute() uses the real wall-clock now(), so event dates must be
+    relative to now — hardcoded calendar dates rot into the past and get
+    filtered out by the parser.
+    """
+    base = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    return (base + timedelta(days=days)).replace(hour=hour)
+
+
+def _z(dt: datetime) -> str:
+    return dt.strftime("%Y%m%dT%H%M%SZ")
 
 
 def _new_cron(timestamp: datetime) -> SyncCron:
@@ -64,19 +80,16 @@ def patch_sync_deps():
         patch("external_calendar_busy_blocks.sync.cron.StaffCalendarFeed") as MockFeed,
         patch("external_calendar_busy_blocks.sync.cron.ImportedEvent") as MockImported,
         patch("external_calendar_busy_blocks.sync.cron.fetch_feed") as mock_fetch,
-        patch("external_calendar_busy_blocks.sync.cron.Staff") as MockStaff,
         patch(
-            "external_calendar_busy_blocks.sync.cron.find_admin_calendar_id"
-        ) as mock_find_cal,
+            "external_calendar_busy_blocks.sync.cron.get_admin_calendar_id"
+        ) as mock_get_cal,
     ):
-        MockStaff.objects.get.return_value = MagicMock(full_name="Jane Doe")
-        mock_find_cal.return_value = "cal-1"
+        mock_get_cal.return_value = ("cal-1", [])
         yield {
             "feed_model": MockFeed,
             "imported_model": MockImported,
             "fetch": mock_fetch,
-            "staff": MockStaff,
-            "find_cal": mock_find_cal,
+            "get_cal": mock_get_cal,
         }
 
 
@@ -87,7 +100,7 @@ def test_new_event_emits_create_effect(patch_sync_deps) -> None:
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
     patch_sync_deps["imported_model"].objects.filter.return_value = []
     patch_sync_deps["fetch"].return_value = FetchOk(
-        body=_ok_body("ev-1@x", "20260615T140000Z", "20260615T150000Z"),
+        body=_ok_body("ev-1@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
         etag='"abc"',
         last_modified="Mon, 01 Jun 2026",
     )
@@ -104,18 +117,20 @@ def test_unchanged_event_emits_no_effect(patch_sync_deps) -> None:
     from external_calendar_busy_blocks.http.fetcher import FetchOk
 
     feed = _stub_feed()
+    start = _future_dt(10, 14)
+    end = _future_dt(10, 15)
     existing = MagicMock(
         ics_uid="ev-1@x",
         recurrence_id=None,
         canvas_event_id="canvas-1",
         sequence=0,
-        starts_at=datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc),
-        ends_at=datetime(2026, 6, 15, 15, 0, tzinfo=timezone.utc),
+        starts_at=start,
+        ends_at=end,
     )
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
     patch_sync_deps["imported_model"].objects.filter.return_value = [existing]
     patch_sync_deps["fetch"].return_value = FetchOk(
-        body=_ok_body("ev-1@x", "20260615T140000Z", "20260615T150000Z"),
+        body=_ok_body("ev-1@x", _z(start), _z(end)),
         etag='"abc"',
         last_modified=None,
     )
@@ -140,7 +155,7 @@ def test_time_changed_emits_update_effect(patch_sync_deps) -> None:
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
     patch_sync_deps["imported_model"].objects.filter.return_value = [existing]
     patch_sync_deps["fetch"].return_value = FetchOk(
-        body=_ok_body("ev-1@x", "20260615T160000Z", "20260615T170000Z"),
+        body=_ok_body("ev-1@x", _z(_future_dt(10, 16)), _z(_future_dt(10, 17))),
         etag=None,
         last_modified=None,
     )
@@ -167,7 +182,7 @@ def test_removed_event_emits_delete_effect(patch_sync_deps) -> None:
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
     patch_sync_deps["imported_model"].objects.filter.return_value = [existing]
     patch_sync_deps["fetch"].return_value = FetchOk(
-        body=_ok_body("ev-new@x", "20260615T140000Z", "20260615T150000Z"),
+        body=_ok_body("ev-new@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
         etag=None,
         last_modified=None,
     )
@@ -249,11 +264,11 @@ def test_no_admin_calendar_records_error_and_skips(patch_sync_deps) -> None:
     feed = _stub_feed()
     patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
     patch_sync_deps["imported_model"].objects.filter.return_value = []
-    patch_sync_deps["find_cal"].return_value = None
+    patch_sync_deps["get_cal"].return_value = ("", [])
 
     effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
     assert effects == []
-    assert feed.last_error and "no admin calendar" in feed.last_error.lower()
+    assert feed.last_error and "unable to provision" in feed.last_error.lower()
 
 
 def test_existing_query_excludes_past_events(patch_sync_deps) -> None:
@@ -300,7 +315,7 @@ def test_one_feed_failure_does_not_abort_other_feeds(patch_sync_deps) -> None:
         if url == "https://a/x.ics":
             raise RuntimeError("unexpected boom")
         return FetchOk(
-            body=_ok_body("ev-b@x", "20260615T140000Z", "20260615T150000Z"),
+            body=_ok_body("ev-b@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
             etag=None,
             last_modified=None,
         )
@@ -315,3 +330,44 @@ def test_one_feed_failure_does_not_abort_other_feeds(patch_sync_deps) -> None:
     # Feed A recorded an error and was saved.
     assert feed_a.last_error and "unexpected" in feed_a.last_error.lower()
     assert feed_a.save.called
+
+
+def test_new_calendar_effect_is_prepended_before_events(patch_sync_deps) -> None:
+    from external_calendar_busy_blocks.http.fetcher import FetchOk
+
+    cal_effect = MagicMock()
+    cal_effect.type = _CAL_CREATE
+    patch_sync_deps["get_cal"].return_value = ("cal-9", [cal_effect])
+
+    feed = _stub_feed()
+    patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
+    patch_sync_deps["imported_model"].objects.filter.return_value = []
+    patch_sync_deps["fetch"].return_value = FetchOk(
+        body=_ok_body("ev-1@x", _z(_future_dt(10, 14)), _z(_future_dt(10, 15))),
+        etag=None,
+        last_modified=None,
+    )
+
+    effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
+    # Calendar create must come first, before the Event.create that references it.
+    assert effects[0] is cal_effect
+    create_effects = [e for e in effects if e.type == _CREATE]
+    assert len(create_effects) == 1
+    payload = json.loads(create_effects[0].payload)["data"]
+    assert payload["calendar_id"] == "cal-9"
+
+
+def test_not_modified_still_provisions_missing_calendar(patch_sync_deps) -> None:
+    from external_calendar_busy_blocks.http.fetcher import NotModified
+
+    cal_effect = MagicMock()
+    cal_effect.type = _CAL_CREATE
+    patch_sync_deps["get_cal"].return_value = ("cal-9", [cal_effect])
+
+    feed = _stub_feed(last_etag='"abc"')
+    patch_sync_deps["feed_model"].objects.filter.return_value = [feed]
+    patch_sync_deps["imported_model"].objects.filter.return_value = []
+    patch_sync_deps["fetch"].return_value = NotModified()
+
+    effects = _new_cron(datetime(2026, 6, 1, 14, 15, tzinfo=timezone.utc)).execute()
+    assert effects == [cal_effect]
