@@ -1,0 +1,17 @@
+[project]
+authors = [
+  {email = "kristen.oneill@canvasmedical.com", name = "Kristen O'Neill"}
+]
+dependencies = [
+  "canvas[test-utils]",
+  "pytest-cov>=7.0.0",
+]
+description = "Surfaces Surescripts formulary & benefits information as custom HTML inside the Prescribe, Refill, and Adjust Prescription commands once a medication is selected."
+license = "MIT"
+name = "prescribe_formulary_benefits"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[tool.pytest.ini_options]
+python_files = ["*_tests.py", "test_*.py", "tests.py"]

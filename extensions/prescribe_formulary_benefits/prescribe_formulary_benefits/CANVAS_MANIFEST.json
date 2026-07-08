@@ -1,0 +1,33 @@
+{
+    "sdk_version": "0.94.0",
+    "plugin_version": "0.1.12",
+    "name": "prescribe_formulary_benefits",
+    "description": "Surfaces Surescripts formulary & benefits information as custom HTML inside the Prescribe, Refill, and Adjust Prescription commands once a medication is selected.",
+    "license": "MIT",
+    "components": {
+        "protocols": [
+            {
+                "class": "prescribe_formulary_benefits.protocols.benefits_workflow:PrescribeBenefitsTrigger",
+                "description": "Kicks off a Surescripts eligibility request when a medication is selected in a prescribe-family command."
+            },
+            {
+                "class": "prescribe_formulary_benefits.protocols.benefits_workflow:EligibilityResponseHandler",
+                "description": "Receives the eligibility response and submits a benefits request for the chosen medication."
+            },
+            {
+                "class": "prescribe_formulary_benefits.protocols.benefits_workflow:BenefitsResponseHandler",
+                "description": "Receives the benefits response and renders the formulary/coverage detail as command custom HTML."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "applications": []
+    },
+    "secrets": [],
+    "tags": {},
+    "references": [],
+    "diagram": false,
+    "readme": "../README.md"
+}
