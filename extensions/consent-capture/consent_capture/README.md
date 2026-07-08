@@ -79,7 +79,7 @@ who-is-consenting selection:
 **Consent already on file** — shown if the button is clicked when a consent has
 already been recorded (see [After a consent is recorded](#after-a-consent-is-recorded)):
 
-<img src="../screenshots/consent-already-on-file.png" alt="Consent already on file notice" width="480" />
+<img src="../screenshots/consent-already-on-file.png" alt="Consent already on file notice" width="300" />
 
 ---
 
