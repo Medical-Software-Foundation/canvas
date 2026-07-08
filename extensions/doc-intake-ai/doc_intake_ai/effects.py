@@ -9,13 +9,32 @@ from canvas_sdk.effects.data_integration import (
     AssignDocumentReviewer,
     CategorizeDocument,
     LinkDocumentToPatient,
-    ReportType,
     ReviewMode,
-    TemplateType,
 )
+from canvas_sdk.effects.data_integration.types import ReportType, TemplateType
 from logger import log
 
-from doc_intake_ai.constants import AnnotationColor, SOURCE_PROTOCOL
+from doc_intake_ai.constants import AnnotationColor
+
+
+def _coerce_report_type(value: str | None) -> ReportType | None:
+    """Coerce a string to ReportType enum for strict pydantic validation."""
+    if value is None:
+        return None
+    try:
+        return ReportType(value)
+    except ValueError:
+        return None
+
+
+def _coerce_template_type(value: str | None) -> TemplateType | None:
+    """Coerce a string to TemplateType enum for strict pydantic validation."""
+    if value is None:
+        return None
+    try:
+        return TemplateType(value)
+    except ValueError:
+        return None
 
 
 def build_categorize_effect(
@@ -25,20 +44,24 @@ def build_categorize_effect(
     patient_error: str | None = None,
 ) -> Effect | None:
     """Build CategorizeDocument effect with confidence annotation."""
-    template_type = doc_type.get("template_type")
+    report_type = _coerce_report_type(doc_type.get("report_type"))
+    if report_type is None:
+        log.warning("[EFFECTS] Unknown report_type: %s", doc_type.get("report_type"))
+        return None
+
     try:
         return CategorizeDocument(
             document_id=str(doc_id),
             document_type={
                 "key": doc_type["key"],
                 "name": doc_type["name"],
-                "report_type": ReportType(doc_type["report_type"]),
-                "template_type": TemplateType(template_type) if template_type else None,
+                "report_type": report_type,
+                "template_type": _coerce_template_type(doc_type.get("template_type")),
             },
             annotations=_confidence_annotation(confidence, patient_error),
-            source_protocol=SOURCE_PROTOCOL,
+
         ).apply()
-    except (ValidationError, KeyError, ValueError) as e:
+    except (ValidationError, KeyError) as e:
         log.error("[EFFECTS] Categorize error: %s", e)
         return None
 
@@ -54,7 +77,7 @@ def build_link_patient_effect(
             document_id=str(doc_id),
             patient_key=str(patient.id),
             annotations=_confidence_annotation(confidence),
-            source_protocol=SOURCE_PROTOCOL,
+
         ).apply()
     except ValidationError as e:
         log.error("[EFFECTS] Link patient error: %s", e)
@@ -80,7 +103,7 @@ def build_assign_reviewer_effect(
             reviewer_id=str(reviewer.id),
             review_mode=ReviewMode.REVIEW_NOT_REQUIRED,
             annotations=annotations,
-            source_protocol=SOURCE_PROTOCOL,
+
         ).apply()
     except ValidationError as e:
         log.error("[EFFECTS] Assign reviewer error: %s", e)

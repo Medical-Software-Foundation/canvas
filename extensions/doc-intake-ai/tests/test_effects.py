@@ -9,7 +9,7 @@ from doc_intake_ai.effects import (
     build_assign_reviewer_effect,
     _confidence_annotation,
 )
-from doc_intake_ai.constants import AnnotationColor, SOURCE_PROTOCOL
+from doc_intake_ai.constants import AnnotationColor
 
 
 class TestConfidenceAnnotation:
@@ -79,7 +79,6 @@ class TestBuildCategorizeEffect:
         call_kwargs = mock_categorize.call_args.kwargs
         assert call_kwargs["document_id"] == "doc-123"
         assert call_kwargs["document_type"]["key"] == "lab_report"
-        assert call_kwargs["source_protocol"] == SOURCE_PROTOCOL
 
     @patch("doc_intake_ai.effects.CategorizeDocument")
     def test_with_patient_error(self, mock_categorize: MagicMock) -> None:
@@ -124,7 +123,6 @@ class TestBuildLinkPatientEffect:
         call_kwargs = mock_link.call_args.kwargs
         assert call_kwargs["document_id"] == "doc-123"
         assert call_kwargs["patient_key"] == "patient-123"
-        assert call_kwargs["source_protocol"] == SOURCE_PROTOCOL
 
     @patch("doc_intake_ai.effects.LinkDocumentToPatient")
     def test_with_confidence_annotation(self, mock_link: MagicMock) -> None:
@@ -167,7 +165,6 @@ class TestBuildAssignReviewerEffect:
         call_kwargs = mock_assign.call_args.kwargs
         assert call_kwargs["document_id"] == "doc-123"
         assert call_kwargs["reviewer_id"] == "staff-123"
-        assert call_kwargs["source_protocol"] == SOURCE_PROTOCOL
 
     @patch("doc_intake_ai.effects.AssignDocumentReviewer")
     def test_auto_assigned_annotation(self, mock_assign: MagicMock) -> None:

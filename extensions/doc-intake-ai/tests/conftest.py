@@ -10,6 +10,10 @@ import pytest
 mock_data_integration = MagicMock()
 mock_data_integration.PrefillDocumentFields = MagicMock()
 sys.modules.setdefault("canvas_sdk.effects.data_integration", mock_data_integration)
+# The effects module imports ReportType and TemplateType from the .types
+# submodule, which the released SDK exposes but the local install does not,
+# so stub that submodule too.
+sys.modules.setdefault("canvas_sdk.effects.data_integration.types", mock_data_integration)
 
 # Mock canvas_sdk.caching.plugins for cache access (not always installed)
 try:
