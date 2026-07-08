@@ -1,81 +1,77 @@
-# Meta Data Banner
+# Metadata Banner
 
-Display an informational banner at the top of a patient's chart that shows values pulled from their [Patient Metadata](https://docs.canvasmedical.com/sdk/data-patient/#patientmetadata). The banner text is fully customizable through a template you define in the plugin settings.
+**Surface the patient context your team cares about — right at the top of every chart, with zero clicks.**
 
-## Quick Start
+Canvas stores all kinds of useful, program-specific information as [Patient Metadata](https://docs.canvasmedical.com/sdk/data-patient/#patientmetadata): a care-management diagnosis, an enrollment status, a risk tier, an assigned care manager, a payer program. It's there, but it's tucked away — a clinician has to know it exists and go looking for it.
 
-### Step 1: Install the plugin
+This plugin brings it to the surface. You write one template, and every patient who has the right metadata gets a clean, informational banner at the top of their chart:
 
-Deploy the plugin to your Canvas instance using the Canvas CLI:
+> **Care Program: CCM — Risk: High — Care Manager: Jane Smith**
+
+No custom development, no per-patient work. Define the template once as a plugin secret and the banner appears everywhere the data exists, stays in sync as metadata changes, and disappears when it no longer applies.
+
+## Why you'd use it
+
+- **Make the invisible visible.** Metadata that normally lives in an API or admin screen becomes glanceable clinical context at the point of care.
+- **Configure, don't code.** The banner is driven entirely by a text template you control from plugin settings. Change what it says without redeploying.
+- **Always accurate.** Banners update the moment a patient's metadata changes, and clear automatically when the data goes away — so what's on the chart is never stale.
+- **Safe at scale.** Works the same whether you have 50 patients or 50,000 (see [How it works](#how-it-works)).
+
+## How the template works
+
+The banner text comes from a single secret, `BANNER_TEMPLATE`. Write whatever you want, and use `{metadata_key}` wherever you want a patient's metadata value dropped in.
+
+| `BANNER_TEMPLATE` | A patient with… | Banner shown |
+|---|---|---|
+| `Care Program: {ccm_diagnosis}` | `ccm_diagnosis = "Diabetes, Type 2"` | `Care Program: Diabetes, Type 2` |
+| `{program_name} \| Status: {enrollment_status}` | `program_name = "CCM"`, `enrollment_status = "Active"` | `CCM \| Status: Active` |
+| `Risk: {risk_score} — CM: {assigned_cm}` | `risk_score = "High"`, `assigned_cm = "Jane Smith"` | `Risk: High — CM: Jane Smith` |
+
+The rule is all-or-nothing per template: a banner appears only when the patient has a **non-blank value for every `{key}`** in the template. This prevents half-filled banners like `Risk: High — CM:` — if any referenced value is missing, no banner is shown at all.
+
+## Setup
+
+**1. Install the plugin**
 
 ```bash
 canvas install meta_data_banner --host <your-instance>
 ```
 
-### Step 2: Set up Patient Metadata
+**2. Make sure your patients have metadata**
 
-Make sure the patients you want to display banners for have metadata entries. Patient Metadata is a key-value store on each patient record. You can manage it through the Canvas admin or via the FHIR API.
-
-For example, a patient might have:
+Patient Metadata is a key–value store on each patient. Populate it however you already do — via the [FHIR API](https://docs.canvasmedical.com/api/), a data sync, or the Canvas admin. For example:
 
 | Key | Value |
 |-----|-------|
 | `ccm_diagnosis` | `Diabetes, Type 2` |
 | `enrollment_status` | `Active` |
 
-### Step 3: Configure the banner template
+**3. Set the `BANNER_TEMPLATE` secret**
 
-In the Canvas admin, navigate to the plugin settings for **meta_data_banner** and set the `BANNER_TEMPLATE` secret.
+In the Canvas admin, open the settings for **meta_data_banner** and set `BANNER_TEMPLATE` to your desired text (e.g. `Care Program: {ccm_diagnosis}`).
 
-Write your banner text and use `{metadata_key}` wherever you want a patient's metadata value to appear:
+**4. Open a patient chart**
 
-```
-Care Program: {ccm_diagnosis}
-```
+Any patient with a `ccm_diagnosis` value now shows a blue informational banner beneath their name.
 
-### Step 4: Verify
+## How it works
 
-Open a patient chart. If the patient has a `ccm_diagnosis` metadata value, you will see a blue info banner at the top of their chart:
+The plugin keeps banners correct through two complementary mechanisms:
 
-> Care Program: Diabetes, Type 2
+1. **Real-time, per patient.** When a patient's metadata is created or updated, the plugin immediately re-evaluates just that patient and adds, updates, or removes their banner. This is the primary path and handles ongoing changes automatically.
 
-## Template Examples
+2. **Backfill, for everyone else.** A scheduled task covers the two things the real-time path can't: getting banners onto **existing** patients right after you install the plugin, and **re-rendering everyone** when you change `BANNER_TEMPLATE` later (editing a secret doesn't emit a plugin-update event, so a scheduled task is the only reliable trigger).
 
-**Single value:**
+   Crucially, the backfill never scans the whole patient panel at once. It walks the active patients in **bounded pages** (500 at a time, every 5 minutes) using a cursor, then goes **dormant** — once the panel is fully reconciled, each subsequent run is a single cache check that returns instantly without touching the database. It only wakes back up when the template changes. As a rough guide, a 30,000-patient panel is fully backfilled in about 5 hours of unattended background work, with no impact on installs or day-to-day use. Both the cadence and page size are configurable at the top of `protocols/meta_data_banner_backfill.py` (`SCHEDULE`, `PAGE_SIZE`).
 
-```
-Care Program: {ccm_diagnosis}
-```
+## Configuration reference
 
-**Multiple values separated by a pipe:**
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `BANNER_TEMPLATE` | Yes | The banner text. Use `{metadata_key}` placeholders to insert Patient Metadata values. If unset, no banners are created. |
 
-```
-{program_name} | Status: {enrollment_status}
-```
-> CCM | Status: Active
+## Good to know
 
-**Descriptive label with a value:**
-
-```
-Risk Level: {risk_score} - Care Manager: {assigned_cm}
-```
-> Risk Level: High - Care Manager: Jane Smith
-
-## How It Works
-
-The plugin checks each patient's metadata against the `{variables}` in your template. Here is what determines whether a banner appears:
-
-- **Banner shows** when the patient has a metadata entry for every `{variable}` in the template, and none of those values are blank.
-- **Banner does not show** when any referenced metadata key is missing or has an empty value.
-- **Banner is removed** automatically if a patient previously qualified but no longer does (e.g., a metadata value was cleared).
-
-The banner updates in two ways:
-
-1. **When patient metadata changes** — whenever a patient's metadata is created or updated, the plugin re-evaluates that patient's banner immediately. This is the primary mechanism: as metadata is written, banners stay current on their own.
-2. **Backfill (cron task)** — a scheduled task covers the two cases the event path can't: seeding banners for existing patients right after install, and re-rendering everyone if `BANNER_TEMPLATE` ever changes (a bare secret edit does not fire a plugin-update event, so a cron is the only reliable trigger). It sweeps the active-patient panel once in bounded pages (500 patients every 5 minutes; e.g. a ~30k-patient panel is fully reconciled in roughly 5 hours), then goes **dormant** — subsequent runs are a single cache check that returns immediately without scanning patients. It only wakes again if the template changes. This avoids both an all-patient scan on plugin lifecycle events and round-the-clock background churn. Schedule and page size are configurable in `meta_data_banner_backfill.py` (`SCHEDULE`, `PAGE_SIZE`).
-
-## Notes
-
-- The banner text is capped at 90 characters. Longer text is truncated with `...`.
-- Only one banner per patient is created by this plugin (keyed as `patient-metadata`).
-- The banner appears on the patient chart with an informational (blue) style.
+- **One banner per patient.** This plugin manages a single banner keyed `patient-metadata`; it won't collide with banners from other plugins.
+- **90-character cap.** Banner text longer than 90 characters is truncated with `…`, matching the chart banner limit.
+- **Informational styling.** Banners render in the neutral blue "info" style and are not clickable links.
