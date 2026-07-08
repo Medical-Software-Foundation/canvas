@@ -7,6 +7,7 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
 from external_calendar_busy_blocks.auth import canonical_staff_id
+from external_calendar_busy_blocks.calendars.admin_lookup import get_admin_calendar_id
 from external_calendar_busy_blocks.data.models import (
     ImportedEvent,
     StaffCalendarFeed,
@@ -67,7 +68,10 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         else:
             StaffCalendarFeed(staff_id=staff_id, ics_url=url, is_active=True).save()
 
-        return [JSONResponse({"status": "connected"}, status_code=200)]
+        # Provision the provider's Admin calendar so the busy blocks have a
+        # calendar to land on (find-or-create; empty effects if it exists).
+        _, cal_effects = get_admin_calendar_id(staff_id)
+        return [*cal_effects, JSONResponse({"status": "connected"}, status_code=200)]
 
     @api.post("/feeds/delete")
     def delete_feed(self) -> list[Response | Effect]:
