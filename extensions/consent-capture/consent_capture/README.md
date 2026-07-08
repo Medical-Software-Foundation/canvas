@@ -74,7 +74,7 @@ who-is-consenting selection:
 
 **After recording** — a brief confirmation that auto-closes:
 
-<img src="../screenshots/consent-recorded.png" alt="Consent recorded confirmation" width="480" />
+<img src="../screenshots/consent-recorded.png" alt="Consent recorded confirmation" width="300" />
 
 **Consent already on file** — shown if the button is clicked when a consent has
 already been recorded (see [After a consent is recorded](#after-a-consent-is-recorded)):
