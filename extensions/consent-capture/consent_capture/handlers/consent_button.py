@@ -2,6 +2,11 @@
 
 Visible only for patients who do not already have an accepted consent of the
 configured coding. Clicking it opens a modal with the scripted consent statement.
+
+Visibility is only evaluated on page load, so the button can linger after a
+consent is collected until the next reload. To handle that stale state, ``handle``
+re-checks for an accepted consent and shows an informational notice (rather than
+collecting again) when one is already on file.
 """
 
 from canvas_sdk.effects import Effect
@@ -46,17 +51,15 @@ class ConsentButton(ActionButton):
         target = getattr(self.event, "target", None)
         return getattr(target, "id", None)
 
-    def visible(self) -> bool:
-        """Show the button only when there is no accepted consent on file."""
-        patient_id = self._patient_id()
-        if not patient_id:
+    def _has_accepted_consent(self, patient_id) -> bool:
+        """Whether the patient already has an accepted consent of the configured
+        coding. Returns False when no consent code is configured yet (there is
+        nothing to check against)."""
+        code = self.secrets.get("CONSENT_CODE", "")
+        if not code:
             return False
 
         system = self.secrets.get("CONSENT_SYSTEM", "")
-        code = self.secrets.get("CONSENT_CODE", "")
-        if not code:
-            return should_prompt(patient_id, code, False)
-
         filters = {
             "patient__id": patient_id,
             "category__code": code,
@@ -65,11 +68,43 @@ class ConsentButton(ActionButton):
         if system:
             filters["category__system"] = system
 
-        accepted_exists = PatientConsent.objects.filter(**filters).exists()
+        return PatientConsent.objects.filter(**filters).exists()
+
+    def visible(self) -> bool:
+        """Show the button only when there is no accepted consent on file."""
+        patient_id = self._patient_id()
+        if not patient_id:
+            return False
+
+        code = self.secrets.get("CONSENT_CODE", "")
+        if not code:
+            return should_prompt(patient_id, code, False)
+
+        accepted_exists = self._has_accepted_consent(patient_id)
         return should_prompt(patient_id, code, accepted_exists)
 
     def handle(self) -> list[Effect]:
         patient_id = self._patient_id()
+
+        # visible() is only evaluated on page load, so the button can linger in the
+        # chart header after a consent was just recorded this session. If the
+        # consent is now on file, show an informational notice instead of
+        # collecting it again.
+        if patient_id and self._has_accepted_consent(patient_id):
+            log.info(
+                "ConsentButton: consent already on file for patient %s; showing notice"
+                % patient_id
+            )
+            html = render_to_string(
+                "templates/consent_none.html",
+                {"button_title": BUTTON_TITLE},
+            )
+            modal = LaunchModalEffect(
+                target=LaunchModalEffect.TargetType.DEFAULT_MODAL,
+                content=html,
+            )
+            return [modal.apply()]
+
         staff_id = self.event.context.get("user", {}).get("id", "")
 
         log.info(

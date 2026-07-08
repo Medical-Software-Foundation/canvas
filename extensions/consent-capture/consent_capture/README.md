@@ -133,6 +133,17 @@ any consent type by changing configuration.
 "Accepted" means the patient's consent is in one of these states: `accepted` or
 `accepted_via_patient_portal`.
 
+### After a consent is recorded
+
+Canvas only evaluates the button's visibility when the chart page loads, so
+immediately after a consent is collected the button can linger in the header
+until the next reload. To avoid confusion, if a staff member clicks it again
+while a consent is already on file, the plugin doesn't collect a second consent —
+it opens a short notice ("Consent already on file / No action needed…") explaining
+that the button will be removed on the next page reload, and that they can refresh
+now to clear it immediately. The button clears itself on the next page load
+regardless.
+
 ---
 
 ## Components

@@ -269,3 +269,121 @@ class TestHandle:
                     "ConsentButton: opened for patient patient-123 by staff "
                 )
             ]
+
+
+class TestHandleAlreadyOnFile:
+    """handle() re-checks consent because visible() only runs on page load, so a
+    stale button (consent already collected this session) should show a notice
+    instead of collecting again."""
+
+    def _button(self):
+        button = ConsentButton()
+        button.event = MagicMock()
+        button.event.target.id = "patient-123"
+        button.event.context = {"user": {"id": "staff-9"}}
+        button.secrets = {
+            "CONSENT_SYSTEM": "http://loinc.org",
+            "CONSENT_CODE": "12345",
+            "CONSENT_DISPLAY": "Consent to Treat",
+            "CONSENT_STATEMENT": "I consent.",
+        }
+        return button
+
+    def test_shows_notice_when_consent_already_on_file(self):
+        button = self._button()
+
+        with patch(f"{MODULE}.PatientConsent") as mock_consent, patch(
+            f"{MODULE}.Patient"
+        ) as mock_patient, patch(f"{MODULE}.render_to_string") as mock_render, patch(
+            f"{MODULE}.log"
+        ) as mock_log:
+            mock_consent.objects.filter.return_value.exists.return_value = True
+            mock_render.return_value = "<html>notice</html>"
+
+            effects = button.handle()
+
+            # The consent lookup ran and found an accepted consent.
+            assert mock_consent.mock_calls == [
+                call.objects.filter(
+                    patient__id="patient-123",
+                    category__code="12345",
+                    state__in=("accepted", "accepted_via_patient_portal"),
+                    category__system="http://loinc.org",
+                ),
+                call.objects.filter().exists(),
+            ]
+            # The notice template was rendered with the button label.
+            assert mock_render.mock_calls == [
+                call("templates/consent_none.html", {"button_title": "Consent"})
+            ]
+            # The collect flow never ran: no patient lookup.
+            assert mock_patient.mock_calls == []
+            assert mock_log.mock_calls == [
+                call.info(
+                    "ConsentButton: consent already on file for patient "
+                    "patient-123; showing notice"
+                )
+            ]
+
+        assert effects == [
+            {
+                "type": "LaunchModalEffect",
+                "target": "default_modal",
+                "content": "<html>notice</html>",
+            }
+        ]
+
+    def test_collects_when_no_accepted_consent(self):
+        button = self._button()
+
+        with patch(f"{MODULE}.PatientConsent") as mock_consent, patch(
+            f"{MODULE}.Patient"
+        ) as mock_patient, patch(f"{MODULE}.render_to_string") as mock_render, patch(
+            f"{MODULE}.log"
+        ) as mock_log:
+            mock_consent.objects.filter.return_value.exists.return_value = False
+            mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
+                None
+            )
+            mock_render.return_value = "<html>collect</html>"
+
+            effects = button.handle()
+
+            # Checked for an accepted consent, found none...
+            assert mock_consent.mock_calls == [
+                call.objects.filter(
+                    patient__id="patient-123",
+                    category__code="12345",
+                    state__in=("accepted", "accepted_via_patient_portal"),
+                    category__system="http://loinc.org",
+                ),
+                call.objects.filter().exists(),
+            ]
+            # ...then ran the normal collect flow (patient lookup + collect modal).
+            assert mock_patient.mock_calls == [
+                call.objects.filter(id="patient-123"),
+                call.objects.filter().values_list(
+                    "first_name", "last_name", "birth_date"
+                ),
+                call.objects.filter().values_list().first(),
+            ]
+            assert mock_render.mock_calls == [
+                call(
+                    "templates/consent.html",
+                    {
+                        "patient_id": "patient-123",
+                        "patient_name": "",
+                        "patient_dob": "",
+                        "consent_display": "Consent to Treat",
+                        "paragraphs": ["I consent."],
+                        "no_statement_note": "Review the consent with the patient before recording.",
+                    },
+                )
+            ]
+            assert mock_log.mock_calls == [
+                call.info(
+                    "ConsentButton: opened for patient patient-123 by staff staff-9"
+                )
+            ]
+
+        assert len(effects) == 1
