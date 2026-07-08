@@ -1,0 +1,46 @@
+{
+    "sdk_version": "0.177.0",
+    "plugin_version": "0.0.1",
+    "name": "consent_capture",
+    "description": "Red 'Collect Consent' action button in the patient chart header, shown only for patients without the configured consent on file. Opens a scripted consent modal; on Accept, records the consent via the Canvas FHIR API (accepted + effective today, never expires) with a generated PDF documenting the collecting staff member.",
+    "url_permissions": [],
+    "components": {
+        "protocols": [
+            {
+                "class": "consent_capture.handlers.consent_button:ConsentButton",
+                "description": "Red action button in the patient chart header that opens the consent modal when the patient has no accepted consent of the configured code.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "PatientConsent"],
+                    "write": []
+                }
+            },
+            {
+                "class": "consent_capture.handlers.consent_api:ConsentApi",
+                "description": "Endpoint that records the accepted consent via the Canvas FHIR API with a generated documentation PDF.",
+                "data_access": {
+                    "event": "",
+                    "read": ["Patient", "Staff"],
+                    "write": []
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [
+        {"name": "CANVAS_FHIR_CLIENT_ID", "sensitive": true},
+        {"name": "CANVAS_FHIR_CLIENT_SECRET", "sensitive": true},
+        {"name": "CONSENT_SYSTEM", "default": "http://loinc.org"},
+        {"name": "CONSENT_CODE"},
+        {"name": "CONSENT_DISPLAY"},
+        {"name": "CONSENT_STATEMENT"}
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "README.md"
+}

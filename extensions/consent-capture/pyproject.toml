@@ -1,0 +1,23 @@
+# Test configuration for the consent_capture Canvas plugin.
+#
+# NOTE: intentionally no [project] or [build-system] table — this keeps `uv run`
+# from trying to build the plugin as an installable package. pytest and coverage
+# still read their config from the tables below.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["consent_capture"]
+branch = true
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]

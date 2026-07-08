@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Consent</title>
+  <style>
+    :root {
+      --ink: #1f2933;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --panel: #f9fafb;
+      --primary: #111827;
+      --primary-hover: #000000;
+      --success: #0b7a3b;
+    }
+    * { box-sizing: border-box; }
+    /* Fixed-size modal (sized once when opened). Only the consent statement
+       scrolls; the header and the action bar stay put so the buttons are always
+       visible above the fold. */
+    html, body { height: 100%; margin: 0; padding: 0; background: #fff; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .view { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+    .view.hidden { display: none; }
+    .pad { width: 100%; max-width: 680px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+    .head { flex: none; padding-top: 18px; }
+    .body { flex: 1 1 auto; min-height: 0; display: flex; padding-top: 4px; padding-bottom: 4px; }
+    .tail { flex: none; padding-top: 14px; }
+
+    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
+    .subtitle { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+
+    .context {
+      display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px;
+      padding: 8px 12px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px;
+    }
+    .context .item { display: inline-flex; gap: 6px; align-items: baseline; }
+    .context .label { color: var(--muted); }
+    .context .value { font-weight: 600; }
+
+    .statement {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--line); border-radius: 10px; padding: 4px 18px; background: #fff;
+    }
+    .statement p { font-size: 15px; margin: 14px 0; }
+    .statement-empty { color: var(--muted); }
+
+    .who { margin-top: 4px; }
+    .who-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+    .radio { display: inline-flex; align-items: center; gap: 8px; margin-right: 20px; font-size: 15px; cursor: pointer; min-height: 28px; }
+    .radio input { width: 18px; height: 18px; margin: 0; }
+    .rep-fields { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; max-width: 440px; }
+    .rep-fields input {
+      font-size: 16px; padding: 12px 12px; border: 1px solid var(--line);
+      border-radius: 8px; color: var(--ink); font-family: inherit; width: 100%;
+    }
+    .rep-fields input:focus { outline: none; border-color: #9aa4b2; }
+
+    .message { margin-top: 10px; font-size: 14px; min-height: 18px; }
+    .message.error { color: #b42318; }
+
+    .footer { flex: none; background: #fff; border-top: 1px solid var(--line); }
+    .footer-inner {
+      max-width: 680px; margin: 0 auto; display: flex; gap: 12px;
+      justify-content: flex-end; align-items: center; flex-wrap: wrap;
+      /* Guarantee clearance above the iPad home-indicator/safe-area even when
+         env(safe-area-inset-bottom) reports 0 inside the modal webview. */
+      padding: 14px 24px;
+      padding-bottom: calc(16px + max(env(safe-area-inset-bottom), 34px));
+    }
+
+    button {
+      font-size: 16px; font-weight: 500; padding: 12px 22px; border-radius: 8px;
+      border: 1px solid transparent; cursor: pointer; min-height: 46px;
+      transition: background .15s, border-color .15s;
+    }
+    button:disabled { opacity: 0.55; cursor: default; }
+    .primary { background: var(--primary); color: #fff; }
+    .primary:not(:disabled):hover { background: var(--primary-hover); }
+    .ghost { background: #fff; color: var(--ink); border-color: var(--line); }
+    .ghost:not(:disabled):hover { border-color: #cbd2d9; }
+
+    /* Success confirmation (centered, auto-closes) */
+    #successView { justify-content: center; align-items: center; text-align: center; }
+    .success-inner { padding: 32px 24px; }
+    .success-inner h1 { margin: 0 0 8px; }
+    .check {
+      border-radius: 50%; background: #e7f5ee; color: var(--success);
+      display: flex; align-items: center; justify-content: center; font-weight: 700;
+    }
+    .check-lg { width: 48px; height: 48px; font-size: 24px; margin: 0 auto 18px; }
+    .success-sub { color: var(--muted); font-size: 14px; margin: 0; }
+    .success-inner .primary { margin-top: 22px; min-width: 140px; }
+    .countdown { color: var(--muted); font-size: 13px; margin: 14px 0 0; min-height: 16px; }
+
+    .hidden { display: none !important; }
+
+    /* Narrow screens: full-width stacked buttons. */
+    @media (max-width: 520px) {
+      .footer-inner { flex-direction: column-reverse; align-items: stretch; }
+      .footer-inner button { width: 100%; }
+    }
+  </style>
+  <script>
+    // Capture Canvas's MessagePort as early as possible (before the body parses),
+    // so we never miss the INIT_CHANNEL transfer. Canvas requires us to post
+    // {type:'CLOSE_MODAL'} back through this port to dismiss the modal.
+    window.__consentPort = null;
+    window.addEventListener('message', function (event) {
+      if (event.ports && event.ports[0]) {
+        window.__consentPort = event.ports[0];
+        try { window.__consentPort.start(); } catch (e) {}
+      }
+    });
+  </script>
+</head>
+<body>
+  <!-- Collect view -->
+  <div class="view" id="collectView">
+    <div class="pad head">
+      <h1>{% if consent_display %}{{ consent_display }}{% else %}Consent{% endif %}</h1>
+      <p class="subtitle">Review with the patient before recording their consent.</p>
+
+      {% if patient_name or patient_dob %}
+      <div class="context">
+        {% if patient_name %}
+        <span class="item"><span class="label">Patient</span><span class="value">{{ patient_name }}</span></span>
+        {% endif %}
+        {% if patient_dob %}
+        <span class="item"><span class="label">DOB</span><span class="value">{{ patient_dob }}</span></span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="pad body">
+      <div class="statement">
+        {% if paragraphs %}
+          {% for paragraph in paragraphs %}
+          <p>{{ paragraph }}</p>
+          {% endfor %}
+        {% else %}
+          <p class="statement-empty">{{ no_statement_note }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="pad tail">
+      <div class="who">
+        <span class="who-label">Who is giving consent?</span>
+        <label class="radio"><input type="radio" name="who" value="patient" checked> Patient</label>
+        <label class="radio"><input type="radio" name="who" value="representative"> Authorized representative</label>
+        <div class="rep-fields hidden" id="repFields">
+          <input type="text" id="repName" placeholder="Representative's full name" autocomplete="off" />
+          <input type="text" id="repRel" placeholder="Relationship to patient (e.g. parent, healthcare proxy)" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="message" id="message" role="status" aria-live="polite"></div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-inner">
+        <button type="button" class="ghost" id="cancelBtn">Cancel</button>
+        <button type="button" class="primary" id="acceptBtn">Accept &amp; Record Consent</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success view -->
+  <div class="view hidden" id="successView">
+    <div class="inner success-inner">
+      <div class="check check-lg" aria-hidden="true">&#10003;</div>
+      <h1>Consent recorded</h1>
+      <p class="success-sub">A copy has been saved to the patient's record.</p>
+      <button type="button" class="primary" id="closeBtn">Close</button>
+      <p class="countdown" id="countdown" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <script>
+    var PATIENT_ID = "{{ patient_id|escapejs }}";
+    var COLLECT_URL = "/plugin-io/api/consent_capture/consent/collect";
+
+    // The port is captured in the <head> script above (window.__consentPort).
+    // Dismiss the modal by posting CLOSE_MODAL back through it.
+    function closeModal() {
+      var p = window.__consentPort;
+      if (p) {
+        try { p.postMessage({ type: 'CLOSE_MODAL' }); return; } catch (e) {}
+      }
+      try { window.parent.postMessage({ type: 'CLOSE_MODAL' }, '*'); } catch (e) {}
+      try { window.close(); } catch (e) {}
+    }
+
+    function localDateISO() {
+      var d = new Date();
+      function pad(n) { return (n < 10 ? '0' : '') + n; }
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+    function localTimeStr() {
+      try { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+      catch (e) { return ''; }
+    }
+    var acceptBtn = document.getElementById('acceptBtn');
+    var cancelBtn = document.getElementById('cancelBtn');
+    var closeBtn = document.getElementById('closeBtn');
+    var countdownEl = document.getElementById('countdown');
+    var messageEl = document.getElementById('message');
+    var repFields = document.getElementById('repFields');
+    var repName = document.getElementById('repName');
+    var repRel = document.getElementById('repRel');
+    var ACCEPT_LABEL = acceptBtn.textContent;
+    var closeTimer = null;
+
+    cancelBtn.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', function () {
+      if (closeTimer) { clearInterval(closeTimer); }
+      closeModal();
+    });
+
+    function selectedWho() {
+      var checked = document.querySelector('input[name="who"]:checked');
+      return checked ? checked.value : 'patient';
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="who"]'), function (r) {
+      r.addEventListener('change', function () {
+        if (selectedWho() === 'representative') { repFields.classList.remove('hidden'); repName.focus(); }
+        else { repFields.classList.add('hidden'); }
+      });
+    });
+
+    function showSuccess() {
+      document.getElementById('collectView').classList.add('hidden');
+      document.getElementById('successView').classList.remove('hidden');
+
+      // Auto-close with a visible countdown; the Close button closes immediately.
+      var remaining = 5;
+      function render() {
+        countdownEl.textContent =
+          'Closing in ' + remaining + (remaining === 1 ? ' second…' : ' seconds…');
+      }
+      render();
+      closeTimer = setInterval(function () {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(closeTimer);
+          closeModal();
+          return;
+        }
+        render();
+      }, 1000);
+    }
+
+    acceptBtn.addEventListener('click', function () {
+      var who = selectedWho();
+      if (who === 'representative' && !repName.value.trim()) {
+        messageEl.className = 'message error';
+        messageEl.textContent = "Please enter the representative's name.";
+        repName.focus();
+        return;
+      }
+
+      acceptBtn.disabled = true;
+      cancelBtn.disabled = true;
+      acceptBtn.textContent = 'Recording…';
+      messageEl.className = 'message';
+      messageEl.textContent = '';
+
+      function resetButton() {
+        acceptBtn.textContent = ACCEPT_LABEL;
+        acceptBtn.disabled = false;
+        cancelBtn.disabled = false;
+      }
+
+      fetch(COLLECT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          patient_id: PATIENT_ID,
+          local_date: localDateISO(),
+          local_time: localTimeStr(),
+          consent_by: who,
+          representative_name: repName.value,
+          representative_relationship: repRel.value
+        })
+      })
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          if (data && data.ok) {
+            showSuccess();
+          } else {
+            messageEl.className = 'message error';
+            messageEl.textContent = (data && data.error) || 'Could not record consent.';
+            resetButton();
+          }
+        })
+        .catch(function () {
+          messageEl.className = 'message error';
+          messageEl.textContent = 'Could not reach the server. Please try again.';
+          resetButton();
+        });
+    });
+  </script>
+</body>
+</html>
