@@ -1,0 +1,41 @@
+{
+    "sdk_version": "0.1.4",
+    "plugin_version": "0.0.1",
+    "name": "meta_data_banner",
+    "description": "Displays a banner alert on the patient chart with configurable metadata fields defined as plugin secrets.",
+    "components": {
+        "protocols": [
+            {
+                "class": "meta_data_banner.protocols.meta_data_banner:MetaDataBanner",
+                "description": "Surfaces patient metadata as a banner alert on the chart summary.",
+                "data_access": {
+                    "event": "PATIENT_METADATA_CREATED, PATIENT_METADATA_UPDATED",
+                    "read": ["Patient", "PatientMetadata"],
+                    "write": ["BannerAlert (via effects)"]
+                }
+            },
+            {
+                "class": "meta_data_banner.protocols.meta_data_banner_backfill:MetaDataBannerBackfill",
+                "description": "Paged cron task that reconciles metadata banners across the active-patient panel.",
+                "data_access": {
+                    "event": "CRON",
+                    "read": ["Patient", "PatientMetadata"],
+                    "write": ["BannerAlert (via effects)"]
+                }
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": [],
+        "questionnaires": []
+    },
+    "secrets": [
+        "BANNER_TEMPLATE"
+    ],
+    "tags": {},
+    "references": [],
+    "license": "",
+    "diagram": false,
+    "readme": "./README.md"
+}

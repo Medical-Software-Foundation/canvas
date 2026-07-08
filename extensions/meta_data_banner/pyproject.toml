@@ -1,0 +1,27 @@
+[project]
+name = "meta_data_banner"
+version = "0.0.1"
+description = "Canvas plugin to display patient metadata as a banner alert on the chart summary"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["meta_data_banner"]
+omit = ["tests/*", "*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+omit = ["tests/*", "*/tests/*"]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest-cov>=7.0.0",
+]
