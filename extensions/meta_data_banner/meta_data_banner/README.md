@@ -10,6 +10,10 @@ This plugin brings it to the surface. You write one template, and every patient 
 
 No custom development, no per-patient work. Define the template once as a plugin secret and the banner appears everywhere the data exists, stays in sync as metadata changes, and disappears when it no longer applies.
 
+<img src="assets/banner-example.png" width="720" alt="A patient chart showing a blue informational banner reading 'Program Enrollments: Health Coaching, Nutrition Counseling' at the top of the chart summary" />
+
+*The banner (top-left, blue) surfaces this patient's program enrollments directly on their chart — here driven by a template like `Program Enrollments: {program_enrollments}`.*
+
 ## Why you'd use it
 
 - **Make the invisible visible.** Metadata that normally lives in an API or admin screen becomes glanceable clinical context at the point of care.
