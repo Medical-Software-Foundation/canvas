@@ -65,6 +65,24 @@ plain-language message instead of failing silently.
 
 ---
 
+## Screenshots
+
+**Collecting a consent** — the scripted statement, patient context, and the
+who-is-consenting selection:
+
+![Consent collection modal](../screenshots/collect-modal.png)
+
+**After recording** — a brief confirmation that auto-closes:
+
+![Consent recorded confirmation](../screenshots/consent-recorded.png)
+
+**Consent already on file** — shown if the button is clicked when a consent has
+already been recorded (see [After a consent is recorded](#after-a-consent-is-recorded)):
+
+![Consent already on file notice](../screenshots/consent-already-on-file.png)
+
+---
+
 ## Prerequisites
 
 Before configuring the plugin you need two things set up in Canvas:
