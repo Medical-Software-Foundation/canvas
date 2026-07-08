@@ -9,10 +9,14 @@ right after the prescriber selects a medication.
 The plugin chains three Surescripts SDK capabilities across the
 request/response cycle:
 
-1. **Medication selected** — when a medication (and its dispensable form/NDC) is
+1. **Medication present** — when a medication (and its dispensable form/NDC) is
    chosen in a prescribe-family command, `PrescribeBenefitsTrigger` fires a
    `SendSurescriptsEligibilityRequestEffect` and writes a "checking coverage…"
-   placeholder into the command via `set_custom_html`.
+   placeholder into the command via `set_custom_html`. It listens to both
+   `POST_ORIGINATE` and `POST_UPDATE`, so commands that appear with a medication
+   already set (refill/adjust of an existing prescription, favorites, re-prescribe)
+   are covered too. For **Adjust Prescription** the medication is read from
+   `change_medication_to` (the new drug), not the original prescription.
 2. **Eligibility response** — `EligibilityResponseHandler` receives the
    `SURESCRIPTS_ELIGIBILITY_RESPONSE` event, extracts the patient's plan, and
    fires a `SendSurescriptsBenefitsRequestEffect` for the chosen medication +
@@ -28,7 +32,7 @@ under that id (in the SDK cache) so each response can be matched to the
 originating command — and so the handlers ignore responses they didn't start.
 
 ```
-POST_UPDATE (medication chosen)
+POST_ORIGINATE / POST_UPDATE (medication present)
    └─> eligibility request  ──┐  (correlation_id A, context cached)
                               ▼
         SURESCRIPTS_ELIGIBILITY_RESPONSE (A)

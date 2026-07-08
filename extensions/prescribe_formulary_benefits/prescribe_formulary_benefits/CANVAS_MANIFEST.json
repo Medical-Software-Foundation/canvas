@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.94.0",
-    "plugin_version": "0.1.10",
+    "plugin_version": "0.1.12",
     "name": "prescribe_formulary_benefits",
     "description": "Surfaces Surescripts formulary & benefits information as custom HTML inside the Prescribe, Refill, and Adjust Prescription commands once a medication is selected.",
     "license": "MIT",
@@ -29,5 +29,5 @@
     "tags": {},
     "references": [],
     "diagram": false,
-    "readme": "README.md"
+    "readme": "../README.md"
 }

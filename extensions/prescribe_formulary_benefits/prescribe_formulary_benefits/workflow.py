@@ -54,10 +54,14 @@ _EVENT_PREFIX_TO_KIND = {
     "ADJUST_PRESCRIPTION_COMMAND__": "adjust_prescription",
 }
 
-# Field keys, in priority order, that hold the medication being prescribed.
-# Adjust Prescription exposes "change_medication_to" when the provider is
-# switching the drug; otherwise the original prescription sits in "prescribe".
-_MEDICATION_FIELD_KEYS = ("change_medication_to", "prescribe")
+# The command field holding the medication being prescribed, per command kind.
+# For Adjust Prescription that is "change_medication_to" (the new drug) — NOT
+# "prescribe", which holds the original prescription being adjusted.
+_MEDICATION_FIELD_BY_KIND = {
+    "prescribe": "prescribe",
+    "refill": "prescribe",
+    "adjust_prescription": "change_medication_to",
+}
 
 
 def command_kind_for_event(event_name: str) -> str | None:
@@ -144,21 +148,17 @@ def _deep_find_ndc(node: Any) -> str | None:
     return None
 
 
-def extract_medication(fields: dict[str, Any]) -> tuple[str, str] | None:
-    """Pull (description, ndc) for the chosen medication out of a command's fields.
+def extract_medication(fields: dict[str, Any], kind: str) -> tuple[str, str] | None:
+    """Pull (description, ndc) for the medication being prescribed in a command.
 
-    Returns None until both a human-readable description and an NDC are
-    available — the benefits request requires an NDC, which only materializes
-    once the medication (and its dispensable form) is selected.
+    The source field depends on the command kind — Adjust Prescription uses
+    ``change_medication_to`` (the new drug), never ``prescribe`` (the original).
+    Returns None until both a description and an NDC are available; the benefits
+    request needs an NDC, which materializes once a dispensable form is chosen.
     """
-    medication_field: dict[str, Any] | None = None
-    for key in _MEDICATION_FIELD_KEYS:
-        candidate = fields.get(key)
-        if isinstance(candidate, dict) and candidate.get("value"):
-            medication_field = candidate
-            break
-
-    if medication_field is None:
+    field_key = _MEDICATION_FIELD_BY_KIND.get(kind)
+    medication_field = fields.get(field_key) if field_key else None
+    if not (isinstance(medication_field, dict) and medication_field.get("value")):
         return None
 
     description = (medication_field.get("text") or "").strip()
@@ -171,11 +171,11 @@ def extract_medication(fields: dict[str, Any]) -> tuple[str, str] | None:
     if not description:
         return None
 
-    # The NDC can live on the medication field or on the related
-    # type_to_dispense field, so search the whole fields blob.
-    ndc = _deep_find_ndc(medication_field) or _deep_find_ndc(fields.get("type_to_dispense")) or (
-        _deep_find_ndc(fields)
-    )
+    # NDC comes from the selected medication field or the related
+    # type_to_dispense (its representative NDC). We deliberately do NOT scan the
+    # whole fields blob: for adjust that would risk picking up the original
+    # prescription's NDC instead of the change-medication-to drug.
+    ndc = _deep_find_ndc(medication_field) or _deep_find_ndc(fields.get("type_to_dispense"))
     if not ndc:
         return None
 

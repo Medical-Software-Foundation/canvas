@@ -6,7 +6,9 @@ from types import SimpleNamespace
 
 from prescribe_formulary_benefits.workflow import (
     command_kind_for_event,
+    correlation_key,
     extract_medication,
+    fingerprint_key,
     load_context,
     select_plan_name,
     store_context,
@@ -52,7 +54,7 @@ def test_extract_medication_reads_description_and_representative_ndc() -> None:
         },
         "type_to_dispense": {"value": 1, "extra": {"representative_ndc": "00006010654"}},
     }
-    assert extract_medication(fields) == ("Lisinopril 10 mg tablet", "00006010654")
+    assert extract_medication(fields, "prescribe") == ("Lisinopril 10 mg tablet", "00006010654")
 
 
 def test_extract_medication_returns_none_without_ndc() -> None:
@@ -64,24 +66,52 @@ def test_extract_medication_returns_none_without_ndc() -> None:
             "extra": {"coding": [{"system": "http://www.fdbhealth.com/", "code": 606783}]},
         }
     }
-    assert extract_medication(fields) is None
+    assert extract_medication(fields, "prescribe") is None
 
 
 def test_extract_medication_returns_none_when_no_medication_selected() -> None:
-    assert extract_medication({"sig": "take one daily"}) is None
-    assert extract_medication({"prescribe": {"text": "", "value": None}}) is None
+    assert extract_medication({"sig": "take one daily"}, "prescribe") is None
+    assert extract_medication({"prescribe": {"text": "", "value": None}}, "prescribe") is None
 
 
-def test_extract_medication_prefers_change_medication_to() -> None:
+def test_adjust_uses_change_medication_to_not_the_original() -> None:
+    """Adjust reads the new drug (change_medication_to), never the original prescription."""
     fields = {
-        "prescribe": {"text": "Old drug", "value": 1},
+        "prescribe": {
+            "text": "Old drug 10 mg",
+            "value": 1,
+            "extra": {"coding": [{"system": "http://hl7.org/fhir/sid/ndc", "code": "99999999999"}]},
+        },
         "change_medication_to": {
             "text": "New drug 5 mg",
             "value": 2,
             "extra": {"representative_ndc": "11111222233"},
         },
     }
-    assert extract_medication(fields) == ("New drug 5 mg", "11111222233")
+    assert extract_medication(fields, "adjust_prescription") == ("New drug 5 mg", "11111222233")
+
+
+def test_adjust_ignores_original_prescription_when_no_change_selected() -> None:
+    """Adjusting sig/quantity without changing the drug does not trigger on the original."""
+    fields = {
+        "prescribe": {
+            "text": "Old drug 10 mg",
+            "value": 1,
+            "extra": {"coding": [{"system": "http://hl7.org/fhir/sid/ndc", "code": "99999999999"}]},
+        },
+        "type_to_dispense": {"extra": {"representative_ndc": "99999999999"}},
+    }
+    assert extract_medication(fields, "adjust_prescription") is None
+
+
+def test_prescribe_ignores_change_medication_to_field() -> None:
+    fields = {
+        "change_medication_to": {"text": "Adjust-only drug", "value": 2,
+                                 "extra": {"representative_ndc": "11111222233"}},
+        "prescribe": {"text": "Prescribed drug", "value": 1},
+        "type_to_dispense": {"extra": {"representative_ndc": "00006010654"}},
+    }
+    assert extract_medication(fields, "prescribe") == ("Prescribed drug", "00006010654")
 
 
 def test_extract_medication_finds_ndc_systemed_coding() -> None:
@@ -97,7 +127,7 @@ def test_extract_medication_finds_ndc_systemed_coding() -> None:
             },
         }
     }
-    assert extract_medication(fields) == ("Some drug", "00093-7146-01")
+    assert extract_medication(fields, "prescribe") == ("Some drug", "00093-7146-01")
 
 
 def test_extract_medication_falls_back_to_coding_display_for_description() -> None:
@@ -111,7 +141,7 @@ def test_extract_medication_falls_back_to_coding_display_for_description() -> No
         },
         "type_to_dispense": {"extra": {"representative_ndc": "00006010654"}},
     }
-    assert extract_medication(fields) == ("Drug X", "00006010654")
+    assert extract_medication(fields, "prescribe") == ("Drug X", "00006010654")
 
 
 # --- select_plan_name ------------------------------------------------------
@@ -161,3 +191,44 @@ def test_load_context_consumes_the_entry(fake_cache) -> None:
 
 def test_load_context_unknown_correlation_returns_none(fake_cache) -> None:
     assert load_context(fake_cache, "never-seen") is None
+
+
+def test_load_context_with_corrupt_value_returns_none(fake_cache) -> None:
+    """A non-JSON cached value is handled gracefully (not raised)."""
+    fake_cache.set(correlation_key("corr-x"), "{not valid json")
+    assert load_context(fake_cache, "corr-x") is None
+
+
+def test_cache_key_helpers_are_namespaced() -> None:
+    assert correlation_key("abc") == "corr:abc"
+    assert fingerprint_key("cmd-1") == "cmd_fp:cmd-1"
+
+
+def test_extract_medication_ignores_non_ndc_representative_value() -> None:
+    """A representative value that isn't NDC-shaped is not treated as an NDC."""
+    fields = {
+        "prescribe": {"text": "Some drug", "value": 9},
+        "type_to_dispense": {"extra": {"representative_ndc": "N/A"}},
+    }
+    assert extract_medication(fields, "prescribe") is None
+
+
+def test_extract_medication_ignores_non_string_ndc_value() -> None:
+    """A non-string representative NDC (e.g. an int) is not accepted as an NDC."""
+    fields = {
+        "prescribe": {"text": "Some drug", "value": 9},
+        "type_to_dispense": {"extra": {"representative_ndc": 123456789}},
+    }
+    assert extract_medication(fields, "prescribe") is None
+
+
+def test_extract_medication_none_when_description_unresolvable() -> None:
+    """Medication selected (has value + ndc) but no text/display -> no description -> None."""
+    fields = {
+        "prescribe": {
+            "text": "",
+            "value": 9,
+            "extra": {"coding": [{"system": "http://hl7.org/fhir/sid/ndc", "code": "00093104801"}]},
+        },
+    }
+    assert extract_medication(fields, "prescribe") is None

@@ -12,57 +12,61 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
+# Colors and type mirror the Canvas platform tokens (home-app static/styles/
+# variables.scss): Lato UI font, greys #333/#767676/#606063, semantic border
+# rgba(34,36,38,.15), green #23b135, red #d0111f/#9f3a38, and Canvas's warning
+# palette (#fcf8e3 / #8a6d3b / #faebcc) for the neutral (non-preferred) state.
 _STYLE = """
 *{box-sizing:border-box}
 body{margin:0;padding:0;background:transparent;
-  font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  color:#1f2328;-webkit-font-smoothing:antialiased}
+  font:13px/1.45 lato,"Helvetica Neue",Arial,Helvetica,sans-serif;
+  color:#333;-webkit-font-smoothing:antialiased}
 /* No outer margin on the card: a top/bottom margin here collapses out of the
    body box and isn't counted by the parent's height measurement, which leaves a
    few px of phantom scroll. Space stacked cards with an in-flow sibling margin. */
-.card{border:1px solid #e6e3db;border-radius:10px;padding:14px 16px;margin:0;background:#fff}
+.card{border:1px solid rgba(34,36,38,.15);border-radius:6px;padding:14px 16px;margin:0;background:#fff}
 .card+.card{margin-top:10px}
 .hdr{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  color:#5b636d;margin-bottom:12px}
+  color:#767676;margin-bottom:12px}
 .cards{display:flex;flex-wrap:wrap;gap:10px}
-.cell{flex:1 1 180px;background:#f7f4ec;border-radius:8px;padding:9px 11px;min-width:160px}
-.lbl{font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
-  color:#8a8f98;margin-bottom:6px}
-.status{display:inline-flex;align-items:center;gap:6px;background:#f4ead2;color:#5a4a1e;
-  border-radius:14px;padding:4px 10px;font-weight:500}
-.status.good{background:#e2f1e6;color:#15703a}
-.status.bad{background:#fbe4e2;color:#a31515}
-.dot{width:9px;height:9px;border-radius:50%;background:#c79a3a;flex:none}
-.status.good .dot{background:#2da44e}
-.status.bad .dot{background:#cf3b2f}
-.copay{display:inline-flex;align-items:center;gap:5px;background:#e7f2ea;color:#15703a;
-  border-radius:14px;padding:4px 10px;font-weight:600}
+.cell{flex:1 1 180px;background:#f5f5f5;border-radius:5px;padding:9px 11px;min-width:160px}
+.lbl{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:#767676;margin-bottom:6px}
+.status{display:inline-flex;align-items:center;gap:6px;background:#fcf8e3;color:#8a6d3b;
+  border:1px solid #faebcc;border-radius:12px;padding:3px 10px;font-weight:600}
+.status.good{background:#e6f4e8;color:#1a7f2e;border-color:#bfe3c6}
+.status.bad{background:#fdeceb;color:#9f3a38;border-color:#e0b4b4}
+.dot{width:8px;height:8px;border-radius:50%;background:#b8860b;flex:none}
+.status.good .dot{background:#23b135}
+.status.bad .dot{background:#d0111f}
+.copay{display:inline-flex;align-items:center;gap:5px;background:#e6f4e8;color:#1a7f2e;
+  border-radius:12px;padding:3px 10px;font-weight:700}
 .copay .sym{font-weight:700}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{display:inline-block;border-radius:12px;padding:2px 9px;font-size:12px;font-weight:500;
+.chip{display:inline-block;border-radius:11px;padding:2px 9px;font-size:12px;font-weight:600;
   white-space:nowrap}
-.chip.neutral{background:#edeef0;color:#5b636d}
-.chip.warn{background:#fbecd2;color:#8a5a12}
-.chip.generic{background:#e2f1e6;color:#15703a}
-.chip.brand{background:#f1e7cf;color:#8a6a16}
-.chip.tier{background:#f6edd6;color:#6f5512}
-.muted{color:#8a8f98}
-details.alts{margin-top:12px;border:1px solid #e6e3db;border-radius:8px;overflow:hidden}
+.chip.neutral{background:#efefef;color:#606063}
+.chip.warn{background:#fcf8e3;color:#8a6d3b}
+.chip.generic{background:#e6f4e8;color:#1a7f2e}
+.chip.brand{background:#fcf8e3;color:#8a6d3b}
+.chip.tier{background:#efefef;color:#606063}
+.muted{color:#999}
+details.alts{margin-top:12px;border:1px solid rgba(34,36,38,.15);border-radius:6px;overflow:hidden}
 details.alts>summary{display:flex;align-items:center;gap:8px;cursor:pointer;
-  padding:10px 12px;font-weight:600;list-style:none;user-select:none}
+  padding:10px 12px;font-weight:700;list-style:none;user-select:none}
 details.alts>summary::-webkit-details-marker{display:none}
-.summary-icon{color:#5b636d}
-.count{color:#8a8f98;font-weight:500}
-.chev{margin-left:auto;color:#8a8f98;transition:transform .15s ease}
+.summary-icon{color:#767676}
+.count{color:#999;font-weight:400}
+.chev{margin-left:auto;color:#999;transition:transform .15s ease}
 details.alts[open]>summary .chev{transform:rotate(90deg)}
-table{width:100%;border-collapse:collapse;border-top:1px solid #eceae3}
-th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
-  color:#8a8f98;padding:8px 12px;background:#fbfaf7}
-td{padding:8px 12px;border-top:1px solid #f0eee8;vertical-align:top}
-td.drug{font-weight:500}
-td.rxclass{color:#5b636d}
-.msg{color:#5b636d}
-.msg .err{color:#a31515;margin-top:4px}
+table{width:100%;border-collapse:collapse;border-top:1px solid rgba(34,36,38,.12)}
+th{text-align:left;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:#767676;padding:8px 12px;background:#fafafa}
+td{padding:8px 12px;border-top:1px solid rgba(34,36,38,.08);vertical-align:top}
+td.drug{font-weight:600}
+td.rxclass{color:#606063}
+.msg{color:#606063}
+.msg .err{color:#9f3a38;margin-top:4px}
 """
 
 _DOT = '<span class="dot"></span>'

@@ -74,9 +74,10 @@ class PrescribeBenefitsTrigger(BaseProtocol):
         command_uuid = str(self.event.target.id)
         fields = self.event.context.get("fields") or {}
 
-        medication = extract_medication(fields)
+        medication = extract_medication(fields, kind)
         if medication is None:
             # Medication (or its dispensable NDC) not selected yet — nothing to do.
+            # For adjust this only reads change_medication_to, not the original.
             return []
         description, ndc = medication
 
