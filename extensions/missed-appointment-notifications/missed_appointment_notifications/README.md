@@ -29,7 +29,8 @@ events and creates:
 
 - a **task** titled with the provider and the original appointment date/time
   (noting whether the appointment was *cancelled* or *no-showed*), linked to the
-  patient, due **the next day**; and
+  patient, due a configurable number of days later (see `RESCHEDULE_DUE_DAYS`;
+  defaults to the next day); and
 - a **comment** summarising the original appointment: reason for visit,
   provider, date/time, location, and note type.
 
@@ -69,16 +70,20 @@ Configured via plugin **variables** (declared in `CANVAS_MANIFEST.json`):
 | Variable | Required | Description |
 |---|---|---|
 | `SCHEDULING_TEAM_NAME` | optional | Exact name of the Team that reschedule tasks should be assigned to (matched case-insensitively, e.g. `Scheduling`). If unset/blank or no team matches, tasks are assigned to the appointment's provider. |
+| `RESCHEDULE_DUE_DAYS` | optional | Whole number of days (1–366) after the cancellation/no-show that the reschedule task is due. Defaults to `1` when unset. A blank, non-numeric, or out-of-range value is ignored (with a logged warning) and falls back to the default. |
 
-No code changes are needed to customise routing — leave `SCHEDULING_TEAM_NAME`
-blank to always assign to the provider. The display timezone is taken from the
-instance configuration (`INSTALLATION_TIME_ZONE`), not a setting.
+No code changes are needed to customise routing or timing — leave
+`SCHEDULING_TEAM_NAME` blank to always assign to the provider, and set
+`RESCHEDULE_DUE_DAYS` (e.g. `7`) to change how long staff have before the task
+is due. The display timezone is taken from the instance configuration
+(`INSTALLATION_TIME_ZONE`), not a setting.
 
 ## Screenshots
 
 The reschedule task created in a patient's chart after a cancellation — titled
-with the provider and original appointment time, due the next day, labelled
-`Reschedule`, with a comment summarising the original appointment:
+with the provider and original appointment time, due after the configured
+number of days, labelled `Reschedule`, with a comment summarising the original
+appointment:
 
 ![Reschedule task generated from a cancelled appointment](docs/reschedule-task.png)
 
