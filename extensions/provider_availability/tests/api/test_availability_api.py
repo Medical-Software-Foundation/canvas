@@ -1366,9 +1366,10 @@ class TestCreateBlock:
         # Dates sorted ascending
         starts = [b["start"][:10] for b in data["blocks"]]
         assert starts == ["2026-07-04", "2026-11-26", "2026-12-25"]
-        # All-day end is next-day midnight (the visual rendering is handled
-        # in event_sync via naive datetimes, not by truncating the duration).
-        assert data["blocks"][0]["end"] == "2026-07-05T00:00:00"
+        # All-day blocks run 00:00:00 -> 23:59:59 on the same day so the calendar
+        # event doesn't spill into the next day.
+        assert data["blocks"][0]["start"] == "2026-07-04T00:00:00"
+        assert data["blocks"][0]["end"] == "2026-07-04T23:59:59"
         assert len(mock_save.mock_calls) == 3
         assert len(mock_effects.mock_calls) == 3
 
@@ -1391,6 +1392,31 @@ class TestCreateBlock:
         # Single-date batch shouldn't mint a group_id
         assert data["group_id"] is None
         assert data["blocks"][0]["all_day"] is True
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[])
+    @patch(f"{MODULE}.save_block")
+    def test_all_day_block_stays_within_same_day(
+        self, mock_save, mock_effects, mock_access
+    ):
+        """An all-day block must run 00:00:00 -> 23:59:59 on the same day.
+
+        Ending at next-day midnight makes the calendar event spill into the next
+        day. The frontend's batch path sends no start/end for all-day, so the
+        server computes the window; it must keep the end inside the same day.
+        """
+        body = {
+            "provider_id": PROVIDER_ID,
+            "dates": ["2026-07-04"],
+            "all_day": True,
+        }
+        handler = _make_handler(json_body=body)
+        handler.create_block()
+
+        saved_block = mock_save.call_args.args[0]
+        assert saved_block.start == datetime(2026, 7, 4, 0, 0, 0)
+        assert saved_block.end == datetime(2026, 7, 4, 23, 59, 59)
+        assert saved_block.end.date() == saved_block.start.date()  # no carry-over
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_multi_date_invalid_format(self, mock_access):
@@ -1947,8 +1973,9 @@ class TestSetProviderTimezone:
     @patch(f"{MODULE}.sync_provider_availability", return_value=[MagicMock()])
     @patch(f"{MODULE}.get_all_recurring_blocks")
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[MagicMock()])
+    @patch(f"{MODULE}.get_all_blocks", return_value=[])
     def test_success_resyncs_provider_and_blocks(
-        self, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
+        self, mock_get_blocks, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
     ):
         rb_match = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID, is_active=True)
         rb_other = RecurringBlock(id="rb-2", provider_id=PROVIDER_ID_2, is_active=True)
@@ -1966,6 +1993,52 @@ class TestSetProviderTimezone:
         assert mock_build_rb.mock_calls == [call(rb_match)]
         # 1 sync effect + 1 recurring-block effect + final JSONResponse
         assert len(result) == 3
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.get_all_recurring_blocks", return_value=[])
+    @patch(f"{MODULE}.get_all_blocks")
+    @patch(f"{MODULE}.build_delete_block_effects", return_value=[MagicMock()])
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[MagicMock()])
+    def test_resyncs_one_off_blocks_to_new_timezone(
+        self, mock_build_block, mock_delete_block, mock_get_blocks,
+        mock_get_rbs, mock_sync, mock_set, mock_access,
+    ):
+        """Changing a provider's TZ must re-anchor their one-off blocks.
+
+        A naive all-day block (midnight–midnight wall-clock) is localized to the
+        provider TZ at sync time. If the handler does not rebuild the block on a
+        TZ change, the event keeps the old TZ's UTC instant (midnight PT shows as
+        3 AM ET). The fix: delete the old block events then rebuild under the new
+        TZ so the wall-clock time is preserved (12 AM ET).
+        """
+        block_match = AdminBlock(
+            id="blk-1",
+            provider_id=PROVIDER_ID,
+            start=datetime(2026, 6, 17, 0, 0),
+            end=datetime(2026, 6, 18, 0, 0),
+            all_day=True,
+        )
+        block_other = AdminBlock(
+            id="blk-2",
+            provider_id=PROVIDER_ID_2,
+            start=datetime(2026, 6, 17, 0, 0),
+            end=datetime(2026, 6, 18, 0, 0),
+            all_day=True,
+        )
+        mock_get_blocks.return_value = [block_match, block_other]
+
+        handler = _make_handler(json_body={"provider_id": PROVIDER_ID, "timezone": "US/Eastern"})
+        result = handler.set_provider_tz()
+
+        body, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        # Only this provider's one-off block is rebuilt (re-anchored to the new TZ)
+        assert mock_build_block.mock_calls == [call(block_match)]
+        # Its prior (old-TZ) events are deleted as part of the re-sync
+        assert call(PROVIDER_ID, block_match) in mock_delete_block.mock_calls
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_missing_provider_id_is_bad_request(self, mock_access):
@@ -2006,8 +2079,9 @@ class TestSetProviderTimezoneBulk:
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_all_recurring_blocks")
     @patch(f"{MODULE}.build_recurring_block_sync_effects", return_value=[MagicMock()])
+    @patch(f"{MODULE}.get_all_blocks", return_value=[])
     def test_success_sets_all(
-        self, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
+        self, mock_get_blocks, mock_build_rb, mock_get_rbs, mock_sync, mock_set, mock_access
     ):
         rb_match = RecurringBlock(id="rb-1", provider_id=PROVIDER_ID_2, is_active=True)
         mock_get_rbs.return_value = [rb_match]
@@ -2028,6 +2102,54 @@ class TestSetProviderTimezoneBulk:
         ]
         assert mock_sync.mock_calls == [call(PROVIDER_ID), call(PROVIDER_ID_2)]
         assert mock_build_rb.mock_calls == [call(rb_match)]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.COMMON_TIMEZONES", ["US/Eastern", "US/Pacific", "UTC"])
+    @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.sync_provider_availability", return_value=[])
+    @patch(f"{MODULE}.get_all_recurring_blocks", return_value=[])
+    @patch(f"{MODULE}.get_all_blocks")
+    @patch(f"{MODULE}.build_delete_block_effects", return_value=[MagicMock()])
+    @patch(f"{MODULE}.build_block_event_effects", return_value=[MagicMock()])
+    def test_resyncs_one_off_blocks_for_each_provider(
+        self, mock_build_block, mock_delete_block, mock_get_blocks,
+        mock_get_rbs, mock_sync, mock_set, mock_access,
+    ):
+        """Apply-to-All (bulk) must re-anchor each targeted provider's one-off blocks.
+
+        Same root cause as the single-provider handler: naive wall-clock blocks
+        must be rebuilt on a TZ change. Blocks belonging to providers not in the
+        request are left untouched.
+        """
+        block_p1 = AdminBlock(
+            id="blk-1", provider_id=PROVIDER_ID,
+            start=datetime(2026, 6, 17, 0, 0), end=datetime(2026, 6, 18, 0, 0), all_day=True,
+        )
+        block_p2 = AdminBlock(
+            id="blk-2", provider_id=PROVIDER_ID_2,
+            start=datetime(2026, 6, 17, 0, 0), end=datetime(2026, 6, 18, 0, 0), all_day=True,
+        )
+        block_other = AdminBlock(
+            id="blk-3", provider_id="provider-uuid-999",
+            start=datetime(2026, 6, 17, 0, 0), end=datetime(2026, 6, 18, 0, 0), all_day=True,
+        )
+        mock_get_blocks.return_value = [block_p1, block_p2, block_other]
+
+        handler = _make_handler(json_body={
+            "provider_ids": [PROVIDER_ID, PROVIDER_ID_2],
+            "timezone": "US/Eastern",
+        })
+        result = handler.set_provider_tz_bulk()
+
+        body, code = _parse(result[-1])
+        assert code == HTTPStatus.OK
+        # Both targeted providers' blocks are rebuilt; the unrelated one is not
+        assert mock_build_block.mock_calls == [call(block_p1), call(block_p2)]
+        # Old-TZ events are deleted (per provider) as part of the re-sync
+        assert mock_delete_block.mock_calls == [
+            call(PROVIDER_ID, block_p1),
+            call(PROVIDER_ID_2, block_p2),
+        ]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
     def test_empty_provider_ids_is_bad_request(self, mock_access):

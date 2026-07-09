@@ -15,6 +15,7 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPI
 from canvas_sdk.handlers.simple_api.api import get, post, put
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
+from canvas_sdk.v1.data.calendar import Event as EventModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
@@ -51,27 +52,42 @@ class ProvisionAPI(SimpleAPI):
         skipped = 0
         errored = 0
 
-        active_staff = Staff.objects.filter(active=True)
-        log.info("provision: checking %d active staff", active_staff.count())
+        active_staff = list(Staff.objects.filter(active=True))
+        log.info("provision: checking %d active staff", len(active_staff))
 
-        for staff in active_staff:
-            role = staff.top_role_abbreviation
-            if not role or role.upper() not in SCHEDULABLE_ROLES:
-                continue
+        schedulable = [
+            s for s in active_staff
+            if s.top_role_abbreviation
+            and s.top_role_abbreviation.upper() in SCHEDULABLE_ROLES
+        ]
+        staff_keys = [str(s.id) for s in schedulable]
 
+        # Bulk-load existing calendars and the calendars that already have an
+        # active Available event, so the per-staff loop issues no DB queries.
+        cals_by_key: dict[str, CalendarModel] = {}
+        active_cal_ids: set[str] = set()
+        if staff_keys:
+            cals_by_key = {
+                c.description: c
+                for c in CalendarModel.objects.filter(description__in=staff_keys)
+            }
+            now = datetime.now(UTC).replace(tzinfo=None)
+            active_cal_ids = {
+                str(cid)
+                for cid in EventModel.objects.filter(
+                    calendar__description__in=staff_keys,
+                    title="Available",
+                    recurrence_ends_at__gt=now,
+                ).values_list("calendar_id", flat=True)
+            }
+
+        for staff in schedulable:
             try:
                 staff_key = str(staff.id)
-                existing_cal = CalendarModel.objects.filter(
-                    description=staff_key
-                ).first()
+                existing_cal = cals_by_key.get(staff_key)
 
                 if existing_cal:
-                    now = datetime.now(UTC).replace(tzinfo=None)
-                    active_event = existing_cal.events.filter(
-                        title="Available",
-                        recurrence_ends_at__gt=now,
-                    ).first()
-                    if active_event:
+                    if str(existing_cal.id) in active_cal_ids:
                         skipped += 1
                         continue
                     calendar_id = str(existing_cal.id)

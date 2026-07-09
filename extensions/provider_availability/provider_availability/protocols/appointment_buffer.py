@@ -20,9 +20,19 @@ from canvas_sdk.v1.data.calendar import Event as EventModel
 from logger import log
 
 from provider_availability.engine.admin_calendar import get_admin_calendar_id, get_admin_calendars
+from provider_availability.engine.event_sync import DEFAULT_HORIZON_YEARS
 from provider_availability.engine.storage import get_rules_for_provider
 
 BUFFER_TITLE = "Buffer"
+
+
+def _buffer_horizon(now: datetime) -> datetime:
+    """The furthest future point we create buffers for, matching availability sync."""
+    try:
+        return now.replace(year=now.year + DEFAULT_HORIZON_YEARS)
+    except ValueError:
+        # Feb 29 in a leap year — fall back to Feb 28
+        return now.replace(year=now.year + DEFAULT_HORIZON_YEARS, day=now.day - 1)
 
 
 class OnAppointmentCreated(BaseProtocol):
@@ -85,20 +95,27 @@ def _reconcile_buffers(appointment_id: str, action: str) -> list[Effect]:
 
     effects: list[Effect] = list(cal_effects)
 
-    # 1. Delete ALL existing Buffer events on the admin calendar
+    # 1. Delete ALL existing Buffer events on the admin calendars (one bulk query)
     delete_count = 0
-    for cal in get_admin_calendars(provider_id):
+    cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+    if cal_ids:
         for evt in EventModel.objects.filter(
-            calendar__id=cal.id, title=BUFFER_TITLE, is_cancelled=False
+            calendar__id__in=cal_ids, title=BUFFER_TITLE, is_cancelled=False
         ):
             effects.append(EventEffect(event_id=str(evt.id)).delete())
             delete_count += 1
 
-    # 2. Query all future non-canceled appointments for this provider
+    # 2. Query future, non-canceled patient appointments for this provider.
+    #    patient__isnull=False excludes schedule events (lunch, blocks, OOO) — those
+    #    are calendar blocks, not visits, and must not spawn buffers. The start_time
+    #    ceiling bounds runaway no-end recurring events that would otherwise generate
+    #    buffers decades into the future.
     now = datetime.now(UTC)
     appointments = Appointment.objects.filter(
         provider__id=provider_id,
+        patient__isnull=False,
         start_time__gte=now,
+        start_time__lte=_buffer_horizon(now),
     ).exclude(status="cancelled")
 
     # 3. Create buffer events for each active appointment

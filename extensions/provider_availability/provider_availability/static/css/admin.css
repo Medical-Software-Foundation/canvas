@@ -510,6 +510,14 @@ body {
 .confirm-dialog p { font-size: 14px; color: var(--text-dim); margin-bottom: 20px; }
 .confirm-dialog .confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
+/* Confirm modal (canvas-modal): more breathing room so content isn't tight against
+   the edges. These override the components' default :host padding (header 1.25/1.5rem,
+   content 1.5rem, footer 1rem) — a higher-specificity outer rule wins over :host. */
+#confirm-modal canvas-modal-header { padding: 1.5rem 2rem 0.75rem; }
+#confirm-modal canvas-modal-content { padding: 0.5rem 2rem; }   /* top == bottom */
+#confirm-modal canvas-modal-footer { padding: 0.75rem 2rem; }   /* top == bottom */
+#confirm-message { margin: 0; line-height: 1.6; }
+
 /* Alerts */
 .alert { padding: 12px 18px; border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 14px; font-weight: 500; position: relative; display: flex; align-items: center; justify-content: space-between; }
 .alert-success { background: var(--avail-bg); color: var(--avail); border: 1px solid var(--avail-border); }

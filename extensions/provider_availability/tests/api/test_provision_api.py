@@ -58,6 +58,18 @@ def _setup_staff_queryset(mock_staff_cls: MagicMock, staff_list: list) -> None:
     mock_staff_cls.objects.filter.return_value = qs
 
 
+def _setup_calendars(mock_cal_model: MagicMock, cals: list) -> None:
+    """Configure the bulk CalendarModel.objects.filter(description__in=...) lookup."""
+    mock_cal_model.objects.filter.return_value = cals
+
+
+def _setup_active_event_cal_ids(mock_event_model: MagicMock, cal_ids: list) -> None:
+    """Configure the bulk EventModel active-event lookup to return given calendar ids."""
+    qs = MagicMock()
+    qs.values_list.return_value = cal_ids
+    mock_event_model.objects.filter.return_value = qs
+
+
 # ── Authentication ───────────────────────────────────────────────────────
 
 
@@ -107,13 +119,17 @@ class TestAuthenticate:
 
 
 class TestRunProvisioning:
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_creates_calendars_for_schedulable_roles(self, mock_staff_cls, mock_cal_model):
+    def test_creates_calendars_for_schedulable_roles(
+        self, mock_staff_cls, mock_cal_model, mock_event_model
+    ):
         """Providers with MD/DO/NP/PA roles get calendar + event created."""
         provider = _make_staff("MD", "staff-uuid-md", "Jane", "Doe")
         _setup_staff_queryset(mock_staff_cls, [provider])
-        mock_cal_model.objects.filter.return_value.first.return_value = None
+        _setup_calendars(mock_cal_model, [])
+        _setup_active_event_cal_ids(mock_event_model, [])
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -127,14 +143,10 @@ class TestRunProvisioning:
         # CalendarEffect + EventEffect + JSONResponse
         assert len(result) == 3
 
-        assert mock_staff_cls.mock_calls == [
-            call.objects.filter(active=True),
-            call.objects.filter().count(),
-        ]
-        assert mock_cal_model.mock_calls == [
-            call.objects.filter(description=str(provider.id)),
-            call.objects.filter().first(),
-        ]
+        # Calendars are bulk-loaded once by staff key, not per-staff
+        assert mock_cal_model.objects.filter.call_args == call(
+            description__in=[str(provider.id)]
+        )
 
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
@@ -174,18 +186,21 @@ class TestRunProvisioning:
         assert data["skipped"] == 0
         assert mock_cal_model.mock_calls == []
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_skips_existing_calendar_with_active_event(self, mock_staff_cls, mock_cal_model):
+    def test_skips_existing_calendar_with_active_event(
+        self, mock_staff_cls, mock_cal_model, mock_event_model
+    ):
         """Provider with existing calendar AND active event is skipped."""
         provider = _make_staff("NP", "staff-uuid-np", "Bob", "Smith")
         _setup_staff_queryset(mock_staff_cls, [provider])
 
         existing_cal = MagicMock()
         existing_cal.id = "cal-uuid-1"
-        active_event = MagicMock()
-        existing_cal.events.filter.return_value.first.return_value = active_event
-        mock_cal_model.objects.filter.return_value.first.return_value = existing_cal
+        existing_cal.description = str(provider.id)
+        _setup_calendars(mock_cal_model, [existing_cal])
+        _setup_active_event_cal_ids(mock_event_model, ["cal-uuid-1"])
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -198,17 +213,21 @@ class TestRunProvisioning:
         # Only JSONResponse, no effects
         assert len(result) == 1
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_reuses_existing_calendar_without_active_event(self, mock_staff_cls, mock_cal_model):
+    def test_reuses_existing_calendar_without_active_event(
+        self, mock_staff_cls, mock_cal_model, mock_event_model
+    ):
         """Provider with existing calendar but no active event gets a new event only."""
         provider = _make_staff("DO", "staff-uuid-do", "Alice", "Jones")
         _setup_staff_queryset(mock_staff_cls, [provider])
 
         existing_cal = MagicMock()
         existing_cal.id = "cal-uuid-existing"
-        existing_cal.events.filter.return_value.first.return_value = None
-        mock_cal_model.objects.filter.return_value.first.return_value = existing_cal
+        existing_cal.description = str(provider.id)
+        _setup_calendars(mock_cal_model, [existing_cal])
+        _setup_active_event_cal_ids(mock_event_model, [])  # no active events
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -220,13 +239,20 @@ class TestRunProvisioning:
         # Only EventEffect + JSONResponse (no CalendarEffect)
         assert len(result) == 2
 
+    @patch(f"{PROV_MODULE}.EventEffect")
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_handles_exception_per_staff(self, mock_staff_cls, mock_cal_model):
-        """Exception during provisioning of one staff increments errored count."""
+    def test_handles_exception_per_staff(
+        self, mock_staff_cls, mock_cal_model, mock_event_model, mock_event_effect
+    ):
+        """An error while provisioning one staff increments errored, not crash."""
         provider = _make_staff("PA", "staff-uuid-pa", "Error", "Provider")
         _setup_staff_queryset(mock_staff_cls, [provider])
-        mock_cal_model.objects.filter.side_effect = Exception("DB error")
+        _setup_calendars(mock_cal_model, [])
+        _setup_active_event_cal_ids(mock_event_model, [])
+        # The per-staff event build fails — isolated by the loop's try/except.
+        mock_event_effect.side_effect = Exception("event build error")
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()

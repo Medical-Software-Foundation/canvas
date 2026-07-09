@@ -396,34 +396,26 @@ class TestBuildDeleteEffects:
         mock_evt2.ends_at = future
         mock_evt2.recurrence_ends_at = None
 
-        # Use separate querysets so each calendar's iterator works independently
-        mock_qs1 = MagicMock()
-        mock_qs1.__iter__ = MagicMock(return_value=iter([mock_evt1]))
-
-        mock_qs2 = MagicMock()
-        mock_qs2.__iter__ = MagicMock(return_value=iter([mock_evt2]))
+        mock_qs = MagicMock()
+        mock_qs.__iter__ = MagicMock(return_value=iter([mock_evt1, mock_evt2]))
 
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
              patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
             mock_staff_objects.get.return_value = mock_staff
             mock_cal_objects.filter.return_value = [mock_cal1, mock_cal2]
-            mock_event_objects.filter.side_effect = [mock_qs1, mock_qs2]
+            mock_event_objects.filter.return_value = mock_qs
 
             result = build_delete_effects(PROVIDER_ID)
 
-            # Called twice (once per calendar)
-            assert len(mock_event_objects.filter.call_args_list) == 2
-            assert mock_event_objects.filter.call_args_list[0] == call(
-                calendar__id="cal-1",
-                title=AVAILABILITY_TITLE,
-                is_cancelled=False,
-            )
-            assert mock_event_objects.filter.call_args_list[1] == call(
-                calendar__id="cal-2",
-                title=AVAILABILITY_TITLE,
-                is_cancelled=False,
-            )
+            # One bulk query across all the provider's Clinic calendars
+            assert mock_event_objects.filter.call_args_list == [
+                call(
+                    calendar__id__in=["cal-1", "cal-2"],
+                    title=AVAILABILITY_TITLE,
+                    is_cancelled=False,
+                )
+            ]
             # 2 events total (one from each calendar)
             assert len(result) == 2
 
@@ -527,6 +519,8 @@ class TestGetCalendarId:
             mock_loc = MagicMock()
             mock_loc.full_name = "West Office"
             mock_loc_objects.get.return_value = mock_loc
+            # anchor-id lookup misses -> falls back to title match
+            mock_cal_objects.filter.return_value.first.return_value = None
             mock_cal_objects.for_calendar_name.return_value.first.return_value = mock_cal
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, LOCATION_ID)
@@ -539,6 +533,28 @@ class TestGetCalendarId:
                 location="West Office",
             )
 
+    def test_existing_calendar_found_by_anchor_id(self):
+        """A calendar matching the deterministic anchor id is reused without a title lookup."""
+        mock_staff = MagicMock()
+        mock_staff.full_name = "Jane Doe"
+
+        mock_cal = MagicMock()
+        mock_cal.id = "anchor-cal-uuid"
+
+        with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
+             patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
+             patch(f"{MODULE}.PracticeLocation.objects") as mock_loc_objects:
+            mock_staff_objects.get.return_value = mock_staff
+            mock_loc_objects.get.return_value = MagicMock(full_name="West Office")
+            mock_cal_objects.filter.return_value.first.return_value = mock_cal
+
+            cal_id, effects = _get_calendar_id(PROVIDER_ID, LOCATION_ID)
+
+            assert cal_id == "anchor-cal-uuid"
+            assert effects == []
+            # title lookup is not consulted when the anchor id matches
+            assert mock_cal_objects.for_calendar_name.call_count == 0
+
     def test_creates_new_calendar(self):
         mock_staff = MagicMock()
         mock_staff.full_name = "Jane Doe"
@@ -546,11 +562,12 @@ class TestGetCalendarId:
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
              patch(f"{MODULE}.PracticeLocation.objects") as mock_loc_objects, \
-             patch(f"{MODULE}.uuid.uuid4", return_value="new-cal-uuid"):
+             patch(f"{MODULE}.deterministic_calendar_id", return_value="new-cal-uuid"):
             mock_staff_objects.get.return_value = mock_staff
             mock_loc = MagicMock()
             mock_loc.full_name = "West Office"
             mock_loc_objects.get.return_value = mock_loc
+            mock_cal_objects.filter.return_value.first.return_value = None
             mock_cal_objects.for_calendar_name.return_value.first.return_value = None
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, LOCATION_ID)
@@ -563,7 +580,7 @@ class TestGetCalendarId:
 
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.PracticeLocation.objects") as mock_loc_objects, \
-             patch(f"{MODULE}.uuid.uuid4", return_value="new-cal-uuid"):
+             patch(f"{MODULE}.deterministic_calendar_id", return_value="new-cal-uuid"):
             mock_staff_objects.get.side_effect = Staff.DoesNotExist
             mock_loc = MagicMock()
             mock_loc.full_name = "West Office"
@@ -585,6 +602,7 @@ class TestGetCalendarId:
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects:
             mock_staff_objects.get.return_value = mock_staff
+            mock_cal_objects.filter.return_value.first.return_value = None
             mock_cal_objects.for_calendar_name.return_value.first.return_value = mock_cal
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, None)
@@ -611,6 +629,7 @@ class TestGetCalendarId:
              patch(f"{MODULE}.PracticeLocation.objects") as mock_loc_objects:
             mock_staff_objects.get.return_value = mock_staff
             mock_loc_objects.get.side_effect = PracticeLocation.DoesNotExist
+            mock_cal_objects.filter.return_value.first.return_value = None
             mock_cal_objects.for_calendar_name.return_value.first.return_value = mock_cal
 
             cal_id, effects = _get_calendar_id(PROVIDER_ID, "bad-loc-id")
@@ -632,12 +651,13 @@ class TestGetCalendarId:
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
              patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
              patch(f"{MODULE}.PracticeLocation.objects") as mock_loc_objects, \
-             patch(f"{MODULE}.uuid.uuid4", return_value="new-id"), \
+             patch(f"{MODULE}.deterministic_calendar_id", return_value="new-id"), \
              patch(f"{MODULE}.CalendarEffect") as mock_cal_effect:
             mock_staff_objects.get.return_value = mock_staff
             mock_loc = MagicMock()
             mock_loc.full_name = "West"
             mock_loc_objects.get.return_value = mock_loc
+            mock_cal_objects.filter.return_value.first.return_value = None
             mock_cal_objects.for_calendar_name.return_value.first.return_value = None
             mock_cal_effect.return_value.create.return_value = MagicMock()
 
@@ -661,7 +681,7 @@ class TestGetCalendarId:
         mock_staff.full_name = ""  # empty name -> skip for_calendar_name
 
         with patch(f"{MODULE}.Staff.objects") as mock_staff_objects, \
-             patch(f"{MODULE}.uuid.uuid4", return_value="new-id"), \
+             patch(f"{MODULE}.deterministic_calendar_id", return_value="new-id"), \
              patch(f"{MODULE}.CalendarEffect") as mock_cal_effect:
             mock_staff_objects.get.return_value = mock_staff
             mock_cal_effect.return_value.create.return_value = MagicMock()
@@ -1283,7 +1303,7 @@ class TestBuildDeleteBlockEffects:
 
         assert mock_event_objects.filter.call_count >= 1
         first_call = mock_event_objects.filter.call_args_list[0]
-        assert first_call.kwargs["calendar__id"] == "admin-cal-1"
+        assert first_call.kwargs["calendar__id__in"] == ["admin-cal-1"]
         assert first_call.kwargs["is_cancelled"] is False
         assert len(result) == 1
 
@@ -1302,7 +1322,7 @@ class TestBuildDeleteBlockEffects:
             result = build_delete_block_effects(PROVIDER_ID, block=None)
 
         assert mock_event_objects.filter.call_args == call(
-            calendar__id="admin-cal-1",
+            calendar__id__in=["admin-cal-1"],
             title=BLOCK_TITLE,
             is_cancelled=False,
         )
@@ -1348,12 +1368,17 @@ class TestBuildDeleteBlockEffects:
         mock_evt2.id = "evt-2"
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.side_effect = [[mock_evt1], [mock_evt2]]
+            mock_event_objects.filter.return_value = [mock_evt1, mock_evt2]
 
             result = build_delete_block_effects(PROVIDER_ID, sample_block)
 
-        assert len(result) >= 2
-        assert mock_event_objects.filter.call_count >= 2
+        # One bulk query spanning both admin calendars
+        assert len(result) == 2
+        assert mock_event_objects.filter.call_count == 1
+        assert mock_event_objects.filter.call_args.kwargs["calendar__id__in"] == [
+            "admin-cal-1",
+            "admin-cal-2",
+        ]
 
 
 # NOTE: delete_all_plugin_events() was removed (it destroyed non-plugin events
@@ -1406,11 +1431,17 @@ class TestDeleteAllLeadTimeEvents:
         with patch(f"{MODULE}.CalendarModel.objects") as mock_cal_objects, \
              patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
             mock_cal_objects.filter.return_value = [mock_cal1, mock_cal2]
-            mock_event_objects.filter.side_effect = [[mock_evt1], [mock_evt2]]
+            mock_event_objects.filter.return_value = [mock_evt1, mock_evt2]
 
             result = delete_all_lead_time_events()
 
+        # One bulk query spanning both admin calendars
         assert len(result) == 2
+        assert mock_event_objects.filter.call_count == 1
+        assert mock_event_objects.filter.call_args.kwargs["calendar__id__in"] == [
+            "admin-cal-1",
+            "admin-cal-2",
+        ]
 
     def test_calendars_with_no_lead_events(self):
         mock_cal = MagicMock()
@@ -1775,7 +1806,7 @@ class TestBuildDeleteRecurringBlockEffects:
 
         # Should match by block's reason ("Lunch") AND legacy RECURRING_BLOCK_TITLE
         assert mock_event_objects.filter.call_args == call(
-            calendar__id="admin-cal-1",
+            calendar__id__in=["admin-cal-1"],
             title__in=["Lunch", RECURRING_BLOCK_TITLE],
             is_cancelled=False,
         )
@@ -1796,7 +1827,7 @@ class TestBuildDeleteRecurringBlockEffects:
             result = build_delete_recurring_block_effects(PROVIDER_ID, block=None)
 
         assert mock_event_objects.filter.call_args == call(
-            calendar__id="admin-cal-1",
+            calendar__id__in=["admin-cal-1"],
             title=RECURRING_BLOCK_TITLE,
             is_cancelled=False,
         )
@@ -1866,7 +1897,7 @@ class TestBuildDeleteRecurringBlockEffects:
 
         # "Blocked" != RECURRING_BLOCK_TITLE so both should be in the list
         assert mock_event_objects.filter.call_args == call(
-            calendar__id="admin-cal-1",
+            calendar__id__in=["admin-cal-1"],
             title__in=["Blocked", RECURRING_BLOCK_TITLE],
             is_cancelled=False,
         )
@@ -1900,14 +1931,19 @@ class TestBuildDeleteRecurringBlockEffects:
         mock_evt2.id = "evt-2"
 
         with patch(f"{MODULE}.EventModel.objects") as mock_event_objects:
-            mock_event_objects.filter.side_effect = [[mock_evt1], [mock_evt2]]
+            mock_event_objects.filter.return_value = [mock_evt1, mock_evt2]
 
             result = build_delete_recurring_block_effects(
                 PROVIDER_ID, sample_recurring_block
             )
 
+        # One bulk query spanning both admin calendars
         assert len(result) == 2
-        assert len(mock_event_objects.filter.call_args_list) == 2
+        assert mock_event_objects.filter.call_count == 1
+        assert mock_event_objects.filter.call_args.kwargs["calendar__id__in"] == [
+            "cal-1",
+            "cal-2",
+        ]
 
 
 # ── build_lead_time_block_effects ─────────────────────────────────────

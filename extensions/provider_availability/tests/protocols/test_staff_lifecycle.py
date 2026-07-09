@@ -28,6 +28,7 @@ class TestOnStaffActivated:
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
+            mock_cal.filter.return_value.first.return_value = None
             mock_cal.for_calendar_name.return_value.first.return_value = None
 
             result = handler.compute()
@@ -182,8 +183,9 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
              patch(f"{SL_MODULE}.mark_installed"), \
-             patch(f"{SL_MODULE}.uuid4", return_value="new-cal-id"):
+             patch(f"{SL_MODULE}.deterministic_calendar_id", return_value="new-cal-id"):
             mock_staff.filter.return_value.distinct.return_value = self._make_staff_qs([staff1])
+            mock_cal.filter.return_value.first.return_value = None
             mock_cal.for_calendar_name.return_value.first.return_value = None
 
             result = handler.compute()

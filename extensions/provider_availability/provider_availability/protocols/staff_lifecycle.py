@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.calendar import Calendar as CalendarEffect
 from canvas_sdk.effects.calendar import CalendarType
@@ -13,6 +11,7 @@ from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
+from provider_availability.engine.admin_calendar import deterministic_calendar_id
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
     build_delete_block_effects,
@@ -59,11 +58,15 @@ class OnStaffActivated(BaseProtocol):
             return []
 
         provider_name = staff.full_name
-        existing = CalendarModel.objects.for_calendar_name(
-            provider_name=provider_name,
-            calendar_type=CalendarType.Clinic,
-            location=None,
-        ).first()
+        calendar_id = deterministic_calendar_id(staff_key, CalendarType.Clinic, None)
+        existing = (
+            CalendarModel.objects.filter(id=calendar_id).first()
+            or CalendarModel.objects.for_calendar_name(
+                provider_name=provider_name,
+                calendar_type=CalendarType.Clinic,
+                location=None,
+            ).first()
+        )
         if existing:
             log.info(
                 "OnStaffActivated: Clinic calendar already exists for %s %s",
@@ -72,7 +75,6 @@ class OnStaffActivated(BaseProtocol):
             )
             return []
 
-        calendar_id = str(uuid4())
         cal_effect = CalendarEffect(
             id=calendar_id,
             provider=staff_key,
@@ -149,17 +151,20 @@ class OnPluginInstalled(BaseProtocol):
             try:
                 staff_key = str(staff.id)
                 provider_name = staff.full_name
-                existing = CalendarModel.objects.for_calendar_name(
-                    provider_name=provider_name,
-                    calendar_type=CalendarType.Clinic,
-                    location=None,
-                ).first()
+                calendar_id = deterministic_calendar_id(staff_key, CalendarType.Clinic, None)
+                existing = (
+                    CalendarModel.objects.filter(id=calendar_id).first()
+                    or CalendarModel.objects.for_calendar_name(
+                        provider_name=provider_name,
+                        calendar_type=CalendarType.Clinic,
+                        location=None,
+                    ).first()
+                )
 
                 if existing:
                     cal_skipped += 1
                     continue
 
-                calendar_id = str(uuid4())
                 cal_effect = CalendarEffect(
                     id=calendar_id,
                     provider=staff_key,
