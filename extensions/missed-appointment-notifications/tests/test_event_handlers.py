@@ -248,12 +248,16 @@ def test_due_date_uses_configured_value() -> None:
 
 
 def test_due_date_falls_back_on_invalid_value() -> None:
-    """A non-numeric, zero, or negative value falls back to the default."""
+    """Non-numeric, zero, negative, or out-of-range values fall back to the default.
+
+    ``"99999999999"`` is a valid int but would overflow ``datetime`` when shifted,
+    so it must be rejected rather than raised on.
+    """
     patient = PatientFactory.create()
     provider = StaffFactory.create()
     appointment = _create_appointment(patient, provider, start_time=_future())
 
-    for bad in ("abc", "7.5", "0", "-3", "  "):
+    for bad in ("abc", "7.5", "0", "-3", "  ", "367", "99999999999"):
         due = _due_of(_make_handler(appointment.id, {RESCHEDULE_DUE_DAYS_VARIABLE: bad}))
         _assert_due_in_days(due, DEFAULT_RESCHEDULE_DUE_DAYS)
 

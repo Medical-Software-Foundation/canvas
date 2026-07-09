@@ -70,7 +70,7 @@ Configured via plugin **variables** (declared in `CANVAS_MANIFEST.json`):
 | Variable | Required | Description |
 |---|---|---|
 | `SCHEDULING_TEAM_NAME` | optional | Exact name of the Team that reschedule tasks should be assigned to (matched case-insensitively, e.g. `Scheduling`). If unset/blank or no team matches, tasks are assigned to the appointment's provider. |
-| `RESCHEDULE_DUE_DAYS` | optional | Whole number of days after the cancellation/no-show that the reschedule task is due. Defaults to `1` when unset. A blank, non-numeric, zero, or negative value is ignored (with a logged warning) and falls back to the default. |
+| `RESCHEDULE_DUE_DAYS` | optional | Whole number of days (1–366) after the cancellation/no-show that the reschedule task is due. Defaults to `1` when unset. A blank, non-numeric, or out-of-range value is ignored (with a logged warning) and falls back to the default. |
 
 No code changes are needed to customise routing or timing — leave
 `SCHEDULING_TEAM_NAME` blank to always assign to the provider, and set
