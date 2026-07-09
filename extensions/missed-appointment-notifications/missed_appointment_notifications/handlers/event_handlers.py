@@ -18,8 +18,14 @@ from logger import log
 #: to the appointment's provider. (Accessed at runtime via ``self.secrets``.)
 SCHEDULING_TEAM_NAME_VARIABLE = "SCHEDULING_TEAM_NAME"
 
-#: Number of days from cancellation until the reschedule task is due.
-RESCHEDULE_DUE_DAYS = 1
+#: Plugin variable holding the number of days from cancellation until the
+#: reschedule task is due. Optional; when unset, blank, or invalid the handler
+#: falls back to ``DEFAULT_RESCHEDULE_DUE_DAYS``. (Accessed at runtime via
+#: ``self.secrets``.) Cylinder sets this to ``7``.
+RESCHEDULE_DUE_DAYS_VARIABLE = "RESCHEDULE_DUE_DAYS"
+
+#: Days until the reschedule task is due when the variable above is not set.
+DEFAULT_RESCHEDULE_DUE_DAYS = 1
 
 #: Label added to the reschedule task — but only when a label of this name
 #: already exists in the instance. We never create a new label.
@@ -87,7 +93,7 @@ class MissedAppointmentNotificationHandler(BaseHandler):
             "id": task_id,
             "patient_id": str(appointment.patient.id) if appointment.patient else None,
             "title": self._task_title(appointment, tz, is_no_show),
-            "due": arrow.utcnow().shift(days=RESCHEDULE_DUE_DAYS).datetime,
+            "due": arrow.utcnow().shift(days=self._due_days()).datetime,
             "status": TaskStatus.OPEN,
             "labels": self._labels(appointment),
         }
@@ -135,6 +141,35 @@ class MissedAppointmentNotificationHandler(BaseHandler):
                 team_name,
             )
         return team
+
+    def _due_days(self) -> int:
+        """Number of days until the reschedule task is due.
+
+        Reads the ``RESCHEDULE_DUE_DAYS`` plugin variable and returns it as a
+        positive integer. When the variable is unset, blank, or not a usable
+        value, logs a warning and falls back to ``DEFAULT_RESCHEDULE_DUE_DAYS``
+        so a misconfiguration never breaks task creation.
+        """
+        raw = (self.secrets.get(RESCHEDULE_DUE_DAYS_VARIABLE) or "").strip()
+        if not raw:
+            return DEFAULT_RESCHEDULE_DUE_DAYS
+
+        try:
+            days = int(raw)
+        except ValueError:
+            days = 0  # not a whole number; falls through to the guard below
+
+        # A due date in the past (negative) or same-day (0) is almost certainly
+        # a misconfiguration — fall back rather than create a nonsensical task.
+        if days < 1:
+            log.warning(
+                "MissedAppointmentNotifications: invalid RESCHEDULE_DUE_DAYS %r; using %d",
+                raw,
+                DEFAULT_RESCHEDULE_DUE_DAYS,
+            )
+            return DEFAULT_RESCHEDULE_DUE_DAYS
+
+        return days
 
     @staticmethod
     def _labels(appointment: Appointment) -> list[str]:

@@ -28,6 +28,8 @@ from canvas_sdk.v1.data.staff import Staff
 from canvas_sdk.v1.data.task import TaskLabel
 
 from missed_appointment_notifications.handlers.event_handlers import (
+    DEFAULT_RESCHEDULE_DUE_DAYS,
+    RESCHEDULE_DUE_DAYS_VARIABLE,
     RESCHEDULE_LABEL,
     MissedAppointmentNotificationHandler,
 )
@@ -214,14 +216,46 @@ def test_creates_unassigned_task_when_no_team_and_no_provider() -> None:
     assert data["patient"]["id"] == str(patient.id)
 
 
-def test_due_date_is_next_day() -> None:
-    """The reschedule task is due roughly one day after cancellation."""
+def _due_of(handler: MissedAppointmentNotificationHandler) -> arrow.Arrow:
+    """The due datetime of the reschedule task produced by a handler."""
+    return arrow.get(_task_data(handler.compute()[0])["due"])
+
+
+def _assert_due_in_days(due: arrow.Arrow, days: int) -> None:
+    """Assert the due date is roughly ``days`` out (within a ±1h window)."""
+    now = arrow.utcnow()
+    assert now.shift(days=days, hours=-1) < due < now.shift(days=days, hours=1)
+
+
+def test_due_date_defaults_to_one_day_when_unset() -> None:
+    """With no RESCHEDULE_DUE_DAYS configured, the task is due ~1 day out."""
     patient = PatientFactory.create()
     provider = StaffFactory.create()
     appointment = _create_appointment(patient, provider, start_time=_future())
 
-    due = arrow.get(_task_data(_make_handler(appointment.id, {}).compute()[0])["due"])
-    assert arrow.utcnow().shift(hours=23) < due < arrow.utcnow().shift(hours=25)
+    due = _due_of(_make_handler(appointment.id, {}))
+    _assert_due_in_days(due, DEFAULT_RESCHEDULE_DUE_DAYS)
+
+
+def test_due_date_uses_configured_value() -> None:
+    """RESCHEDULE_DUE_DAYS=7 (Cylinder's setting) makes the task due ~7 days out."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    appointment = _create_appointment(patient, provider, start_time=_future())
+
+    due = _due_of(_make_handler(appointment.id, {RESCHEDULE_DUE_DAYS_VARIABLE: "7"}))
+    _assert_due_in_days(due, 7)
+
+
+def test_due_date_falls_back_on_invalid_value() -> None:
+    """A non-numeric, zero, or negative value falls back to the default."""
+    patient = PatientFactory.create()
+    provider = StaffFactory.create()
+    appointment = _create_appointment(patient, provider, start_time=_future())
+
+    for bad in ("abc", "7.5", "0", "-3", "  "):
+        due = _due_of(_make_handler(appointment.id, {RESCHEDULE_DUE_DAYS_VARIABLE: bad}))
+        _assert_due_in_days(due, DEFAULT_RESCHEDULE_DUE_DAYS)
 
 
 # --------------------------------------------------------------------------- #
