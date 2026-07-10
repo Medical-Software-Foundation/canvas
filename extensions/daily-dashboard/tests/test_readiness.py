@@ -15,8 +15,9 @@ import pytest
 
 from canvas_sdk.effects import EffectType
 from canvas_sdk.v1.data.appointment import Appointment, AppointmentProgressStatus
+from canvas_sdk.v1.data.common import ContactPointSystem
 from canvas_sdk.v1.data.message import Message
-from canvas_sdk.v1.data.patient import PatientMetadata
+from canvas_sdk.v1.data.patient import PatientContactPoint, PatientMetadata
 from canvas_sdk.v1.data.task import TaskStatus
 from canvas_sdk.v1.data.user import CanvasUser
 from canvas_sdk.test_utils.factories import (
@@ -831,3 +832,68 @@ def test_board_filters_by_location() -> None:
     )
     assert len(board["rows"]) == 1
     assert board["rows"][0]["location"] == (loc_a.full_name or "—")
+
+
+# ── helper edge cases ────────────────────────────────────────────────────
+
+def test_short_dt_returns_empty_for_none() -> None:
+    assert readiness._short_dt(None, dt_timezone.utc) == ""
+
+
+def test_outreach_detail_skips_non_dict_and_bad_dates() -> None:
+    log = [
+        "not a dict",  # non-dict entry -> skipped
+        {"channel": "Fax", "recipient_type": "PCP", "date": "not-a-date"},  # bad date -> when=""
+        {"channel": "Call", "recipient_type": "Patient", "date": None},  # no date
+    ]
+    detail = readiness._outreach_detail(log, dt_timezone.utc)
+    # The string entry is dropped; the two dict entries survive (newest first).
+    assert len(detail) == 2
+    # Unparseable date leaves the timestamp blank rather than raising.
+    assert all(entry["when"] == "" for entry in detail)
+
+
+def test_sortkey_handles_timestamp_error() -> None:
+    class _BadDate(datetime):
+        def timestamp(self) -> float:  # type: ignore[override]
+            raise OSError("timestamp out of range")
+
+    bad = _BadDate(2020, 1, 1, tzinfo=dt_timezone.utc)
+    # isinstance(bad, datetime) is True, so _sortkey takes the datetime branch,
+    # hits the failing timestamp(), and falls back to the oldest-sort sentinel.
+    assert readiness._sortkey(bad) == float("-inf")
+
+
+@pytest.mark.django_db
+def test_record_outreach_resets_non_list_stored_value() -> None:
+    patient = PatientFactory()
+    # Valid JSON, but an object rather than a list -> discarded, fresh log started.
+    PatientMetadata.objects.create(
+        patient=patient, key=readiness.OUTREACH_KEY, value='{"stray": "object"}'
+    )
+    effect = readiness.record_outreach(
+        str(patient.id), channel="Email", recipient_type="Patient",
+        recipient="", outcome="Sent", note="", user="Nurse",
+    )
+    logged = json.loads(json.loads(effect.payload)["data"]["value"])
+    assert isinstance(logged, list)
+    assert len(logged) == 1
+    assert logged[0]["channel"] == "Email"
+
+
+@pytest.mark.django_db
+def test_phones_by_patient_returns_lowest_rank_number() -> None:
+    patient = PatientFactory()
+    # Two phones; the lower rank is the primary and should win.
+    common = dict(
+        use="", use_notes="", state="", has_consent=False,
+        verification_token="", opted_out=False,
+    )
+    PatientContactPoint.objects.create(
+        patient=patient, system=ContactPointSystem.PHONE, rank=2, value="555-2222", **common
+    )
+    PatientContactPoint.objects.create(
+        patient=patient, system=ContactPointSystem.PHONE, rank=1, value="555-1111", **common
+    )
+    phones = readiness._phones_by_patient({patient.pk})
+    assert phones[patient.pk] == "555-1111"
