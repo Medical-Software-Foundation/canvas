@@ -66,7 +66,7 @@ default — but `CLINIC_TIMEZONE` is recommended.
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `CLINIC_TIMEZONE` | Fallback timezone for the day window + time display when the browser doesn't supply one. Times otherwise follow the **signed-in user's own** timezone. | `UTC` |
-| `CUSTOMER_IDENTIFIER` | Your Canvas instance subdomain, used to build chart deep-links. Set this to your instance for the "open chart" links to resolve. | `example` (placeholder) |
+| `CUSTOMER_IDENTIFIER` | Your Canvas instance subdomain, used to build chart deep-links. When unset, chart actions (open chart, appointment prep, open messages) are hidden and a hint is shown; set it to your instance to enable them. | _unset_ (chart links disabled) |
 | `MESSAGING_APP_IDENTIFIER` | App identifier for the "Open messages" deep-link. | conversational-view app |
 | `ASSISTANT_PANEL_APP` | App identifier opened by the "Appointment Prep" action. | assistant ChatApp |
 | `ASSISTANT_PREP_PROMPT` | The prompt auto-sent to the assistant on Appointment Prep. | a visit-prep summary prompt |

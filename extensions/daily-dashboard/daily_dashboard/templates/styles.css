@@ -65,6 +65,17 @@ body {
   color: var(--muted);
 }
 
+.drb-hint {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.drb-hint code {
+  font-style: normal;
+  font-size: 11px;
+}
+
 .drb-controls {
   display: flex;
   align-items: center;

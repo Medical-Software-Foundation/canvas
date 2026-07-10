@@ -4,8 +4,8 @@ HTML, CSS, and JS are each served from their own route (per project
 convention) and authenticated against the logged-in staff session. Templates
 live under ``templates/`` and are loaded with the SDK's ``render_to_string``.
 
-Step 1 serves only the static shell; the data endpoint (`/app/data`) arrives
-in a later step.
+``/app`` serves the static shell (HTML/CSS/JS); ``/app/data`` returns the
+board JSON; the remaining routes handle the in-dashboard write actions.
 """
 
 from __future__ import annotations
@@ -39,7 +39,8 @@ ASSET_BASE = "/plugin-io/api/daily_dashboard/app"
 TIMEZONE_SECRET = "CLINIC_TIMEZONE"
 
 # Instance subdomain for patient-chart deep-links. Set this to your Canvas
-# instance subdomain; falls back to a placeholder until configured.
+# instance subdomain; when unset, chart deep-links are disabled (the UI hides
+# the chart actions rather than link to a host that won't resolve).
 CUSTOMER_SECRET = "CUSTOMER_IDENTIFIER"
 
 # Patient-scoped messaging Application to deep-link "Open messages" to. Default
@@ -143,7 +144,7 @@ class DashboardDataRoute(StaffSessionAuthMixin, SimpleAPIRoute):
             day=day,
             provider_id=provider_id,
             location_id=location_id,
-            customer_identifier=self.secrets.get(CUSTOMER_SECRET, "example"),
+            customer_identifier=self.secrets.get(CUSTOMER_SECRET) or "",
             messaging_app_id=self.secrets.get(MESSAGING_APP_SECRET) or DEFAULT_MESSAGING_APP,
         )
         # Card-header deep-links — only used if explicitly configured. Canvas's

@@ -1,6 +1,6 @@
-"""Step 1 tests: the provider-menu app launches the page, the asset routes are
+"""Shell tests: the provider-menu app launches the page, the asset routes are
 staff-authenticated at the expected paths, and the template shell carries the
-structural hooks later steps depend on.
+structural hooks the client script depends on.
 """
 
 from pathlib import Path
@@ -41,7 +41,7 @@ def test_routes_are_staff_authenticated_at_expected_paths() -> None:
 
 
 def test_index_template_has_structural_hooks() -> None:
-    """The shell references its assets and carries the DOM ids later steps target."""
+    """The shell references its assets and carries the DOM ids the client targets."""
     html = (TEMPLATES / "index.html").read_text()
 
     # Assets are referenced via the plugin-io base so relative resolution is correct.
@@ -54,7 +54,7 @@ def test_index_template_has_structural_hooks() -> None:
     # "Tomorrow" is also a "mine" view, so it defaults to the signed-in provider.
     assert 'data-scope="mine" data-day="tomorrow"' in html
 
-    # Panels, table body, and filter controls that later steps populate.
+    # Panels, table body, and filter controls that the client script populates.
     for hook in (
         "drb-date",
         "drb-tasks-count",

@@ -1,6 +1,6 @@
 // Daily Readiness Dashboard — client.
-// Step 2: load today's board (appointments) and wire scope/provider/location
-// filters. Readiness cells and action panels are placeholders until later steps.
+// Loads today's board (appointments, readiness cells, action panels) and wires
+// the scope/provider/location filters and the in-dashboard action popovers.
 
 (function () {
   "use strict";
@@ -324,12 +324,17 @@
     pop.className = "drb-popover drb-menu";
     pop.id = "drb-detail-popover";
 
-    var actions = [
-      ["Appointment Prep", function () { openAppointmentPrep(row.patient_id); }],
-      ["Open chart", function () { openChart(row.patient_id); }],
-      ["Log outreach…", function () { openOutreach(row.patient_id, row.patient_name); }],
-      ["Create task…", function () { openTaskModal(row); }],
-    ];
+    // Chart-dependent actions are only offered when a chart base is configured
+    // (CUSTOMER_IDENTIFIER); otherwise the links wouldn't resolve.
+    var actions = [];
+    if (chartBase && assistantPanelApp) {
+      actions.push(["Appointment Prep", function () { openAppointmentPrep(row.patient_id); }]);
+    }
+    if (chartBase) {
+      actions.push(["Open chart", function () { openChart(row.patient_id); }]);
+    }
+    actions.push(["Log outreach…", function () { openOutreach(row.patient_id, row.patient_name); }]);
+    actions.push(["Create task…", function () { openTaskModal(row); }]);
     actions.forEach(function (pair) {
       var item = document.createElement("button");
       item.type = "button";
@@ -585,7 +590,7 @@
       });
       pop.appendChild(msgBtn);
     }
-    if (item.patient_id) {
+    if (item.patient_id && chartBase) {
       var chartBtn = document.createElement("button");
       chartBtn.type = "button";
       chartBtn.className = "drb-pop-btn";
@@ -877,6 +882,11 @@
       })
       .then(function (board) {
         chartBase = board.chart_base || "";
+        // Chart deep-links need CUSTOMER_IDENTIFIER; hint when it's unconfigured.
+        var chartHint = document.getElementById("drb-chart-hint");
+        if (chartHint) {
+          chartHint.hidden = !!chartBase;
+        }
         messagingApp = board.messaging_app || "";
         staffOptions = board.staff_options || [];
         teamOptions = board.team_options || [];

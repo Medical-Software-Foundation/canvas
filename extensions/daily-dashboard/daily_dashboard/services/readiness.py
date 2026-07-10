@@ -1,8 +1,8 @@
 """Builds the daily readiness board from Canvas SDK data.
 
-Step 2 covers today's appointments and the scope/provider/location filters.
-Readiness columns (labs/imaging/referral/auth), outreach, and the action
-panels are layered on in later steps.
+Covers today's appointments, the scope/provider/location filters, the
+readiness columns (labs/imaging/referral/auth), outreach, and the action
+panels (tasks/refills/messages).
 
 All queries are bulk and keyed off a single appointment fetch (no per-patient
 queries in a loop).
@@ -121,8 +121,16 @@ def _day_window(
 
 
 def _chart_base(customer_identifier: str | None) -> str:
-    """Base URL for patient-chart deep-links on the target instance."""
-    identifier = (customer_identifier or "example").strip() or "example"
+    """Base URL for patient-chart deep-links, or '' when unconfigured.
+
+    Deep-links target the configured Canvas instance subdomain. When
+    CUSTOMER_IDENTIFIER isn't set there is no correct instance to link to, so
+    return '' — the UI hides the chart actions rather than emit links to a
+    placeholder host that won't resolve.
+    """
+    identifier = (customer_identifier or "").strip()
+    if not identifier:
+        return ""
     return f"https://{identifier}.canvasmedical.com"
 
 

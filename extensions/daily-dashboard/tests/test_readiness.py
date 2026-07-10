@@ -1,4 +1,4 @@
-"""Step 2 tests for the readiness board builder.
+"""Tests for the readiness board builder.
 
 Pure helpers are tested directly; board assembly + filtering is tested against
 real appointment records created in the test DB.
@@ -179,7 +179,7 @@ def test_provider_filter_narrows_rows() -> None:
     assert {str(a.id), str(b.id)} <= provider_ids
 
 
-# ── readiness cells (Step 3) ─────────────────────────────────────────────
+# ── readiness cells ──────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 def test_readiness_three_states_render_on_row() -> None:
@@ -199,7 +199,7 @@ def test_readiness_three_states_render_on_row() -> None:
     assert cells["labs"] == readiness.INCOMPLETE
     assert cells["imaging"] == readiness.COMPLETE
     assert cells["referral"] == readiness.NOT_NEEDED
-    assert cells["auth"] == readiness.NOT_NEEDED  # manual flag arrives in Step 5
+    assert cells["auth"] == readiness.NOT_NEEDED  # auth is a manual flag, unset here
 
 
 @pytest.mark.django_db
@@ -255,7 +255,7 @@ def test_every_order_resulted_is_complete() -> None:
     assert cells["imaging"] == readiness.COMPLETE
 
 
-# ── action panels (Step 4) ───────────────────────────────────────────────
+# ── action panels ────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 def test_board_echoes_signed_in_staff_id() -> None:
@@ -474,7 +474,7 @@ def test_messages_panel_counts_unread_from_board_patients() -> None:
     assert "move my appointment" in messages["items"][0]["snippet"]
 
 
-# ── outreach + manual overrides (Step 5) ─────────────────────────────────
+# ── outreach + manual overrides ──────────────────────────────────────────
 
 @pytest.mark.django_db
 def test_manual_override_marks_cells_complete() -> None:
@@ -611,7 +611,7 @@ def test_cell_detail_caps_at_three_most_recent() -> None:
     assert row["readiness"]["labs"] == readiness.INCOMPLETE
 
 
-# ── deep-links + create task (Step 6) ────────────────────────────────────
+# ── deep-links + create task ─────────────────────────────────────────────
 
 @pytest.mark.django_db
 def test_chart_base_from_customer_identifier() -> None:
@@ -623,11 +623,13 @@ def test_chart_base_from_customer_identifier() -> None:
 
 
 @pytest.mark.django_db
-def test_chart_base_defaults_to_placeholder() -> None:
+def test_chart_base_empty_when_unconfigured() -> None:
+    # Without CUSTOMER_IDENTIFIER there is no instance to link to, so chart_base
+    # is empty and the UI hides the chart actions.
     board = readiness.build_board(
         tz_name="UTC", staff_id=None, scope="all", provider_id=None, location_id=None
     )
-    assert board["chart_base"] == "https://example.canvasmedical.com"
+    assert board["chart_base"] == ""
 
 
 @pytest.mark.django_db
