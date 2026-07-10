@@ -237,6 +237,35 @@ def test_sync_returns_502_on_refresh_failure() -> None:
     assert effects[0].status_code == HTTPStatus.BAD_GATEWAY
 
 
+def test_sync_preserves_refresh_failed_state_on_refresh_failure() -> None:
+    """On RefreshFailed the handler must NOT overwrite last_error.
+
+    sync.py's _fetch_with_refresh writes last_error="refresh_failed" one frame
+    down before re-raising; chart_data._resolve_status keys the "expired" UI
+    state (the reconnect / "Generate connection link" action) off that exact
+    string. If sync_now clobbers it with "sync_failed", _resolve_status falls
+    through to "connected" and the reconnect prompt never renders.
+    """
+    from dexcom_cgm_viewer.services.oauth import RefreshFailed
+    api = _make_api("POST", "/sync", query_params={"patient_id": PATIENT, "range": "7d"})
+    storage.upsert_tokens(
+        PATIENT, access_token_ciphertext="x", refresh_token_ciphertext="y",
+        expires_at=_now(), dexcom_user_id="DEX",
+        now=_now(), is_initial_connection=True,
+    )
+    # Simulate the state sync.py wrote one frame down before re-raising.
+    storage.upsert_sync_state(
+        PATIENT, last_error="refresh_failed", last_error_at=_now(),
+    )
+    with patch("dexcom_cgm_viewer.protocols.chart_api.sync_patient",
+               side_effect=RefreshFailed("refresh rejected")):
+        effects = api.sync_now()
+    assert effects[0].status_code == HTTPStatus.BAD_GATEWAY
+    # The specific refresh_failed tag must survive so the UI can reach "expired".
+    state = storage.get_sync_state(PATIENT)
+    assert state is not None and state.last_error == "refresh_failed"
+
+
 def test_sync_propagates_unexpected_errors_for_observability() -> None:
     """Per REVIEW.md §3: a programmer bug (AttributeError, etc.) must surface
     rather than be masked as a generic 502 'sync_failed'."""

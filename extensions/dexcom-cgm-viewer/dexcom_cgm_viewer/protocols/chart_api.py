@@ -136,7 +136,20 @@ class DexcomChartAPI(StaffSessionAuthMixin, SimpleAPI):
                 content={"error": "patient is not connected to Dexcom"},
                 status_code=HTTPStatus.CONFLICT,
             )]
-        except (DexcomAuthError, DexcomAPIError, RefreshFailed) as exc:
+        except RefreshFailed as exc:
+            # sync.py's _fetch_with_refresh already wrote last_error=
+            # "refresh_failed" before re-raising. Do NOT overwrite it here:
+            # chart_data._resolve_status keys the "expired" UI state (which
+            # surfaces the "Generate connection link" / reconnect action) off
+            # that exact string. Clobbering it with "sync_failed" pins the UI
+            # to "connected" and hides the documented recovery path
+            # (see oauth_api on-callback state reset).
+            log.warning(f"Dexcom refresh failed for {patient_id}: {exc}")
+            return [JSONResponse(
+                content={"error": "sync failed; reconnect required"},
+                status_code=HTTPStatus.BAD_GATEWAY,
+            )]
+        except (DexcomAuthError, DexcomAPIError) as exc:
             log.warning(f"Dexcom sync failed for {patient_id}: {exc}")
             upsert_sync_state(
                 patient_id, last_error="sync_failed", last_error_at=now,
