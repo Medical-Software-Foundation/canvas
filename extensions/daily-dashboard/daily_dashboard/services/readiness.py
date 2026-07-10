@@ -244,12 +244,14 @@ def build_board(
         "providers": providers,
         "locations": locations,
         # Tasks follow the provider filter (as assignee), independent of which
-        # patients are scheduled. Tomorrow view → tasks due tomorrow.
+        # patients are scheduled, and are scoped to the selected day: today view
+        # → due by end of today (overdue tasks stay visible); tomorrow view →
+        # due tomorrow only.
         "panels": build_panels(
             patient_pks,
             tz,
             phones,
-            due_window=(start_dt, end_dt) if offset else None,
+            due_window=(start_dt, end_dt) if offset else (None, end_dt),
             task_assignee_id=task_assignee_id,
         ),
         "chart_base": _chart_base(customer_identifier),
@@ -283,7 +285,7 @@ def build_panels(
     patient_ids: set[Any],
     tz: ZoneInfo | dt_timezone,
     phones: dict[Any, str] | None = None,
-    due_window: tuple[datetime, datetime] | None = None,
+    due_window: tuple[datetime | None, datetime | None] | None = None,
     task_assignee_id: str | None = None,
 ) -> dict[str, Any]:
     """Build the three action panels.
@@ -295,18 +297,20 @@ def build_panels(
     that provider's assigned tasks (``task_assignee_id``). Refills and messages
     stay scoped to the board's patients (``patient_ids``).
 
-    When ``due_window`` is supplied (the "Tomorrow" view), the tasks panel is
-    narrowed to tasks *due* within that window — "what's due tomorrow". Refills
-    and messages carry no due date, so they are never date-filtered and show the
-    same set regardless of the day toggle.
+    ``due_window`` is a ``(lo, hi)`` pair of due-date bounds; either end may be
+    ``None`` for an open bound. Today view passes ``(None, end_of_today)`` — due
+    by end of today, so overdue tasks stay visible. Tomorrow view passes
+    ``(start, end)`` of tomorrow — only tasks due tomorrow. Refills and messages
+    carry no due date, so they are never date-filtered and show the same set
+    regardless of the day toggle.
     """
     phones = phones or {}
     empty = {"count": 0, "items": []}
 
     # Tasks — open tasks, soonest due first. Scoped to the selected provider (as
     # assignee) when filtered, otherwise all open tasks. Independent of which
-    # patients are scheduled today. In the Tomorrow view, restrict to tasks due
-    # tomorrow.
+    # patients are scheduled. The due-date bounds scope the panel to the selected
+    # day (today: due by end of today, incl. overdue; tomorrow: due tomorrow).
     task_qs = (
         Task.objects.filter(status=TaskStatus.OPEN)
         .select_related("patient", "assignee", "team")
@@ -316,7 +320,11 @@ def build_panels(
         # Match the Staff UUID (`id`), not the raw integer assignee_id (dbid) FK.
         task_qs = task_qs.filter(assignee__id=task_assignee_id)
     if due_window is not None:
-        task_qs = task_qs.filter(due__gte=due_window[0], due__lt=due_window[1])
+        lo, hi = due_window
+        if lo is not None:
+            task_qs = task_qs.filter(due__gte=lo)
+        if hi is not None:
+            task_qs = task_qs.filter(due__lt=hi)
 
     task_items = list(task_qs[:PANEL_LIMIT])
     # Tasks can reference patients who aren't on today's board, so make sure we

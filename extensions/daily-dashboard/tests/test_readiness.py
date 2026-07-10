@@ -282,9 +282,9 @@ def test_tasks_panel_lists_all_open_tasks_not_scoped_to_board_patients() -> None
     now = datetime.now(dt_timezone.utc)
     _make_appt(on_board, StaffFactory(), PracticeLocationFactory(), now)
 
-    TaskFactory(patient=on_board, status=TaskStatus.OPEN, title="On-board task")
-    TaskFactory(patient=off_board, status=TaskStatus.OPEN, title="Off-board task")
-    TaskFactory(patient=on_board, status=TaskStatus.COMPLETED)  # not open -> excluded
+    TaskFactory(patient=on_board, status=TaskStatus.OPEN, title="On-board task", due=now)
+    TaskFactory(patient=off_board, status=TaskStatus.OPEN, title="Off-board task", due=now)
+    TaskFactory(patient=on_board, status=TaskStatus.COMPLETED, due=now)  # not open -> excluded
 
     panels = readiness.build_board(
         tz_name="UTC", staff_id=None, scope="all", provider_id=None, location_id=None
@@ -303,9 +303,9 @@ def test_tasks_panel_scoped_to_provider_when_filtered() -> None:
     now = datetime.now(dt_timezone.utc)
     _make_appt(patient, provider, PracticeLocationFactory(), now)
 
-    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Mine", assignee=provider)
-    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Theirs", assignee=other)
-    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Unassigned")
+    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Mine", assignee=provider, due=now)
+    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Theirs", assignee=other, due=now)
+    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Unassigned", due=now)
 
     # Dropdown provider filter.
     by_dropdown = readiness.build_board(
@@ -400,21 +400,27 @@ def test_tomorrow_view_tasks_filtered_to_due_tomorrow() -> None:
 
 
 @pytest.mark.django_db
-def test_today_view_tasks_not_due_filtered() -> None:
-    """Today view keeps the original behavior: all open tasks for the board's
-    patients regardless of due date."""
+def test_today_view_tasks_due_today_or_earlier() -> None:
+    """Today view scopes tasks to those due by end of today: overdue and
+    due-today tasks appear; future and no-due-date tasks are excluded."""
     patient = PatientFactory()
     now = datetime.now(dt_timezone.utc)
     _make_appt(patient, StaffFactory(), PracticeLocationFactory(), now)
 
-    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="No due date", due=None)
+    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Overdue",
+                due=now - timedelta(days=3))
+    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Due today", due=now)
     TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Due next week",
                 due=now + timedelta(days=7))
+    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="No due date", due=None)
 
     tasks = readiness.build_board(
         tz_name="UTC", staff_id=None, scope="all", provider_id=None, location_id=None
     )["panels"]["tasks"]
+    # Overdue + due-today survive; future and no-due-date are filtered out.
     assert tasks["count"] == 2
+    titles = {item["title"] for item in tasks["items"]}
+    assert titles == {"Overdue", "Due today"}
 
 
 @pytest.mark.django_db
@@ -637,7 +643,7 @@ def test_panel_items_carry_patient_id_for_deeplinks() -> None:
     patient = PatientFactory()
     now = datetime.now(dt_timezone.utc)
     _make_appt(patient, StaffFactory(), PracticeLocationFactory(), now)
-    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Follow up")
+    TaskFactory(patient=patient, status=TaskStatus.OPEN, title="Follow up", due=now)
 
     item = readiness.build_board(
         tz_name="UTC", staff_id=None, scope="all", provider_id=None, location_id=None
@@ -656,7 +662,7 @@ def test_create_task_returns_add_task_effect() -> None:
     assert data["patient"]["id"] == str(patient.id)
 
 
-# ── in-dashboard task edit (Step: act on task) ───────────────────────────
+# ── in-dashboard task edit ───────────────────────────────────────────────
 
 def test_update_task_only_sends_set_fields() -> None:
     eff = readiness.update_task("task-1", status="COMPLETED", assignee_id="staff-9")
