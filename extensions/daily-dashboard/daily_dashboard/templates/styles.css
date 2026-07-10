@@ -1,0 +1,520 @@
+/* Daily Readiness Dashboard — styled to match the Carallel care_management app.
+   Tokens lifted from that plugin: sky-blue primary, slate text, soft cards. */
+
+:root {
+  --primary: #0369a1;
+  --primary-dark: #075985;
+  --primary-light: #e0f2fe;
+  --secondary: #059669;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --dark: #1e293b;
+  --light: #f8fafc;
+  --text: #475569;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --border: #e2e8f0;
+  --page: #f0f4f8;
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 0;
+  background: var(--page);
+  color: var(--text);
+}
+
+.drb-wrap {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+.drb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.drb-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--dark);
+}
+
+.drb-date {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.drb-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Segmented scope toggle (My day / All) — Carallel filter-tab look */
+.drb-scope {
+  display: inline-flex;
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.drb-scope .button,
+.drb-scope button {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.drb-scope .button.active,
+.drb-scope button.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Filter selects */
+.drb-filter {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 28px 7px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2364748b' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+.drb-filter:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1);
+}
+
+.drb-refresh {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.drb-refresh:hover { background: var(--light); color: var(--primary); }
+
+/* ── Action panels ──────────────────────────────────── */
+/* Two-column layout: appointments (left) + action cards (right). */
+.drb-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .drb-columns { grid-template-columns: 1fr; }
+}
+
+/* Right rail: the three action cards stacked vertically. */
+.drb-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.drb-panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+}
+
+.drb-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drb-panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.drb-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.drb-panel-body { padding: 10px 16px 14px; flex: 1; }
+
+.drb-placeholder {
+  color: var(--faint);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.drb-panel-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--light);
+}
+.drb-panel-item:last-child { border-bottom: none; }
+.drb-item-content { min-width: 0; }
+
+.drb-task-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.drb-task-row .drb-item-content { flex: 1; min-width: 0; }
+.drb-done-btn {
+  flex: none;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--success);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.drb-done-btn:hover { background: #d1fae5; border-color: #d1fae5; }
+.drb-done-btn:disabled { opacity: 0.6; cursor: default; }
+.drb-item-primary {
+  font-size: 13px;
+  color: var(--dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drb-item-secondary {
+  font-size: 12px;
+  color: var(--faint);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Readiness table ────────────────────────────────── */
+.drb-table-wrap {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+
+.drb-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.drb-table thead th {
+  text-align: left;
+  padding: 12px;
+  background: var(--light);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.drb-table tbody td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  color: var(--dark);
+  vertical-align: middle;
+}
+.drb-table tbody tr:last-child td { border-bottom: none; }
+.drb-table tbody tr:hover:not(.drb-empty-row) { background: #fafbfc; }
+
+.drb-col-time { width: 76px; color: var(--text); }
+.drb-col-state { width: 84px; text-align: center; }
+.drb-col-actions { width: 64px; text-align: center; }
+
+.drb-row-meta { color: var(--faint); font-size: 12px; margin-top: 2px; }
+
+.drb-empty {
+  text-align: center;
+  color: var(--faint);
+  font-style: italic;
+  padding: 28px 0;
+}
+
+/* ── Interactive cells ──────────────────────────────── */
+.drb-clickable { cursor: pointer; }
+.drb-clickable:hover { background: #fafbfc; }
+
+.drb-outreach { font-size: 13px; color: var(--dark); white-space: nowrap; }
+.drb-outreach .drb-faint { color: var(--faint); font-style: italic; }
+.drb-mini-badge {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.drb-actions-btn {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.drb-actions-btn:hover { background: var(--light); color: var(--primary); }
+
+.drb-link { color: var(--primary); cursor: pointer; font-weight: 500; }
+.drb-link:hover { color: var(--primary-dark); text-decoration: underline; }
+
+/* ── Readiness cell states (pill badges) ────────────── */
+.drb-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.drb-state.complete { background: #d1fae5; color: var(--success); }
+.drb-state.incomplete { background: #fed7aa; color: var(--warning); }
+.drb-state.not-needed { background: transparent; color: #cbd5e1; font-weight: 600; }
+
+/* ── Cell detail popover + actions menu ─────────────── */
+.drb-popover {
+  position: absolute;
+  z-index: 1100;
+  width: 264px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 12px 14px;
+}
+.drb-pop-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--primary);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.drb-pop-item { font-size: 13px; color: var(--dark); padding: 3px 0; }
+.drb-pop-item + .drb-pop-item { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+.drb-pop-empty { font-size: 13px; color: var(--faint); font-style: italic; padding: 2px 0 4px; }
+.drb-pop-note {
+  font-size: 13px;
+  color: var(--dark);
+  font-style: italic;
+  background: var(--primary-light);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: 3px 0;
+  white-space: pre-wrap;
+}
+.drb-pop-btn {
+  margin-top: 10px;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--light);
+  color: var(--dark);
+  border-radius: 8px;
+  padding: 7px 0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.drb-pop-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary-light); }
+
+.drb-menu { width: 188px; padding: 6px; }
+.drb-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 9px 10px;
+  font-size: 13px;
+  color: var(--dark);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.drb-menu-item:hover { background: var(--primary-light); color: var(--primary); }
+a.drb-menu-item { text-decoration: none; color: var(--primary); font-weight: 500; }
+
+/* click-to-dial buttons */
+a.drb-pop-btn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  margin-top: 6px;
+}
+.drb-call-btn {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary-light);
+  font-weight: 600;
+}
+.drb-call-btn:hover { background: #cde9f8; color: var(--primary-dark); }
+
+/* ── Modals ─────────────────────────────────────────── */
+.drb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 41, 59, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.drb-modal-overlay[hidden] { display: none; }
+.drb-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.drb-modal-head {
+  padding: 16px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dark);
+  border-bottom: 1px solid var(--border);
+}
+.drb-modal-body { padding: 18px 20px; }
+.drb-modal-body label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  margin: 12px 0 4px;
+}
+.drb-modal-body label:first-child { margin-top: 0; }
+.drb-modal-body select,
+.drb-modal-body input,
+.drb-modal-body textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--dark);
+  box-sizing: border-box;
+}
+.drb-modal-body select:focus,
+.drb-modal-body input:focus,
+.drb-modal-body textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1);
+}
+.drb-modal-error {
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: #fee2e2;
+  color: var(--danger);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.drb-modal-error[hidden] { display: none; }
+.drb-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Buttons (replacing Semantic UI classes used in markup) */
+.drb-modal-actions .button,
+.drb-modal-actions button {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+.drb-modal-actions .button:hover,
+.drb-modal-actions button:hover { background: var(--light); }
+.drb-modal-actions .primary,
+.drb-modal-actions .primary.button {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.drb-modal-actions .primary:hover,
+.drb-modal-actions .primary.button:hover { background: var(--primary-dark); border-color: var(--primary-dark); }

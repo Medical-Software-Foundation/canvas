@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Readiness</title>
+  <link rel="stylesheet" href="{{ asset_base }}/styles.css">
+</head>
+<body data-base="{{ asset_base }}">
+  <div class="drb-wrap">
+
+    <!-- Header -->
+    <header class="drb-header">
+      <div class="drb-title-block">
+        <h1 class="drb-title">Daily Readiness</h1>
+        <span class="drb-date" id="drb-date">&nbsp;</span>
+      </div>
+      <div class="drb-controls">
+        <div class="ui buttons drb-scope" role="group" aria-label="View">
+          <button class="ui button" data-scope="all" data-day="today" type="button">All</button>
+          <button class="ui button active" data-scope="mine" data-day="today" type="button">My day</button>
+          <button class="ui button" data-scope="mine" data-day="tomorrow" type="button">Tomorrow</button>
+        </div>
+        <select class="ui dropdown drb-filter" id="drb-provider" aria-label="Provider">
+          <option value="">Provider: All</option>
+        </select>
+        <select class="ui dropdown drb-filter" id="drb-location" aria-label="Location">
+          <option value="">Location: All</option>
+        </select>
+        <button class="drb-refresh" id="drb-refresh" type="button" title="Refresh" aria-label="Refresh">⟳</button>
+      </div>
+    </header>
+
+    <div class="drb-columns">
+
+      <!-- Today's appointments / readiness (left) -->
+      <section class="drb-table-wrap drb-left" aria-label="Today's appointments">
+        <table class="drb-table">
+          <thead>
+            <tr>
+              <th class="drb-col-time">Time</th>
+              <th>Patient</th>
+              <th class="drb-col-state">Labs</th>
+              <th class="drb-col-state">Imaging</th>
+              <th class="drb-col-state">Referral</th>
+              <th class="drb-col-state">Auth</th>
+              <th>Outreach</th>
+              <th class="drb-col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="drb-rows">
+            <tr class="drb-empty-row">
+              <td colspan="8">
+                <div class="drb-empty">Today's schedule will appear here.</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Action panels (right) -->
+      <aside class="drb-panels drb-right" aria-label="Action panels">
+        <div class="drb-panel" id="drb-panel-tasks">
+          <div class="drb-panel-head">
+            <span class="drb-panel-title" id="drb-tasks-title">Tasks</span>
+            <span class="drb-count" id="drb-tasks-count">—</span>
+          </div>
+          <div class="drb-panel-body" id="drb-tasks-body">
+            <div class="drb-placeholder">No data yet</div>
+          </div>
+        </div>
+
+        <div class="drb-panel" id="drb-panel-refills">
+          <div class="drb-panel-head">
+            <span class="drb-panel-title" id="drb-refills-title">Recent refill activity</span>
+            <span class="drb-count" id="drb-refills-count">—</span>
+          </div>
+          <div class="drb-panel-body" id="drb-refills-body">
+            <div class="drb-placeholder">No data yet</div>
+          </div>
+        </div>
+
+        <div class="drb-panel" id="drb-panel-messages">
+          <div class="drb-panel-head">
+            <span class="drb-panel-title" id="drb-messages-title">New messages</span>
+            <span class="drb-count" id="drb-messages-count">—</span>
+          </div>
+          <div class="drb-panel-body" id="drb-messages-body">
+            <div class="drb-placeholder">No data yet</div>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+
+  </div>
+
+  <!-- Outreach modal -->
+  <div class="drb-modal-overlay" id="drb-outreach-modal" hidden>
+    <div class="drb-modal" role="dialog" aria-modal="true" aria-label="Log outreach attempt">
+      <div class="drb-modal-head">
+        Log outreach — <span id="drb-modal-patient"></span>
+      </div>
+      <div class="drb-modal-body">
+        <label for="drb-o-channel">Channel</label>
+        <select id="drb-o-channel">
+          <option value="Call">Call</option>
+          <option value="Fax">Fax</option>
+          <option value="Email">Email</option>
+        </select>
+
+        <label for="drb-o-recipient-type">Recipient</label>
+        <select id="drb-o-recipient-type">
+          <option value="PCP">PCP</option>
+          <option value="Patient">Patient</option>
+        </select>
+
+        <label for="drb-o-recipient">Recipient name (optional)</label>
+        <input id="drb-o-recipient" type="text" placeholder="e.g. Dr. Smith">
+
+        <label for="drb-o-outcome">Outcome</label>
+        <select id="drb-o-outcome">
+          <option value="Sent">Sent</option>
+          <option value="Left message">Left message</option>
+          <option value="Spoke">Spoke with</option>
+          <option value="No answer">No answer</option>
+        </select>
+
+        <label for="drb-o-note">Note</label>
+        <textarea id="drb-o-note" rows="3" placeholder="What was requested / awaited"></textarea>
+
+        <div class="drb-modal-error" id="drb-o-error" hidden></div>
+      </div>
+      <div class="drb-modal-actions">
+        <button class="ui button" id="drb-o-cancel" type="button">Cancel</button>
+        <button class="ui primary button" id="drb-o-save" type="button">Save attempt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create task modal -->
+  <div class="drb-modal-overlay" id="drb-task-modal" hidden>
+    <div class="drb-modal" role="dialog" aria-modal="true" aria-label="Create task">
+      <div class="drb-modal-head">
+        Create task — <span id="drb-task-patient"></span>
+      </div>
+      <div class="drb-modal-body">
+        <label for="drb-t-title">Task</label>
+        <input id="drb-t-title" type="text" placeholder="e.g. Chase referral before visit">
+
+        <label for="drb-t-assignee">Assignee</label>
+        <select id="drb-t-assignee"><option value="">Unassigned</option></select>
+
+        <label for="drb-t-team">Team</label>
+        <select id="drb-t-team"><option value="">No team</option></select>
+
+        <label for="drb-t-due">Follow-up due (optional)</label>
+        <input id="drb-t-due" type="date">
+
+        <label for="drb-t-priority">Priority</label>
+        <select id="drb-t-priority"><option value="">No priority</option></select>
+
+        <div class="drb-modal-error" id="drb-t-error" hidden></div>
+      </div>
+      <div class="drb-modal-actions">
+        <button class="ui button" id="drb-t-cancel" type="button">Cancel</button>
+        <button class="ui primary button" id="drb-t-save" type="button">Create task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit task modal -->
+  <div class="drb-modal-overlay" id="drb-edit-modal" hidden>
+    <div class="drb-modal" role="dialog" aria-modal="true" aria-label="Edit task">
+      <div class="drb-modal-head">
+        Task — <span id="drb-edit-patient"></span>
+      </div>
+      <div class="drb-modal-body">
+        <label for="drb-e-title">Title</label>
+        <input id="drb-e-title" type="text">
+
+        <label for="drb-e-status">Status</label>
+        <select id="drb-e-status">
+          <option value="OPEN">Open</option>
+          <option value="COMPLETED">Done</option>
+          <option value="CLOSED">Closed</option>
+        </select>
+
+        <label for="drb-e-assignee">Assignee</label>
+        <select id="drb-e-assignee"><option value="">Unassigned</option></select>
+
+        <label for="drb-e-team">Team</label>
+        <select id="drb-e-team"><option value="">No team</option></select>
+
+        <label for="drb-e-due">Follow-up due</label>
+        <input id="drb-e-due" type="date">
+
+        <label for="drb-e-priority">Priority</label>
+        <select id="drb-e-priority"><option value="">No priority</option></select>
+
+        <label for="drb-e-comment">Add comment (optional)</label>
+        <textarea id="drb-e-comment" rows="2" placeholder="Comment added to the task"></textarea>
+
+        <div class="drb-modal-error" id="drb-e-error" hidden></div>
+      </div>
+      <div class="drb-modal-actions">
+        <a class="drb-pop-btn" id="drb-e-chart" target="_blank" rel="noopener" style="width:auto;padding:8px 12px;margin:0;">Open chart</a>
+        <button class="ui button" id="drb-e-cancel" type="button">Cancel</button>
+        <button class="ui primary button" id="drb-e-save" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ asset_base }}/app.js"></script>
+</body>
+</html>
