@@ -453,7 +453,15 @@
     if (!panel.items || panel.items.length === 0) {
       var empty = document.createElement("div");
       empty.className = "drb-placeholder";
-      empty.textContent = "Nothing for today's patients";
+      // Panel-specific empty copy — the tasks panel isn't patient-scoped and the
+      // day window shifts with the view, so a generic "today's patients" line
+      // would be inaccurate.
+      var emptyText = {
+        Task: "No open tasks",
+        Refill: "No recent refills",
+        Message: "No new messages",
+      };
+      empty.textContent = emptyText[kind] || "Nothing to show";
       body.appendChild(empty);
       return;
     }
