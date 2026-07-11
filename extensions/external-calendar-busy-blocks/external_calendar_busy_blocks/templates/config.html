@@ -33,6 +33,28 @@
       </form>
     {% endif %}
   </div>
+  {% if is_admin %}
+  <hr style="margin:24px 0;" />
+  <div id="admin-content">
+    <h2>Manage another provider</h2>
+    <p>Connect or disconnect a personal calendar on behalf of a provider. The provider never has to paste their own URL.</p>
+    <label for="admin_staff">Provider</label>
+    <select id="admin_staff">
+      <option value="">— Select a provider —</option>
+      {% for option in staff_options %}
+      <option value="{{ option.id }}">{{ option.name }}</option>
+      {% endfor %}
+    </select>
+    <p id="admin-status"></p>
+    <div id="admin-actions" style="display:none;">
+      <label for="admin_ics_url">Secret iCal URL</label>
+      <input type="url" id="admin_ics_url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" />
+      <button type="button" id="admin-connect">Connect / Replace</button>
+      <button type="button" id="admin-disconnect">Disconnect</button>
+    </div>
+    <p id="admin-msg"></p>
+  </div>
+  {% endif %}
   <p id="msg"></p>
 
   <script>
@@ -113,6 +135,55 @@
         form.addEventListener("submit", function (e) {
           e.preventDefault();
           submitJson(deleteUrl, {}, form.querySelector("button"), renderConnectForm);
+        });
+      }
+
+      var statusUrl = "{{ status_url }}";
+      var adminSelect = document.getElementById("admin_staff");
+      if (adminSelect) {
+        var adminActions = document.getElementById("admin-actions");
+        var adminStatus = document.getElementById("admin-status");
+        var adminMsg = document.getElementById("admin-msg");
+        var adminUrlInput = document.getElementById("admin_ics_url");
+
+        function refreshAdminStatus(staffId) {
+          adminMsg.textContent = "";
+          if (!staffId) { adminActions.style.display = "none"; adminStatus.textContent = ""; return; }
+          adminActions.style.display = "block";
+          adminStatus.textContent = "Loading…";
+          fetch(statusUrl + "?staff_id=" + encodeURIComponent(staffId), { credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (d.connected) {
+                adminStatus.textContent = "Connected." +
+                  (d.last_sync_at ? " Last sync: " + d.last_sync_at : "") +
+                  (d.last_error ? " Last error: " + d.last_error : "");
+              } else {
+                adminStatus.textContent = "Not connected.";
+              }
+            })
+            .catch(function () { adminStatus.textContent = "Could not load status."; });
+        }
+
+        adminSelect.addEventListener("change", function () { refreshAdminStatus(adminSelect.value); });
+
+        document.getElementById("admin-connect").addEventListener("click", function () {
+          var staffId = adminSelect.value;
+          var url = adminUrlInput.value.trim();
+          if (!staffId || !url) { adminMsg.textContent = "Pick a provider and enter a URL."; adminMsg.className = "error"; return; }
+          submitJson(postUrl, { ics_url: url, staff_id: staffId }, this, function () {
+            adminMsg.textContent = "Connected."; adminMsg.className = "status";
+            adminUrlInput.value = ""; refreshAdminStatus(staffId);
+          });
+        });
+
+        document.getElementById("admin-disconnect").addEventListener("click", function () {
+          var staffId = adminSelect.value;
+          if (!staffId) { return; }
+          submitJson(deleteUrl, { staff_id: staffId }, this, function () {
+            adminMsg.textContent = "Disconnected."; adminMsg.className = "status";
+            refreshAdminStatus(staffId);
+          });
         });
       }
 
