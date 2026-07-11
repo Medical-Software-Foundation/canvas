@@ -3,8 +3,9 @@ from http import HTTPStatus
 from canvas_sdk.effects.simple_api import HTMLResponse, PlainTextResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 from canvas_sdk.templates import render_to_string
+from canvas_sdk.v1.data.staff import Staff
 
-from external_calendar_busy_blocks.auth import canonical_staff_id
+from external_calendar_busy_blocks.auth import canonical_staff_id, is_admin
 from external_calendar_busy_blocks.data.models import StaffCalendarFeed
 
 
@@ -15,13 +16,25 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
     def render(self) -> list[Response]:
         staff_id = canonical_staff_id(self.request.headers)
         feed = StaffCalendarFeed.objects.filter(staff_id=staff_id).first() if staff_id else None
+
+        admin = is_admin(staff_id, self.secrets)
+        staff_options: list[dict] = []
+        if admin:
+            staff_options = [
+                {"id": s.id, "name": s.full_name}
+                for s in Staff.objects.filter(active=True).order_by("last_name", "first_name")
+            ]
+
         html = render_to_string(
             "templates/config.html",
             {
                 "feed": feed,
                 "connected": feed is not None and feed.is_active,
+                "is_admin": admin,
+                "staff_options": staff_options,
                 "post_url": "/plugin-io/api/external_calendar_busy_blocks/feeds",
                 "delete_url": "/plugin-io/api/external_calendar_busy_blocks/feeds/delete",
+                "status_url": "/plugin-io/api/external_calendar_busy_blocks/feeds/status",
             },
         )
         # render_to_string is typed `str | None`. The current SDK raises
