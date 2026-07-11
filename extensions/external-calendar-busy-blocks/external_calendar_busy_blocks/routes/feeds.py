@@ -107,6 +107,31 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         feed.delete()
         return [*effects, JSONResponse({"status": "disconnected"}, status_code=200)]
 
+    @api.get("/feeds/status")
+    def feed_status(self) -> list[Response | Effect]:
+        staff_id = self._logged_in_staff_id()
+        if not staff_id:
+            return [JSONResponse({"error": "Not authenticated"}, status_code=401)]
+        if not is_admin(staff_id, self.secrets):
+            return [JSONResponse({"error": "Forbidden"}, status_code=403)]
+
+        target_id = (self.request.query_params.get("staff_id") or "").strip().replace("-", "")
+        if not target_id:
+            return [JSONResponse({"error": "Missing staff_id"}, status_code=400)]
+
+        feed = StaffCalendarFeed.objects.filter(staff_id=target_id).first()
+        if feed is None:
+            return [JSONResponse({"connected": False}, status_code=200)]
+        # Never return ics_url — it is a bearer token.
+        return [JSONResponse(
+            {
+                "connected": bool(feed.is_active),
+                "last_sync_at": str(feed.last_sync_at) if feed.last_sync_at else None,
+                "last_error": feed.last_error,
+            },
+            status_code=200,
+        )]
+
     def _logged_in_staff_id(self) -> str | None:
         return canonical_staff_id(self.request.headers)
 

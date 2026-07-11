@@ -357,3 +357,54 @@ def test_connect_no_calendar_effect_when_exists() -> None:
     effects_emitted = [r for r in responses if hasattr(r, "type")]
     assert effects_emitted == []
     assert responses[0].status_code == 200
+
+
+def test_status_requires_admin() -> None:
+    api = _api_with_request(
+        "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000002",
+        secrets={},  # not an admin
+        query_params={"staff_id": "00000000000000000000000000000099"},
+    )
+    responses = api.feed_status()
+    assert responses[0].status_code == 403
+
+
+def test_status_requires_staff_id() -> None:
+    api = _api_with_request(
+        "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
+        secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+        query_params={},
+    )
+    responses = api.feed_status()
+    assert responses[0].status_code == 400
+
+
+def test_status_reports_connected_feed_without_url() -> None:
+    feed = MagicMock(is_active=True, last_sync_at="2026-07-11T00:00:00Z", last_error=None)
+    with patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed:
+        MockFeed.objects.filter.return_value.first.return_value = feed
+        api = _api_with_request(
+            "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+            query_params={"staff_id": "00000000-0000-0000-0000-000000000099"},
+        )
+        responses = api.feed_status()
+    assert responses[0].status_code == 200
+    body = json.loads(responses[0].content)
+    assert body["connected"] is True
+    assert "ics_url" not in body
+    # Lookup was scoped to the canonicalized target id.
+    assert MockFeed.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+
+
+def test_status_reports_no_feed() -> None:
+    with patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed:
+        MockFeed.objects.filter.return_value.first.return_value = None
+        api = _api_with_request(
+            "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+            query_params={"staff_id": "00000000000000000000000000000099"},
+        )
+        responses = api.feed_status()
+    body = json.loads(responses[0].content)
+    assert body["connected"] is False
