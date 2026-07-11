@@ -1,6 +1,6 @@
 {
     "sdk_version": "0.1.4",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.3.0",
     "name": "external_calendar_busy_blocks",
     "description": "Subscribe Canvas to a provider's personal calendar via ICS and mirror busy times as Admin events.",
     "components": {
@@ -8,12 +8,12 @@
             {
                 "class": "external_calendar_busy_blocks.routes.feeds:FeedsAPI",
                 "description": "POST /feeds to connect; POST /feeds/delete to disconnect.",
-                "data_access": {"event": "", "read": [], "write": ["Event", "Calendar"]}
+                "data_access": {"event": "", "read": ["Staff"], "write": ["Event", "Calendar"]}
             },
             {
                 "class": "external_calendar_busy_blocks.ui.pages:ConfigPage",
                 "description": "GET /pages/config — renders the connect/disconnect HTML page.",
-                "data_access": {"event": "", "read": [], "write": []}
+                "data_access": {"event": "", "read": ["Staff"], "write": []}
             },
             {
                 "class": "external_calendar_busy_blocks.sync.cron:SyncCron",
@@ -35,7 +35,7 @@
         "effects": [],
         "views": []
     },
-    "secrets": ["LOOKAHEAD_DAYS", "namespace_read_write_access_key"],
+    "secrets": ["LOOKAHEAD_DAYS", "ADMIN_STAFF_IDS", "namespace_read_write_access_key"],
     "tags": {},
     "references": [],
     "license": "MIT",

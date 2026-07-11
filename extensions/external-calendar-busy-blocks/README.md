@@ -24,11 +24,23 @@ Each provider opens the **Calendar Busy Blocks** application from the Canvas glo
 
 Canvas users see only "Busy" — the original event titles never leave the personal calendar.
 
+## Admin: connect feeds on behalf of providers
+
+Staff whose IDs are listed in the `ADMIN_STAFF_IDS` secret see an extra
+**Manage another provider** section when they open **Calendar Busy Blocks**.
+There they pick any active provider, see whether that provider already has a
+feed connected, and connect/replace or disconnect the provider's secret iCal
+URL — so providers never have to paste their own URL. Everyone else sees only
+their own self-service form; the admin section and its API are denied to
+non-admins (fail closed). Admin-connected feeds sync exactly like self-service
+feeds, and the stored URL is never shown back in the UI.
+
 ## Configuration
 
 | Plugin secret | Default | Notes |
 |---|---|---|
 | `LOOKAHEAD_DAYS` | `90` | How far in advance to expand recurring events. |
+| `ADMIN_STAFF_IDS` | _(unset)_ | Comma-separated Canvas staff IDs allowed to manage other providers' feeds from the admin section. Unset means no one has admin access (the admin section is hidden). |
 
 ## Privacy & security
 
