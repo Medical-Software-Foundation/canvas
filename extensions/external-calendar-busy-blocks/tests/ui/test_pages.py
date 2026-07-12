@@ -29,13 +29,14 @@ def test_render_non_admin_has_no_staff_options() -> None:
 def test_render_admin_lists_active_staff() -> None:
     staff_a = MagicMock(id="00000000000000000000000000000010", full_name="Bea Adams")
     staff_b = MagicMock(id="00000000000000000000000000000011", full_name="Cy Brown")
+    staff_nameless = MagicMock(id="00000000000000000000000000000012", full_name="")
     with (
         patch("external_calendar_busy_blocks.ui.pages.render_to_string", return_value="<html></html>") as mock_render,
         patch("external_calendar_busy_blocks.ui.pages.StaffCalendarFeed") as MockFeed,
         patch("external_calendar_busy_blocks.ui.pages.Staff") as MockStaff,
     ):
         MockFeed.objects.filter.return_value.first.return_value = None
-        MockStaff.objects.filter.return_value.order_by.return_value = [staff_a, staff_b]
+        MockStaff.objects.filter.return_value.order_by.return_value = [staff_a, staff_b, staff_nameless]
         _page(
             "00000000-0000-0000-0000-000000000001",
             secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
@@ -46,4 +47,5 @@ def test_render_admin_lists_active_staff() -> None:
         {"id": "00000000000000000000000000000010", "name": "Bea Adams"},
         {"id": "00000000000000000000000000000011", "name": "Cy Brown"},
     ]
+    assert all(opt["id"] != "00000000000000000000000000000012" for opt in context["staff_options"])
     MockStaff.objects.filter.assert_called_once_with(active=True)

@@ -23,6 +23,7 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
             staff_options = [
                 {"id": s.id, "name": s.full_name}
                 for s in Staff.objects.filter(active=True).order_by("last_name", "first_name")
+                if (s.full_name or "").strip()
             ]
 
         html = render_to_string(

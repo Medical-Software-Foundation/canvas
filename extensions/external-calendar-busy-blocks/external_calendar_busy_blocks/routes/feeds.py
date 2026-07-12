@@ -6,7 +6,7 @@ from canvas_sdk.effects.calendar import Event
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
-from external_calendar_busy_blocks.auth import canonical_staff_id, is_admin
+from external_calendar_busy_blocks.auth import canonical_staff_id, canonicalize_staff_id, is_admin
 from external_calendar_busy_blocks.calendars.admin_lookup import get_admin_calendar_id
 from external_calendar_busy_blocks.data.models import (
     ImportedEvent,
@@ -115,7 +115,7 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         if not is_admin(staff_id, self.secrets):
             return [JSONResponse({"error": "Forbidden"}, status_code=403)]
 
-        target_id = (self.request.query_params.get("staff_id") or "").strip().replace("-", "")
+        target_id = canonicalize_staff_id(self.request.query_params.get("staff_id") or "")
         if not target_id:
             return [JSONResponse({"error": "Missing staff_id"}, status_code=400)]
 
@@ -146,7 +146,7 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         """
         requested = (body.get("staff_id") or "").strip()
         if requested and is_admin(logged_in, self.secrets):
-            return requested.replace("-", "")
+            return canonicalize_staff_id(requested)
         return logged_in
 
     _HTTPS_URL_REGEX = re.compile(r"^https://[^/?#\s]+", re.IGNORECASE)

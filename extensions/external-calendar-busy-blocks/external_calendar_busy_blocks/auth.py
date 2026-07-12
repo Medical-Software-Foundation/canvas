@@ -16,12 +16,18 @@ def canonical_staff_id(headers) -> str | None:
     raw = headers.get(_HEADER)
     if not raw:
         return None
-    return raw.replace("-", "")
+    return canonicalize_staff_id(raw)
 
 
-def _canonical(raw: str) -> str:
-    """Dashless, lowercased form for case/format-insensitive UUID comparison."""
-    return raw.replace("-", "").strip().lower()
+def canonicalize_staff_id(value: str) -> str:
+    """Dashless, stripped, lowercased form for case/format-insensitive UUID comparison.
+
+    Staff.id is stored as ``uuid4().hex`` (always lowercase, no dashes). Every
+    path that stores, compares, or looks up a staff id must route through this
+    single primitive so a mixed-case or dashed id never diverges from the
+    stored key.
+    """
+    return value.replace("-", "").strip().lower()
 
 
 def is_admin(staff_id, secrets) -> bool:
@@ -35,7 +41,7 @@ def is_admin(staff_id, secrets) -> bool:
     if not staff_id:
         return False
     raw = (secrets or {}).get("ADMIN_STAFF_IDS") or ""
-    admins = {_canonical(part) for part in raw.split(",") if part.strip()}
+    admins = {canonicalize_staff_id(part) for part in raw.split(",") if part.strip()}
     if not admins:
         return False
-    return _canonical(staff_id) in admins
+    return canonicalize_staff_id(staff_id) in admins
