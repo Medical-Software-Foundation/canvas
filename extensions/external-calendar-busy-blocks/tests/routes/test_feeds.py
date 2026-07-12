@@ -6,7 +6,13 @@ import pytest
 from external_calendar_busy_blocks.routes.feeds import FeedsAPI
 
 
-def _api_with_request(method: str, body: bytes, logged_in_staff: str | None) -> FeedsAPI:
+def _api_with_request(
+    method: str,
+    body: bytes,
+    logged_in_staff: str | None,
+    secrets: dict | None = None,
+    query_params: dict | None = None,
+) -> FeedsAPI:
     headers = {}
     if logged_in_staff:
         headers["canvas-logged-in-user-id"] = logged_in_staff
@@ -15,10 +21,11 @@ def _api_with_request(method: str, body: bytes, logged_in_staff: str | None) -> 
         body=body,
         headers=headers,
         path_params={},
+        query_params=query_params or {},
     )
     api = FeedsAPI.__new__(FeedsAPI)
     api.request = request
-    api.secrets = {}
+    api.secrets = secrets or {}
     return api
 
 
@@ -94,8 +101,8 @@ def test_post_creates_feed_when_valid() -> None:
     assert kwargs["ics_url"] == "https://calendar.google.com/calendar/ical/me/basic.ics"
 
 
-def test_post_ignores_staff_id_in_body() -> None:
-    """Even if the body claims a different staff_id, the session is authoritative."""
+def test_post_non_admin_ignores_staff_id_in_body() -> None:
+    """A non-admin's body staff_id is ignored; the session stays authoritative."""
     with (
         patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
         patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
@@ -108,12 +115,124 @@ def test_post_ignores_staff_id_in_body() -> None:
         api = _api_with_request(
             "POST",
             b'{"ics_url":"https://outlook.office365.com/owa/calendar/x/calendar.ics",'
-            b'"staff_id":"impersonated"}',
+            b'"staff_id":"00000000000000000000000000000099"}',
             logged_in_staff="00000000-0000-0000-0000-000000000002",
+            secrets={},  # not an admin
         )
         api.create_feed()
-    # Session header wins (canonicalized), body staff_id ignored.
     assert MockFeed.call_args.kwargs["staff_id"] == "00000000000000000000000000000002"
+
+
+def test_post_admin_targets_other_staff() -> None:
+    """An admin's body staff_id is honored: the feed is keyed to the target."""
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("cal-1", [])) as mock_get_cal,
+    ):
+        from external_calendar_busy_blocks.http.fetcher import FetchOk
+        mock_fetch.return_value = FetchOk(b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", None, None)
+        MockFeed.objects.filter.return_value.first.return_value = None
+        api = _api_with_request(
+            "POST",
+            b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics",'
+            b'"staff_id":"00000000-0000-0000-0000-000000000099"}',
+            logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+        )
+        api.create_feed()
+    assert MockFeed.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+    assert mock_get_cal.call_args.args[0] == "00000000000000000000000000000099"
+
+
+def test_post_admin_targets_other_staff_uppercase_dashed_id() -> None:
+    """An admin's UPPERCASE dashed body staff_id is canonicalized to the
+    dashless LOWERCASE form that matches Staff.id (uuid4().hex)."""
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("cal-1", [])),
+    ):
+        from external_calendar_busy_blocks.http.fetcher import FetchOk
+        mock_fetch.return_value = FetchOk(b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", None, None)
+        MockFeed.objects.filter.return_value.first.return_value = None
+        api = _api_with_request(
+            "POST",
+            b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics",'
+            b'"staff_id":"0000000000000000000000000000AABB"}',
+            logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+        )
+        api.create_feed()
+    assert MockFeed.call_args.kwargs["staff_id"] == "0000000000000000000000000000aabb"
+
+
+def test_post_admin_returns_400_when_calendar_unresolvable() -> None:
+    """If the target staff can't be resolved, no feed is written and we 400."""
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.fetch_feed") as mock_fetch,
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.get_admin_calendar_id",
+              return_value=("", [])),
+    ):
+        from external_calendar_busy_blocks.http.fetcher import FetchOk
+        mock_fetch.return_value = FetchOk(b"BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", None, None)
+        MockFeed.objects.filter.return_value.first.return_value = None
+        api = _api_with_request(
+            "POST",
+            b'{"ics_url":"https://calendar.google.com/calendar/ical/me/basic.ics",'
+            b'"staff_id":"00000000000000000000000000000099"}',
+            logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+        )
+        responses = api.create_feed()
+    assert responses[0].status_code == 400
+    MockFeed.assert_not_called()
+
+
+def test_delete_admin_targets_other_staff() -> None:
+    feed = MagicMock(staff_id="00000000000000000000000000000099")
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+    ):
+        MockFeed.objects.filter.return_value.first.return_value = feed
+        MockImported.objects.filter.return_value = []
+        api = _api_with_request(
+            "POST",
+            b'{"staff_id":"00000000-0000-0000-0000-000000000099"}',
+            logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+        )
+        responses = api.delete_feed()
+    # Feed and imported-event lookups were scoped to the target staff id.
+    assert MockFeed.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+    assert responses[-1].status_code == 200
+    feed.delete.assert_called_once()
+
+
+def test_delete_non_admin_ignores_staff_id() -> None:
+    """A non-admin's body staff_id is ignored; the delete acts on self."""
+    feed = MagicMock(staff_id="00000000000000000000000000000002")
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+    ):
+        MockFeed.objects.filter.return_value.first.return_value = feed
+        MockImported.objects.filter.return_value = []
+        api = _api_with_request(
+            "POST",
+            b'{"staff_id":"00000000000000000000000000000099"}',
+            logged_in_staff="00000000-0000-0000-0000-000000000002",
+            secrets={},  # not an admin
+        )
+        responses = api.delete_feed()
+    # Lookup was scoped to the canonicalized SESSION id, not the body id.
+    assert MockFeed.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000002"
+    assert responses[-1].status_code == 200
+    feed.delete.assert_called_once()
 
 
 def test_delete_idempotent_when_no_feed() -> None:
@@ -283,3 +402,65 @@ def test_connect_no_calendar_effect_when_exists() -> None:
     effects_emitted = [r for r in responses if hasattr(r, "type")]
     assert effects_emitted == []
     assert responses[0].status_code == 200
+
+
+def test_status_requires_admin() -> None:
+    api = _api_with_request(
+        "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000002",
+        secrets={},  # not an admin
+        query_params={"staff_id": "00000000000000000000000000000099"},
+    )
+    responses = api.feed_status()
+    assert responses[0].status_code == 403
+
+
+def test_status_requires_staff_id() -> None:
+    api = _api_with_request(
+        "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
+        secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+        query_params={},
+    )
+    responses = api.feed_status()
+    assert responses[0].status_code == 400
+
+
+def test_status_reports_connected_feed_without_url() -> None:
+    feed = MagicMock(is_active=True, last_sync_at="2026-07-11T00:00:00Z", last_error=None)
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+    ):
+        MockFeed.objects.filter.return_value.first.return_value = feed
+        MockImported.objects.filter.return_value.count.return_value = 5
+        api = _api_with_request(
+            "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+            query_params={"staff_id": "00000000-0000-0000-0000-000000000099"},
+        )
+        responses = api.feed_status()
+    assert responses[0].status_code == 200
+    body = json.loads(responses[0].content)
+    assert body["connected"] is True
+    assert body["event_count"] == 5
+    assert "ics_url" not in body
+    # Both the feed lookup and the event count were scoped to the canonical id.
+    assert MockFeed.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+    assert MockImported.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+
+
+def test_status_reports_no_feed() -> None:
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+    ):
+        MockFeed.objects.filter.return_value.first.return_value = None
+        MockImported.objects.filter.return_value.count.return_value = 0
+        api = _api_with_request(
+            "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
+            secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
+            query_params={"staff_id": "00000000000000000000000000000099"},
+        )
+        responses = api.feed_status()
+    body = json.loads(responses[0].content)
+    assert body["connected"] is False
+    assert body["event_count"] == 0

@@ -6,7 +6,7 @@ from canvas_sdk.effects.calendar import Event
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import SimpleAPI, StaffSessionAuthMixin, api
 
-from external_calendar_busy_blocks.auth import canonical_staff_id
+from external_calendar_busy_blocks.auth import canonical_staff_id, canonicalize_staff_id, is_admin
 from external_calendar_busy_blocks.calendars.admin_lookup import get_admin_calendar_id
 from external_calendar_busy_blocks.data.models import (
     ImportedEvent,
@@ -57,7 +57,19 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
                 status_code=400,
             )]
 
-        existing = StaffCalendarFeed.objects.filter(staff_id=staff_id).first()
+        target_id = self._resolve_target_staff_id(staff_id, body)
+
+        # Provision the target's Admin calendar first. An empty id means the
+        # staff (or their name) could not be resolved — fail before writing a
+        # feed row that would have no calendar to land busy blocks on.
+        cal_id, cal_effects = get_admin_calendar_id(target_id)
+        if not cal_id:
+            return [JSONResponse(
+                {"error": "Could not resolve the provider's calendar"},
+                status_code=400,
+            )]
+
+        existing = StaffCalendarFeed.objects.filter(staff_id=target_id).first()
         if existing:
             existing.ics_url = url
             existing.is_active = True
@@ -66,11 +78,8 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
             existing.last_modified = None
             existing.save()
         else:
-            StaffCalendarFeed(staff_id=staff_id, ics_url=url, is_active=True).save()
+            StaffCalendarFeed(staff_id=target_id, ics_url=url, is_active=True).save()
 
-        # Provision the provider's Admin calendar so the busy blocks have a
-        # calendar to land on (find-or-create; empty effects if it exists).
-        _, cal_effects = get_admin_calendar_id(staff_id)
         return [*cal_effects, JSONResponse({"status": "connected"}, status_code=200)]
 
     @api.post("/feeds/delete")
@@ -79,20 +88,72 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         if not staff_id:
             return [JSONResponse({"error": "Not authenticated"}, status_code=401)]
 
-        feed = StaffCalendarFeed.objects.filter(staff_id=staff_id).first()
+        try:
+            body = json.loads(self.request.body or b"{}")
+        except json.JSONDecodeError:
+            return [JSONResponse({"error": "Invalid JSON"}, status_code=400)]
+
+        target_id = self._resolve_target_staff_id(staff_id, body)
+
+        feed = StaffCalendarFeed.objects.filter(staff_id=target_id).first()
         if feed is None:
             return [JSONResponse({"status": "no feed"}, status_code=200)]
 
         effects: list[Effect] = []
-        for row in ImportedEvent.objects.filter(staff_id=staff_id):
+        for row in ImportedEvent.objects.filter(staff_id=target_id):
             effects.append(Event(event_id=row.canvas_event_id).delete())
             row.delete()
 
         feed.delete()
         return [*effects, JSONResponse({"status": "disconnected"}, status_code=200)]
 
+    @api.get("/feeds/status")
+    def feed_status(self) -> list[Response | Effect]:
+        staff_id = self._logged_in_staff_id()
+        if not staff_id:
+            return [JSONResponse({"error": "Not authenticated"}, status_code=401)]
+        if not is_admin(staff_id, self.secrets):
+            return [JSONResponse({"error": "Forbidden"}, status_code=403)]
+
+        target_id = canonicalize_staff_id(self.request.query_params.get("staff_id") or "")
+        if not target_id:
+            return [JSONResponse({"error": "Missing staff_id"}, status_code=400)]
+
+        event_count = ImportedEvent.objects.filter(staff_id=target_id).count()
+
+        feed = StaffCalendarFeed.objects.filter(staff_id=target_id).first()
+        if feed is None:
+            return [JSONResponse(
+                {"connected": False, "event_count": event_count},
+                status_code=200,
+            )]
+        # Never return ics_url — it is a bearer token.
+        return [JSONResponse(
+            {
+                "connected": bool(feed.is_active),
+                "last_sync_at": str(feed.last_sync_at) if feed.last_sync_at else None,
+                "last_error": feed.last_error,
+                "event_count": event_count,
+            },
+            status_code=200,
+        )]
+
     def _logged_in_staff_id(self) -> str | None:
         return canonical_staff_id(self.request.headers)
+
+    def _resolve_target_staff_id(self, logged_in: str, body: dict) -> str:
+        """Return the staff id to act on.
+
+        An admin may target another provider by sending ``staff_id`` in the
+        body; the id is canonicalized to the dashless form used for Staff.id.
+        For everyone else (and when no staff_id is sent), the logged-in staff is
+        authoritative — a non-admin's body staff_id is ignored, so it can never
+        escalate privilege.
+        """
+        requested = (body.get("staff_id") or "").strip()
+        if requested and is_admin(logged_in, self.secrets):
+            return canonicalize_staff_id(requested)
+        return logged_in
 
     _HTTPS_URL_REGEX = re.compile(r"^https://[^/?#\s]+", re.IGNORECASE)
 

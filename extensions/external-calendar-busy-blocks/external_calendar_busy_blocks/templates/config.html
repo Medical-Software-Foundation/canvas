@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Calendar Busy Blocks</title>
   <style>
-    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 600px; }
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 860px; }
     label { display: block; margin: 12px 0 4px; font-weight: 600; }
     input[type="url"] { width: 100%; padding: 8px; font-size: 14px; box-sizing: border-box; }
     button { padding: 8px 16px; font-size: 14px; cursor: pointer; margin-top: 12px; }
@@ -12,6 +12,15 @@
     .error { color: #b00; }
     .status { color: #060; }
     #msg { margin-top: 12px; }
+    table#admin-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    table#admin-table th, table#admin-table td {
+      text-align: left; padding: 8px; border-bottom: 1px solid #ddd; vertical-align: top; font-size: 14px;
+    }
+    table#admin-table th { font-weight: 600; }
+    table#admin-table input[type="url"] { min-width: 240px; margin: 0; }
+    table#admin-table button { margin-top: 0; margin-right: 6px; }
+    td.admin-status { white-space: nowrap; }
+    td.admin-status.is-connected { color: #060; }
   </style>
 </head>
 <body>
@@ -33,6 +42,39 @@
       </form>
     {% endif %}
   </div>
+  {% if is_admin %}
+  <hr style="margin:24px 0;" />
+  <div id="admin-content">
+    <h2>Manage staff</h2>
+    <p>Connect or disconnect a personal calendar on behalf of any staff member — they never have to paste their own URL. Each staff member's secret URL is stored privately and is never shown here; to change one, enter a new URL and click Connect / Replace.</p>
+    <table id="admin-table">
+      <thead>
+        <tr>
+          <th>Provider</th>
+          <th>Status</th>
+          <th>Events</th>
+          <th>Secret iCal URL</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for option in staff_options %}
+        <tr data-staff-id="{{ option.id }}">
+          <td>{{ option.name }}</td>
+          <td class="admin-status{% if option.connected %} is-connected{% endif %}">{% if option.connected %}Connected{% if option.last_sync_at %} · last sync {{ option.last_sync_at }}{% endif %}{% if option.last_error %} · error: {{ option.last_error }}{% endif %}{% else %}Not connected{% endif %}</td>
+          <td class="admin-events">{{ option.event_count }}</td>
+          <td><input type="url" class="admin-url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" /></td>
+          <td>
+            <button type="button" class="admin-connect">Connect / Replace</button>
+            <button type="button" class="admin-disconnect"{% if not option.connected %} disabled{% endif %}>Disconnect</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p id="admin-msg"></p>
+  </div>
+  {% endif %}
   <p id="msg"></p>
 
   <script>
@@ -113,6 +155,71 @@
         form.addEventListener("submit", function (e) {
           e.preventDefault();
           submitJson(deleteUrl, {}, form.querySelector("button"), renderConnectForm);
+        });
+      }
+
+      var statusUrl = "{{ status_url }}";
+      var adminTable = document.getElementById("admin-table");
+      if (adminTable) {
+        var adminMsg = document.getElementById("admin-msg");
+
+        function providerName(row) { return row.cells[0].textContent; }
+
+        // Update one row's status cell + Disconnect button from a status payload.
+        function setRowStatus(row, d) {
+          var cell = row.querySelector(".admin-status");
+          var eventsCell = row.querySelector(".admin-events");
+          var disconnectBtn = row.querySelector(".admin-disconnect");
+          if (eventsCell && d && typeof d.event_count === "number") {
+            eventsCell.textContent = d.event_count;
+          }
+          if (d && d.connected) {
+            cell.textContent = "Connected" +
+              (d.last_sync_at ? " · last sync " + d.last_sync_at : "") +
+              (d.last_error ? " · error: " + d.last_error : "");
+            cell.className = "admin-status is-connected";
+            disconnectBtn.disabled = false;
+          } else {
+            cell.textContent = "Not connected";
+            cell.className = "admin-status";
+            disconnectBtn.disabled = true;
+          }
+        }
+
+        function refreshRow(row) {
+          var staffId = row.getAttribute("data-staff-id");
+          fetch(statusUrl + "?staff_id=" + encodeURIComponent(staffId), { credentials: "same-origin" })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { setRowStatus(row, d); })
+            .catch(function () { /* leave the server-rendered status in place */ });
+        }
+
+        // One delegated listener handles every row's buttons.
+        adminTable.addEventListener("click", function (e) {
+          var btn = e.target;
+          if (!btn.classList || !(btn.classList.contains("admin-connect") || btn.classList.contains("admin-disconnect"))) return;
+          var row = btn.closest("tr");
+          var staffId = row.getAttribute("data-staff-id");
+          adminMsg.textContent = ""; adminMsg.className = "";
+
+          if (btn.classList.contains("admin-connect")) {
+            var input = row.querySelector(".admin-url");
+            var url = input.value.trim();
+            if (!url) {
+              adminMsg.textContent = "Enter a URL for " + providerName(row) + ".";
+              adminMsg.className = "error";
+              return;
+            }
+            submitJson(postUrl, { ics_url: url, staff_id: staffId }, btn, function () {
+              adminMsg.textContent = "Connected " + providerName(row) + "."; adminMsg.className = "status";
+              input.value = ""; btn.disabled = false; refreshRow(row);
+            });
+          } else {
+            submitJson(deleteUrl, { staff_id: staffId }, btn, function () {
+              adminMsg.textContent = "Disconnected " + providerName(row) + "."; adminMsg.className = "status";
+              btn.disabled = false; refreshRow(row);
+            });
+          }
         });
       }
 
