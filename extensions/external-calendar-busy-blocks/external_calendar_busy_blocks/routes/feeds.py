@@ -119,15 +119,21 @@ class FeedsAPI(StaffSessionAuthMixin, SimpleAPI):
         if not target_id:
             return [JSONResponse({"error": "Missing staff_id"}, status_code=400)]
 
+        event_count = ImportedEvent.objects.filter(staff_id=target_id).count()
+
         feed = StaffCalendarFeed.objects.filter(staff_id=target_id).first()
         if feed is None:
-            return [JSONResponse({"connected": False}, status_code=200)]
+            return [JSONResponse(
+                {"connected": False, "event_count": event_count},
+                status_code=200,
+            )]
         # Never return ics_url — it is a bearer token.
         return [JSONResponse(
             {
                 "connected": bool(feed.is_active),
                 "last_sync_at": str(feed.last_sync_at) if feed.last_sync_at else None,
                 "last_error": feed.last_error,
+                "event_count": event_count,
             },
             status_code=200,
         )]

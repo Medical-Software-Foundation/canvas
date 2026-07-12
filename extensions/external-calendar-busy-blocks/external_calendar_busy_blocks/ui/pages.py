@@ -6,7 +6,7 @@ from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data.staff import Staff
 
 from external_calendar_busy_blocks.auth import canonical_staff_id, is_admin
-from external_calendar_busy_blocks.data.models import StaffCalendarFeed
+from external_calendar_busy_blocks.data.models import ImportedEvent, StaffCalendarFeed
 
 
 class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
@@ -25,13 +25,19 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
                 for s in Staff.objects.filter(active=True).order_by("last_name", "first_name")
                 if (s.full_name or "").strip()
             ]
+            staff_ids = [s.id for s in active_staff]
             # One bulk query for every provider's current feed (no per-row query).
             feeds_by_staff = {
                 f.staff_id: f
-                for f in StaffCalendarFeed.objects.filter(
-                    staff_id__in=[s.id for s in active_staff]
-                )
+                for f in StaffCalendarFeed.objects.filter(staff_id__in=staff_ids)
             }
+            # One bulk query for imported-event counts per provider. values_list
+            # avoids pulling full rows; tally in Python (no Count/Counter import).
+            event_counts: dict[str, int] = {}
+            for sid in ImportedEvent.objects.filter(staff_id__in=staff_ids).values_list(
+                "staff_id", flat=True
+            ):
+                event_counts[sid] = event_counts.get(sid, 0) + 1
             for s in active_staff:
                 f = feeds_by_staff.get(s.id)
                 staff_options.append(
@@ -41,6 +47,7 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
                         "connected": bool(f and f.is_active),
                         "last_sync_at": str(f.last_sync_at) if f and f.last_sync_at else None,
                         "last_error": f.last_error if f else None,
+                        "event_count": event_counts.get(s.id, 0),
                     }
                 )
 

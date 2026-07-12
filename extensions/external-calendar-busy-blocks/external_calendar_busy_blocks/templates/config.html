@@ -52,6 +52,7 @@
         <tr>
           <th>Provider</th>
           <th>Status</th>
+          <th>Events</th>
           <th>Secret iCal URL</th>
           <th>Actions</th>
         </tr>
@@ -61,6 +62,7 @@
         <tr data-staff-id="{{ option.id }}">
           <td>{{ option.name }}</td>
           <td class="admin-status{% if option.connected %} is-connected{% endif %}">{% if option.connected %}Connected{% if option.last_sync_at %} · last sync {{ option.last_sync_at }}{% endif %}{% if option.last_error %} · error: {{ option.last_error }}{% endif %}{% else %}Not connected{% endif %}</td>
+          <td class="admin-events">{{ option.event_count }}</td>
           <td><input type="url" class="admin-url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" /></td>
           <td>
             <button type="button" class="admin-connect">Connect / Replace</button>
@@ -166,7 +168,11 @@
         // Update one row's status cell + Disconnect button from a status payload.
         function setRowStatus(row, d) {
           var cell = row.querySelector(".admin-status");
+          var eventsCell = row.querySelector(".admin-events");
           var disconnectBtn = row.querySelector(".admin-disconnect");
+          if (eventsCell && d && typeof d.event_count === "number") {
+            eventsCell.textContent = d.event_count;
+          }
           if (d && d.connected) {
             cell.textContent = "Connected" +
               (d.last_sync_at ? " · last sync " + d.last_sync_at : "") +

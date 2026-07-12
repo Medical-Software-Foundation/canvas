@@ -426,8 +426,12 @@ def test_status_requires_staff_id() -> None:
 
 def test_status_reports_connected_feed_without_url() -> None:
     feed = MagicMock(is_active=True, last_sync_at="2026-07-11T00:00:00Z", last_error=None)
-    with patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed:
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+    ):
         MockFeed.objects.filter.return_value.first.return_value = feed
+        MockImported.objects.filter.return_value.count.return_value = 5
         api = _api_with_request(
             "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
             secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
@@ -437,14 +441,20 @@ def test_status_reports_connected_feed_without_url() -> None:
     assert responses[0].status_code == 200
     body = json.loads(responses[0].content)
     assert body["connected"] is True
+    assert body["event_count"] == 5
     assert "ics_url" not in body
-    # Lookup was scoped to the canonicalized target id.
+    # Both the feed lookup and the event count were scoped to the canonical id.
     assert MockFeed.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
+    assert MockImported.objects.filter.call_args.kwargs["staff_id"] == "00000000000000000000000000000099"
 
 
 def test_status_reports_no_feed() -> None:
-    with patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed:
+    with (
+        patch("external_calendar_busy_blocks.routes.feeds.StaffCalendarFeed") as MockFeed,
+        patch("external_calendar_busy_blocks.routes.feeds.ImportedEvent") as MockImported,
+    ):
         MockFeed.objects.filter.return_value.first.return_value = None
+        MockImported.objects.filter.return_value.count.return_value = 0
         api = _api_with_request(
             "GET", b"", logged_in_staff="00000000-0000-0000-0000-000000000001",
             secrets={"ADMIN_STAFF_IDS": "00000000000000000000000000000001"},
@@ -453,3 +463,4 @@ def test_status_reports_no_feed() -> None:
         responses = api.feed_status()
     body = json.loads(responses[0].content)
     assert body["connected"] is False
+    assert body["event_count"] == 0
