@@ -20,11 +20,29 @@ class ConfigPage(StaffSessionAuthMixin, SimpleAPI):
         admin = is_admin(staff_id, self.secrets)
         staff_options: list[dict] = []
         if admin:
-            staff_options = [
-                {"id": s.id, "name": s.full_name}
+            active_staff = [
+                s
                 for s in Staff.objects.filter(active=True).order_by("last_name", "first_name")
                 if (s.full_name or "").strip()
             ]
+            # One bulk query for every provider's current feed (no per-row query).
+            feeds_by_staff = {
+                f.staff_id: f
+                for f in StaffCalendarFeed.objects.filter(
+                    staff_id__in=[s.id for s in active_staff]
+                )
+            }
+            for s in active_staff:
+                f = feeds_by_staff.get(s.id)
+                staff_options.append(
+                    {
+                        "id": s.id,
+                        "name": s.full_name,
+                        "connected": bool(f and f.is_active),
+                        "last_sync_at": str(f.last_sync_at) if f and f.last_sync_at else None,
+                        "last_error": f.last_error if f else None,
+                    }
+                )
 
         html = render_to_string(
             "templates/config.html",
