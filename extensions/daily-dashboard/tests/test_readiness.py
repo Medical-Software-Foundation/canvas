@@ -624,9 +624,9 @@ def test_cell_detail_caps_at_three_most_recent() -> None:
 def test_chart_base_from_customer_identifier() -> None:
     board = readiness.build_board(
         tz_name="UTC", staff_id=None, scope="all", provider_id=None,
-        location_id=None, customer_identifier="acme-clinic",
+        location_id=None, customer_identifier="example",
     )
-    assert board["chart_base"] == "https://acme-clinic.canvasmedical.com"
+    assert board["chart_base"] == "https://example.canvasmedical.com"
 
 
 @pytest.mark.django_db
