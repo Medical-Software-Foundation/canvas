@@ -60,3 +60,29 @@ class TestGetEncountersQuery:
         mock_note.objects.select_related.assert_called_once_with(
             "patient", "provider", "location", "note_type_version"
         )
+
+
+class TestGetEncountersClaimLookup:
+    """Rendering a row must resolve the note's claim once, not twice."""
+
+    @patch("encounter_list.applications.my_application.Note")
+    def test_get_claim_called_once_per_row(self, mock_note):
+        """get_encounters resolves get_claim() a single time per encounter row."""
+        note = MagicMock()
+        note.datetime_of_service = None
+        note.created = None
+        note.patient.birth_date = None
+        note.patient.nickname = ""
+        note.get_claim.return_value = MagicMock()
+
+        with (
+            patch.object(EncounterListApi, "_sort_and_paginate_database", return_value=([note], 1, 1)),
+            patch.object(EncounterListApi, "_calculate_delegated_orders_count", return_value=0),
+        ):
+            api = EncounterListApi()
+            api.request = MagicMock()
+            api.request.query_params.get = lambda key, default=None: default
+
+            api.get_encounters()
+
+        assert note.get_claim.call_count == 1
