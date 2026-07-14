@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from http import HTTPStatus
 
 from logger import log
@@ -26,6 +26,7 @@ from provider_availability.engine.event_sync import (
     build_delete_recurring_block_effects,
     build_lead_time_block_effects,
     build_recurring_block_sync_effects,
+    delete_provider_lead_time_events,
     sync_provider_availability,
 )
 from provider_availability.engine.lookups import (
@@ -51,7 +52,6 @@ from provider_availability.engine.storage import (
     get_all_blocks,
     get_all_rules,
     get_all_recurring_blocks,
-    get_allowed_staff,
     get_block_by_id,
     get_blocks_by_group,
     get_blocks_for_provider,
@@ -70,6 +70,7 @@ from provider_availability.engine.storage import (
     set_practice_timezone,
     set_provider_timezone,
 )
+from provider_availability.api._auth import is_authorized
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
 from provider_availability.engine.provider_resolver import (
     get_provider_displays,
@@ -189,30 +190,11 @@ def _validate_recurrence_payload(body: dict) -> str | None:
 def _check_write_access(request: object, secrets: dict | None = None) -> list[Response] | None:
     """Return an error response list if the user is not authorized for writes, else None.
 
-    Checks the ``allowed-staff-keys`` plugin secret first (comma-separated staff UUIDs).
-    Falls back to cache-based ``get_allowed_staff()`` for backward compat.
-    Empty / missing secret = allow everyone (bootstrap behaviour).
+    Gates on the ``allowed-staff-keys`` plugin secret. Empty / unset secret =
+    any logged-in Canvas staff member is allowed (``StaffSessionAuthMixin``
+    enforces the logged-in baseline).
     """
-    staff_id = str(getattr(request, "staff_id", None) or "")
-
-    # Prefer secret-based access control
-    secret_val = (secrets or {}).get("allowed-staff-keys", "")
-    if secret_val:
-        allowed_keys = [k.strip() for k in secret_val.split(",") if k.strip()]
-        if staff_id and staff_id in allowed_keys:
-            return None
-        return [
-            JSONResponse(
-                {"error": "Access denied. You are not authorized to modify availability rules."},
-                status_code=HTTPStatus.FORBIDDEN,
-            )
-        ]
-
-    # Fallback: cache-based list (backward compat during migration)
-    allowed = get_allowed_staff()
-    if not allowed:
-        return None  # empty list = allow everyone (bootstrap)
-    if staff_id and staff_id in allowed:
+    if is_authorized(secrets, request):
         return None
     return [
         JSONResponse(
@@ -684,14 +666,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                     all_effects.extend(build_lead_time_block_effects(r))
                     has_lead_time = True
             if not has_lead_time:
-                from provider_availability.engine.admin_calendar import get_admin_calendars
-                from canvas_sdk.v1.data.calendar import Event as EventModel
-                from canvas_sdk.effects.calendar import Event as EventEffect
-                for cal in get_admin_calendars(pid):
-                    for evt in EventModel.objects.filter(
-                        calendar__id=cal.id, title="Lead Time", is_cancelled=False
-                    ):
-                        all_effects.append(EventEffect(event_id=str(evt.id)).delete())
+                all_effects.extend(delete_provider_lead_time_events(pid))
 
         return [
             *all_effects,
@@ -720,14 +695,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 event_effects.extend(build_lead_time_block_effects(r))
                 has_lead_time = True
         if not has_lead_time:
-            from provider_availability.engine.admin_calendar import get_admin_calendars
-            from canvas_sdk.v1.data.calendar import Event as EventModel
-            from canvas_sdk.effects.calendar import Event as EventEffect
-            for cal in get_admin_calendars(provider_id):
-                for evt in EventModel.objects.filter(
-                    calendar__id=cal.id, title="Lead Time", is_cancelled=False
-                ):
-                    event_effects.append(EventEffect(event_id=str(evt.id)).delete())
+            event_effects.extend(delete_provider_lead_time_events(provider_id))
 
         return [
             *event_effects,
@@ -929,8 +897,10 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
             event_effects: list[Effect] = []
             for d in parsed_dates:
                 if all_day:
-                    start_dt = datetime.combine(d, datetime.min.time())
-                    end_dt = datetime.combine(d + timedelta(days=1), datetime.min.time())
+                    # 00:00:00 -> 23:59:59 on the same day. Ending at next-day
+                    # midnight makes the calendar event spill into the next day.
+                    start_dt = datetime.combine(d, time.min)
+                    end_dt = datetime.combine(d, time(23, 59, 59))
                 else:
                     # parse start/end as time-of-day applied to this date
                     start_dt = datetime.fromisoformat(f"{d.isoformat()}T{body['start'][-8:] if 'T' in body['start'] else body['start']}")
@@ -1389,12 +1359,25 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 {"error": f"Invalid timezone. Choose from: {', '.join(COMMON_TIMEZONES)}"},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
+        # One-off blocks store naive wall-clock times that are localized to the
+        # provider TZ at sync time, so a TZ change must rebuild them or their
+        # events keep the OLD TZ's UTC instant (midnight PT shows as 3 AM ET).
+        # Delete the existing events *before* switching the TZ, so the delete's
+        # time-range match hits the old-TZ events; then rebuild after the switch.
+        provider_blocks = [b for b in get_all_blocks() if b.provider_id == provider_id]
+        effects: list[Effect] = []
+        for blk in provider_blocks:
+            effects.extend(build_delete_block_effects(provider_id, blk))
+
         set_provider_timezone(provider_id, tz_name)
+
         # Re-sync this provider's calendar events with the new timezone
-        effects: list[Effect] = list(sync_provider_availability(provider_id))
+        effects.extend(sync_provider_availability(provider_id))
         for rb in get_all_recurring_blocks():
             if rb.provider_id == provider_id:
                 effects.extend(build_recurring_block_sync_effects(rb))
+        for blk in provider_blocks:
+            effects.extend(build_block_event_effects(blk))
         log.info("set_provider_tz: provider %s → %s, %d sync effects", provider_id, tz_name, len(effects))
         return [*effects, JSONResponse({
             "message": f"Provider timezone set to {tz_name}",
@@ -1418,13 +1401,22 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 {"error": f"Invalid timezone. Choose from: {', '.join(COMMON_TIMEZONES)}"},
                 status_code=HTTPStatus.BAD_REQUEST,
             )]
+        # Delete existing one-off block events under each provider's OLD tz first
+        # (before any set_provider_timezone call), then rebuild after the switch
+        # so naive wall-clock block times re-anchor to the new TZ. See set_provider_tz.
+        provider_blocks = [b for b in get_all_blocks() if b.provider_id in provider_ids]
         effects: list[Effect] = []
+        for blk in provider_blocks:
+            effects.extend(build_delete_block_effects(blk.provider_id, blk))
+
         for pid in provider_ids:
             set_provider_timezone(pid, tz_name)
             effects.extend(sync_provider_availability(pid))
         for rb in get_all_recurring_blocks():
             if rb.provider_id in provider_ids:
                 effects.extend(build_recurring_block_sync_effects(rb))
+        for blk in provider_blocks:
+            effects.extend(build_block_event_effects(blk))
         log.info("set_provider_tz_bulk: %d providers → %s, %d sync effects", len(provider_ids), tz_name, len(effects))
         return [*effects, JSONResponse({
             "message": f"Timezone set to {tz_name} for {len(provider_ids)} providers",
@@ -1710,14 +1702,7 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 has_lead_time = True
         if not has_lead_time:
             # Delete orphaned lead time events for this provider
-            from provider_availability.engine.admin_calendar import get_admin_calendars
-            from canvas_sdk.v1.data.calendar import Event as EventModel
-            from canvas_sdk.effects.calendar import Event as EventEffect
-            for cal in get_admin_calendars(provider_id):
-                for evt in EventModel.objects.filter(
-                    calendar__id=cal.id, title="Lead Time", is_cancelled=False
-                ):
-                    effects.append(EventEffect(event_id=str(evt.id)).delete())
+            effects.extend(delete_provider_lead_time_events(provider_id))
         return [*effects, JSONResponse({"message": "Rule deleted"})]
 
     def _form_delete_provider_rules(self, provider_id: str) -> list[Response | Effect]:

@@ -58,6 +58,18 @@ def _setup_staff_queryset(mock_staff_cls: MagicMock, staff_list: list) -> None:
     mock_staff_cls.objects.filter.return_value = qs
 
 
+def _setup_calendars(mock_cal_model: MagicMock, cals: list) -> None:
+    """Configure the bulk CalendarModel.objects.filter(description__in=...) lookup."""
+    mock_cal_model.objects.filter.return_value = cals
+
+
+def _setup_active_event_cal_ids(mock_event_model: MagicMock, cal_ids: list) -> None:
+    """Configure the bulk EventModel active-event lookup to return given calendar ids."""
+    qs = MagicMock()
+    qs.values_list.return_value = cal_ids
+    mock_event_model.objects.filter.return_value = qs
+
+
 # ── Authentication ───────────────────────────────────────────────────────
 
 
@@ -107,13 +119,17 @@ class TestAuthenticate:
 
 
 class TestRunProvisioning:
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_creates_calendars_for_schedulable_roles(self, mock_staff_cls, mock_cal_model):
+    def test_creates_calendars_for_schedulable_roles(
+        self, mock_staff_cls, mock_cal_model, mock_event_model
+    ):
         """Providers with MD/DO/NP/PA roles get calendar + event created."""
         provider = _make_staff("MD", "staff-uuid-md", "Jane", "Doe")
         _setup_staff_queryset(mock_staff_cls, [provider])
-        mock_cal_model.objects.filter.return_value.first.return_value = None
+        _setup_calendars(mock_cal_model, [])
+        _setup_active_event_cal_ids(mock_event_model, [])
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -127,14 +143,10 @@ class TestRunProvisioning:
         # CalendarEffect + EventEffect + JSONResponse
         assert len(result) == 3
 
-        assert mock_staff_cls.mock_calls == [
-            call.objects.filter(active=True),
-            call.objects.filter().count(),
-        ]
-        assert mock_cal_model.mock_calls == [
-            call.objects.filter(description=str(provider.id)),
-            call.objects.filter().first(),
-        ]
+        # Calendars are bulk-loaded once by staff key, not per-staff
+        assert mock_cal_model.objects.filter.call_args == call(
+            description__in=[str(provider.id)]
+        )
 
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
@@ -174,18 +186,21 @@ class TestRunProvisioning:
         assert data["skipped"] == 0
         assert mock_cal_model.mock_calls == []
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_skips_existing_calendar_with_active_event(self, mock_staff_cls, mock_cal_model):
+    def test_skips_existing_calendar_with_active_event(
+        self, mock_staff_cls, mock_cal_model, mock_event_model
+    ):
         """Provider with existing calendar AND active event is skipped."""
         provider = _make_staff("NP", "staff-uuid-np", "Bob", "Smith")
         _setup_staff_queryset(mock_staff_cls, [provider])
 
         existing_cal = MagicMock()
         existing_cal.id = "cal-uuid-1"
-        active_event = MagicMock()
-        existing_cal.events.filter.return_value.first.return_value = active_event
-        mock_cal_model.objects.filter.return_value.first.return_value = existing_cal
+        existing_cal.description = str(provider.id)
+        _setup_calendars(mock_cal_model, [existing_cal])
+        _setup_active_event_cal_ids(mock_event_model, ["cal-uuid-1"])
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -198,17 +213,21 @@ class TestRunProvisioning:
         # Only JSONResponse, no effects
         assert len(result) == 1
 
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_reuses_existing_calendar_without_active_event(self, mock_staff_cls, mock_cal_model):
+    def test_reuses_existing_calendar_without_active_event(
+        self, mock_staff_cls, mock_cal_model, mock_event_model
+    ):
         """Provider with existing calendar but no active event gets a new event only."""
         provider = _make_staff("DO", "staff-uuid-do", "Alice", "Jones")
         _setup_staff_queryset(mock_staff_cls, [provider])
 
         existing_cal = MagicMock()
         existing_cal.id = "cal-uuid-existing"
-        existing_cal.events.filter.return_value.first.return_value = None
-        mock_cal_model.objects.filter.return_value.first.return_value = existing_cal
+        existing_cal.description = str(provider.id)
+        _setup_calendars(mock_cal_model, [existing_cal])
+        _setup_active_event_cal_ids(mock_event_model, [])  # no active events
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -220,13 +239,20 @@ class TestRunProvisioning:
         # Only EventEffect + JSONResponse (no CalendarEffect)
         assert len(result) == 2
 
+    @patch(f"{PROV_MODULE}.EventEffect")
+    @patch(f"{PROV_MODULE}.EventModel")
     @patch(f"{PROV_MODULE}.CalendarModel")
     @patch(f"{PROV_MODULE}.Staff")
-    def test_handles_exception_per_staff(self, mock_staff_cls, mock_cal_model):
-        """Exception during provisioning of one staff increments errored count."""
+    def test_handles_exception_per_staff(
+        self, mock_staff_cls, mock_cal_model, mock_event_model, mock_event_effect
+    ):
+        """An error while provisioning one staff increments errored, not crash."""
         provider = _make_staff("PA", "staff-uuid-pa", "Error", "Provider")
         _setup_staff_queryset(mock_staff_cls, [provider])
-        mock_cal_model.objects.filter.side_effect = Exception("DB error")
+        _setup_calendars(mock_cal_model, [])
+        _setup_active_event_cal_ids(mock_event_model, [])
+        # The per-staff event build fails — isolated by the loop's try/except.
+        mock_event_effect.side_effect = Exception("event build error")
 
         handler = _make_provision_handler()
         result = handler.run_provisioning()
@@ -286,114 +312,6 @@ class TestRunProvisioning:
         assert data["created"] == 2  # MD + NP
         assert data["skipped"] == 0
         assert data["errored"] == 0
-
-
-# ── list_allowed_staff ──────────────────────────────────────────────────
-
-
-class TestListAllowedStaff:
-    @patch(f"{PROV_MODULE}.get_allowed_staff", return_value=["s1", "s2"])
-    def test_returns_list(self, mock_get):
-        handler = _make_provision_handler()
-        result = handler.list_allowed_staff()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.OK
-        assert data["allowed_staff"] == ["s1", "s2"]
-        assert data["count"] == 2
-        assert mock_get.mock_calls == [call()]
-
-    @patch(f"{PROV_MODULE}.get_allowed_staff", return_value=[])
-    def test_returns_empty_list(self, mock_get):
-        handler = _make_provision_handler()
-        result = handler.list_allowed_staff()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.OK
-        assert data["allowed_staff"] == []
-        assert data["count"] == 0
-        assert mock_get.mock_calls == [call()]
-
-
-# ── replace_allowed_staff ───────────────────────────────────────────────
-
-
-class TestReplaceAllowedStaff:
-    @patch(f"{PROV_MODULE}.set_allowed_staff")
-    def test_replaces_list(self, mock_set):
-        handler = _make_provision_handler(json_body={"staff_ids": ["s1", "s2", "s3"]})
-        result = handler.replace_allowed_staff()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.OK
-        assert data["count"] == 3
-        assert data["message"] == "Allowed staff list updated"
-        assert mock_set.mock_calls == [call(["s1", "s2", "s3"])]
-
-    def test_invalid_input_not_a_list(self):
-        handler = _make_provision_handler(json_body={"staff_ids": "not-a-list"})
-        result = handler.replace_allowed_staff()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "staff_ids must be a list" in data["error"]
-
-    @patch(f"{PROV_MODULE}.set_allowed_staff")
-    def test_coerces_ids_to_strings(self, mock_set):
-        handler = _make_provision_handler(json_body={"staff_ids": [123, 456]})
-        result = handler.replace_allowed_staff()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.OK
-        assert mock_set.mock_calls == [call(["123", "456"])]
-
-
-# ── add_allowed_staff_endpoint ──────────────────────────────────────────
-
-
-class TestAddAllowedStaffEndpoint:
-    @patch(f"{PROV_MODULE}.add_allowed_staff")
-    def test_adds_single(self, mock_add):
-        handler = _make_provision_handler(json_body={"staff_id": "s-new"})
-        result = handler.add_allowed_staff_endpoint()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.CREATED
-        assert data["staff_id"] == "s-new"
-        assert data["message"] == "Staff added"
-        assert mock_add.mock_calls == [call("s-new")]
-
-    def test_missing_staff_id(self):
-        handler = _make_provision_handler(json_body={})
-        result = handler.add_allowed_staff_endpoint()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "staff_id is required" in data["error"]
-
-    def test_empty_staff_id(self):
-        handler = _make_provision_handler(json_body={"staff_id": ""})
-        result = handler.add_allowed_staff_endpoint()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.BAD_REQUEST
-        assert "staff_id is required" in data["error"]
-
-
-# ── remove_allowed_staff_endpoint ───────────────────────────────────────
-
-
-class TestRemoveAllowedStaffEndpoint:
-    @patch(f"{PROV_MODULE}.remove_allowed_staff")
-    def test_removes_single(self, mock_remove):
-        handler = _make_provision_handler(path_params={"staff_id": "s-remove"})
-        result = handler.remove_allowed_staff_endpoint()
-
-        data, code = _parse(result[0])
-        assert code == HTTPStatus.OK
-        assert data["staff_id"] == "s-remove"
-        assert data["message"] == "Staff removed"
-        assert mock_remove.mock_calls == [call("s-remove")]
 
 
 # ── get_timezone ────────────────────────────────────────────────────────

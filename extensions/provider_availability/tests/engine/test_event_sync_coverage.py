@@ -357,10 +357,11 @@ class TestBuildDeleteBlockEffectsTitleFallback:
 
             result = build_delete_block_effects(PROVIDER_ID, sample_block)
 
-        # Two filter calls: time-range then title
+        # Two filter calls: time-range then title. Queries now use a single
+        # bulk calendar__id__in lookup rather than one filter per calendar.
         assert mock_event_objects.filter.call_count == 2
         title_call = mock_event_objects.filter.call_args_list[1]
-        assert title_call.kwargs["calendar__id"] == "admin-cal-1"
+        assert title_call.kwargs["calendar__id__in"] == ["admin-cal-1"]
         assert title_call.kwargs["title"] == sample_block.reason
         assert title_call.kwargs["is_cancelled"] is False
         assert "starts_at__date" in title_call.kwargs

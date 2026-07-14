@@ -499,9 +499,10 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
         <div>
           <div class="section-label">Access Control</div>
           <p style="font-size:13px;color:var(--text-dim);line-height:1.5;">
-            Edit access is controlled by the <strong>allowed-staff-keys</strong> plugin secret.
+            Access is controlled by the <strong>allowed-staff-keys</strong> plugin secret.
             Configure it under <strong>Settings &gt; Plugins &gt; provider_availability</strong> in your Canvas instance.
-            Add the staff key UUIDs of users who should have write access, separated by commas.
+            List the staff UUIDs (dashed or undashed) who should have access, separated by commas.
+            Leave it empty to allow any logged-in Canvas staff member.
           </p>
         </div>
 

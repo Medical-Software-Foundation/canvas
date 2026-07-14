@@ -13,17 +13,14 @@ from canvas_sdk.effects.calendar import CalendarType, EventRecurrence
 from canvas_sdk.effects.calendar import Event as EventEffect
 from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPI
-from canvas_sdk.handlers.simple_api.api import delete, get, post, put
+from canvas_sdk.handlers.simple_api.api import get, post, put
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
+from canvas_sdk.v1.data.calendar import Event as EventModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
 from provider_availability.engine.storage import (
-    add_allowed_staff,
-    get_allowed_staff,
     get_practice_timezone,
-    remove_allowed_staff,
-    set_allowed_staff,
     set_practice_timezone,
 )
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
@@ -55,27 +52,42 @@ class ProvisionAPI(SimpleAPI):
         skipped = 0
         errored = 0
 
-        active_staff = Staff.objects.filter(active=True)
-        log.info("provision: checking %d active staff", active_staff.count())
+        active_staff = list(Staff.objects.filter(active=True))
+        log.info("provision: checking %d active staff", len(active_staff))
 
-        for staff in active_staff:
-            role = staff.top_role_abbreviation
-            if not role or role.upper() not in SCHEDULABLE_ROLES:
-                continue
+        schedulable = [
+            s for s in active_staff
+            if s.top_role_abbreviation
+            and s.top_role_abbreviation.upper() in SCHEDULABLE_ROLES
+        ]
+        staff_keys = [str(s.id) for s in schedulable]
 
+        # Bulk-load existing calendars and the calendars that already have an
+        # active Available event, so the per-staff loop issues no DB queries.
+        cals_by_key: dict[str, CalendarModel] = {}
+        active_cal_ids: set[str] = set()
+        if staff_keys:
+            cals_by_key = {
+                c.description: c
+                for c in CalendarModel.objects.filter(description__in=staff_keys)
+            }
+            now = datetime.now(UTC).replace(tzinfo=None)
+            active_cal_ids = {
+                str(cid)
+                for cid in EventModel.objects.filter(
+                    calendar__description__in=staff_keys,
+                    title="Available",
+                    recurrence_ends_at__gt=now,
+                ).values_list("calendar_id", flat=True)
+            }
+
+        for staff in schedulable:
             try:
                 staff_key = str(staff.id)
-                existing_cal = CalendarModel.objects.filter(
-                    description=staff_key
-                ).first()
+                existing_cal = cals_by_key.get(staff_key)
 
                 if existing_cal:
-                    now = datetime.now(UTC).replace(tzinfo=None)
-                    active_event = existing_cal.events.filter(
-                        title="Available",
-                        recurrence_ends_at__gt=now,
-                    ).first()
-                    if active_event:
+                    if str(existing_cal.id) in active_cal_ids:
                         skipped += 1
                         continue
                     calendar_id = str(existing_cal.id)
@@ -148,59 +160,6 @@ class ProvisionAPI(SimpleAPI):
                 "errored": errored,
             }),
         ]
-
-    # ── Allowed staff management ──────────────────────────────────────
-
-    @get("/allowed-staff")
-    def list_allowed_staff(self) -> list[Response | Effect]:
-        """Return the list of staff IDs allowed to access the admin UI."""
-        ids = get_allowed_staff()
-        return [JSONResponse({"allowed_staff": ids, "count": len(ids)})]
-
-    @put("/allowed-staff")
-    def replace_allowed_staff(self) -> list[Response | Effect]:
-        """Replace the full allowed staff list."""
-        body = self.request.json()
-        ids = body.get("staff_ids", [])
-        if not isinstance(ids, list):
-            return [
-                JSONResponse(
-                    {"error": "staff_ids must be a list"},
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
-        set_allowed_staff([str(i) for i in ids])
-        log.info("replace_allowed_staff: set %d staff IDs", len(ids))
-        return [JSONResponse({"message": "Allowed staff list updated", "count": len(ids)})]
-
-    @post("/allowed-staff")
-    def add_allowed_staff_endpoint(self) -> list[Response | Effect]:
-        """Add a single staff ID to the allowed list."""
-        body = self.request.json()
-        staff_id = body.get("staff_id", "")
-        if not staff_id:
-            return [
-                JSONResponse(
-                    {"error": "staff_id is required"},
-                    status_code=HTTPStatus.BAD_REQUEST,
-                )
-            ]
-        add_allowed_staff(str(staff_id))
-        log.info("add_allowed_staff: added %s", staff_id)
-        return [
-            JSONResponse(
-                {"message": "Staff added", "staff_id": str(staff_id)},
-                status_code=HTTPStatus.CREATED,
-            )
-        ]
-
-    @delete("/allowed-staff/<staff_id>")
-    def remove_allowed_staff_endpoint(self) -> list[Response | Effect]:
-        """Remove a staff ID from the allowed list."""
-        staff_id = self.request.path_params["staff_id"]
-        remove_allowed_staff(str(staff_id))
-        log.info("remove_allowed_staff: removed %s", staff_id)
-        return [JSONResponse({"message": "Staff removed", "staff_id": staff_id})]
 
     # ── Timezone management ───────────────────────────────────────────
 

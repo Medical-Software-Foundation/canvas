@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import uuid
 from datetime import UTC, date, datetime
 
 from canvas_sdk.effects import Effect
@@ -18,7 +17,11 @@ from logger import log
 
 from zoneinfo import ZoneInfo
 
-from provider_availability.engine.admin_calendar import get_admin_calendar_id, get_admin_calendars
+from provider_availability.engine.admin_calendar import (
+    deterministic_calendar_id,
+    get_admin_calendar_id,
+    get_admin_calendars,
+)
 from provider_availability.engine.models import (
     AdminBlock,
     DateOverride,
@@ -26,8 +29,8 @@ from provider_availability.engine.models import (
     RecurringBlock,
     date_in_pattern,
 )
-from provider_availability.engine.storage import get_event_ids, get_rules_for_provider, save_event_ids
-from provider_availability.engine.tz_utils import localize_naive, practice_tz, provider_tz, to_utc
+from provider_availability.engine.storage import get_event_ids, get_rules_for_provider
+from provider_availability.engine.tz_utils import localize_naive, provider_tz, to_utc
 
 DAY_TO_WEEKDAY: dict[str, int] = {
     "monday": 0,
@@ -355,33 +358,33 @@ def build_delete_effects(provider_id: str) -> list[Effect]:
     if not provider_name:
         return []
 
-    calendars = CalendarModel.objects.filter(
-        title__startswith=provider_name + ": Clinic"
-    )
+    cal_ids = [
+        c.id
+        for c in CalendarModel.objects.filter(
+            title__startswith=provider_name + ": Clinic"
+        )
+    ]
+    if not cal_ids:
+        return []
 
     effects: list[Effect] = []
     now = datetime.now(UTC)
-    for cal in calendars:
-        events = EventModel.objects.filter(
-            calendar__id=cal.id,
-            title=AVAILABILITY_TITLE,
-            is_cancelled=False,
-        )
-        for evt in events:
-            # Preserve fully-past events for historical reporting
-            end_boundary = getattr(evt, "recurrence_ends_at", None) or evt.ends_at
-            if end_boundary and end_boundary < now:
-                continue
-            effects.append(EventEffect(event_id=str(evt.id)).delete())
-        log.info(
-            "build_delete_effects: cal=%s title=%s found %d future events to delete",
-            cal.id, cal.title, len(effects),
-        )
+    # Single bulk query across all the provider's Clinic calendars.
+    for evt in EventModel.objects.filter(
+        calendar__id__in=cal_ids,
+        title=AVAILABILITY_TITLE,
+        is_cancelled=False,
+    ):
+        # Preserve fully-past events for historical reporting
+        end_boundary = getattr(evt, "recurrence_ends_at", None) or evt.ends_at
+        if end_boundary and end_boundary < now:
+            continue
+        effects.append(EventEffect(event_id=str(evt.id)).delete())
 
     if effects:
         log.info(
-            "build_delete_effects: provider=%s, total %d delete effects",
-            provider_id, len(effects),
+            "build_delete_effects: provider=%s, %d Clinic calendars, total %d delete effects",
+            provider_id, len(cal_ids), len(effects),
         )
 
     return effects
@@ -427,13 +430,19 @@ def _get_calendar_id(
         except PracticeLocation.DoesNotExist:
             pass
 
+    new_id = deterministic_calendar_id(provider_id, CalendarType.Clinic, location_id)
     if provider_name:
         loc_arg = location_name or None
-        existing = CalendarModel.objects.for_calendar_name(
-            provider_name=provider_name,
-            calendar_type=CalendarType.Clinic,
-            location=loc_arg,
-        ).first()
+        # Prefer the deterministic anchor id; fall back to title for legacy
+        # calendars created before deterministic ids existed.
+        existing = (
+            CalendarModel.objects.filter(id=new_id).first()
+            or CalendarModel.objects.for_calendar_name(
+                provider_name=provider_name,
+                calendar_type=CalendarType.Clinic,
+                location=loc_arg,
+            ).first()
+        )
         if existing:
             log.info(
                 "_get_calendar_id: found existing calendar id=%s title=%s",
@@ -445,12 +454,14 @@ def _get_calendar_id(
         "_get_calendar_id: creating new calendar for provider=%s location=%s",
         provider_id, location_id,
     )
-    new_id = str(uuid.uuid4())
     cal_effect = CalendarEffect(
         id=new_id,
         provider=provider_id,
         type=CalendarType.Clinic,
         location=location_id if location_id else None,
+        # Store the staff UUID in description so the calendar can be resolved
+        # back to its provider even after a rename (title is name-based).
+        description=str(provider_id),
     ).create()
 
     return new_id, [cal_effect]
@@ -526,34 +537,33 @@ def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None
         block_end_utc = to_utc(block.end if block.end.tzinfo is not None else localize_naive(block.end, tz))
         block_title = block.reason if block.reason else "Blocked"
 
-        for cal in get_admin_calendars(provider_id):
-            # Match by converted UTC times
-            events_qs = EventModel.objects.filter(
-                calendar__id=cal.id,
+        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+        if cal_ids:
+            # Match by converted UTC times across all the provider's Admin calendars
+            for evt in EventModel.objects.filter(
+                calendar__id__in=cal_ids,
                 is_cancelled=False,
                 starts_at=block_start_utc,
                 ends_at=block_end_utc,
-            )
-            for evt in events_qs:
+            ):
                 effects.append(EventEffect(event_id=str(evt.id)).delete())
             # Also match by title if time match found nothing (handles TZ edge cases)
             if not effects:
-                events_qs = EventModel.objects.filter(
-                    calendar__id=cal.id,
+                for evt in EventModel.objects.filter(
+                    calendar__id__in=cal_ids,
                     is_cancelled=False,
                     title=block_title,
                     starts_at__date=block_start_utc.date(),
-                )
-                for evt in events_qs:
+                ):
                     effects.append(EventEffect(event_id=str(evt.id)).delete())
     else:
-        for cal in get_admin_calendars(provider_id):
-            events_qs = EventModel.objects.filter(
-                calendar__id=cal.id,
+        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+        if cal_ids:
+            for evt in EventModel.objects.filter(
+                calendar__id__in=cal_ids,
                 title=BLOCK_TITLE,
                 is_cancelled=False,
-            )
-            for evt in events_qs:
+            ):
                 effects.append(EventEffect(event_id=str(evt.id)).delete())
 
     if effects:
@@ -563,60 +573,49 @@ def build_delete_block_effects(provider_id: str, block: AdminBlock | None = None
 
 # ── Lead-time block sync ──────────────────────────────────────────────
 
-
-def delete_all_plugin_events() -> list[Effect]:
-    """Delete ALL non-cancelled events on the plugin's Clinic + Admin calendars.
-
-    Used during plugin install to ensure a clean slate before re-syncing.
-    These calendars are created and managed exclusively by this plugin
-    (`CalendarType.Clinic` and `CalendarType.Administrative`), so every event
-    on them is ours. We don't filter by title because block events use the
-    user-supplied reason as their title (e.g. "holiday") — title filtering
-    would leak duplicates on every redeploy as those custom-named events
-    accumulate.
-    """
-    effects: list[Effect] = []
-
-    # Clean Clinic calendars (Available events)
-    for cal in CalendarModel.objects.filter(title__contains=": Clinic"):
-        for evt in EventModel.objects.filter(
-            calendar__id=cal.id,
-            is_cancelled=False,
-        ):
-            effects.append(EventEffect(event_id=str(evt.id)).delete())
-
-    # Clean Administrative calendars (blocks of any title, lead time, recurring blocks, holds)
-    for cal in CalendarModel.objects.filter(title__contains=": Admin"):
-        for evt in EventModel.objects.filter(
-            calendar__id=cal.id,
-            is_cancelled=False,
-        ):
-            effects.append(EventEffect(event_id=str(evt.id)).delete())
-
-    if effects:
-        log.info("delete_all_plugin_events: deleting %d stale events across all calendars", len(effects))
-    return effects
-
-
 def delete_all_lead_time_events() -> list[Effect]:
     """Delete ALL 'Lead Time' events across ALL Administrative calendars.
 
     Used during plugin install to clean up orphaned lead-time events
     from providers whose rules may no longer be cached.
     """
-    effects: list[Effect] = []
-    admin_cals = CalendarModel.objects.filter(title__contains=": Admin")
-    for cal in admin_cals:
+    admin_cal_ids = [
+        c.id for c in CalendarModel.objects.filter(title__contains=": Admin")
+    ]
+    if not admin_cal_ids:
+        return []
+    effects: list[Effect] = [
+        EventEffect(event_id=str(evt.id)).delete()
         for evt in EventModel.objects.filter(
-            calendar__id=cal.id,
+            calendar__id__in=admin_cal_ids,
             title=LEAD_TIME_TITLE,
             is_cancelled=False,
-        ):
-            effects.append(EventEffect(event_id=str(evt.id)).delete())
+        )
+    ]
 
     if effects:
         log.info("delete_all_lead_time_events: deleting %d orphaned lead-time events", len(effects))
     return effects
+
+
+def delete_provider_lead_time_events(provider_id: str) -> list[Effect]:
+    """Delete all 'Lead Time' events on a single provider's Admin calendars.
+
+    Used to clean up orphaned lead-time blocks when a provider has no active
+    rules requiring lead time. One bulk query across all the provider's Admin
+    calendars.
+    """
+    cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+    if not cal_ids:
+        return []
+    return [
+        EventEffect(event_id=str(evt.id)).delete()
+        for evt in EventModel.objects.filter(
+            calendar__id__in=cal_ids,
+            title=LEAD_TIME_TITLE,
+            is_cancelled=False,
+        )
+    ]
 
 
 def build_lead_time_block_effects(rule: ProviderAvailabilityRule) -> list[Effect]:
@@ -688,16 +687,18 @@ def build_lead_time_block_effects(rule: ProviderAvailabilityRule) -> list[Effect
         pass
 
     # Check if existing lead-time events are still close enough to skip rebuild
-    admin_cals = get_admin_calendars(rule.provider_id)
-    existing_events = []
-    for cal in admin_cals:
-        existing_events.extend(
+    admin_cal_ids = [c.id for c in get_admin_calendars(rule.provider_id)]
+    existing_events = (
+        list(
             EventModel.objects.filter(
-                calendar__id=cal.id,
+                calendar__id__in=admin_cal_ids,
                 title=LEAD_TIME_TITLE,
                 is_cancelled=False,
             ).order_by("starts_at")
         )
+        if admin_cal_ids
+        else []
+    )
 
     if existing_events and lead_intervals:
         existing_start = existing_events[0].starts_at
@@ -1035,10 +1036,11 @@ def build_hold_block_refresh_effects(block: RecurringBlock) -> list[Effect]:
     effects: list[Effect] = []
 
     # Delete existing hold block events (legacy and new title formats)
-    for cal in get_admin_calendars(block.provider_id):
+    cal_ids = [c.id for c in get_admin_calendars(block.provider_id)]
+    if cal_ids:
         for prefix in HOLD_TITLE_PREFIXES:
             for evt in EventModel.objects.filter(
-                calendar__id=cal.id,
+                calendar__id__in=cal_ids,
                 title__startswith=prefix,
                 is_cancelled=False,
             ):
@@ -1065,15 +1067,15 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
                 effects.append(EventEffect(event_id=eid).delete())
             log.info("build_delete_recurring_block_effects: block=%s, deleted %d events by stored IDs", block.id, len(effects))
             # Also clean up any hold block events
-            if block.hold_type != "none":
-                for cal in get_admin_calendars(provider_id):
-                    for prefix in HOLD_TITLE_PREFIXES:
-                        for evt in EventModel.objects.filter(
-                            calendar__id=cal.id,
-                            title__startswith=prefix,
-                            is_cancelled=False,
-                        ):
-                            effects.append(EventEffect(event_id=str(evt.id)).delete())
+            cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+            if block.hold_type != "none" and cal_ids:
+                for prefix in HOLD_TITLE_PREFIXES:
+                    for evt in EventModel.objects.filter(
+                        calendar__id__in=cal_ids,
+                        title__startswith=prefix,
+                        is_cancelled=False,
+                    ):
+                        effects.append(EventEffect(event_id=str(evt.id)).delete())
             return effects
 
         # Fall back: match by the block's actual title AND legacy title
@@ -1081,9 +1083,10 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
         titles_to_delete = [title]
         if RECURRING_BLOCK_TITLE != title:
             titles_to_delete.append(RECURRING_BLOCK_TITLE)
-        for cal in get_admin_calendars(provider_id):
+        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+        if cal_ids:
             for evt in EventModel.objects.filter(
-                calendar__id=cal.id,
+                calendar__id__in=cal_ids,
                 title__in=titles_to_delete,
                 is_cancelled=False,
             ):
@@ -1092,16 +1095,17 @@ def build_delete_recurring_block_effects(provider_id: str, block: RecurringBlock
             if block.hold_type != "none":
                 for prefix in HOLD_TITLE_PREFIXES:
                     for evt in EventModel.objects.filter(
-                        calendar__id=cal.id,
+                        calendar__id__in=cal_ids,
                         title__startswith=prefix,
                         is_cancelled=False,
                     ):
                         effects.append(EventEffect(event_id=str(evt.id)).delete())
     else:
         # No specific block — search by legacy title
-        for cal in get_admin_calendars(provider_id):
+        cal_ids = [c.id for c in get_admin_calendars(provider_id)]
+        if cal_ids:
             for evt in EventModel.objects.filter(
-                calendar__id=cal.id,
+                calendar__id__in=cal_ids,
                 title=RECURRING_BLOCK_TITLE,
                 is_cancelled=False,
             ):
