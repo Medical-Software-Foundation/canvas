@@ -1,5 +1,5 @@
 {
-    "sdk_version": "0.177.0",
+    "sdk_version": "0.179.0",
     "plugin_version": "0.2.0",
     "name": "sticky_note",
     "description": "Sticky note action button in patient chart header with shared and user-specific notes",
