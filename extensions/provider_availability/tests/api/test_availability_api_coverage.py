@@ -145,6 +145,7 @@ class TestUpdateRuleGroupBranches:
         assert mock_lead.mock_calls == [call(mock_lead.call_args[0][0])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=["orphan-del-fx"])
     @patch(f"{MODULE}.build_lead_time_block_effects")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.save_rule")
@@ -159,40 +160,24 @@ class TestUpdateRuleGroupBranches:
         mock_save,
         mock_sync,
         mock_lead,
+        mock_del_orphans,
         mock_access,
     ):
-        """No remaining lead-time rule -> orphaned Lead Time events are deleted."""
-        cal = MagicMock()
-        cal.id = "cal-1"
-        evt = MagicMock()
-        evt.id = "evt-1"
-        del_effect = MagicMock()
-        event_effect = MagicMock()
-        event_effect.delete.return_value = del_effect
-
+        """No remaining lead-time rule -> orphaned Lead Time events are cleaned up
+        via delete_provider_lead_time_events."""
         body = {
             "id": "r1",
             "provider_id": PROVIDER_ID,
             "weekly_schedule": {},
         }
         handler = _make_handler(json_body=body)
-        with patch(
-            "provider_availability.engine.admin_calendar.get_admin_calendars",
-            return_value=[cal],
-        ) as mock_cals, patch(
-            "canvas_sdk.v1.data.calendar.Event"
-        ) as mock_event_model, patch(
-            "canvas_sdk.effects.calendar.Event", return_value=event_effect
-        ) as mock_event_effect:
-            mock_event_model.objects.filter.return_value = [evt]
-            result = handler.update_rule_group()
+        result = handler.update_rule_group()
 
         data, code = _parse(result[-1])
         assert code == HTTPStatus.OK
-        assert del_effect in result
+        assert "orphan-del-fx" in result
         assert mock_lead.mock_calls == []
-        assert mock_cals.mock_calls == [call(PROVIDER_ID)]
-        mock_event_effect.assert_called_once_with(event_id="evt-1")
+        assert mock_del_orphans.mock_calls == [call(PROVIDER_ID)]
 
 
 # ── delete_rule: lead-time refresh + orphan cleanup ────────────────────────
@@ -220,41 +205,24 @@ class TestDeleteRuleBranches:
         assert mock_lead.mock_calls == [call(mock_lead.call_args[0][0])]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=["orphan-del-fx"])
     @patch(f"{MODULE}.build_lead_time_block_effects")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.delete_rule_by_id")
     def test_orphan_cleanup_when_no_remaining_lead_time(
-        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_access
+        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_del_orphans, mock_access
     ):
-        cal = MagicMock()
-        cal.id = "cal-9"
-        evt = MagicMock()
-        evt.id = "evt-9"
-        del_effect = MagicMock()
-        event_effect = MagicMock()
-        event_effect.delete.return_value = del_effect
-
         handler = _make_handler(
             path_params={"provider_id": PROVIDER_ID, "rule_id": "r1"}
         )
-        with patch(
-            "provider_availability.engine.admin_calendar.get_admin_calendars",
-            return_value=[cal],
-        ) as mock_cals, patch(
-            "canvas_sdk.v1.data.calendar.Event"
-        ) as mock_event_model, patch(
-            "canvas_sdk.effects.calendar.Event", return_value=event_effect
-        ) as mock_event_effect:
-            mock_event_model.objects.filter.return_value = [evt]
-            result = handler.delete_rule()
+        result = handler.delete_rule()
 
         data, code = _parse(result[-1])
         assert code == HTTPStatus.OK
-        assert del_effect in result
+        assert "orphan-del-fx" in result
         assert mock_lead.mock_calls == []
-        assert mock_cals.mock_calls == [call(PROVIDER_ID)]
-        mock_event_effect.assert_called_once_with(event_id="evt-9")
+        assert mock_del_orphans.mock_calls == [call(PROVIDER_ID)]
 
 
 # ── add_override / remove_override: lead-time + recurring re-sync ──────────
@@ -657,8 +625,9 @@ class TestSetProviderTz:
     @patch(f"{MODULE}.get_all_recurring_blocks")
     @patch(f"{MODULE}.sync_provider_availability", return_value=["sync-fx"])
     @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.get_all_blocks", return_value=[])
     def test_success_resyncs_matching_recurring_blocks(
-        self, mock_set, mock_sync, mock_get_rb, mock_rb_sync, mock_access
+        self, mock_get_blocks, mock_set, mock_sync, mock_get_rb, mock_rb_sync, mock_access
     ):
         matching = RecurringBlock(id="rb1", provider_id=PROVIDER_ID)
         other = RecurringBlock(id="rb2", provider_id=PROVIDER_ID_2)
@@ -723,8 +692,9 @@ class TestSetProviderTzBulk:
     @patch(f"{MODULE}.get_all_recurring_blocks")
     @patch(f"{MODULE}.sync_provider_availability", return_value=["sync-fx"])
     @patch(f"{MODULE}.set_provider_timezone")
+    @patch(f"{MODULE}.get_all_blocks", return_value=[])
     def test_success_sets_all_and_resyncs(
-        self, mock_set, mock_sync, mock_get_rb, mock_rb_sync, mock_access
+        self, mock_get_blocks, mock_set, mock_sync, mock_get_rb, mock_rb_sync, mock_access
     ):
         matching = RecurringBlock(id="rb1", provider_id=PROVIDER_ID)
         other = RecurringBlock(id="rb2", provider_id="not-in-list")
@@ -997,7 +967,9 @@ class TestDispatchWriteProviderTimezone:
 class TestCheckWriteAccessSecret:
     def test_secret_allows_matching_staff(self):
         request = MagicMock()
-        request.staff_id = "staff-42"
+        # Access control reads the logged-in staff id from request headers
+        # (canvas-logged-in-user-id), not request.staff_id.
+        request.headers = {"canvas-logged-in-user-id": "staff-42"}
         result = _check_write_access(
             request, {"allowed-staff-keys": "staff-1, staff-42 , staff-9"}
         )
@@ -1005,7 +977,7 @@ class TestCheckWriteAccessSecret:
 
     def test_secret_denies_unlisted_staff(self):
         request = MagicMock()
-        request.staff_id = "intruder"
+        request.headers = {"canvas-logged-in-user-id": "intruder"}
         result = _check_write_access(request, {"allowed-staff-keys": "staff-1,staff-2"})
         assert result is not None
         body, code = _parse(result[0])
@@ -1035,36 +1007,22 @@ class TestFormDeleteRule:
         assert mock_delete.mock_calls == [call(PROVIDER_ID, "r1")]
 
     @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.delete_provider_lead_time_events", return_value=["orphan-del-fx"])
     @patch(f"{MODULE}.build_lead_time_block_effects")
     @patch(f"{MODULE}.sync_provider_availability", return_value=[])
     @patch(f"{MODULE}.get_rules_for_provider", return_value=[])
     @patch(f"{MODULE}.delete_rule_by_id")
     def test_orphan_cleanup(
-        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_access
+        self, mock_delete, mock_get_rules, mock_sync, mock_lead, mock_del_orphans, mock_access
     ):
-        cal = MagicMock()
-        cal.id = "cal-form"
-        evt = MagicMock()
-        evt.id = "evt-form"
-        del_effect = MagicMock()
-        event_effect = MagicMock()
-        event_effect.delete.return_value = del_effect
-
         handler = _make_handler()
-        with patch(
-            "provider_availability.engine.admin_calendar.get_admin_calendars",
-            return_value=[cal],
-        ), patch("canvas_sdk.v1.data.calendar.Event") as mock_event_model, patch(
-            "canvas_sdk.effects.calendar.Event", return_value=event_effect
-        ) as mock_event_effect:
-            mock_event_model.objects.filter.return_value = [evt]
-            result = handler._form_delete_rule(PROVIDER_ID, "r1")
+        result = handler._form_delete_rule(PROVIDER_ID, "r1")
 
         data, code = _parse(result[-1])
         assert code == HTTPStatus.OK
-        assert del_effect in result
+        assert "orphan-del-fx" in result
         assert mock_lead.mock_calls == []
-        mock_event_effect.assert_called_once_with(event_id="evt-form")
+        assert mock_del_orphans.mock_calls == [call(PROVIDER_ID)]
 
 
 # ── _form_add_override / _form_remove_override ─────────────────────────────
