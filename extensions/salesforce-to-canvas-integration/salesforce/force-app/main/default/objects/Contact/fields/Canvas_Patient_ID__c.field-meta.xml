@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Canvas_Patient_ID__c</fullName>
+    <label>Canvas Patient ID</label>
+    <type>Text</type>
+    <length>64</length>
+    <required>false</required>
+    <unique>false</unique>
+    <externalId>false</externalId>
+    <inlineHelpText>Reverse link to the Canvas patient. The Canvas plugin writes the patient identifier here after a successful Create patient resolution. Do not edit by hand.</inlineHelpText>
+</CustomField>

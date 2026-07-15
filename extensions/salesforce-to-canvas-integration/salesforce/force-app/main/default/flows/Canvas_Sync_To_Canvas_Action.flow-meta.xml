@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <actionCalls>
+        <name>Emit_Sync</name>
+        <label>Emit Sync</label>
+        <locationX>176</locationX>
+        <locationY>350</locationY>
+        <actionName>CanvasSyncEmitter</actionName>
+        <actionType>apex</actionType>
+        <connector>
+            <targetReference>Sync_Requested</targetReference>
+        </connector>
+        <flowTransactionModel>CurrentTransaction</flowTransactionModel>
+        <inputParameters>
+            <name>contactId</name>
+            <value>
+                <elementReference>recordId</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>intent</name>
+            <value>
+                <stringValue>sync</stringValue>
+            </value>
+        </inputParameters>
+        <nameSegment>CanvasSyncEmitter</nameSegment>
+    </actionCalls>
+    <description>Screen action behind the Sync to Canvas button. Confirms intent, then enqueues a deliberate sync for this Contact through the same emitter the org uses, intent sync.</description>
+    <environments>Default</environments>
+    <interviewLabel>Canvas Sync To Canvas {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Canvas Sync To Canvas</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>Flow</processType>
+    <screens>
+        <name>Confirm_Sync</name>
+        <label>Sync to Canvas</label>
+        <locationX>176</locationX>
+        <locationY>242</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <connector>
+            <targetReference>Emit_Sync</targetReference>
+        </connector>
+        <fields>
+            <name>Confirm_Sync_Text</name>
+            <fieldText>&lt;p&gt;Push this Contact to Canvas now. If the Contact is not yet linked to a Canvas patient this requests a new patient, otherwise it sends the latest demographics as an update. The request lands in the Canvas console for an operator to apply.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <screens>
+        <name>Sync_Requested</name>
+        <label>Sync requested</label>
+        <locationX>176</locationX>
+        <locationY>458</locationY>
+        <allowBack>false</allowBack>
+        <allowFinish>true</allowFinish>
+        <allowPause>false</allowPause>
+        <fields>
+            <name>Sync_Requested_Text</name>
+            <fieldText>&lt;p&gt;Sync requested. The Canvas Status field on this Contact updates within a few seconds, Sent then Synced once an operator applies it, or Error if delivery failed.&lt;/p&gt;</fieldText>
+            <fieldType>DisplayText</fieldType>
+        </fields>
+        <showFooter>true</showFooter>
+        <showHeader>true</showHeader>
+    </screens>
+    <start>
+        <locationX>50</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Confirm_Sync</targetReference>
+        </connector>
+    </start>
+    <status>Active</status>
+    <variables>
+        <name>recordId</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>true</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>
