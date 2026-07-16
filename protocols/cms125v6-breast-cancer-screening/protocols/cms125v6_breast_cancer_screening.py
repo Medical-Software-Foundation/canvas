@@ -11,12 +11,12 @@ Excluded from the denominator if there is evidence of:
 
 from __future__ import annotations
 
-from functools import cached_property
 from typing import Any
 
 import arrow
 from django.db.models import Q
 
+from canvas_sdk.commands import InstructCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
@@ -31,7 +31,7 @@ from canvas_sdk.value_set.v2022.condition import (
 )
 from canvas_sdk.value_set.v2022.diagnostic_study import Mammography
 from canvas_sdk.value_set.v2022.procedure import BilateralMastectomy
-from canvas_sdk.value_set.value_set import CodeConstants, ValueSet
+from canvas_sdk.value_set.value_set import ValueSet
 
 
 class UnilateralMastectomy(ValueSet):
@@ -158,7 +158,7 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         event: Any = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(*args, event=event, **kwargs)
+        super().__init__(*args, **kwargs)
         if now is not None:
             self.now = now
         self._injected_patient = patient
@@ -166,6 +166,10 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         self._injected_conditions = conditions
         self._injected_imaging_reports = imaging_reports
         self._on_date: arrow.Arrow | None = None
+        if "patient" in self.event.context:
+          self._patient_id: int = self.event.context["patient"]["id"]
+        else:
+          self._patient_id: int = self.target.id
 
     @property
     def timeframe(self) -> Timeframe:
@@ -174,7 +178,7 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
             return self._injected_timeframe
         return super().timeframe
 
-    @cached_property
+    @property
     def patient(self) -> Patient:
         """Return the patient (injected in tests; otherwise loaded by ID from the event)."""
         if self._injected_patient is not None:
@@ -397,11 +401,10 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
             due_in=-1,
         )
         card.narrative = "No relevant exams found.\n" + self.screening_interval_context()
-        coding_filter = self._mammography_coding_filter()
         card.add_recommendation(
             title=self.RECOMMENDATION_TITLE,
             button="Counsel",
-            commands=[{"command": {"type": "instruct"}, "context": {"coding": coding_filter}}],
+            commands=[InstructCommand()],
         )
         return card
 
@@ -424,22 +427,6 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         )
         return card
 
-    def _mammography_coding_filter(self) -> list[dict[str, Any]]:
-        """Build the coding filter applied to the recommended ``Instruct`` command."""
-        combined = Mammography | CMS125v6Tomography
-        coding: list[dict[str, Any]] = []
-        # Map our internal system names to the lowercase strings used by command filters.
-        system_aliases = {
-            CodeConstants.HCPCS: "hcpcs",
-            CodeConstants.LOINC: "loinc",
-            CodeConstants.SNOMEDCT: "snomed",
-            CodeConstants.CPT: "cpt",
-            CodeConstants.ICD10CM: "icd10cm",
-        }
-        for name, codes in combined.values.items():
-            coding.append({"system": system_aliases.get(name, name.lower()), "code": sorted(codes)})
-        return coding
-
     def compute(self) -> list[Effect]:
         """Compute the protocol effect(s) in response to an event."""
         patient_id = self.patient.id
@@ -459,4 +446,3 @@ class ClinicalQualityMeasure125v6(ClinicalQualityMeasure):
         return [card.apply()]
 
 
-__exports__ = ("ClinicalQualityMeasure125v6",)
