@@ -1,6 +1,6 @@
 {
-    "sdk_version": "0.112.0",
-    "plugin_version": "0.1.0",
+    "sdk_version": "0.179.0",
+    "plugin_version": "0.2.0",
     "name": "sticky_note",
     "description": "Sticky note action button in patient chart header with shared and user-specific notes",
     "url_permissions": [],
@@ -8,7 +8,7 @@
         "protocols": [
             {
                 "class": "sticky_note.protocols.sticky_note_button:StickyNoteButton",
-                "description": "Action button in patient chart header that opens a sticky note modal",
+                "description": "Action button in patient chart header that opens a sticky note modal and indicates whether the note has content",
                 "data_access": {
                     "event": "",
                     "read": [],
