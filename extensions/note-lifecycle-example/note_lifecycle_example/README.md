@@ -65,8 +65,10 @@ visibility by overriding `visible()`.
 - `handlers/event_handlers.py` — two reload handlers keep the footer in sync without a page
   refresh, each returning a `ReloadNoteActionButtonsEffect` for the affected note.
   `ReloadFooterOnNoteStateChange` listens for `NOTE_STATE_CHANGE_EVENT_CREATED`, and
-  `ReloadFooterOnCommandCommit` listens for every command's `*_COMMAND__POST_COMMIT` (so the
-  Sign button reappears once the last staged command is committed). Reloads are **pushed** to
+  `ReloadFooterOnCommandChange` listens for a command being added to, removed from, or committed
+  in the note (`*_COMMAND__POST_ORIGINATE`/`POST_DELETE`/`POST_COMMIT`) so the Sign button hides
+  as soon as a command is added and reappears once the last staged command is committed or
+  removed. Reloads are **pushed** to
   the open note via the `NoteActionButtonsSubscription` GraphQL subscription (driven by
   home-app's `ReloadActionButtonsInterpreter`), so the footer also refreshes for state
   changes that didn't come from a footer click (native flow, API, other tabs).
@@ -74,5 +76,5 @@ visibility by overriding `visible()`.
 ### CANVAS_MANIFEST
 
 The CANVAS_MANIFEST.json registers the footer buttons, both reload handlers
-(`ReloadFooterOnNoteStateChange` and `ReloadFooterOnCommandCommit`), and the
+(`ReloadFooterOnNoteStateChange` and `ReloadFooterOnCommandChange`), and the
 footer-configuration handler. Update it if you add, remove, or rename handler classes.

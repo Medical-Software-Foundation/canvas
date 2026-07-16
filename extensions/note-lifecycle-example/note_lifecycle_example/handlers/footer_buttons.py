@@ -39,10 +39,10 @@ class SignNoteButton(SignNoteActionButton):
     """Sign the current note.
 
     Also hidden while the note still has staged (uncommitted) commands — a note can't be
-    signed until its commands are committed. ``ReloadFooterOnCommandCommit`` reloads the
-    footer on each command commit, so the button reappears once the last command is
-    committed. (The lock-first, sig-required and already-signed rules come from
-    ``SignNoteActionButton``.)
+    signed until its commands are committed. ``ReloadFooterOnCommandChange`` reloads the
+    footer whenever a command is added to, removed from, or committed in the note, so the
+    button hides as soon as a command is added and reappears once the last one is committed.
+    (The lock-first, sig-required and already-signed rules come from ``SignNoteActionButton``.)
     """
 
     BUTTON_TEXT_COLOR = _WHITE

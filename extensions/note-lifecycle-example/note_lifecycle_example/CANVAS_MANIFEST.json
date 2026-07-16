@@ -1,5 +1,5 @@
 {
-    "sdk_version": "0.1.4",
+    "sdk_version": "0.179.0",
     "plugin_version": "0.0.1",
     "name": "note_lifecycle_example",
     "description": "Replaces the note footer's native state buttons with plugin-owned, state-responsive action buttons that show only the transitions valid for the note's current state. A worked reference for builders customizing the note lifecycle.",
@@ -54,8 +54,8 @@
                 "description": "Hides Canvas's native footer state buttons so this plugin's buttons replace them."
             },
             {
-                "class": "note_lifecycle_example.handlers.event_handlers:ReloadFooterOnCommandCommit",
-                "description": "Reloads the note footer when any command is committed."
+                "class": "note_lifecycle_example.handlers.event_handlers:ReloadFooterOnCommandChange",
+                "description": "Reloads the note footer when a command is added to, removed from, or committed in the note."
             },
             {
                 "class": "note_lifecycle_example.handlers.event_handlers:ReloadFooterOnNoteStateChange",

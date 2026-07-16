@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from note_lifecycle_example.handlers import event_handlers
 from note_lifecycle_example.handlers.event_handlers import (
-    ReloadFooterOnCommandCommit,
+    ReloadFooterOnCommandChange,
     ReloadFooterOnNoteStateChange,
 )
 
@@ -20,42 +20,46 @@ def _handler(
     return cls(event=event)
 
 
-def test_command_commit_responds_to_every_command_post_commit() -> None:
-    """The reload handler subscribes to all command POST_COMMIT events and nothing else."""
-    events = ReloadFooterOnCommandCommit.RESPONDS_TO
+def test_command_change_responds_to_command_lifecycle_events() -> None:
+    """The reload handler subscribes to command originate, remove, and commit events.
+
+    POST_ORIGINATE is the important one: adding a command to the note must reload the footer
+    so SignNoteButton can hide while the note has uncommitted commands.
+    """
+    events = ReloadFooterOnCommandChange.RESPONDS_TO
     assert events
-    assert all(name.endswith("_COMMAND__POST_COMMIT") for name in events)
+    allowed_suffixes = (
+        "_COMMAND__POST_ORIGINATE",
+        "_COMMAND__POST_DELETE",
+        "_COMMAND__POST_COMMIT",
+    )
+    assert all(name.endswith(allowed_suffixes) for name in events)
+    assert EventType.Name(EventType.PLAN_COMMAND__POST_ORIGINATE) in events
     assert EventType.Name(EventType.PLAN_COMMAND__POST_COMMIT) in events
-    assert EventType.Name(EventType.PRESCRIBE_COMMAND__POST_COMMIT) in events
 
 
-def test_command_commit_reloads_the_commands_note() -> None:
-    """Committing a command reloads the footer for that command's note."""
-    handler = _handler(ReloadFooterOnCommandCommit, target_id="command-key")
-    command = MagicMock()
-    command.note.id = "note-key"
+def test_command_change_reloads_the_note_from_context() -> None:
+    """A command change reloads the footer for the note carried in the event context.
 
-    with (
-        patch.object(event_handlers.Command, "objects") as objects,
-        patch.object(event_handlers, "ReloadNoteActionButtonsEffect") as reload_effect,
-    ):
-        objects.filter.return_value.first.return_value = command
+    The note id is read from the context (``note.uuid``), not by looking up the command — a
+    deleted command can't be queried, so a lookup-based reload would never fire on delete.
+    """
+    handler = _handler(
+        ReloadFooterOnCommandChange, context={"note": {"uuid": "note-key"}}
+    )
+
+    with patch.object(event_handlers, "ReloadNoteActionButtonsEffect") as reload_effect:
         result = handler.compute()
 
-    objects.filter.assert_called_once_with(id="command-key")
     reload_effect.assert_called_once_with(id="note-key")
     assert result == [reload_effect.return_value.apply.return_value]
 
 
-def test_command_commit_no_effect_when_command_missing() -> None:
-    """No reload is emitted when the committed command can't be found."""
-    handler = _handler(ReloadFooterOnCommandCommit, target_id="missing")
+def test_command_change_no_effect_without_note_in_context() -> None:
+    """No reload is emitted when the event context carries no note."""
+    handler = _handler(ReloadFooterOnCommandChange, context={})
 
-    with (
-        patch.object(event_handlers.Command, "objects") as objects,
-        patch.object(event_handlers, "ReloadNoteActionButtonsEffect") as reload_effect,
-    ):
-        objects.filter.return_value.first.return_value = None
+    with patch.object(event_handlers, "ReloadNoteActionButtonsEffect") as reload_effect:
         assert handler.compute() == []
 
     reload_effect.assert_not_called()

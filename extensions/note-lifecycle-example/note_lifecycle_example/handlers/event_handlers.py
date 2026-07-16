@@ -2,31 +2,45 @@ from canvas_sdk.effects import Effect
 from canvas_sdk.effects.action_button import ReloadNoteActionButtonsEffect
 from canvas_sdk.events import EventType
 from canvas_sdk.handlers import BaseHandler
-from canvas_sdk.v1.data.command import Command
+
+# Command lifecycle events that change a note's set of staged commands: a command being
+# added (originated), removed, or committed. SignNoteButton gates on staged commands, so the
+# footer must reload on each of these to keep the Sign gate in sync — not just on commit.
+_COMMAND_CHANGE_SUFFIXES = (
+    "_COMMAND__POST_ORIGINATE",
+    "_COMMAND__POST_DELETE",
+    "_COMMAND__POST_COMMIT",
+)
 
 
-class ReloadFooterOnCommandCommit(BaseHandler):
-    """Reload the note footer whenever any command is committed.
+class ReloadFooterOnCommandChange(BaseHandler):
+    """Reload the note footer when a command is added to, removed from, or committed in the note.
 
-    ``SignNoteButton`` hides itself while the note still has staged (uncommitted)
-    commands. Committing a command does not on its own re-evaluate the footer, so this
-    handler reloads it on every command's POST_COMMIT event — the Sign button reappears
-    as soon as the last staged command is committed, without a page refresh.
+    ``SignNoteButton`` hides itself while the note still has staged (uncommitted) commands.
+    A change to the note's command set does not on its own re-evaluate the footer, so this
+    handler reloads it whenever a command is added, removed, or committed — Sign hides as soon
+    as a command is added and reappears once the last staged command is committed or removed,
+    without a page refresh.
     """
 
     RESPONDS_TO = [
         EventType.Name(value)
         for value in EventType.values()
-        if EventType.Name(value).endswith("_COMMAND__POST_COMMIT")
+        if EventType.Name(value).endswith(_COMMAND_CHANGE_SUFFIXES)
     ]
 
     def compute(self) -> list[Effect]:
-        """Reload the footer buttons for the committed command's note."""
-        command = Command.objects.filter(id=self.event.target.id).first()
-        if not command or not command.note:
+        """Reload the footer buttons for the note the changed command belongs to.
+
+        The note's external id comes from the event context (``note.uuid``) rather than from
+        the command itself — on a delete the command is already gone, so looking it up would
+        find nothing and the footer would never reload.
+        """
+        note_id = (self.event.context.get("note") or {}).get("uuid")
+        if not note_id:
             return []
 
-        return [ReloadNoteActionButtonsEffect(id=str(command.note.id)).apply()]
+        return [ReloadNoteActionButtonsEffect(id=note_id).apply()]
 
 
 class ReloadFooterOnNoteStateChange(BaseHandler):
