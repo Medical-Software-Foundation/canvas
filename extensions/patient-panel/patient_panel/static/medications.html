@@ -1,0 +1,25 @@
+<td colspan="11">
+    <div class="accordion-details">
+        <h4>Active medications</h4>
+        {% if medications %}
+        <div class="activity-list">
+            {% for med in medications %}
+            <div class="task-item" data-medication-id="{{ med.id }}">
+                <div class="task-header">
+                    <div class="task-info">
+                        <div class="activity-title">{{ med.display }}</div>
+                        <div class="activity-due">
+                            {% if med.quantity and med.quantity != med.display %}{{ med.quantity }}{% endif %}
+                            {% if med.quantity and med.quantity != med.display and med.start_date %} &middot; {% endif %}
+                            {% if med.start_date %}Start: {{ med.start_date }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-activity">No active medications</div>
+        {% endif %}
+    </div>
+</td>
