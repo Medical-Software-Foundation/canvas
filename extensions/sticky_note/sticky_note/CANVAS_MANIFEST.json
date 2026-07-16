@@ -11,7 +11,7 @@
                 "description": "Action button in patient chart header that opens a sticky note modal and indicates whether the note has content",
                 "data_access": {
                     "event": "",
-                    "read": ["Patient", "Staff"],
+                    "read": [],
                     "write": []
                 }
             },
