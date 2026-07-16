@@ -98,3 +98,33 @@ class TestBuildConsentPayload:
             today="2026-07-07",
         )
         assert "end" not in payload["provision"]["period"]
+
+    def test_omits_attachment_when_no_pdf(self):
+        # A "Written" consent passes no PDF — the payload carries no attachment.
+        payload = build_consent_payload(
+            system="s",
+            code="c",
+            display="d",
+            patient_id="p",
+            today="2026-07-07",
+            pdf_base64="",
+        )
+        assert "sourceAttachment" not in payload
+        assert payload["resourceType"] == "Consent"
+        assert payload["provision"] == {"period": {"start": "2026-07-07"}}
+
+    def test_attachment_present_when_pdf_given(self):
+        payload = build_consent_payload(
+            system="s",
+            code="c",
+            display="d",
+            patient_id="p",
+            today="2026-07-07",
+            pdf_base64="QkFTRTY0",
+        )
+        assert payload["sourceAttachment"]["data"] == "QkFTRTY0"
+
+    def test_pdf_base64_defaults_to_empty(self):
+        # Called positionally without a PDF -> no attachment.
+        payload = build_consent_payload("s", "c", "d", "p", "2026-07-07")
+        assert "sourceAttachment" not in payload

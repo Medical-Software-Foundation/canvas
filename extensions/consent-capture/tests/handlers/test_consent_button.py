@@ -2,23 +2,58 @@
 
 from unittest.mock import MagicMock, call, patch
 
-from consent_capture.handlers.consent_button import ConsentButton, should_prompt
+from consent_capture.constants import (
+    BUTTON_DUE_BACKGROUND,
+    BUTTON_DUE_TEXT,
+    BUTTON_SATISFIED_BACKGROUND,
+    BUTTON_SATISFIED_TEXT,
+)
+from consent_capture.handlers.consent_button import ConsentButton, needs_any
 
 MODULE = "consent_capture.handlers.consent_button"
 
 
-class TestShouldPrompt:
-    def test_no_patient_hides(self):
-        assert should_prompt("", "code", False) is False
+def _assert_red(button):
+    assert button.BUTTON_TITLE == "Consents"  # label is always "Consents"
+    assert button.BUTTON_BACKGROUND_COLOR == BUTTON_DUE_BACKGROUND
+    assert button.BUTTON_TEXT_COLOR == BUTTON_DUE_TEXT
 
-    def test_no_code_shows(self):
-        assert should_prompt("patient-1", "", False) is True
 
-    def test_accepted_exists_hides(self):
-        assert should_prompt("patient-1", "code", True) is False
+def _assert_neutral(button):
+    assert button.BUTTON_TITLE == "Consents"  # label is always "Consents"
+    assert button.BUTTON_BACKGROUND_COLOR == BUTTON_SATISFIED_BACKGROUND
+    assert button.BUTTON_TEXT_COLOR == BUTTON_SATISFIED_TEXT
 
-    def test_no_accepted_shows(self):
-        assert should_prompt("patient-1", "code", False) is True
+
+def _item(code, on_file, required=True):
+    return {
+        "code": code,
+        "system": "http://loinc.org",
+        "display": code.title(),
+        "paragraphs": ["Read this."],
+        "method_enabled": True,
+        "obtained_by_enabled": True,
+        "capacity_enabled": True,
+        "required": required,
+        "on_file": on_file,
+    }
+
+
+class TestNeedsAny:
+    def test_true_when_a_required_consent_not_on_file(self):
+        assert needs_any([_item("a", True), _item("b", False)]) is True
+
+    def test_false_when_all_on_file(self):
+        assert needs_any([_item("a", True), _item("b", True)]) is False
+        assert needs_any([_item("a", True)]) is False
+
+    def test_false_when_only_optional_missing(self):
+        # An optional consent that's not on file must NOT surface the red button.
+        assert needs_any([_item("a", True), _item("b", False, required=False)]) is False
+        assert needs_any([_item("b", False, required=False)]) is False
+
+    def test_false_when_empty(self):
+        assert needs_any([]) is False
 
 
 class TestPatientId:
@@ -26,11 +61,7 @@ class TestPatientId:
         button = ConsentButton()
         button.event = MagicMock()
         button.event.target.id = "patient-123"
-
         assert button._patient_id() == "patient-123"
-
-        # Only attribute reads/sets occurred — no recorded method calls.
-        assert button.event.mock_calls == []
 
     def test_no_target_returns_none(self):
         button = ConsentButton()
@@ -39,351 +70,91 @@ class TestPatientId:
 
 
 class TestVisible:
+    def _button(self):
+        button = ConsentButton()
+        button.event = MagicMock()
+        button.event.target.id = "patient-123"
+        return button
+
     def test_no_patient_id_not_visible(self):
         button = ConsentButton()
         button.event = None
         assert button.visible() is False
 
-    def test_no_code_configured_is_visible(self):
-        button = ConsentButton()
-        button.event = MagicMock()
-        button.event.target.id = "patient-123"
-        button.secrets = {"CONSENT_SYSTEM": "http://loinc.org", "CONSENT_CODE": ""}
-
-        assert button.visible() is True
-
-    def test_accepted_consent_hides_button(self):
-        button = ConsentButton()
-        button.event = MagicMock()
-        button.event.target.id = "patient-123"
-        button.secrets = {
-            "CONSENT_SYSTEM": "http://loinc.org",
-            "CONSENT_CODE": "12345",
-        }
-
-        with patch(f"{MODULE}.PatientConsent") as mock_consent:
-            mock_consent.objects.filter.return_value.exists.return_value = True
-
-            assert button.visible() is False
-
-            assert mock_consent.mock_calls == [
-                call.objects.filter(
-                    patient__id="patient-123",
-                    category__code="12345",
-                    state__in=("accepted", "accepted_via_patient_portal"),
-                    category__system="http://loinc.org",
-                ),
-                call.objects.filter().exists(),
-            ]
-
-    def test_no_accepted_consent_shows_button(self):
-        button = ConsentButton()
-        button.event = MagicMock()
-        button.event.target.id = "patient-123"
-        button.secrets = {
-            "CONSENT_SYSTEM": "http://loinc.org",
-            "CONSENT_CODE": "12345",
-        }
-
-        with patch(f"{MODULE}.PatientConsent") as mock_consent:
-            mock_consent.objects.filter.return_value.exists.return_value = False
-
+    def test_red_when_a_required_consent_is_due(self):
+        button = self._button()
+        with patch(f"{MODULE}.is_eligible_patient", return_value=True), patch(
+            f"{MODULE}.picker_items", return_value=[_item("a", False)]
+        ) as mock_items:
             assert button.visible() is True
+            assert mock_items.mock_calls == [call("patient-123")]
+        _assert_red(button)
 
-            assert mock_consent.mock_calls == [
-                call.objects.filter(
-                    patient__id="patient-123",
-                    category__code="12345",
-                    state__in=("accepted", "accepted_via_patient_portal"),
-                    category__system="http://loinc.org",
-                ),
-                call.objects.filter().exists(),
-            ]
-
-    def test_no_system_omits_system_filter(self):
-        button = ConsentButton()
-        button.event = MagicMock()
-        button.event.target.id = "patient-123"
-        button.secrets = {"CONSENT_SYSTEM": "", "CONSENT_CODE": "12345"}
-
-        with patch(f"{MODULE}.PatientConsent") as mock_consent:
-            mock_consent.objects.filter.return_value.exists.return_value = False
-
+    def test_neutral_when_all_on_file(self):
+        button = self._button()
+        with patch(f"{MODULE}.is_eligible_patient", return_value=True), patch(
+            f"{MODULE}.picker_items", return_value=[_item("a", True)]
+        ):
             assert button.visible() is True
+        _assert_neutral(button)
 
-            assert mock_consent.mock_calls == [
-                call.objects.filter(
-                    patient__id="patient-123",
-                    category__code="12345",
-                    state__in=("accepted", "accepted_via_patient_portal"),
-                ),
-                call.objects.filter().exists(),
-            ]
+    def test_neutral_when_only_optional_missing(self):
+        button = self._button()
+        with patch(f"{MODULE}.is_eligible_patient", return_value=True), patch(
+            f"{MODULE}.picker_items", return_value=[_item("a", False, required=False)]
+        ):
+            assert button.visible() is True
+        _assert_neutral(button)
+
+    def test_neutral_when_no_consents_configured(self):
+        button = self._button()
+        with patch(f"{MODULE}.is_eligible_patient", return_value=True), patch(
+            f"{MODULE}.picker_items", return_value=[]
+        ):
+            assert button.visible() is True
+        _assert_neutral(button)
+
+    def test_neutral_and_never_red_for_ineligible_patient(self):
+        # Inactive/deceased patients still see the button, but it is always the
+        # neutral gray chip and never red — even with a required consent missing.
+        # Eligibility short-circuits before the consent lookup.
+        button = self._button()
+        with patch(f"{MODULE}.is_eligible_patient", return_value=False), patch(
+            f"{MODULE}.picker_items", return_value=[_item("a", False)]
+        ) as mock_items:
+            assert button.visible() is True
+        mock_items.assert_not_called()  # ineligibility short-circuits before the consent check
+        _assert_neutral(button)
 
 
 class TestHandle:
-    def _button(self, statement=""):
+    """handle() delegates modal construction to the shared build_picker_modal;
+    the modal's content is covered by tests/test_picker_modal.py."""
+
+    def _button(self, context=None, secrets=None):
         button = ConsentButton()
         button.event = MagicMock()
         button.event.target.id = "patient-123"
-        button.event.context = {"user": {"id": "staff-9"}}
-        button.secrets = {
-            "CONSENT_DISPLAY": "Consent to Treat",
-            "CONSENT_STATEMENT": statement,
-        }
+        button.event.context = {"user": {"id": "staff-9"}} if context is None else context
+        if secrets is not None:
+            button.secrets = secrets
         return button
 
-    def test_handle_builds_modal_with_patient_row(self):
-        button = self._button(statement="I consent.")
+    def test_handle_delegates_to_build_picker_modal(self):
+        button = self._button(secrets={"CONSENT_ADMIN_USERS": "jane"})
+        effect = object()
+        modal = MagicMock()
+        modal.apply.return_value = effect
+        with patch(f"{MODULE}.build_picker_modal", return_value=modal) as mbuild:
+            result = button.handle()
+            mbuild.assert_called_once_with("patient-123", "staff-9", {"CONSENT_ADMIN_USERS": "jane"})
+        assert result == [effect]
 
-        dob = MagicMock()
-        dob.isoformat.return_value = "1990-01-01"
-
-        with patch(f"{MODULE}.Patient") as mock_patient, patch(
-            f"{MODULE}.render_to_string"
-        ) as mock_render, patch(f"{MODULE}.log") as mock_log:
-            mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
-                "Jane",
-                "Doe",
-                dob,
-            )
-            mock_render.return_value = "<html>modal</html>"
-
-            effects = button.handle()
-
-            assert mock_patient.mock_calls == [
-                call.objects.filter(id="patient-123"),
-                call.objects.filter().values_list(
-                    "first_name", "last_name", "birth_date"
-                ),
-                call.objects.filter().values_list().first(),
-            ]
-            assert mock_render.mock_calls == [
-                call(
-                    "templates/consent.html",
-                    {
-                        "patient_id": "patient-123",
-                        "patient_name": "Jane Doe",
-                        "patient_dob": "1990-01-01",
-                        "consent_display": "Consent to Treat",
-                        "paragraphs": ["I consent."],
-                        "no_statement_note": "Review the consent with the patient before recording.",
-                    },
-                )
-            ]
-            assert mock_log.mock_calls == [
-                call.info(
-                    "ConsentButton: opened for patient patient-123 by staff staff-9"
-                )
-            ]
-            assert dob.mock_calls == [call.__bool__(), call.isoformat()]
-
-        assert len(effects) == 1
-        effect = effects[0]
-        assert effect == {
-            "type": "LaunchModalEffect",
-            "target": "default_modal",
-            "content": "<html>modal</html>",
-        }
-
-    def test_handle_with_no_patient_row(self):
-        button = self._button(statement="")
-
-        with patch(f"{MODULE}.Patient") as mock_patient, patch(
-            f"{MODULE}.render_to_string"
-        ) as mock_render, patch(f"{MODULE}.log") as mock_log:
-            mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
-                None
-            )
-            mock_render.return_value = "<html>empty</html>"
-
-            effects = button.handle()
-
-            assert mock_patient.mock_calls == [
-                call.objects.filter(id="patient-123"),
-                call.objects.filter().values_list(
-                    "first_name", "last_name", "birth_date"
-                ),
-                call.objects.filter().values_list().first(),
-            ]
-            # Name/dob blank because there was no row.
-            assert mock_render.mock_calls == [
-                call(
-                    "templates/consent.html",
-                    {
-                        "patient_id": "patient-123",
-                        "patient_name": "",
-                        "patient_dob": "",
-                        "consent_display": "Consent to Treat",
-                        "paragraphs": [],
-                        "no_statement_note": "Review the consent with the patient before recording.",
-                    },
-                )
-            ]
-            assert mock_log.mock_calls == [
-                call.info(
-                    "ConsentButton: opened for patient patient-123 by staff staff-9"
-                )
-            ]
-
-        assert len(effects) == 1
-
-    def test_handle_row_without_birth_date(self):
-        button = self._button(statement="")
-
-        with patch(f"{MODULE}.Patient") as mock_patient, patch(
-            f"{MODULE}.render_to_string"
-        ) as mock_render, patch(f"{MODULE}.log"):
-            mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
-                "Jane",
-                "Doe",
-                None,
-            )
-            mock_render.return_value = "<html>ok</html>"
-
+    def test_handle_missing_user_context_uses_empty_staff(self):
+        button = self._button(context={})
+        modal = MagicMock()
+        modal.apply.return_value = "eff"
+        with patch(f"{MODULE}.build_picker_modal", return_value=modal) as mbuild:
             button.handle()
-
-            context = mock_render.mock_calls[0].args[1]
-            assert context["patient_name"] == "Jane Doe"
-            assert context["patient_dob"] == ""
-
-    def test_handle_missing_user_context(self):
-        button = ConsentButton()
-        button.event = MagicMock()
-        button.event.target.id = "patient-123"
-        button.event.context = {}
-        button.secrets = {"CONSENT_DISPLAY": "", "CONSENT_STATEMENT": ""}
-
-        with patch(f"{MODULE}.Patient") as mock_patient, patch(
-            f"{MODULE}.render_to_string"
-        ) as mock_render, patch(f"{MODULE}.log") as mock_log:
-            mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
-                None
-            )
-            mock_render.return_value = "x"
-
-            button.handle()
-
-            assert mock_log.mock_calls == [
-                call.info(
-                    "ConsentButton: opened for patient patient-123 by staff "
-                )
-            ]
-
-
-class TestHandleAlreadyOnFile:
-    """handle() re-checks consent because visible() only runs on page load, so a
-    stale button (consent already collected this session) should show a notice
-    instead of collecting again."""
-
-    def _button(self):
-        button = ConsentButton()
-        button.event = MagicMock()
-        button.event.target.id = "patient-123"
-        button.event.context = {"user": {"id": "staff-9"}}
-        button.secrets = {
-            "CONSENT_SYSTEM": "http://loinc.org",
-            "CONSENT_CODE": "12345",
-            "CONSENT_DISPLAY": "Consent to Treat",
-            "CONSENT_STATEMENT": "I consent.",
-        }
-        return button
-
-    def test_shows_notice_when_consent_already_on_file(self):
-        button = self._button()
-
-        with patch(f"{MODULE}.PatientConsent") as mock_consent, patch(
-            f"{MODULE}.Patient"
-        ) as mock_patient, patch(f"{MODULE}.render_to_string") as mock_render, patch(
-            f"{MODULE}.log"
-        ) as mock_log:
-            mock_consent.objects.filter.return_value.exists.return_value = True
-            mock_render.return_value = "<html>notice</html>"
-
-            effects = button.handle()
-
-            # The consent lookup ran and found an accepted consent.
-            assert mock_consent.mock_calls == [
-                call.objects.filter(
-                    patient__id="patient-123",
-                    category__code="12345",
-                    state__in=("accepted", "accepted_via_patient_portal"),
-                    category__system="http://loinc.org",
-                ),
-                call.objects.filter().exists(),
-            ]
-            # The notice template was rendered with the button label.
-            assert mock_render.mock_calls == [
-                call("templates/consent_none.html", {"button_title": "Consent"})
-            ]
-            # The collect flow never ran: no patient lookup.
-            assert mock_patient.mock_calls == []
-            assert mock_log.mock_calls == [
-                call.info(
-                    "ConsentButton: consent already on file for patient "
-                    "patient-123; showing notice"
-                )
-            ]
-
-        assert effects == [
-            {
-                "type": "LaunchModalEffect",
-                "target": "default_modal",
-                "content": "<html>notice</html>",
-            }
-        ]
-
-    def test_collects_when_no_accepted_consent(self):
-        button = self._button()
-
-        with patch(f"{MODULE}.PatientConsent") as mock_consent, patch(
-            f"{MODULE}.Patient"
-        ) as mock_patient, patch(f"{MODULE}.render_to_string") as mock_render, patch(
-            f"{MODULE}.log"
-        ) as mock_log:
-            mock_consent.objects.filter.return_value.exists.return_value = False
-            mock_patient.objects.filter.return_value.values_list.return_value.first.return_value = (
-                None
-            )
-            mock_render.return_value = "<html>collect</html>"
-
-            effects = button.handle()
-
-            # Checked for an accepted consent, found none...
-            assert mock_consent.mock_calls == [
-                call.objects.filter(
-                    patient__id="patient-123",
-                    category__code="12345",
-                    state__in=("accepted", "accepted_via_patient_portal"),
-                    category__system="http://loinc.org",
-                ),
-                call.objects.filter().exists(),
-            ]
-            # ...then ran the normal collect flow (patient lookup + collect modal).
-            assert mock_patient.mock_calls == [
-                call.objects.filter(id="patient-123"),
-                call.objects.filter().values_list(
-                    "first_name", "last_name", "birth_date"
-                ),
-                call.objects.filter().values_list().first(),
-            ]
-            assert mock_render.mock_calls == [
-                call(
-                    "templates/consent.html",
-                    {
-                        "patient_id": "patient-123",
-                        "patient_name": "",
-                        "patient_dob": "",
-                        "consent_display": "Consent to Treat",
-                        "paragraphs": ["I consent."],
-                        "no_statement_note": "Review the consent with the patient before recording.",
-                    },
-                )
-            ]
-            assert mock_log.mock_calls == [
-                call.info(
-                    "ConsentButton: opened for patient patient-123 by staff staff-9"
-                )
-            ]
-
-        assert len(effects) == 1
+            # no user in context -> empty staff id; no secrets set -> empty dict
+            mbuild.assert_called_once_with("patient-123", "", {})
