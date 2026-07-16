@@ -5,10 +5,9 @@ condition on file, recommending that the patient be contacted. Patients without
 an active hypertension condition receive a satisfied card.
 """
 
-from functools import cached_property
-
 import arrow
 
+from canvas_sdk.commands import FollowUpCommand
 from canvas_sdk.effects import Effect
 from canvas_sdk.effects.protocol_card import ProtocolCard
 from canvas_sdk.events import EventType
@@ -40,7 +39,7 @@ class Ccp003v1(ClinicalQualityMeasure):
         EventType.Name(EventType.CONDITION_RESOLVED),
     ]
 
-    @cached_property
+    @property
     def active_hypertension_conditions(self) -> list[Condition]:
         """Active hypertension conditions for the patient, oldest first by onset."""
         return list(
@@ -50,7 +49,7 @@ class Ccp003v1(ClinicalQualityMeasure):
             .order_by("onset_date")
         )
 
-    @cached_property
+    @property
     def date_of_diagnosis(self) -> str:
         """The earliest onset date among the patient's active hypertension conditions, or ''."""
         for condition in self.active_hypertension_conditions:
@@ -85,19 +84,21 @@ class Ccp003v1(ClinicalQualityMeasure):
         )
 
         if self.in_numerator():
-            formatted_date = arrow.get(self.date_of_diagnosis).format("ddd, MMM Do YYYY")
-            card.narrative = (
-                f"{patient.first_name} has been diagnosed of hypertension on {formatted_date}."
+            formatted_date = arrow.get(self.date_of_diagnosis).format(
+                "ddd, MMM Do YYYY"
             )
+            card.narrative = f"{patient.first_name} has been diagnosed of hypertension on {formatted_date}."
             card.status = ProtocolCard.Status.DUE
             card.due_in = 0
             card.add_recommendation(
                 title="Contact the patient",
                 button="Schedule",
-                command="schedule",
+                commands=[FollowUpCommand()],
             )
         else:
-            card.narrative = f"{patient.first_name} has not been diagnosed of hypertension."
+            card.narrative = (
+                f"{patient.first_name} has not been diagnosed of hypertension."
+            )
             card.status = ProtocolCard.Status.SATISFIED
             card.due_in = -1
 
