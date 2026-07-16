@@ -28,6 +28,7 @@ from canvas_sdk.handlers.simple_api import (
 )
 from canvas_sdk.templates import render_to_string
 from canvas_sdk.v1.data import Patient
+from canvas_sdk.v1.data.common import ContactPointSystem
 from logger import log
 
 from dexcom_cgm_viewer.services.chart_data import build_payload, payload_to_dict
@@ -244,8 +245,9 @@ class DexcomChartAPI(StaffSessionAuthMixin, SimpleAPI):
         """Read-only dump of the patient's messaging-relevant state.
 
         Used to triage why portal-message delivery is failing. Returns the
-        patient's email/sms contact points with the fields that gate
-        Canvas's ``CREATE_AND_SEND_MESSAGE`` channel resolution
+        patient's email/phone contact points (phone being the SMS-capable
+        channel) with the fields that gate Canvas's
+        ``CREATE_AND_SEND_MESSAGE`` channel resolution
         (``has_consent``, ``opted_out``, ``state``, ``last_verified``).
         """
         patient_id = (self.request.query_params.get("patient_id") or "").strip()
@@ -263,7 +265,12 @@ class DexcomChartAPI(StaffSessionAuthMixin, SimpleAPI):
             )]
 
         telecom_rows = list(
-            patient.telecom.filter(system__in=("email", "sms")).order_by("rank")
+            patient.telecom.filter(
+                system__in=(
+                    ContactPointSystem.EMAIL.value,
+                    ContactPointSystem.PHONE.value,
+                )
+            ).order_by("rank")
         )
         contact_points = [
             {
@@ -425,7 +432,10 @@ def _patient_has_messageable_channel(patient_id: str) -> bool:
     except Patient.DoesNotExist:
         return False
     return bool(patient.telecom.filter(
-        system__in=("email", "sms"),
+        system__in=(
+            ContactPointSystem.EMAIL.value,
+            ContactPointSystem.PHONE.value,
+        ),
         has_consent=True,
         opted_out=False,
         state="active",
@@ -442,7 +452,7 @@ def _try_build_portal_message(
 
     Returns ``(effect_or_None, status_dict)``. We pre-flight the patient's
     messaging channels and skip the effect entirely when no consenting,
-    non-opted-out, active email/sms contact point exists — Canvas would
+    non-opted-out, active email/phone contact point exists — Canvas would
     raise ``Channel not supported`` downstream otherwise.
     """
     if not sender_id:

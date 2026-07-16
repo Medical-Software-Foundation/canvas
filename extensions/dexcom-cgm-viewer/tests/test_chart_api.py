@@ -433,10 +433,25 @@ def test_patient_has_messageable_channel_filters_by_consent_and_state() -> None:
     with patch.object(Patient.objects, "get", return_value=fake_patient):
         assert _patient_has_messageable_channel(PATIENT) is True
     filter_kwargs = fake_patient.telecom.filter.call_args.kwargs
-    assert filter_kwargs["system__in"] == ("email", "sms")
+    assert filter_kwargs["system__in"] == ("email", "phone")
     assert filter_kwargs["has_consent"] is True
     assert filter_kwargs["opted_out"] is False
     assert filter_kwargs["state"] == "active"
+
+
+def test_patient_has_messageable_channel_true_for_phone_only_patient() -> None:
+    """A phone-only patient (no email) is messageable — Canvas resolves SMS via phone."""
+    from canvas_sdk.v1.data import Patient
+    from dexcom_cgm_viewer.protocols.chart_api import _patient_has_messageable_channel
+    fake_patient = MagicMock()
+    fake_qs = MagicMock()
+    fake_qs.exists.return_value = True
+    fake_patient.telecom.filter.return_value = fake_qs
+    with patch.object(Patient.objects, "get", return_value=fake_patient):
+        assert _patient_has_messageable_channel(PATIENT) is True
+    # "phone" must be in the queried systems, otherwise phone-only patients
+    # are wrongly excluded (the original "sms" bug).
+    assert "phone" in fake_patient.telecom.filter.call_args.kwargs["system__in"]
 
 
 def test_send_link_emails_when_sendgrid_configured() -> None:
