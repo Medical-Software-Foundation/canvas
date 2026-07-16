@@ -60,6 +60,9 @@ class ExternalDocumentsViewerApp(Application):
                         full_key = f"{base}{doc['s3_key']}" if base else doc["s3_key"]
                         doc["url"] = client.generate_presigned_url(full_key, expiration=3600) or ""
             except Exception as e:
+                # Broad catch is intentional: a failure fetching documents must
+                # never crash the chart pane. Full detail is logged server-side;
+                # the user sees only a generic notice (no raw exception text).
                 log.error(f"Error fetching documents for patient {patient_id}: {e}")
                 notice = "No external documents available. Contact your administrator for assistance."
 

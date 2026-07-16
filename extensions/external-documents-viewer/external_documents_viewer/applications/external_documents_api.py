@@ -39,5 +39,13 @@ class ExternalDocumentsAPI(StaffSessionAuthMixin, SimpleAPI):
             presigned_url = client.generate_presigned_url(full_key, expiration=3600)
             return [JSONResponse({"url": presigned_url}, status_code=HTTPStatus.OK)]
         except Exception as e:
+            # Log full detail server-side, but return a generic message so raw
+            # exception text (which may reference bucket/key names) is never
+            # echoed back to the caller.
             log.error(f"Error generating presigned URL for {decoded_key}: {e}")
-            return [JSONResponse({"error": str(e)}, status_code=HTTPStatus.INTERNAL_SERVER_ERROR)]
+            return [
+                JSONResponse(
+                    {"error": "Unable to generate document link."},
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+            ]

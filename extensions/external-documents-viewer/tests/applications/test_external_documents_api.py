@@ -169,7 +169,10 @@ class TestGetDocumentUrl:
                 assert json.loads(response.content) == {"error": "S3 connection failed"}
 
     def test_s3_exception_returns_500(self, mock_secrets: dict[str, str]) -> None:
-        """When generate_presigned_url raises, return 500 with error message."""
+        """When generate_presigned_url raises, return 500 with a generic message.
+
+        The raw exception text must not be echoed back to the caller.
+        """
         handler = ExternalDocumentsAPI.__new__(ExternalDocumentsAPI)
         handler.secrets = {**mock_secrets, "S3_PREFIX": ""}
         handler.request = MagicMock(path_params={"s3_key": "doc.pdf"})
@@ -195,4 +198,7 @@ class TestGetDocumentUrl:
                 response = effects[0]
                 assert isinstance(response, JSONResponse)
                 assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-                assert json.loads(response.content) == {"error": "AWS timeout"}
+                body = json.loads(response.content)
+                assert body == {"error": "Unable to generate document link."}
+                # Raw exception detail must never leak to the client.
+                assert "AWS timeout" not in body["error"]
