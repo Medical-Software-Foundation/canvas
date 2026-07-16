@@ -1,0 +1,32 @@
+# Virtual environment
+.venv/
+venv/
+.env
+
+# Test / coverage artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Packaging
+*.egg-info/
+dist/
+build/
+*.tar.gz
+
+# IDE / OS / tooling
+.DS_Store
+.claude
+.cpa-workflow-artifacts/
+**/.cpa-workflow-artifacts/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated patient document indexes and source data — never commit (may contain PHI)
+patient-indices/
+document-indices/
+*.csv
