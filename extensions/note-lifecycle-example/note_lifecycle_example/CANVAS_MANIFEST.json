@@ -1,0 +1,76 @@
+{
+    "sdk_version": "0.179.0",
+    "plugin_version": "0.0.1",
+    "name": "note_lifecycle_example",
+    "description": "Replaces the note footer's native state buttons with plugin-owned, state-responsive action buttons that show only the transitions valid for the note's current state. A worked reference for builders customizing the note lifecycle.",
+    "components": {
+        "handlers": [
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:LockNoteButton",
+                "description": "Footer button: lock the note (shown when LOCKED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:SignNoteButton",
+                "description": "Footer button: sign the note (shown when SIGNED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:UnlockNoteButton",
+                "description": "Footer button: unlock the note (shown when UNLOCKED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:PushChargesNoteButton",
+                "description": "Footer button: push charges (shown when PUSHED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:CheckInAppointmentButton",
+                "description": "Footer button: check in (shown when CONVERTED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:NoShowAppointmentButton",
+                "description": "Footer button: no-show (shown when NOSHOW is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:CancelAppointmentButton",
+                "description": "Footer button: cancel the appointment (shown when CANCELLED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:RestoreAppointmentButton",
+                "description": "Footer button: restore a cancelled appointment (shown when REVERTED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:DeleteNoteButton",
+                "description": "Footer button: delete the note (shown when DELETED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:RestoreNoteButton",
+                "description": "Footer button: restore the note (shown when UNDELETED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_buttons:DischargeNoteButton",
+                "description": "Footer button: discharge the note (shown when DISCHARGED is an allowed next state)."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.footer_configuration:HideDefaultStateButtons",
+                "description": "Hides Canvas's native footer state buttons so this plugin's buttons replace them."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.event_handlers:ReloadFooterOnCommandChange",
+                "description": "Reloads the note footer when a command is added to, removed from, or committed in the note."
+            },
+            {
+                "class": "note_lifecycle_example.handlers.event_handlers:ReloadFooterOnNoteStateChange",
+                "description": "Reloads the note footer when the note transitions to a new state."
+            }
+        ],
+        "commands": [],
+        "content": [],
+        "effects": [],
+        "views": []
+    },
+    "variables": [],
+    "tags": {},
+    "references": [],
+    "license": "MIT",
+    "diagram": false,
+    "readme": "./README.md"
+}
