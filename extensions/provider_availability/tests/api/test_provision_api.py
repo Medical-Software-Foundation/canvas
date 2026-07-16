@@ -39,23 +39,18 @@ def _make_provision_handler(
     return handler
 
 
-def _make_staff(role: str | None, staff_id: str = "staff-uuid-1",
+def _make_staff(staff_id: str = "staff-uuid-1",
                 first_name: str = "Jane", last_name: str = "Doe") -> MagicMock:
-    """Create a mock Staff object."""
+    """Create a mock schedulable Staff object.
+
+    Role-based filtering now lives in ``engine.roles.get_schedulable_staff``
+    (tested separately); provisioning just iterates whatever it returns.
+    """
     staff = MagicMock()
-    staff.top_role_abbreviation = role
     staff.id = staff_id
     staff.first_name = first_name
     staff.last_name = last_name
     return staff
-
-
-def _setup_staff_queryset(mock_staff_cls: MagicMock, staff_list: list) -> None:
-    """Configure Staff.objects.filter to return the given staff list."""
-    qs = MagicMock()
-    qs.count.return_value = len(staff_list)
-    qs.__iter__ = lambda self: iter(staff_list)
-    mock_staff_cls.objects.filter.return_value = qs
 
 
 # ── Authentication ───────────────────────────────────────────────────────
@@ -108,11 +103,11 @@ class TestAuthenticate:
 
 class TestRunProvisioning:
     @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_creates_calendars_for_schedulable_roles(self, mock_staff_cls, mock_cal_model):
-        """Providers with MD/DO/NP/PA roles get calendar + event created."""
-        provider = _make_staff("MD", "staff-uuid-md", "Jane", "Doe")
-        _setup_staff_queryset(mock_staff_cls, [provider])
+    @patch(f"{PROV_MODULE}.get_schedulable_staff")
+    def test_creates_calendars_for_schedulable_staff(self, mock_sched, mock_cal_model):
+        """Each schedulable staff member gets a calendar + event created."""
+        provider = _make_staff("staff-uuid-md", "Jane", "Doe")
+        mock_sched.return_value = [provider]
         mock_cal_model.objects.filter.return_value.first.return_value = None
 
         handler = _make_provision_handler()
@@ -127,23 +122,16 @@ class TestRunProvisioning:
         # CalendarEffect + EventEffect + JSONResponse
         assert len(result) == 3
 
-        assert mock_staff_cls.mock_calls == [
-            call.objects.filter(active=True),
-            call.objects.filter().count(),
-        ]
+        assert mock_sched.mock_calls == [call()]
         assert mock_cal_model.mock_calls == [
             call.objects.filter(description=str(provider.id)),
             call.objects.filter().first(),
         ]
 
     @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_skips_non_provider_roles(self, mock_staff_cls, mock_cal_model):
-        """Staff with roles not in SCHEDULABLE_ROLES (RN, MA, etc.) are skipped."""
-        rn_staff = _make_staff("RN", "staff-rn")
-        ma_staff = _make_staff("MA", "staff-ma")
-        _setup_staff_queryset(mock_staff_cls, [rn_staff, ma_staff])
-
+    @patch(f"{PROV_MODULE}.get_schedulable_staff", return_value=[])
+    def test_no_schedulable_staff(self, mock_sched, mock_cal_model):
+        """When no staff are schedulable, nothing is created and calendars aren't queried."""
         handler = _make_provision_handler()
         result = handler.run_provisioning()
 
@@ -159,27 +147,11 @@ class TestRunProvisioning:
         assert mock_cal_model.mock_calls == []
 
     @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_skips_null_role(self, mock_staff_cls, mock_cal_model):
-        """Staff with None as top_role_abbreviation should be skipped."""
-        staff = _make_staff(None, "staff-null-role")
-        staff.top_role_abbreviation = None
-        _setup_staff_queryset(mock_staff_cls, [staff])
-
-        handler = _make_provision_handler()
-        result = handler.run_provisioning()
-
-        data, _ = _parse(result[-1])
-        assert data["created"] == 0
-        assert data["skipped"] == 0
-        assert mock_cal_model.mock_calls == []
-
-    @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_skips_existing_calendar_with_active_event(self, mock_staff_cls, mock_cal_model):
+    @patch(f"{PROV_MODULE}.get_schedulable_staff")
+    def test_skips_existing_calendar_with_active_event(self, mock_sched, mock_cal_model):
         """Provider with existing calendar AND active event is skipped."""
-        provider = _make_staff("NP", "staff-uuid-np", "Bob", "Smith")
-        _setup_staff_queryset(mock_staff_cls, [provider])
+        provider = _make_staff("staff-uuid-np", "Bob", "Smith")
+        mock_sched.return_value = [provider]
 
         existing_cal = MagicMock()
         existing_cal.id = "cal-uuid-1"
@@ -199,11 +171,11 @@ class TestRunProvisioning:
         assert len(result) == 1
 
     @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_reuses_existing_calendar_without_active_event(self, mock_staff_cls, mock_cal_model):
+    @patch(f"{PROV_MODULE}.get_schedulable_staff")
+    def test_reuses_existing_calendar_without_active_event(self, mock_sched, mock_cal_model):
         """Provider with existing calendar but no active event gets a new event only."""
-        provider = _make_staff("DO", "staff-uuid-do", "Alice", "Jones")
-        _setup_staff_queryset(mock_staff_cls, [provider])
+        provider = _make_staff("staff-uuid-do", "Alice", "Jones")
+        mock_sched.return_value = [provider]
 
         existing_cal = MagicMock()
         existing_cal.id = "cal-uuid-existing"
@@ -221,11 +193,11 @@ class TestRunProvisioning:
         assert len(result) == 2
 
     @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_handles_exception_per_staff(self, mock_staff_cls, mock_cal_model):
+    @patch(f"{PROV_MODULE}.get_schedulable_staff")
+    def test_handles_exception_per_staff(self, mock_sched, mock_cal_model):
         """Exception during provisioning of one staff increments errored count."""
-        provider = _make_staff("PA", "staff-uuid-pa", "Error", "Provider")
-        _setup_staff_queryset(mock_staff_cls, [provider])
+        provider = _make_staff("staff-uuid-pa", "Error", "Provider")
+        mock_sched.return_value = [provider]
         mock_cal_model.objects.filter.side_effect = Exception("DB error")
 
         handler = _make_provision_handler()
@@ -239,20 +211,17 @@ class TestRunProvisioning:
 
     @patch(f"{PROV_MODULE}.datetime")
     @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_leap_year_fallback(self, mock_staff_cls, mock_cal_model, mock_datetime):
+    @patch(f"{PROV_MODULE}.get_schedulable_staff")
+    def test_leap_year_fallback(self, mock_sched, mock_cal_model, mock_datetime):
         """When current date is Feb 29, recurrence_end falls back to Feb 28 if needed."""
-        provider = _make_staff("MD", "staff-uuid-leap", "Leap", "Doc")
-        _setup_staff_queryset(mock_staff_cls, [provider])
+        provider = _make_staff("staff-uuid-leap", "Leap", "Doc")
+        mock_sched.return_value = [provider]
         mock_cal_model.objects.filter.return_value.first.return_value = None
 
         # Simulate Feb 29 of a leap year
-        from datetime import datetime as real_datetime, timedelta as real_timedelta
+        from datetime import datetime as real_datetime
 
         fake_now = real_datetime(2028, 2, 29, 12, 0, 0)
-        mock_datetime.now.return_value = fake_now
-        mock_datetime.side_effect = real_datetime
-        mock_datetime.return_value = fake_now
 
         # Override datetime constructor to behave like real datetime
         def datetime_constructor(*args, **kwargs):
@@ -269,13 +238,12 @@ class TestRunProvisioning:
         assert data["created"] == 1 or data["errored"] == 0
 
     @patch(f"{PROV_MODULE}.CalendarModel")
-    @patch(f"{PROV_MODULE}.Staff")
-    def test_mixed_staff_roles(self, mock_staff_cls, mock_cal_model):
-        """Batch of staff with mixed roles: only schedulable ones get processed."""
-        md_provider = _make_staff("MD", "staff-md", "Dr", "One")
-        rn_staff = _make_staff("RN", "staff-rn", "Nurse", "Two")
-        np_provider = _make_staff("NP", "staff-np", "Nurse", "Pract")
-        _setup_staff_queryset(mock_staff_cls, [md_provider, rn_staff, np_provider])
+    @patch(f"{PROV_MODULE}.get_schedulable_staff")
+    def test_multiple_schedulable_staff(self, mock_sched, mock_cal_model):
+        """Every schedulable staff member in the batch is processed."""
+        md_provider = _make_staff("staff-md", "Dr", "One")
+        np_provider = _make_staff("staff-np", "Nurse", "Pract")
+        mock_sched.return_value = [md_provider, np_provider]
         mock_cal_model.objects.filter.return_value.first.return_value = None
 
         handler = _make_provision_handler()
@@ -283,7 +251,7 @@ class TestRunProvisioning:
 
         data, code = _parse(result[-1])
         assert code == HTTPStatus.OK
-        assert data["created"] == 2  # MD + NP
+        assert data["created"] == 2
         assert data["skipped"] == 0
         assert data["errored"] == 0
 
@@ -455,3 +423,49 @@ class TestSetTimezone:
         data, code = _parse(result[0])
         assert code == HTTPStatus.BAD_REQUEST
         assert "Invalid timezone" in data["error"]
+
+
+# ── Schedulable roles ────────────────────────────────────────────────────
+
+
+class TestSchedulableRolesEndpoints:
+    @patch(f"{PROV_MODULE}.get_available_roles", return_value=[
+        {"code": "MD", "name": "Physician", "abbreviation": "MD", "domain": "CLI", "staff_count": 3},
+    ])
+    @patch(f"{PROV_MODULE}.get_schedulable_roles", return_value=["MD", "DO"])
+    def test_get_roles(self, mock_get, mock_avail):
+        handler = _make_provision_handler()
+        result = handler.get_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["schedulable_roles"] == ["MD", "DO"]
+        assert data["available"][0]["code"] == "MD"
+        assert mock_get.mock_calls == [call()]
+        assert mock_avail.mock_calls == [call()]
+
+    @patch(f"{PROV_MODULE}.set_schedulable_roles")
+    def test_set_roles_normalizes_and_saves(self, mock_set):
+        handler = _make_provision_handler(json_body={"schedulable_roles": ["cc", " md ", ""]})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["schedulable_roles"] == ["CC", "MD"]
+        assert mock_set.mock_calls == [call(["CC", "MD"])]
+
+    def test_set_roles_rejects_non_list(self):
+        handler = _make_provision_handler(json_body={"schedulable_roles": "MD,DO"})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "must be a list" in data["error"]
+
+    def test_set_roles_rejects_missing_key(self):
+        handler = _make_provision_handler(json_body={})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "must be a list" in data["error"]

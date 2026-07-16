@@ -36,6 +36,8 @@ class TestGetActiveStaffIds:
 
 
 class TestGetActiveProviders:
+    ROLES_MODULE = "provider_availability.engine.roles"
+
     def test_returns_sorted_providers(self):
         staff_b = MagicMock()
         staff_b.id = "s2"
@@ -49,23 +51,16 @@ class TestGetActiveProviders:
         staff_a.last_name = "Alpha"
         staff_a.npi_number = "111"
 
-        with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value.distinct.return_value = [staff_b, staff_a]
-
+        with patch(f"{self.ROLES_MODULE}.get_schedulable_staff", return_value=[staff_b, staff_a]) as mock_sched:
             result = get_active_providers()
 
-            assert mock_objects.mock_calls == [
-                call.filter(active=True, roles__role_type="PROVIDER"),
-                call.filter().distinct(),
-            ]
+            assert mock_sched.mock_calls == [call()]
             # Sorted by last_name
             assert result[0]["name"] == "John Alpha"
             assert result[1]["name"] == "Jane Zebra"
 
     def test_empty(self):
-        with patch(f"{LOOKUPS_MODULE}.Staff.objects") as mock_objects:
-            mock_objects.filter.return_value.distinct.return_value = []
-
+        with patch(f"{self.ROLES_MODULE}.get_schedulable_staff", return_value=[]):
             result = get_active_providers()
 
             assert result == []

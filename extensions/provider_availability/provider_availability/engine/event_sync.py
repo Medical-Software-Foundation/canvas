@@ -68,6 +68,16 @@ HOLD_TITLE_PREFIXES = ["Hold Block", "Same Day Hold", "Next Day Hold", "Same-Day
 LEAD_TIME_DRIFT_THRESHOLD_SECONDS = 300  # 5 minutes
 
 
+def _location_name(location_id: str | None) -> str:
+    """Resolve a location's display name, or '' for provider-level (no location)."""
+    if not location_id:
+        return ""
+    try:
+        return PracticeLocation.objects.get(id=location_id).full_name or ""
+    except PracticeLocation.DoesNotExist:
+        return ""
+
+
 def sync_provider_availability(provider_id: str) -> list[Effect]:
     """Delete all availability events and recreate for ALL active rules.
 
@@ -949,7 +959,6 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
 
     tz = ZoneInfo(block.timezone) if block.timezone else provider_tz(block.provider_id)
     hold_type_label = "Same Day Hold" if block.hold_type == "same_day" else "Next Day Hold"
-    title = hold_type_label + (": " + block.reason if block.reason else "")
 
     # Determine the range
     range_start = block.effective_start if block.effective_start and block.effective_start > today else today
@@ -973,6 +982,15 @@ def _build_hold_block_events(block: RecurringBlock) -> list[Effect]:
             continue
 
         effects.extend(cal_effects)
+
+        # Label each event with its location so multi-location holds are
+        # distinguishable in the merged (all-locations) calendar view.
+        loc_name = _location_name(loc_id)
+        title = hold_type_label
+        if loc_name:
+            title += " — " + loc_name
+        if block.reason:
+            title += ": " + block.reason
 
         is_daily = block.recurrence_frequency == "daily"
         current_date = range_start

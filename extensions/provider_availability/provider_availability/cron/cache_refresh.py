@@ -11,9 +11,9 @@ from canvas_sdk.effects.calendar import Calendar as CalendarEffect
 from canvas_sdk.effects.calendar import CalendarType
 from canvas_sdk.handlers.cron_task import CronTask
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
-from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
+from provider_availability.engine.roles import get_schedulable_staff
 from provider_availability.engine.event_sync import (
     build_hold_block_refresh_effects,
     build_lead_time_block_effects,
@@ -138,9 +138,7 @@ def _ensure_provider_calendars() -> list[Effect]:
     """Create Clinic calendars for any active providers missing one."""
     effects: list[Effect] = []
     try:
-        active_providers = Staff.objects.filter(
-            active=True, roles__role_type="PROVIDER"
-        ).distinct()
+        active_providers = get_schedulable_staff()
 
         created = 0
         for staff in active_providers:

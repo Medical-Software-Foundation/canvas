@@ -15,20 +15,21 @@ from canvas_sdk.effects.simple_api import JSONResponse, Response
 from canvas_sdk.handlers.simple_api import APIKeyCredentials, SimpleAPI
 from canvas_sdk.handlers.simple_api.api import delete, get, post, put
 from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
-from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
+from provider_availability.engine.roles import get_available_roles, get_schedulable_staff
 from provider_availability.engine.storage import (
     add_allowed_staff,
     get_allowed_staff,
     get_practice_timezone,
+    get_schedulable_roles,
     remove_allowed_staff,
     set_allowed_staff,
     set_practice_timezone,
+    set_schedulable_roles,
 )
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
 
-SCHEDULABLE_ROLES = {"MD", "DO", "NP", "PA"}
 AVAILABILITY_YEARS = 25
 
 
@@ -55,14 +56,10 @@ class ProvisionAPI(SimpleAPI):
         skipped = 0
         errored = 0
 
-        active_staff = Staff.objects.filter(active=True)
-        log.info("provision: checking %d active staff", active_staff.count())
+        active_staff = get_schedulable_staff()
+        log.info("provision: checking %d schedulable staff", len(active_staff))
 
         for staff in active_staff:
-            role = staff.top_role_abbreviation
-            if not role or role.upper() not in SCHEDULABLE_ROLES:
-                continue
-
             try:
                 staff_key = str(staff.id)
                 existing_cal = CalendarModel.objects.filter(
@@ -229,3 +226,37 @@ class ProvisionAPI(SimpleAPI):
         set_practice_timezone(tz_name)
         log.info("provision set_timezone: changed to %s", tz_name)
         return [JSONResponse({"message": f"Timezone set to {tz_name}", "timezone": tz_name})]
+
+    # ── Schedulable roles ─────────────────────────────────────────────
+
+    @get("/roles")
+    def get_roles(self) -> list[Response | Effect]:
+        """Return configured schedulable role codes and the roles available in the instance."""
+        return [
+            JSONResponse({
+                "schedulable_roles": get_schedulable_roles(),
+                "available": get_available_roles(),
+            })
+        ]
+
+    @put("/roles")
+    def set_roles(self) -> list[Response | Effect]:
+        """Replace the set of schedulable role internal codes."""
+        body = self.request.json()
+        codes = body.get("schedulable_roles")
+        if not isinstance(codes, list):
+            return [
+                JSONResponse(
+                    {"error": "schedulable_roles must be a list of role internal codes"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        normalized = [str(c).strip().upper() for c in codes if str(c).strip()]
+        set_schedulable_roles(normalized)
+        log.info("provision set_roles: set %d schedulable roles", len(normalized))
+        return [
+            JSONResponse({
+                "message": "Schedulable roles updated",
+                "schedulable_roles": normalized,
+            })
+        ]

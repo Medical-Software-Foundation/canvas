@@ -1356,3 +1356,52 @@ class TestBuildPreloadedDataWithData:
         assert prov["rules"][0]["visit_type_names"] == ["Follow-up"]
         assert len(prov["blocks"]) == 1
         assert len(prov["recurring_blocks"]) == 1
+
+
+# ── Schedulable roles endpoints ────────────────────────────────────────────
+
+
+class TestSchedulableRolesEndpoints:
+    @patch(f"{MODULE}.get_available_roles", return_value=[
+        {"code": "CC", "name": "Care Coordinator", "abbreviation": "", "domain": "HYB", "staff_count": 8},
+    ])
+    @patch(f"{MODULE}.get_schedulable_roles", return_value=["MD", "DO", "NP", "PA"])
+    def test_get_roles(self, mock_get, mock_avail):
+        handler = _make_handler()
+        result = handler.get_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["schedulable_roles"] == ["MD", "DO", "NP", "PA"]
+        assert data["available"][0]["code"] == "CC"
+        assert mock_get.mock_calls == [call()]
+        assert mock_avail.mock_calls == [call()]
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_normalizes_and_saves(self, mock_set, mock_access):
+        handler = _make_handler(json_body={"schedulable_roles": ["cc", " md ", ""]})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.OK
+        assert data["schedulable_roles"] == ["CC", "MD"]
+        assert mock_set.mock_calls == [call(["CC", "MD"])]
+
+    @patch(f"{MODULE}._check_write_access", return_value=["DENIED"])
+    @patch(f"{MODULE}.set_schedulable_roles")
+    def test_set_roles_respects_write_access(self, mock_set, mock_access):
+        handler = _make_handler(json_body={"schedulable_roles": ["CC"]})
+        result = handler.set_roles()
+
+        assert result == ["DENIED"]
+        assert mock_set.mock_calls == []
+
+    @patch(f"{MODULE}._check_write_access", return_value=None)
+    def test_set_roles_rejects_non_list(self, mock_access):
+        handler = _make_handler(json_body={"schedulable_roles": "MD,DO"})
+        result = handler.set_roles()
+
+        data, code = _parse(result[0])
+        assert code == HTTPStatus.BAD_REQUEST
+        assert "must be a list" in data["error"]

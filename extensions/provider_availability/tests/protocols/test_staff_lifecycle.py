@@ -19,13 +19,14 @@ class TestOnStaffActivated:
         mock_staff.first_name = "Jane"
         mock_staff.last_name = "Doe"
         mock_staff.full_name = "Jane Doe"
-        mock_staff.top_role_abbreviation = "MD"
 
         mock_event = MagicMock()
         mock_event.target.id = "p1"
         handler = OnStaffActivated(mock_event)
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
+             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"MD"}), \
+             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True) as mock_sched, \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
             mock_cal.for_calendar_name.return_value.first.return_value = None
@@ -33,23 +34,48 @@ class TestOnStaffActivated:
             result = handler.compute()
 
             assert mock_objects.mock_calls == [call.get(id="p1")]
+            assert mock_sched.mock_calls == [call(mock_staff, {"MD"})]
             assert len(result) == 1  # Calendar create effect
 
     def test_skips_non_provider_role(self):
         mock_staff = MagicMock()
         mock_staff.id = "s1"
-        mock_staff.top_role_abbreviation = "RN"
 
         mock_event = MagicMock()
         mock_event.target.id = "s1"
         handler = OnStaffActivated(mock_event)
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_objects:
+        with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
+             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"MD", "DO", "NP", "PA"}), \
+             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=False):
             mock_objects.get.return_value = mock_staff
 
             result = handler.compute()
 
             assert result == []
+
+    def test_creates_calendar_for_non_clinical_role(self):
+        """A non-clinical staff member in a configured role gets a calendar."""
+        mock_staff = MagicMock()
+        mock_staff.id = "cc1"
+        mock_staff.first_name = "Casey"
+        mock_staff.last_name = "Coordinator"
+        mock_staff.full_name = "Casey Coordinator"
+
+        mock_event = MagicMock()
+        mock_event.target.id = "cc1"
+        handler = OnStaffActivated(mock_event)
+
+        with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
+             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"CC"}), \
+             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True), \
+             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
+            mock_objects.get.return_value = mock_staff
+            mock_cal.for_calendar_name.return_value.first.return_value = None
+
+            result = handler.compute()
+
+            assert len(result) == 1
 
     def test_skips_existing_calendar(self):
         mock_staff = MagicMock()
@@ -57,13 +83,14 @@ class TestOnStaffActivated:
         mock_staff.first_name = "Jane"
         mock_staff.last_name = "Doe"
         mock_staff.full_name = "Jane Doe"
-        mock_staff.top_role_abbreviation = "DO"
 
         mock_event = MagicMock()
         mock_event.target.id = "p1"
         handler = OnStaffActivated(mock_event)
 
         with patch(f"{SL_MODULE}.Staff.objects") as mock_objects, \
+             patch(f"{SL_MODULE}.get_schedulable_codes", return_value={"DO"}), \
+             patch(f"{SL_MODULE}.is_schedulable_staff", return_value=True), \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal:
             mock_objects.get.return_value = mock_staff
             mock_cal.for_calendar_name.return_value.first.return_value = MagicMock()
@@ -131,33 +158,18 @@ class TestOnStaffDeactivated:
 
 
 class TestOnPluginInstalled:
-    def _make_empty_qs(self):
-        """Create a mock queryset that supports both .count() and iteration."""
-        qs = MagicMock()
-        qs.count.return_value = 0
-        qs.__iter__ = MagicMock(return_value=iter([]))
-        return qs
-
-    def _make_staff_qs(self, staff_list):
-        """Create a mock queryset with .count() and iteration support."""
-        qs = MagicMock()
-        qs.count.return_value = len(staff_list)
-        qs.__iter__ = MagicMock(return_value=iter(staff_list))
-        return qs
-
     def test_empty_cache_preserves_events(self):
         """When cache is empty, plugin should only create calendars, not delete events."""
         mock_event = MagicMock()
         handler = OnPluginInstalled(mock_event)
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
-             patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
+             patch(f"{SL_MODULE}.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
              patch(f"{SL_MODULE}.mark_installed") as mock_mark:
-            mock_staff.filter.return_value.distinct.return_value = self._make_empty_qs()
 
             result = handler.compute()
 
@@ -165,7 +177,7 @@ class TestOnPluginInstalled:
             assert result == []
 
     def test_creates_calendars_for_active_providers(self):
-        """Should create Clinic calendars for providers that don't have one."""
+        """Should create Clinic calendars for schedulable staff that don't have one."""
         mock_event = MagicMock()
         handler = OnPluginInstalled(mock_event)
 
@@ -175,7 +187,7 @@ class TestOnPluginInstalled:
         staff1.first_name = "Jane"
         staff1.last_name = "Doe"
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[staff1]), \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal, \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
@@ -183,7 +195,6 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
              patch(f"{SL_MODULE}.mark_installed"), \
              patch(f"{SL_MODULE}.uuid4", return_value="new-cal-id"):
-            mock_staff.filter.return_value.distinct.return_value = self._make_staff_qs([staff1])
             mock_cal.for_calendar_name.return_value.first.return_value = None
 
             result = handler.compute()
@@ -191,7 +202,7 @@ class TestOnPluginInstalled:
             assert len(result) == 1  # Calendar create effect
 
     def test_skips_existing_calendars_on_install(self):
-        """Should skip providers that already have a Clinic calendar."""
+        """Should skip staff that already have a Clinic calendar."""
         mock_event = MagicMock()
         handler = OnPluginInstalled(mock_event)
 
@@ -199,14 +210,13 @@ class TestOnPluginInstalled:
         staff1.id = "s1"
         staff1.full_name = "Jane Doe"
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[staff1]), \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal, \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
              patch(f"{SL_MODULE}.mark_installed"):
-            mock_staff.filter.return_value.distinct.return_value = self._make_staff_qs([staff1])
             mock_cal.for_calendar_name.return_value.first.return_value = MagicMock()
 
             result = handler.compute()
@@ -222,14 +232,13 @@ class TestOnPluginInstalled:
         staff1.id = "s1"
         staff1.full_name = "Jane Doe"
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[staff1]), \
              patch(f"{SL_MODULE}.CalendarModel.objects") as mock_cal, \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=True), \
              patch(f"{SL_MODULE}.mark_installed"):
-            mock_staff.filter.return_value.distinct.return_value = self._make_staff_qs([staff1])
             mock_cal.for_calendar_name.side_effect = Exception("DB error")
 
             result = handler.compute()
@@ -253,7 +262,7 @@ class TestOnPluginInstalled:
         mock_rb = MagicMock()
         mock_rb.provider_id = "p1"
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
              patch(f"{SL_MODULE}.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
@@ -265,7 +274,6 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.build_lead_time_block_effects", return_value=["lead-fx"]) as mock_lead, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=["block-fx"]) as mock_block_fx, \
              patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=["rb-fx"]) as mock_rb_fx:
-            mock_staff.filter.return_value.distinct.return_value = self._make_empty_qs()
 
             result = handler.compute()
 
@@ -290,7 +298,7 @@ class TestOnPluginInstalled:
         mock_rule.is_active = True
         mock_rule.booking_interval.min_lead_hours = 0
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
              patch(f"{SL_MODULE}.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
@@ -299,7 +307,6 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.mark_installed"), \
              patch(f"{SL_MODULE}.delete_all_plugin_events", return_value=[]), \
              patch(f"{SL_MODULE}.sync_provider_availability", side_effect=Exception("sync error")):
-            mock_staff.filter.return_value.distinct.return_value = self._make_empty_qs()
 
             result = handler.compute()
 
@@ -315,14 +322,13 @@ class TestOnPluginInstalled:
         mock_rule.is_active = True
         mock_rule.booking_interval.min_lead_hours = 24
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
              patch(f"{SL_MODULE}.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.get_all_recurring_blocks", return_value=[]), \
              patch(f"{SL_MODULE}.is_first_install", return_value=False), \
              patch(f"{SL_MODULE}.build_lead_time_block_effects", side_effect=Exception("lead error")):
-            mock_staff.filter.return_value.distinct.return_value = self._make_empty_qs()
 
             result = handler.compute()
 
@@ -347,7 +353,7 @@ class TestOnPluginInstalled:
         mock_rb.id = "rb1"
         mock_rb.provider_id = "p1"
 
-        with patch(f"{SL_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{SL_MODULE}.get_schedulable_staff", return_value=[]), \
              patch(f"{SL_MODULE}.CalendarModel.objects"), \
              patch(f"{SL_MODULE}.get_all_rules", return_value=[mock_rule]), \
              patch(f"{SL_MODULE}.get_all_blocks", return_value=[mock_block]), \
@@ -358,7 +364,6 @@ class TestOnPluginInstalled:
              patch(f"{SL_MODULE}.build_lead_time_block_effects", return_value=[]) as mock_lead, \
              patch(f"{SL_MODULE}.build_block_event_effects", return_value=[]) as mock_block_fx, \
              patch(f"{SL_MODULE}.build_recurring_block_sync_effects", return_value=[]) as mock_rb_fx:
-            mock_staff.filter.return_value.distinct.return_value = self._make_empty_qs()
 
             handler.compute()
 

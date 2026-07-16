@@ -15,6 +15,7 @@ BLOCK_INDEX_KEY = "pa:blocks:index"
 RECURRING_BLOCK_INDEX_KEY = "pa:recurring_blocks:index"
 EVENT_IDS_PREFIX = "pa:event_ids:"
 ALLOWED_STAFF_KEY = "pa:allowed_staff"
+SCHEDULABLE_ROLES_KEY = "pa:schedulable_roles"
 PRACTICE_TZ_KEY = "pa:practice_timezone"
 PROVIDER_TZ_PREFIX = "pa:provider_tz:"
 PROVIDER_TZ_INDEX_KEY = "pa:provider_tz:index"
@@ -485,6 +486,11 @@ def refresh_all_ttls() -> int:
     if tz_val is not None:
         cache.set(PRACTICE_TZ_KEY, tz_val, timeout_seconds=CACHE_TTL_SECONDS)
 
+    # Refresh schedulable roles
+    roles_val = cache.get(SCHEDULABLE_ROLES_KEY)
+    if roles_val is not None:
+        cache.set(SCHEDULABLE_ROLES_KEY, roles_val, timeout_seconds=CACHE_TTL_SECONDS)
+
     # Refresh provider timezones
     tz_index = _get_provider_tz_index()
     if tz_index:
@@ -554,6 +560,33 @@ def set_practice_timezone(tz_name: str) -> None:
     """Store the practice timezone name."""
     cache = _get_cache()
     cache.set(PRACTICE_TZ_KEY, tz_name, timeout_seconds=CACHE_TTL_SECONDS)
+
+
+# ── Schedulable roles ─────────────────────────────────────────────────
+
+# Default set matches the historical hard-coded providers. For provider roles
+# the StaffRole ``internal_code`` equals the ``public_abbreviation`` (MD, DO,
+# NP, PA), so this default preserves prior behaviour on upgrade.
+DEFAULT_SCHEDULABLE_ROLES = ("MD", "DO", "NP", "PA")
+
+
+def get_schedulable_roles() -> list[str]:
+    """Get the StaffRole internal codes considered schedulable.
+
+    Falls back to the default provider codes when never configured, so a fresh
+    or upgraded install still schedules providers out of the box.
+    """
+    cache = _get_cache()
+    val = cache.get(SCHEDULABLE_ROLES_KEY)
+    if val is None:
+        return list(DEFAULT_SCHEDULABLE_ROLES)
+    return list(val)
+
+
+def set_schedulable_roles(codes: list[str]) -> None:
+    """Store the schedulable role internal codes."""
+    cache = _get_cache()
+    cache.set(SCHEDULABLE_ROLES_KEY, codes, timeout_seconds=CACHE_TTL_SECONDS)
 
 
 # ── Per-provider timezone ────────────────────────────────────────────

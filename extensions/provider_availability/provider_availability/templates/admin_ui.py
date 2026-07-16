@@ -505,7 +505,23 @@ ADMIN_HTML_TEMPLATE = """<!DOCTYPE html>
           </p>
         </div>
 
-        
+        <!-- Schedulable roles -->
+        <div>
+          <div class="section-label">Schedulable Roles</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+            Choose which staff roles can be scheduled. Staff in a selected role get a Clinic calendar
+            and appear in the provider pickers. Includes non-clinical roles, matched by role code.
+          </p>
+          <div class="form-row" style="grid-template-columns:1fr auto;align-items:start;gap:12px;">
+            <div class="field">
+              <label>Roles</label>
+              <div id="ms-schedulable-roles" class="multi-select"></div>
+            </div>
+            <canvas-button onclick="saveSchedulableRoles()" style="white-space:nowrap;margin-top:22px;">Save Roles</canvas-button>
+          </div>
+        </div>
+
+
         <!-- Bulk assignment -->
         <div>
           <div class="section-label">Set All Providers</div>

@@ -39,6 +39,12 @@ After install, open **Provider Availability** from the provider menu to manage s
 
 Set a practice-level default timezone in the admin UI **Settings** tab, with optional per-provider overrides. All times are stored in UTC internally; changing a provider's timezone re-syncs all of their calendar events.
 
+### Schedulable roles
+
+Which staff can be scheduled is configurable per practice from the **Settings** tab under **Schedulable Roles**. Staff in a checked role get a Clinic calendar (on activation, plugin install, provisioning, and the daily cron) and appear in the provider pickers. Roles are matched by StaffRole **internal code** — always present, unlike the public abbreviation, so non-clinical roles (Care Coordinator, Office Manager, etc.) can be scheduled too. The checklist lists each role as `Name (CODE) — N staff` for every role active staff currently hold.
+
+Defaults to the provider roles `MD`, `DO`, `NP`, `PA` (whose internal codes match their abbreviations), so behavior is unchanged until you configure it. The set can also be read/written via the API: `GET`/`PUT /api/roles` (staff session, write-gated by `allowed-staff-keys`) and `GET`/`PUT /provision/roles` (API key).
+
 ## Screenshots
 
 **Availability overview** - at-a-glance view of every provider's rules, blocks, and holds:
@@ -63,6 +69,7 @@ Set a practice-level default timezone in the admin UI **Settings** tab, with opt
 - **Hold Types**: Recurring blocks with same-day or next-day hold release on a rolling 30-day window.
 - **Appointment Buffers**: Automatic pre/post buffer events on Administrative calendars when appointments are created/rescheduled/canceled.
 - **Timezone Support**: Practice-level default with per-provider overrides; all times stored UTC internally.
+- **Configurable Schedulable Roles**: Choose which staff roles (by internal code, including non-clinical roles) can be scheduled, from the Settings tab. See [Schedulable roles](#schedulable-roles).
 - **Cache-backed Storage**: Rules stored in plugin cache with TTL refresh.
 
 ## Bulk CSV import

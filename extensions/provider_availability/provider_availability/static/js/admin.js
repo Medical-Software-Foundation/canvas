@@ -285,6 +285,95 @@ function _firstWindowFromSchedule(schedule) {
   return [];
 }
 
+/* ---------- Time field (15-min dropdown + custom) ---------- */
+
+function _pad2(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
+
+function _fmt12(v) {
+  var p = String(v).split(':');
+  if (p.length < 2) return v;
+  var h = parseInt(p[0], 10);
+  var min = p[1];
+  var ap = h < 12 ? 'AM' : 'PM';
+  var h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return h12 + ':' + min + ' ' + ap;
+}
+
+var TIME_OPTIONS = (function () {
+  var out = [];
+  for (var h = 0; h < 24; h++) {
+    for (var m = 0; m < 60; m += 15) {
+      var v = _pad2(h) + ':' + _pad2(m);
+      out.push({ v: v, label: _fmt12(v) });
+    }
+  }
+  return out;
+})();
+var TIME_OPTION_SET = {};
+TIME_OPTIONS.forEach(function (o) { TIME_OPTION_SET[o.v] = true; });
+
+function _isStdTime(v) { return !!TIME_OPTION_SET[v]; }
+
+// Parse "9:07 AM", "9 am", "21:07", "9:07" -> canonical "HH:MM" (or "" if invalid).
+function parseTimeTo24(str) {
+  if (!str) return '';
+  var m = String(str).trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return '';
+  var h = parseInt(m[1], 10);
+  var min = m[2] ? parseInt(m[2], 10) : 0;
+  var ap = m[3];
+  if (min > 59) return '';
+  if (ap) {
+    if (h < 1 || h > 12) return '';
+    if (ap === 'pm' && h !== 12) h += 12;
+    if (ap === 'am' && h === 12) h = 0;
+  } else if (h > 23) {
+    return '';
+  }
+  return _pad2(h) + ':' + _pad2(min);
+}
+
+// A time field: a 15-min dropdown + a "Custom…" option that reveals a text
+// input. The canonical HH:MM value lives on the hidden `.time-input` so all
+// existing read sites keep working unchanged.
+function timeFieldHtml(val) {
+  val = val || '';
+  var isCustom = val !== '' && !_isStdTime(val);
+  var selVal = isCustom ? '__custom__' : val;
+  var opts = '<option value="">--:--</option>';
+  TIME_OPTIONS.forEach(function (o) {
+    opts += '<option value="' + o.v + '"' + (o.v === selVal ? ' selected' : '') + '>' + o.label + '</option>';
+  });
+  opts += '<option value="__custom__"' + (isCustom ? ' selected' : '') + '>Custom…</option>';
+  var customStyle = 'width:100px;' + (isCustom ? '' : 'display:none;');
+  return '<span class="time-picker">' +
+    '<select class="time-select" onchange="tpOnSelect(this)">' + opts + '</select>' +
+    '<input type="text" class="time-custom" placeholder="e.g. 9:07 AM" style="' + customStyle + '" value="' + (isCustom ? _fmt12(val) : '') + '" oninput="tpOnCustom(this)">' +
+    '<input type="hidden" class="time-input" value="' + val + '">' +
+    '</span>';
+}
+
+function tpOnSelect(sel) {
+  var span = sel.closest('.time-picker');
+  var custom = span.querySelector('.time-custom');
+  var hidden = span.querySelector('.time-input');
+  if (sel.value === '__custom__') {
+    custom.style.display = '';
+    hidden.value = parseTimeTo24(custom.value) || '';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    hidden.value = sel.value;
+  }
+}
+
+function tpOnCustom(inp) {
+  var span = inp.closest('.time-picker');
+  var hidden = span.querySelector('.time-input');
+  hidden.value = parseTimeTo24(inp.value) || '';
+}
+
 /* ---------- Daily mode flat time-windows editor ---------- */
 
 function addDailyTimeWindow(containerId, startVal, endVal) {
@@ -294,9 +383,9 @@ function addDailyTimeWindow(containerId, startVal, endVal) {
   row.className = 'day-time-inputs';
   row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
   row.innerHTML =
-    '<input class="time-input" type="time" value="' + (startVal || '') + '">' +
+    timeFieldHtml(startVal) +
     '<span class="time-sep">→</span>' +
-    '<input class="time-input" type="time" value="' + (endVal || '') + '">';
+    timeFieldHtml(endVal);
   var rmv = document.createElement('button');
   rmv.type = 'button';
   rmv.className = 'remove-time';
@@ -605,7 +694,7 @@ class MultiSelect {
   clear() { this.selected = []; this.updateChips(); }
 }
 
-let msProvider, msLocation, msVisitType, msBlockProvider, msBlockLocation, msFilterProvider, msHoldProvider, msHoldLocation;
+let msProvider, msLocation, msVisitType, msBlockProvider, msBlockLocation, msFilterProvider, msHoldProvider, msHoldLocation, msSchedulableRoles;
 
 /* ---------- Tab management ---------- */
 
@@ -2860,10 +2949,55 @@ function getEditorTimezone() {
 }
 
 
+/* ---------- Schedulable roles ---------- */
+
+function _roleItems(available) {
+  return (available || []).map(function(r) {
+    var base = r.name ? r.name + ' (' + r.code + ')' : r.code;
+    var count = r.staff_count ? ' — ' + r.staff_count + ' staff' : '';
+    return { code: r.code, name: base + count };
+  });
+}
+
+async function loadSchedulableRoles() {
+  if (!msSchedulableRoles) return;
+  var data = await apiCall('/roles');
+  if (!data || data.error) {
+    showMsg((data && data.error) || 'Could not load roles', 'error');
+    return;
+  }
+  var configured = (data.schedulable_roles || []).map(function(c) { return String(c).toUpperCase(); });
+  var items = _roleItems(data.available);
+  // Keep any configured code no active staff currently hold, so it isn't dropped.
+  configured.forEach(function(code) {
+    if (!items.some(function(i) { return String(i.code).toUpperCase() === code; })) {
+      items.push({ code: code, name: code + ' — no active staff' });
+    }
+  });
+  msSchedulableRoles.setItems(items);
+  msSchedulableRoles.setValue(configured);
+}
+
+async function saveSchedulableRoles() {
+  if (!msSchedulableRoles) return;
+  var codes = msSchedulableRoles.getValue();
+  var data = await apiCall('/roles', { method: 'PUT', body: JSON.stringify({ schedulable_roles: codes }) });
+  if (data && data.error) { showMsg(data.error, 'error'); return; }
+  showMsg('Schedulable roles saved', 'success');
+  // Reflect the change immediately — refresh the provider pickers without a page reload.
+  await loadProviders();
+}
+
 
 /* ---------- Settings panel ---------- */
 
 async function renderSettingsPanel() {
+  // Load the schedulable-role checklist.
+  loadSchedulableRoles();
+
+  // Refresh the practice timezone so the bulk selector reflects the saved value.
+  await loadTimezone();
+
   // Populate bulk TZ dropdown
   var bulkSel = document.getElementById('bulk-tz-select');
   if (bulkSel && bulkSel.options.length === 0) {
@@ -2874,6 +3008,8 @@ async function renderSettingsPanel() {
       bulkSel.appendChild(opt);
     });
   }
+  // Reflect the current practice timezone (defaults to UTC), not the first option.
+  if (bulkSel) bulkSel.value = _practiceTz;
 
   // Ensure we have provider data
   if (_providers.length === 0) {
@@ -3198,6 +3334,7 @@ msBlockLocation = new MultiSelect('ms-block-location', { placeholder: 'Search lo
 msHoldProvider = new MultiSelect('ms-hold-provider', { placeholder: 'Search providers...', displayKey: 'name', valueKey: 'id' });
 msHoldLocation = new MultiSelect('ms-hold-location', { placeholder: 'Search locations...', displayKey: 'name', valueKey: 'id' });
 msFilterProvider = new MultiSelect('ms-filter-provider', { placeholder: 'Filter by provider...', displayKey: 'name', valueKey: 'id' });
+msSchedulableRoles = new MultiSelect('ms-schedulable-roles', { placeholder: 'Search roles...', displayKey: 'name', valueKey: 'code' });
 // msSettingsStaff removed — access control now via plugin secret
 
 // Re-render accordion whenever filter MultiSelect changes

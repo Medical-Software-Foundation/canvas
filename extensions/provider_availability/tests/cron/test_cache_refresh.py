@@ -263,18 +263,14 @@ class TestEnsureProviderCalendars:
         staff.first_name = "Alice"
         staff.last_name = "Smith"
 
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]) as mock_sched, \
              patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
              patch(f"{CR_MODULE}.uuid4", return_value="new-cal-uuid"):
-            mock_staff.filter.return_value.distinct.return_value = [staff]
             mock_cal.filter.return_value.first.return_value = None
 
             result = _ensure_provider_calendars()
 
-            assert mock_staff.mock_calls == [
-                call.filter(active=True, roles__role_type="PROVIDER"),
-                call.filter().distinct(),
-            ]
+            assert mock_sched.mock_calls == [call()]
             assert mock_cal.mock_calls == [
                 call.filter(description="staff-uuid-1"),
                 call.filter().first(),
@@ -285,9 +281,8 @@ class TestEnsureProviderCalendars:
         staff = MagicMock()
         staff.id = "staff-uuid-2"
 
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff]), \
              patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal:
-            mock_staff.filter.return_value.distinct.return_value = [staff]
             mock_cal.filter.return_value.first.return_value = MagicMock()
 
             result = _ensure_provider_calendars()
@@ -305,10 +300,9 @@ class TestEnsureProviderCalendars:
         staff_b.first_name = "Bob"
         staff_b.last_name = "B"
 
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[staff_a, staff_b]), \
              patch(f"{CR_MODULE}.CalendarModel.objects") as mock_cal, \
              patch(f"{CR_MODULE}.uuid4", return_value="cal-uuid"):
-            mock_staff.filter.return_value.distinct.return_value = [staff_a, staff_b]
             # staff_a has no calendar, staff_b has one
             mock_cal.filter.return_value.first.side_effect = [None, MagicMock()]
 
@@ -318,18 +312,14 @@ class TestEnsureProviderCalendars:
             assert len(result) == 1
 
     def test_no_active_providers(self):
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff, \
+        with patch(f"{CR_MODULE}.get_schedulable_staff", return_value=[]), \
              patch(f"{CR_MODULE}.CalendarModel.objects"):
-            mock_staff.filter.return_value.distinct.return_value = []
-
             result = _ensure_provider_calendars()
 
             assert result == []
 
     def test_exception_is_caught(self):
-        with patch(f"{CR_MODULE}.Staff.objects") as mock_staff:
-            mock_staff.filter.side_effect = RuntimeError("db error")
-
+        with patch(f"{CR_MODULE}.get_schedulable_staff", side_effect=RuntimeError("db error")):
             result = _ensure_provider_calendars()
 
             assert result == []

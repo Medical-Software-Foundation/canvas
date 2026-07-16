@@ -13,6 +13,11 @@ from canvas_sdk.v1.data.calendar import Calendar as CalendarModel
 from canvas_sdk.v1.data.staff import Staff
 from logger import log
 
+from provider_availability.engine.roles import (
+    get_schedulable_codes,
+    get_schedulable_staff,
+    is_schedulable_staff,
+)
 from provider_availability.engine.event_sync import (
     build_block_event_effects,
     build_delete_effects,
@@ -47,14 +52,13 @@ class OnStaffActivated(BaseProtocol):
             log.warning("OnStaffActivated: staff not found for id %s", staff_id)
             return []
 
-        # Only create calendars for providers
-        role = staff.top_role_abbreviation
-        if not role or role.upper() not in ("MD", "DO", "NP", "PA"):
+        # Only create calendars for staff in a schedulable role (configurable
+        # per practice by role internal code; defaults to MD/DO/NP/PA).
+        if not is_schedulable_staff(staff, get_schedulable_codes()):
             log.info(
-                "OnStaffActivated: %s %s (role=%s) not a schedulable provider, skipping",
+                "OnStaffActivated: %s %s not in a schedulable role, skipping",
                 staff.first_name,
                 staff.last_name,
-                role,
             )
             return []
 
@@ -141,8 +145,8 @@ class OnPluginInstalled(BaseProtocol):
         # Step 1: Create Clinic calendars for all active providers
         cal_created = 0
         cal_skipped = 0
-        active_staff = Staff.objects.filter(active=True, roles__role_type="PROVIDER").distinct()
-        log.info("OnPluginInstalled: checking %d active providers for Clinic calendars", active_staff.count())
+        active_staff = get_schedulable_staff()
+        log.info("OnPluginInstalled: checking %d schedulable staff for Clinic calendars", len(active_staff))
 
         for staff in active_staff:
             try:

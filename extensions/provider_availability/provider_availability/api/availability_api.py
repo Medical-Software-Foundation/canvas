@@ -33,6 +33,7 @@ from provider_availability.engine.lookups import (
     get_active_providers,
     get_scheduleable_visit_types,
 )
+from provider_availability.engine.roles import get_available_roles
 from provider_availability.engine.models import (
     AdminBlock,
     BookingInterval,
@@ -64,11 +65,13 @@ from provider_availability.engine.storage import (
     get_rule_by_id,
     get_rules_by_group,
     get_rules_for_provider,
+    get_schedulable_roles,
     save_block,
     save_recurring_block,
     save_rule,
     set_practice_timezone,
     set_provider_timezone,
+    set_schedulable_roles,
 )
 from provider_availability.engine.tz_utils import COMMON_TIMEZONES
 from provider_availability.engine.provider_resolver import (
@@ -1349,6 +1352,43 @@ class AvailabilityAPI(StaffSessionAuthMixin, SimpleAPI):
                 "message": f"Timezone set to {tz_name}",
                 "timezone": tz_name,
             }),
+        ]
+
+    # ── Schedulable roles ─────────────────────────────────────────────
+
+    @api.get("/roles")
+    def get_roles(self) -> list[Response | Effect]:
+        """Return configured schedulable role codes and the roles in this instance."""
+        return [
+            JSONResponse({
+                "schedulable_roles": get_schedulable_roles(),
+                "available": get_available_roles(),
+            })
+        ]
+
+    @api.put("/roles")
+    def set_roles(self) -> list[Response | Effect]:
+        """Replace the set of schedulable role internal codes."""
+        denied = _check_write_access(self.request, self.secrets)
+        if denied:
+            return denied
+        body = self.request.json()
+        codes = body.get("schedulable_roles")
+        if not isinstance(codes, list):
+            return [
+                JSONResponse(
+                    {"error": "schedulable_roles must be a list of role internal codes"},
+                    status_code=HTTPStatus.BAD_REQUEST,
+                )
+            ]
+        normalized = [str(c).strip().upper() for c in codes if str(c).strip()]
+        set_schedulable_roles(normalized)
+        log.info("set_roles: set %d schedulable roles", len(normalized))
+        return [
+            JSONResponse({
+                "message": "Schedulable roles updated",
+                "schedulable_roles": normalized,
+            })
         ]
 
     # ── Per-provider timezone ─────────────────────────────────────────
