@@ -40,7 +40,11 @@ class Hcc002v2(ClinicalQualityMeasure):
         identifiers = ["HCC002v2"]
         types = ["HCC"]
         authors = ["Canvas Medical Team"]
-        show_in_chart = False
+        # Legacy built-in HCC002v2 displays in the chart on 147/151 enabled
+        # instances; keep chart visibility on to match that default (SDK base
+        # default is True). Overriding to False would flip CKD-suspect cards
+        # off in the chart fleet-wide.
+        show_in_chart = True
         references = [
             "Canvas Medical HCC. "
             "https://canvas-medical.help.usepylon.com/articles/6051758367-ckd-suspect"
