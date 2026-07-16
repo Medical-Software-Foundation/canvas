@@ -1,0 +1,15 @@
+{
+  "name": "consent-capture-screenshots",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playwright screenshot harness for the consent_capture plugin guides.",
+  "scripts": {
+    "local": "node capture_local.mjs",
+    "live": "node capture_live.mjs"
+  },
+  "dependencies": {
+    "marked": "^18.0.6",
+    "playwright": "^1.61.1"
+  }
+}
