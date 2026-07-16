@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>External Documents</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      color: #111827;
+      background: #ffffff;
+      padding: 20px 16px 16px;
+    }
+
+    .header {
+      margin-bottom: 4px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.3;
+    }
+
+    .patient-info {
+      font-size: 13px;
+      color: #6B7280;
+      margin-top: 2px;
+      margin-bottom: 14px;
+    }
+
+    .search-wrapper {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .search-wrapper svg {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9CA3AF;
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 8px 12px 8px 34px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #374151;
+      background: #F9FAFB;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-input:focus {
+      border-color: #3B82F6;
+      background: #ffffff;
+    }
+
+    .search-input::placeholder {
+      color: #9CA3AF;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 10px 8px 8px;
+      border-bottom: 2px solid #E5E7EB;
+      text-align: left;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      background: #F9FAFB;
+    }
+
+    thead th:hover {
+      color: #111827;
+    }
+
+    thead th .sort-arrow {
+      display: none;
+      font-size: 9px;
+      color: #9CA3AF;
+      margin-left: 2px;
+    }
+
+    thead th.sort-asc .sort-arrow,
+    thead th.sort-desc .sort-arrow { display: inline; }
+
+    thead th.sort-asc .sort-arrow::after { content: "\2191"; }
+    thead th.sort-desc .sort-arrow::after { content: "\2193"; }
+
+    th.col-name {
+      width: 55%;
+    }
+
+    th.col-category {
+      width: 28%;
+    }
+
+    th.col-date {
+      width: 17%;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #F3F4F6;
+      cursor: pointer;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #F8FAFC;
+    }
+
+    tbody tr:hover {
+      background: #EFF6FF;
+    }
+
+    tbody tr.hidden-row {
+      display: none;
+    }
+
+    td {
+      padding: 10px 8px;
+      vertical-align: middle;
+    }
+
+    .doc-title {
+      font-size: 14px;
+      color: #111827;
+      font-weight: 400;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* 10 category color schemes */
+    .badge-order           { background: #FCE7F3; color: #9D174D; }
+    .badge-lab             { background: #EDE9FE; color: #5B21B6; }
+    .badge-admin           { background: #F3F4F6; color: #374151; }
+    .badge-home-health     { background: #CCFBF1; color: #0F766E; }
+    .badge-insurance       { background: #FEF3C7; color: #92400E; }
+    .badge-clinical-note   { background: #E0E7FF; color: #3730A3; }
+    .badge-imaging         { background: #CFFAFE; color: #155E75; }
+    .badge-communication   { background: #E0F2FE; color: #075985; }
+    .badge-care-summary    { background: #D1FAE5; color: #064E3B; }
+    .badge-referral        { background: #EDE9FE; color: #6D28D9; }
+    .badge-unknown         { background: #F3F4F6; color: #374151; }
+
+    .doc-date {
+      font-size: 13px;
+      color: #374151;
+      white-space: nowrap;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 16px;
+      color: #9CA3AF;
+      font-size: 14px;
+    }
+
+    .error-banner {
+      background: #FEF2F2;
+      border: 1px solid #FECACA;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      color: #991B1B;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .error-banner strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 14px;
+    }
+
+    .notice-banner {
+      background: #F9FAFB;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      color: #4B5563;
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: justify;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Historical Documents</h1>
+    {% if patient %}
+    <div class="patient-info">
+      {{ patient.last_name }}, {{ patient.first_name }} | DOB: {{ patient.birth_date|date:"m/d/Y" }}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if error %}
+  <div class="error-banner">
+    <strong>Something went wrong</strong>
+    {{ error }}
+  </div>
+  {% endif %}
+
+  {% if notice %}
+  <div class="notice-banner">
+    {{ notice }}
+  </div>
+  {% endif %}
+
+  <div class="search-wrapper">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input
+      type="text"
+      class="search-input"
+      id="searchInput"
+      placeholder="Search documents by name..."
+      oninput="filterDocs(this.value)"
+    >
+  </div>
+
+  <table id="docTable">
+    <thead>
+      <tr>
+        <th class="col-name sortable" onclick="sortTable('name', this)">Document Name<span class="sort-arrow"></span></th>
+        <th class="col-category sortable" onclick="sortTable('category', this)">Category<span class="sort-arrow"></span></th>
+        <th class="col-date sortable sort-desc" onclick="sortTable('date', this)">Date<span class="sort-arrow"></span></th>
+      </tr>
+    </thead>
+    <tbody id="docBody">
+      {% for doc in documents %}
+      <tr
+        class="doc-row"
+        data-title="{{ doc.title|lower }}"
+        data-category="{{ doc.category|lower }}"
+        data-date="{{ doc.date }}"
+        data-s3key="{{ doc.s3_key }}"
+        data-url="{{ doc.url }}"
+        onclick="openDocument(this.getAttribute('data-url'))"
+      >
+        <td><span class="doc-title">{{ doc.title }}</span></td>
+        <td><span class="badge">{{ doc.category }}</span></td>
+        <td><span class="doc-date" data-iso="{{ doc.date }}">{{ doc.date }}</span></td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="3" class="empty-state">No documents found for this patient.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    // Category → badge CSS class mapping
+    const CATEGORY_CLASSES = {
+      "order":          "badge-order",
+      "lab":            "badge-lab",
+      "admin":          "badge-admin",
+      "home health":    "badge-home-health",
+      "insurance":      "badge-insurance",
+      "clinical note":  "badge-clinical-note",
+      "imaging":        "badge-imaging",
+      "communication":  "badge-communication",
+      "care summary":   "badge-care-summary",
+      "referral":       "badge-referral",
+    };
+
+    // Apply badge classes on load
+    document.querySelectorAll(".badge").forEach(function(badge) {
+      var cat = badge.textContent.trim().toLowerCase();
+      var cls = CATEGORY_CLASSES[cat] || "badge-unknown";
+      badge.className = "badge " + cls;
+    });
+
+    // Format dates from ISO (YYYY-MM-DD) to MM/DD/YY
+    document.querySelectorAll(".doc-date[data-iso]").forEach(function(el) {
+      var iso = el.getAttribute("data-iso");
+      if (iso && iso.length === 10) {
+        var parts = iso.split("-");
+        var y = parts[0].slice(2);
+        el.textContent = parts[1] + "/" + parts[2] + "/" + y;
+      }
+    });
+
+    // --- Search ---
+    function filterDocs(query) {
+      var q = query.toLowerCase().trim();
+      document.querySelectorAll("tr.doc-row").forEach(function(row) {
+        var title = row.getAttribute("data-title") || "";
+        row.classList.toggle("hidden-row", q.length > 0 && title.indexOf(q) === -1);
+      });
+    }
+
+    // --- Sort ---
+    var currentSort = { col: "date", dir: "desc" };
+
+    function sortTable(col, thEl) {
+      var tbody = document.getElementById("docBody");
+      var rows = Array.from(tbody.querySelectorAll("tr.doc-row"));
+
+      // Toggle direction if same column, otherwise default to desc for date, asc for name
+      if (currentSort.col === col) {
+        currentSort.dir = currentSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        currentSort.col = col;
+        currentSort.dir = (col === "date") ? "desc" : "asc";
+      }
+
+      rows.sort(function(a, b) {
+        var aVal, bVal;
+        if (col === "date") {
+          aVal = a.getAttribute("data-date") || "";
+          bVal = b.getAttribute("data-date") || "";
+        } else if (col === "category") {
+          aVal = a.getAttribute("data-category") || "";
+          bVal = b.getAttribute("data-category") || "";
+        } else {
+          aVal = a.getAttribute("data-title") || "";
+          bVal = b.getAttribute("data-title") || "";
+        }
+        if (aVal < bVal) return currentSort.dir === "asc" ? -1 : 1;
+        if (aVal > bVal) return currentSort.dir === "asc" ? 1 : -1;
+        return 0;
+      });
+
+      rows.forEach(function(row) { tbody.appendChild(row); });
+
+      // Update header classes
+      document.querySelectorAll("thead th.sortable").forEach(function(th) {
+        th.classList.remove("sort-asc", "sort-desc");
+      });
+      thEl.classList.add(currentSort.dir === "asc" ? "sort-asc" : "sort-desc");
+    }
+
+    // --- Open document via presigned URL ---
+    function openDocument(url) {
+      if (url) {
+        window.open(url, "_blank");
+      }
+    }
+
+    // Apply initial descending date sort on load
+    (function() {
+      var tbody = document.getElementById("docBody");
+      if (!tbody) return;
+      var rows = Array.from(tbody.querySelectorAll("tr.doc-row"));
+      if (rows.length === 0) return;
+      rows.sort(function(a, b) {
+        var aVal = a.getAttribute("data-date") || "";
+        var bVal = b.getAttribute("data-date") || "";
+        if (aVal < bVal) return 1;
+        if (aVal > bVal) return -1;
+        return 0;
+      });
+      rows.forEach(function(row) { tbody.appendChild(row); });
+    })();
+  </script>
+</body>
+</html>
